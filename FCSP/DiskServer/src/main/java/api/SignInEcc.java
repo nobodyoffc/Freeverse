@@ -6,7 +6,10 @@ import clients.redisClient.RedisTools;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
 import constants.Strings;
+import crypto.CryptoDataByte;
+import crypto.Encryptor;
 import crypto.old.EccAes256K1P7;
+import fcData.AlgorithmId;
 import initial.Initiator;
 import javaTools.Hex;
 import fcData.FcReplier;
@@ -77,7 +80,15 @@ public class SignInEcc extends HttpServlet {
                     } else {
                         session.setExpireTime(expireMillis);
                     }
-                    String sessionKeyCipher = EccAes256K1P7.encryptWithPubKey(sessionKey.getBytes(), Hex.fromHex(pubKey));
+                    Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+                    CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(sessionKey.getBytes(), Hex.fromHex(pubKey));
+                    if(cryptoDataByte==null || cryptoDataByte.getCode()!=0){
+                        String msg=null;
+                        if(cryptoDataByte!=null)msg=cryptoDataByte.getMessage();
+                        replier.replyOtherError("Failed to encrypt sessionKey."+msg,null,jedis);
+                        return;
+                    }
+                    String sessionKeyCipher = cryptoDataByte.toJson();//EccAes256K1P7.encryptWithPubKey(sessionKey.getBytes(), Hex.fromHex(pubKey));
                     session.setSessionKeyCipher(sessionKeyCipher);
                 } else {
                     try {

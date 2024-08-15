@@ -11,6 +11,8 @@ import server.Settings;
 
 import java.io.BufferedReader;
 
+import static configure.Configure.saveConfig;
+
 public class FcspClientSettings extends Settings {
     String diskAccountId;
     private transient ApiAccount diskAccount;
@@ -44,7 +46,7 @@ public class FcspClientSettings extends Settings {
         }
 
         saveSettings(mainFid);
-        config.saveConfig();
+        saveConfig();
         System.out.println("Service settings initiated.");
         return mainFid;
     }

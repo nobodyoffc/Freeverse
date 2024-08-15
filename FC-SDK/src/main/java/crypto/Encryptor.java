@@ -269,7 +269,7 @@ public class Encryptor {
         byte[] priKeyA;
         ECKey ecKey = new ECKey();
         priKeyA = ecKey.getPrivKeyBytes();
-        return encryptByAsy(data, priKeyA, pubKeyB);
+        return encryptByAsy(data, priKeyA, pubKeyB, EncryptType.AsyOneWay);
     }
     public byte[] encryptByAsyOneWayToBundle(@NotNull byte[] data, @NotNull byte[] pubKeyB){
         CryptoDataByte cryptoDataByte = encryptByAsyOneWay(data,pubKeyB);
@@ -277,13 +277,13 @@ public class Encryptor {
     }
 
     public CryptoDataByte encryptByAsyTwoWay(@NotNull byte[] data, @NotNull byte[]priKeyA, @NotNull byte[] pubKeyB){
-        return encryptByAsy(data, priKeyA, pubKeyB);
+        return encryptByAsy(data, priKeyA, pubKeyB, EncryptType.AsyTwoWay);
     }
     public byte[] encryptByAsyTwoWayToBundle(@NotNull byte[] data,@NotNull byte[]priKeyA, @NotNull byte[] pubKeyB){
         CryptoDataByte cryptoDataByte = encryptByAsyTwoWay(data,priKeyA,pubKeyB);
         return cryptoDataByte.toBundle(this.algorithmId);
     }
-    private CryptoDataByte encryptByAsy(@NotNull byte[] data, byte[]priKeyA, byte[] pubKeyB){
+    private CryptoDataByte encryptByAsy(@NotNull byte[] data, byte[]priKeyA, byte[] pubKeyB, EncryptType encryptType){
         CryptoDataByte cryptoDataByte;
         if(priKeyA==null){
             cryptoDataByte = new CryptoDataByte();
@@ -302,7 +302,7 @@ public class Encryptor {
                     = encryptStreamByAsyTwoWay(bis, bos, priKeyA, pubKeyB);
             cryptoDataByte.setCipher(bos.toByteArray());
             cryptoDataByte.makeSum4();
-            cryptoDataByte.setType(EncryptType.AsyTwoWay);
+            cryptoDataByte.setType(encryptType);
 
             return cryptoDataByte;
         } catch (IOException e) {

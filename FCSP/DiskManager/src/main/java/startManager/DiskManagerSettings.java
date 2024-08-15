@@ -1,6 +1,8 @@
 package startManager;
 
+import appTools.Inputer;
 import appTools.Menu;
+import appTools.Shower;
 import clients.apipClient.ApipClient;
 import clients.redisClient.RedisTools;
 import configure.ServiceType;
@@ -8,6 +10,7 @@ import configure.Configure;
 import constants.FieldNames;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.DiskParams;
+import javaTools.JsonTools;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Settings;
@@ -59,6 +62,9 @@ public class DiskManagerSettings extends Settings {
         apipAccountId = apipAccount.getId();
         saveConfig();
         saveSettings(service.getSid());
+        System.out.println("Check your service:");
+        System.out.println(JsonTools.toNiceJson(service));
+        Shower.printUnderline(20);
         System.out.println("Initiated.");
         return service;
     }

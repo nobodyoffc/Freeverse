@@ -60,6 +60,8 @@ public class StartApipManager {
 	private static Counter counter=null;
 	private static Pusher pusher = null;
 	private static MempoolCleaner mempoolCleaner=null;
+
+
 	private static BufferedReader br;
 	private static IndicesApip indicesAPIP;
 	public static JedisPool jedisPool;
@@ -67,10 +69,9 @@ public class StartApipManager {
 	private static String sid;
 	public static ApipParams params;
 	private static ApipManagerSettings settings;
-
+	public static final ServiceType serviceType = ServiceType.APIP;
 
 	public static void main(String[] args)throws Exception{
-		ServiceType serviceType = ServiceType.APIP;
 		br = new BufferedReader(new InputStreamReader(System.in));
 
 		//Load config info from the file

@@ -39,9 +39,8 @@ public class StartDiskManager {
     public static Counter counter;
 
     public static String sid;
-
+    public static final ServiceType serviceType = ServiceType.DISK;
     public static void main(String[] args) throws IOException {
-        ServiceType serviceType = ServiceType.DISK;
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         //Load config info from the file

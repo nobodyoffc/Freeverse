@@ -13,6 +13,7 @@ import javax.servlet.ServletConfig;
 import javax.servlet.http.HttpServlet;
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 
 import static configure.Configure.makeConfigFileName;
 
@@ -26,15 +27,17 @@ public class Initiator extends HttpServlet {
     final static Logger log = LoggerFactory.getLogger(Initiator.class);
 
     public void init(ServletConfig config) {
-        System.out.println("Initiating FCSP server...");
+        System.out.println("Initiating DISK server...");
         String configFileName = makeConfigFileName(SERVICE_TYPE);
+
         WebServerConfig webServerConfig;
         Configure configure;
         DiskManagerSettings settings;
-
+        Map<String,Configure> configureMap;
         try {
             webServerConfig = JsonTools.readJsonFromFile(configFileName,WebServerConfig.class);
-            configure = JsonTools.readJsonFromFile(webServerConfig.getConfigPath(),Configure.class);
+            configureMap = JsonTools.readMapFromJsonFile(null,webServerConfig.getConfigPath(),String.class,Configure.class);
+            configure = configureMap.get(webServerConfig.getPasswordName());
             settings = JsonTools.readJsonFromFile(webServerConfig.getSettingPath(), DiskManagerSettings.class);
             dataPath = webServerConfig.getDataPath();
             sid = webServerConfig.getSid();
@@ -58,14 +61,14 @@ public class Initiator extends HttpServlet {
             }else log.error("Failed to create {}", StartDiskManager.STORAGE_DIR);
         }
 
-        System.out.println("FCSP server is initiated.");
+        System.out.println("DISK server is initiated.");
     }
 
     @Override
     public void destroy(){
-        log.debug("Destroying FCSP server...");
+        log.debug("Destroying DISK server...");
         jedisPool.close();
         esAccount.closeEs();
-        log.debug("FCSP server is Destroyed.");
+        log.debug("DISK server is Destroyed.");
     }
 }
