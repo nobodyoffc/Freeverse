@@ -1,0 +1,26 @@
+# Ignore all files with the `.log` extension
+*.log
+
+# Ignore directories named `target` (commonly used in Maven projects)
+/target/
+
+# Ignore IntelliJ IDEA files
+.idea/
+*.iml
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore build artifacts
+/out/
+/build/
+
+# config json
+*.json
+/config
+/*_data
+
+# avatar
+*.png
+/avatar
