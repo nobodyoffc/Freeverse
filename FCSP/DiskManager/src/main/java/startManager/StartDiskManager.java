@@ -1,6 +1,8 @@
 package startManager;
 
 import clients.apipClient.ApipClient;
+import co.elastic.clients.elasticsearch.cat.IndicesResponse;
+import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
 import configure.ServiceType;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.DiskParams;
@@ -12,10 +14,13 @@ import configure.Configure;
 import constants.ApiNames;
 import clients.esClient.EsTools;
 import feip.feipData.serviceParams.Params;
+import javaTools.JsonTools;
 import redis.clients.jedis.JedisPool;
 import server.*;
 import server.balance.BalanceInfo;
+import server.balance.BalanceManager;
 import server.order.Order;
+import server.order.OrderManager;
 import server.reward.RewardInfo;
 import server.reward.RewardManager;
 import server.reward.Rewarder;
@@ -24,9 +29,12 @@ import server.serviceManagers.DiskManager;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import static constants.IndicesNames.ORDER;
 import static constants.Strings.*;
 
 public class StartDiskManager {
@@ -48,15 +56,16 @@ public class StartDiskManager {
         Configure configure = Configure.checkPassword(br);
         byte[] symKey = configure.getSymKey();
 
-        sid = configure.chooseSid(symKey);
-        //Load the local settings from the file of localSettings.json
-        settings = DiskManagerSettings.loadFromFile(sid, DiskManagerSettings.class);//new ApipClientSettings(configure,br);
-        if(settings==null) settings = new DiskManagerSettings(configure);
-        service = settings.initiateServer(sid,symKey,configure, br);
-        if(service==null){
-            System.out.println("Failed to initiate.");
-            close();
-            return;
+        while(true) {
+            sid = configure.chooseSid(serviceType);
+            //Load the local settings from the file of localSettings.json
+            settings = DiskManagerSettings.loadFromFile(sid, DiskManagerSettings.class);//new ApipClientSettings(configure,br);
+            if(settings==null) settings = new DiskManagerSettings(configure);
+
+            service = settings.initiateServer(sid,symKey,configure, br);
+
+            if(service!=null)break;
+            System.out.println("Try again.");
         }
 
         sid = service.getSid();
@@ -73,14 +82,14 @@ public class StartDiskManager {
         checkEsIndices(esClient);
 
         //Check API prices
-        Order.setNPrices(sid, ApiNames.ApipApiList, jedisPool, br,false);
+        Order.setNPrices(sid, ApiNames.DiskApiList, jedisPool, br,false);
 
         //Check user balance
         Counter.checkUserBalance(sid, jedisPool, esClient, br);
 
         //Check webhooks for new orders.
         if(settings.getFromWebhook()!=null && settings.getFromWebhook().equals(Boolean.TRUE))
-            if (!Order.checkWebhook(ApiNames.NewCashByFids, sid, params, apipClient.getApiAccount(), br, jedisPool)){
+            if (!Order.checkWebhook(ApiNames.NewCashByFids, params, apipClient.getApiAccount(), br, jedisPool)){
                 close();
                 return;
             }
@@ -92,10 +101,13 @@ public class StartDiskManager {
         //Show the main menu
         Menu menu = new Menu();
         menu.setName("Disk Manager");
+
         menu.add("Manage the service");
-        menu.add("Reset the price multipliers(nPrice)");
-        menu.add("Recreate all indices");
+        menu.add("Manage order");
+        menu.add("Manage balance");
         menu.add("Manage the rewards");
+        menu.add("Reset the price multipliers(nPrice)");
+        menu.add("Manage ES indices");
         menu.add("Settings");
 
         while(true) {
@@ -103,11 +115,13 @@ public class StartDiskManager {
             int choice = menu.choose(br);
             switch (choice) {
                 case 1 -> new DiskManager(service, settings.getApipAccount(), br,symKey, DiskParams.class).menu();
-                case 2 -> Order.resetNPrices(br, sid, jedisPool);
-                case 3 -> recreateAllIndices(esClient, br);
+                case 2 -> new OrderManager(service, counter, br, esClient, jedisPool).menu();
+                case 3 -> new BalanceManager(service, br, esClient,jedisPool).menu();
                 case 4 -> new RewardManager(sid,params.getAccount(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
-                case 5 -> settings.setting(symKey, br, serviceType);
+                case 5 -> Order.resetNPrices(br, sid, jedisPool);
+                case 6 -> manageIndices(br);//recreateAllIndices(esClient, br);
+                case 7 -> settings.setting(symKey, br, serviceType);
                 case 0 -> {
                     if (counter != null) counter.close();
                     close();
@@ -116,6 +130,52 @@ public class StartDiskManager {
                 }
             }
         }
+    }
+
+    private static void manageIndices(BufferedReader br) {
+        Menu menu = new Menu();
+
+        ArrayList<String> menuItemList = new ArrayList<>();
+        menuItemList.add("List All Indices in ES");
+        menuItemList.add("Recreate Data index");
+        menuItemList.add("Recreate Order Backup index");
+        menuItemList.add("Recreate Balance index");
+        menuItemList.add("Recreate Reward index");
+        menuItemList.add("Recreate All indices");
+
+        menu.add(menuItemList);
+        while(true) {
+            menu.show();
+            menu.setName("Manage ES indices");
+            int choice = menu.choose(br);
+            switch (choice) {
+                case 1 -> listAllIndices(esClient,br);
+                case 2 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient,br);
+                case 3 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
+                case 4 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient, br);
+                case 5 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
+                case 6 -> recreateAllIndices(esClient,br);
+                case 0 -> {
+                    return;
+                }
+            }
+        }
+    }
+    public static void listAllIndices(ElasticsearchClient esClient, BufferedReader br) {
+        IndicesResponse result = null;
+        try {
+            result = esClient.cat().indices();
+        } catch (IOException e) {
+            System.out.println("Failed to get data from ES:"+e.getMessage());
+            return;
+        }
+        List<IndicesRecord> indicesRecordList = result.valueBody();
+
+        Map<String, String> allSumMap = new HashMap<>();
+        for (IndicesRecord record : indicesRecordList) {
+            allSumMap.put(record.index(), record.docsCount());
+        }
+        System.out.println(JsonTools.toNiceJson(allSumMap));
     }
 
     private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
@@ -130,14 +190,10 @@ public class StartDiskManager {
 
     private static void recreateAllIndices(ElasticsearchClient esClient,BufferedReader br) {
         if(!Inputer.askIfYes(br,"Recreate the disk data, order, balance, reward indices?"))return;
-        try {
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient);
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient);
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient);
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
     }
 
     private static void checkEsIndices(ElasticsearchClient esClient) {

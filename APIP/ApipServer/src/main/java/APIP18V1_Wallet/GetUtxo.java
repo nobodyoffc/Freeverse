@@ -6,6 +6,7 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.*;
 import fcData.FcReplier;
 import fch.CashListReturn;
+import fch.ParseTools;
 import fch.Wallet;
 import fch.fchData.Cash;
 import initial.Initiator;
@@ -23,10 +24,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static constants.FieldNames.AMOUNT;
+import static constants.IndicesNames.ADDRESS;
 import static fch.Wallet.checkUnconfirmed;
 
 
-@WebServlet(name = ApiNames.GetUtxo, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.GetUtxo)
+@WebServlet(name = ApiNames.GetUtxo, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.GetUtxo)
 public class GetUtxo extends HttpServlet {
 
 
@@ -47,14 +50,14 @@ public class GetUtxo extends HttpServlet {
             if (requestCheckResult==null){
                 return;
             }
-            String idRequested = request.getParameter("address");
+            String idRequested = request.getParameter(ADDRESS);
             if (idRequested==null){
                 replier.reply(ReplyCodeMessage.Code2003IllegalFid,null,jedis);
                 return;
             }
 
-            if(request.getParameter("amount")!=null){
-                long amount=(long)(Double.parseDouble(request.getParameter("amount"))* Constants.FchToSatoshi);
+            if(request.getParameter(AMOUNT)!=null){
+                long amount= ParseTools.coinStrToSatoshi(request.getParameter(AMOUNT));
                 CashListReturn cashListReturn = Wallet.getCashListForPay(amount,idRequested,Initiator.esClient);
                 if(cashListReturn.getCode()!=0){
                     replier.replyOtherError(cashListReturn.getMsg(),null,jedis);

@@ -27,16 +27,18 @@ public class FcspClientSettings extends Settings {
     }
 
     public String initiateClient(String fid, byte[] symKey, Configure config, BufferedReader br) {
-        System.out.println("Initiating APP settings...");
+        System.out.println("Initiating APP settings...\n");
         setInitForClient(fid, config, br);
 
-        apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey);//checkApiAccount(apipAccountId, ApiType.APIP, config, symKey, null);
-        checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
+        if(shareApiAccount==null)inputShareApiAccount(br);
+
+        apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey, shareApiAccount);//checkApiAccount(apipAccountId, ApiType.APIP, config, symKey, null);
+        if(shareApiAccount)checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
         if(apipAccount.getClient()!=null)apipAccountId=apipAccount.getId();
         else System.out.println("No APIP service.");
 
-        diskAccount = config.checkAPI(diskAccountId, mainFid, ServiceType.DISK,symKey,apipAccount.getApipClient());//checkFcAccount(diskAccountId,ApiType.DISK,config,symKey, (ApipClient) apipAccount.getClient());
-        checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
+        diskAccount = config.checkAPI(diskAccountId, mainFid, ServiceType.DISK,symKey, (ApipClient) apipAccount.getClient(),shareApiAccount);//checkFcAccount(diskAccountId,ApiType.DISK,config,symKey, (ApipClient) apipAccount.getClient());
+        if(shareApiAccount)checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
         if(diskAccount !=null && diskAccount.getClient()!=null) diskAccountId = diskAccount.getId();
         else System.out.println("No Disk service.");
 
@@ -61,8 +63,8 @@ public class FcspClientSettings extends Settings {
     }
 
     @Override
-    public void saveSettings(String mainFid) {
-        writeToFile(mainFid);
+    public void saveSettings(String id) {
+        writeToFile(id);
     }
 
     @Override

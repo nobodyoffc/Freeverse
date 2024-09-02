@@ -15,7 +15,7 @@ import java.io.IOException;
 import static constants.Strings.HEIGHT;
 import static server.FcdslRequestHandler.doBlockInfoRequest;
 
-@WebServlet(name = ApiNames.BlockByHeights, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.BlockByHeights)
+@WebServlet(name = ApiNames.BlockByHeights, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.BlockByHeights)
 public class BlockByHeights extends HttpServlet {
 
     @Override

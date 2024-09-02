@@ -20,7 +20,7 @@ import static constants.OpNames.RATE;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.ServiceOpHistory, value = "/"+ApiNames.SN_6+"/"+ApiNames.Version2 +"/"+ApiNames.ServiceOpHistory)
+@WebServlet(name = ApiNames.ServiceOpHistory, value = "/"+ApiNames.SN_6+"/"+ApiNames.Version1 +"/"+ApiNames.ServiceOpHistory)
 
 public class ServiceOpHistory extends HttpServlet {
     @Override

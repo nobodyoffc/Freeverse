@@ -18,7 +18,7 @@ import java.util.Map;
 import static constants.FieldNames.RAW_TX;
 
 
-@WebServlet(name = ApiNames.BroadcastTx, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.BroadcastTx)
+@WebServlet(name = ApiNames.BroadcastTx, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.BroadcastTx)
 public class BroadcastTx extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FREE;

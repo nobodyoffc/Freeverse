@@ -26,7 +26,7 @@ import static apip.apipData.FcQuery.PART;
 import static constants.FieldNames.*;
 import static constants.IndicesNames.ADDRESS;
 
-@WebServlet(name = ApiNames.FidCidSeek, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.FidCidSeek)
+@WebServlet(name = ApiNames.FidCidSeek, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.FidCidSeek)
 public class FidCidSeek extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {

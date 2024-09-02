@@ -22,7 +22,7 @@ import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.GroupOpHistory, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version2 +"/"+ApiNames.GroupOpHistory)
+@WebServlet(name = ApiNames.GroupOpHistory, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version1 +"/"+ApiNames.GroupOpHistory)
 
 public class GroupOpHistory extends HttpServlet {
     @Override

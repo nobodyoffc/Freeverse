@@ -18,7 +18,7 @@ import java.util.ArrayList;
 
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApiNames.FidSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.FidSearch)
+@WebServlet(name = ApiNames.FidSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.FidSearch)
 public class FidSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

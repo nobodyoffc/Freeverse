@@ -2,6 +2,7 @@ package server.order;
 
 import apip.apipData.Session;
 import apip.apipData.WebhookRequestBody;
+import constants.FieldNames;
 import feip.feipData.serviceParams.Params;
 import appTools.Inputer;
 import clients.apipClient.ApipClient;
@@ -9,6 +10,7 @@ import configure.ApiAccount;
 import constants.ApiNames;
 import constants.Strings;
 import javaTools.Hex;
+import javaTools.JsonTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -17,12 +19,13 @@ import server.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static appTools.Inputer.askIfYes;
+import static constants.ApiNames.WebhookPoint;
 import static constants.Strings.*;
 
 public class Order {
@@ -37,25 +40,34 @@ public class Order {
     private long height;
     final static Logger log = LoggerFactory.getLogger(Order.class);
     public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"orderId\":{\"type\":\"keyword\"},\"fromFid\":{\"type\":\"keyword\"},\"toFid\":{\"type\":\"keyword\"},\"via\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"long\"},\"time\":{\"type\":\"long\"},\"txId\":{\"type\":\"keyword\"},\"txIndex\":{\"type\":\"long\"},\"height\":{\"type\":\"long\"}}}}";
+    public static OrderOpReturn getJsonBuyOrder(){
+        return getJsonBuyOrder(null);
+    }
     public static OrderOpReturn getJsonBuyOrder(String sid){
         OrderOpReturn orderOpReturn = new OrderOpReturn();
         OrderOpReturnData data = new OrderOpReturnData();
-        data.setOp("buy");
-        data.setSid(sid);
+        if(sid!=null){
+            data.setOp("buy");
+            data.setSid(sid);
+        }
+        data.setVia("The via FID");
         orderOpReturn.setData(data);
         orderOpReturn.setType("apip");
         orderOpReturn.setSn("0");
-        orderOpReturn.setPid("");
         orderOpReturn.setName("OpenAPI");
-        orderOpReturn.setVer("1");
+        orderOpReturn.setVer("2");
+
         return orderOpReturn;
     }
 
-    public static boolean checkWebhook(String hookMethod, String sid, Params params, ApiAccount apipAccount, BufferedReader br, JedisPool jedisPool) {
-        String endpoint = Path.of(params.getUrlHead(), ApiNames.Endpoint).toString();
+    public static boolean checkWebhook(String hookMethod, Params params, ApiAccount apipAccount, BufferedReader br, JedisPool jedisPool) {
+        System.out.println("Check webhook...");
+        String urlHead = params.getUrlHead();
+        if(!urlHead.endsWith("/"))urlHead=urlHead+"/";
+        String endpoint = urlHead+ApiNames.Version1+"/"+WebhookPoint;
         ApipClient apipClient = (ApipClient) apipAccount.getClient();
 
-        Map<String, String> dataMap = apipClient.checkSubscription(endpoint);
+        Map<String, String> dataMap = apipClient.checkSubscription(hookMethod, endpoint);
         if(dataMap==null || dataMap.get(FOUND)==null){
             return false;
         }
@@ -63,21 +75,24 @@ public class Order {
         String webhookRequestDataStr;
         if(result.equalsIgnoreCase("true")){
             webhookRequestDataStr = dataMap.get(Strings.SUBSCRIBE);
-            System.out.println(webhookRequestDataStr);
+            System.out.println(JsonTools.strToJson(webhookRequestDataStr));
             if(!askIfYes(br,"Here is your subscription. Change it?")){
                 return true;
             }
         }
-
-        if(apipClient.subscribeWebhook(endpoint)){
+        List<String> fidList = new ArrayList<>();
+        fidList.add(params.getAccount());
+        Map<String,Object> map = new HashMap<>();
+        map.put(FieldNames.IDS,fidList);
+        String hookUserId = apipClient.subscribeWebhook(hookMethod, map, endpoint);
+        if(hookUserId!=null){
             try(Jedis jedis = jedisPool.getResource()){
                 jedis.select(1);
                 String sessionName = Session.makeSessionName(apipAccount.getSession().getSessionName());
-                String hookUserId = WebhookRequestBody.makeHookUserId(sid, apipAccount.getUserId(), hookMethod);
                 jedis.hset(sessionName, SESSION_KEY, Hex.toHex(apipClient.getSessionKey()));
-                jedis.hset(sessionName, HOOK_USER_ID,hookUserId);
+                jedis.hset(sessionName, hookMethod+"_"+HOOK_USER_ID,hookUserId);
             }
-            System.out.println("Subscribed.");
+            System.out.println("Webhook is subscribed:"+hookUserId);
             return true;
         }
         else System.out.println("Failed to subscribe the webhook from "+ apipAccount.getApiUrl());

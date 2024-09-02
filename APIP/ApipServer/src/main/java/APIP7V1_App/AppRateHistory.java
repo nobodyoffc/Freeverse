@@ -20,7 +20,7 @@ import static constants.OpNames.RATE;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.AppRateHistory, value = "/"+ApiNames.SN_7+"/"+ApiNames.Version2 +"/"+ApiNames.AppRateHistory)
+@WebServlet(name = ApiNames.AppRateHistory, value = "/"+ApiNames.SN_7+"/"+ApiNames.Version1 +"/"+ApiNames.AppRateHistory)
 public class AppRateHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

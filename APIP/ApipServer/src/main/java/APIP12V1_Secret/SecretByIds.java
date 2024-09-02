@@ -19,7 +19,7 @@ import static constants.FieldNames.Secret_Id;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.SecretByIds, value = "/"+ApiNames.SN_12+"/"+ApiNames.Version2 +"/"+ApiNames.SecretByIds)
+@WebServlet(name = ApiNames.SecretByIds, value = "/"+ApiNames.SN_12+"/"+ApiNames.Version1 +"/"+ApiNames.SecretByIds)
 public class SecretByIds extends HttpServlet {
 
     @Override

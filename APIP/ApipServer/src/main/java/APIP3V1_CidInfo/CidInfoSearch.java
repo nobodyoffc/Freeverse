@@ -16,7 +16,7 @@ import java.util.ArrayList;
 
 import static constants.FieldNames.FID;
 
-@WebServlet(name = ApiNames.CidInfoSearch, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.CidInfoSearch)
+@WebServlet(name = ApiNames.CidInfoSearch, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.CidInfoSearch)
 public class CidInfoSearch extends HttpServlet {
 
     @Override

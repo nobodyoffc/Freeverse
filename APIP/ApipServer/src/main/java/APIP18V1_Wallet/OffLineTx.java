@@ -3,10 +3,7 @@ package APIP18V1_Wallet;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
 import fcData.FcReplier;
-import fch.CashListReturn;
-import fch.CryptoSign;
-import fch.DataForOffLineTx;
-import fch.Wallet;
+import fch.*;
 import fch.fchData.Cash;
 import fch.fchData.SendTo;
 import initial.Initiator;
@@ -24,13 +21,12 @@ import java.util.List;
 import java.util.Map;
 
 import static constants.Constants.Dust;
-import static constants.Constants.FchToSatoshi;
 import static constants.FieldNames.DATA_FOR_OFF_LINE_TX;
 import static fch.CryptoSign.parseDataForOffLineTxFromOther;
 import static fch.Wallet.getCashListForPay;
 
 
-@WebServlet(name = ApiNames.OffLineTx, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.OffLineTx)
+@WebServlet(name = ApiNames.OffLineTx, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.OffLineTx)
 public class OffLineTx extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -71,7 +67,7 @@ public class OffLineTx extends HttpServlet {
                         replier.replyOtherError("The amount must be more than "+Dust+"fch.",null,jedis);
                         return;
                     }
-                    amount += (long) (sendTo.getAmount() * FchToSatoshi);
+                    amount += ParseTools.coinToSatoshi(sendTo.getAmount());
                 }
             }
             CashListReturn cashListReturn;

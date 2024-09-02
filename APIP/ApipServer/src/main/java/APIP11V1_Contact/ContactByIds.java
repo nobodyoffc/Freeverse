@@ -18,7 +18,7 @@ import static constants.FieldNames.Contact_Id;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.ContactByIds, value = "/"+ApiNames.SN_11+"/"+ApiNames.Version2 +"/"+ApiNames.ContactByIds)
+@WebServlet(name = ApiNames.ContactByIds, value = "/"+ApiNames.SN_11+"/"+ApiNames.Version1 +"/"+ApiNames.ContactByIds)
 public class ContactByIds extends HttpServlet {
 
     @Override

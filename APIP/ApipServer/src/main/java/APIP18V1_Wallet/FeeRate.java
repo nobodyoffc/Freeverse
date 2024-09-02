@@ -20,7 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApiNames.FeeRate, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.FeeRate)
+@WebServlet(name = ApiNames.FeeRate, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.FeeRate)
 public class FeeRate extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {

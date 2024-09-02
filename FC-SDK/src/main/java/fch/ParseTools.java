@@ -294,8 +294,9 @@ public class ParseTools {
         return last3Str;
     }
 
-    public static long fchStrToSatoshi(String fchStr) {
-        return (long) (Double.parseDouble(fchStr) * Constants.COIN_TO_SATOSHI);
+    public static long coinStrToSatoshi(String fchStr) {
+        return coinToSatoshi(Double.parseDouble(fchStr));
+//        return (long) (Double.parseDouble(fchStr) * Constants.COIN_TO_SATOSHI);
     }
 
     public static boolean isGoodShare(String consumeViaShare) {

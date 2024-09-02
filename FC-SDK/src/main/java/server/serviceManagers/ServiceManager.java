@@ -36,7 +36,7 @@ public abstract class ServiceManager {
 
     protected abstract Params inputParams(byte[] symKey, BufferedReader br);
 
-    protected abstract void updateParams(Params serviceParams, BufferedReader br, byte[] symKey);
+    protected abstract Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey);
 
 
     public void menu() {
@@ -157,7 +157,9 @@ public abstract class ServiceManager {
 
         Params serviceParams = (Params) data.getParams();
 
-        updateParams(serviceParams,br,symKey);
+        serviceParams = updateParams(serviceParams,br,symKey);
+
+        data.setParams(serviceParams);
 
         dataOnChain.setData(data);
 
@@ -179,10 +181,10 @@ public abstract class ServiceManager {
         data.setProtocols(service.getProtocols());
         data.setDesc(service.getDesc());
         data.setWaiters(service.getWaiters());
-
+        data.setServices(service.getServices());
+        data.setCodes(service.getCodes());
         data.setParams(Configure.parseMyServiceParams(service, paramsClass));
     }
-
     private void stopService(BufferedReader br) {
         System.out.println("Stop service services...");
         operateService(br,OpNames.STOP);

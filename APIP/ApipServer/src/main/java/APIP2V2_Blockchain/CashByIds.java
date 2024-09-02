@@ -16,7 +16,7 @@ import java.io.IOException;
 import static constants.FieldNames.CASH_ID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
-@WebServlet(name = ApiNames.CashByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.CashByIds)
+@WebServlet(name = ApiNames.CashByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.CashByIds)
 public class CashByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

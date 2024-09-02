@@ -18,7 +18,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 
-@WebServlet(name = ApiNames.KeccakSha3Hex, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version2 +"/"+ApiNames.KeccakSha3Hex)
+@WebServlet(name = ApiNames.KeccakSha3Hex, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version1 +"/"+ApiNames.KeccakSha3Hex)
 public class KeccakSha3 extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;

@@ -19,7 +19,7 @@ import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
 
-@WebServlet(name = ApiNames.BoxHistory, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version2 +"/"+ApiNames.BoxHistory)
+@WebServlet(name = ApiNames.BoxHistory, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version1 +"/"+ApiNames.BoxHistory)
 public class BoxHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

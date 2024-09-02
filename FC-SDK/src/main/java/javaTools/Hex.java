@@ -63,4 +63,9 @@ public class Hex {
         if(str.length()%2!=0)return false;
         return str.matches(HEX_PATTERN);
     }
+
+    public static boolean isHex32(String str) {
+        if(str.length()!=64)return false;
+        return isHexString(str);
+    }
 }

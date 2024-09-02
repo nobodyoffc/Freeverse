@@ -47,7 +47,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.*;
 
-import static constants.ApiNames.Version2;
+import static constants.ApiNames.Version1;
 import static constants.Constants.COINBASE;
 import static constants.Constants.COIN_TO_SATOSHI;
 import static constants.FieldNames.*;
@@ -154,7 +154,7 @@ public class Wallet {
             if(i>0)RawTx.append(",");
             RawTxForCs rawTxForCs = new RawTxForCs();
             rawTxForCs.setAddress(cash.getOwner());
-            rawTxForCs.setAmount((double) cash.getValue() / Constants.FchToSatoshi);
+            rawTxForCs.setAmount(ParseTools.satoshiToCoin(cash.getValue()));
             rawTxForCs.setTxid(cash.getBirthTxId());
             rawTxForCs.setIndex(cash.getBirthIndex());
             rawTxForCs.setSeq(i);
@@ -504,7 +504,7 @@ public class Wallet {
             if(nasaClient!=null)return nasaClient.getBestHeight();
             if(esClient!=null)return getBestHeight(esClient);
             if (apipClient != null) {
-                apipClient.ping(Version2,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+                apipClient.ping(Version1,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
                 return apipClient.getFcClientEvent().getResponseBody().getBestHeight();
             }
         }catch (Exception ignore){}
@@ -965,8 +965,8 @@ public class Wallet {
         long sum = (long) result.aggregations().get(FieldNames.SUM).sum().value();
 
         if (sum < value) {
-            cashListReturn.setCode(ReplyCodeMessage.Code1020OtherError);
-            cashListReturn.setMsg("No enough balance: " + sum / Constants.COIN_TO_SATOSHI + " fch");
+            cashListReturn.setCode(ReplyCodeMessage.Code1026InsufficientFchOnChain);
+            cashListReturn.setMsg(ReplyCodeMessage.Msg1026InsufficientFchOnChain +" "+ sum / Constants.COIN_TO_SATOSHI + " fch");
             return cashListReturn;
         }
 
@@ -1045,8 +1045,8 @@ public class Wallet {
         long sum = (long) result.aggregations().get(FieldNames.SUM).sum().value();
 
         if (sum < value) {
-            cashListReturn.setCode(ReplyCodeMessage.Code1020OtherError);
-            cashListReturn.setMsg("No enough balance: " + sum / Constants.COIN_TO_SATOSHI + " fch");
+            cashListReturn.setCode(ReplyCodeMessage.Code1026InsufficientFchOnChain);
+            cashListReturn.setMsg(ReplyCodeMessage.Msg1026InsufficientFchOnChain +" "+ ParseTools.satoshiToCoin(sum) + " fch");
             return cashListReturn;
         }
 

@@ -21,6 +21,7 @@ public class Initiator extends HttpServlet {
     public static final ServiceType SERVICE_TYPE = ServiceType.DISK;
     public static String dataPath;
     public static ApiAccount esAccount;
+    public static String listenPath;
     public static ElasticsearchClient esClient;
     public static JedisPool jedisPool;
     public static String sid;
@@ -39,6 +40,7 @@ public class Initiator extends HttpServlet {
             configureMap = JsonTools.readMapFromJsonFile(null,webServerConfig.getConfigPath(),String.class,Configure.class);
             configure = configureMap.get(webServerConfig.getPasswordName());
             settings = JsonTools.readJsonFromFile(webServerConfig.getSettingPath(), DiskManagerSettings.class);
+            listenPath = settings.getListenPath();
             dataPath = webServerConfig.getDataPath();
             sid = webServerConfig.getSid();
         } catch (IOException e) {

@@ -36,11 +36,11 @@ public class BalanceInfo {
 //    public static final String BALANCE_BACKUP_JSON = "balanceBackup.json";
 
     public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"userBalanceMapStr\":{\"type\":\"keyword\",\"ignore_above\":256},\"bestHeight\":{\"type\":\"long\"},\"consumeViaMapStr\":{\"type\":\"keyword\",\"ignore_above\":256},\"orderViaMapStr\":{\"type\":\"keyword\",\"ignore_above\":256},\"rewardPendingMapStr\":{\"type\":\"keyword\",\"ignore_above\":256}}}}";
-    public static void recoverUserBalanceFromFile(String fileName,JedisPool jedisPool) {
+    public static void recoverUserBalanceFromFile(String sid, String fileName, JedisPool jedisPool) {
         try(Jedis jedis = jedisPool.getResource()) {
             BalanceInfo balanceInfo = JsonTools.readObjectFromJsonFile(null,fileName, BalanceInfo.class);
             if(balanceInfo==null)return;
-            recoverBalanceToRedis(balanceInfo, jedis);
+            recoverBalanceToRedis(sid,balanceInfo, jedis);
         } catch (IOException e) {
             log.debug("Failed to recoverUserBalanceFromFile: "+fileName);
         }
@@ -92,7 +92,7 @@ public class BalanceInfo {
 
 
             if (balanceInfo != null) {
-                recoverBalanceToRedis(balanceInfo, jedis);
+                recoverBalanceToRedis(sid, balanceInfo, jedis);
             } else {
                 log.debug("Failed recovered balances from ES.");
             }
@@ -110,7 +110,7 @@ public class BalanceInfo {
         }
     }
 
-    public static void recoverBalanceToRedis(BalanceInfo balanceInfo, Jedis jedis) {
+    public static void recoverBalanceToRedis(String sid, BalanceInfo balanceInfo, Jedis jedis) {
         Gson gson = new Gson();
         Map<String, String> balanceMap = gson.fromJson(balanceInfo.getUserBalanceMapStr(), new TypeToken<HashMap<String, String>>() {
         }.getType());
@@ -126,18 +126,18 @@ public class BalanceInfo {
 
 
         for (String id : balanceMap.keySet()) {
-            jedis.hset(BalanceManager.sidBrief + "_" + Strings.BALANCE, id, balanceMap.get(id));
+            jedis.hset(Settings.addSidBriefToName(sid,Strings.BALANCE), id, balanceMap.get(id));
         }
         for (String id : orderViaMap.keySet()) {
-            jedis.hset(BalanceManager.sidBrief + "_" + ORDER_VIA, id, orderViaMap.get(id));
+            jedis.hset(Settings.addSidBriefToName(sid,ORDER_VIA), id, orderViaMap.get(id));
         }
         for (String id : consumeViaMap.keySet()) {
-            jedis.hset(BalanceManager.sidBrief + "_" + CONSUME_VIA, id, consumeViaMap.get(id));
+            jedis.hset(Settings.addSidBriefToName(sid,CONSUME_VIA), id, consumeViaMap.get(id));
         }
         for (String id : rewardPendingMap.keySet()) {
-            jedis.hset(BalanceManager.sidBrief + "_" + REWARD_PENDING_MAP, id, rewardPendingMap.get(id));
+            jedis.hset(Settings.addSidBriefToName(sid,REWARD_PENDING_MAP), id, rewardPendingMap.get(id));
         }
-        jedis.hset(BalanceManager.sidBrief + "_" + CONSUME_VIA, BEST_HEIGHT, String.valueOf(balanceInfo.getBestHeight()));
+        jedis.hset(Settings.addSidBriefToName(sid,CONSUME_VIA), BEST_HEIGHT, String.valueOf(balanceInfo.getBestHeight()));
 
         log.debug("Balances recovered from ES.");
     }

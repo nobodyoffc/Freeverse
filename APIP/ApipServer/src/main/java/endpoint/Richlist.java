@@ -5,6 +5,7 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.ApiNames;
+import constants.FieldNames;
 import constants.IndicesNames;
 import fcData.FcReplier;
 import fch.ParseTools;
@@ -42,13 +43,21 @@ public class Richlist extends HttpServlet {
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
         FcReplier replier = new FcReplier(sid,response);
+        String numberStr = request.getParameter(FieldNames.NUMBER);
+        int number = 0;
+        try{
+            number = Integer.parseInt(numberStr);
+        }catch (Exception ignore){}
+        if(number==0)number=100;
+
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
             if (requestCheckResult == null) {
                 return;
             }
-            SearchResponse<Address> result = Initiator.esClient.search(s -> s.index(IndicesNames.ADDRESS).size(100).sort(so -> so.field(f -> f.field(BALANCE).order(SortOrder.Desc))), Address.class);
+            int finalNumber = number;
+            SearchResponse<Address> result = Initiator.esClient.search(s -> s.index(IndicesNames.ADDRESS).size(finalNumber).sort(so -> so.field(f -> f.field(BALANCE).order(SortOrder.Desc))), Address.class);
             if(result==null||result.hits()==null||result.hits().hits()==null){
                 response.getWriter().write("Failed to get data.");
                 return;

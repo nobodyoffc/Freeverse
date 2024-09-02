@@ -22,8 +22,9 @@ public class ApipManager extends ServiceManager {
     }
 
     @Override
-    protected void updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
+    protected Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
         ApipParams apipParams = (ApipParams)serviceParams;
         apipParams.updateParams(br,symKey,null);
+        return apipParams;
     }
 }

@@ -1,9 +1,6 @@
 package javaTools;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
+import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -83,12 +80,20 @@ public class JsonTools {
     }
 
     public static String strToJson(String rawStr) {
+        if(rawStr==null)return null;
         if (!rawStr.contains("{")) return null;
         if (!rawStr.contains("}")) return null;
         int begin = rawStr.indexOf("{");
         int end = rawStr.lastIndexOf("}");
         rawStr = rawStr.substring(begin, end + 1);
         return rawStr.replaceAll("[\r\n\t]", "");
+    }
+    public static String strToNiceJson(String rawStr){
+        rawStr = strToJson(rawStr);
+        if(rawStr==null)return null;
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        JsonElement jsonElement = JsonParser.parseString(rawStr);
+        return gson.toJson(jsonElement);
     }
 
     private static Comparator<String> getComparator() {

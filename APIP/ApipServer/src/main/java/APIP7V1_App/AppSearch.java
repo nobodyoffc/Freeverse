@@ -21,7 +21,7 @@ import static constants.FieldNames.T_RATE;
 import static constants.Strings.ACTIVE;
 
 
-@WebServlet(name = ApiNames.AppSearch, value = "/"+ApiNames.SN_7+"/"+ApiNames.Version2 +"/"+ApiNames.AppSearch)
+@WebServlet(name = ApiNames.AppSearch, value = "/"+ApiNames.SN_7+"/"+ApiNames.Version1 +"/"+ApiNames.AppSearch)
 public class AppSearch extends HttpServlet {
 
     @Override

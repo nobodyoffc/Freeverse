@@ -23,7 +23,7 @@ import java.util.Map;
 import static constants.Strings.BEST_HEIGHT;
 import static fch.fchData.FchChainInfo.MAX_REQUEST_COUNT;
 
-@WebServlet(name = ApiNames.HashRateHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.HashRateHistory)
+@WebServlet(name = ApiNames.HashRateHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.HashRateHistory)
 public class HashRateHistory extends HttpServlet {
 
 

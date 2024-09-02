@@ -101,13 +101,13 @@ public class ApiAccount {
         return balance < price * minRequestTimes;
     }
 
-    public Object connectApi(ApiProvider apiProvider, byte[] symKey, BufferedReader br, @Nullable ApipClient apipClient) {
+    public Object connectApi(ApiProvider apiProvider, byte[] symKey, BufferedReader br, @Nullable ApipClient apipClient, Map<String, String> fidCipherMap) {
 
         if (!checkApiGeneralParams(apiProvider, br)) return null;
 
         switch (apiProvider.getType()){
             case APIP -> {
-                return connectApip(apiProvider,symKey,br);
+                return connectApip(apiProvider,symKey,br,fidCipherMap);
             }
             case NASA_RPC -> {
                 return connectNaSaRPC(symKey);
@@ -119,7 +119,7 @@ public class ApiAccount {
                 return connectRedis();
             }
             case DISK -> {
-                return connectDisk(apiProvider,symKey,br,apipClient);
+                return connectDisk(apiProvider,symKey,br,apipClient,fidCipherMap);
             }
             case OTHER -> {
                 return connectOtherApi(apiProvider, symKey);
@@ -256,7 +256,11 @@ public class ApiAccount {
         return esClientMaker.esClient;
     }
 
-    private DiskClient connectDisk(ApiProvider apiProvider, byte[] symKey, BufferedReader br, ApipClient apipClient) {
+    private DiskClient connectDisk(ApiProvider apiProvider, byte[] symKey, BufferedReader br, ApipClient apipClient, Map<String, String> fidCipherMap) {
+        if(apipClient==null){
+            System.out.println("APIP client is required for the DISK service.");
+            System.exit(-1);
+        }
 
         DiskClient diskClient;
         if(client==null){
@@ -274,13 +278,6 @@ public class ApiAccount {
             return null;
         }
 
-//        if(!checkDiskProvider(apiProvider)){
-//            log.debug("Failed to get service from {}", apiProvider.getApiUrl());
-//            System.out.println("Failed to get Disk service.");
-//            Menu.anyKeyToContinue(br);
-//            return null;
-//        }
-
         if(checkFcApiProvider(apiProvider, ServiceType.DISK,DiskParams.class, apipClient)==null){
             log.debug("Failed to get service from {}", apiProvider.getApiUrl());
             Menu.anyKeyToContinue(br);
@@ -289,7 +286,7 @@ public class ApiAccount {
 
         if (userPriKeyCipher == null) {
             System.out.println("Set requester priKey...");
-            inputPriKeyCipher(symKey,br);
+            inputPriKeyCipher(symKey,br,fidCipherMap);
         }
 
         byte[] sessionKey1 =
@@ -468,6 +465,7 @@ public class ApiAccount {
         try {
             apiAccount.setMinPayment(Double.valueOf(serviceParams1.getMinPayment()));
         }catch (Exception ignore){}
+
         apiAccount.inputVia(br);
 
         System.out.println();
@@ -481,7 +479,7 @@ public class ApiAccount {
     }
 
     static Service getService(String urlHead) {
-        FcReplier replier = ApipClient.getService(urlHead, Version2, ApipParams.class);
+        FcReplier replier = ApipClient.getService(urlHead, Version1, ApipParams.class);
         if(replier==null)return null;
         Service service = (Service) replier.getData();
         if(service!=null) {
@@ -564,7 +562,7 @@ public class ApiAccount {
         return HexFormat.of().formatHex(Hash.sha256x2(bundleBytes));
     }
 
-    public void inputAll(byte[] symKey, ApiProvider apiProvider, String userFid, Map<String, String> fidPriKeyCipher, BufferedReader br) {
+    public void inputAll(byte[] symKey, ApiProvider apiProvider, String userFid, Map<String, String> fidPriKeyCipherMap, BufferedReader br) {
         try  {
             this.providerId =apiProvider.getId();
             this.apiUrl = apiProvider.getApiUrl();
@@ -590,7 +588,7 @@ public class ApiAccount {
                 case APIP, DISK -> {
                     if(providerId ==null)inputSid(br);
 
-                    checkUserCipher(symKey, userFid, fidPriKeyCipher, br);
+                    checkUserCipher(symKey, userFid, fidPriKeyCipherMap, br);
 
                     while(userName==null) {
                         if(userPriKeyCipher==null)return;
@@ -632,7 +630,8 @@ public class ApiAccount {
                 this.userPubKey=makePubKey(this.userPriKeyCipher, symKey);
             }
         }
-        if(cipher==null) inputPriKeyCipher(symKey, br);
+
+        if(cipher==null) inputPriKeyCipher(symKey, br,fidPriKeyCipher);
     }
 
     public String chooseUserCipher(byte[] symKey, Map<String, String> fidPriKeyCipher, BufferedReader br, String cipher) {
@@ -719,7 +718,7 @@ public class ApiAccount {
        }
     }
 
-    public void inputPriKeyCipher(byte[] symKey, BufferedReader br) {
+    public void inputPriKeyCipher(byte[] symKey, BufferedReader br, Map<String, String> fidPriKeyCipherMap) {
         System.out.println();
         if(Inputer.askIfYes(br,"Set the API buyer priKey?"))
             while(true) {
@@ -731,6 +730,8 @@ public class ApiAccount {
                     }
                     this.userPriKeyCipher = cipherJson;
                     this.userPubKey=makePubKey(this.userPriKeyCipher,symKey);
+                    String fid = KeyTools.pubKeyToFchAddr(Hex.fromHex(this.userPubKey));
+                    fidPriKeyCipherMap.put(fid,this.userPriKeyCipher);
                     break;
                 }catch (Exception e){
                     System.out.println("Wrong input. Try again.");
@@ -772,63 +773,67 @@ public class ApiAccount {
         }
         return new Encryptor(FC_EccK1AesCbc256_No1_NrC7).encryptToJsonBySymKey(password,symKey);
     }
+//
+//    public double buyService(Params params,String sid, ApipClient apipClient, byte[] symKey) {
+//
+//        boolean done = updateService(sid, apipClient);
+//        if (!done) return 0;
+//
+//        long minPay = ParseTools.coinStrToSatoshi(params.getMinPayment());
+//
+//        long price;
+//        try {
+//            price = (long) (Double.parseDouble(params.getPricePerKBytes()) * COIN_TO_SATOSHI);
+//        } catch (Exception ignore) {
+//            try {
+//                price = (long) (Double.parseDouble(params.getPricePerKBytes()) * COIN_TO_SATOSHI);
+//            } catch (Exception e) {
+//                System.out.println("The price of APIP service is 0.");
+//                price = 0;
+//            }
+//        }
+//        double payValue;
+//
+//        payValue = (double) Math.max(price * ApiAccount.orderRequestTimes, minPay) / COIN_TO_SATOSHI;
+//
+//        List<Cash> cashList  = apipClient.cashValid(this.userId,  payValue,null,HttpRequestMethod.GET,AuthType.FREE);//apipClient.getCashes(apiUrl,this.userId,payValue);
+//        if(cashList==null)return 0;
+//        List<SendTo> sendToList = new ArrayList<>();
+//        SendTo sendTo = new SendTo();
+//
+//        sendTo.setFid(params.getAccount());
+//        sendTo.setAmount(payValue);
+//        sendToList.add(sendTo);
+//
+//        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(userPriKeyCipher, symKey);
+//        if(cryptoDataByte.getCode()!=0){
+//            System.out.println("Failed to decrypt the priKey.");
+//            return 0;
+//        }
+//        byte[] priKey = cryptoDataByte.getData();
+//        String txHex = TxCreator.createTransactionSignFch(cashList, priKey, sendToList, null);
+//
+//        String result = apipClient.broadcastTx(txHex, HttpRequestMethod.GET, AuthType.FREE);
+//
+//        if(result!=null) {
+//            log.debug("Paid for service: " + payValue + "f to " + params.getAccount() + ". \nWait for confirmation for a few minutes.");
+//            log.debug("RawTx: " + txHex);
+//            log.debug("TxId: " + result);
+//        }
+//        waitConfirmation(cashList.get(0).getCashId(), apipClient);
+//        return payValue;
+//    }
 
-    public double buyService(Params params,String sid, ApipClient apipClient, byte[] symKey) {
-
-        boolean done = updateService(sid, apipClient);
-        if (!done) return 0;
-
-        long minPay = ParseTools.fchStrToSatoshi(params.getMinPayment());
-
-        long price;
-        try {
-            price = (long) (Double.parseDouble(params.getPricePerKBytes()) * COIN_TO_SATOSHI);
-        } catch (Exception ignore) {
-            try {
-                price = (long) (Double.parseDouble(params.getPricePerKBytes()) * COIN_TO_SATOSHI);
-            } catch (Exception e) {
-                System.out.println("The price of APIP service is 0.");
-                price = 0;
-            }
-        }
-        double payValue;
-
-        payValue = (double) Math.max(price * ApiAccount.orderRequestTimes, minPay) / COIN_TO_SATOSHI;
-
-        List<Cash> cashList  = apipClient.cashValid(this.userId,  payValue,null,HttpRequestMethod.GET,AuthType.FREE);//apipClient.getCashes(apiUrl,this.userId,payValue);
-        if(cashList==null)return 0;
-        List<SendTo> sendToList = new ArrayList<>();
-        SendTo sendTo = new SendTo();
-
-        sendTo.setFid(params.getAccount());
-        sendTo.setAmount(payValue);
-        sendToList.add(sendTo);
-
-        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(userPriKeyCipher, symKey);
-        if(cryptoDataByte.getCode()!=0){
-            System.out.println("Failed to decrypt the priKey.");
-            return 0;
-        }
-        byte[] priKey = cryptoDataByte.getData();
-        String txHex = TxCreator.createTransactionSignFch(cashList, priKey, sendToList, null);
-
-        String result = apipClient.broadcastTx(txHex, HttpRequestMethod.GET, AuthType.FREE);
-
-        if(result!=null) {
-            log.debug("Paid for service: " + payValue + " f to " + params.getAccount() + ". \nWait for confirmation for a few minutes.");
-            log.debug("RawTx: " + txHex);
-            log.debug("TxId: " + result);
-        }
-        waitConfirmation(apipClient);
-        return payValue;
-    }
-
-    public static void waitConfirmation(ApipClient apipClient) {
+    public static void waitConfirmation(String cashId, ApipClient apipClient) {
         while (true) {
             try {
                 TimeUnit.SECONDS.sleep(60);
-                Long data = (Long) apipClient.ping(Version2, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, null);
-                if(data!=null && data>0)break;
+                Map<String, Cash> result = apipClient.cashByIds(HttpRequestMethod.GET, AuthType.FREE, cashId);
+                if(result!=null && result.get(cashId)!=null && !result.get(cashId).isValid()){
+                    System.out.println("Confirmed!");
+                    break;
+                }
+                System.out.println("Wait confirmation...");
             } catch (InterruptedException ignore) {
             }
         }
@@ -849,18 +854,14 @@ public class ApiAccount {
         if(apipClient==null) apipClient = Settings.getFreeApipClient();
 
         byte[] priKey = decryptUserPriKey(userPriKeyCipher, symKey);
-        long minPay = ParseTools.fchStrToSatoshi(serviceParams.getMinPayment());
+        long minPay = ParseTools.coinStrToSatoshi(serviceParams.getMinPayment());
 
         long price;
         try {
-            price = (long) (Double.parseDouble(serviceParams.getPricePerKBytes()) * COIN_TO_SATOSHI);
+            price = ParseTools.coinStrToSatoshi(serviceParams.getPricePerKBytes());
         } catch (Exception ignore) {
-            try {
-                price = (long) (Double.parseDouble(serviceParams.getPricePerRequest()) * COIN_TO_SATOSHI);
-            } catch (Exception e) {
-                System.out.println("The price of APIP service is 0.");
-                price = 0;
-            }
+            System.out.println("The price of APIP service is 0.");
+            price = 0;
         }
         double payValue;
 
@@ -884,9 +885,10 @@ public class ApiAccount {
             return 0;
         }
         log.debug("TxId: " + result);
-        log.debug("Paid for APIP service: " + payValue + " f to " + serviceParams.getAccount() + ". \nWait for confirmation for a few minutes.");
+        System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getAccount() + ". \nWait for the confirmation for a few minutes...");
 
-        waitConfirmation(apipClient);
+        waitConfirmation(cashList.get(0).getCashId(), apipClient);
+
         BytesTools.clearByteArray(priKey);
         if(payments==null)payments=new HashMap<>();
         payments.put(result,payValue);
@@ -894,7 +896,7 @@ public class ApiAccount {
     }
 
 
-    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br){
+    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br, Map<String, String> fidCipherMap){
 
         if(client==null)client = new ApipClient(apiProvider,this,symKey);
 
@@ -915,7 +917,7 @@ public class ApiAccount {
 
         if (userPriKeyCipher == null) {
             System.out.println("Set APIP requester priKey...");
-            inputPriKeyCipher(symKey,br);
+            inputPriKeyCipher(symKey,br, fidCipherMap);
         }
 
         apipClient = (ApipClient) client;
@@ -927,9 +929,11 @@ public class ApiAccount {
 
         if(sessionKey1==null) {
             System.out.println("Failed to get the sessionKey of APIP service from "+apiUrl+". Only free APIs are available.");
-        }else sessionKey = sessionKey1;
-        System.out.println("Connected to the APIP service: " + providerId + " on " + apiUrl);
-
+            return null;
+        }else {
+            sessionKey = sessionKey1;
+            System.out.println("Connected to the APIP service: " + providerId + " on " + apiUrl);
+        }
         return apipClient;
     }
 
@@ -937,7 +941,7 @@ public class ApiAccount {
         FcReplier replier = null;
         if(apiUrl==null)return null;
         switch (type){
-            case APIP -> replier = Client.getService(apiUrl, Version2, ApipParams.class);
+            case APIP -> replier = Client.getService(apiUrl, Version1, ApipParams.class);
             case DISK -> replier = Client.getService(apiUrl, Version1, DiskParams.class);
         }
         if(replier!=null && replier.getData()!=null){
@@ -989,7 +993,7 @@ public class ApiAccount {
 
 
     public boolean checkApipProvider(ApiProvider apiProvider,String apiUrl) {
-        FcReplier replier = ApipClient.getService(apiUrl, Version2, ApipParams.class);
+        FcReplier replier = ApipClient.getService(apiUrl, Version1, ApipParams.class);
         if(replier==null || replier.getData()==null) {
             return false;
         }
@@ -1018,14 +1022,14 @@ public class ApiAccount {
     public ApiProvider checkFcApiProvider(ApiProvider apiProvider, ServiceType type, Class<? extends Params> paramsClass, ApipClient apipClient) {
         FcReplier result;
         while(true) {
-            result = Client.getService(apiProvider.getApiUrl(), Version2, paramsClass);
+            result = Client.getService(apiProvider.getApiUrl(), Version1, paramsClass);
             if(result!=null && result.getData()!=null)break;
             System.out.println("Update API provider from APIP service...");
             Map<String, Service> serviceMap = apipClient.serviceByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, apiProvider.getId());
             if(serviceMap!=null){
                 service = serviceMap.get(apiProvider.getId());
                 apiProvider.fromFcService(service, Params.getParamsClassByApiType(type) );
-                result = Client.getService(apiProvider.getApiUrl(), Version2, paramsClass);
+                result = Client.getService(apiProvider.getApiUrl(), Version1, paramsClass);
                 break;
             }
             return null;
@@ -1060,9 +1064,9 @@ public class ApiAccount {
         Client client1 = (Client) client;
 
         client1.setSessionKey(sessionKey);
-        boolean allowFreeRequest = (boolean) client1.ping(Version2,HttpRequestMethod.GET,AuthType.FREE, type);
+        boolean allowFreeRequest = (boolean) client1.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, type);
         ((Client) client).setAllowFreeRequest(allowFreeRequest);
-        Object rest = client1.ping(Version2,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+        Object rest = client1.ping(Version1,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
         if(rest!=null){
             System.out.println((Long)rest+" KB/requests are available on "+ apiUrl);
             return sessionKey;
@@ -1235,7 +1239,7 @@ public class ApiAccount {
     public void inputVia(BufferedReader br) {
         String input;
         String ask = "Input the FID by whom you knew this service. Default: 'FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7'";
-        input = fch.Inputer.inputString(br,ask);
+        input = "";//fch.Inputer.inputString(br,ask);
         while(true) {
             if ("".equals(input)) {
                 this.via = "FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7";
@@ -1278,9 +1282,8 @@ public class ApiAccount {
     public static byte[] decryptSessionKey(String sessionKeyCipher, byte[] symKey) {
         Decryptor decryptor = new Decryptor();
         CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymKey(sessionKeyCipher,symKey);
-        if(cryptoDataByte.getCode()!=0)return null;
+        if(cryptoDataByte.getCode()==null || cryptoDataByte.getCode()!=0)return null;
         return cryptoDataByte.getData();
-//        return EccAes256K1P7.decryptJsonBytes(sessionKeyCipher,symKey);
     }
 
     public String getId() {

@@ -24,7 +24,7 @@ import java.util.Map;
 
 import static constants.Strings.SERVICE;
 
-@WebServlet(name = ApiNames.GetService, value = "/"+ApiNames.Version2 +"/"+ApiNames.GetService)
+@WebServlet(name = ApiNames.GetService, value = "/"+ApiNames.Version1 +"/"+ApiNames.GetService)
 public class GetService extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -44,7 +44,7 @@ public class GetService extends HttpServlet {
             String data = JsonTools.toJson(service);
             replier.reply0Success(data, response);
         }catch (Exception e){
-            replier.replyOtherError(e.getMessage(),null,null);
+            replier.replyOtherError(e.getMessage(),e.getStackTrace(),null);
         }
     }
     @Override

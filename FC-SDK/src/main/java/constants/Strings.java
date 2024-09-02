@@ -5,6 +5,7 @@ public class Strings {
     //Redis keys
     public static final String SID = "sid";
     public static final String NAME = "name";
+    public static final String PAID = "paid";
     public static final String SERVICE = "service";
     public static final String CONFIG = "config";
     public static final String TOMCAT_BASE_PATH = "tomcatBasePath";

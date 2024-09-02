@@ -61,6 +61,8 @@ public class ReplyCodeMessage {
     public static final String Msg1024UrlMissed = "URL missed in the request body";
     public static final int Code1025WrongSid = 1025;
     public static final String Msg1025WrongSid = "Wrong SID.";
+    public static final int Code1026InsufficientFchOnChain = 1026;
+    public static final String Msg1026InsufficientFchOnChain = "Insufficient FCH on chain.";
     public static final int Code2001FreeGetIsForbidden = 2001;
     public static final String Msg2001FreeGetIsForbidden = "Free API is not active now.";
     public static final int Code2002CidNoFound = 2002;
@@ -136,6 +138,7 @@ public class ReplyCodeMessage {
             case Code1023MissSessionKey -> Msg1023MissSessionKey;
             case Code1024UrlMissed -> Msg1024UrlMissed;
             case Code1025WrongSid -> Msg1025WrongSid;
+            case Code1026InsufficientFchOnChain -> Msg1026InsufficientFchOnChain;
             case Code2001FreeGetIsForbidden -> Msg2001FreeGetIsForbidden;
             case Code2002CidNoFound -> Msg2002CidNoFound;
             case Code2003IllegalFid -> Msg2003IllegalFid;

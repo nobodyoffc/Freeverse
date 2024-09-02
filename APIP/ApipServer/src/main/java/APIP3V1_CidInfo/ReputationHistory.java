@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApiNames.ReputationHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.ReputationHistory)
+@WebServlet(name = ApiNames.ReputationHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.ReputationHistory)
 public class ReputationHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

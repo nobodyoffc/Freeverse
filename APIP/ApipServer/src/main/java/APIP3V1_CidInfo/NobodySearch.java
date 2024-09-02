@@ -19,7 +19,7 @@ import java.util.ArrayList;
 
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApiNames.NobodySearch, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.NobodySearch)
+@WebServlet(name = ApiNames.NobodySearch, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.NobodySearch)
 public class NobodySearch extends HttpServlet {
 
     @Override

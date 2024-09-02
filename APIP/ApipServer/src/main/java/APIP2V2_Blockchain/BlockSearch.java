@@ -13,7 +13,7 @@ import java.io.IOException;
 
 import static constants.FieldNames.BLOCK_ID;
 
-@WebServlet(name = ApiNames.BlockSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.BlockSearch)
+@WebServlet(name = ApiNames.BlockSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.BlockSearch)
 public class BlockSearch extends HttpServlet {
 
     @Override

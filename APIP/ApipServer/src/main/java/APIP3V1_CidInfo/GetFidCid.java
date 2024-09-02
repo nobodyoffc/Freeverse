@@ -26,7 +26,7 @@ import java.util.*;
 
 import static apip.apipData.CidInfo.mergeCidInfo;
 
-@WebServlet(name = ApiNames.GetFidCid, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.GetFidCid)
+@WebServlet(name = ApiNames.GetFidCid, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.GetFidCid)
 public class GetFidCid extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {

@@ -13,7 +13,7 @@ public class RequestBody {
     private Object data;
     private Fcdsl fcdsl;
     private SignInMode mode;
-    public static enum SignInMode{
+    public enum SignInMode{
         REFRESH,NORMAL
     }
 

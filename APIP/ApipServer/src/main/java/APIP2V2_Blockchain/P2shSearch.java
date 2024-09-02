@@ -20,7 +20,7 @@ import static constants.FieldNames.BIRTH_HEIGHT;
 import static constants.FieldNames.FID;
 
 
-@WebServlet(name = ApiNames.P2shSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.P2shSearch)
+@WebServlet(name = ApiNames.P2shSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.P2shSearch)
 public class P2shSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

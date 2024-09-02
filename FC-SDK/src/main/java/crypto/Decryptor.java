@@ -118,8 +118,7 @@ public class Decryptor {
     }
 
     @NotNull
-    private static CryptoDataByte decryptBySymKey(@NotNull CryptoDataByte cryptoDataByte) {
-        if(cryptoDataByte==null)return null;
+    private static CryptoDataByte decryptBySymKey(CryptoDataByte cryptoDataByte) {
         switch (cryptoDataByte.getAlg()) {
             case FC_Aes256Cbc_No1_NrC7 -> AesCbc256.decrypt(cryptoDataByte);
             default -> new EccAes256K1P7().decrypt(cryptoDataByte);

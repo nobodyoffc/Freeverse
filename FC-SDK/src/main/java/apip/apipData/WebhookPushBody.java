@@ -8,7 +8,6 @@ public class WebhookPushBody {
     private String sessionName;
     private String data;
     private String sign;
-    private Long sinceHeight;
     private Long bestHeight;
     public String toJson(){
         return new Gson().toJson(this);
@@ -53,14 +52,6 @@ public class WebhookPushBody {
 
     public void setSign(String sign) {
         this.sign = sign;
-    }
-
-    public Long getSinceHeight() {
-        return sinceHeight;
-    }
-
-    public void setSinceHeight(Long sinceHeight) {
-        this.sinceHeight = sinceHeight;
     }
 
     public Long getBestHeight() {

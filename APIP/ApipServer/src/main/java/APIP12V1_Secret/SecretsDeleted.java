@@ -23,7 +23,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.TRUE;
 
 
-@WebServlet(name = ApiNames.SecretsDeleted, value = "/"+ApiNames.SN_12+"/"+ApiNames.Version2 +"/"+ApiNames.SecretsDeleted)
+@WebServlet(name = ApiNames.SecretsDeleted, value = "/"+ApiNames.SN_12+"/"+ApiNames.Version1 +"/"+ApiNames.SecretsDeleted)
 public class SecretsDeleted extends HttpServlet {
 
     @Override

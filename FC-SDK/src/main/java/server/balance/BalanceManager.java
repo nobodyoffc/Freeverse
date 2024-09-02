@@ -19,9 +19,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Set;
 
-import static constants.Strings.BALANCE;
 import static clients.esClient.EsTools.recreateIndex;
-import static constants.Strings.DOT_JSON;
+import static constants.Strings.*;
 import static server.Settings.addSidBriefToName;
 
 public class BalanceManager {
@@ -32,7 +31,6 @@ public class BalanceManager {
     private Service service;
     public static  final  String  balanceMappingJsonStr = "{\"mappings\":{\"properties\":{\"user\":{\"type\":\"text\"},\"consumeVia\":{\"type\":\"text\"},\"orderVia\":{\"type\":\"text\"},\"bestHeight\":{\"type\":\"keyword\"}}}}";
     public static String sid;
-    public static String sidBrief;
 
     public BalanceManager(Service service, BufferedReader br, ElasticsearchClient esClient, JedisPool jedisPool) {
         this.esClient = esClient;
@@ -40,7 +38,6 @@ public class BalanceManager {
         this.br = br;
         this.service = service;
         BalanceManager.sid = service.getSid();
-        BalanceManager.sidBrief=sid.substring(0,6);
     }
 
     public void menu()  {
@@ -66,7 +63,7 @@ public class BalanceManager {
                 case 1 -> findUsers(br);
                 case 2 -> BalanceInfo.backupBalance(sid,esClient,jedisPool);
                 case 3 -> BalanceInfo.recoverUserBalanceFromEs(sid, esClient,jedisPool);
-                case 4 -> BalanceInfo.recoverUserBalanceFromFile(balance0FileName,jedisPool);
+                case 4 -> BalanceInfo.recoverUserBalanceFromFile(sid,balance0FileName,jedisPool);
                 case 5 -> recreateBalanceIndex(br, esClient,  BALANCE, balanceMappingJsonStr);
                 case 0 -> {
                     return;
@@ -77,15 +74,12 @@ public class BalanceManager {
 
     public static void recreateBalanceIndex(BufferedReader br, ElasticsearchClient esClient, String indexName, String mappingJsonStr) {
         String index = addSidBriefToName(sid,indexName);
-        try {
-            recreateIndex(index, mappingJsonStr, esClient);
-        } catch (InterruptedException e) {
-            log.debug("Recreate index {} wrong.",index);
-        }
+        recreateIndex(index, mappingJsonStr, esClient, br);
         Menu.anyKeyToContinue(br);
     }
 
-    public static void findUsers(BufferedReader br) {
+    public void findUsers(BufferedReader br) {
+        System.out.println("All users balances are under the key of "+Settings.addSidBriefToName(sid,BALANCE)+" in Redis.");
         System.out.println("Input user's fch address or session name. Press enter to list all users:");
         String str;
         try {
@@ -95,38 +89,52 @@ public class BalanceManager {
             return;
         }
 
-        Jedis jedis0Common = new Jedis();
-        Jedis jedis1Session = new Jedis();
+        try(Jedis jedis = this.jedisPool.getResource()) {
 
-        jedis1Session.select(1);
-
-        if ("".equals(str)) {
-            Set<String> addrSet = jedis0Common.hkeys(sidBrief+"_"+Strings.FID_SESSION_NAME);
-            for (String addr : addrSet) {
-                User user = getUser(addr, jedis0Common, jedis1Session);
-                System.out.println(JsonTools.toNiceJson(user));
-            }
-        } else {
-            if (jedis0Common.hget(sidBrief+"_"+Strings.FID_SESSION_NAME, str) != null) {
-                User user = getUser(str, jedis0Common, jedis1Session);
-                System.out.println(JsonTools.toNiceJson(user));
-            } else if (jedis1Session.hgetAll(str) != null) {
-                User user = getUser(jedis1Session.hget(str, "addr"), jedis0Common, jedis1Session);
-                System.out.println(JsonTools.toNiceJson(user));
+            if ("".equals(str)) {
+                Set<String> addrSet = jedis.hkeys(Settings.addSidBriefToName(sid, BALANCE));
+                for (String addr : addrSet) {
+                    User user = getUser(addr, jedis);
+                    System.out.println(JsonTools.toNiceJson(user));
+                }
+            } else {
+                if (jedis.hget(Settings.addSidBriefToName(sid, BALANCE), str) != null) {
+                    //For FID
+                    jedis.select(0);
+                    User user = getUser(str, jedis);
+                    System.out.println(JsonTools.toNiceJson(user));
+                } else {
+                    //For sessionName
+                    jedis.select(1);
+                    if(jedis.exists(str)) {
+                        User user = getUser(jedis.hget(str, FID), jedis);
+                        System.out.println(JsonTools.toNiceJson(user));
+                    }else {
+                        System.out.println("Failed to find "+str);
+                        return;
+                    }
+                }
             }
         }
         Menu.anyKeyToContinue(br);
     }
 
-    private static User getUser(String addr, Jedis jedis0Common, Jedis jedis1Session) {
+    private static User getUser(String addr, Jedis jedis) {
+        if(addr==null)return null;
         User user = new User();
         user.setFid(addr);
-        user.setBalance(jedis0Common.hget(sidBrief+"_"+Strings.BALANCE, addr));
-        String sessionName = jedis0Common.hget(sidBrief+"_"+Strings.FID_SESSION_NAME, addr);
-        user.setSessionName(sessionName);
-        user.setSessionKey(jedis1Session.hget(sessionName, "sessionKey"));
+        jedis.select(0);
+        String balance = jedis.hget(addSidBriefToName(sid, BALANCE), addr);
+        if(balance!=null)user.setBalance(balance);
+        String sessionName = jedis.hget(Settings.addSidBriefToName(sid,Strings.FID_SESSION_NAME), addr);
+        if(sessionName!=null)user.setSessionName(sessionName);
+        else {
+            return user;
+        }
+        jedis.select(1);
+        user.setSessionKey(jedis.hget(sessionName, SESSION_KEY));
 
-        long timestamp = System.currentTimeMillis() + jedis1Session.expireTime(sessionName); // example timestamp in milliseconds
+        long timestamp = System.currentTimeMillis() + jedis.expireTime(sessionName); // example timestamp in milliseconds
         Date date = new Date(timestamp); // create a new date object from the timestamp
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"); // define the date format

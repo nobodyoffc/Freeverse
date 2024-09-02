@@ -4,14 +4,13 @@ import crypto.Hash;
 
 public class WebhookRequestBody {
     private String hookUserId;
-    private String userName;
+    private String userId;
     private String method;
     private String endpoint;
     private Object data;
     private String op;
-    private Long lastHeight;
 
-    public static String makeHookUserId(String sid, String userId, String newCashByFidsAPI) {
+    public static String makeHookUserId(String sid, String newCashByFidsAPI, String userId) {
         return Hash.sha256x2(sid+newCashByFidsAPI+userId);
     }
 
@@ -31,12 +30,12 @@ public class WebhookRequestBody {
         this.hookUserId = hookUserId;
     }
 
-    public String getUserName() {
-        return userName;
+    public String getUserId() {
+        return userId;
     }
 
-    public void setUserName(String userName) {
-        this.userName = userName;
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 
     public String getEndpoint() {
@@ -63,11 +62,4 @@ public class WebhookRequestBody {
         this.method = method;
     }
 
-    public Long getLastHeight() {
-        return lastHeight;
-    }
-
-    public void setLastHeight(Long lastHeight) {
-        this.lastHeight = lastHeight;
-    }
 }

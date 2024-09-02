@@ -86,6 +86,8 @@ public class ServiceData {
 		updateWaiters(br,symKey,apipClient);
 
 		updateProtocols(br);
+		updateServices(br);
+		updateCodes(br);
 	}
 
 	private void updateWaiters(BufferedReader br, byte[]symKey, ApipClient apipClient) {

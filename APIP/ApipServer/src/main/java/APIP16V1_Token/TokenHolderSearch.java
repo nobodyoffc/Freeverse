@@ -22,7 +22,7 @@ import server.FcdslRequestHandler;
 import static constants.FieldNames.*;
 
 
-@WebServlet(name = ApiNames.TokenHolderSearch, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version2 +"/"+ApiNames.TokenHolderSearch)
+@WebServlet(name = ApiNames.TokenHolderSearch, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version1 +"/"+ApiNames.TokenHolderSearch)
 public class TokenHolderSearch extends HttpServlet {
 
     @Override

@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-@WebServlet("/"+ApiNames.Version2 +"/"+ApiNames.Ping)
+@WebServlet(name = ApiNames.Ping, value = "/"+ApiNames.Version1 +"/"+ ApiNames.Ping)
 public class Ping extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {

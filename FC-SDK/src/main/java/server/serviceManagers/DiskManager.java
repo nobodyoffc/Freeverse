@@ -18,13 +18,16 @@ public class DiskManager extends ServiceManager {
     @Override
     protected Params inputParams(byte[] symKey, BufferedReader br) {
         DiskParams diskParams = new DiskParams();
-        diskParams.inputParams(br, symKey,(ApipClient) apipAccount.getClient());
+        ApipClient apipClient =null;
+        if(apipAccount!=null)apipClient = (ApipClient) apipAccount.getClient();
+        diskParams.inputParams(br, symKey, apipClient);
         return diskParams;
     }
 
     @Override
-    protected void updateParams(Params params, BufferedReader br, byte[] symKey) {
+    protected Params updateParams(Params params, BufferedReader br, byte[] symKey) {
         DiskParams diskParams = (DiskParams) params;
         diskParams.updateParams(br,symKey);
+        return diskParams;
     }
 }

@@ -19,7 +19,7 @@ import static constants.FieldNames.Token_Id;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.TokenByIds, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version2 +"/"+ApiNames.TokenByIds)
+@WebServlet(name = ApiNames.TokenByIds, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version1 +"/"+ApiNames.TokenByIds)
 public class TokenByIds extends HttpServlet {
 
     @Override

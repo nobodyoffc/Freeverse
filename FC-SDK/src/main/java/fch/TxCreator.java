@@ -1,11 +1,6 @@
 package fch;
 
 import clients.apipClient.ApipClient;
-import fch.fchData.SendTo;
-import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
-import nasa.data.TxInput;
-import nasa.data.TxOutput;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch._types.SortOrder;
@@ -15,16 +10,19 @@ import configure.ApiAccount;
 import constants.Constants;
 import constants.IndicesNames;
 import crypto.KeyTools;
-import org.bitcoinj.crypto.SchnorrSignature;
-import org.bitcoinj.fch.FchMainNetwork;
 import fch.fchData.Cash;
 import fch.fchData.P2SH;
+import fch.fchData.SendTo;
 import javaTools.BytesTools;
 import javaTools.Hex;
+import javaTools.http.AuthType;
+import javaTools.http.HttpRequestMethod;
+import nasa.data.TxInput;
+import nasa.data.TxOutput;
 import org.bitcoinj.core.*;
-
+import org.bitcoinj.crypto.SchnorrSignature;
+import org.bitcoinj.fch.FchMainNetwork;
 import org.bitcoinj.script.Script;
-import org.bitcoinj.core.Coin;
 import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.script.ScriptOpCodes;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -51,7 +49,6 @@ import java.util.*;
 
 import static constants.Constants.COIN_TO_SATOSHI;
 import static crypto.KeyTools.priKeyToFid;
-import static org.bitcoinj.script.ScriptBuilder.createMultiSigInputScriptBytes;
 
 /**
  * 工具类
@@ -105,12 +102,6 @@ public class TxCreator {
 
     /**
      * 创建签名
-     *
-     * @param inputs
-     * @param outputs
-     * @param opReturn
-     * @param returnAddr
-     * @return
      */
 
     public static String createTransactionSignFch(List<TxInput> inputs, List<TxOutput> outputs, String opReturn, String returnAddr) {
@@ -196,11 +187,13 @@ public class TxCreator {
         if(outputs==null)outputs = new ArrayList<>();
         long txSize = opReturn == null ? calcTxSize(inputs.size(), outputs.size(), 0) : calcTxSize(inputs.size(), outputs.size(), opReturn.getBytes().length);
 
-        long feeRateLong;
-        if (feeRateDouble != 0) {
-            feeRateLong = (long) (feeRateDouble / 1000 * COIN_TO_SATOSHI);
-        } else feeRateLong = (long) (DEFAULT_FEE_RATE / 1000 * COIN_TO_SATOSHI);
-        long fee = feeRateLong * txSize;
+//        long feeRateLong;
+//        if (feeRateDouble != 0) {
+//            feeRateLong = (long) (feeRateDouble / 1000 * COIN_TO_SATOSHI);
+//        } else feeRateLong = (long) (DEFAULT_FEE_RATE / 1000 * COIN_TO_SATOSHI);
+//        long fee = feeRateLong * txSize;
+
+        long fee =calcFee(txSize,feeRateDouble);
 
         Transaction transaction = new Transaction(FchMainNetwork.MAINNETWORK);
 
@@ -503,8 +496,6 @@ public class TxCreator {
     /**
      * 随机私钥
      *
-     * @param secret
-     * @return
      */
     public static IdInfo createRandomIdInfo(String secret) {
         return IdInfo.genRandomIdInfo();
@@ -513,8 +504,6 @@ public class TxCreator {
     /**
      * 公钥转地址
      *
-     * @param pukey
-     * @return
      */
     public static String pubkeyToAddr(String pukey) {
 
@@ -525,9 +514,6 @@ public class TxCreator {
 
     /**
      * 通过wif创建私钥
-     *
-     * @param wifKey
-     * @return
      */
     public static IdInfo createIdInfoFromWIFPrivateKey(byte[] wifKey) {
 
@@ -536,10 +522,6 @@ public class TxCreator {
 
     /**
      * 消息签名
-     *
-     * @param msg
-     * @param wifkey
-     * @return
      */
     public static String signMsg(String msg, byte[] wifkey) {
         IdInfo idInfo = new IdInfo(wifkey);
@@ -558,9 +540,6 @@ public class TxCreator {
 
     /**
      * 签名验证
-     *
-     * @param msg
-     * @return
      */
     public static boolean verifyFullMsg(String msg) {
         String args[] = msg.split("----");
@@ -586,7 +565,7 @@ public class TxCreator {
 
     public static String msgHash(String msg) {
         try {
-            byte[] data = msg.getBytes("UTF-8");
+            byte[] data = msg.getBytes(StandardCharsets.UTF_8);
             return Hex.toHex(Sha256Hash.hash(data));
         } catch (Exception e) {
 
@@ -609,8 +588,7 @@ public class TxCreator {
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
 
         cipher.init(Cipher.ENCRYPT_MODE, keySpec, new IvParameterSpec(iv));
-        byte[] encData = cipher.doFinal(srcData);
-        return encData;
+        return cipher.doFinal(srcData);
 
     }
 
@@ -649,6 +627,15 @@ public class TxCreator {
         scriptLen = (dataLen + 1) + VarInt.sizeOf(dataLen + 1);
         int amountLen = 8;
         return scriptLen + amountLen;
+    }
+
+    public static long calcFee(long txSize, double feeRate) {
+        long feeRateLong;
+        if (feeRate != 0) {
+            feeRateLong = (long) (feeRate / 1000 * COIN_TO_SATOSHI);
+        } else feeRateLong = (long) (DEFAULT_FEE_RATE / 1000 * COIN_TO_SATOSHI);
+        long fee = feeRateLong * txSize;
+        return fee;
     }
 
     @Test

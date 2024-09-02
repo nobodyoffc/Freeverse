@@ -85,15 +85,6 @@ public class RequestChecker {
         } else if (authType.equals(FC_SIGN_BODY)) {
             signInfo = getBodySignInfo(request);
             requestCheckResult.setRequestBody(signInfo.requestBody);
-
-            if(isBadUrl(signInfo.url,url)){
-                Map<String,String> dataMap = new HashMap<>();
-                dataMap.put("requestedURL",request.getRequestURL().toString());
-                dataMap.put("signedURL",signInfo.url);
-                replier.setData(dataMap);
-                replier.reply(ReplyCodeMessage.Code1005UrlUnequal, dataMap, jedis);
-                return null;
-            }
         }
 
         if(requestCheckResult.getRequestBody()==null)
@@ -148,6 +139,17 @@ public class RequestChecker {
         if (isBadSymSign(signInfo.sign, bytesSigned, replier, sessionKey)) {
             replier.reply(ReplyCodeMessage.Code1008BadSign, replier.getData(), jedis);
             return null;
+        }
+
+        if(authType.equals(FC_SIGN_BODY)){
+            if(isBadUrl(signInfo.url,url)){
+                Map<String,String> dataMap = new HashMap<>();
+                dataMap.put("requestedURL",request.getRequestURL().toString());
+                dataMap.put("signedURL",signInfo.url);
+                replier.setData(dataMap);
+                replier.reply(ReplyCodeMessage.Code1005UrlUnequal, dataMap, jedis);
+                return null;
+            }
         }
 
         if (isBadTime(signInfo.time, windowTime)) {

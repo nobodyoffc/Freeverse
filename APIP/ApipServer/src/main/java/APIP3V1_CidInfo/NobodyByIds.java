@@ -16,7 +16,7 @@ import java.io.IOException;
 import static constants.FieldNames.FID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
-@WebServlet(name = ApiNames.NobodyByIds, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.NobodyByIds)
+@WebServlet(name = ApiNames.NobodyByIds, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.NobodyByIds)
 public class NobodyByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

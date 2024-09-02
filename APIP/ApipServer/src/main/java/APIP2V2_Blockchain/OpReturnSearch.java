@@ -18,7 +18,7 @@ import java.util.ArrayList;
 
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApiNames.OpReturnSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.OpReturnSearch)
+@WebServlet(name = ApiNames.OpReturnSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.OpReturnSearch)
 public class OpReturnSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

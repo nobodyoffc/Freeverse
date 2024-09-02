@@ -17,7 +17,7 @@ import java.io.IOException;
 import static constants.FieldNames.BID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
-@WebServlet(name = ApiNames.BoxByIds, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version2 +"/"+ApiNames.BoxByIds)
+@WebServlet(name = ApiNames.BoxByIds, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version1 +"/"+ApiNames.BoxByIds)
 public class BoxByIds extends HttpServlet {
 
     @Override

@@ -33,7 +33,7 @@ import static fch.Wallet.getCashForCd;
 import static fch.Wallet.getCashListForPay;
 
 
-@WebServlet(name = ApiNames.CashValid, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.CashValid)
+@WebServlet(name = ApiNames.CashValid, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.CashValid)
 public class CashValid extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -96,13 +96,13 @@ public class CashValid extends HttpServlet {
 
         if(fid==null){
             ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, response, replier, Initiator.esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, Initiator.esClient);
             List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort, Cash.class, jedis);
             replier.reply0Success(meetList, jedis, null);
         }else if(amount!=null && amount>0){
             CashListReturn cashListReturn = getCashListForPay(amount,fid,Initiator.esClient);
             if(cashListReturn.getCode()!=0){
-                replier.replyOtherError(cashListReturn.getMsg(),null,jedis);
+                replier.reply(cashListReturn.getCode(),null,jedis);
                 return;
             }
             List<Cash> meetList = cashListReturn.getCashList();
@@ -112,7 +112,7 @@ public class CashValid extends HttpServlet {
         }else if(cd!=null && cd!=0){
             CashListReturn cashListReturn = getCashForCd(fid, cd,Initiator.esClient);
             if(cashListReturn.getCode()!=0){
-                replier.replyOtherError(cashListReturn.getMsg(),null,jedis);
+                replier.reply(cashListReturn.getCode(),null,jedis);
                 return;
             }
             List<Cash> meetList = cashListReturn.getCashList();
@@ -125,7 +125,7 @@ public class CashValid extends HttpServlet {
             if(requestBody==null)fcdsl=new Fcdsl();
             else fcdsl= requestBody.getFcdsl();
             fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(fid);
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, response, replier, Initiator.esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, Initiator.esClient);
             List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort,Cash.class, jedis);
             replier.reply0Success(meetList, jedis, null);
         }

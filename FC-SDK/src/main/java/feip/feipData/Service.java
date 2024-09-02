@@ -1,9 +1,17 @@
 package feip.feipData;
 
-import feip.feipData.serviceParams.DiskParams;
+import com.google.gson.Gson;
+import feip.feipData.serviceParams.Params;
 import javaTools.StringTools;
 
 import java.util.Map;
+
+import static constants.FieldNames.*;
+import static constants.FieldNames.BIRTH_HEIGHT;
+import static constants.FieldNames.DESC;
+import static constants.FieldNames.SID;
+import static constants.FieldNames.TYPES;
+import static constants.Strings.*;
 
 public class Service {
 
@@ -32,33 +40,35 @@ public class Service {
 	protected Boolean closed;
 	protected String closeStatement;
 
-	public static Service fromMap(Map<String, String> map, Class<DiskParams> diskParamsClass) {
+	public static Service fromMap(Map<String, String> map, Class<? extends Params> paramsClass) {
 		Service service = new Service();
 
-		service.sid = map.get("sid");
-		service.stdName = map.get("stdName");
-		service.localNames = StringTools.splitString(map.get("localNames"));
-		service.desc = map.get("desc");
-		service.ver = map.get("ver");
-		service.types = StringTools.splitString(map.get("types"));
-		service.urls = StringTools.splitString(map.get("urls"));
-		service.waiters = StringTools.splitString(map.get("waiters"));
-		service.protocols = StringTools.splitString(map.get("protocols"));
-		service.services = StringTools.splitString(map.get("services"));
-		service.codes = StringTools.splitString(map.get("codes"));
+		service.sid = map.get(SID);
+		service.stdName = map.get(STD_NAME);
+		service.localNames = StringTools.splitString(map.get(LOCAL_NAMES));
+		service.desc = map.get(DESC);
+		service.ver = map.get(VER);
+		service.types = StringTools.splitString(map.get(TYPES));
+		service.urls = StringTools.splitString(map.get(URLS));
+		service.waiters = StringTools.splitString(map.get(WAITERS));
+		service.protocols = StringTools.splitString(map.get(PROTOCOLS));
+		service.services = StringTools.splitString(map.get(SERVICES));
+		service.codes = StringTools.splitString(map.get(CODES));
 
-		service.owner = map.get("owner");
+		service.owner = map.get(OWNER);
 
-		service.birthTime = StringTools.parseLong(map.get("birthTime"));
-		service.birthHeight = StringTools.parseLong(map.get("birthHeight"));
-		service.lastTxId = map.get("lastTxId");
-		service.lastTime = StringTools.parseLong(map.get("lastTime"));
-		service.lastHeight = StringTools.parseLong(map.get("lastHeight"));
-		service.tCdd = StringTools.parseLong(map.get("tCdd"));
-		service.tRate = StringTools.parseFloat(map.get("tRate"));
-		service.active = StringTools.parseBoolean(map.get("active"));
-		service.closed = StringTools.parseBoolean(map.get("closed"));
-		service.closeStatement = map.get("closeStatement");
+		if(map.get(BIRTH_TIME)!=null)service.birthTime = StringTools.parseLong(map.get(BIRTH_TIME));
+		if(map.get(BIRTH_HEIGHT)!=null)service.birthHeight = StringTools.parseLong(map.get(BIRTH_HEIGHT));
+		service.lastTxId = map.get(LAST_TX_ID);
+		if(map.get(LAST_TIME)!=null)service.lastTime = StringTools.parseLong(map.get(LAST_TIME));
+		if(map.get(LAST_HEIGHT)!=null)service.lastHeight = StringTools.parseLong(map.get(LAST_HEIGHT));
+		if(map.get(T_CDD)!=null)service.tCdd = StringTools.parseLong(map.get(T_CDD));
+		if(map.get(T_RATE)!=null)service.tRate = StringTools.parseFloat(map.get(T_RATE));
+		service.active = StringTools.parseBoolean(map.get(ACTIVE));
+		service.closed = StringTools.parseBoolean(map.get(CLOSED));
+		if(map.get(CLOSE_STATEMENT)!=null)service.closeStatement = map.get(CLOSE_STATEMENT);
+
+		service.params = new Gson().fromJson(map.get(PARAMS),paramsClass);
 
 		return service;
 	}

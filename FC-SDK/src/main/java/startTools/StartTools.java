@@ -20,10 +20,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
+import java.security.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -571,20 +568,38 @@ public class StartTools {
             if ("".equals(input)) {
                 return;
             }
-            if(input.length()==64){
-                System.out.println("Hex to Base58:"+"\n----");
-                System.out.println("New: "+ KeyTools.priKey32To38(input));
-                System.out.println("Old: "+KeyTools.priKey32To37(input)+"\n----");
-
-            }else if(input.length()==52){
-                System.out.println("Base58 WIF compressed to Hex:"+"\n----");
-                System.out.println(KeyTools.getPriKey32(input)+"\n----");
-            }else if(input.length()==51){
-                System.out.println("Base58 WIF to Hex:"+"\n----");
-                System.out.println(KeyTools.getPriKey32(input)+"\n----");
-            }else{
+            try {
+                byte[] priKey = KeyTools.getPriKey32(input);
+                if(priKey==null){
+                    System.out.println("Only 64 chars hex or 52 chars base58 string can be accepted.");
+                    continue;
+                }
+                String hex = Hex.toHex(priKey);
+                System.out.println("----");
+                System.out.println("- Private Key in Hex:\n"+ hex);
+                System.out.println("- Private Key in Base58:\n"+ KeyTools.priKey32To38(hex));
+                System.out.println("- Private Key in Base58 old style:\n"+KeyTools.priKey32To37(hex));
+//
+//                if(input.length()==64){
+//                    System.out.println("Hex to Base58:"+"\n----");
+//                    System.out.println("New: "+ KeyTools.priKey32To38(input));
+//                    System.out.println("Old: "+KeyTools.priKey32To37(input)+"\n----");
+//                }else if(input.length()==52){
+//                    System.out.println("Base58 WIF compressed to Hex:"+"\n----");
+//                    System.out.println(KeyTools.getPriKey32(input)+"\n----");
+//                }else if(input.length()==51){
+//                    System.out.println("Base58 WIF to Hex:"+"\n----");
+//                    System.out.println(KeyTools.getPriKey32(input)+"\n----");
+//                }else{
+//                    System.out.println("Only 64 chars hex or 52 chars base58 string can be accepted.");
+//                }
+                String pubKey = Hex.toHex(KeyTools.priKeyToPubKey(priKey));
+                printPubKeyAndAddresses(pubKey);
+            }catch (Exception e){
                 System.out.println("Only 64 chars hex or 52 chars base58 string can be accepted.");
-            };
+                continue;
+            }
+
         }
     }
 
@@ -649,11 +664,14 @@ public class StartTools {
             return;
         }
 
+        printPubKeyAndAddresses(pubKey);
 
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void printPubKeyAndAddresses(String pubKey) throws Exception {
         pubKey = KeyTools.getPubKey33(pubKey);
-
         KeyTools.showPubKeys(pubKey);
-
         Map<String, String> addrMap = KeyTools.pubKeyToAddresses(pubKey);
 
         System.out.println("----");
@@ -666,9 +684,8 @@ public class StartTools {
         System.out.println("TRX"+": "+ addrMap.get("trxAddr"));
         System.out.println("LTC"+": "+ addrMap.get("ltcAddr"));
 
-        
+
         System.out.println("----");
-        Menu.anyKeyToContinue(br);
     }
 
     private static void sha256File(BufferedReader br) throws IOException {

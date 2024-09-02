@@ -27,7 +27,7 @@ import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 
 
-@WebServlet(name = ApiNames.TokenHoldersByIds, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version2 +"/"+ApiNames.TokenHoldersByIds)
+@WebServlet(name = ApiNames.TokenHoldersByIds, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version1 +"/"+ApiNames.TokenHoldersByIds)
 public class TokenHoldersByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -48,7 +48,7 @@ public class TokenHoldersByIds extends HttpServlet {
 
         try (Jedis jedis = jedisPool.getResource()) {
 
-            List<TokenHolder> meetList = FcdslRequestHandler.doRequestForList(sid, IndicesNames.TOKEN_HOLDER, TokenHolder.class, null, null, null, null, sort, request, response, authType, esClient, replier, jedis);
+            List<TokenHolder> meetList = FcdslRequestHandler.doRequestForList(sid, IndicesNames.TOKEN_HOLDER, TokenHolder.class, null, null, null, null, sort, request, authType, esClient, replier, jedis);
             if (meetList == null) return;
 
             Map<String, Map<String,Double>> meetMap = new HashMap<>();

@@ -56,6 +56,7 @@ public class Rewarder {
         this.account = account;
         this.naSaRpcClient = naSaRpcClient;
         pendingMap = new HashMap<>();
+        unpaidCostMap=new HashMap<>();
     }
 
     public static void checkRewarderParams(String sid, Params params, JedisPool jedisPool, BufferedReader br) {
@@ -110,15 +111,13 @@ public class Rewarder {
         }
 
         long total = Cash.sumCashValue(cashList);
+
         log.debug("Ready to reward "+ParseTools.satoshiToCoin(total)+" F from "+cashList.get(0).getOwner()+"...");
         double sumApiMinPaymentDouble = sumApiMinPayment(chargedAccountList);
         long sumApiMinPayment = ParseTools.coinToSatoshi(sumApiMinPaymentDouble);
-        total -= sumApiMinPayment;
 
-        if (total < 0) {
-            log.debug("The balance is insufficient to send rewards.");
-            return null;
-        }
+        total -= sumApiMinPayment;
+        if (isNoMoreThanZero(total)) return null;
 
         Map<String, String> orderViaMap;
         Map<String, String> consumeViaMap;
@@ -142,9 +141,12 @@ public class Rewarder {
         if (builderShareMap != null) sendToCount += builderShareMap.size();
         if (costMap != null) sendToCount += costMap.size();
 
-        long fee = TxCreator.calcTxSize(cashList.size(), sendToCount, opReturn.length());
-        total -= fee;
+        long txSize = TxCreator.calcTxSize(cashList.size(), sendToCount, opReturn.length());
+        double feeRate = wallet.getFeeRate();
+        long fee = TxCreator.calcFee(txSize, feeRate);
 
+        total -= fee;
+        if (isNoMoreThanZero(total)) return null;
         RewardParams rewardParams = getRewardParams(sid, jedisPool);
 
         pendingMap = getPendingMapFromRedis(jedisPool);
@@ -157,7 +159,6 @@ public class Rewarder {
         addQualifiedPendingToPay(sendToMap);
         backUpPending();
 
-        double feeRate = wallet.getFeeRate();
         String txSigned = TxCreator.createTransactionSignFch(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate);
 
         FcReplier fcReplier = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
@@ -177,6 +178,14 @@ public class Rewarder {
             backUpRewardInfo(rewardInfo, esClient);
 
         return rewardInfo;
+    }
+
+    private static boolean isNoMoreThanZero(long total) {
+        if (total <= 0) {
+            log.debug("The balance is insufficient to send rewards.");
+            return true;
+        }
+        return false;
     }
 
     public Map<String, Long> getPendingMapFromRedis(JedisPool jedisPool) {
@@ -281,6 +290,7 @@ public class Rewarder {
     }
 
     private void backUpPending() {
+        if(pendingMap==null || pendingMap.isEmpty())return;
         Map<String ,String > pendingStrMap = new HashMap<>();
         for(String key: pendingMap.keySet()){
             String amountStr = String.valueOf(pendingMap.get(key));
@@ -308,19 +318,21 @@ public class Rewarder {
 
         makePayDetailListIntoSendToMap(sendToMap,orderViaList);
         makePayDetailListIntoSendToMap(sendToMap,consumeViaList);
-        makePayDetailListIntoSendToMap(sendToMap,costList);
-        makePayDetailListIntoSendToMap(sendToMap,buildList);
+        if(costList!=null && !costList.isEmpty())
+            makePayDetailListIntoSendToMap(sendToMap,costList);
+        if(buildList!=null && !buildList.isEmpty())
+            makePayDetailListIntoSendToMap(sendToMap,buildList);
 
         return sendToMap;
     }
 
     public static void makePayDetailListIntoSendToMap(HashMap<String,SendTo> sendToMap,ArrayList<Payment> payDetailList) {
-
+        if(payDetailList==null)return;
         for(Payment payDetail:payDetailList){
             SendTo sendTo = new SendTo();
             String fid = payDetail.getFid();
             sendTo.setFid(fid);
-            double amount = (double) payDetail.getAmount() /FchToSatoshi;
+            double amount = ParseTools.satoshiToCoin(payDetail.getAmount());
             if(sendToMap.get(fid)!=null){
                 amount = amount+ sendToMap.get(fid).getAmount();
                 sendTo.setAmount(NumberTools.roundDouble8(amount));
@@ -357,7 +369,7 @@ public class Rewarder {
         return rewardParams;
     }
 
-    public RewardInfo makeRewardInfo(long incomeT, RewardParams rewardParams) {
+    public RewardInfo makeRewardInfo(long total, RewardParams rewardParams) {
         RewardInfo rewardInfo = new RewardInfo();
 
         try(Jedis jedis = jedisPool.getResource()) {
@@ -369,7 +381,9 @@ public class Rewarder {
             try {
                 orderViaMap = jedis.hgetAll(Settings.addSidBriefToName(sid,ORDER_VIA));
                 consumeViaMap = jedis.hgetAll(Settings.addSidBriefToName(sid,CONSUME_VIA));
-                unpaidCostMap = jedis.hgetAll(Settings.addSidBriefToName(sid,UNPAID_COST));
+                Map<String, String> unpaidCostMapFromJedis = jedis.hgetAll(addSidBriefToName(sid, UNPAID_COST));
+                if(unpaidCostMapFromJedis!=null) unpaidCostMap = new HashMap<>(unpaidCostMapFromJedis);
+                else unpaidCostMap = new HashMap<>();
                 builderShareMap = rewardParams.getBuilderShareMap();//jedis.hgetAll(Settings.addSidBriefToName(sid,BUILDER_SHARE_MAP));
                 costMap = rewardParams.getCostMap();//jedis.hgetAll(Settings.addSidBriefToName(sid,COST_MAP));
             } catch (Exception e) {
@@ -386,16 +400,18 @@ public class Rewarder {
 
             ArrayList<Payment> orderViaRewardList = makeViaPayList(orderViaMap, orderViaShare, Settings.addSidBriefToName(sid,ORDER_VIA));
             ArrayList<Payment> consumeViaRewardList = makeViaPayList(consumeViaMap, consumeViaShare, Settings.addSidBriefToName(sid, CONSUME_VIA));
-
-            ArrayList<Payment> costList = makeCostPayList(costMap, incomeT,unpaidCostMap);
+            ArrayList<Payment> costList = null;
+            if(costMap!=null && !costMap.isEmpty())
+                costList = makeCostPayList(costMap, total,unpaidCostMap);
             if(unpaidCostMap!= null && !unpaidCostMap.isEmpty())jedis.hmset(Settings.addSidBriefToName(sid,UNPAID_COST),unpaidCostMap);
 
-            ArrayList<Payment> builderRewardList = makeBuilderPayList(builderShareMap, incomeT);
+            ArrayList<Payment> builderRewardList = makeBuilderPayList(builderShareMap, total);
 
             rewardInfo.setOrderViaList(orderViaRewardList);
             rewardInfo.setConsumeViaList(consumeViaRewardList);
             rewardInfo.setBuilderList(builderRewardList);
-            rewardInfo.setCostList(costList);
+            if(costMap!=null && !costMap.isEmpty())
+                rewardInfo.setCostList(costList);
 
             rewardInfo.setRewardT(paidSum);
             rewardInfo.setState(RewardState.unpaid);
@@ -429,30 +445,31 @@ public class Rewarder {
 
 
     private ArrayList<Payment> makeCostPayList(Map<String, String> costMap, long income, Map<String, String> unpaidCostMap) {
-        long costTotal = 0;
+        long costSum = 0;
         Map<String,Long> costAmountMap = new HashMap<>();
         for(String fid: costMap.keySet()) {
             long amount;
             try {
-                amount = (long) (Float.parseFloat(costMap.get(fid))*FchToSatoshi);
+                amount = ParseTools.coinStrToSatoshi(costMap.get(fid));
             } catch (Exception e) {
                 log.error("Get cost of {} from redis wrong.", fid, e);
                 return null;
             }
 
-            if(amount+costTotal+paidSum > income){
-                if(costTotal+paidSum<income){
-                    long payNow = income-costTotal-paidSum;
-                    costAmountMap.put(fid, amount);
-                    unpaidCostMap.put(fid,String.valueOf(ParseTools.satoshiToCoin(amount-payNow)));
+            if(amount+costSum+paidSum > income){
+                if(costSum+paidSum < income){
+                    long payNow = income-costSum-paidSum;
+                    double unpaid = ParseTools.satoshiToCoin(amount - payNow);
+                    unpaidCostMap.put(fid,String.valueOf(unpaid));
                     amount = payNow;
+                    costAmountMap.put(fid, amount);
                 }else unpaidCostMap.put(fid,String.valueOf(ParseTools.satoshiToCoin(amount)));
             }else {
                 costAmountMap.put(fid, amount);
             }
-            costTotal += amount;
+            costSum += amount;
         }
-        int payPercent = (int) (Cover4Decimal * (income-paidSum)/costTotal);
+        int payPercent = (int) (Cover4Decimal * (income-paidSum)/costSum);
         if(payPercent > Cover4Decimal)payPercent= Cover4Decimal;
         return payCost(costAmountMap,payPercent);
     }
@@ -534,7 +551,7 @@ public class Rewarder {
 
         try {
             esClient.index(i->i.index(addSidBriefToName(sid,REWARD).toLowerCase()).id(rewardInfo.getRewardId()).document(rewardInfo));
-            log.debug("Backup rewardInfo into ES success. BestHeight.");
+            log.debug("Backup rewardInfo into ES success. BestHeight {}",rewardInfo.getBestHeight());
         } catch (IOException e) {
             log.error("Backup rewardInfo wrong. Check ES.",e);
             return false;

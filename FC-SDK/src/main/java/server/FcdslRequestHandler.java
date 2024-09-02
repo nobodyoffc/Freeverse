@@ -25,7 +25,6 @@ import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
-import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -37,18 +36,15 @@ import static constants.Strings.HEIGHT;
 
 public class FcdslRequestHandler {
     private final FcReplier replier;
-    private final HttpServletResponse response;
     private final ElasticsearchClient esClient;
     private final RequestBody dataRequestBody;
 
-    public FcdslRequestHandler(RequestBody dataRequestBody, HttpServletResponse response, FcReplier replier, ElasticsearchClient esClient) {
-        if(dataRequestBody==null)
-            this.dataRequestBody= new RequestBody();
-        else this.dataRequestBody = dataRequestBody;
+    public FcdslRequestHandler(RequestBody dataRequestBody, FcReplier replier, ElasticsearchClient esClient) {
+        this.dataRequestBody = Objects.requireNonNullElseGet(dataRequestBody, RequestBody::new);
         if(this.dataRequestBody.getFcdsl()==null)
             this.dataRequestBody.setFcdsl(new Fcdsl());
         this.esClient = esClient;
-        this.response = response;
+
         this.replier = replier;
     }
 
@@ -67,9 +63,8 @@ public class FcdslRequestHandler {
             }
 
             List<T> meetList;
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), response, replier, esClient);
-            ArrayList<Sort> defaultSortList = null;
-            meetList = fcdslRequestHandler.doRequest(indexName, defaultSortList, tClass, jedis);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
+            meetList = fcdslRequestHandler.doRequest(indexName, null, tClass, jedis);
 
             if (meetList == null || meetList.size() == 0) return;
 
@@ -88,7 +83,7 @@ public class FcdslRequestHandler {
 
         try (Jedis jedis = jedisPool.getResource()) {
 
-            List<T> meetList = doRequestForList(sid, indexName, tClass, filterField, filterValue, exceptField, exceptValue, sort, request, response, authType, esClient, replier, jedis);
+            List<T> meetList = doRequestForList(sid, indexName, tClass, filterField, filterValue, exceptField, exceptValue, sort, request, authType, esClient, replier, jedis);
             if (meetList == null) return;
 
             replier.reply0Success(meetList, jedis, null);
@@ -96,7 +91,7 @@ public class FcdslRequestHandler {
     }
 
     @Nullable
-    public static <T> List<T> doRequestForList(String sid, String indexName, Class<T> tClass, String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, FcReplier replier, Jedis jedis) {
+    public static <T> List<T> doRequestForList(String sid, String indexName, Class<T> tClass, String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, AuthType authType, ElasticsearchClient esClient, FcReplier replier, Jedis jedis) {
         RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
         if (requestCheckResult == null) {
             return null;
@@ -117,7 +112,7 @@ public class FcdslRequestHandler {
             fcdsl.setSort(sort);
         }
         //Request
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, response, replier, esClient);
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, esClient);
         List<T> meetList = fcdslRequestHandler.doRequest(indexName, fcdsl.getSort(), tClass, jedis);
         if (meetList == null || meetList.isEmpty()) return null;
         return meetList;
@@ -151,7 +146,7 @@ public class FcdslRequestHandler {
             //Request
             String index = IndicesNames.BLOCK_HAS;
 
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), response, replier, esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
             List<BlockHas> blockHasList = fcdslRequestHandler.doRequest(index, defaultSortList, BlockHas.class, jedis);
             if (blockHasList == null || blockHasList.size() == 0) {
                 return;
@@ -178,7 +173,11 @@ public class FcdslRequestHandler {
 
 
             Map<String, BlockInfo> meetMap = null;
-            if(isForMap)meetMap= ObjectTools.listToMap(meetList,idFieldName);
+
+            if(isForMap){
+                meetMap= ObjectTools.listToMap(meetList,idFieldName);
+                replier.setLast(null);
+            }
 
             //response
             replier.setGot((long) meetList.size());
@@ -199,15 +198,12 @@ public class FcdslRequestHandler {
             if (requestCheckResult == null) {
                 return;
             }
-            if(isForMap)
-                if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-                    replier.replyOtherError("The parameter 'ids' is required.", null, jedis);
-                    return;
-                }
+
+            if (ifForMapWithoutIds(isForMap, replier, jedis, requestCheckResult)) return;
 
             List<Cid> meetCidList;
             List<Address> meetAddrList;
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), response, replier, esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
             meetCidList = fcdslRequestHandler.doRequest(CID, sort, Cid.class, jedis);
 
             if (meetCidList == null) return;
@@ -227,7 +223,7 @@ public class FcdslRequestHandler {
 
             List<CidInfo> cidInfoList = CidInfo.mergeCidInfoList(meetCidList, meetAddrList);
 
-            if (cidInfoList == null || cidInfoList.size() == 0) {
+            if (cidInfoList.size() == 0) {
                 replier.reply(ReplyCodeMessage.Code1011DataNotFound, null, jedis);
                 return;
             }
@@ -244,7 +240,16 @@ public class FcdslRequestHandler {
         }
     }
 
-    public static void doTxInfoRequest(String sid, boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
+    private static boolean ifForMapWithoutIds(boolean isForMap, FcReplier replier, Jedis jedis, RequestCheckResult requestCheckResult) {
+        if(isForMap)
+            if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
+                replier.replyOtherError("The parameter 'ids' is required.", null, jedis);
+                return true;
+            }
+        return false;
+    }
+
+    public static void doTxInfoRequest(String sid, boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) {
 
         FcReplier replier = new FcReplier(sid,response);
         try (Jedis jedis = jedisPool.getResource()) {
@@ -252,18 +257,14 @@ public class FcdslRequestHandler {
             if (requestCheckResult == null) {
                 return;
             }
-            if(isForMap)
-                if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-                replier.replyOtherError("The parameter 'ids' is required.", null, jedis);
-                return;
-                }
+            if (ifForMapWithoutIds(isForMap, replier, jedis, requestCheckResult)) return;
             //Set default sort.
             ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, TX_ID, true, null, null);
 
             //Request
             String index = IndicesNames.TX_HAS;
 
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), response, replier, esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
             List<TxHas> txHasList = fcdslRequestHandler.doRequest(index, defaultSortList, TxHas.class, jedis);
             if (txHasList == null || txHasList.size() == 0) {
                 return;
@@ -604,29 +605,29 @@ public class FcdslRequestHandler {
 
         for(String field : fields){
             if(field.isBlank())continue;
-            RangeQuery.Builder rangeBuider = new RangeQuery.Builder();
-            rangeBuider.field(field);
+            RangeQuery.Builder rangeBuilder = new RangeQuery.Builder();
+            rangeBuilder.field(field);
 
             int count = 0;
             if(range.getGt()!=null){
-                rangeBuider.gt(JsonData.of(range.getGt()));
+                rangeBuilder.gt(JsonData.of(range.getGt()));
                 count++;
             }
             if(range.getGte()!=null){
-                rangeBuider.gte(JsonData.of(range.getGte()));
+                rangeBuilder.gte(JsonData.of(range.getGte()));
                 count++;
             }
             if(range.getLt()!=null){
-                rangeBuider.lt(JsonData.of(range.getLt()));
+                rangeBuilder.lt(JsonData.of(range.getLt()));
                 count++;
             }
             if(range.getLte()!=null){
-                rangeBuider.lte(JsonData.of(range.getLte()));
+                rangeBuilder.lte(JsonData.of(range.getLte()));
                 count++;
             }
             if(count==0)return null;
 
-            queryList.add(new Query.Builder().range(rangeBuider.build()).build());
+            queryList.add(new Query.Builder().range(rangeBuilder.build()).build());
         }
 
         bBuilder.must(queryList);
@@ -672,7 +673,7 @@ public class FcdslRequestHandler {
     }
 
     private BoolQuery.Builder makeBoolShouldTermsQuery(String[] fields, List<FieldValue> valueList) {
-        BoolQuery.Builder termsBoolBuider = new BoolQuery.Builder();
+        BoolQuery.Builder termsBoolBuilder = new BoolQuery.Builder();
 
         List<Query> queryList = new ArrayList<>();
         for(String field:fields){
@@ -684,8 +685,8 @@ public class FcdslRequestHandler {
 
             queryList.add(new Query.Builder().terms(tQuery).build());
         }
-        termsBoolBuider.should(queryList);
-        return termsBoolBuider;
+        termsBoolBuilder.should(queryList);
+        return termsBoolBuilder;
     }
 
     private MatchAllQuery getMatchAllQuery() {

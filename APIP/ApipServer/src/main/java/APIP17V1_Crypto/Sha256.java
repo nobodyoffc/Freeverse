@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 
-@WebServlet(name = ApiNames.Sha256, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version2 +"/"+ApiNames.Sha256)
+@WebServlet(name = ApiNames.Sha256, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version1 +"/"+ApiNames.Sha256)
 public class Sha256 extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;

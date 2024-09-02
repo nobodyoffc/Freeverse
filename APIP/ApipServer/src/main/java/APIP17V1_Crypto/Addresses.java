@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.HashMap;
 import java.util.Map;
 
-@WebServlet(name = ApiNames.Addresses, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version2 +"/"+ApiNames.Addresses)
+@WebServlet(name = ApiNames.Addresses, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version1 +"/"+ApiNames.Addresses)
 public class Addresses extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;

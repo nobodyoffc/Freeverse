@@ -36,7 +36,7 @@ public class Check extends HttpServlet {
             }
 
         //Do request
-            doRequest(request, response, replier, requestCheckResult,jedis);
+            doRequest(request, replier, jedis);
         }
     }
 
@@ -54,16 +54,18 @@ public class Check extends HttpServlet {
                 return;
             }
         //Do request
-            doRequest(request, response,  replier, requestCheckResult,jedis);
+            doRequest(request, replier, jedis);
         }
     }
 
-    private void doRequest(HttpServletRequest request, HttpServletResponse response, FcReplier replier, RequestCheckResult requestCheckResult, Jedis jedis) {
+    private void doRequest(HttpServletRequest request, FcReplier replier, Jedis jedis) {
         String did = replier.getStringFromUrl(request, DID,jedis);
         if (did == null) return;
+        if (FcReplier.isBadHex32(replier, jedis, did)) return;
         String subDir = getSubPathForDisk(did);
-        String path = STORAGE_DIR+subDir;
+        String path = STORAGE_DIR + subDir;
         Boolean isFileExists = Boolean.TRUE.equals(FileTools.checkFileOfFreeDisk(path, did));
         replier.reply0Success(isFileExists, jedis, null);
     }
+
 }

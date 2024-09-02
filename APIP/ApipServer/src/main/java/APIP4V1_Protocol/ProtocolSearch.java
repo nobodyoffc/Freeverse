@@ -21,7 +21,7 @@ import static constants.FieldNames.PID;
 import static constants.Strings.ACTIVE;
 
 
-@WebServlet(name = ApiNames.ProtocolSearch, value = "/"+ApiNames.SN_4+"/"+ApiNames.Version2 +"/"+ApiNames.ProtocolSearch)
+@WebServlet(name = ApiNames.ProtocolSearch, value = "/"+ApiNames.SN_4+"/"+ApiNames.Version1 +"/"+ApiNames.ProtocolSearch)
 public class ProtocolSearch extends HttpServlet {
 
     @Override

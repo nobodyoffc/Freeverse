@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.*;
 
 
-@WebServlet(name = ApiNames.GroupSearch, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version2 +"/"+ApiNames.GroupSearch)
+@WebServlet(name = ApiNames.GroupSearch, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version1 +"/"+ApiNames.GroupSearch)
 public class GroupSearch extends HttpServlet {
 
     @Override

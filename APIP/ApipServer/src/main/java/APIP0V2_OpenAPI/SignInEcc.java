@@ -23,7 +23,7 @@ import java.util.Map;
 import static constants.Constants.DEFAULT_SESSION_DAYS;
 import static constants.Strings.*;
 
-@WebServlet(name = ApiNames.SignInEcc, value = "/"+ApiNames.Version2 +"/"+ ApiNames.SignInEcc)
+@WebServlet(name = ApiNames.SignInEcc, value = "/"+ApiNames.Version1 +"/"+ ApiNames.SignInEcc)
 public class SignInEcc extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {

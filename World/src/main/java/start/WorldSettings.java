@@ -40,8 +40,8 @@ public class WorldSettings extends Settings {
     }
 
     @Override
-    public void saveSettings(String mainFid) {
-        writeToFile(mainFid);
+    public void saveSettings(String id) {
+        writeToFile(id);
     }
 
     @Override

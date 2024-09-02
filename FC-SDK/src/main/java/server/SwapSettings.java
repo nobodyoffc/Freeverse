@@ -42,7 +42,7 @@ public class SwapSettings extends Settings {
     }
 
     @Override
-    public void saveSettings(String mainFid) {
+    public void saveSettings(String id) {
 
     }
 
@@ -85,10 +85,10 @@ public class SwapSettings extends Settings {
         while (true) {
             System.out.println("Reset default API service...");
             ApiProvider apiProvider = config.chooseApiProviderOrAdd(config.getApiProviderMap(), apipClient);
-            ApiAccount apiAccount = config.chooseAccountForTheProvider(apiProvider, mainFid, symKey,apipClient);
+            ApiAccount apiAccount = config.findAccountForTheProvider(apiProvider, mainFid, symKey,apipClient);
 
             if (apiAccount != null) {
-                Object client = apiAccount.connectApi(config.getApiProviderMap().get(apiAccount.getProviderId()), symKey, br, null);
+                Object client = apiAccount.connectApi(config.getApiProviderMap().get(apiAccount.getProviderId()), symKey, br, null, config.getFidCipherMap());
                 if (client != null) {
                     menu.show();
                     int choice = menu.choose(br);

@@ -13,7 +13,7 @@ import java.util.Map;
 
 public class DiskParams extends Params {
     private String dataLifeDays;
-    private String pricePerKBytesPermanent;
+    private String pricePerKBytesCarve;
     private transient ApipClient apipClient;
 
     public DiskParams(){
@@ -33,7 +33,7 @@ public class DiskParams extends Params {
         Map<String, String> map = new HashMap<>();
         toMap(map);
         if (this.dataLifeDays != null) map.put("dataLifeDays", this.dataLifeDays);
-        if (this.pricePerKBytesPermanent != null) map.put("pricePerKBytesPermanent", this.pricePerKBytesPermanent);
+        if (this.pricePerKBytesCarve != null) map.put("pricePerKBytesPermanent", this.pricePerKBytesCarve);
         return map;
     }
 
@@ -42,24 +42,25 @@ public class DiskParams extends Params {
         DiskParams params = new DiskParams();
         params.fromMap(map, params);
         params.dataLifeDays = map.get("dataLifeDays");
-        params.pricePerKBytesPermanent = map.get("pricePerKBytesPermanent");
+        params.pricePerKBytesCarve = map.get("pricePerKBytesPermanent");
         return params;
     }
 
     public void inputParams(BufferedReader br, byte[]symKey){
         inputParams(br,symKey,apipClient);
         this.dataLifeDays = Inputer.inputString(br,"Input the dataLifeDays:");
-        this.pricePerKBytesPermanent = Inputer.inputDoubleAsString(br,"Input the pricePerKBytesPermanent:");
+        this.pricePerKBytesCarve = Inputer.inputDoubleAsString(br,"Input the pricePerKBytesPermanent:");
     }
 
-    public void updateParams(BufferedReader br, byte[] symKey) {
+    public Params updateParams(BufferedReader br, byte[] symKey) {
         try {
             updateParams(br, symKey,apipClient );
-            this.dataLifeDays = Inputer.promptAndUpdate(br,"Input the dataLifeDays:",this.dataLifeDays);
-            this.pricePerKBytesPermanent = Inputer.promptAndUpdate(br,"Input the pricePerKBytesPermanent:",this.pricePerKBytesPermanent);
+            this.dataLifeDays = Inputer.promptAndUpdate(br,"dataLifeDays",this.dataLifeDays);
+            this.pricePerKBytesCarve = Inputer.promptAndUpdate(br,"pricePerKBytesPermanent",this.pricePerKBytesCarve);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        return this;
     }
 
     public static DiskParams getParamsFromService(Service service) {
@@ -84,12 +85,12 @@ public class DiskParams extends Params {
         this.dataLifeDays = dataLifeDays;
     }
 
-    public String getPricePerKBytesPermanent() {
-        return pricePerKBytesPermanent;
+    public String getPricePerKBytesCarve() {
+        return pricePerKBytesCarve;
     }
 
-    public void setPricePerKBytesPermanent(String pricePerKBytesPermanent) {
-        this.pricePerKBytesPermanent = pricePerKBytesPermanent;
+    public void setPricePerKBytesCarve(String pricePerKBytesCarve) {
+        this.pricePerKBytesCarve = pricePerKBytesCarve;
     }
     public ApipClient getApipClient() {
         return apipClient;

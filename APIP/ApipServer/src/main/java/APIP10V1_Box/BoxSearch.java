@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.BID;
 import static constants.FieldNames.LAST_HEIGHT;
 
-@WebServlet(name = ApiNames.BoxSearch, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version2 +"/"+ApiNames.BoxSearch)
+@WebServlet(name = ApiNames.BoxSearch, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version1 +"/"+ApiNames.BoxSearch)
 public class BoxSearch extends HttpServlet {
 
     @Override

@@ -16,7 +16,7 @@ import java.io.IOException;
 import static constants.FieldNames.TX_ID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
-@WebServlet(name = ApiNames.OpReturnByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.OpReturnByIds)
+@WebServlet(name = ApiNames.OpReturnByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.OpReturnByIds)
 public class OpReturnByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

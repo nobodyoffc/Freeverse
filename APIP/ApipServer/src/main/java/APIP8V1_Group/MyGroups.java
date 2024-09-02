@@ -23,7 +23,7 @@ import java.util.List;
 import static constants.FieldNames.*;
 import static server.FcdslRequestHandler.doRequestForList;
 
-@WebServlet(name = ApiNames.MyGroups, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version2 +"/"+ApiNames.MyGroups)
+@WebServlet(name = ApiNames.MyGroups, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version1 +"/"+ApiNames.MyGroups)
 public class MyGroups extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -39,7 +39,7 @@ public class MyGroups extends HttpServlet {
     protected void doRequest(String sid, List<Sort> sortList,HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
         FcReplier replier = new FcReplier(sid,response);
         try (Jedis jedis = jedisPool.getResource()) {
-            List<Group> meetList = doRequestForList(sid, IndicesNames.GROUP, Group.class, null, null, null, null, sortList, request, response, authType, esClient, replier, jedis);
+            List<Group> meetList = doRequestForList(sid, IndicesNames.GROUP, Group.class, null, null, null, null, sortList, request, authType, esClient, replier, jedis);
             if (meetList == null) return;
             //Make data
             List<apip.apipData.MyGroupData> dataList = new ArrayList<>();

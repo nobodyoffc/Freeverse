@@ -18,7 +18,7 @@ import static constants.Strings.SID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.ProtocolByIds, value = "/"+ApiNames.SN_4+"/"+ApiNames.Version2 +"/"+ApiNames.ProtocolByIds)
+@WebServlet(name = ApiNames.ProtocolByIds, value = "/"+ApiNames.SN_4+"/"+ApiNames.Version1 +"/"+ApiNames.ProtocolByIds)
 public class ProtocolByIds extends HttpServlet {
 
     @Override

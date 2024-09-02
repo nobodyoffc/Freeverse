@@ -1,5 +1,6 @@
 package clients.esClient;
 
+import appTools.Inputer;
 import appTools.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.*;
@@ -33,8 +34,8 @@ public class EsTools {
     public static final int READ_MAX = 5000;
     public static final int WRITE_MAX = 3000;
     final static Logger log = LoggerFactory.getLogger(EsTools.class);
-    public static void recreateIndex(String index, String mappingJsonStr, ElasticsearchClient esClient) throws InterruptedException {
-
+    public static void recreateIndex(String index, String mappingJsonStr, ElasticsearchClient esClient, BufferedReader br)  {
+        if(!Inputer.askIfYes(br,"Ary you sure to delete "+index+" from ES?"))return;
         if(esClient==null) {
             System.out.println("Create a Java client for ES first.");
             return;
@@ -49,7 +50,11 @@ public class EsTools {
             log.debug("Deleting index {} failed.", index,e);
         }
 
-        TimeUnit.SECONDS.sleep(2);
+        try {
+            TimeUnit.SECONDS.sleep(2);
+        } catch (InterruptedException e) {
+            System.out.println(e.getMessage());
+        }
 
         createIndex(esClient, index, mappingJsonStr);
     }
@@ -97,11 +102,7 @@ public class EsTools {
     }
 
     public static void recreateApipIndex(BufferedReader br, ElasticsearchClient esClient, String index, String mappingJsonStr) {
-        try {
-            recreateIndex(index, mappingJsonStr, esClient);
-        } catch (InterruptedException e) {
-            log.debug("Recreate index {} wrong.",index);
-        }
+        recreateIndex(index, mappingJsonStr, esClient, br);
         Menu.anyKeyToContinue(br);
     }
 
@@ -271,7 +272,7 @@ public class EsTools {
         return result;
     }
 
-    public static <T> ArrayList<T> getListByTermsSinceHeight(ElasticsearchClient esClient, String index, String termField, String[] termValues, long sinceHeight, String sortField, SortOrder order, Class<T> clazz) throws IOException {
+    public static <T> ArrayList<T> getListByTermsSinceHeight(ElasticsearchClient esClient, String index, String termField, List<String> termValues, long sinceHeight, String sortField, SortOrder order, Class<T> clazz) throws IOException {
 
         List<FieldValue> values = new ArrayList<>();
         for (String v : termValues) {

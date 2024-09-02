@@ -22,7 +22,7 @@ import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.TeamRateHistory, value = "/"+ApiNames.SN_9+"/"+ApiNames.Version2 +"/"+ApiNames.TeamRateHistory)
+@WebServlet(name = ApiNames.TeamRateHistory, value = "/"+ApiNames.SN_9+"/"+ApiNames.Version1 +"/"+ApiNames.TeamRateHistory)
 
 public class TeamRateHistory extends HttpServlet {
     @Override

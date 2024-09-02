@@ -40,12 +40,13 @@ public class StartTalkServer {
     public static Service service;
     public static TalkParams params;
     public static Counter counter;
+    public static final ServiceType serviceType = ServiceType.TALK;
 
 
     public static String sid;
 
     public static void main(String[] args) throws IOException {
-        ServiceType serviceType = ServiceType.TALK;
+
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         //Load config info from the file
@@ -53,7 +54,7 @@ public class StartTalkServer {
         Configure configure = Configure.checkPassword(br);
         byte[] symKey = configure.getSymKey();
 
-        sid = configure.chooseSid(symKey);
+        sid = configure.chooseSid(serviceType);
         //Load the local settings from the file of localSettings.json
         settings = TalkServerSettings.loadFromFile(sid, TalkServerSettings.class);//new ApipClientSettings(configure,br);
         if(settings==null) settings = new TalkServerSettings(configure);
@@ -85,7 +86,7 @@ public class StartTalkServer {
 
         //Check webhooks for new orders.
         if(settings.getFromWebhook()!=null && settings.getFromWebhook().equals(Boolean.TRUE))
-            if (!Order.checkWebhook(ApiNames.NewCashByFids, sid, params, apipClient.getApiAccount(), br, jedisPool)){
+            if (!Order.checkWebhook(ApiNames.NewCashByFids, params, apipClient.getApiAccount(), br, jedisPool)){
                 close();
                 return;
             }
@@ -144,14 +145,10 @@ public class StartTalkServer {
 
     private static void recreateAllIndices(ElasticsearchClient esClient,BufferedReader br) {
         if(!Inputer.askIfYes(br,"Recreate the disk data, order, balance, reward indices?"))return;
-        try {
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS,esClient);
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient);
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient);
-            EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
     }
 
     private static void checkEsIndices(ElasticsearchClient esClient) {

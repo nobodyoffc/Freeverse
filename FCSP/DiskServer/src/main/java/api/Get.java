@@ -70,6 +70,10 @@ public class Get extends HttpServlet {
             try {
                 Map<String, String> paramMap = ObjectTools.objectToMap(fcdsl.getOther(), String.class, String.class);
                 did = paramMap.get(DID);
+                if (did == null) {
+                    replier.reply(ReplyCodeMessage.Code3009DidMissed, null, jedis);
+                    return;
+                }
             }catch (Exception e){
                 replier.replyOtherError("Failed to get DID.",null,jedis);
                 return;
@@ -79,12 +83,8 @@ public class Get extends HttpServlet {
         }
     }
 
-    @Nullable
     private void doPostRequest(HttpServletResponse response, FcReplier replier, String did, Jedis jedis) throws IOException {
-        if (did == null) {
-            replier.reply(ReplyCodeMessage.Code3009DidMissed, null, jedis);
-            return;
-        }
+        if (did == null) return;
         String path = FileTools.getSubPathForDisk(did);
         File file = new File(STORAGE_DIR+path, did);
         if (!file.exists()) {

@@ -4,14 +4,13 @@ import appTools.Menu;
 import clients.apipClient.ApipClient;
 import clients.redisClient.RedisTools;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import configure.ApiAccount;
 import configure.ServiceType;
 import configure.Configure;
 import constants.ApiNames;
 import constants.FieldNames;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.ApipParams;
-import nasa.NaSaRpcClient;
+import javaTools.JsonTools;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Settings;
@@ -25,6 +24,7 @@ import static constants.Constants.UserDir;
 import static constants.FieldNames.SETTINGS;
 
 public class ApipManagerSettings extends Settings {
+    public static final ServiceType serviceType = ServiceType.APIP;
     protected Boolean scanMempool = true;
     private String avatarElementsPath = System.getProperty(UserDir)+"/avatar/elements";
     private String avatarPngPath = System.getProperty(UserDir)+"/avatar/png";
@@ -39,15 +39,19 @@ public class ApipManagerSettings extends Settings {
 
         setInitForServer(sid, config, br);
 
-        esAccount = config.checkAPI(esAccountId, mainFid, ServiceType.ES,symKey);//checkApiAccount(esAccountId, ApiType.ES, config, symKey, null);
+        mainFid = config.getServiceAccount(sid,symKey);
+
+        if(shareApiAccount==null)inputShareApiAccount(br);
+
+        esAccount = config.checkAPI(esAccountId, mainFid, ServiceType.ES,symKey, shareApiAccount);//checkApiAccount(esAccountId, ApiType.ES, config, symKey, null);
         if(esAccount.getClient()!=null)esAccountId = esAccount.getId();
         else System.out.println("No ES service.");
 
-        nasaAccount = config.checkAPI(nasaAccountId, mainFid, ServiceType.NASA_RPC,symKey);//checkApiAccount(nasaAccountId, ApiType.REDIS, config, symKey, null);
+        nasaAccount = config.checkAPI(nasaAccountId, mainFid, ServiceType.NASA_RPC,symKey, shareApiAccount);//checkApiAccount(nasaAccountId, ApiType.REDIS, config, symKey, null);
         if(nasaAccount.getClient()!=null)nasaAccountId=nasaAccount.getId();
         else System.out.println("No Nasa node RPC service.");
 
-        redisAccount = config.checkAPI(redisAccountId, mainFid, ServiceType.REDIS,symKey);//checkApiAccount(redisAccountId,ApiType.REDIS,config,symKey,null);
+        redisAccount = config.checkAPI(redisAccountId, mainFid, ServiceType.REDIS,symKey, shareApiAccount);//checkApiAccount(redisAccountId,ApiType.REDIS,config,symKey,null);
         if(redisAccount.getClient()!=null){
             redisAccountId = redisAccount.getId();
             this.jedisPool=(JedisPool) redisAccount.getClient();
@@ -56,10 +60,15 @@ public class ApipManagerSettings extends Settings {
 
         ElasticsearchClient esClient = (ElasticsearchClient) esAccount.getClient();
         Service service = getMyService(sid, symKey, config, br, esClient, ApipParams.class, ServiceType.APIP);
-        writeServiceToRedis(service,(JedisPool)redisAccount.getClient(), ApipParams.class);
+        if (isWrongServiceType(service, serviceType.name())) return null;
+
+        System.out.println("\nYour service:\n"+ JsonTools.toNiceJson(service));
+        Menu.anyKeyToContinue(br);
+
+        writeServiceToRedis(service, ApipParams.class);
 
         if(listenPath==null)inputListenPath(br);
-        if(fromWebhook==null)inputFromWebhook(br);
+        fromWebhook=false;
         if(forbidFreeApi==null)inputForbidFreeApi(br);
         if(windowTime==null)inputWindowTime(br);
 
@@ -68,7 +77,6 @@ public class ApipManagerSettings extends Settings {
         System.out.println("Initiated.\n");
         return service;
     }
-
 
     @Override
     public String initiateClient(String fid, byte[] symKey, Configure config, BufferedReader br) {
@@ -84,6 +92,7 @@ public class ApipManagerSettings extends Settings {
         menu.add("Reset forbidFreeApi switch");
         menu.add("Reset window time");
         menu.add("Reset API prices");
+        menu.add("Make web server config file");
         while (true) {
             menu.show();
             int choice = menu.choose(br);
@@ -92,12 +101,14 @@ public class ApipManagerSettings extends Settings {
                 case 2 -> updateFromWebhook(br);
                 case 3 -> updateForbidFreeApi(br);
                 case 4 -> updateWindowTime(br);
-                case 5 -> Order.setNPrices(sid, ApiNames.DiskApiList, (JedisPool) redisAccount.getClient(), br, true);
+                case 5 -> Order.setNPrices(sid, ApiNames.ApipApiList, (JedisPool) redisAccount.getClient(), br, true);
+                case 6 -> Configure.makeWebConfig(sid, config, this,symKey, serviceType, jedisPool);
                 case 0 -> {
                     System.out.println("Restart is necessary to active new settings.");
                     return;
                 }
             }
+            saveSettings(sid);
         }
     }
 
@@ -197,7 +208,7 @@ public class ApipManagerSettings extends Settings {
     public void saveSettings(String id){
         writeToFile(id);
         if(redisAccount!=null) {
-            JedisPool jedisPool = (JedisPool) redisAccount.getClient();
+
             try (Jedis jedis = jedisPool.getResource()) {
                 RedisTools.writeToRedis(this, Settings.addSidBriefToName(sid,SETTINGS), jedis, ApipManagerSettings.class);
             }
@@ -209,47 +220,6 @@ public class ApipManagerSettings extends Settings {
         try (Jedis jedis = jedisPool.getResource()) {
             RedisTools.writeToRedis(this, Settings.addSidBriefToName(sid,SETTINGS), jedis, ApipManagerSettings.class);
         }
-    }
-
-    public String getRedisAccountId() {
-        return redisAccountId;
-    }
-
-    public void setRedisAccountId(String redisAccountId) {
-        this.redisAccountId = redisAccountId;
-    }
-
-    public String getEsAccountId() {
-        return esAccountId;
-    }
-
-    public void setEsAccountId(String esAccountId) {
-        this.esAccountId = esAccountId;
-    }
-
-    public String getApipAccountId() {
-        return apipAccountId;
-    }
-
-    public void setApipAccountId(String apipAccountId) {
-        this.apipAccountId = apipAccountId;
-    }
-
-
-    public ApiAccount getNasaAccount() {
-        return nasaAccount;
-    }
-
-    public void setNasaAccount(ApiAccount nasaAccount) {
-        this.nasaAccount = nasaAccount;
-    }
-
-    public String getNasaAccountId() {
-        return nasaAccountId;
-    }
-
-    public void setNasaAccountId(String nasaAccountId) {
-        this.nasaAccountId = nasaAccountId;
     }
 
 
@@ -269,20 +239,8 @@ public class ApipManagerSettings extends Settings {
         this.avatarPngPath = avatarPngPath;
     }
 
-    public Long getWindowTime() {
-        return windowTime;
-    }
-
-    public void setWindowTime(Long windowTime) {
-        this.windowTime = windowTime;
-    }
-
     public Boolean getForbidFreeApi() {
         return isForbidFreeApi();
-    }
-
-    public void setForbidFreeApi(Boolean forbidFreeApi) {
-        this.forbidFreeApi = forbidFreeApi;
     }
 
     public Boolean getScanMempool() {

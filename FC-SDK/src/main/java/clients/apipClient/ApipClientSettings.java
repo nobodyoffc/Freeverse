@@ -29,9 +29,9 @@ public class ApipClientSettings extends Settings {
         System.out.println("Initiating APIP Client settings...");
         setInitForClient(fid, config, br);
 
-        String mainFidPriKeyCipher = config.getFidCipherMap().get(mainFid);
+        if(shareApiAccount==null)inputShareApiAccount(br);
 
-        apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey);//checkApiAccount(apipAccountId,ApiType.APIP , config, symKey, null);
+        apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey, shareApiAccount);
         checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
         if(apipAccount.getClient()!=null)apipAccountId=apipAccount.getId();
         else System.out.println("No APIP service or failed to get APIP client.");
@@ -51,8 +51,8 @@ public class ApipClientSettings extends Settings {
     }
 
     @Override
-    public void saveSettings(String mainFid) {
-        writeToFile(mainFid);
+    public void saveSettings(String id) {
+        writeToFile(id);
     }
 
     @Override

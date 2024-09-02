@@ -22,7 +22,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 
-@WebServlet(name = ApiNames.MailThread, value = "/"+ApiNames.SN_13+"/"+ApiNames.Version2 +"/"+ApiNames.MailThread)
+@WebServlet(name = ApiNames.MailThread, value = "/"+ApiNames.SN_13+"/"+ApiNames.Version1 +"/"+ApiNames.MailThread)
 public class MailThread extends HttpServlet {
 
     @Override

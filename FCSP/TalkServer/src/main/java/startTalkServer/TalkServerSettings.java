@@ -5,6 +5,7 @@ import clients.apipClient.ApipClient;
 import clients.redisClient.RedisTools;
 import configure.ServiceType;
 import configure.Configure;
+import constants.ApiNames;
 import constants.FieldNames;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
@@ -32,15 +33,15 @@ public class TalkServerSettings extends Settings {
         System.out.println("Initiating service settings...");
         setInitForServer(sid, config, br);
 
-        apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey);//checkApiAccount(apipAccountId,ApiType.APIP, config, symKey, null);
+        apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey, shareApiAccount);//checkApiAccount(apipAccountId,ApiType.APIP, config, symKey, null);
         if(apipAccount!=null)apipAccountId=apipAccount.getId();
         else System.out.println("No APIP service.");
 
-        esAccount =  config.checkAPI(esAccountId, mainFid, ServiceType.ES,symKey);//checkApiAccount(esAccountId, ApiType.ES, config, symKey, null);
+        esAccount =  config.checkAPI(esAccountId, mainFid, ServiceType.ES,symKey, shareApiAccount);//checkApiAccount(esAccountId, ApiType.ES, config, symKey, null);
         if(esAccount!=null)esAccountId = esAccount.getId();
         else System.out.println("No ES service.");
 
-        redisAccount =  config.checkAPI(redisAccountId, mainFid, ServiceType.REDIS,symKey);//checkApiAccount(redisAccountId,ApiType.REDIS,config,symKey,null);
+        redisAccount =  config.checkAPI(redisAccountId, mainFid, ServiceType.REDIS,symKey, shareApiAccount);//checkApiAccount(redisAccountId,ApiType.REDIS,config,symKey,null);
         if(redisAccount!=null)redisAccountId = redisAccount.getId();
         else System.out.println("No Redis service.");
 
@@ -52,13 +53,13 @@ public class TalkServerSettings extends Settings {
             return null;
         }
 
-        writeServiceToRedis(service,(JedisPool)redisAccount.getClient(), TalkParams.class);
+        writeServiceToRedis(service, TalkParams.class);
 
         if(forbidFreeApi ==null)inputForbidFreeApi(br);
         if(windowTime==null)inputWindowTime(br);
         if(localDataPath==null)localDataPath=getLocalDataDir(this.sid);
         if(fromWebhook==null)inputFromWebhook(br);
-        if(listenPath==null)checkListenPath(br);//listenPath=System.getProperty(UserDir) +"/"+ Settings.addSidBriefToName(service.getSid(),NewCashByFids)+"/";
+        if(listenPath==null)checkListenPath(br,ApiNames.NewCashByFids );//listenPath=System.getProperty(UserDir) +"/"+ Settings.addSidBriefToName(service.getSid(),NewCashByFids)+"/";
 
         checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
 
@@ -147,7 +148,7 @@ public class TalkServerSettings extends Settings {
         try {
             fromWebhook = appTools.Inputer.promptAndSet(br, FieldNames.FROM_WEBHOOK,this.fromWebhook);
             if(fromWebhook){
-                listenPath = makeWebhookNewCashListListenPath();
+                listenPath = makeWebhookListenPath(sid, ApiNames.NewCashByFids);
             }else listenPath = appTools.Inputer.promptAndSet(br, FieldNames.LISTEN_PATH,this.listenPath);
             inputForbidFreeApi(br);
             inputWindowTime(br);

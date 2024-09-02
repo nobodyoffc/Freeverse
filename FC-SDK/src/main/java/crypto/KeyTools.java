@@ -128,7 +128,7 @@ public class KeyTools {
     @Nullable
     public static byte[] inputCipherGetPriKey(BufferedReader br) {
         System.out.println("""
-                Input  the private key.
+                Input the private key...
                 'b' for Base58 code.
                 'c' for the cipher json.
                 'h' for hex.
@@ -248,7 +248,8 @@ public class KeyTools {
         byte[] priKey32 = ecKey.getPrivKeyBytes();
         System.out.println("New FID generated:");
         Shower.printUnderline(60);
-        System.out.println(Address.fromKey(netParams, ecKey));
+        Address fid = Address.fromKey(netParams, ecKey);
+        System.out.println(fid);
         System.out.println("PriKey WIF:" + ecKey.getPrivateKeyAsWiF(netParams));
         System.out.println("PriKey hex:" + HexFormat.of().formatHex(priKey32));
         Shower.printUnderline(60);
@@ -256,6 +257,7 @@ public class KeyTools {
         char[] password = Inputer.inputPassword(br, "Input a password to encrypt your new private key:");
         String userCipher = EccAes256K1P7.encryptKeyWithPassword(priKey32, password);
         System.out.println("Here is the cipher of your new private key:");
+        System.out.println(fid);
         Shower.printUnderline(60);
         System.out.println(userCipher);
         Shower.printUnderline(60);
@@ -337,7 +339,12 @@ public class KeyTools {
             return false;
         }
     }
-
+    public static String getPubKeyHexUncompressed(String pubKey33) {
+        String pubKey65 = KeyTools.recoverPK33ToPK65(pubKey33);
+        if(pubKey65==null)return null;
+        byte[] pubKeyBytes = HexFormat.of().parseHex(pubKey65);
+        return HexFormat.of().formatHex(pubKeyBytes);
+    }
     public static String getPubKeyWifUncompressed(String pubKey33) {
         String pubKey65 = KeyTools.recoverPK33ToPK65(pubKey33);
         byte[] pubKeyBytes = HexFormat.of().parseHex(pubKey65);
@@ -945,9 +952,10 @@ public class KeyTools {
     public static void showPubKeys(String pubKey) {
         Shower.printUnderline(4);
         System.out.println("- Public key compressed in hex:\n" + pubKey);
-        System.out.println("- Public key uncompressed in hex:\n" + getPubKeyWifUncompressed(pubKey));
+        System.out.println("- Public key uncompressed in hex:\n" + getPubKeyHexUncompressed(pubKey));
 
         byte[] pubKeyBytes = HexFormat.of().parseHex(pubKey);
+        System.out.println("- Public key WIF uncompressed:\n" + getPubKeyWifUncompressed(pubKey));
         System.out.println("- Public key WIF compressed with version 0:\n" + getPubKeyWifCompressedWithVer0(pubKey));
         System.out.println("- Public key WIF compressed without version:\n" + getPubKeyWifCompressedWithoutVer(pubKey));
     }

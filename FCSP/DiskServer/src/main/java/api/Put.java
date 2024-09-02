@@ -2,6 +2,7 @@ package api;
 
 import clients.fcspClient.DiskItem;
 import clients.redisClient.RedisTools;
+import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
@@ -11,6 +12,7 @@ import constants.ReplyCodeMessage;
 import constants.Strings;
 import crypto.Hash;
 import initial.Initiator;
+import javaTools.DateTools;
 import javaTools.FileTools;
 import javaTools.Hex;
 import javaTools.http.AuthType;
@@ -123,10 +125,12 @@ public class Put extends HttpServlet {
     }
 
     public static void updateDataInfoToEs(long dataLifeDays, long bytesLength, String did) throws IOException {
-        Date saveDate = new Date(System.currentTimeMillis());
-        Date expire = new Date(saveDate.getTime() + (dataLifeDays * Constants.DAY_TO_MIL_SEC));
-        DiskItem diskItem = new DiskItem(did, saveDate,expire, bytesLength);
-        esClient.index(i->i.index(Settings.addSidBriefToName(Initiator.sid,DATA)).id(did).document(diskItem));
-    }
+        System.out.println("Save File info to ES...");
 
+        long saveDate = System.currentTimeMillis();
+        Long expire = saveDate + DateTools.dayToLong(dataLifeDays);
+        DiskItem diskItem = new DiskItem(did, saveDate,expire, bytesLength);
+        IndexResponse result = esClient.index(i -> i.index(Settings.addSidBriefToName(Initiator.sid, DATA)).id(did).document(diskItem));
+        System.out.println("Result:"+result.result().jsonValue());
+    }
 }

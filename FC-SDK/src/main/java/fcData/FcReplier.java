@@ -49,6 +49,14 @@ public class FcReplier {
         this.response = response;
     }
 
+    public static boolean isBadHex32(FcReplier replier, Jedis jedis, String did) {
+        if(!Hex.isHex32(did)){
+            replier.replyOtherError("It is not a hex string of a 32 byte array.", did, jedis);
+            return true;
+        }
+        return false;
+    }
+
     public void Set0Success() {
         this.code = ReplyCodeMessage.Code0Success;
         this.message = ReplyCodeMessage.Msg0Success;
@@ -72,7 +80,7 @@ public class FcReplier {
     public String getStringFromUrl(HttpServletRequest request, String name, Jedis jedis) {
         String value = request.getParameter(name);
         if (value == null) {
-            reply(ReplyCodeMessage.Code3009DidMissed,null,jedis);
+            replyOtherError("Failed to get "+name+"From the URL.",null,jedis);
             return null;
         }
         return value;
@@ -244,6 +252,7 @@ public class FcReplier {
         if(code==ReplyCodeMessage.Code1020OtherError)this.message = otherError;
         else this.message=ReplyCodeMessage.getMsg(code);
         if(data!=null)this.data=data;
+        jedis.select(0);
         try {
             String bestHeightStr = jedis.get(BEST_HEIGHT);
             bestHeight = Long.parseLong(bestHeightStr);

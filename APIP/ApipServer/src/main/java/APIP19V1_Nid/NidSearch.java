@@ -23,7 +23,7 @@ import server.FcdslRequestHandler;
 import static constants.FieldNames.*;
 
 
-@WebServlet(name = ApiNames.NidSearch, value = "/"+ApiNames.SN_19+"/"+ApiNames.Version2 +"/"+ApiNames.NidSearch)
+@WebServlet(name = ApiNames.NidSearch, value = "/"+ApiNames.SN_19+"/"+ApiNames.Version1 +"/"+ApiNames.NidSearch)
 public class NidSearch extends HttpServlet {
 
     @Override

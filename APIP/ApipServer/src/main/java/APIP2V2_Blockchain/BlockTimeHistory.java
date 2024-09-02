@@ -24,7 +24,7 @@ import static constants.FieldNames.*;
 import static constants.Strings.BEST_HEIGHT;
 import static fch.fchData.FchChainInfo.MAX_REQUEST_COUNT;
 
-@WebServlet(name = ApiNames.BlockTimeHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.BlockTimeHistory)
+@WebServlet(name = ApiNames.BlockTimeHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.BlockTimeHistory)
 public class BlockTimeHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

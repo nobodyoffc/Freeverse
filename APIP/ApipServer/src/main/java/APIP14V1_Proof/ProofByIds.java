@@ -19,7 +19,7 @@ import static constants.FieldNames.Proof_Id;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.ProofByIds, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version2 +"/"+ApiNames.ProofByIds)
+@WebServlet(name = ApiNames.ProofByIds, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version1 +"/"+ApiNames.ProofByIds)
 public class ProofByIds extends HttpServlet {
 
     @Override

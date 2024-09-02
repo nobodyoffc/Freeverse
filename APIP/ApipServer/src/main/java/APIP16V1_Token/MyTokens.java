@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 
-@WebServlet(name = ApiNames.MyTokens, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version2 +"/"+ApiNames.MyTokens)
+@WebServlet(name = ApiNames.MyTokens, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version1 +"/"+ApiNames.MyTokens)
 public class MyTokens extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

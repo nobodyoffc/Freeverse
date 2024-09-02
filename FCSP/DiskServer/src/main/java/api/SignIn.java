@@ -1,13 +1,13 @@
 package api;
 
-import apip.apipData.Session;
 import apip.apipData.RequestBody;
+import apip.apipData.Session;
 import clients.redisClient.RedisTools;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
 import constants.Strings;
-import initial.Initiator;
 import fcData.FcReplier;
+import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
@@ -22,7 +22,7 @@ import java.util.Map;
 
 import static constants.Strings.*;
 
-@WebServlet(name = ApiNames.SignIn, value = "/"+ApiNames.Version2 +"/"+ ApiNames.SignIn)
+@WebServlet(name = ApiNames.SignIn, value = "/"+ApiNames.Version1 +"/"+ ApiNames.SignIn)
 public class SignIn extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -31,7 +31,7 @@ public class SignIn extends HttpServlet {
         Session session = new Session();
         RequestChecker requestChecker = new RequestChecker();
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-
+            replier.setBestHeight(Long.valueOf(jedis.get(BEST_HEIGHT)));
             Map<String, String> paramsMap = jedis.hgetAll(Settings.addSidBriefToName(Initiator.sid, PARAMS));
             long windowTime = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(Initiator.sid,SETTINGS), WINDOW_TIME);
             RequestCheckResult  requestCheckResult = requestChecker.checkSignInRequest(Initiator.sid, request, replier, paramsMap, windowTime, jedis);
@@ -87,8 +87,6 @@ public class SignIn extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         FcReplier replier =new FcReplier(Initiator.sid,response);
-        replier.setCode(ReplyCodeMessage.Code1017MethodNotAvailable);
-        replier.setMessage(ReplyCodeMessage.Msg1017MethodNotAvailable);
-        response.getWriter().write(replier.toNiceJson());
+        replier.reply(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
     }
 }

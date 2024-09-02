@@ -25,7 +25,7 @@ import static constants.Strings.*;
 import static initial.Initiator.*;
 
 
-@WebServlet(name = ApiNames.GetAvatar, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.GetAvatar)
+@WebServlet(name = ApiNames.GetAvatar, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.GetAvatar)
 public class GetAvatar extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {

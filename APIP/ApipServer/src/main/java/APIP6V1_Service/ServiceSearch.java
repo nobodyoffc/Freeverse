@@ -21,7 +21,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Strings.SID;
 
 
-@WebServlet(name = ApiNames.ServiceSearch, value = "/"+ApiNames.SN_6+"/"+ApiNames.Version2 +"/"+ApiNames.ServiceSearch)
+@WebServlet(name = ApiNames.ServiceSearch, value = "/"+ApiNames.SN_6+"/"+ApiNames.Version1 +"/"+ApiNames.ServiceSearch)
 public class ServiceSearch extends HttpServlet {
 
     @Override

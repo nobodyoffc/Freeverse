@@ -1,17 +1,17 @@
 package server.reward;
 
-import clients.apipClient.ApipClient;
 import apip.apipData.Sort;
-import fch.ParseTools;
-import fch.fchData.Address;
 import appTools.Menu;
 import appTools.Shower;
+import clients.apipClient.ApipClient;
+import clients.esClient.EsTools;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch.core.DeleteResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import clients.esClient.EsTools;
+import fch.ParseTools;
+import fch.fchData.Address;
 import javaTools.JsonTools;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
@@ -19,12 +19,12 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Indices;
+import server.Settings;
 
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static constants.Constants.FchToSatoshi;
 import static constants.Constants.REWARD_HISTORY_FILE;
 import static constants.IndicesNames.ADDRESS;
 import static constants.Strings.*;
@@ -35,22 +35,18 @@ public class RewardManager {
     private static final Logger log = LoggerFactory.getLogger(RewardManager.class);
     public static final String UNSIGNED_REWARD_TX_FILE = "unsigned.txt";
     private final ElasticsearchClient esClient;
-    private final ApipClient apipClient;
-    private NaSaRpcClient naSaRpcClient;//for the data of the FCH
+    //for the data of the FCH
     private final JedisPool jedisPool;
     private final BufferedReader br;
     private final String sid;
-    private final String account;
     Rewarder rewarder;
 
     public RewardManager(String sid, String account,ApipClient apipClient,ElasticsearchClient esClient,NaSaRpcClient naSaRpcClient,JedisPool jedisPool, BufferedReader br) {
         this.esClient = esClient;
-        this.apipClient = apipClient;
         this.jedisPool = jedisPool;
         this.br = br;
         this.rewarder = new Rewarder(sid,account,apipClient,esClient,naSaRpcClient,jedisPool);
         this.sid =sid;
-        this.account = account;
     }
 
     public void menu(String consumeViaShare,String orderViaShare) {
@@ -59,9 +55,7 @@ public class RewardManager {
         ArrayList<String> menuItemList = new ArrayList<>();
         menuItemList.add("Show the last reward");
         menuItemList.add("Show all unpaid rewards");
-        menuItemList.add("Get all unsignedTxCs for paying ");
         menuItemList.add("Delete rewards");
-//        menuItemList.add("Make a fixed incomeT rewardInfo");
         menuItemList.add("Backup reward history to file");
         menuItemList.add("Set reward parameters");
 
@@ -72,13 +66,9 @@ public class RewardManager {
             switch (choice) {
                 case 1 -> showLastReward(esClient,br);
                 case 2 -> showAllUnpaidRewards(esClient,br);
-                case 3 -> getAllUnsignedTxCsToPay(esClient,br);
-                case 4 -> deleteRewards(br, esClient);
-//                case 5 -> makeFixedIncomeTReward(br,account);
-                case 5 -> backupRewardHistoryToFile(br,esClient);
-                case 6 -> {
-                   Rewarder.setRewardParameters(sid,consumeViaShare,orderViaShare,jedisPool,br);
-                }
+                case 3 -> deleteRewards(br, esClient);
+                case 4 -> backupRewardHistoryToFile(br,esClient);
+                case 5 -> Rewarder.setRewardParameters(sid,consumeViaShare,orderViaShare,jedisPool,br);
                 case 0 -> {
                     return;
                 }
@@ -93,7 +83,7 @@ public class RewardManager {
         for(RewardInfo rewardInfo:rewardInfoList){
             JsonTools.writeObjectToJsonFile(rewardInfo,REWARD_HISTORY_FILE,true);
         }
-        log.debug(rewardInfoList.size() +"reward records saved to "+REWARD_HISTORY_FILE+ ".");
+        log.debug(rewardInfoList.size() +" reward records saved to "+REWARD_HISTORY_FILE+ ".");
         Menu.anyKeyToContinue(br);
     }
 
@@ -162,7 +152,7 @@ public class RewardManager {
         AffairMaker affairMaker;
         String account = null;
         try(Jedis jedis = jedisPool.getResource()) {
-            account = jedis.hget(jedis.hget(CONFIG,SERVICE_NAME)+"_"+ PARAMS, ACCOUNT);
+            account = jedis.hget(Settings.addSidBriefToName(sid, PARAMS), ACCOUNT);
         }catch (Exception e){
             log.error("Get service account wrong. Check redis.");
         }
@@ -231,7 +221,7 @@ public class RewardManager {
             String time = ParseTools.convertTimestampToDate(rewardInfo.getTime());
             System.out.print(Shower.formatString(time,22));
 
-            String rewardT = String.valueOf((double) rewardInfo.getRewardT()/FchToSatoshi);
+            String rewardT = String.valueOf(ParseTools.satoshiToCoin(rewardInfo.getRewardT()));
             System.out.print(Shower.formatString(rewardT,20));
 
             System.out.print(Shower.formatString(rewardInfo.getRewardId(),66));

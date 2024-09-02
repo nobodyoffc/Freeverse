@@ -25,7 +25,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 
-@WebServlet(name = ApiNames.SecretSearch, value = "/"+ApiNames.SN_12+"/"+ApiNames.Version2 +"/"+ApiNames.SecretSearch)
+@WebServlet(name = ApiNames.SecretSearch, value = "/"+ApiNames.SN_12+"/"+ApiNames.Version1 +"/"+ApiNames.SecretSearch)
 public class SecretSearch extends HttpServlet {
 
     @Override

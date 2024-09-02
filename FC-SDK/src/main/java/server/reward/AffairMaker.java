@@ -3,10 +3,7 @@ package server.reward;
 import fcData.Affair;
 import fcData.DataSignTx;
 import fcData.Op;
-import fch.CashListReturn;
-import fch.CryptoSign;
-import fch.DataForOffLineTx;
-import fch.Wallet;
+import fch.*;
 import fch.fchData.Cash;
 import fch.fchData.SendTo;
 import feip.feipData.DataOnChain;
@@ -119,7 +116,7 @@ public class AffairMaker {
 
     private void addQualifiedPendingToPay(HashMap<String, SendTo> sendToMap) {
         for(String key: pendingMap.keySet()){
-            double amount = (double) pendingMap.get(key) /FchToSatoshi;
+            double amount = ParseTools.satoshiToCoin(pendingMap.get(key));
             SendTo sendTo = new SendTo();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
@@ -145,7 +142,7 @@ public class AffairMaker {
             String fid = sendTo.getFid();
             double amount = sendTo.getAmount();
             if (amount < MinPayValue) {
-                addToPending(fid, (long) (amount*FchToSatoshi),jedisPool);
+                addToPending(fid, ParseTools.coinToSatoshi(amount),jedisPool);
                 iterator.remove();
             }
         }
@@ -161,7 +158,7 @@ public class AffairMaker {
 
         makePayDetailListIntoSendToMap(sendToMap,orderViaList);
         makePayDetailListIntoSendToMap(sendToMap,consumeViaList);
-        makePayDetailListIntoSendToMap(sendToMap,costList);
+        if(costList!=null && !costList.isEmpty())makePayDetailListIntoSendToMap(sendToMap,costList);
         makePayDetailListIntoSendToMap(sendToMap,buildList);
 
         return sendToMap;
@@ -173,7 +170,7 @@ public class AffairMaker {
             SendTo sendTo = new SendTo();
             String fid = payDetail.getFid();
             sendTo.setFid(fid);
-            double amount = (double) payDetail.getAmount() /FchToSatoshi;
+            double amount = ParseTools.satoshiToCoin(payDetail.getAmount());
             if(sendToMap.get(fid)!=null){
                 amount = amount+ sendToMap.get(fid).getAmount();
                 sendTo.setAmount(NumberTools.roundDouble8(amount));

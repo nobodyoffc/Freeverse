@@ -16,7 +16,7 @@ import java.io.IOException;
 import static constants.FieldNames.FID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
-@WebServlet(name = ApiNames.P2shByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.P2shByIds)
+@WebServlet(name = ApiNames.P2shByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.P2shByIds)
 public class P2shByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

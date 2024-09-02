@@ -19,7 +19,7 @@ import static constants.FieldNames.Mail_Id;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.MailByIds, value = "/"+ApiNames.SN_13+"/"+ApiNames.Version2 +"/"+ApiNames.MailByIds)
+@WebServlet(name = ApiNames.MailByIds, value = "/"+ApiNames.SN_13+"/"+ApiNames.Version1 +"/"+ApiNames.MailByIds)
 public class MailByIds extends HttpServlet {
 
     @Override

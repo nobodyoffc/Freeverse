@@ -500,18 +500,16 @@ public class Inputer {
     }
 
     public static String promptAndUpdate(BufferedReader reader, String fieldName, String currentValue) throws IOException {
-        System.out.println("The " + fieldName + " is :" + currentValue);
-        System.out.print("Do you want to update it? 'y' to update. Others to ignore: ");
-
-        if ("y".equalsIgnoreCase(reader.readLine())) {
-            String ask = "Enter new values for the " + fieldName + ": ";
-            return inputString(reader, ask);
-        }
-        return currentValue;
+        System.out.println("\nThe " + fieldName + " is :" + currentValue);
+        System.out.print("Update it? Input new value to update. Enter to skip: ");
+        String input = reader.readLine();
+        if ("".equalsIgnoreCase(input))
+            return currentValue;
+        return input;
     }
 
     public static long promptAndUpdate(BufferedReader reader, String fieldName, long currentValue) throws IOException {
-        System.out.println("The " + fieldName + "is :" + currentValue);
+        System.out.println("The " + fieldName + " is :" + currentValue);
         System.out.print("Do you want to update it? Input a integer to update it. Enter to ignore: ");
         String input = reader.readLine();
         if("".equals(input))return currentValue;

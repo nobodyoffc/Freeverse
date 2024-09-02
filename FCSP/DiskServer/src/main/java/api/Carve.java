@@ -29,7 +29,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -76,7 +75,7 @@ public class Carve extends HttpServlet {
             replier.reply0Success(dataMap, jedis,price);
 
             //Update item info into ES
-            updateDataInfoToEs(dataLifeDays, DidAndLength.bytesLength(), DidAndLength.did());
+            updateCarveDataInfoToEs(DidAndLength.bytesLength(), DidAndLength.did());
         }
     }
 
@@ -123,11 +122,10 @@ public class Carve extends HttpServlet {
     private record Result(long bytesLength, String did) {
     }
 
-    public static void updateDataInfoToEs(long dataLifeDays, long bytesLength, String did) throws IOException {
-        Date saveDate = new Date(System.currentTimeMillis());
-        Date expire = null;
+    public static void updateCarveDataInfoToEs(long bytesLength, String did) throws IOException {
+        long saveDate = System.currentTimeMillis();
+        Long expire = null;
         DiskItem diskItem = new DiskItem(did, saveDate,expire, bytesLength);
         esClient.index(i->i.index(Settings.addSidBriefToName(Initiator.sid,DATA)).id(did).document(diskItem));
     }
-
 }

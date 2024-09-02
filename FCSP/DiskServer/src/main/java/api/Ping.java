@@ -1,9 +1,9 @@
 package api;
 
 import constants.ApiNames;
+import fcData.FcReplier;
 import initial.Initiator;
 import javaTools.http.AuthType;
-import fcData.FcReplier;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-@WebServlet("/"+ApiNames.Version2 +"/"+ApiNames.Ping)
+@WebServlet(name = ApiNames.Ping, value = "/"+ApiNames.Version1 +"/"+ ApiNames.Ping)
 public class Ping extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
@@ -32,7 +32,8 @@ public class Ping extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response){
         FcReplier replier = new FcReplier(Initiator.sid,response);
-        AuthType authType = AuthType.FC_SIGN_URL;
+        AuthType authType = AuthType.FREE;
+
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false);

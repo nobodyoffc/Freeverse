@@ -62,14 +62,14 @@ public abstract class Params {
 
     public void updateParams(BufferedReader br, byte[] symKey, ApipClient apipClient){
         try {
-            this.urlHead = Inputer.promptAndUpdate(br,"url",this.urlHead);
-            this.currency = Inputer.promptAndUpdate(br,"Input the currency:",this.currency);
+            this.urlHead = Inputer.promptAndUpdate(br,"urlHead",this.urlHead);
+            this.currency = Inputer.promptAndUpdate(br,"currency",this.currency);
             this.account = updateAccount(br, symKey, apipClient);
-            this.pricePerKBytes = Inputer.promptAndUpdate(br, "Input the pricePerKBytes:", this.pricePerKBytes);
-            this.minPayment = Inputer.promptAndUpdate(br,"Input the minPayment:",this.minPayment);
-            this.sessionDays = Inputer.promptAndUpdate(br,"Input the sessionDays:",this.sessionDays);
-            this.consumeViaShare = Inputer.promptAndUpdate(br,"Input the consumeViaShare:",this.consumeViaShare);
-            this.orderViaShare = Inputer.promptAndUpdate(br,"Input the orderViaShare:",this.orderViaShare);
+            this.pricePerKBytes = Inputer.promptAndUpdate(br, "pricePerKBytes", this.pricePerKBytes);
+            this.minPayment = Inputer.promptAndUpdate(br,"minPayment",this.minPayment);
+            this.sessionDays = Inputer.promptAndUpdate(br,"sessionDays",this.sessionDays);
+            this.consumeViaShare = Inputer.promptAndUpdate(br,"consumeViaShare",this.consumeViaShare);
+            this.orderViaShare = Inputer.promptAndUpdate(br,"orderViaShare",this.orderViaShare);
         } catch (IOException e) {
             System.out.println("Failed to updateParams. "+e.getMessage());
         }

@@ -23,7 +23,7 @@ import java.util.Map;
 import static server.FcdslRequestHandler.doRequestForList;
 
 
-@WebServlet(name = ApiNames.GroupMembers, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version2 +"/"+ApiNames.GroupMembers)
+@WebServlet(name = ApiNames.GroupMembers, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version1 +"/"+ApiNames.GroupMembers)
 public class GroupMembers extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -38,7 +38,7 @@ public class GroupMembers extends HttpServlet {
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
         FcReplier replier = new FcReplier(sid,response);
         try (Jedis jedis = jedisPool.getResource()) {
-            List<Group> meetList = doRequestForList(sid, IndicesNames.GROUP, Group.class, null, null, null, null, null, request, response, authType, esClient, replier, jedis);
+            List<Group> meetList = doRequestForList(sid, IndicesNames.GROUP, Group.class, null, null, null, null, null, request, authType, esClient, replier, jedis);
             if (meetList == null) return;
             //Make data
             Map<String,String[]> dataMap = new HashMap<>();

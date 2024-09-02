@@ -22,7 +22,7 @@ import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.ProtocolRateHistory, value = "/"+ApiNames.SN_5+"/"+ApiNames.Version2 +"/"+ApiNames.ProtocolRateHistory)
+@WebServlet(name = ApiNames.ProtocolRateHistory, value = "/"+ApiNames.SN_5+"/"+ApiNames.Version1 +"/"+ApiNames.ProtocolRateHistory)
 public class ProtocolRateHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

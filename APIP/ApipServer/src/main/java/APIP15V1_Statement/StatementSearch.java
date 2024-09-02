@@ -23,7 +23,7 @@ import static constants.FieldNames.Statement_Id;
 import static constants.FieldNames.LAST_HEIGHT;
 
 
-@WebServlet(name = ApiNames.StatementSearch, value = "/"+ApiNames.SN_15+"/"+ApiNames.Version2 +"/"+ApiNames.StatementSearch)
+@WebServlet(name = ApiNames.StatementSearch, value = "/"+ApiNames.SN_15+"/"+ApiNames.Version1 +"/"+ApiNames.StatementSearch)
 public class StatementSearch extends HttpServlet {
 
     @Override

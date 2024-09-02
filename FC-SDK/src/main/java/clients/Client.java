@@ -19,6 +19,7 @@ import javaTools.Hex;
 import javaTools.JsonTools;
 import javaTools.http.AuthType;
 import javaTools.http.HttpRequestMethod;
+import javaTools.http.HttpTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import server.FreeApi;
@@ -27,6 +28,7 @@ import server.Settings;
 import javax.annotation.Nullable;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static constants.ApiNames.*;
 import static constants.Strings.URL_HEAD;
@@ -185,10 +187,20 @@ public class Client {
             case POST -> fcClientEvent.post(authKey);
             default -> fcClientEvent.setCode(ReplyCodeMessage.Code1022NoSuchMethod);
         }
-        return checkResult();
+        Object result = checkResult();
+
+        String apiName = HttpTools.getApiNameFromUrl(urlTail);
+        if(apiName==null||apiName.equals(SignIn) || apiName.equals(SignInEcc))return result;
+
+        //If any request besides signIn or signInEcc got a session response, it means the client signed in again. So repeat the request.
+        try {
+            Session session = (Session) result;
+            if (session == null || session.getSessionName() == null) return result;
+            else return requestBase(urlTail, requestBodyType, fcdsl, requestBodyStr, requestBodyBytes, paramMap, requestFileName, responseBodyType, responseFileName, responseFilePath, authType, authKey, httpMethod);
+        }catch (ClassCastException e){
+            return result;
+        }
     }
-
-
 
     public Object request(String sn, String ver, String apiName, FcClientEvent.RequestBodyType requestBodyType, @Nullable Fcdsl fcdsl, @Nullable String requestBodyStr, @Nullable byte[] requestBodyBytes, @Nullable Map<String,String> paramMap, String requestFileName, FcClientEvent.ResponseBodyType responseBodyType, String responseFileName, String responseFilePath, AuthType authType, @Nullable byte[] authKey, HttpRequestMethod httpMethod){
         String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
@@ -212,6 +224,7 @@ public class Client {
                 System.out.println(fcClientEvent.getMessage());
             } else {
                 log.debug(fcClientEvent.getResponseBody().getCode() + ":" + fcClientEvent.getResponseBody().getMessage());
+                System.out.println(fcClientEvent.getResponseBody().getMessage());
                 if (fcClientEvent.getResponseBody().getData() != null)
                     log.debug(JsonTools.toJson(fcClientEvent.getResponseBody().getData()));
             }
@@ -219,8 +232,27 @@ public class Client {
                 if(apipClient==null && this.serviceType.equals(ServiceType.APIP)){
                     apipClient = (ApipClient) this;
                 }
-                apiAccount.buyApi(symKey,apipClient);
-                return null;
+                double paid = apiAccount.buyApi(symKey, apipClient);
+                if(paid==0){
+                    if(fcClientEvent.getResponseBody().getCode().equals(ReplyCodeMessage.Code1026InsufficientFchOnChain)){
+                        System.out.println("Send some FCH to "+apiAccount.getUserId()+"...");
+                        while(true) {
+                            waitSeconds(30);
+                            paid = apiAccount.buyApi(symKey, apipClient);
+                            if (paid!=0)break;
+                            System.out.println("Waiting...");
+                        }
+                    }
+                    System.out.println("Failed to pay from "+ apiAccount.getUserId());
+                    return null;
+                }
+                System.out.println("Check the balance...");
+                Session session;
+                while(true){
+                    waitSeconds(5);
+                    session = checkSignInEcc();
+                    if (session != null)return session;
+                }
             }
 
             if (fcClientEvent.getCode() == ReplyCodeMessage.Code1002SessionNameMissed || fcClientEvent.getCode() == ReplyCodeMessage.Code1009SessionTimeExpired) {
@@ -255,6 +287,28 @@ public class Client {
         return null;
     }
 
+    @org.jetbrains.annotations.Nullable
+    private Session checkSignInEcc() {
+        Decryptor decryptor = new Decryptor();
+        CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymKey(apiAccount.getUserPriKeyCipher(),symKey);
+        if(cryptoDataByte.getCode()!=0) return null;
+        byte[] priKey = cryptoDataByte.getData();
+        fcClientEvent = new FcClientEvent(apiAccount.getApiUrl(),null,Version1,ApiNames.SignInEcc);
+        fcClientEvent.signInPost(apiAccount.getVia(), priKey, RequestBody.SignInMode.NORMAL);
+        Object data = fcClientEvent.getResponseBody().getData();
+        Session session;
+        try{
+            session=gson.fromJson(gson.toJson(data), Session.class);
+        } catch (Exception ignore){return null;}
+        return session;
+    }
+
+    private static void waitSeconds(int seconds) {
+        try {
+            TimeUnit.SECONDS.sleep(seconds);
+        } catch (InterruptedException ignore) {}
+    }
+
 
     public static Long checkBalance(ApiAccount apiAccount, final FcClientEvent fcClientEvent, byte[] symKey, ApipClient apipClient) {
         if(fcClientEvent ==null)return null;
@@ -268,10 +322,14 @@ public class Client {
         apiAccount.setBalance(balance);
 
         String priceStr;
-        if(apiAccount.getServiceParams().getPricePerKBytes()==null)
+        if(apiAccount.getServiceParams()==null) {
+            System.out.println("The service parameters is null in the API account.");
+            return null;
+        }
+        else if(apiAccount.getServiceParams().getPricePerKBytes()==null)
             priceStr=apiAccount.getApipParams().getPricePerRequest();
         else priceStr =apiAccount.getApipParams().getPricePerKBytes();
-        long price = ParseTools.fchStrToSatoshi(priceStr);
+        long price = ParseTools.coinStrToSatoshi(priceStr);
 
         if(balance!=0 && balance < price * ApiAccount.minRequestTimes){
             double topUp = apiAccount.buyApi(symKey,apipClient);
@@ -309,7 +367,7 @@ public class Client {
     }
 
 //    public boolean pingFree(ApiType apiType) {
-//        Object data = ping(Version2,HttpRequestMethod.GET,AuthType.FREE, null);
+//        Object data = ping(Version1,HttpRequestMethod.GET,AuthType.FREE, null);
 ////        requestBase(Ping, FcClientEvent.RequestBodyType.NONE, null, null, null, null, null, FcClientEvent.ResponseBodyType.FC_REPLY, null, null, AuthType.FREE, null, HttpRequestMethod.GET);
 ////        Object data = checkResult();
 //        setFreeApiState(data,apiType);
@@ -345,21 +403,40 @@ public class Client {
     }
 
     private void signIn(byte[] priKey, @Nullable RequestBody.SignInMode mode) {
-        fcClientEvent = new FcClientEvent(apiAccount.getApiUrl(),null,Version2,ApiNames.SignIn);
+        fcClientEvent = new FcClientEvent(apiAccount.getApiUrl(),null,Version1,ApiNames.SignIn);
         fcClientEvent.signInPost(apiAccount.getVia(), priKey, mode);
+        int paymentsSize;
+        if(apiAccount.getPayments()!=null) paymentsSize = apiAccount.getPayments().size();
+        else paymentsSize=0;
         Object data = checkResult();
-        checkBalance(apiAccount, fcClientEvent,symKey,apipClient);
-        if(data==null)return;
+        if(data==null){
+            if(fcClientEvent.getCode()==1004 && apiAccount.getPayments().size()>paymentsSize){
+                fcClientEvent.signInPost(apiAccount.getVia(), priKey, mode);
+                data = checkResult();
+                if(data==null) return;
+            } else return;
+        }
         Session session = gson.fromJson(gson.toJson(data), Session.class);
         fcClientEvent.getResponseBody().setData(session);
     }
 
     private void signInEcc(byte[] priKey, @Nullable RequestBody.SignInMode mode) {
-        fcClientEvent = new FcClientEvent(apiAccount.getApiUrl(),null,Version2,ApiNames.SignInEcc);
+        fcClientEvent = new FcClientEvent(apiAccount.getApiUrl(),null,Version1,ApiNames.SignInEcc);
         fcClientEvent.signInPost(apiAccount.getVia(), priKey, mode);
+        int paymentsSize;
+        if(apiAccount.getPayments()!=null) paymentsSize= apiAccount.getPayments().size();
+        else paymentsSize=0;
+
         Object data = checkResult();
-        checkBalance(apiAccount, fcClientEvent,symKey,apipClient);
-        if(data==null)return;
+        if(data==null){
+            if(fcClientEvent.getCode()==1004 && apiAccount.getPayments().size()>paymentsSize){
+                fcClientEvent.signInPost(apiAccount.getVia(), priKey, mode);
+                data = checkResult();
+                if(data==null) return;
+            } else if(fcClientEvent.getCode()==1026){
+                return;
+            }
+        }
         Session session = gson.fromJson(gson.toJson(data), Session.class);
         fcClientEvent.getResponseBody().setData(session);
     }
@@ -430,18 +507,17 @@ public class Client {
         apiAccount.setSessionKey(sessionKey);
 
         String sessionName = Session.makeSessionName(session.getSessionKey());
-
-        Encryptor encryptor = new Encryptor();
-        CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey,symKey);
-        if(cryptoDataByte2.getCode()!=0)return null;
-        String sessionKeyCipher = cryptoDataByte2.toJson();
-//        String sessionKeyCipher=EccAes256K1P7.encryptWithSymKey(sessionKey,symKey);
-
         String fid = KeyTools.priKeyToFid(priKey);
-
-        session.setSessionKeyCipher(sessionKeyCipher);
         session.setFid(fid);
         session.setSessionName(sessionName);
+
+        if(session.getSessionKeyCipher()==null) {
+            Encryptor encryptor = new Encryptor();
+            CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey, symKey);
+            if (cryptoDataByte2.getCode() != 0) return null;
+            String sessionKeyCipher = cryptoDataByte2.toJson();
+            session.setSessionKeyCipher(sessionKeyCipher);
+        }
 
         apiAccount.setSession(session);
         apiAccount.setSessionKey(sessionKey);
@@ -456,38 +532,41 @@ public class Client {
         byte[] priKey = cryptoDataByte.getData();
 
         String fid = KeyTools.priKeyToFid(priKey);
+
         signInEcc(priKey, mode);
+
         if(fcClientEvent==null||fcClientEvent.getResponseBody()==null||fcClientEvent.getResponseBody().getData()==null)
             return null;
         Session session = (Session) fcClientEvent.getResponseBody().getData();
         if(session==null||session.getSessionKeyCipher()==null)return null;
 
-        String sessionKeyCipher1 = session.getSessionKeyCipher();
+        if(session.getSessionKey()==null) {
+            String sessionKeyCipher1 = session.getSessionKeyCipher();
+            CryptoDataByte cryptoDataByte1 =
+                    decryptor.decryptJsonByAsyOneWay(sessionKeyCipher1, priKey);
+            if (cryptoDataByte1.getCode() != 0) return null;
+            byte[] sessionKeyHexBytes = cryptoDataByte1.getData();
+            if (sessionKeyHexBytes == null) return null;
 
-        CryptoDataByte cryptoDataByte1 =
-                decryptor.decryptJsonByAsyOneWay(sessionKeyCipher1,priKey);
-        if(cryptoDataByte1.getCode()!=0)return null;
-        byte[] sessionKeyHexBytes = cryptoDataByte1.getData();
-        if(sessionKeyHexBytes==null)return null;
+            String sessionKeyHex = new String(sessionKeyHexBytes);
+            sessionKey = Hex.fromHex(sessionKeyHex);
 
-        String sessionKeyHex =new String(sessionKeyHexBytes);
-        sessionKey = Hex.fromHex(sessionKeyHex);
+            Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
+            CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey, symKey);
+            if (cryptoDataByte2.getCode() != 0) return null;
+            String newCipher = cryptoDataByte2.toJson();
 
-        Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
-        CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey,symKey);
-        if(cryptoDataByte2.getCode()!=0)return null;
-        String newCipher = cryptoDataByte2.toJson();
-        String sessionName = Session.makeSessionName(sessionKeyHex);
-        Long expireTime = session.getExpireTime();
+            String sessionName = Session.makeSessionName(sessionKeyHex);
+            Long expireTime = session.getExpireTime();
 
-        session.setSessionKey(Hex.toHex(sessionKey));
-        session.setSessionKeyCipher(newCipher);
-        session.setSessionName(sessionName);
-        session.setExpireTime(expireTime);
-        session.setFid(fid);
-
-        apiAccount.setSession(session);
-        apiAccount.setSessionKey(sessionKey);
+            session.setSessionKey(Hex.toHex(sessionKey));
+            session.setSessionKeyCipher(newCipher);
+            session.setSessionName(sessionName);
+            session.setExpireTime(expireTime);
+            session.setFid(fid);
+        }
+            apiAccount.setSession(session);
+            apiAccount.setSessionKey(sessionKey);
 
         return session;
     }

@@ -64,7 +64,7 @@ public class ApiProvider {
         }
         if(service.getUrls().length>0)this.orgUrl=service.getUrls()[0];
         if(service.getProtocols()!=null && service.getProtocols().length>0)this.protocols=service.getProtocols();
-        this.apiParams=Params.getParamsFromService(service,Params.class);
+        this.apiParams=Params.getParamsFromService(service,tClass);
         this.service=service;
         return true;
     }
@@ -115,7 +115,7 @@ public class ApiProvider {
         return apiProviderFromFcService(service,type);
     }
 
-    public void makeApipProvider(BufferedReader br) {
+    public boolean makeApipProvider(BufferedReader br) {
         apiUrl = Inputer.inputString(br,"Input the urlHead of the APIP service. Enter to choose a default one");
         if("".equals(apiUrl)) {
             List<FreeApi> freeApiList = Settings.freeApiListMap.get(ServiceType.APIP);
@@ -123,10 +123,15 @@ public class ApiProvider {
             if(freeApi!=null) apiUrl = freeApi.getUrlHead();
             else apiUrl = Inputer.inputString(br,"Input the urlHead of the APIP service.");
         }
-
-        FcReplier replier = Client.getService(apiUrl, ApiNames.Version2, ApipParams.class);//OpenAPIs.getService(apiUrl);
-        if(replier==null||replier.getData()==null)return;
+        FcReplier replier;
+        try {
+            replier = Client.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
+        }catch (Exception ignore) {
+            return false;
+        }
+        if (replier == null || replier.getData() == null) return false;
         service = (Service) replier.getData();
+        if(service==null || service.getParams()==null)return false;
         apiParams = (Params) service.getParams();
         System.out.println("Got the service:");
         JsonTools.printJson(service);
@@ -135,12 +140,7 @@ public class ApiProvider {
         owner = service.getOwner();
         protocols = service.getProtocols();
         ticks = new String[]{"fch"};
-//        try {
-//            inputOrgUrl(br);
-//            inputDocUrl(br);
-//        } catch (IOException e) {
-//            log.debug("BufferReader wrong.");
-//        }
+        return true;
     }
 
 
@@ -152,7 +152,7 @@ public class ApiProvider {
             if(type==null)return false;
 
             switch (type){
-                case APIP -> makeApipProvider(br);
+                case APIP -> {return makeApipProvider(br);}
                 case NASA_RPC ->{
                     inputApiURL(br, "http://127.0.0.1:8332");
                     do {
@@ -176,7 +176,7 @@ public class ApiProvider {
                         System.out.println("Can't add such provider because the APIP client is null.");
                         return false;
                     }
-                    List<Service> serviceList = apipClient.getServiceListByType(serviceType.toString());
+                    List<Service> serviceList = apipClient.getServiceListByType(serviceType.name());
                     Service service = Configure.selectService(serviceList);
                     boolean done = fromFcService(service, DiskParams.class);
                     if(!done) System.out.println("Failed to make provider from on-chain service information.");
@@ -275,7 +275,7 @@ public class ApiProvider {
                         apiUrl = Inputer.inputString(br, "Input the urlHead of the APIP service:");
                     }
                     if(apiUrl==null)return;
-                    FcReplier replier = ApipClient.getService(apiUrl, ApiNames.Version2, ApipParams.class);//OpenAPIs.getService(apiUrl);
+                    FcReplier replier = ApipClient.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
 
                     if(replier==null||replier.getData()==null)return;
                     service = (Service) replier.getData();

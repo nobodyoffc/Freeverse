@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApiNames.CidHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.CidHistory)
+@WebServlet(name = ApiNames.CidHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.CidHistory)
 public class CidHistory extends HttpServlet {
 
     @Override

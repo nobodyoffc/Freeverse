@@ -105,6 +105,7 @@ public class Menu {
             try {
                 input = br.readLine();
                 if("".equals(input)){
+                    show();
                     System.out.println("\nInput one of the integers shown above:");
                     continue;
                 }

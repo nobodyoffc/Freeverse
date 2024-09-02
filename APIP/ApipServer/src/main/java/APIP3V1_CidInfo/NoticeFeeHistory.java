@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApiNames.NoticeFeeHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.NoticeFeeHistory)
+@WebServlet(name = ApiNames.NoticeFeeHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.NoticeFeeHistory)
 public class NoticeFeeHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

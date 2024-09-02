@@ -18,7 +18,7 @@ import static constants.FieldNames.GID;
 import static server.FcdslRequestHandler.doIdsRequest;
 
 
-@WebServlet(name = ApiNames.GroupByIds, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version2 +"/"+ApiNames.GroupByIds)
+@WebServlet(name = ApiNames.GroupByIds, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version1 +"/"+ApiNames.GroupByIds)
 public class GroupByIds extends HttpServlet {
 
     @Override

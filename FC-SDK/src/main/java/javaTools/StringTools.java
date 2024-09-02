@@ -3,6 +3,7 @@ package javaTools;
 import constants.Strings;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Arrays;
 import java.util.List;
 
 public class StringTools {
@@ -65,5 +66,10 @@ public class StringTools {
 
     public static boolean parseBoolean(String str) {
         return Boolean.parseBoolean(str);
+    }
+
+    public static boolean isContainCaseInsensitive(String[] array, String item) {
+        return Arrays.stream(array)
+                .anyMatch(s -> s.equalsIgnoreCase(item));
     }
 }

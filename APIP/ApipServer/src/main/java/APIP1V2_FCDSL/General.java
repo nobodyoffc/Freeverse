@@ -22,7 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-@WebServlet(name = ApiNames.General, value = "/"+ApiNames.SN_1+"/"+ApiNames.Version2 +"/"+ApiNames.General)
+@WebServlet(name = ApiNames.General, value = "/"+ApiNames.SN_1+"/"+ApiNames.Version1 +"/"+ApiNames.General)
 public class General extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
@@ -45,7 +45,7 @@ public class General extends HttpServlet {
                 return;
             }
             List<Object> meetList;
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), response, replier, esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
             ArrayList<Sort> defaultSortList = null;
             String index = requestCheckResult.getRequestBody().getFcdsl().getIndex();
             meetList = fcdslRequestHandler.doRequest(index, defaultSortList, Object.class, jedis);

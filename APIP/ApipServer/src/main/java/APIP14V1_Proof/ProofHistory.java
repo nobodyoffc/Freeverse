@@ -20,7 +20,7 @@ import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
 
-@WebServlet(name = ApiNames.ProofHistory, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version2 +"/"+ApiNames.ProofHistory)
+@WebServlet(name = ApiNames.ProofHistory, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version1 +"/"+ApiNames.ProofHistory)
 public class ProofHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

@@ -182,13 +182,13 @@ public class StartApipClient {
     }
 
     private static void ping() {
-        boolean data = (boolean) apipClient.ping(Version2,HttpRequestMethod.GET,AuthType.FREE, ServiceType.APIP);
+        boolean data = (boolean) apipClient.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, ServiceType.APIP);
         System.out.println(data);
     }
 
     public static void getService() {
         System.out.println("Getting the default service information...");
-        FcReplier replier = ApipClient.getService(apipClient.getUrlHead(), ApiNames.Version2, ApipParams.class);
+        FcReplier replier = ApipClient.getService(apipClient.getUrlHead(), ApiNames.Version1, ApipParams.class);
         if(replier!=null)JsonTools.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);

@@ -20,8 +20,7 @@ public class WebhookInfo {  //for webhook users to mark different webhook servic
     private Object request;
     private Object response;
 
-    public static final String  MAPPINGS = "{\"mappings\":{\"properties\":{\"hookId\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"endpoint\":{\"type\":\"text\"},\"data\":{\"type\":\"object\"},\"method\":{\"type\":\"wildcard\"},\"op\":{\"type\":\"keyword\"}}}}";
-
+    public static final String  MAPPINGS = "{\"mappings\":{\"properties\":{\"hookId\":{\"type\":\"keyword\"},\"userId\":{\"type\":\"wildcard\"},\"endpoint\":{\"type\":\"text\"},\"data\":{\"type\":\"object\"},\"method\":{\"type\":\"wildcard\"},\"op\":{\"type\":\"keyword\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 
     private static String makeWebhookId(String url, String method) {
         return HexFormat.of().formatHex(Hash.sha256x2(BytesTools.bytesMerger(url.getBytes(), method.getBytes())));

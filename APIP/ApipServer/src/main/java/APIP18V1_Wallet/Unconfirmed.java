@@ -25,7 +25,7 @@ import java.util.Map;
 import static constants.FieldNames.*;
 import static constants.Strings.FID;
 
-@WebServlet(name = ApiNames.Unconfirmed, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.Unconfirmed)
+@WebServlet(name = ApiNames.Unconfirmed, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.Unconfirmed)
 public class Unconfirmed extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;

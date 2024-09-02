@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.CASH_ID;
 import static constants.FieldNames.LAST_TIME;
 
-@WebServlet(name = ApiNames.CashSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.CashSearch)
+@WebServlet(name = ApiNames.CashSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.CashSearch)
 public class CashSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

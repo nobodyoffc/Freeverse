@@ -26,7 +26,7 @@ import java.util.Map;
 import static initial.Initiator.avatarElementsPath;
 import static initial.Initiator.avatarPngPath;
 
-@WebServlet(name = ApiNames.Avatars, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.Avatars)
+@WebServlet(name = ApiNames.Avatars, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.Avatars)
 public class Avatars extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

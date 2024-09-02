@@ -22,7 +22,7 @@ import java.io.IOException;
 
 import static constants.Strings.SERVICE;
 
-@WebServlet(name = ApiNames.GetService, value = "/"+ApiNames.Version2 +"/"+ApiNames.GetService)
+@WebServlet(name = ApiNames.GetService, value = "/"+ApiNames.Version1 +"/"+ApiNames.GetService)
 public class GetService extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

@@ -17,7 +17,7 @@ import java.util.Map;
 import static constants.FieldNames.RAW_TX;
 
 
-@WebServlet(name = ApiNames.DecodeTx, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version2 +"/"+ApiNames.DecodeTx)
+@WebServlet(name = ApiNames.DecodeTx, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.DecodeTx)
 public class DecodeTx extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;

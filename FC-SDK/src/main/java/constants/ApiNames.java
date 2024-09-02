@@ -223,7 +223,7 @@ public class ApiNames {
     public static final String DifficultyHistory ="difficultyHistory";
     public static final String HashRateHistory ="hashRateHistory";
     public static final String BlockTimeHistory ="blockTimeHistory";
-    public static final String Endpoint = "endpoint";
+    public static final String WebhookPoint = "webhookPoint";
 
 
 
@@ -307,10 +307,12 @@ public class ApiNames {
         ApipApiList.addAll(java.util.List.of(PublishAPIs));
         ApipApiList.addAll(java.util.List.of(WalletAPIs));
         ApipApiList.addAll(java.util.List.of(CryptoAPIs));
+        ApipApiList.add(NewCashByFids);
+        ApipApiList.add(NewOpReturnByFids);
 
         ApipAPIs = ApipApiList.toArray(new String[0]);
         DiskAPIs = new String[]{
-                Put, Get, Check, LIST, Ping, SignIn, SignInEcc
+                Put, Get, Check, LIST, Ping, SignIn, SignInEcc, WebhookPoint
         };
         EndpointAPIs = new String[]{
                 TotalSupply,Circulating,Richlist,FreecashInfo
@@ -337,6 +339,7 @@ public class ApiNames {
         DiskApiList.add(Check);
         DiskApiList.add(LIST);
         DiskApiList.add(Ping);
+        DiskApiList.add(WebhookPoint);
 
         SwapHallAPIs = new String[]{
                 SwapRegister, SwapUpdate, SwapState,

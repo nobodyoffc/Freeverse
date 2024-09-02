@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApiNames.HomepageHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.HomepageHistory)
+@WebServlet(name = ApiNames.HomepageHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.HomepageHistory)
 public class HomepageHistory extends HttpServlet {
 
     @Override

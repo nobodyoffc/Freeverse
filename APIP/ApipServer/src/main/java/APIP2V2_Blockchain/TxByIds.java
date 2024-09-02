@@ -15,7 +15,7 @@ import java.io.IOException;
 
 import static constants.FieldNames.TX_ID;
 
-@WebServlet(name = ApiNames.TxByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.TxByIds)
+@WebServlet(name = ApiNames.TxByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.TxByIds)
 public class TxByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

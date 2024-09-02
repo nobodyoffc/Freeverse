@@ -23,7 +23,7 @@ import java.util.Map;
 import static constants.Strings.BEST_HEIGHT;
 import static fch.fchData.FchChainInfo.MAX_REQUEST_COUNT;
 
-@WebServlet(name = ApiNames.DifficultyHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.DifficultyHistory)
+@WebServlet(name = ApiNames.DifficultyHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.DifficultyHistory)
 public class DifficultyHistory extends HttpServlet {
 
     @Override

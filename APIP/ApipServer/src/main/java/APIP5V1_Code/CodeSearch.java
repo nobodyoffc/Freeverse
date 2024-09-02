@@ -20,7 +20,7 @@ import static constants.FieldNames.*;
 import static constants.Strings.ACTIVE;
 
 
-@WebServlet(name = ApiNames.CodeSearch, value = "/"+ApiNames.SN_5+"/"+ApiNames.Version2 +"/"+ApiNames.CodeSearch)
+@WebServlet(name = ApiNames.CodeSearch, value = "/"+ApiNames.SN_5+"/"+ApiNames.Version1 +"/"+ApiNames.CodeSearch)
 public class CodeSearch extends HttpServlet {
 
     @Override

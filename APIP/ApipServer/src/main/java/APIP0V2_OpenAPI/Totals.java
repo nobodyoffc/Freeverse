@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@WebServlet(name = ApiNames.Totals, value = "/"+ApiNames.Version2 +"/"+ApiNames.Totals)
+@WebServlet(name = ApiNames.Totals, value = "/"+ApiNames.Version1 +"/"+ApiNames.Totals)
 public class Totals extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {

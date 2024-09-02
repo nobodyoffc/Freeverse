@@ -257,6 +257,9 @@ public class FcClientEvent {
         if(responseBody!=null){
             code = responseBody.getCode();
             message = responseBody.getMessage();
+        }else{
+            code = 1020;
+            message = "Failed to sign in.";
         }
     }
 
@@ -310,7 +313,14 @@ public class FcClientEvent {
                 }
             }
 
-            httpResponse = httpClient.execute(request);
+            try {
+                httpResponse = httpClient.execute(request);
+            }catch (HttpHostConnectException e){
+                log.debug("Failed to connect "+apiUrl.getUrl()+". Check the URL.");
+                code = ReplyCodeMessage.Code3001ResponseIsNull;
+                message = ReplyCodeMessage.Msg3001ResponseIsNull;
+                return false;
+            }
 
             if(httpResponse==null){
                 code= ReplyCodeMessage.Code3002GetRequestFailed;

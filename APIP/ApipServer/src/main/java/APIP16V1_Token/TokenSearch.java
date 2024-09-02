@@ -23,7 +23,7 @@ import static constants.FieldNames.Token_Id;
 import static constants.FieldNames.LAST_HEIGHT;
 
 
-@WebServlet(name = ApiNames.TokenSearch, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version2 +"/"+ApiNames.TokenSearch)
+@WebServlet(name = ApiNames.TokenSearch, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version1 +"/"+ApiNames.TokenSearch)
 public class TokenSearch extends HttpServlet {
 
     @Override

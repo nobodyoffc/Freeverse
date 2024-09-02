@@ -12,7 +12,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApiNames.CidInfoByIds, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version2 +"/"+ApiNames.CidInfoByIds)
+@WebServlet(name = ApiNames.CidInfoByIds, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.CidInfoByIds)
 public class CidInfoByIds extends HttpServlet {
 
     @Override

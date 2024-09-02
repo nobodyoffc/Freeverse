@@ -78,13 +78,16 @@ public class StartApipManager {
 		Configure.loadConfig(br);
 		Configure configure = Configure.checkPassword(br);
 		byte[] symKey = configure.getSymKey();
-
-		sid = configure.chooseSid(symKey);
-		//Load the local settings from the file of localSettings.json
-		settings = ApipManagerSettings.loadFromFile(sid,ApipManagerSettings.class);//new ApipClientSettings(configure,br);
-		if(settings==null) settings = new ApipManagerSettings(configure);
-		//Check necessary APIs and set them if anyone can't be connected.
-		service = settings.initiateServer(sid,symKey,configure,br);
+		while(true) {
+			sid = configure.chooseSid(serviceType);
+			//Load the local settings from the file of localSettings.json
+			settings = ApipManagerSettings.loadFromFile(sid, ApipManagerSettings.class);//new ApipClientSettings(configure,br);
+			if (settings == null) settings = new ApipManagerSettings(configure);
+			//Check necessary APIs and set them if anyone can't be connected.
+			service = settings.initiateServer(sid, symKey, configure, br);
+			if(service!=null)break;
+			System.out.println("Try again.");
+		}
 		sid = service.getSid();
 		params = (ApipParams) service.getParams();
 
@@ -111,6 +114,7 @@ public class StartApipManager {
 		startCounterThread(symKey, settings,params);
 
 		startMempoolScan();
+
 		startPusher(esClient);
 
 		if(counter.isRunning().get()) System.out.println("Order scanner is running...");
@@ -174,8 +178,7 @@ public class StartApipManager {
 						return;
 					}
 				}
-				default -> {
-				}
+				default -> {}
 			}
 		}
 	}
@@ -214,14 +217,14 @@ public class StartApipManager {
 		EsTools.checkEsIndices(esClient,nameMappingList);
 	}
 
-	public static void checkSwapIndices(ElasticsearchClient esClient) throws IOException {
+	public static void checkSwapIndices(ElasticsearchClient esClient) {
 		Map<String,String> nameMappingList = new HashMap<>();
 		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
 		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_LP), SwapLpData.swapLpMappingJsonStr);
 		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_FINISHED), SwapAffair.swapFinishedMappingJsonStr);
 		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_PENDING), SwapPendingData.swapPendingMappingJsonStr);
 		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
-		EsTools.checkEsIndices(StartApipManager.esClient,nameMappingList);
+		EsTools.checkEsIndices(esClient,nameMappingList);
 
 	}
 
@@ -318,7 +321,7 @@ public class StartApipManager {
 	public static String getNameOfService(String name) {
 		String finalName;
 		try(Jedis jedis = StartApipManager.jedisPool.getResource()) {
-			finalName = (jedis.hget(CONFIG, SERVICE_NAME) + "_" + name).toLowerCase();
+			finalName = Settings.addSidBriefToName(sid,name).toLowerCase();
 		}
 		return finalName;
 	}

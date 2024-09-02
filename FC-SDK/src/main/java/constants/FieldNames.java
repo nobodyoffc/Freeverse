@@ -3,6 +3,7 @@ package constants;
 public class FieldNames {
     public static final String OWNER = "owner";
     public static final String TYPES = "types";
+    public static final String IDS = "ids";
     public static final String LAST_HEIGHT = "lastHeight";
     public static final String BIRTH_HEIGHT = "birthHeight";
     public static final String BIRTH_TIME = "birthTime";
@@ -33,6 +34,7 @@ public class FieldNames {
     public static final String OPEN_DISK_SID_BRIEF = "openDiskSidBrief";
     public static final String SETTINGS = "settings";
     public static final String FORBID_FREE_API = "forbidFreeApi";
+    public static final String SHARE_API_ACCOUNT = "shareApiAccount";
     public static final String DISK_INFO = "disk_info";
     public static final String APIP_INFO = "apip_info";
     public static final String EXPIRE = "expire";
@@ -92,4 +94,15 @@ public class FieldNames {
     public static final String ENCRYPT_INPUT = "encryptInput";
     public static final String WEBHOOK_REQUEST_BODY = "webhookRequestBody";
     public static final String SIGN = "sign";
+    public static final String CLOSE_STATEMENT = "closeStatement";
+    public static final String LAST_TX_ID = "lastTxId";
+    public static final String CODES = "codes";
+    public static final String SERVICES = "services";
+    public static final String PROTOCOLS = "protocols";
+    public static final String WAITERS = "waiters";
+    public static final String URLS = "urls";
+    public static final String VER = "ver";
+    public static final String DESC = "desc";
+    public static final String LOCAL_NAMES = "localNames";
+    public static final String NUMBER = "number";
 }

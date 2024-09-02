@@ -23,7 +23,7 @@ import java.util.Map;
 
 import static constants.FieldNames.HEIGHT;
 
-@WebServlet(name = ApiNames.ChainInfo, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version2 +"/"+ApiNames.ChainInfo)
+@WebServlet(name = ApiNames.ChainInfo, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.ChainInfo)
 public class ChainInfo extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

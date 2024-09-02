@@ -25,7 +25,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 
-@WebServlet(name = ApiNames.ProofSearch, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version2 +"/"+ApiNames.ProofSearch)
+@WebServlet(name = ApiNames.ProofSearch, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version1 +"/"+ApiNames.ProofSearch)
 public class ProofSearch extends HttpServlet {
 
     @Override

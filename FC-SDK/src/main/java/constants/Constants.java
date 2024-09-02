@@ -12,7 +12,7 @@ public class Constants {
     public static final Long RewardInterval = OneDayInterval * 1;//10
     public static final String UserDir = "user.dir";
     public static final String UserHome = "user.home";
-    public static final int MaxRequestSize = 100;
+    public static final int MaxRequestSize = 3000;
     public static final int DefaultSize = 20;
     public static final String zeroBlockId = "00000000cbe04361b1d6de82b893a7d8419e76e99dd2073ac0db2ba0e652eea8";
     public static final String MAGIC = "f9beb4d9";

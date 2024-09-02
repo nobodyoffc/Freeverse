@@ -31,7 +31,8 @@ public class SwapHallManager extends ServiceManager {
     }
 
     @Override
-    public void updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
+    public Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
         serviceParams.updateParams(br,symKey,(ApipClient) apipAccount.getClient());
+        return serviceParams;
     }
 }

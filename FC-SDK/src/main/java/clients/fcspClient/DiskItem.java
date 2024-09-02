@@ -4,14 +4,14 @@ import java.util.Date;
 
 public class DiskItem {
     private String did;
-    private Date since;
-    private Date expire;
+    private Long since;
+    private Long expire;
     private Long size;
 
-    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"did\":{\"type\":\"keyword\"},\"since\":{\"type\":\"date\",\"format\":\"epoch_millis||strict_date_optional_time\"},\"expire\":{\"type\":\"date\",\"format\":\"epoch_millis||strict_date_optional_time\"},\"size\":{\"type\":\"long\"}}}}";
+    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"did\":{\"type\":\"keyword\"},\"since\":{\"type\":\"long\"},\"expire\":{\"type\":\"long\"},\"size\":{\"type\":\"long\"}}}}";
     public DiskItem() {}
 
-    public DiskItem(String did, Date since, Date expire, long size) {
+    public DiskItem(String did, Long since, Long expire, long size) {
         this.did = did;
         this.since = since;
         this.expire = expire;
@@ -28,19 +28,19 @@ public class DiskItem {
         this.did = did;
     }
 
-    public Date getSince() {
+    public Long getSince() {
         return since;
     }
 
-    public void setSince(Date since) {
+    public void setSince(Long since) {
         this.since = since;
     }
 
-    public Date getExpire() {
+    public Long getExpire() {
         return expire;
     }
 
-    public void setExpire(Date expire) {
+    public void setExpire(Long expire) {
         this.expire = expire;
     }
 
