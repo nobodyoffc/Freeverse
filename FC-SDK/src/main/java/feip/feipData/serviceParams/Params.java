@@ -34,7 +34,7 @@ public abstract class Params {
             case REDIS -> null;
             case DISK -> DiskParams.class;
             case OTHER -> null;
-            case TALK -> null;
+            case TALK -> TalkParams.class;
             case MAP -> null;
             case SWAP_HALL -> null;
         };
@@ -54,7 +54,7 @@ public abstract class Params {
     }
 
     protected String updateAccount(BufferedReader br, byte[] symKey, ApipClient apipClient) {
-        if(Inputer.askIfYes(br,"The account is "+this.account)){
+        if(Inputer.askIfYes(br,"The account is "+this.account+". Update it?")){
             return fch.Inputer.inputOrCreateFid("Input the account:",br,symKey,apipClient);
         }
         return this.account;

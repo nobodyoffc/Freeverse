@@ -171,7 +171,7 @@ public class ApiProvider {
                     id = makeSimpleId(REDIS);
                     name=id;
                 }
-                case DISK -> {
+                case DISK, TALK -> {
                     if(apipClient==null){
                         System.out.println("Can't add such provider because the APIP client is null.");
                         return false;

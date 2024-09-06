@@ -38,13 +38,13 @@ import static constants.IndicesNames.ORDER;
 import static constants.Strings.*;
 
 public class StartDiskManager {
-    public static final String STORAGE_DIR = System.getProperty("user.home")+"/disk_data";
+    public static  String STORAGE_DIR;
     private static DiskManagerSettings settings;
     public static ElasticsearchClient esClient;
     public static ApipClient apipClient;
     public static Service service;
     public static DiskParams params;
-    public static Counter counter;
+    public static DiskCounter counter;
 
     public static String sid;
     public static final ServiceType serviceType = ServiceType.DISK;
@@ -69,6 +69,7 @@ public class StartDiskManager {
         }
 
         sid = service.getSid();
+        STORAGE_DIR = Service.makeServiceDataDir(sid, serviceType);
         params = (DiskParams) service.getParams();
 
         //Prepare API clients
@@ -180,7 +181,7 @@ public class StartDiskManager {
 
     private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
         byte[] priKey = Settings.getMainFidPriKey(symKey, settings);
-        counter = new Counter(settings,priKey, params);
+        counter = new DiskCounter(settings,priKey, params);
         Thread thread = new Thread(counter);
         thread.start();
     }

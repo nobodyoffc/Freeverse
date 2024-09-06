@@ -47,6 +47,7 @@ public class ApiNames {
     public static String[] WalletAPIs;
     public static String[] CryptoAPIs;
     public static String[] DiskAPIs;
+    public static String[] TalkAPIs;
     public static String[] ApipAPIs;
     public static String[] EndpointAPIs;
     //APIP path
@@ -171,9 +172,6 @@ public class ApiNames {
     public static final String BroadcastTx = "broadcastTx";
     public static final String FeeRate = "feeRate";
     public static final String Broadcast = "broadcast";
-//    public static final String CashValid = "cashValidLive";
-//    public static final String CashValid = "cashValidForCd";
-//    public static final String CashValid = "cashValidForPay";
     public static final String GetTotals = "getTotals";
     public static final String GetPrices = "getPrices";
     public static final String NidSearch = "nidSearch";
@@ -225,10 +223,21 @@ public class ApiNames {
     public static final String BlockTimeHistory ="blockTimeHistory";
     public static final String WebhookPoint = "webhookPoint";
 
-
+    public static final String Content = "content";
+    public static final String CreatRoom = "createRoom";
+    public static final String AskRoomInfo = "askRoomInfo";
+    public static final String ShareRoomInfo = "roomInfo";
+    public static final String AddMember = "addMember";
+    public static final String RemoveMember = "removeMember";
+    public static final String CloseRoom = "closeRoom";
+    public static final String AskKey = "askKey";
+    public static final String ShareKey = "shareKey";
+    public static final String UpdateItems = "updateItems";
+    public static final String Exit = "exit";
 
     public static ArrayList<String> freeApiList = new ArrayList<>();
     public static ArrayList<String> DiskApiList = new ArrayList<>();
+    public static ArrayList<String> TalkApiList = new ArrayList<>();
     public static ArrayList<String> ApipApiList = new ArrayList<>();
 
     static {
@@ -340,6 +349,24 @@ public class ApiNames {
         DiskApiList.add(LIST);
         DiskApiList.add(Ping);
         DiskApiList.add(WebhookPoint);
+
+        TalkApiList.add(SignInEcc);
+        TalkApiList.add(Content);
+        TalkApiList.add(CreatRoom);
+        TalkApiList.add(AskRoomInfo);
+        TalkApiList.add(ShareRoomInfo);
+        TalkApiList.add(AddMember);
+        TalkApiList.add(RemoveMember);
+        TalkApiList.add(CloseRoom);
+        TalkApiList.add(AskKey);
+        TalkApiList.add(ShareKey);
+        TalkApiList.add(UpdateItems);
+        TalkApiList.add(Exit);
+
+        TalkAPIs = new String[]{
+                SignInEcc,Content,CreatRoom,AskRoomInfo,ShareRoomInfo,
+                AddMember,RemoveMember,CloseRoom,AskKey,ShareKey,UpdateItems,Exit
+        };
 
         SwapHallAPIs = new String[]{
                 SwapRegister, SwapUpdate, SwapState,

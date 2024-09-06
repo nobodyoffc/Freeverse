@@ -1,6 +1,7 @@
 package configure;
 
 import appTools.Menu;
+import clients.Client;
 import feip.feipData.ServiceMask;
 import feip.feipData.serviceParams.*;
 import appTools.Inputer;

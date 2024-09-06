@@ -7,7 +7,6 @@ import javaTools.JsonTools;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
 
 public class TalkItem {
     private transient String id; //time+nonce
@@ -26,10 +25,10 @@ public class TalkItem {
     private Long time;
     private Integer nonce;
     private String from;//FID
-    private DataType dataType; //0 text, 1 cipher, 2 HAT, 3 signature
+    private DataType dataType; //0 text, 1 cipher, 2 HAT, 3 sign
     private String data;
     private transient byte[] bytes; //toType+to+time+nonce+from+dataType+data
-    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"wildcard\"},\"toType\":{\"type\":\"keyword\"},\"to\":{\"type\":\"wildcard\"},\"time\":{\"type\":\"long\",\"format\":\"epoch_millis||strict_date_optional_time\"},\"nonce\":{\"type\":\"integer\"},\"from\":{\"type\":\"wildcard\"},\"dataType\":{\"type\":\"keyword\"},\"data\":{\"type\":\"text\"}}}}";
+    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"wildcard\"},\"toType\":{\"type\":\"keyword\"},\"to\":{\"type\":\"wildcard\"},\"time\":{\"type\":\"long\"},\"nonce\":{\"type\":\"integer\"},\"from\":{\"type\":\"wildcard\"},\"dataType\":{\"type\":\"keyword\"},\"data\":{\"type\":\"text\"}}}}";
     public enum ToType {
         SELF((byte)0),
         FID((byte)1),
@@ -49,13 +48,13 @@ public class TalkItem {
         SIGN_IN((byte)5), //data = {"sid":,"nonce":,"time":}
         CREAT_ROOM((byte)6),
         ASK_ROOM_INFO((byte)7),
-        ROOM_INFO((byte)8),
+        SHARE_ROOM_INFO((byte)8),
         ADD_MEMBER((byte)9),
         REMOVE_MEMBER((byte)10),
         CLOSE_ROOM((byte)11),
         ASK_KEY((byte)12),
         SHARE_KEY((byte)13),
-        UPDATE((byte)14),
+        UPDATE_ITEMS((byte)14),
         EXIT((byte)19);
 
         public final byte number;
@@ -204,7 +203,6 @@ public class TalkItem {
     public String toString(){
         return toJson();
     }
-
 
     public String getId() {
         return id;

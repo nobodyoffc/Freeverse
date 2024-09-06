@@ -27,8 +27,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.net.MalformedURLException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URL;
 import java.util.*;
 
 import static apip.apipData.Session.getSessionFromJedis;
@@ -49,16 +51,25 @@ public class TalkServer {
     private final JedisPool jedisPool;
     private static String sid = null;
     private final byte[] waiterPriKey;
+    private static String ip;
+    private static int port;
 
-    public TalkServer(String sid1, byte[] waiterPriKey, ApipClient apipClient, JedisPool jedisPool) {
+    public TalkServer(String url, String sid1, byte[] waiterPriKey, ApipClient apipClient, JedisPool jedisPool) {
         sid = sid1;
         this.waiterPriKey = waiterPriKey;
         this.apipClient = apipClient;
         this.jedisPool = jedisPool;
+        try {
+            URL url1 = new URL(url);
+            ip = url1.getHost();
+            port = url1.getPort();
+        } catch (MalformedURLException e) {
+            System.out.println("Failed to get the URL from:"+url);
+        }
     }
 
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(3333)) {
+        try (ServerSocket serverSocket = new ServerSocket(port)) {
             serverSocket.setReuseAddress(true);  // Allow immediate reuse of the port
             int count = 0;
             while (isRunning) {
@@ -104,7 +115,7 @@ public class TalkServer {
             }
 
             System.out.println("Clients number: " + sockets.size());
-            String fid = "client" + (++count);
+            String fid = "startClient" + (++count);
             System.out.println(fid + " connected.");
             try (BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
                 String talkItemStr;

@@ -476,14 +476,14 @@ public class Inputer {
     }
 
     public static Boolean promptAndSet(BufferedReader reader, String fieldName, Boolean currentValue) throws IOException {
-        if(currentValue!=null)System.out.print("Enter " + fieldName + "(true or false). It is '"+currentValue+ "' now. (Press Enter to keep it): ");
-        else System.out.println("Enter " + fieldName + "(true or false). Enter to set as 'false':");
+        if(currentValue!=null)System.out.print("Set " + fieldName + "(true or false). It is '"+currentValue+ "' now. (Press Enter to keep it): ");
+        else System.out.println("Set " + fieldName + "(true or false). Enter to set as 'false':");
         String input = reader.readLine();
         if("".equals(input)) input = FALSE;
         return Boolean.parseBoolean(input);
     }
     public static long promptForLong(BufferedReader reader, String fieldName, long currentValue) throws IOException {
-        System.out.print("Enter " + fieldName + " (Press Enter to skip): ");
+        System.out.print("Set " + fieldName + " (Enter to skip): ");
         String newValue = reader.readLine();
         return newValue.isEmpty() ? currentValue : Long.parseLong(newValue);
     }
@@ -493,7 +493,7 @@ public class Inputer {
         System.out.print("Do you want to update it? (y/n): ");
 
         if ("y".equalsIgnoreCase(reader.readLine())) {
-            String ask = "Enter new values for " + fieldName + ": ";
+            String ask = "Set new values for " + fieldName + ": ";
             return inputStringArray(reader, ask, 0);
         }
         return currentValue;

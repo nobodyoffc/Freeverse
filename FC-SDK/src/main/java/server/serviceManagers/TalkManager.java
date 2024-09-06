@@ -23,7 +23,7 @@ public class TalkManager extends ServiceManager {
 
     @Override
     protected Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
-        TalkParams talkParams = new TalkParams();
+        TalkParams talkParams = (TalkParams)serviceParams;
         talkParams.updateParams(br, symKey,(ApipClient) apipAccount.getClient());
         return talkParams;
     }

@@ -6,14 +6,15 @@ import clients.apipClient.ApipClient;
 import clients.esClient.EsTools;
 import clients.fcspClient.TalkItem;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import configure.ServiceType;
 import configure.Configure;
+import configure.ServiceType;
 import constants.ApiNames;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import feip.feipData.serviceParams.TalkParams;
+import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
 import server.Settings;
@@ -31,22 +32,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static constants.Strings.*;
+import static feip.feipData.Service.makeServiceDataDir;
 
 public class StartTalkServer {
-    public static final String STORAGE_DIR = System.getProperty("user.home")+"/disk_data";
+    public static String STORAGE_DIR;
     private static TalkServerSettings settings;
     public static ElasticsearchClient esClient;
     public static ApipClient apipClient;
     public static Service service;
     public static TalkParams params;
     public static Counter counter;
+    public static String sid;
     public static final ServiceType serviceType = ServiceType.TALK;
 
-
-    public static String sid;
-
     public static void main(String[] args) throws IOException {
-
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         //Load config info from the file
@@ -54,18 +53,21 @@ public class StartTalkServer {
         Configure configure = Configure.checkPassword(br);
         byte[] symKey = configure.getSymKey();
 
-        sid = configure.chooseSid(serviceType);
-        //Load the local settings from the file of localSettings.json
-        settings = TalkServerSettings.loadFromFile(sid, TalkServerSettings.class);//new ApipClientSettings(configure,br);
-        if(settings==null) settings = new TalkServerSettings(configure);
-        service = settings.initiateServer(sid,symKey,configure, br);
-        if(service==null){
-            System.out.println("Failed to initiate.");
-            close();
-            return;
+
+        while(true) {
+            sid = configure.chooseSid(serviceType);
+            //Load the local settings from the file of localSettings.json
+            settings = TalkServerSettings.loadFromFile(sid, TalkServerSettings.class);
+            if(settings==null) settings = new TalkServerSettings(configure);
+
+            service = settings.initiateServer(sid,symKey,configure, br);
+
+            if(service!=null)break;
+            System.out.println("Try again.");
         }
 
         sid = service.getSid();
+        STORAGE_DIR = makeServiceDataDir(sid, ServiceType.TALK);
         params = (TalkParams) service.getParams();
 
         //Prepare API clients
@@ -73,13 +75,13 @@ public class StartTalkServer {
         esClient = (ElasticsearchClient) settings.getEsAccount().getClient();
         JedisPool jedisPool = (JedisPool) settings.getRedisAccount().getClient();
 
-        Configure.checkWebConfig(configure.getPasswordName(), sid,configure, settings,symKey, serviceType, jedisPool, br);
+//        Configure.checkWebConfig(configure.getPasswordName(), sid,configure, settings,symKey, serviceType, jedisPool, br);
 
         //Check indices in ES
         checkEsIndices(esClient);
 
         //Check API prices
-        Order.setNPrices(sid, ApiNames.ApipApiList, jedisPool, br,false);
+        Order.setNPrices(sid, ApiNames.TalkApiList, jedisPool, br,false);
 
         //Check user balance
         Counter.checkUserBalance(sid, jedisPool, esClient, br);
@@ -96,17 +98,13 @@ public class StartTalkServer {
         startCounterThread(symKey, settings,params);
 
         byte[] waiterPriKey;
-        CryptoDataByte result = new Decryptor().decryptJsonBySymKey(configure.getFidCipherMap().get(settings.getMainFid()), symKey);
-        if(result.getCode()!=0 || result.getData()==null){
-            System.out.println("Failed to decrypt the waiter's priKey.");
-            return;
-        }
-        waiterPriKey = result.getData();
+        waiterPriKey = getWaiterPriKey(configure, symKey);
+        if (waiterPriKey == null) return;
 
         //Show the main menu
         Menu menu = new Menu();
-        menu.setName("Start server");
         menu.setName("Talk Manager");
+        menu.add("Start server");
         menu.add("Manage the service");
         menu.add("Reset the price multipliers(nPrice)");
         menu.add("Recreate all indices");
@@ -117,7 +115,10 @@ public class StartTalkServer {
             menu.show();
             int choice = menu.choose(br);
             switch (choice) {
-                case 1 -> new TalkServer(sid, waiterPriKey, apipClient,jedisPool).start();
+                case 1 -> {
+                    TalkServer talkServer = new TalkServer(params.getUrlHead(), sid, waiterPriKey, apipClient, jedisPool);
+                    talkServer.start();
+                }
                 case 2 -> new TalkManager(service, settings.getApipAccount(), br,symKey, TalkParams.class).menu();
                 case 3 -> Order.resetNPrices(br, sid, jedisPool);
                 case 4 -> recreateAllIndices(esClient, br);
@@ -133,6 +134,19 @@ public class StartTalkServer {
             }
         }
     }
+
+    @Nullable
+    private static byte[] getWaiterPriKey(Configure configure, byte[] symKey) {
+        byte[] waiterPriKey;
+        CryptoDataByte result = new Decryptor().decryptJsonBySymKey(configure.getFidCipherMap().get(settings.getMainFid()), symKey);
+        if(result.getCode()!=0 || result.getData()==null){
+            System.out.println("Failed to decrypt the waiter's priKey.");
+            return null;
+        }
+        waiterPriKey = result.getData();
+        return waiterPriKey;
+    }
+
     private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
         byte[] priKey = Settings.getMainFidPriKey(symKey, settings);
         counter = new Counter(settings,priKey, params);
@@ -144,7 +158,7 @@ public class StartTalkServer {
     }
 
     private static void recreateAllIndices(ElasticsearchClient esClient,BufferedReader br) {
-        if(!Inputer.askIfYes(br,"Recreate the disk data, order, balance, reward indices?"))return;
+        if(!Inputer.askIfYes(br,"Recreate the talk data, order, balance, reward indices?"))return;
         EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS,esClient, br);
         EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
         EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient, br);
@@ -153,10 +167,10 @@ public class StartTalkServer {
 
     private static void checkEsIndices(ElasticsearchClient esClient) {
         Map<String,String> nameMappingList = new HashMap<>();
-        nameMappingList.put(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
+        nameMappingList.put(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS);
         EsTools.checkEsIndices(esClient,nameMappingList);
     }
 

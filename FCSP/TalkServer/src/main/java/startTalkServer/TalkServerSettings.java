@@ -1,28 +1,30 @@
 package startTalkServer;
 
 import appTools.Menu;
+import appTools.Shower;
 import clients.apipClient.ApipClient;
 import clients.redisClient.RedisTools;
-import configure.ServiceType;
 import configure.Configure;
+import configure.ServiceType;
 import constants.ApiNames;
 import constants.FieldNames;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
+import javaTools.JsonTools;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Settings;
-import server.serviceManagers.TalkManager;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 
+import static configure.Configure.saveConfig;
 import static constants.FieldNames.SETTINGS;
 
 public class TalkServerSettings extends Settings {
     public static final int DEFAULT_WINDOW_TIME = 1000 * 60 * 5;
-
+    public static final ServiceType serviceType = ServiceType.TALK;
     private String localDataPath;
 
     public TalkServerSettings(Configure configure) {
@@ -32,6 +34,10 @@ public class TalkServerSettings extends Settings {
     public Service initiateServer(String sid, byte[] symKey, Configure config, BufferedReader br) {
         System.out.println("Initiating service settings...");
         setInitForServer(sid, config, br);
+
+        mainFid = config.getServiceAccount(sid,symKey);
+
+        if(shareApiAccount==null)inputShareApiAccount(br);
 
         apipAccount = config.checkAPI(apipAccountId, mainFid, ServiceType.APIP,symKey, shareApiAccount);//checkApiAccount(apipAccountId,ApiType.APIP, config, symKey, null);
         if(apipAccount!=null)apipAccountId=apipAccount.getId();
@@ -44,28 +50,28 @@ public class TalkServerSettings extends Settings {
         redisAccount =  config.checkAPI(redisAccountId, mainFid, ServiceType.REDIS,symKey, shareApiAccount);//checkApiAccount(redisAccountId,ApiType.REDIS,config,symKey,null);
         if(redisAccount!=null)redisAccountId = redisAccount.getId();
         else System.out.println("No Redis service.");
+        jedisPool = (JedisPool) redisAccount.getClient();
 
         ApipClient apipClient = (ApipClient) apipAccount.getClient();
         Service service = getMyService(sid, symKey, config, br, apipClient, TalkParams.class, ServiceType.TALK);
-
-        if(service==null){
-            new TalkManager(null,apipAccount,br,symKey, TalkParams.class).publishService();
-            return null;
-        }
+        if (isWrongServiceType(service, serviceType.name())) return null;
 
         writeServiceToRedis(service, TalkParams.class);
 
         if(forbidFreeApi ==null)inputForbidFreeApi(br);
         if(windowTime==null)inputWindowTime(br);
         if(localDataPath==null)localDataPath=getLocalDataDir(this.sid);
-        if(fromWebhook==null)inputFromWebhook(br);
-        if(listenPath==null)checkListenPath(br,ApiNames.NewCashByFids );//listenPath=System.getProperty(UserDir) +"/"+ Settings.addSidBriefToName(service.getSid(),NewCashByFids)+"/";
+        if(fromWebhook==null)fromWebhook=true;//inputFromWebhook(br);
+        if(listenPath==null)checkListenPath(br, ApiNames.NewCashByFids );//listenPath=System.getProperty(UserDir) +"/"+ Settings.addSidBriefToName(service.getSid(),NewCashByFids)+"/";
 
         checkIfMainFidIsApiAccountUser(symKey,config,br,apipAccount, mainFid);
 
         apipAccountId = apipAccount.getId();
-        config.saveConfig();
+        saveConfig();
         saveSettings(service.getSid());
+        System.out.println("Check your service:");
+        System.out.println(JsonTools.toNiceJson(service));
+        Shower.printUnderline(20);
         System.out.println("Initiated.");
         return service;
     }
@@ -79,16 +85,18 @@ public class TalkServerSettings extends Settings {
     public void resetLocalSettings(byte[] symKey) {
         Menu menu = new Menu();
         menu.setName("Settings of Talk Manager");
-//        menu.add("Reset listenPath");
-//        menu.add("Reset fromWebhook switch");
-        menu.add("Reset forbidFreeApi switch");
+        menu.add("Reset listenPath");
+        menu.add("Reset fromWebhook");
+        menu.add("Reset forbidFreeApi");
         menu.add("Reset window time");
         while (true) {
             menu.show();
             int choice = menu.choose(br);
             switch (choice) {
-                case 1 -> updateForbidFreeApi(br);
-                case 2 -> updateWindowTime(br);
+                case 1 -> updateListenPath(br);
+                case 2 -> updateFromWebhook(br);
+                case 3 -> updateForbidFreeApi(br);
+                case 4 -> updateWindowTime(br);
                 case 0 -> {
                     System.out.println("Restart is necessary to active new settings.");
                     return;
@@ -104,7 +112,6 @@ public class TalkServerSettings extends Settings {
         menu.add("Reset APIP");
         menu.add("Reset ES");
         menu.add("Reset Redis");
-        menu.add("Reset DISK");
         while (true) {
             menu.show();
             int choice = menu.choose(br);
@@ -112,7 +119,6 @@ public class TalkServerSettings extends Settings {
                 case 1 -> resetApi(symKey, apipClient, ServiceType.APIP);
                 case 2 -> resetApi(symKey, apipClient, ServiceType.ES);
                 case 3 -> resetApi(symKey, apipClient, ServiceType.REDIS);
-                case 4 -> resetApi(symKey, apipClient, ServiceType.DISK);
                 default -> {
                     return;
                 }
@@ -130,6 +136,7 @@ public class TalkServerSettings extends Settings {
         br.close();
     }
 
+
     public void inputListenPath(BufferedReader br){
         try {
             while(true) {
@@ -141,7 +148,6 @@ public class TalkServerSettings extends Settings {
             System.out.println("Failed to input listenPath.");
         }
     }
-
 
     @Override
     public void inputAll(BufferedReader br){
@@ -170,29 +176,9 @@ public class TalkServerSettings extends Settings {
     public void saveSettings(String id){
         writeToFile(id);
         if(redisAccount!=null) {
-            JedisPool jedisPool = (JedisPool) redisAccount.getClient();
             try (Jedis jedis = jedisPool.getResource()) {
                 RedisTools.writeToRedis(this, Settings.addSidBriefToName(sid,SETTINGS), jedis, TalkServerSettings.class);
             }
         }
-    }
-
-    public void saveSettings(JedisPool jedisPool){
-        writeToFile(mainFid);
-        try (Jedis jedis = jedisPool.getResource()) {
-            RedisTools.writeToRedis(this, Settings.addSidBriefToName(sid,SETTINGS), jedis, TalkServerSettings.class);
-        }
-    }
-
-    public void setWindowTime(long windowTime) {
-        this.windowTime = windowTime;
-    }
-
-    public String getLocalDataPath() {
-        return localDataPath;
-    }
-
-    public void setLocalDataPath(String localDataPath) {
-        this.localDataPath = localDataPath;
     }
 }

@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPool;
 import startManager.DiskManagerSettings;
-import startManager.StartDiskManager;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.http.HttpServlet;
@@ -16,6 +15,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import static configure.Configure.makeConfigFileName;
+import static feip.feipData.Service.makeServiceDataDir;
 
 public class Initiator extends HttpServlet {
     public static final ServiceType SERVICE_TYPE = ServiceType.DISK;
@@ -56,11 +56,12 @@ public class Initiator extends HttpServlet {
         ApiProvider esProvider = configure.getApiProviderMap().get(esAccount.getProviderId());
         esClient = (ElasticsearchClient)esAccount.connectApi(esProvider,symKey);
 
-        File directory = new File(StartDiskManager.STORAGE_DIR);
+        String storageDir = makeServiceDataDir(sid, ServiceType.DISK);
+        File directory = new File(storageDir);
         if (!directory.exists()) {
             if(directory.mkdirs()){
-                log.debug("{} is Created.", StartDiskManager.STORAGE_DIR);
-            }else log.error("Failed to create {}", StartDiskManager.STORAGE_DIR);
+                log.debug("{} is Created.", storageDir);
+            }else log.error("Failed to create {}", storageDir);
         }
 
         System.out.println("DISK server is initiated.");

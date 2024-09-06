@@ -8,11 +8,7 @@ import configure.ApiProvider;
 import constants.ApiNames;
 import constants.Constants;
 import constants.ReplyCodeMessage;
-import crypto.*;
 import crypto.Hash;
-import javaTools.BytesTools;
-import javaTools.FileTools;
-import javaTools.Hex;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
 import javaTools.http.HttpRequestMethod;
@@ -28,48 +24,12 @@ import java.util.Map;
 
 import static constants.ApiNames.*;
 import static constants.FieldNames.*;
-import static fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 import static javaTools.ObjectTools.objectToList;
 
 public class DiskClient extends Client {
 
     public DiskClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symKey, ApipClient apipClient) {
         super(apiProvider, apiAccount, symKey, apipClient);
-    }
-
-    public static String encryptFile(String fileName, String pubKeyHex) {
-
-        byte[] pubKey = Hex.fromHex(pubKeyHex);
-        Encryptor encryptor = new Encryptor(FC_EccK1AesCbc256_No1_NrC7);
-        String tempFileName = FileTools.getTempFileName();
-        CryptoDataByte result1 = encryptor.encryptFileByAsyOneWay(fileName, tempFileName, pubKey);
-        if(result1.getCode()!=0)return null;
-        String cipherFileName;
-        try {
-            cipherFileName = Hash.sha256x2(new File(tempFileName));
-            Files.move(Paths.get(tempFileName),Paths.get(cipherFileName));
-        } catch (IOException e) {
-            return null;
-        }
-        return cipherFileName;
-    }
-
-    @Nullable
-    public static String decryptFile(String path, String gotFile,byte[]symKey,String priKeyCipher) {
-        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(priKeyCipher,symKey);
-        if(cryptoDataByte.getCode()!=0){
-            log.debug("Failed to decrypt the user priKey.");
-            log.debug(cryptoDataByte.getMessage());
-            return null;
-        }
-        byte[] priKey = cryptoDataByte.getData();
-        CryptoDataByte cryptoDataByte1 = new Decryptor().decryptFileToDidByAsyOneWay(path, gotFile, path, priKey);
-        if(cryptoDataByte1.getCode()!=0){
-            log.debug("Failed to decrypt file "+ Path.of(path, gotFile));
-            return null;
-        }
-        BytesTools.clearByteArray(priKey);
-        return Hex.toHex(cryptoDataByte1.getDid());
     }
 
     public String get(HttpRequestMethod method, AuthType authType, String did, String localPath) {

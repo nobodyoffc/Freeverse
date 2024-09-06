@@ -2,6 +2,8 @@ package server.order;
 
 import apip.apipData.Session;
 import apip.apipData.WebhookRequestBody;
+import appTools.Menu;
+import appTools.Shower;
 import constants.FieldNames;
 import feip.feipData.serviceParams.Params;
 import appTools.Inputer;
@@ -75,7 +77,9 @@ public class Order {
         String webhookRequestDataStr;
         if(result.equalsIgnoreCase("true")){
             webhookRequestDataStr = dataMap.get(Strings.SUBSCRIBE);
-            System.out.println(JsonTools.strToJson(webhookRequestDataStr));
+            Shower.printUnderline(10);
+            System.out.println(JsonTools.strToNiceJson(webhookRequestDataStr));
+            Shower.printUnderline(10);
             if(!askIfYes(br,"Here is your subscription. Change it?")){
                 return true;
             }

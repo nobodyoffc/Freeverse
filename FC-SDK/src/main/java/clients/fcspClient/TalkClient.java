@@ -1,163 +1,230 @@
 package clients.fcspClient;
 
-import apip.apipData.Fcdsl;
+import apip.apipData.RequestBody;
+import apip.apipData.Session;
 import clients.Client;
 import clients.apipClient.ApipClient;
 import configure.ApiAccount;
 import configure.ApiProvider;
-import constants.ApiNames;
-import constants.Constants;
-import constants.ReplyCodeMessage;
-import crypto.CryptoDataByte;
-import crypto.Decryptor;
-import crypto.Encryptor;
-import crypto.Hash;
-import javaTools.BytesTools;
-import javaTools.FileTools;
-import javaTools.Hex;
-import javaTools.ObjectTools;
+import configure.ServiceType;
+import fcData.FcReplier;
+import feip.feipData.serviceParams.Params;
 import javaTools.http.AuthType;
 import javaTools.http.HttpRequestMethod;
-import org.jetbrains.annotations.Nullable;
 
-import java.io.File;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static constants.ApiNames.*;
-import static constants.FieldNames.DID;
-import static fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
-import static javaTools.ObjectTools.objectToList;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.net.Socket;
+import java.net.URL;
 
 public class TalkClient extends Client {
 
+    public static Socket socket;
+    public static OutputStreamWriter outputStreamWriter;
+    public static BufferedReader brFromKeyboard;
+    public static BufferedReader brFromServer;
+
+    public TalkClient() {
+    }
+
     public TalkClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symKey, ApipClient apipClient) {
         super(apiProvider, apiAccount, symKey, apipClient);
-//        this.signInUrlTailPath= ApiUrl.makeUrlTailPath(ApiNames.SN_0,ApiNames.Version1);
+    }
+    public Session ping(String version, AuthType authType, ServiceType serviceType) {
+        System.out.println("Sign in...");
+        return null;
     }
 
-    public static String encryptFile(String fileName, String pubKeyHex) {
+    @Override
+    public Session signInEcc(ApiAccount apiAccount, RequestBody.SignInMode mode, byte[] symKey) {
+        System.out.println("Sign in...");
+        return null;
+    }
 
-        byte[] pubKey = Hex.fromHex(pubKeyHex);
-        Encryptor encryptor = new Encryptor(FC_EccK1AesCbc256_No1_NrC7);
-        String tempFileName = FileTools.getTempFileName();
-        CryptoDataByte result1 = encryptor.encryptFileByAsyOneWay(fileName, tempFileName, pubKey);
-        if(result1.getCode()!=0)return null;
-        String cipherFileName;
-        try {
-            cipherFileName = Hash.sha256x2(new File(tempFileName));
-            Files.move(Paths.get(tempFileName),Paths.get(cipherFileName));
+    public void start() {
+        System.out.println("Starting client...");
+        try{
+            URL url = new URL(apiProvider.getApiUrl());
+            String ip = url.getHost();
+            int port = url.getPort();
+//            int ipEndIndex = apiProvider.getApiUrl().lastIndexOf(":");
+//            String ip = apiProvider.getApiUrl().substring(0, ipEndIndex);
+//            int port = Integer.parseInt(apiProvider.getApiUrl().substring(ipEndIndex+1));
+            socket = new Socket(ip, port);
+            outputStreamWriter = new OutputStreamWriter(socket.getOutputStream());
+            outputStreamWriter.write(apiAccount.getId()+" connect.");
+            brFromKeyboard = new BufferedReader(new InputStreamReader(System.in));
+            brFromServer = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            System.out.println(brFromServer.readLine());
         } catch (IOException e) {
-            return null;
-        }
-        return cipherFileName;
-    }
-
-    @Nullable
-    public static String decryptFile(String path, String gotFile,byte[]symKey,String priKeyCipher) {
-        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(priKeyCipher,symKey);
-        if(cryptoDataByte.getCode()!=0){
-            log.debug("Failed to decrypt the user priKey.");
-            log.debug(cryptoDataByte.getMessage());
-            return null;
-        }
-        byte[] priKey = cryptoDataByte.getData();
-        CryptoDataByte cryptoDataByte1 = new Decryptor().decryptFileToDidByAsyOneWay(path, gotFile, path, priKey);
-        if(cryptoDataByte1.getCode()!=0){
-            log.debug("Failed to decrypt file "+ Path.of(path, gotFile));
-            return null;
-        }
-        BytesTools.clearByteArray(priKey);
-        return Hex.toHex(cryptoDataByte1.getDid());
-    }
-
-    public String get(HttpRequestMethod method, AuthType authType, String did, String localPath) {
-        localPath = checkLocalPath(localPath);
-        if (localPath == null) return null;
-        Fcdsl fcdsl = new Fcdsl();
-        Map<String,String> paramMap= new HashMap<>();
-        paramMap.put(DID,did);
-        fcdsl.setOther(paramMap);
-        Object data = requestFile(ApiNames.SN_1, ApiNames.Version1, ApiNames.Get, fcdsl, did, localPath, authType, sessionKey, method);
-        return (String)data;
-    }
-
-    public String check(String did) {
-        Map<String,String> urlParamMap= new HashMap<>();
-        urlParamMap.put(DID,did);
-        Object data  = requestJsonByUrlParams(ApiNames.SN_1, ApiNames.Version1,ApiNames.Check, urlParamMap,null);
-        return String.valueOf(data);
-    }
-
-    public List<DiskItem> list(Fcdsl fcdsl, HttpRequestMethod httpRequestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(SN_1, Version1, LIST,fcdsl, authType,sessionKey, httpRequestMethod);
-        return objectToList(data, DiskItem.class);
-    }
-    public List<DiskItem> list(HttpRequestMethod method, AuthType authType, int size, String sort, String order, String[] last) {
-        Fcdsl fcdsl = new Fcdsl();
-        if(size!=0)fcdsl.addSize(size);
-        if(sort!=null)fcdsl.addSort(sort,order);
-        if(last!=null && last.length>0)fcdsl.addAfter(List.of(last));
-
-        return list(fcdsl,method,authType);
-    }
-
-
-    @Nullable
-    private static String checkLocalPath(String localPath) {
-        if(localPath ==null) localPath =System.getProperty(Constants.UserDir);
-        Path path = Paths.get(localPath);
-        if(Files.notExists(path)) {
             try {
-                Files.createDirectories(path);
-            } catch (IOException e) {
-                log.debug("Failed to create path:" + localPath);
-                return null;
+                e.printStackTrace();
+                socket.close();
+                outputStreamWriter.close();
+                brFromServer.close();
+                brFromKeyboard.close();
+            } catch (IOException e1) {
+                e1.printStackTrace();
             }
         }
-        return localPath;
-    }
 
-    public String put(String fileName) {
-        Object data = requestJsonByFile(ApiNames.SN_1, ApiNames.Version1,ApiNames.Put,null,sessionKey,fileName);
-        return replyPut(fileName, data);
-    }
-    public String carve(String fileName) {
-        Object data = requestJsonByFile(ApiNames.SN_1, ApiNames.Version1, Carve,null,sessionKey,fileName);
-        return replyPut(fileName, data);
-    }
-
-    @Nullable
-    private String replyPut(String fileName, Object data) {
-        if(sessionFreshen) data = checkResult();
-        if(data ==null) return null;
-
-        Map<String, String> stringStringMap = ObjectTools.objectToMap(data, String.class, String.class);
-        if(stringStringMap==null || stringStringMap.size()==0){
-            fcClientEvent.setCode(ReplyCodeMessage.Code1020OtherError);
-            fcClientEvent.setMessage("Failed to get the DID.");
-            return null;
-        }
-        String respondDid = stringStringMap.get(DID);
-        String localDid;
+//        signInEcc();
 
         try {
-            localDid = Hash.sha256x2(new File(fileName));
-        } catch (IOException e) {
-            fcClientEvent.setCode(ReplyCodeMessage.Code1020OtherError);
-            fcClientEvent.setMessage("Failed to hash local file.");
-            return null;
+            Thread send = new Send(socket);
+            Thread get = new Get(socket);
+
+            send.start();
+            get.start();
+
+            // Wait for threads to finish
+            send.join();
+            get.join();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
-        if(localDid.equals(respondDid)) return respondDid;
-        else {
-            fcClientEvent.setCode(ReplyCodeMessage.Code1020OtherError);
-            fcClientEvent.setMessage("Wrong DID."+"\nLocal DID:"+localDid+"\nrespond DID:"+respondDid);
-            return null;
+    }
+
+    public static class Send extends Thread {
+        private final Socket socket;
+
+        public Send(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            try {
+                while (!socket.isClosed()) {
+
+                        String content = brFromKeyboard.readLine();
+                        if (content == null || "exit".equalsIgnoreCase(content)) {
+                            break;
+                        }
+                        outputStreamWriter.write(content + "\n");
+                        outputStreamWriter.flush();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }finally {
+                try {
+                    brFromKeyboard.close();
+                    outputStreamWriter.close();
+                } catch (IOException ex) {
+                    System.out.println("Failed to close:"+ex.getMessage());
+                }
+            }
+        }
+    }
+
+    public static class Get extends Thread {
+        private final Socket socket;
+
+        public Get(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            String content;
+            try {
+                while ((content = brFromServer.readLine()) != null && !socket.isClosed()) {
+                    System.out.println(content);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }finally {
+                try {
+                    brFromServer.close();
+                } catch (IOException ex) {
+                    System.out.println("Failed to close:"+ex.getMessage());
+                }
+            }
+        }
+    }
+
+
+//TEST
+
+    public static void main(String[] args) {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        new TalkClient().start("127.0.0.1", 3333);
+    }
+    public void start(String ip, int port) {
+        System.out.println("Starting client...");
+        try (Socket socket = new Socket(ip, port)) {
+            Thread sendThread = new SendThread(socket);
+            Thread getThread = new GetThread(socket);
+
+            sendThread.start();
+            getThread.start();
+
+            // Wait for threads to finish
+            sendThread.join();
+            getThread.join();
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static class SendThread extends Thread {
+        private final Socket socket;
+
+        public SendThread(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            try (OutputStreamWriter osw = new OutputStreamWriter(socket.getOutputStream());
+                 BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
+
+                while (!socket.isClosed()) {
+                    String content = br.readLine();
+                    if (content == null || "exit".equalsIgnoreCase(content)) {
+                        break;
+                    }
+                    osw.write(content + "\n");
+                    osw.flush();
+                }
+            } catch (IOException e) {
+                if (!socket.isClosed()) {
+                    e.printStackTrace();
+                }
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    public static class GetThread extends Thread {
+        private final Socket socket;
+
+        public GetThread(Socket socket) {
+            this.socket = socket;
+        }
+
+        public void run() {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+
+                String content;
+                while ((content = br.readLine()) != null && !socket.isClosed()) {
+                    System.out.println(content);
+                }
+            } catch (IOException e) {
+                if (!socket.isClosed()) {
+                    e.printStackTrace();
+                }
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
         }
     }
 }

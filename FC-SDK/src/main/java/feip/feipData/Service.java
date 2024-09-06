@@ -1,8 +1,11 @@
 package feip.feipData;
 
 import com.google.gson.Gson;
+import configure.ServiceType;
 import feip.feipData.serviceParams.Params;
 import javaTools.StringTools;
+import org.jetbrains.annotations.NotNull;
+import server.Settings;
 
 import java.util.Map;
 
@@ -73,7 +76,12 @@ public class Service {
 		return service;
 	}
 
-	public String[] getServices() {
+    @NotNull
+    public static String makeServiceDataDir(String sid, ServiceType serviceType) {
+        return System.getProperty("user.home") + "/" + Settings.addSidBriefToName(sid, serviceType.name().toLowerCase() + "_data");
+    }
+
+    public String[] getServices() {
 		return services;
 	}
 

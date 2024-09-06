@@ -439,7 +439,7 @@ public class ApipClient extends Client {
     }
 
     public List<Protocol> protocolSearch(Fcdsl fcdsl, HttpRequestMethod httpRequestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(SN_4, Version1, ProtocolSearch, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, HttpRequestMethod.POST);
+        Object data = requestJsonByFcdsl(SN_4, Version1, ProtocolSearch, fcdsl, authType, sessionKey, httpRequestMethod);
         if(data==null)return null;
         return objectToList(data,Protocol.class);
     }
@@ -506,7 +506,7 @@ public class ApipClient extends Client {
     }
 
     public List<Service> serviceSearch(Fcdsl fcdsl, HttpRequestMethod httpRequestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(SN_6, Version1, ServiceSearch, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, HttpRequestMethod.POST);
+        Object data = requestJsonByFcdsl(SN_6, Version1, ServiceSearch, fcdsl, authType, sessionKey, httpRequestMethod);
         if(data==null)return null;
         return objectToList(data,Service.class);
     }

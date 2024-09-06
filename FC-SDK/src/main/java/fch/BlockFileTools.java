@@ -49,6 +49,7 @@ public class BlockFileTools {
                 .index(IndicesNames.BLOCK)
                 .query(q -> q
                         .term(t -> t.field("height").value(height))), Block.class);
-        return result.hits().hits().get(0).source();
+        if(!result.hits().hits().isEmpty())return result.hits().hits().get(0).source();
+        else return null;
     }
 }

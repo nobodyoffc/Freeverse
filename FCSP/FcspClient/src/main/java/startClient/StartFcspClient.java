@@ -5,6 +5,7 @@ import apip.apipData.Session;
 import appTools.Inputer;
 import appTools.Menu;
 import appTools.Shower;
+import clients.Client;
 import clients.apipClient.ApipClient;
 import clients.fcspClient.DiskClient;
 import clients.fcspClient.DiskItem;
@@ -188,7 +189,7 @@ public class StartFcspClient {
             } catch (IOException e) {
                 System.out.println("Failed to hash file:"+fileName);
             }
-            fileName = DiskClient.encryptFile(fileName, diskClient.getApiAccount().getUserPubKey());
+            fileName = Client.encryptFile(fileName, diskClient.getApiAccount().getUserPubKey());
             System.out.println("Encrypted to: "+fileName);
         }
         return fileName;
@@ -209,7 +210,7 @@ public class StartFcspClient {
     private static void tryToDecryptFile(String path, String gotFileId) {
         try {
             JsonTools.readOneJsonFromFile(path, gotFileId, CryptoDataStr.class);
-            String did = DiskClient.decryptFile(path, gotFileId,symKey, diskClient.getApiAccount().getUserPriKeyCipher());
+            String did = Client.decryptFile(path, gotFileId,symKey, diskClient.getApiAccount().getUserPriKeyCipher());
             if(did!= null) System.out.println("Decrypted to:"+Path.of(path,did));
         } catch (IOException ignore) {}
     }

@@ -195,32 +195,27 @@ public abstract class Settings {
         System.out.println("Get my service...");
         Service service = null;
         if(sid ==null) {
-            askIfPublishNewService(symKey, br, serviceType);
-            String owner = chooseOne(config.getOwnerList(), null, "Choose the owner:", br);
-            if (owner == null)
-                owner = config.addOwner(br);
-            service = config.chooseOwnerService(owner, symKey, serviceType, esClient, apipClient);
-        }else {
-            try {
-                if(esClient !=null)
-                    service = EsTools.getById(esClient, IndicesNames.SERVICE, sid,Service.class);
-                else if(apipClient !=null){
-                    service = apipClient.serviceById(sid);
-                }
-            } catch (IOException e) {
-                System.out.println("Failed to get service from ES.");
-                return null;
+            service = askIfPublishNewService(sid, symKey, br, serviceType, apipClient, esClient);
+            if(service==null) {
+                String owner = chooseOne(config.getOwnerList(), null, "Choose the owner:", br);
+                if (owner == null)
+                    owner = config.addOwner(br);
+                service = config.chooseOwnerService(owner, symKey, serviceType, esClient, apipClient);
             }
+        }else {
+            service = getServiceBySid(sid, apipClient, esClient, service);
         }
 
         if(service==null){
-            if(!askIfPublishNewService(symKey, br, serviceType)) return null;
+            service = askIfPublishNewService(sid, symKey, br, serviceType, apipClient, esClient);
+            if(service==null)return null;
         }
-        if(service==null)return null;
+
         Params params;
         switch (serviceType) {
             case APIP -> params = (ApipParams) Params.getParamsFromService(service, paramsClass);
             case DISK -> params = (DiskParams) Params.getParamsFromService(service, paramsClass);
+            case TALK -> params = (TalkParams) Params.getParamsFromService(service, paramsClass);
             case SWAP_HALL -> params = (SwapHallParams) Params.getParamsFromService(service, paramsClass);
             default -> params = (Params) Params.getParamsFromService(service, paramsClass);
         }
@@ -236,7 +231,8 @@ public abstract class Settings {
         return service;
     }
 
-    private static boolean askIfPublishNewService(byte[] symKey, BufferedReader br, ServiceType serviceType) {
+    private static Service askIfPublishNewService(String sid, byte[] symKey, BufferedReader br, ServiceType serviceType, ApipClient apipClient, ElasticsearchClient esClient) {
+        Service service = null;
         if(askIfYes(br,"Publish a new service?")) {
             switch (serviceType) {
                 case APIP -> new ApipManager(null, null, br, symKey, ApipParams.class).publishService();
@@ -244,9 +240,29 @@ public abstract class Settings {
                 case TALK -> new TalkManager(null, null, br, symKey, TalkParams.class).publishService();
                 case SWAP_HALL -> new SwapHallManager(null, null, br, symKey, SwapHallParams.class).publishService();
             }
-            System.exit(0);
+            while (true){
+                sid = Inputer.inputString(br,"Input the SID of the service you published:");
+                if(!Hex.isHex32(sid))continue;
+                service = getServiceBySid(sid, apipClient, esClient, service);
+                if(service!=null)return service;
+                else System.out.println("Failed to get the service with SID: "+sid);
+            }
         }
-        return false;
+        return null;
+    }
+
+    @Nullable
+    private static Service getServiceBySid(String sid, ApipClient apipClient, ElasticsearchClient esClient, Service service) {
+        try {
+            if(apipClient !=null){
+                service = apipClient.serviceById(sid);
+            } else if(esClient !=null)
+                service = EsTools.getById(esClient, IndicesNames.SERVICE, sid,Service.class);
+        } catch (IOException e) {
+            System.out.println("Failed to get service from ES.");
+                    return null;
+        }
+        return service;
     }
 
     protected void setInitForServer(String sid, Configure config, BufferedReader br) {

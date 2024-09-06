@@ -15,6 +15,7 @@ import crypto.*;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import javaTools.BytesTools;
+import javaTools.FileTools;
 import javaTools.Hex;
 import javaTools.JsonTools;
 import javaTools.http.AuthType;
@@ -26,7 +27,12 @@ import server.FreeApi;
 import server.Settings;
 
 import javax.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -34,6 +40,7 @@ import static constants.ApiNames.*;
 import static constants.Strings.URL_HEAD;
 import static constants.UpStrings.BALANCE;
 import static fcData.AlgorithmId.FC_Aes256Cbc_No1_NrC7;
+import static fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 import static javaTools.ObjectTools.listToMap;
 
 public class Client {
@@ -104,6 +111,42 @@ public class Client {
         }
         return cryptoResult.getData();
     }
+
+    public static String encryptFile(String fileName, String pubKeyHex) {
+
+        byte[] pubKey = Hex.fromHex(pubKeyHex);
+        Encryptor encryptor = new Encryptor(FC_EccK1AesCbc256_No1_NrC7);
+        String tempFileName = FileTools.getTempFileName();
+        CryptoDataByte result1 = encryptor.encryptFileByAsyOneWay(fileName, tempFileName, pubKey);
+        if(result1.getCode()!=0)return null;
+        String cipherFileName;
+        try {
+            cipherFileName = Hash.sha256x2(new File(tempFileName));
+            Files.move(Paths.get(tempFileName),Paths.get(cipherFileName));
+        } catch (IOException e) {
+            return null;
+        }
+        return cipherFileName;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    public static String decryptFile(String path, String gotFile,byte[]symKey,String priKeyCipher) {
+        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(priKeyCipher,symKey);
+        if(cryptoDataByte.getCode()!=0){
+            log.debug("Failed to decrypt the user priKey.");
+            log.debug(cryptoDataByte.getMessage());
+            return null;
+        }
+        byte[] priKey = cryptoDataByte.getData();
+        CryptoDataByte cryptoDataByte1 = new Decryptor().decryptFileToDidByAsyOneWay(path, gotFile, path, priKey);
+        if(cryptoDataByte1.getCode()!=0){
+            log.debug("Failed to decrypt file "+ Path.of(path, gotFile));
+            return null;
+        }
+        BytesTools.clearByteArray(priKey);
+        return Hex.toHex(cryptoDataByte1.getDid());
+    }
+
     public Object requestJsonByUrlParams(String ver, String apiName,
                                          @Nullable Map<String,String> paramMap, AuthType authType){
         return requestJsonByUrlParams(null, ver,apiName, paramMap,authType);
@@ -251,6 +294,8 @@ public class Client {
                 while(true){
                     waitSeconds(5);
                     session = checkSignInEcc();
+                    apiAccount.setSession(session);
+                    apiAccount.setSessionKey(sessionKey);
                     if (session != null)return session;
                 }
             }
@@ -299,6 +344,7 @@ public class Client {
         Session session;
         try{
             session=gson.fromJson(gson.toJson(data), Session.class);
+            session = makeSessionFromSignInEccResult(symKey, decryptor, priKey, session);
         } catch (Exception ignore){return null;}
         return session;
     }
@@ -531,8 +577,6 @@ public class Client {
         if(cryptoDataByte.getCode()!=0)return null;
         byte[] priKey = cryptoDataByte.getData();
 
-        String fid = KeyTools.priKeyToFid(priKey);
-
         signInEcc(priKey, mode);
 
         if(fcClientEvent==null||fcClientEvent.getResponseBody()==null||fcClientEvent.getResponseBody().getData()==null)
@@ -541,35 +585,43 @@ public class Client {
         if(session==null||session.getSessionKeyCipher()==null)return null;
 
         if(session.getSessionKey()==null) {
-            String sessionKeyCipher1 = session.getSessionKeyCipher();
-            CryptoDataByte cryptoDataByte1 =
-                    decryptor.decryptJsonByAsyOneWay(sessionKeyCipher1, priKey);
-            if (cryptoDataByte1.getCode() != 0) return null;
-            byte[] sessionKeyHexBytes = cryptoDataByte1.getData();
-            if (sessionKeyHexBytes == null) return null;
-
-            String sessionKeyHex = new String(sessionKeyHexBytes);
-            sessionKey = Hex.fromHex(sessionKeyHex);
-
-            Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
-            CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey, symKey);
-            if (cryptoDataByte2.getCode() != 0) return null;
-            String newCipher = cryptoDataByte2.toJson();
-
-            String sessionName = Session.makeSessionName(sessionKeyHex);
-            Long expireTime = session.getExpireTime();
-
-            session.setSessionKey(Hex.toHex(sessionKey));
-            session.setSessionKeyCipher(newCipher);
-            session.setSessionName(sessionName);
-            session.setExpireTime(expireTime);
-            session.setFid(fid);
+            session = makeSessionFromSignInEccResult(symKey, decryptor, priKey, session);
+            if(session==null)return null;
         }
             apiAccount.setSession(session);
             apiAccount.setSessionKey(sessionKey);
 
         return session;
     }
+
+    public Session makeSessionFromSignInEccResult(byte[] symKey, Decryptor decryptor, byte[] priKey, Session session) {
+        String sessionKeyCipher1 = session.getSessionKeyCipher();
+        String fid = KeyTools.priKeyToFid(priKey);
+        CryptoDataByte cryptoDataByte1 =
+                decryptor.decryptJsonByAsyOneWay(sessionKeyCipher1, priKey);
+        if (cryptoDataByte1.getCode() != 0) return null;
+        byte[] sessionKeyHexBytes = cryptoDataByte1.getData();
+        if (sessionKeyHexBytes == null) return null;
+
+        String sessionKeyHex = new String(sessionKeyHexBytes);
+        sessionKey = Hex.fromHex(sessionKeyHex);
+
+        Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
+        CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey, symKey);
+        if (cryptoDataByte2.getCode() != 0) return null;
+        String newCipher = cryptoDataByte2.toJson();
+        session.setSessionKeyCipher(newCipher);
+
+        String sessionName = Session.makeSessionName(sessionKeyHex);
+        Long expireTime = session.getExpireTime();
+
+        session.setSessionKey(Hex.toHex(sessionKey));
+        session.setSessionName(sessionName);
+        session.setExpireTime(expireTime);
+        session.setFid(fid);
+        return session;
+    }
+
     public boolean isSessionFreshen() {
         return sessionFreshen;
     }
