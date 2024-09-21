@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.fchData.Address;
 import feip.feipData.Cid;
 import initial.Initiator;
@@ -40,7 +40,7 @@ public class FidCidSeek extends HttpServlet {
         doRequest(Initiator.sid,false,request, response, authType,Initiator.esClient, Initiator.jedisPool);
     }
     public static void doRequest(String sid, boolean isForMap, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -80,7 +80,7 @@ public class FidCidSeek extends HttpServlet {
             }
             replier.setGot((long) addrCidsMap.size());
             replier.setTotal((long) addrCidsMap.size());
-            replier.reply0Success(addrCidsMap, jedis, null);
+            replier.reply0SuccessHttp(addrCidsMap, jedis, null);
         }
     }
 }

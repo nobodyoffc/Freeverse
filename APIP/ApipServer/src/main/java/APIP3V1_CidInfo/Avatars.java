@@ -3,7 +3,7 @@ package APIP3V1_CidInfo;
 import avatar.AvatarMaker;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -40,7 +40,7 @@ public class Avatars extends HttpServlet {
         doRequest(Initiator.sid,request,response,authType,Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -49,12 +49,12 @@ public class Avatars extends HttpServlet {
             }
 
             if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-                replier.reply(ReplyCodeMessage.Code1012BadQuery, null, jedis);
+                replier.replyHttp(ReplyCodeMessage.Code1012BadQuery, null, jedis);
                 return;
             }
             String[] addrs = requestCheckResult.getRequestBody().getFcdsl().getIds().toArray(new String[0]);
             if (addrs.length == 0) {
-                replier.replyOtherError("No qualified FID.",null,jedis);
+                replier.replyOtherErrorHttp("No qualified FID.",null,jedis);
                 return;
             }
 
@@ -75,7 +75,7 @@ public class Avatars extends HttpServlet {
             replier.setGot((long) addrPngBase64Map.size());
             replier.setTotal((long) addrPngBase64Map.size());
 
-            replier.reply0Success(addrPngBase64Map,jedis, null);
+            replier.reply0SuccessHttp(addrPngBase64Map,jedis, null);
         }
     }
 }

@@ -5,7 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 
 import static constants.FieldNames.*;
-import static constants.Strings.FID;
 
 @WebServlet(name = ApiNames.Unconfirmed, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.Unconfirmed)
 public class Unconfirmed extends HttpServlet {
@@ -38,7 +37,7 @@ public class Unconfirmed extends HttpServlet {
 
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool)  {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -46,12 +45,12 @@ public class Unconfirmed extends HttpServlet {
                 return;
             }
             if(requestCheckResult.getRequestBody()==null || requestCheckResult.getRequestBody().getFcdsl()==null){
-                replier.reply(ReplyCodeMessage.Code1003BodyMissed,null,jedis);
+                replier.replyHttp(ReplyCodeMessage.Code1003BodyMissed,null,jedis);
                 return;
             }
 
             if (requestCheckResult.getRequestBody().getFcdsl().getIds()==null) {
-                replier.reply(ReplyCodeMessage.Code1015FidMissed,null,jedis);
+                replier.replyHttp(ReplyCodeMessage.Code1015FidMissed,null,jedis);
                 return;
             }
             List<UnconfirmedInfo> meetList = new ArrayList<>();

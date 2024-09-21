@@ -11,7 +11,7 @@ import constants.ReplyCodeMessage;
 import crypto.Hash;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
@@ -32,7 +32,7 @@ public class DiskClient extends Client {
         super(apiProvider, apiAccount, symKey, apipClient);
     }
 
-    public String get(HttpRequestMethod method, AuthType authType, String did, String localPath) {
+    public String get(RequestMethod method, AuthType authType, String did, String localPath) {
         localPath = checkLocalPath(localPath);
         if (localPath == null) return null;
         Fcdsl fcdsl = new Fcdsl();
@@ -50,11 +50,11 @@ public class DiskClient extends Client {
         return String.valueOf(data);
     }
 
-    public List<DiskItem> list(Fcdsl fcdsl, HttpRequestMethod httpRequestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(Version1, LIST,fcdsl, authType,sessionKey, httpRequestMethod);
+    public List<DiskItem> list(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(Version1, LIST,fcdsl, authType,sessionKey, requestMethod);
         return objectToList(data, DiskItem.class);
     }
-    public List<DiskItem> list(HttpRequestMethod method, AuthType authType, int size, String sort, String order, String[] last) {
+    public List<DiskItem> list(RequestMethod method, AuthType authType, int size, String sort, String order, String[] last) {
         Fcdsl fcdsl = new Fcdsl();
         if(size!=0)fcdsl.addSize(size);
         if(sort!=null)fcdsl.addSort(sort,order);

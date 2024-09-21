@@ -7,11 +7,11 @@ import clients.esClient.EsTools;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import fch.fchData.*;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import javaTools.Hex;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import nasa.NaSaRpcClient;
 import nasa.data.TxInput;
 import nasa.data.TxOutput;
@@ -88,7 +88,7 @@ public class Wallet {
 
     public static String sendTxByApip(byte[] priKey, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient) {
         String txSigned = makeTx(priKey, null, sendToList, opReturnStr, cd, maxCashes, apipClient, null);
-        apipClient.broadcastTx(txSigned, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         Object data = apipClient.checkResult();
         return (String)data;
     }
@@ -117,7 +117,7 @@ public class Wallet {
             cashList = getCashListFromApip(fid, maxCashes, apipClient);
             bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
         }else if(esClient!=null){
-            FcReplier replier = getCashListFromEs(fid, true, maxCashes, null, null, esClient);
+            FcReplierHttp replier = getCashListFromEs(fid, true, maxCashes, null, null, esClient);
             if(replier.getCode()!=0)return null;
             cashList = ObjectTools.objectToList(replier.getData(),Cash.class);//DataGetter.getCashList(replier.getData());
             bestHeight = getBestHeight(esClient);
@@ -195,28 +195,28 @@ public class Wallet {
         fcdsl.addNewFilter().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
         fcdsl.addSize(maxCashes);
         fcdsl.addSort(CD, ASC).addSort(CASH_ID, ASC);
-        return apipClient.cashSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);//BlockchainAPIs.cashSearchPost(apipClient.getApiAccount().getApiUrl(), fcdsl, apipClient.getApiAccount().getVia(), apipClient.getSessionKey());
+        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);//BlockchainAPIs.cashSearchPost(apipClient.getApiAccount().getApiUrl(), fcdsl, apipClient.getApiAccount().getVia(), apipClient.getSessionKey());
     }
 
-    public static FcReplier sendTx(String txSigned, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient naSaRpcClient) {
-        FcReplier fcReplier = new FcReplier();
+    public static FcReplierHttp sendTx(String txSigned, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient naSaRpcClient) {
+        FcReplierHttp fcReplierHttp = new FcReplierHttp();
         if(naSaRpcClient!=null){
             String txid = naSaRpcClient.sendRawTransaction(txSigned);
             long bestHeight = naSaRpcClient.getBestHeight();
             if(Hex.isHexString(txid)) {
-                fcReplier.Set0Success();
-                fcReplier.setData(txid);
-                fcReplier.setBestHeight(bestHeight);
+                fcReplierHttp.Set0Success();
+                fcReplierHttp.setData(txid);
+                fcReplierHttp.setBestHeight(bestHeight);
             }
         }else if(apipClient!=null){
-            apipClient.broadcastTx(txSigned, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
             return apipClient.getFcClientEvent().getResponseBody();
-        }else fcReplier.setOtherError("No client to send tx.");
-        return fcReplier;
+        }else fcReplierHttp.setOtherError("No client to send tx.");
+        return fcReplierHttp;
     }
 
     public Double getFeeRate()  {
-        if(apipClient!=null)return apipClient.feeRate(HttpRequestMethod.GET, AuthType.FREE);
+        if(apipClient!=null)return apipClient.feeRate(RequestMethod.GET, AuthType.FREE);
         if(esClient!=null)return calcFeeRate(esClient);
         if(nasaClient!=null)return nasaClient.estimateFee(3);
         return 0.001D;
@@ -301,7 +301,7 @@ public class Wallet {
         String txSigned = createTransactionSignFch(cashList, priKey, sendToList, null);
 
         if(apipClient!=null) {
-            apipClient.broadcastTx(txSigned, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY );
+            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY );
             data = apipClient.checkResult();
         }else if(nasaClient!=null){
             data = nasaClient.sendRawTransaction(txSigned);
@@ -312,7 +312,7 @@ public class Wallet {
     public List<Cash> getAllCashList(String fid, boolean onlyValid, int size, ArrayList<Sort> sortList, List<String> last){
         List<Cash> cashList = new ArrayList<>();
 
-        FcReplier fcReplier;
+        FcReplierHttp fcReplierHttp;
         if(this.apipClient!=null) {
             do {
                 List<Cash> newCashList = getCashListFromApip(fid, onlyValid, size, sortList, last, apipClient);
@@ -323,31 +323,31 @@ public class Wallet {
                 if(newCashList.isEmpty())return cashList;
                 cashList.addAll(newCashList);
 
-                fcReplier= this.apipClient.getFcClientEvent().getResponseBody();
-                last = fcReplier.getLast();
-            }while(cashList.size()<fcReplier.getTotal());
+                fcReplierHttp = this.apipClient.getFcClientEvent().getResponseBody();
+                last = fcReplierHttp.getLast();
+            }while(cashList.size()< fcReplierHttp.getTotal());
         }
         else if (this.esClient!=null) {
             do {
-                fcReplier = getCashListFromEs(fid, onlyValid, size, sortList, last, esClient);
-                if(fcReplier.getCode()!=0){
-                    log.debug(fcReplier.getMessage());
+                fcReplierHttp = getCashListFromEs(fid, onlyValid, size, sortList, last, esClient);
+                if(fcReplierHttp.getCode()!=0){
+                    log.debug(fcReplierHttp.getMessage());
                     break;
                 }
-                if(fcReplier.getData()!=null){
-                    cashList.addAll(ObjectTools.objectToList(fcReplier.getData(),Cash.class));//DataGetter.getCashList(fcReplier.getData()));
+                if(fcReplierHttp.getData()!=null){
+                    cashList.addAll(ObjectTools.objectToList(fcReplierHttp.getData(),Cash.class));//DataGetter.getCashList(fcReplier.getData()));
                 }
                 else return cashList;
-                last = ObjectTools.objectToList(fcReplier.getData(),String.class);//DataGetter.getStringList(fcReplier.getLast());
-            }while(cashList.size()<fcReplier.getTotal());
+                last = ObjectTools.objectToList(fcReplierHttp.getData(),String.class);//DataGetter.getStringList(fcReplier.getLast());
+            }while(cashList.size()< fcReplierHttp.getTotal());
         }
         else if (this.nasaClient!=null){
-            fcReplier =getCashListFromNasaNode(fid,null,true,nasaClient);
-            if(fcReplier.getCode()!=0){
-                log.debug(fcReplier.getMessage());
+            fcReplierHttp =getCashListFromNasaNode(fid,null,true,nasaClient);
+            if(fcReplierHttp.getCode()!=0){
+                log.debug(fcReplierHttp.getMessage());
                 return cashList;
             }
-            if(fcReplier.getData()!=null)cashList.addAll(ObjectTools.objectToList(fcReplier.getData(),Cash.class));//DataGetter.getCashList(fcReplier.getData()));
+            if(fcReplierHttp.getData()!=null)cashList.addAll(ObjectTools.objectToList(fcReplierHttp.getData(),Cash.class));//DataGetter.getCashList(fcReplier.getData()));
             else return cashList;
         }
         return cashList;
@@ -363,7 +363,7 @@ public class Wallet {
             fcdsl.addNewFilter().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
         if(last!=null && !last.isEmpty())
             fcdsl.setAfter(last);
-        return apipClient.cashSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);//BlockchainAPIs.cashSearchPost(apipClient.getApiAccount().getApiUrl(), fcdsl, apipClient.getApiAccount().getVia(), apipClient.getSessionKey());
+        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);//BlockchainAPIs.cashSearchPost(apipClient.getApiAccount().getApiUrl(), fcdsl, apipClient.getApiAccount().getVia(), apipClient.getSessionKey());
     }
 
 
@@ -504,7 +504,7 @@ public class Wallet {
             if(nasaClient!=null)return nasaClient.getBestHeight();
             if(esClient!=null)return getBestHeight(esClient);
             if (apipClient != null) {
-                apipClient.ping(Version1,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+                apipClient.ping(Version1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
                 return apipClient.getFcClientEvent().getResponseBody().getBestHeight();
             }
         }catch (Exception ignore){}
@@ -521,7 +521,7 @@ public class Wallet {
         }
         return bestHeight;
     }
-    public FcReplier getCashListFromNasaNode(String fid, String minConf, boolean includeUnsafe,NaSaRpcClient naSaRpcClient){
+    public FcReplierHttp getCashListFromNasaNode(String fid, String minConf, boolean includeUnsafe, NaSaRpcClient naSaRpcClient){
         UTXO[] utxos = new NaSaRpcClient(naSaRpcClient.getUrl(), naSaRpcClient.getUsername(), naSaRpcClient.getPassword()).listUnspent(fid, minConf,includeUnsafe);
         List<Cash> cashList = new ArrayList<>();
         for(UTXO utxo:utxos){
@@ -533,14 +533,14 @@ public class Wallet {
             cash.setLockScript(utxo.getRedeemScript());
             cashList.add(cash);
         }
-        FcReplier fcReplier = new FcReplier();
-        fcReplier.set0Success();
-        fcReplier.setData(cashList);
-        return fcReplier;
+        FcReplierHttp fcReplierHttp = new FcReplierHttp();
+        fcReplierHttp.set0Success();
+        fcReplierHttp.setData(cashList);
+        return fcReplierHttp;
     }
     @NotNull
-    public static FcReplier getCashListFromEs(String fid, boolean onlyValid, int size, ArrayList<Sort> sortList, List<String> last,ElasticsearchClient esClient) {
-        FcReplier replier = new FcReplier();
+    public static FcReplierHttp getCashListFromEs(String fid, boolean onlyValid, int size, ArrayList<Sort> sortList, List<String> last, ElasticsearchClient esClient) {
+        FcReplierHttp replier = new FcReplierHttp();
         SearchRequest.Builder sb = new SearchRequest.Builder();
         sb.index(IndicesNames.CASH);
         sb.trackTotalHits(t->t.enabled(true));
@@ -633,7 +633,7 @@ public class Wallet {
         String txSigned = createTransactionSignFch(cashList, priKey, sendToList, msg);
 
         System.out.println("Broadcast with " + urlHead + " ...");
-        return apipClient.broadcastTx(txSigned, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
 
     private static CashToInputsResult cashListToInputs(List<Cash> cashList) {

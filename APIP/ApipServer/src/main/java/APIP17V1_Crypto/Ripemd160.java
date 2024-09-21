@@ -3,7 +3,7 @@ package APIP17V1_Crypto;
 import constants.ApiNames;
 import constants.FieldNames;
 import crypto.Hash;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.Hex;
 import javaTools.http.AuthType;
@@ -30,7 +30,7 @@ public class Ripemd160 extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -38,7 +38,7 @@ public class Ripemd160 extends HttpServlet {
             //Do this request
             String text = other.get(FieldNames.MESSAGE);
             if(text==null){
-                replier.replyOtherError("The hex missed.",null,jedis);
+                replier.replyOtherErrorHttp("The hex missed.",null,jedis);
                 return;
             }
             if (RequestChecker.isBadHex(replier, jedis, text)) return;

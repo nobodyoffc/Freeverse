@@ -1,8 +1,6 @@
 package server.order;
 
 import apip.apipData.Session;
-import apip.apipData.WebhookRequestBody;
-import appTools.Menu;
 import appTools.Shower;
 import constants.FieldNames;
 import feip.feipData.serviceParams.Params;
@@ -17,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -85,7 +83,7 @@ public class Order {
             }
         }
         List<String> fidList = new ArrayList<>();
-        fidList.add(params.getAccount());
+        fidList.add(params.getDealer());
         Map<String,Object> map = new HashMap<>();
         map.put(FieldNames.IDS,fidList);
         String hookUserId = apipClient.subscribeWebhook(hookMethod, map, endpoint);

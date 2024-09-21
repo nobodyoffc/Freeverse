@@ -3,7 +3,7 @@ package APIP17V1_Crypto;
 import constants.ApiNames;
 import constants.FieldNames;
 import crypto.Hash;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -29,7 +29,7 @@ public class Sha256x2 extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String,String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -39,7 +39,7 @@ public class Sha256x2 extends HttpServlet {
             try {
                 text = other.get(FieldNames.MESSAGE);
             }catch (Exception e){
-                replier.replyOtherError("Can not get parameters correctly from Json string.",null,jedis);
+                replier.replyOtherErrorHttp("Can not get parameters correctly from Json string.",null,jedis);
                 e.printStackTrace();
                 return;
             }

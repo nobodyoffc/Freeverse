@@ -5,7 +5,7 @@ import configure.ApiAccount;
 import fcData.AlgorithmId;
 import fch.fchData.SendTo;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import nasa.data.TxInput;
 import nasa.data.TxOutput;
 import constants.Constants;
@@ -87,7 +87,7 @@ public class TxTest {
         apipClient.setUrlHead(urlHead);
         apipClient.setSessionKey(sessionKey);
         String id = mFid;
-        Map<String, P2SH> p2SHMap = apipClient.p2shByIds(HttpRequestMethod.POST,AuthType.FC_SIGN_BODY,mFid);
+        Map<String, P2SH> p2SHMap = apipClient.p2shByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,mFid);
         if(p2SHMap==null)return;
         P2SH p2sh = p2SHMap.get(mFid);
         JsonTools.printJson(p2sh);
@@ -108,7 +108,7 @@ public class TxTest {
 
         long fee = calcSizeMultiSign(0, sendToList.size(), msg.length(), 2, 3);
 
-        List<Cash> cashList = apipClient.cashValid(mFid, 0.1 + ((double) fee / COIN_TO_SATOSHI),null,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> cashList = apipClient.cashValid(mFid, 0.1 + ((double) fee / COIN_TO_SATOSHI),null, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
         if(cashList==null)return;
 
@@ -200,7 +200,7 @@ public class TxTest {
 
         long fee = calcTxSize(0, sendToList.size(), msg.length());
 
-        List<Cash> cashList  = apipClient.cashValid(fid,0.1 + ((double) fee / COIN_TO_SATOSHI),null,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> cashList  = apipClient.cashValid(fid,0.1 + ((double) fee / COIN_TO_SATOSHI),null, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
         String txSigned = createTimeLockedTransaction(cashList, priKeyBytes, sendToList, 1999900, msg);
         System.out.println(txSigned);

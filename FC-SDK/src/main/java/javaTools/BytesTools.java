@@ -16,6 +16,51 @@ public class BytesTools {
     public static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
     private static final Pattern BASE64_PATTERN = Pattern.compile("^[A-Za-z0-9+/]+={0,2}$");
 
+    public static Boolean getBit(byte b, int bitPosition) {
+        if (bitPosition < 0 || bitPosition > 7) {
+            new IllegalArgumentException("Bit position must be between 0 and 7").printStackTrace();
+            return null;
+        }
+        return ((b >> bitPosition) & 1) == 1;
+    }
+
+    // Method to set a bit at a specific position
+    public static Byte setBit(Byte b, Integer bitPosition, boolean value) {
+        if (bitPosition < 0 || bitPosition > 7) {
+            System.out.println(new IllegalArgumentException("Bit position must be between 0 and 7").getMessage());
+            return null;
+        }
+
+        if (value) {
+            // Set the bit to 1 using bitwise OR
+            return (byte) (b | (1 << bitPosition));
+        } else {
+            // Set the bit to 0 using bitwise AND with the negation of the mask
+            return (byte) (b & ~(1 << bitPosition));
+        }
+    }
+
+    public static class ByteArrayAsKey {
+        private final byte[] data;
+
+        public ByteArrayAsKey(byte[] data) {
+            this.data = data;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ByteArrayAsKey that = (ByteArrayAsKey) o;
+            return Arrays.equals(data, that.data);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(data);
+        }
+    }
+
     /**
      * Creates a copy of bytes and appends b to the end of it
      */

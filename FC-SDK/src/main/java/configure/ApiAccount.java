@@ -9,32 +9,31 @@ import clients.Client;
 import clients.apipClient.ApipClient;
 import clients.esClient.EsClientMaker;
 import clients.fcspClient.DiskClient;
-import clients.fcspClient.TalkClient;
+import clients.fcspClient.TalkTcpClient;
+import clients.fcspClient.TalkUdpClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import crypto.*;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.ParseTools;
 import fch.TxCreator;
 import fch.fchData.Cash;
 import fch.fchData.SendTo;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.ApipParams;
-import feip.feipData.serviceParams.DiskParams;
 import feip.feipData.serviceParams.Params;
-import feip.feipData.serviceParams.TalkParams;
 import javaTools.BytesTools;
 import javaTools.Hex;
 import javaTools.JsonTools;
 import javaTools.NumberTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import javax.annotation.Nullable;
 import java.io.BufferedReader;
@@ -281,7 +280,7 @@ public class ApiAccount {
             return null;
         }
 
-        if(checkFcApiProvider(apiProvider, ServiceType.DISK,DiskParams.class, apipClient)==null){
+        if(checkFcApiProvider(apiProvider, ServiceType.DISK, apipClient)==null){
             log.debug("Failed to check service with APIP service {}.", apipClient.getApiProvider().getApiUrl());
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
@@ -310,18 +309,18 @@ public class ApiAccount {
         return diskClient;
     }
 
-    private TalkClient connectTalk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, String> fidCipherMap) {
+    private TalkUdpClient connectTalk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, String> fidCipherMap) {
         if(apipClient==null){
             System.out.println("APIP client is required for the TALK service.");
             System.exit(-1);
         }
 
-        TalkClient talkClient;
+        TalkUdpClient talkUdpClient;
         if(client==null){
-            talkClient = new TalkClient(apiProvider,this,symKey,apipClient);
-            client = talkClient;
+            talkUdpClient = new TalkUdpClient(apiProvider,this,symKey,apipClient);
+            client = talkUdpClient;
         }
-        else talkClient = (TalkClient) client;
+        else talkUdpClient = (TalkUdpClient) client;
 
         if(!apiProvider.getType().equals(ServiceType.TALK)){
             System.out.println("It's not Talk provider.");
@@ -332,10 +331,16 @@ public class ApiAccount {
             return null;
         }
 
-        if(checkFcApiProvider(apiProvider, ServiceType.TALK, TalkParams.class, apipClient)==null){
+        if(checkFcApiProvider(apiProvider, ServiceType.TALK, apipClient)==null){
             log.debug("Failed to check service with APIP service {}.", apipClient.getApiProvider().getApiUrl());
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
+        }
+
+        String accountPubKey = apipClient.getPubKey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
+
+        if (accountPubKey != null) {
+            apiProvider.setAccountPubKey(accountPubKey);
         }
 
         if (userPriKeyCipher == null) {
@@ -344,62 +349,8 @@ public class ApiAccount {
             else return null;
         }
 
-        talkClient.start();
-
-        byte[] sessionKey1 =
-//                talkClient.
-                        checkSessionKey(symKey, apiProvider.getType());
-
-        if(sessionKey1==null) {
-            System.out.println("Failed to connect Talk server.");
-            return null;
-        }
-
-        sessionKey = sessionKey1;
-        talkClient.setSessionKey(sessionKey);
-        client = talkClient;
-
-        log.debug("Connected to the Talk service: " + providerId + " on " + apiUrl);
-        System.out.println("Talk client on "+apiUrl +" is created.\n");
-        return talkClient;
+        return talkUdpClient;
     }
-
-//
-//    public DiskClient connectDisk(ApiProvider apiProvider, byte[] symKey){
-//        DiskClient diskClient;
-//        if(client==null) {
-//            diskClient = new DiskClient(apiProvider, this, symKey, apipClient);
-//            client= diskClient;
-//        } else diskClient = (DiskClient) client;
-//
-//        if(!apiProvider.getType().equals(ServiceType.DISK)){
-//            log.error("It's not DISK provider.");
-//            return null;
-//        }
-//
-//        if(checkFcApiProvider(apiProvider, ServiceType.DISK,DiskParams.class, apipClient)==null){
-//            log.debug("Failed to get service from {}", apiProvider.getApiUrl());
-//            return null;
-//        }
-//
-//        if (userPriKeyCipher == null) {
-//            log.error("Set DISK requester priKey...");
-//            return null;
-//        }
-//        String signInPath = ApiUrl.makeUrlTailPath(ApiNames.SN_0, Version1);
-//        byte[] sessionKey1 = checkSessionKey(symKey, apiProvider.getType());
-//
-//        if(sessionKey1==null) return null;
-//
-//        sessionKey = sessionKey1;
-//        diskClient.setSessionKey(sessionKey);
-//        diskClient.setUrlHead(apiUrl);
-//        diskClient.setVia(via);
-//        client = diskClient;
-//        log.debug("Connected to the DISK service: " + providerId + " on " + apiUrl);
-//        System.out.println("Disk client on "+apiUrl +" is created.\n");
-//        return diskClient;
-//    }
 
     public void closeEs(){
         if(client==null){
@@ -486,7 +437,7 @@ public class ApiAccount {
         }
 
         if (apiAccount.session.getSessionKeyCipher() == null) {
-            sessionKey = apiAccount.freshSessionKey(symKey, ServiceType.APIP, null);
+            sessionKey = apiAccount.freshSessionKey(symKey, ServiceType.APIP, RequestBody.SignInMode.NORMAL);
             if (sessionKey == null) return null;
             revised = true;
         }
@@ -529,7 +480,7 @@ public class ApiAccount {
         System.out.println();
         System.out.println("Set the APIP service buyer(requester)...");
         apiAccount.inputPriKeyCipher(br, symKey);
-        sessionKey = apiAccount.freshSessionKey(symKey, ServiceType.APIP, null);
+        sessionKey = apiAccount.freshSessionKey(symKey, ServiceType.APIP, RequestBody.SignInMode.NORMAL);
         if (sessionKey == null) return null;
 
         writeApipParamsToFile(apiAccount, APIP_Account_JSON);
@@ -537,7 +488,7 @@ public class ApiAccount {
     }
 
     static Service getService(String urlHead) {
-        FcReplier replier = ApipClient.getService(urlHead, Version1, ApipParams.class);
+        FcReplierHttp replier = ApipClient.getService(urlHead, Version1, ApipParams.class);
         if(replier==null)return null;
         Service service = (Service) replier.getData();
         if(service!=null) {
@@ -545,21 +496,6 @@ public class ApiAccount {
             System.out.println(JsonTools.toNiceJson(service));
         }
         return service;
-    }
-
-    @Nullable
-    public static String priKeyCipherToSymKeyCipher(String cipher, byte[] priKey, byte[] symKey) {
-        String symKeyCipher;
-        byte[] sessionKey = decryptHexWithPriKey(cipher, priKey);
-        if (sessionKey == null) {
-            System.out.println("Failed to decrypt.");
-            return null;
-        }
-
-        CryptoDataByte cryptoDataByte = new Encryptor(FC_EccK1AesCbc256_No1_NrC7).encryptBySymKey(sessionKey, symKey);
-        if(cryptoDataByte.getCode()==0)
-            return cryptoDataByte.toJson();
-        else return null;
     }
 
     public static byte[] decryptHexWithPriKey(String cipher, byte[] priKey) {
@@ -598,19 +534,6 @@ public class ApiAccount {
         }
         return null;
     }
-
-//    public void initiate(){
-//        id = "";
-//        sid = "";
-//        userName = "";
-//        passwordCipher = "";
-//        userPriKeyCipher = "";
-//        sessionName = "";
-//        sessionKeyCipher = "";
-//        sessionExpire = 0;
-//        lastHeight = 0;
-//        balance = 0;
-//    }
 
     public String makeApiAccountId(String sid, String userName) {
         byte[] bundleBytes;
@@ -742,19 +665,6 @@ public class ApiAccount {
         return Hex.toHex(pubKey);
     }
 
-//    @org.jetbrains.annotations.Nullable
-//    public void makePubKey(byte[] symKey) {
-//        DecryptorSym decryptorSym = new DecryptorSym();
-//        CryptoDataByte result = decryptorSym.decrypt(this.userPriKeyCipher, symKey);
-//        if(result.getCode()!=0){
-//            return;
-//        }
-//        byte[] priKey = result.getData();
-//        byte[] pubKey = KeyTools.priKeyToPubKey(priKey);
-//        if(pubKey!=null)this.userPubKey = Hex.toHex(pubKey);
-//        return;
-//    }
-
     private String updateKeyCipher(BufferedReader reader, String fieldName, String currentValue, byte[] symKey) throws IOException {
         System.out.println(fieldName + " current value: " + currentValue);
         System.out.print("Do you want to update it? (y/n): ");
@@ -836,7 +746,7 @@ public class ApiAccount {
         while (true) {
             try {
                 TimeUnit.SECONDS.sleep(60);
-                Map<String, Cash> result = apipClient.cashByIds(HttpRequestMethod.GET, AuthType.FREE, cashId);
+                Map<String, Cash> result = apipClient.cashByIds(RequestMethod.GET, AuthType.FREE, cashId);
                 if(result!=null && result.get(cashId)!=null && !result.get(cashId).isValid()){
                     System.out.println("Confirmed!");
                     break;
@@ -875,25 +785,25 @@ public class ApiAccount {
 
         payValue = (double) Math.max(price * orderRequestTimes, minPay) / COIN_TO_SATOSHI;
 
-        List<Cash> cashList = apipClient.cashValid(this.userId,payValue,null,HttpRequestMethod.GET,AuthType.FREE);//apipClient.getCashes(apiUrl,this.userId,payValue);
+        List<Cash> cashList = apipClient.cashValid(this.userId,payValue,null, RequestMethod.GET,AuthType.FREE);//apipClient.getCashes(apiUrl,this.userId,payValue);
         if(cashList==null|| cashList.isEmpty())return 0;
 
         List<SendTo> sendToList = new ArrayList<>();
         SendTo sendTo = new SendTo();
 
-        sendTo.setFid(serviceParams.getAccount());
+        sendTo.setFid(serviceParams.getDealer());
         sendTo.setAmount(payValue);
         sendToList.add(sendTo);
 
         String txHex = TxCreator.createTransactionSignFch(cashList, priKey, sendToList, null);
 
-        String result = apipClient.broadcastTx(txHex, HttpRequestMethod.GET, AuthType.FREE);
+        String result = apipClient.broadcastTx(txHex, RequestMethod.GET, AuthType.FREE);
         if(result==null){
             log.error("Failed to buy APIP service. Failed to broadcast TX.");
             return 0;
         }
         log.debug("TxId: " + result);
-        System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getAccount() + ". \nWait for the confirmation for a few minutes...");
+        System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getDealer() + ". \nWait for the confirmation for a few minutes...");
 
         waitConfirmation(cashList.get(0).getCashId(), apipClient);
 
@@ -952,44 +862,9 @@ public class ApiAccount {
 
         return apipClient;
     }
-//
-//    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey){
-//
-//        if(!apiProvider.getType().equals(ServiceType.APIP)){
-//            log.error("It's not APIP provider.");
-//            return null;
-//        }
-//
-//        if(!checkApipProvider(apiProvider,apiUrl)){
-//            log.debug("Failed to get service from {}", apiProvider.getApiUrl());
-//            return null;
-//        }
-//
-//        if (userPriKeyCipher == null) {
-//            log.error("The requester priKey is null.");
-//            return null;
-//        }
-//
-//        ApipClient apipClient = null;
-//        if(client==null){
-//            apipClient = new ApipClient(apiProvider,this,symKey);
-//            client = apipClient;
-//        }
-//
-//        byte[] sessionKey1 = checkSessionKey(symKey, apiProvider.getType());
-//
-//        if(sessionKey1==null) return null;
-//        if(apipClient==null)return null;
-//        apipClient.setUrlHead(apiUrl);
-//        apipClient.setVia(via);
-//        sessionKey = sessionKey1;
-//        log.debug("Connected to the initial APIP service: " + providerId + " on " + apiUrl);
-//        System.out.println("Apip client on "+apiUrl +" is created.\n");
-//        return apipClient;
-//    }
 
     public boolean checkApipProvider(ApiProvider apiProvider,String apiUrl) {
-        FcReplier replier = ApipClient.getService(apiUrl, Version1, ApipParams.class);
+        FcReplierHttp replier = ApipClient.getService(apiUrl, Version1, ApipParams.class);
         if(replier==null || replier.getData()==null) {
             return false;
         }
@@ -1015,25 +890,10 @@ public class ApiAccount {
         return true;
     }
 
-    public ApiProvider checkFcApiProvider(ApiProvider apiProvider, ServiceType type, Class<? extends Params> paramsClass, ApipClient apipClient) {
-//        FcReplier result;
-//        while(true) {
-//            result = Client.getService(apiProvider.getApiUrl(), Version1, paramsClass);
-//            if(result!=null && result.getData()!=null)break;
-//            System.out.println("Update API provider from APIP service...");
-//            Map<String, Service> serviceMap = apipClient.serviceByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, apiProvider.getId());
-//            if(serviceMap!=null){
-//                service = serviceMap.get(apiProvider.getId());
-//                apiProvider.fromFcService(service, Params.getParamsClassByApiType(type) );
-//                result = Client.getService(apiProvider.getApiUrl(), Version1, paramsClass);
-//                break;
-//            }
-//            return null;
-//        }
-//        Service service = (Service) result.getData();
+    public ApiProvider checkFcApiProvider(ApiProvider apiProvider, ServiceType type, ApipClient apipClient) {
 
         System.out.println("Update API provider from APIP service...");
-        Map<String, Service> serviceMap = apipClient.serviceByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, apiProvider.getId());
+        Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, apiProvider.getId());
         if(serviceMap==null || serviceMap.get(apiProvider.getId())==null)return null;
 
         this.service = serviceMap.get(apiProvider.getId());
@@ -1055,7 +915,7 @@ public class ApiAccount {
     private byte[] checkSessionKey(byte[] symKey, ServiceType type) {
         if(this.session==null)this.session = new Session();
         if (this.session.getSessionKeyCipher()== null) {
-            this.sessionKey=freshSessionKey(symKey, type, null);
+            this.sessionKey=freshSessionKey(symKey, type, RequestBody.SignInMode.NORMAL);
         } else {
             this.sessionKey =decryptSessionKey(session.getSessionKeyCipher(),symKey);
         }
@@ -1066,9 +926,9 @@ public class ApiAccount {
         Client client1 = (Client) client;
 
         client1.setSessionKey(sessionKey);
-        boolean allowFreeRequest = (boolean) client1.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, type);
+        boolean allowFreeRequest = (boolean) client1.ping(Version1, RequestMethod.GET,AuthType.FREE, type);
         ((Client) client).setAllowFreeRequest(allowFreeRequest);
-        Object rest = client1.ping(Version1,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+        Object rest = client1.ping(Version1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
         if(rest!=null){
             System.out.println((Long)rest+" KB/requests are available on "+ apiUrl);
             return sessionKey;
@@ -1083,21 +943,21 @@ public class ApiAccount {
         switch (type){
             case APIP -> {
                 ApipClient apipClient = (ApipClient) client;
-                session = apipClient.signInEcc(this, RequestBody.SignInMode.NORMAL,symKey);
+                session = apipClient.signInEcc(this, mode,symKey);
             }
             case DISK -> {
                 DiskClient diskClient = (DiskClient) client;
-                session = diskClient.signInEcc(this, RequestBody.SignInMode.NORMAL,symKey);
+                session = diskClient.signInEcc(this, mode,symKey);
             }
             case TALK -> {
-                TalkClient talkClient = (TalkClient) client;
-                session = talkClient.signInEcc(this, RequestBody.SignInMode.NORMAL,symKey);
+                TalkTcpClient talkTcpClient = (TalkTcpClient) client;
+                session = talkTcpClient.signInEcc(this, mode,symKey);
             }
             default -> {
                 byte[] priKey = decryptUserPriKey(userPriKeyCipher,symKey);
                 if(priKey==null)return null;
                 Client client1 = (Client)client;
-                session = client1.signInEcc(this, RequestBody.SignInMode.NORMAL,symKey);
+                session = client1.signInEcc(this, mode,symKey);
                 BytesTools.clearByteArray(priKey);
             }
         }

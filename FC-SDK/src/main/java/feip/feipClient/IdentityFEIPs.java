@@ -12,7 +12,7 @@ import javaTools.JsonTools;
 import crypto.KeyTools;
 import fch.fchData.SendTo;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 
 import java.util.ArrayList;
 import java.util.Base64;
@@ -43,7 +43,7 @@ public class IdentityFEIPs {
 
         String ownerPubKey;
         if (KeyTools.isValidFchAddr(ownerOrItsPubKey)) {
-            ownerPubKey = apipClient.getPubKey(ownerOrItsPubKey,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+            ownerPubKey = apipClient.getPubKey(ownerOrItsPubKey, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         } else if (KeyTools.isValidPubKey(ownerOrItsPubKey)) {
             ownerPubKey = ownerOrItsPubKey;
         } else return null;

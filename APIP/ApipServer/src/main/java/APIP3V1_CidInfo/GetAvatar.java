@@ -3,7 +3,7 @@ package APIP3V1_CidInfo;
 import avatar.AvatarMaker;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -29,14 +29,14 @@ import static initial.Initiator.*;
 public class GetAvatar extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier =new FcReplier(Initiator.sid,response);
-        replier.reply(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
+        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
+        replier.replyHttp(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FREE;
-        FcReplier replier = new FcReplier(Initiator.sid, response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid, response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false);
@@ -46,7 +46,7 @@ public class GetAvatar extends HttpServlet {
 
             String fid = request.getParameter(FID);
             if (fid == null) {
-                replier.replyOtherError("No qualified FID.", null, jedis);
+                replier.replyOtherErrorHttp("No qualified FID.", null, jedis);
                 return;
             }
 

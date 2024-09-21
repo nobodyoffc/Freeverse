@@ -14,7 +14,7 @@ import configure.Configure;
 import constants.FieldNames;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.Inputer;
 import fch.ParseTools;
 import fch.Wallet;
@@ -22,7 +22,7 @@ import fch.fchData.Cash;
 import javaTools.Hex;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import nasa.NaSaRpcClient;
 import redis.clients.jedis.JedisPool;
 
@@ -155,7 +155,7 @@ public class StartOffice {
                 fcdsl.addSort(CASH_ID, ASC);
 
 
-                List<Cash>cashList = apipClient.cashSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+                List<Cash>cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
                 showCashList(cashList);
                 if(appTools.Inputer.askIfYes(br,"Merge/split them?")){
@@ -200,9 +200,9 @@ public class StartOffice {
             onlyValid = true;
 
         cashList = Wallet.getCashListFromApip(fid, onlyValid,40, sorts, lastList,apipClient);
-        FcReplier fcReplier= apipClient.getFcClientEvent().getResponseBody();
-        if (fcReplier.getCode() != 0) {
-            fcReplier.printCodeMessage();
+        FcReplierHttp fcReplierHttp = apipClient.getFcClientEvent().getResponseBody();
+        if (fcReplierHttp.getCode() != 0) {
+            fcReplierHttp.printCodeMessage();
         }else {
             showCashList(cashList);
         }
@@ -223,11 +223,11 @@ public class StartOffice {
         boolean onlyValid = false;
         if(!Inputer.askIfYes(br,"Including spent?"))
             onlyValid = true;
-        FcReplier fcReplier = getCashListFromEs(fid, onlyValid,40, sorts, lastList,esClient);
-        if (fcReplier.getCode() != 0) {
-            fcReplier.printCodeMessage();
+        FcReplierHttp fcReplierHttp = getCashListFromEs(fid, onlyValid,40, sorts, lastList,esClient);
+        if (fcReplierHttp.getCode() != 0) {
+            fcReplierHttp.printCodeMessage();
         }else {
-            cashList = ObjectTools.objectToList(fcReplier.getData(),Cash.class);//DataGetter.getCashList(fcReplier.getData());
+            cashList = ObjectTools.objectToList(fcReplierHttp.getData(),Cash.class);//DataGetter.getCashList(fcReplier.getData());
             showCashList(cashList);
         }
         Menu.anyKeyToContinue(br);
@@ -235,11 +235,11 @@ public class StartOffice {
     private static void listCashByNasaNode(String fid, NaSaRpcClient naSaClient, BufferedReader br) {
         List<Cash> cashList;
         Wallet wallet = new Wallet(naSaClient);
-        FcReplier fcReplier = wallet.getCashListFromNasaNode(fid, String.valueOf(1), true, naSaClient);
-        if (fcReplier.getCode() != 0) {
-            fcReplier.printCodeMessage();
+        FcReplierHttp fcReplierHttp = wallet.getCashListFromNasaNode(fid, String.valueOf(1), true, naSaClient);
+        if (fcReplierHttp.getCode() != 0) {
+            fcReplierHttp.printCodeMessage();
         }else {
-            cashList = ObjectTools.objectToList(fcReplier.getData(),Cash.class);
+            cashList = ObjectTools.objectToList(fcReplierHttp.getData(),Cash.class);
             showCashList(cashList);
         }
         Menu.anyKeyToContinue(br);

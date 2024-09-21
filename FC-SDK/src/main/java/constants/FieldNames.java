@@ -105,4 +105,5 @@ public class FieldNames {
     public static final String DESC = "desc";
     public static final String LOCAL_NAMES = "localNames";
     public static final String NUMBER = "number";
+    public static final String SING_IN_MODE = "signInMode";
 }

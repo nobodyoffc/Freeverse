@@ -8,7 +8,7 @@ import constants.Strings;
 import clients.esClient.EsTools;
 import clients.redisClient.RedisTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.order.Order;
@@ -21,7 +21,7 @@ import static fch.BlockFileTools.getBlockByHeight;
 import static constants.IndicesNames.BLOCK;
 import static constants.IndicesNames.ORDER;
 import static constants.Strings.ORDER_LAST_HEIGHT;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class Rollbacker {
     /**
@@ -33,8 +33,8 @@ public class Rollbacker {
 
         if (lastHeight==0 || lastBlockId ==null)return false;
 
-        Map<String, BlockInfo> heightBlockInfoMap = apipClient.blockByHeights(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, String.valueOf(lastHeight));
-        if(heightBlockInfoMap==null)heightBlockInfoMap = apipClient.blockByHeights(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, String.valueOf(lastHeight));
+        Map<String, BlockInfo> heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.FC_SIGN_BODY, String.valueOf(lastHeight));
+        if(heightBlockInfoMap==null)heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.FC_SIGN_BODY, String.valueOf(lastHeight));
         if(heightBlockInfoMap==null)throw new RuntimeException("Failed to get last block info. Check APIP service.");
 
         BlockInfo blockInfo = heightBlockInfoMap.get(String.valueOf(lastHeight));

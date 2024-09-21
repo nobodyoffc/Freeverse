@@ -749,7 +749,7 @@ public class EccAes256K1P7 {
                 cryptoDataByte.setCipher(null);
 
                 Affair affair = new Affair();
-                affair.setOp(Op.encrypt);
+                affair.setOp(Op.ENCRYPT);
 
                 if (cryptoDataByte.getType() == EncryptType.AsyOneWay || cryptoDataByte.getType() == EncryptType.AsyTwoWay)
                     affair.setFid(KeyTools.pubKeyToFchAddr(cryptoDataByte.getPubKeyB()));

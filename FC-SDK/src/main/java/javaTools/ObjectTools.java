@@ -1,9 +1,8 @@
 package javaTools;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.Cid;
 
 import java.lang.reflect.Field;
@@ -13,17 +12,17 @@ import java.util.*;
 public class ObjectTools {
 
     public static void main(String[] args) {
-        FcReplier fcReplier = new FcReplier();
+        FcReplierHttp fcReplierHttp = new FcReplierHttp();
 
         Cid cid = new Cid();
         cid.setCid("liu");
         cid.setHot(13424L);
         Map<String,Cid> map = new HashMap<>();
         map.put(cid.getCid(),cid);
-        fcReplier.setData(map);
+        fcReplierHttp.setData(map);
         Gson gson = new Gson();
-        String json = gson.toJson(fcReplier);
-        Object data = gson.fromJson(json,FcReplier.class).getData();
+        String json = gson.toJson(fcReplierHttp);
+        Object data = gson.fromJson(json, FcReplierHttp.class).getData();
         Map<String, Cid> newMap = objectToMap(data, String.class, Cid.class);
         JsonTools.printJson(newMap);
     }
@@ -82,5 +81,21 @@ public class ObjectTools {
     public static <T> T objectToClass(Object ob,Class<T> tClass) {
         Gson gson = new Gson();
         return gson.fromJson(gson.toJson(ob),tClass);
+    }
+
+    public static Map<String, Long> convertToLongMap(Map<String, String> stringStringMap) {
+        Map<String, Long> nPriceMap = new HashMap<>();
+
+        for (Map.Entry<String, String> entry : stringStringMap.entrySet()) {
+            try {
+                // Parse the String value to Long and put it in the new Map
+                Long price = Long.parseLong(entry.getValue());
+                nPriceMap.put(entry.getKey(), price);
+            } catch (NumberFormatException e) {
+                // Handle the case where parsing fails
+                System.out.println("Error parsing value for key " + entry.getKey() + ": " + entry.getValue());
+            }
+        }
+        return nPriceMap;
     }
 }

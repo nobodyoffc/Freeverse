@@ -1,4 +1,4 @@
-package server;
+package settings;
 
 import appTools.Menu;
 import clients.apipClient.ApipClient;

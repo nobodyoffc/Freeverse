@@ -4,7 +4,7 @@ import clients.esClient.EsTools;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
 import constants.Strings;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.Service;
 import initial.Initiator;
 import javaTools.JsonTools;
@@ -26,7 +26,7 @@ import static constants.Strings.SERVICE;
 public class GetService extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         AuthType authType = AuthType.FREE;
 
@@ -41,23 +41,23 @@ public class GetService extends HttpServlet {
                 replier.setGot(1L);
                 replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
                 String data = JsonTools.toJson(service);
-                replier.reply0Success(data, response);
+                replier.reply0SuccessHttp(data, response);
             }
         }catch (Exception e){
-            replier.replyOtherError(e.getMessage(),null,null);
+            replier.replyOtherErrorHttp(e.getMessage(),null,null);
         }
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier =new FcReplier(Initiator.sid,response);
-        replier.reply(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
+        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
+        replier.replyHttp(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
     }
 
-    private Service doRequest(HttpServletResponse response, FcReplier replier)  {
+    private Service doRequest(HttpServletResponse response, FcReplierHttp replier)  {
         try {
             return EsTools.getById(Initiator.esClient, SERVICE, Initiator.sid, Service.class);
         } catch (IOException e) {
-            replier.replyOtherError("EsClient wrong:"+e.getMessage(),response);
+            replier.replyOtherErrorHttp("EsClient wrong:"+e.getMessage(),response);
             return null;
         }
     }

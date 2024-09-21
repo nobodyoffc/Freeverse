@@ -1,7 +1,7 @@
 package APIP0V2_OpenAPI;
 
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -18,7 +18,7 @@ public class Ping extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
 
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         AuthType authType = AuthType.FC_SIGN_BODY;
 
@@ -26,12 +26,12 @@ public class Ping extends HttpServlet {
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false);
             if (requestCheckResult==null) return;
-            replier.reply0Success(null, jedis, null);
+            replier.reply0SuccessHttp(null, jedis, null);
         }
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response){
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
         AuthType authType = AuthType.FREE;
 
         //Check authorization
@@ -40,7 +40,7 @@ public class Ping extends HttpServlet {
             if (requestCheckResult==null){
                 return;
             }
-            replier.reply0Success(null, jedis, null);
+            replier.reply0SuccessHttp(null, jedis, null);
         }
     }
 }

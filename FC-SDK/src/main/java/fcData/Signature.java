@@ -1,5 +1,6 @@
 package fcData;
 
+import apip.apipData.Session;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import crypto.Hash;
@@ -18,12 +19,16 @@ public class Signature {
     private String sign;
     private AlgorithmId alg;
 
+
+
     private String address;
     private String message;
     private String signature;
     private AlgorithmId algorithm;
 
     private String symKeyName;
+
+
     private transient byte[] symKey;
 
     public Signature() {
@@ -60,10 +65,10 @@ public class Signature {
         }
     }
 
-    public static String symSign(String msg, String sessionKey) {
-        if(msg==null || sessionKey==null)return null;
+    public static String symSign(String msg, String symKey) {
+        if(msg==null || symKey==null)return null;
         byte[] replyJsonBytes = msg.getBytes();
-        byte[] keyBytes = Hex.fromHex(sessionKey);
+        byte[] keyBytes = Hex.fromHex(symKey);
         byte[] bytes = BytesTools.bytesMerger(replyJsonBytes,keyBytes);
         byte[] signBytes = Hash.sha256x2(bytes);
         return Hex.toHex(signBytes);
@@ -71,15 +76,21 @@ public class Signature {
 
     public Signature sign(String msg,byte[] key,AlgorithmId alg){
         this.alg = alg;
-        this.fid = KeyTools.priKeyToFid(key);
         this.msg = msg;
         this.sign=null;
 
         ECKey ecKey = ECKey.fromPrivate(key);
 
         switch (alg){
-            case BTC_EcdsaSignMsg_No1_NrC7 -> this.sign = ecKey.signMessage(message);
-            case FC_AesSymSignMsg_No1_NrC7 -> this.sign = symSign(msg, Hex.toHex(key));
+            case BTC_EcdsaSignMsg_No1_NrC7 -> {
+                this.fid = KeyTools.priKeyToFid(key);
+                this.sign = ecKey.signMessage(msg);
+            }
+            case FC_AesSymSignMsg_No1_NrC7 -> {
+                String keyHex = Hex.toHex(key);
+                this.symKeyName = Session.makeSessionName(keyHex);
+                this.sign = symSign(msg, keyHex);
+            }
         }
         return this;
     }
@@ -175,15 +186,10 @@ public class Signature {
         return new Gson().toJson(this);
     }
 
-    public Signature fromJson(String signatureJson){
+    public static Signature fromJson(String signatureJson){
         Signature signature1 = new Gson().fromJson(signatureJson, Signature.class);
         signature1.makeSignature();
-        this.fid = signature1.getFid();
-        this.symKeyName = signature1.getSymKeyName();
-        this.msg = signature1.getMsg();
-        this.sign = signature1.getSign();
-        this.alg = signature1.getAlg();
-        return this;
+        return signature1;
     }
 
     public String getFid() {
@@ -218,34 +224,16 @@ public class Signature {
         this.alg = alg;
     }
 
-    public String getAddress() {
-        return address;
-    }
 
     public void setAddress(String address) {
         this.address = address;
     }
-
-    public String getMessage() {
-        return message;
-    }
-
     public void setMessage(String message) {
         this.message = message;
     }
-
-    public String getSignature() {
-        return signature;
-    }
-
     public void setSignature(String signature) {
         this.signature = signature;
     }
-
-    public AlgorithmId getAlgorithm() {
-        return algorithm;
-    }
-
     public void setAlgorithm(AlgorithmId algorithm) {
         this.algorithm = algorithm;
     }
@@ -253,11 +241,6 @@ public class Signature {
     public String getSymKeyName() {
         return symKeyName;
     }
-
-    public void setSymKeyName(String symKeyName) {
-        this.symKeyName = symKeyName;
-    }
-
     public enum Type {
         SymSign, AsySign
     }
@@ -275,20 +258,6 @@ public class Signature {
             this.msg = msg;
             this.sign = sign;
             this.alg = alg;
-        }
-    }
-
-    static class LongSign {
-        String address;
-        String message;
-        String signature;
-        AlgorithmId algorithm;
-
-        LongSign(String fid, String msg, String sign, AlgorithmId alg) {
-            this.address = fid;
-            this.message = msg;
-            this.signature = sign;
-            this.algorithm = alg;
         }
     }
 

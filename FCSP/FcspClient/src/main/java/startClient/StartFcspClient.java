@@ -14,12 +14,12 @@ import configure.ServiceType;
 import constants.ApiNames;
 import crypto.CryptoDataStr;
 import crypto.Hash;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.serviceParams.ApipParams;
 import javaTools.Hex;
 import javaTools.JsonTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
@@ -97,12 +97,12 @@ public class StartFcspClient {
                 case 2 -> pingFree(br);
                 case 3 -> ping(br);
                 case 4 -> put(br);
-                case 5 -> get(HttpRequestMethod.GET, AuthType.FREE, br);
-                case 6 -> get(HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, br);
+                case 5 -> get(RequestMethod.GET, AuthType.FREE, br);
+                case 6 -> get(RequestMethod.POST,AuthType.FC_SIGN_BODY, br);
                 case 7 -> checkFree(br);
                 case 8 -> check(br);
-                case 9 -> list(HttpRequestMethod.GET, AuthType.FREE, br);
-                case 10 -> list(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, br);
+                case 9 -> list(RequestMethod.GET, AuthType.FREE, br);
+                case 10 -> list(RequestMethod.POST, AuthType.FC_SIGN_BODY, br);
                 case 11 -> carve(br);
                 case 12 -> signIn();
                 case 13 -> signInEcc();
@@ -130,21 +130,21 @@ public class StartFcspClient {
 
     public static void getService() {
         System.out.println("Getting the service information...");
-        FcReplier replier = DiskClient.getService(diskClient.getUrlHead(), Version1, ApipParams.class);
+        FcReplierHttp replier = DiskClient.getService(diskClient.getUrlHead(), Version1, ApipParams.class);
         if(replier!=null)JsonTools.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
     }
 
     public static void pingFree(BufferedReader br){
-        boolean done = (boolean) diskClient.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, ServiceType.DISK);
+        boolean done = (boolean) diskClient.ping(Version1, RequestMethod.GET,AuthType.FREE, ServiceType.DISK);
         if(done) System.out.println("OK!");
         else System.out.println("Failed!");
         Menu.anyKeyToContinue(br);
     }
 
     public static void ping(BufferedReader br){
-        Object rest = diskClient.ping(Version1,HttpRequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+        Object rest = diskClient.ping(Version1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
         if(rest!=null) System.out.println("OK! "+rest+" KB/requests are available.");
         else System.out.println("Failed!");
 
@@ -196,7 +196,7 @@ public class StartFcspClient {
     }
 
 
-    public static void get(HttpRequestMethod method, AuthType authType, BufferedReader br){
+    public static void get(RequestMethod method, AuthType authType, BufferedReader br){
         String filename = Inputer.inputString(br,"Input the DID of the file:");
         String path = Inputer.inputString(br,"Input the destination path. Default:"+MY_DATA_DIR);
         if("".equals(path))path = MY_DATA_DIR;
@@ -231,7 +231,7 @@ public class StartFcspClient {
         Menu.anyKeyToContinue(br);
     }
 
-    public static void list(HttpRequestMethod method, AuthType authType, BufferedReader br){
+    public static void list(RequestMethod method, AuthType authType, BufferedReader br){
         System.out.println("List...");
         String[] last = new String[0];
         String sort = null;

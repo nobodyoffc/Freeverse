@@ -16,7 +16,7 @@ import configure.ApiAccount;
 import constants.*;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import nasa.NaSaRpcClient;
 import redis.clients.jedis.JedisPool;
 import server.balance.BalanceInfo;
@@ -34,6 +34,7 @@ import server.order.OrderOpReturn;
 import server.reward.RewardInfo;
 import server.reward.Rewarder;
 import server.rollback.Rollbacker;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -54,7 +55,7 @@ import static constants.IndicesNames.ORDER;
 import static constants.Strings.*;
 import static clients.redisClient.RedisTools.readHashLong;
 import static constants.Values.FALSE;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class Counter implements Runnable {
 
@@ -83,7 +84,7 @@ public class Counter implements Runnable {
         this.listenPath = settings.getListenPath();
         if(settings.getFromWebhook()!=null)
             this.fromWebhook = settings.getFromWebhook();
-        this.account= params.getAccount();
+        this.account= params.getDealer();
         this.minPayment  = params.getMinPayment();
 
         if(settings.getEsAccount()!=null)this.esClient = (ElasticsearchClient) settings.getEsAccount().getClient();
@@ -523,7 +524,7 @@ protected void waitNewOrder() {
         fcdsl.addNewFilter().addNewTerms().addNewFields(OWNER).addNewValues(account);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ACTIVE).addNewValues(FALSE);
         fcdsl.setSize(String.valueOf(3000));
-        return apipClient.cashSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
 
     protected List<Cash> getNewCashListFromEs(long lastHeight, String account, ElasticsearchClient esClient) {

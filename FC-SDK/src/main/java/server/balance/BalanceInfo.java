@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,7 +22,7 @@ import java.util.Map;
 
 import static constants.Strings.*;
 import static clients.redisClient.RedisTools.readLong;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class BalanceInfo {
     private String userBalanceMapStr;

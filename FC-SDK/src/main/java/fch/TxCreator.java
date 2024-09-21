@@ -16,7 +16,7 @@ import fch.fchData.SendTo;
 import javaTools.BytesTools;
 import javaTools.Hex;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import nasa.data.TxInput;
 import nasa.data.TxOutput;
 import org.bitcoinj.core.*;
@@ -822,7 +822,7 @@ public class TxCreator {
         String urlHead = apiAccount.getApiUrl();
         System.out.println("Getting cashes from " + urlHead + " ...");
         ApipClient apipClient = (ApipClient) apiAccount.getClient();
-        List<Cash> cashList =apipClient.cashValid(sender, sum + ((double) fee / COIN_TO_SATOSHI),null,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> cashList =apipClient.cashValid(sender, sum + ((double) fee / COIN_TO_SATOSHI),null, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
 //        if (apipClientData.checkResponse() != 0) {
 //            System.out.println("Failed to get cashes." + apipClientData.getMessage() + apipClientData.getResponseBody().getData());
@@ -836,6 +836,6 @@ public class TxCreator {
 
         System.out.println("Broadcast with " + urlHead + " ...");
 
-        return apipClient.broadcastTx(txSigned, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
 }

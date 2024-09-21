@@ -4,7 +4,7 @@ import apip.ApipTools;
 import apip.apipData.Session;
 import apip.apipData.Fcdsl;
 import apip.apipData.RequestBody;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.FchMainNetwork;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
@@ -65,7 +65,7 @@ public class FcClientEvent {
     protected String requestBodyStr;
     protected byte[] requestBodyBytes;
     protected Map<String, String> responseHeaderMap;
-    protected FcReplier responseBody;
+    protected FcReplierHttp responseBody;
     protected String responseBodyStr;
     protected String requestFileName;
     protected ResponseBodyType responseBodyType;
@@ -412,7 +412,7 @@ public class FcClientEvent {
         if(responseFileName==null)
             Files.move(Paths.get(fileName),Paths.get(gotDid), StandardCopyOption.REPLACE_EXISTING);
 
-        if(responseBody==null)responseBody=new FcReplier();
+        if(responseBody==null)responseBody=new FcReplierHttp();
         responseBody.setCode(ReplyCodeMessage.Code0Success);
         responseBody.setMessage(ReplyCodeMessage.Msg0Success);
         responseBody.setData(gotDid);
@@ -425,7 +425,7 @@ public class FcClientEvent {
         responseBodyStr = new String(responseBodyBytes);
         parseFcResponse(httpResponse);
         try {
-            this.responseBody = new Gson().fromJson(responseBodyStr, FcReplier.class);
+            this.responseBody = new Gson().fromJson(responseBodyStr, FcReplierHttp.class);
         } catch (JsonSyntaxException ignore) {
             log.debug("Failed to parse responseBody json.");
             code= ReplyCodeMessage.Code1020OtherError;
@@ -800,7 +800,7 @@ public class FcClientEvent {
         Gson gson = new Gson();
         String sign;
         try {
-            this.responseBody = gson.fromJson(responseBodyStr, FcReplier.class);
+            this.responseBody = gson.fromJson(responseBodyStr, FcReplierHttp.class);
         } catch (JsonSyntaxException ignore) {
             return false;
         }
@@ -889,11 +889,11 @@ public class FcClientEvent {
         this.responseHeaderMap = responseHeaderMap;
     }
 
-    public FcReplier getResponseBody() {
+    public FcReplierHttp getResponseBody() {
         return responseBody;
     }
 
-    public void setResponseBody(FcReplier responseBody) {
+    public void setResponseBody(FcReplierHttp responseBody) {
         this.responseBody = responseBody;
     }
 

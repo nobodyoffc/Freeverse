@@ -2,7 +2,7 @@ package startTalkServer;
 
 import feip.feipData.serviceParams.Params;
 import server.Counter;
-import server.Settings;
+import settings.Settings;
 
 public class TalkCounter extends Counter {
 

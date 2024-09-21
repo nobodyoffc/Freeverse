@@ -1,4 +1,4 @@
-package server;
+package settings;
 
 import apip.apipData.CidInfo;
 import apip.apipData.Fcdsl;
@@ -28,7 +28,7 @@ import javaTools.Hex;
 import javaTools.JsonTools;
 import javaTools.StringTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import org.bitcoinj.core.ECKey;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import server.FreeApi;
 import server.serviceManagers.*;
 
 import java.io.BufferedReader;
@@ -98,7 +99,7 @@ public abstract class Settings {
             apipAccount.setApiUrl(freeApi.getUrlHead());
             apipClient.setApiAccount(apipAccount);
             apipClient.setUrlHead(freeApi.getUrlHead());
-            if((boolean) apipClient.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, ServiceType.APIP))
+            if((boolean) apipClient.ping(Version1, RequestMethod.GET,AuthType.FREE, ServiceType.APIP))
                 return apipClient;
         }
         if(br !=null) {
@@ -107,7 +108,7 @@ public abstract class Settings {
                     String url = fch.Inputer.inputString(br, "Input the urlHead of the APIP service:");
                     apipAccount.setApiUrl(url);
                     apipClient.setApiAccount(apipAccount);
-                    if ((boolean) apipClient.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, ServiceType.APIP)) {
+                    if ((boolean) apipClient.ping(Version1, RequestMethod.GET,AuthType.FREE, ServiceType.APIP)) {
                         FreeApi freeApi = new FreeApi(url,true, ServiceType.APIP);
                         freeApiList.add(freeApi);
                         return apipClient;
@@ -222,7 +223,7 @@ public abstract class Settings {
         if (params == null) return service;
         service.setParams(params);
         this.sid = service.getSid();
-        this.mainFid = params.getAccount();
+        this.mainFid = params.getDealer();
         if(config.getFidCipherMap().get(mainFid)==null)
             config.addUser(mainFid, symKey);
 
@@ -326,7 +327,7 @@ public abstract class Settings {
         fcdsl.addSize(100);
 
         fcdsl.addSort(FieldNames.LAST_HEIGHT,Strings.DESC);
-        return apipClient.serviceSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.serviceSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
 
     public Service selectMyService(List<Service> serviceList){

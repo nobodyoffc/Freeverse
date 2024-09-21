@@ -3,7 +3,7 @@ package APIP2V2_Blockchain;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
 import constants.Strings;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
 import javaTools.ObjectTools;
@@ -37,7 +37,7 @@ public class ChainInfo extends HttpServlet {
         doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);

@@ -4,7 +4,7 @@ import appTools.Inputer;
 import appTools.Menu;
 import clients.apipClient.ApipClient;
 import clients.esClient.EsTools;
-import clients.fcspClient.TalkItem;
+import fcData.TransferUnit;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.Configure;
 import configure.ServiceType;
@@ -17,13 +17,14 @@ import feip.feipData.serviceParams.TalkParams;
 import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
-import server.Settings;
+import settings.Settings;
 import server.balance.BalanceInfo;
 import server.order.Order;
 import server.reward.RewardInfo;
 import server.reward.RewardManager;
 import server.reward.Rewarder;
 import server.serviceManagers.TalkManager;
+import settings.TalkServerSettings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -116,13 +117,13 @@ public class StartTalkServer {
             int choice = menu.choose(br);
             switch (choice) {
                 case 1 -> {
-                    TalkServer talkServer = new TalkServer(params.getUrlHead(), sid, waiterPriKey, apipClient, jedisPool);
+                    TalkUdpServer talkServer = new TalkUdpServer(settings, service, waiterPriKey, apipClient, jedisPool);
                     talkServer.start();
                 }
                 case 2 -> new TalkManager(service, settings.getApipAccount(), br,symKey, TalkParams.class).menu();
                 case 3 -> Order.resetNPrices(br, sid, jedisPool);
                 case 4 -> recreateAllIndices(esClient, br);
-                case 5 -> new RewardManager(sid,params.getAccount(),apipClient,esClient,null, jedisPool, br)
+                case 5 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
                 case 6 -> settings.setting(symKey, br, null);
                 case 0 -> {
@@ -159,7 +160,7 @@ public class StartTalkServer {
 
     private static void recreateAllIndices(ElasticsearchClient esClient,BufferedReader br) {
         if(!Inputer.askIfYes(br,"Recreate the talk data, order, balance, reward indices?"))return;
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS,esClient, br);
+        EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), TransferUnit.MAPPINGS,esClient, br);
         EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
         EsTools.recreateIndex(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS,esClient, br);
         EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
@@ -170,7 +171,7 @@ public class StartTalkServer {
         nameMappingList.put(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
-        nameMappingList.put(Settings.addSidBriefToName(sid,DATA), TalkItem.MAPPINGS);
+        nameMappingList.put(Settings.addSidBriefToName(sid,DATA), TransferUnit.MAPPINGS);
         EsTools.checkEsIndices(esClient,nameMappingList);
     }
 

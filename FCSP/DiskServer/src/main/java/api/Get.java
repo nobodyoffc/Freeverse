@@ -8,7 +8,7 @@ import initial.Initiator;
 import javaTools.FileTools;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
@@ -34,7 +34,7 @@ public class Get extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         AuthType authType = AuthType.FC_SIGN_URL;
 
@@ -49,14 +49,14 @@ public class Get extends HttpServlet {
     }
 
     @Nullable
-    private void doGetRequest(HttpServletRequest request, HttpServletResponse response, FcReplier replier, RequestCheckResult requestCheckResult, Jedis jedis) throws IOException {
+    private void doGetRequest(HttpServletRequest request, HttpServletResponse response, FcReplierHttp replier, RequestCheckResult requestCheckResult, Jedis jedis) throws IOException {
         String did = replier.getStringFromUrl(request, DID, jedis);
         doPostRequest(response,replier,did,jedis);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
         RequestCheckResult requestCheckResult;
         AuthType authType = AuthType.FC_SIGN_BODY;
         String did;
@@ -71,11 +71,11 @@ public class Get extends HttpServlet {
                 Map<String, String> paramMap = ObjectTools.objectToMap(fcdsl.getOther(), String.class, String.class);
                 did = paramMap.get(DID);
                 if (did == null) {
-                    replier.reply(ReplyCodeMessage.Code3009DidMissed, null, jedis);
+                    replier.replyHttp(ReplyCodeMessage.Code3009DidMissed, null, jedis);
                     return;
                 }
             }catch (Exception e){
-                replier.replyOtherError("Failed to get DID.",null,jedis);
+                replier.replyOtherErrorHttp("Failed to get DID.",null,jedis);
                 return;
             }
 //            did = replier.getStringFromBodyJsonData(requestCheckResult.getRequestBody(),DID,jedis);
@@ -83,12 +83,12 @@ public class Get extends HttpServlet {
         }
     }
 
-    private void doPostRequest(HttpServletResponse response, FcReplier replier, String did, Jedis jedis) throws IOException {
+    private void doPostRequest(HttpServletResponse response, FcReplierHttp replier, String did, Jedis jedis) throws IOException {
         if (did == null) return;
         String path = FileTools.getSubPathForDisk(did);
         File file = new File(STORAGE_DIR+path, did);
         if (!file.exists()) {
-            replier.reply(ReplyCodeMessage.Code1020OtherError, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1020OtherError, null, jedis);
             return;
         }
         Long balance = replier.updateBalance(Initiator.sid, ApiNames.Check, file.length(),jedis, null);

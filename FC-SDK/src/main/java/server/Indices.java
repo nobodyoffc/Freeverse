@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 import static constants.IndicesNames.*;
 import static constants.Strings.BALANCE;
 import static constants.Strings.REWARD;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 
 public class Indices {

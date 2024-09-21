@@ -2,7 +2,7 @@ package APIP18V1_Wallet;
 
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.*;
 import fch.fchData.Cash;
 import fch.fchData.SendTo;
@@ -40,7 +40,7 @@ public class OffLineTx extends HttpServlet {
         doRequest(Initiator.sid,request, response, authType, Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) throws IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
@@ -52,7 +52,7 @@ public class OffLineTx extends HttpServlet {
 
             //Check API
             if(dataForSignInCs==null) {
-                replier.reply(ReplyCodeMessage.Code1012BadQuery,null,jedis);
+                replier.replyHttp(ReplyCodeMessage.Code1012BadQuery,null,jedis);
                 return;
             }
 
@@ -64,7 +64,7 @@ public class OffLineTx extends HttpServlet {
             if(dataForSignInCs.getSendToList()!=null && !dataForSignInCs.getSendToList().isEmpty()) {
                 for (SendTo sendTo : dataForSignInCs.getSendToList()) {
                     if (sendTo.getAmount() < Dust) {
-                        replier.replyOtherError("The amount must be more than "+Dust+"fch.",null,jedis);
+                        replier.replyOtherErrorHttp("The amount must be more than "+Dust+"fch.",null,jedis);
                         return;
                     }
                     amount += ParseTools.coinToSatoshi(sendTo.getAmount());
@@ -77,7 +77,7 @@ public class OffLineTx extends HttpServlet {
 
             List<Cash> meetList = cashListReturn.getCashList();
             if(meetList==null){
-                replier.replyOtherError(cashListReturn.getMsg(),null,jedis);
+                replier.replyOtherErrorHttp(cashListReturn.getMsg(),null,jedis);
                 return;
             }
 
@@ -87,7 +87,7 @@ public class OffLineTx extends HttpServlet {
             }
 
             if(totalValue<amount+1000){
-                replier.replyOtherError("Cashes meeting this cd can not match the total amount of outputs.",null,jedis);
+                replier.replyOtherErrorHttp("Cashes meeting this cd can not match the total amount of outputs.",null,jedis);
                 return;
             }
 

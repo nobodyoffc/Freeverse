@@ -194,7 +194,7 @@ public class Aes256CbcP7 {
                 System.out.println("Did:"+did);
                 cryptoDataStr.setCipherId(cipherId);
                 affair.setOidB(did);
-                affair.setOp(Op.encrypt);
+                affair.setOp(Op.ENCRYPT);
                 affair.setData(cryptoDataStr);
                 return affair;
             }
@@ -239,7 +239,7 @@ public class Aes256CbcP7 {
         cryptoDataStr.setCipherId(cipherId);
         affair.setOid(msgId);
         affair.setOidB(cipherId);
-        affair.setOp(Op.encrypt);
+        affair.setOp(Op.ENCRYPT);
         affair.setData(cryptoDataStr);
         return affair;
     }

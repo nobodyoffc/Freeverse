@@ -3,7 +3,7 @@ package APIP9V1_Team;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
 import constants.IndicesNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.Team;
 import initial.Initiator;
 import javaTools.http.AuthType;
@@ -36,7 +36,7 @@ public class TeamMembers extends HttpServlet {
         doRequest(Initiator.sid,request,response,authType,Initiator.esClient,Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try (Jedis jedis = jedisPool.getResource()) {
             List<Team> meetList = doRequestForList(sid, IndicesNames.TEAM, Team.class, null, null, null, null, null, request, authType, esClient, replier, jedis);
             if (meetList == null) return;
@@ -45,7 +45,7 @@ public class TeamMembers extends HttpServlet {
             for(Team team:meetList){
                 dataMap.put(team.getTid(),team.getMembers());
             }
-            replier.reply0Success(dataMap, jedis, null);
+            replier.reply0SuccessHttp(dataMap, jedis, null);
         }
     }
 }

@@ -1,10 +1,9 @@
 package APIP18V1_Wallet;
 
 
-import clients.Client;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.Wallet;
 import initial.Initiator;
 import javaTools.NumberTools;
@@ -34,7 +33,7 @@ public class FeeRate extends HttpServlet {
         doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -43,7 +42,7 @@ public class FeeRate extends HttpServlet {
             }
             Double feeRate = new Wallet(null,Initiator.esClient,Initiator.naSaRpcClient).getFeeRate();
             if(feeRate==null){
-                replier.replyOtherError("Calculating fee rate wrong.",null,jedis);
+                replier.replyOtherErrorHttp("Calculating fee rate wrong.",null,jedis);
                 return;
             }
             replier.replySingleDataSuccess(NumberTools.roundDouble8(feeRate),jedis);

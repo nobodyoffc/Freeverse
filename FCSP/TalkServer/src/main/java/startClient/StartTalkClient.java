@@ -4,9 +4,11 @@ import apip.apipData.RequestBody;
 import apip.apipData.Session;
 import appTools.Menu;
 import clients.apipClient.ApipClient;
-import clients.fcspClient.TalkClient;
+import clients.fcspClient.TalkTcpClient;
+import clients.fcspClient.TalkUdpClient;
 import configure.Configure;
 import javaTools.JsonTools;
+import settings.TalkClientSettings;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -16,7 +18,7 @@ import static configure.Configure.saveConfig;
 public class StartTalkClient{
     private static BufferedReader br;
     public static ApipClient apipClient;
-    public static TalkClient talkClient;
+    public static TalkUdpClient talkUdpClient;
     private static TalkClientSettings settings;
     private static byte[] symKey;
 
@@ -31,32 +33,22 @@ public class StartTalkClient{
 
         //Load the local settings from the file of localSettings.json
         String fid = configure.chooseMainFid(symKey);
+        String userPriKeyCipher = configure.getFidCipherMap().get(fid);
 
         settings = TalkClientSettings.loadFromFile(fid, TalkClientSettings.class);//new ApipClientSettings(configure,br);
         if(settings==null) settings = new TalkClientSettings(configure);
         settings.initiateClient(fid,symKey, configure, br);
 
         apipClient = (ApipClient) settings.getApipAccount().getClient();
-        talkClient = (TalkClient) settings.getTalkAccount().getClient();
-        Menu menu = new Menu();
-        menu.setName("Talk Client");
-        menu.add("start","signIn","Ping free","Ping","Put","Get","Get by POST","Check","Check by POST","List","List by POST","Carve","SignIn","SignIn encrypted","Settings");
-        while (true) {
-            menu.show();
-            int choice = menu.choose(br);
-            switch (choice) {
-                case 1 -> talkClient.start();
-//                case 2 -> sendText();
-                case 14 -> settings.setting(symKey, br, null);
-                case 0 -> {
-                    return;
-                }
-            }
-        }
+        talkUdpClient = (TalkUdpClient) settings.getTalkAccount().getClient();
+
+
+        talkUdpClient.start(settings,userPriKeyCipher);
     }
 
+
     private static void signInEcc() {
-        Session session = talkClient.signInEcc(settings.getTalkAccount(), RequestBody.SignInMode.NORMAL, symKey);
+        Session session = talkUdpClient.signInEcc(settings.getTalkAccount(), RequestBody.SignInMode.NORMAL, symKey);
         JsonTools.printJson(session);
         saveConfig();
         Menu.anyKeyToContinue(br);

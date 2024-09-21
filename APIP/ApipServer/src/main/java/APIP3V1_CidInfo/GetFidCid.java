@@ -7,7 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.*;
 import crypto.KeyTools;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.fchData.Address;
 import feip.feipData.Cid;
 import initial.Initiator;
@@ -30,8 +30,8 @@ import static apip.apipData.CidInfo.mergeCidInfo;
 public class GetFidCid extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid, response);
-        replier.reply(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid, response);
+        replier.replyHttp(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
     }
 
     @Override
@@ -40,7 +40,7 @@ public class GetFidCid extends HttpServlet {
         doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
     }
     public static void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws IOException {
-        FcReplier replier = new FcReplier(sid, response);
+        FcReplierHttp replier = new FcReplierHttp(sid, response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -58,7 +58,7 @@ public class GetFidCid extends HttpServlet {
 
                 List<Hit<Cid>> hitList = result.hits().hits();
                 if (hitList == null || hitList.size() == 0) {
-                    replier.reply(ReplyCodeMessage.Code1011DataNotFound, null, jedis);
+                    replier.replyHttp(ReplyCodeMessage.Code1011DataNotFound, null, jedis);
                     return;
                 }
 
@@ -68,14 +68,14 @@ public class GetFidCid extends HttpServlet {
             if (cid != null) fid = cid.getFid();
             else {
                 if (!KeyTools.isValidFchAddr(idRequested)) {
-                    replier.replyOtherError("It's not a valid CID or FID.", null, jedis);
+                    replier.replyOtherErrorHttp("It's not a valid CID or FID.", null, jedis);
                     return;
                 }
                 fid = idRequested;
             }
             GetResponse<Address> fidResult = esClient.get(g -> g.index(IndicesNames.ADDRESS).id(fid), Address.class);
             if (!fidResult.found()) {
-                replier.reply(ReplyCodeMessage.Code1011DataNotFound, null, jedis);
+                replier.replyHttp(ReplyCodeMessage.Code1011DataNotFound, null, jedis);
                 return;
             }
             Address address = fidResult.source();

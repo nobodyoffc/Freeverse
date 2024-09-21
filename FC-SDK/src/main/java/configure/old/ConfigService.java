@@ -119,8 +119,8 @@ public class ConfigService extends ConfigFEIP {
 
         while (true) {
             if (this.tomcatBasePath != null)
-                System.out.println("The path for tomcat base is: " + this.tomcatBasePath);
-            System.out.println("Input the path for tomcat base. Press 's' to skip:");
+                System.out.println("The dock for tomcat base is: " + this.tomcatBasePath);
+            System.out.println("Input the dock for tomcat base. Press 's' to skip:");
             String str1 = br.readLine();
             if ("s".equals(str1)) return;
             if (!str1.endsWith("/")) str1 = str1 + "/";
@@ -335,10 +335,10 @@ public class ConfigService extends ConfigFEIP {
         String input;
         while (true) {
             System.out.println("""
-                    Input the path to be listen when scanning new order.\s
+                    Input the dock to be listen when scanning new order.\s
                     * 'b' for block directory.\s
                     * 'o' for opreturn directory.\s
-                    * The path for a new directory
+                    * The dock for a new directory
                     * 's' to skip:""");
             input = br.readLine();
 

@@ -4,7 +4,7 @@ import apip.apipData.Sort;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
 import constants.IndicesNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.TokenHolder;
 import initial.Initiator;
 import javaTools.http.AuthType;
@@ -44,7 +44,7 @@ public class TokenHoldersByIds extends HttpServlet {
     }
 
     public static void doRequest(String sid, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid, response);
+        FcReplierHttp replier = new FcReplierHttp(sid, response);
 
         try (Jedis jedis = jedisPool.getResource()) {
 
@@ -59,7 +59,7 @@ public class TokenHoldersByIds extends HttpServlet {
                 fidBalanceMap.put(tokenHolder.getFid(),tokenHolder.getBalance());
                 meetMap.put(tokenHolder.getTokenId(), fidBalanceMap);
             }
-            replier.reply0Success(meetMap, jedis, null);
+            replier.reply0SuccessHttp(meetMap, jedis, null);
         }
     }
 }

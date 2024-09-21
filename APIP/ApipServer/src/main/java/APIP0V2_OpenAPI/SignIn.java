@@ -6,12 +6,12 @@ import clients.redisClient.RedisTools;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
 import constants.Strings;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
-import server.Settings;
+import settings.Settings;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -26,7 +26,7 @@ import static constants.Strings.*;
 public class SignIn extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         Session session = new Session();
         RequestChecker requestChecker = new RequestChecker();
@@ -54,7 +54,7 @@ public class SignIn extends HttpServlet {
                 try {
                     session = new Session().makeSession(Initiator.sid,jedis, fid, sessionDays);
                 } catch (Exception e) {
-                    replier.replyOtherError("Some thing wrong when making sessionKey.\n" + e.getMessage(),null, jedis);
+                    replier.replyOtherErrorHttp("Some thing wrong when making sessionKey.\n" + e.getMessage(),null, jedis);
                 }
             } else {
                 jedis.select(0);
@@ -75,18 +75,18 @@ public class SignIn extends HttpServlet {
                     try {
                         session = new Session().makeSession(Initiator.sid,jedis, fid,sessionDays);
                     } catch (Exception e) {
-                        replier.replyOtherError("Some thing wrong when making sessionKey.\n" + e.getMessage(),null,jedis);
+                        replier.replyOtherErrorHttp("Some thing wrong when making sessionKey.\n" + e.getMessage(),null,jedis);
                         return;
                     }
                 }
             }
-            replier.reply0Success(session,jedis, null);
+            replier.reply0SuccessHttp(session,jedis, null);
             replier.clean();
         }
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier =new FcReplier(Initiator.sid,response);
-        replier.reply(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
+        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
+        replier.replyHttp(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
     }
 }

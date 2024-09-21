@@ -3,7 +3,7 @@ package APIP1V2_FCDSL;
 import apip.apipData.Sort;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -37,7 +37,7 @@ public class General extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
 
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -52,7 +52,7 @@ public class General extends HttpServlet {
 
             if ( meetList== null) return;
             replier.setGot((long) meetList.size());
-            replier.reply0Success(meetList, jedis, null);
+            replier.reply0SuccessHttp(meetList, jedis, null);
         }
 
     }

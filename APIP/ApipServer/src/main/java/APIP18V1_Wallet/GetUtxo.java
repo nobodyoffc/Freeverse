@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.*;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.CashListReturn;
 import fch.ParseTools;
 import fch.Wallet;
@@ -44,7 +44,7 @@ public class GetUtxo extends HttpServlet {
 
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false);
             if (requestCheckResult==null){
@@ -52,7 +52,7 @@ public class GetUtxo extends HttpServlet {
             }
             String idRequested = request.getParameter(ADDRESS);
             if (idRequested==null){
-                replier.reply(ReplyCodeMessage.Code2003IllegalFid,null,jedis);
+                replier.replyHttp(ReplyCodeMessage.Code2003IllegalFid,null,jedis);
                 return;
             }
 
@@ -60,7 +60,7 @@ public class GetUtxo extends HttpServlet {
                 long amount= ParseTools.coinStrToSatoshi(request.getParameter(AMOUNT));
                 CashListReturn cashListReturn = Wallet.getCashListForPay(amount,idRequested,Initiator.esClient);
                 if(cashListReturn.getCode()!=0){
-                    replier.replyOtherError(cashListReturn.getMsg(),null,jedis);
+                    replier.replyOtherErrorHttp(cashListReturn.getMsg(),null,jedis);
                     return;
                 }
 
@@ -73,7 +73,7 @@ public class GetUtxo extends HttpServlet {
                 replier.setTotal(cashListReturn.getTotal());
                 replier.setGot((long) size);
                 replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-                replier.reply0Success(utxoList,jedis, null);
+                replier.reply0SuccessHttp(utxoList,jedis, null);
                 return;
             }
 
@@ -98,7 +98,7 @@ public class GetUtxo extends HttpServlet {
                 List<Hit<Cash>> hitList = cashResult.hits().hits();
 
                 if(hitList==null || hitList.size()==0){
-                    replier.reply(ReplyCodeMessage.Code2007CashNoFound,null,jedis);
+                    replier.replyHttp(ReplyCodeMessage.Code2007CashNoFound,null,jedis);
                     return;
                 }
 
@@ -117,12 +117,12 @@ public class GetUtxo extends HttpServlet {
                 replier.setTotal(cashResult.hits().total().value());
                 replier.setGot((long) size);
                 replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-                replier.reply0Success(utxoList,jedis, null);
+                replier.reply0SuccessHttp(utxoList,jedis, null);
             }else {
-                replier.reply(ReplyCodeMessage.Code2003IllegalFid,null,jedis);
+                replier.replyHttp(ReplyCodeMessage.Code2003IllegalFid,null,jedis);
             }
         } catch (IOException e) {
-            replier.replyOtherError(e.getMessage(),null,null);
+            replier.replyOtherErrorHttp(e.getMessage(),null,null);
         }
     }
 }

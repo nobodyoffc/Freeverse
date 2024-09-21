@@ -1,7 +1,6 @@
 package server.order;
 
 import co.elastic.clients.elasticsearch._types.SortOrder;
-import co.elastic.clients.elasticsearch.core.search.SourceConfig;
 import co.elastic.clients.json.JsonData;
 import fch.ParseTools;
 import feip.feipData.Service;
@@ -11,10 +10,7 @@ import appTools.Shower;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import com.google.gson.Gson;
 import constants.IndicesNames;
-import constants.Strings;
-import constants.Values;
 import crypto.KeyTools;
 import feip.feipData.serviceParams.Params;
 import javaTools.JsonTools;
@@ -24,7 +20,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -35,7 +31,7 @@ import static constants.Constants.*;
 import static constants.Strings.*;
 import static server.Indices.orderMappingJsonStr;
 import static server.Indices.recreateApipIndex;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 
 public class OrderManager {
@@ -259,7 +255,7 @@ public class OrderManager {
 
         Params params = (Params) service.getParams();
         Shower.printUnderline(20);
-        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +params.getAccount()+ " to buy the service. The price is " + NumberTools.numberToPlainString(params.getPricePerKBytes(),"8")+"f/KB.");
+        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +params.getDealer()+ " to buy the service. The price is " + NumberTools.numberToPlainString(params.getPricePerKBytes(),"8")+"f/KB.");
         System.out.println("If you want to set the 'via' FID, write below into the OP_RETURN of the TX:");
         Shower.printUnderline(20);
         System.out.println(JsonTools.toNiceJson(Order.getJsonBuyOrder(sid)));

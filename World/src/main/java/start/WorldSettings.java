@@ -5,7 +5,7 @@ import appTools.Menu;
 import configure.Configure;
 import feip.feipData.Service;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.util.Map;

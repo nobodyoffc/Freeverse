@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Indices;
-import server.Settings;
+import settings.Settings;
 
 import java.io.*;
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ import static constants.Constants.REWARD_HISTORY_FILE;
 import static constants.IndicesNames.ADDRESS;
 import static constants.Strings.*;
 import static server.Indices.recreateApipIndex;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class RewardManager {
     private static final Logger log = LoggerFactory.getLogger(RewardManager.class);

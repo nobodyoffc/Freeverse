@@ -1,10 +1,9 @@
 package APIP17V1_Crypto;
 
-import com.google.gson.Gson;
 import constants.ApiNames;
 import constants.FieldNames;
 import crypto.KeyTools;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fcData.Signature;
 import initial.Initiator;
 import javaTools.http.AuthType;
@@ -33,7 +32,7 @@ public class Verify extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String,String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -44,12 +43,12 @@ public class Verify extends HttpServlet {
             try {
                 signature = Signature.parseSignature(rawSignJson);
             }catch (Exception e){
-                replier.replyOtherError("Wrong signature format.",null,jedis);
+                replier.replyOtherErrorHttp("Wrong signature format.",null,jedis);
                 return;
             }
 
             if(signature==null){
-                replier.replyOtherError("Failed to parse signature.",null,jedis);
+                replier.replyOtherErrorHttp("Failed to parse signature.",null,jedis);
                 return;
             }
 
@@ -63,7 +62,7 @@ public class Verify extends HttpServlet {
                     isGoodSign = false;
                 }
             }else{
-                replier.replyOtherError("FID, signature or message missed.",null,jedis);
+                replier.replyOtherErrorHttp("FID, signature or message missed.",null,jedis);
                 return;
             }
             replier.replySingleDataSuccess(isGoodSign,jedis);

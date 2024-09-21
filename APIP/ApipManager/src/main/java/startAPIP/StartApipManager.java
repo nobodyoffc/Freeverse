@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
-import server.Settings;
+import settings.Settings;
 import server.balance.BalanceInfo;
 import server.balance.BalanceManager;
 import server.order.Order;
@@ -210,26 +210,26 @@ public class StartApipManager {
 
 	private static void checkApipIndices(ElasticsearchClient esClient) {
 		Map<String,String> nameMappingList = new HashMap<>();
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,WEBHOOK), WebhookInfo.MAPPINGS);
+		nameMappingList.put(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS);
+		nameMappingList.put(Settings.addSidBriefToName(sid,BALANCE), BalanceInfo.MAPPINGS);
+		nameMappingList.put(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
+		nameMappingList.put(Settings.addSidBriefToName(sid,WEBHOOK), WebhookInfo.MAPPINGS);
 		EsTools.checkEsIndices(esClient,nameMappingList);
 	}
 
 	public static void checkSwapIndices(ElasticsearchClient esClient) {
 		Map<String,String> nameMappingList = new HashMap<>();
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_LP), SwapLpData.swapLpMappingJsonStr);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_FINISHED), SwapAffair.swapFinishedMappingJsonStr);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_PENDING), SwapPendingData.swapPendingMappingJsonStr);
-		nameMappingList.put(server.Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
+		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
+		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_LP), SwapLpData.swapLpMappingJsonStr);
+		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_FINISHED), SwapAffair.swapFinishedMappingJsonStr);
+		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_PENDING), SwapPendingData.swapPendingMappingJsonStr);
+		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
 		EsTools.checkEsIndices(esClient,nameMappingList);
 
 	}
 
 	private static void manageReward(String sid, Params params, ElasticsearchClient esClient, NaSaRpcClient naSaRpcClient,JedisPool jedisPool, BufferedReader br) {
-		RewardManager rewardManager = new RewardManager(sid, params.getAccount(),null,esClient, naSaRpcClient,jedisPool, br);
+		RewardManager rewardManager = new RewardManager(sid, params.getDealer(),null,esClient, naSaRpcClient,jedisPool, br);
 		rewardManager.menu(params.getConsumeViaShare(),params.getOrderViaShare());
 	}
 

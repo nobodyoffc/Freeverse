@@ -15,12 +15,13 @@ import javaTools.BytesTools;
 import javaTools.Hex;
 import javaTools.ObjectTools;
 import javaTools.http.AuthType;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import javaTools.http.HttpTools;
 import org.bitcoinj.core.ECKey;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
+import settings.Settings;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -36,7 +37,7 @@ import static crypto.KeyTools.pubKeyToFchAddr;
 import static javaTools.http.AuthType.*;
 import static javaTools.http.HttpTools.getApiNameFromUrl;
 import static javaTools.http.HttpTools.illegalUrl;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class RequestChecker {
     /*
@@ -48,14 +49,14 @@ public class RequestChecker {
     2. set free: get
     3. none free: post
      */
-    public static RequestCheckResult checkRequest(String sid, HttpServletRequest request, FcReplier replier,AuthType authType, Jedis jedis,boolean notForSignRequestBody) {
+    public static RequestCheckResult checkRequest(String sid, HttpServletRequest request, FcReplierHttp replier, AuthType authType, Jedis jedis, boolean notForSignRequestBody) {
 
         RequestCheckResult requestCheckResult = new RequestCheckResult();
         replier.setRequestCheckResult(requestCheckResult);
 
         String url = HttpTools.getEntireUrl(request);
         if(illegalUrl(url)){
-            replier.reply(ReplyCodeMessage.Code1016IllegalUrl, null,jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1016IllegalUrl, null,jedis);
             return null;
         }
 
@@ -95,19 +96,19 @@ public class RequestChecker {
 
         if(signInfo == null){
             if(isForbidFreeApi) {
-                replier.replyOtherError("Failed to check sign.", null, jedis);
+                replier.replyOtherErrorHttp("Failed to check sign.", null, jedis);
                 return null;
             }else return requestCheckResult;
         }
         if (signInfo.code != 0) {
             if(isForbidFreeApi) {
-                replier.reply(signInfo.code, null, jedis);
+                replier.replyHttp(signInfo.code, null, jedis);
                 return null;
             }else return requestCheckResult;
         }
         Session session = getSession(signInfo.sessionName, jedis);
         if (session == null) {
-            replier.reply(ReplyCodeMessage.Code1009SessionTimeExpired, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1009SessionTimeExpired, null, jedis);
             return null;
         }
 
@@ -121,12 +122,12 @@ public class RequestChecker {
 
         if (isBadBalance(sid, fid, apiNameFromUrl, jedis)) {
             String data = "Send at lest " + paramsMap.get(MIN_PAYMENT) + " F to " + paramsMap.get(ACCOUNT) + " to buy the service #" + sid + ".";
-            replier.reply(ReplyCodeMessage.Code1004InsufficientBalance, data, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1004InsufficientBalance, data, jedis);
             return null;
         }
 
         if (isBadNonce(signInfo.nonce, windowTime, jedis)) {
-            replier.reply(ReplyCodeMessage.Code1007UsedNonce, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1007UsedNonce, null, jedis);
             return null;
         }
 
@@ -137,7 +138,7 @@ public class RequestChecker {
         else bytesSigned = signInfo.requestBodyBytes;
 
         if (isBadSymSign(signInfo.sign, bytesSigned, replier, sessionKey)) {
-            replier.reply(ReplyCodeMessage.Code1008BadSign, replier.getData(), jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1008BadSign, replier.getData(), jedis);
             return null;
         }
 
@@ -147,7 +148,7 @@ public class RequestChecker {
                 dataMap.put("requestedURL",request.getRequestURL().toString());
                 dataMap.put("signedURL",signInfo.url);
                 replier.setData(dataMap);
-                replier.reply(ReplyCodeMessage.Code1005UrlUnequal, dataMap, jedis);
+                replier.replyHttp(ReplyCodeMessage.Code1005UrlUnequal, dataMap, jedis);
                 return null;
             }
         }
@@ -155,7 +156,7 @@ public class RequestChecker {
         if (isBadTime(signInfo.time, windowTime)) {
             Map<String, String> dataMap = new HashMap<>();
             dataMap.put("windowTime", String.valueOf(windowTime));
-            replier.reply(ReplyCodeMessage.Code1006RequestTimeExpired, dataMap, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1006RequestTimeExpired, dataMap, jedis);
             return null;
         }
         if (signInfo.via != null) requestCheckResult.setVia(signInfo.via);
@@ -172,7 +173,7 @@ public class RequestChecker {
     }
 
     @NotNull
-    private static RequestCheckResult checkFreeRequest(HttpServletRequest request, FcReplier replier, Jedis jedis, boolean notForSignRequestBody, RequestCheckResult requestCheckResult, String url) {
+    private static RequestCheckResult checkFreeRequest(HttpServletRequest request, FcReplierHttp replier, Jedis jedis, boolean notForSignRequestBody, RequestCheckResult requestCheckResult, String url) {
         byte[] requestBodyBytes;
         requestCheckResult.setFreeRequest(true);
         try{
@@ -258,18 +259,18 @@ public class RequestChecker {
     }
 
     @Nullable
-    public static Map<String, String> parseOtherMap(FcReplier replier, Jedis jedis, Object other) {
+    public static Map<String, String> parseOtherMap(FcReplierHttp replier, Jedis jedis, Object other) {
         Map<String,String> otherMap = ObjectTools.objectToMap(other,String.class,String.class);
         if(otherMap==null){
-            replier.replyOtherError("The other parameter has to be a Map<String,String>.",null, jedis);
+            replier.replyOtherErrorHttp("The other parameter has to be a Map<String,String>.",null, jedis);
             return null;
         }
         return otherMap;
     }
 
-    public static boolean isBadHex(FcReplier replier, Jedis jedis, String text) {
+    public static boolean isBadHex(FcReplierHttp replier, Jedis jedis, String text) {
         if(!Hex.isHexString(text)){
-            replier.replyOtherError("It is not a hex string.", text, jedis);
+            replier.replyOtherErrorHttp("It is not a hex string.", text, jedis);
             return true;
         }
         return false;
@@ -279,14 +280,14 @@ public class RequestChecker {
                             byte[] requestBodyBytes, RequestBody requestBody){
     }
 
-    private static Boolean checkForbidFree(Jedis jedis, String sid, FcReplier replier, RequestCheckResult requestCheckResult) {
+    private static Boolean checkForbidFree(Jedis jedis, String sid, FcReplierHttp replier, RequestCheckResult requestCheckResult) {
         boolean isForbidFreeApi;
         String isForbidFreeApiStr = jedis.hget(Settings.addSidBriefToName(sid, SETTINGS), FieldNames.FORBID_FREE_API);
         isForbidFreeApi = "true".equalsIgnoreCase(isForbidFreeApiStr);
         requestCheckResult.setFreeRequest(isForbidFreeApi);
         return isForbidFreeApi;
     }
-    private static boolean isBadSymSign(String sign, byte[] requestBodyBytes, FcReplier replier, String sessionKey) {
+    private static boolean isBadSymSign(String sign, byte[] requestBodyBytes, FcReplierHttp replier, String sessionKey) {
         if(sign==null)return true;
         byte[] signBytes = BytesTools.bytesMerger(requestBodyBytes, Hex.fromHex(sessionKey));
         String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
@@ -376,37 +377,37 @@ public class RequestChecker {
 //    }
 
     @Nullable
-    public static Map<String, String> checkOtherRequest(String sid, HttpServletRequest request, AuthType authType, FcReplier replier, Jedis jedis) {
+    public static Map<String, String> checkOtherRequest(String sid, HttpServletRequest request, AuthType authType, FcReplierHttp replier, Jedis jedis) {
         RequestCheckResult requestCheckResult = checkRequest(sid, request, replier, authType, jedis, false);
         if (requestCheckResult == null) {
             return null;
         }
         RequestBody requestBody = requestCheckResult.getRequestBody();
         if (requestBody == null) {
-            replier.reply(ReplyCodeMessage.Code1003BodyMissed, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1003BodyMissed, null, jedis);
             return null;
         }
         Fcdsl fcdsl = requestBody.getFcdsl();
         if (fcdsl==null) {
-            replier.replyOtherError("The FCDSL is missed.", null, jedis);
+            replier.replyOtherErrorHttp("The FCDSL is missed.", null, jedis);
             return null;
         }
         replier.setNonce(requestBody.getNonce());
         //Check API
         Map<String,String> other = requestBody.getFcdsl().getOther();
         if (other == null) {
-            replier.replyOtherError("The other parameter is missed. Check it.", null, jedis);
+            replier.replyOtherErrorHttp("The other parameter is missed. Check it.", null, jedis);
             return null;
         }
         return other;
     }
 
-    public RequestCheckResult checkSignInRequest(String sid, HttpServletRequest request, FcReplier replier, Map<String, String> paramsMap, long windowTime, Jedis jedis){
+    public RequestCheckResult checkSignInRequest(String sid, HttpServletRequest request, FcReplierHttp replier, Map<String, String> paramsMap, long windowTime, Jedis jedis){
         RequestCheckResult requestCheckResult = new RequestCheckResult();
         replier.setRequestCheckResult(requestCheckResult);
         String url = HttpTools.getEntireUrl(request);
         if(illegalUrl(url)){
-            replier.reply(ReplyCodeMessage.Code1016IllegalUrl, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1016IllegalUrl, null, jedis);
             return null;
         }
         String apiName = HttpTools.getApiNameFromUrl(url);
@@ -415,7 +416,7 @@ public class RequestChecker {
         String fid = request.getHeader(ReplyCodeMessage.FidInHeader);
         if(fid==null){
             String data = "A FID is required in request header.";
-            replier.reply(ReplyCodeMessage.Code1015FidMissed, data,jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1015FidMissed, data,jedis);
             return null;
         }
         requestCheckResult.setFid(fid);
@@ -423,7 +424,7 @@ public class RequestChecker {
         String sign = request.getHeader(ReplyCodeMessage.SignInHeader);
 
         if (paramsMap==null||paramsMap.get(URL_HEAD)==null) {
-            replier.reply(ReplyCodeMessage.Code1020OtherError, "Failed to get parameters from redis.", jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1020OtherError, "Failed to get parameters from redis.", jedis);
             return null;
         }
 
@@ -436,18 +437,18 @@ public class RequestChecker {
         try {
             requestBodyBytes = request.getInputStream().readAllBytes();
         } catch (IOException e) {
-            replier.reply(ReplyCodeMessage.Code1020OtherError, "Getting request body bytes wrong.", jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1020OtherError, "Getting request body bytes wrong.", jedis);
             return null;
         }
         if(requestBodyBytes==null){
-            replier.reply(ReplyCodeMessage.Code1003BodyMissed, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1003BodyMissed, null, jedis);
             return null;
         }
 
         RequestBody signInRequestBody = getRequestBody(requestBodyBytes,replier, jedis);
         if(signInRequestBody==null)return null;
         if(isBadNonce(signInRequestBody.getNonce(), windowTime,jedis )){
-            replier.reply(ReplyCodeMessage.Code1007UsedNonce, null,jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1007UsedNonce, null,jedis);
             return null;
         }
         replier.setNonce(signInRequestBody.getNonce());
@@ -456,18 +457,18 @@ public class RequestChecker {
         try {
             pubKey = checkAsySignAndGetPubKey(fid,sign,requestBodyBytes);
         } catch (SignatureException e) {
-            replier.reply(ReplyCodeMessage.Code1008BadSign, null, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1008BadSign, null, jedis);
             return null;
         }
         if(null==pubKey){
-            replier.reply(ReplyCodeMessage.Code1008BadSign, null,jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1008BadSign, null,jedis);
             return null;
         }
         requestCheckResult.setPubKey(pubKey);
 
         if(isBadBalance(sid,fid,apiName, jedis)){
             String data = "Send at lest "+paramsMap.get(MIN_PAYMENT)+" F to "+paramsMap.get(ACCOUNT)+" to buy the service #"+sid+".";
-            replier.reply(ReplyCodeMessage.Code1004InsufficientBalance, data, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1004InsufficientBalance, data, jedis);
             return null;
         }
 
@@ -476,14 +477,14 @@ public class RequestChecker {
             dataMap.put("requestedURL",request.getRequestURL().toString());
             dataMap.put("signedURL",signInRequestBody.getUrl());
             replier.setData(dataMap);
-            replier.reply(ReplyCodeMessage.Code1005UrlUnequal, replier.getData(), jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1005UrlUnequal, replier.getData(), jedis);
             return null;
         }
 
         if (isBadTime(signInRequestBody.getTime(),windowTime)){
             Map<String, String> dataMap = new HashMap<>();
             dataMap.put("windowTime", String.valueOf(windowTime));
-            replier.reply(ReplyCodeMessage.Code1006RequestTimeExpired, dataMap, jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1006RequestTimeExpired, dataMap, jedis);
             return null;
         }
         if(signInRequestBody.getVia()!=null) requestCheckResult.setVia(signInRequestBody.getVia());
@@ -492,7 +493,7 @@ public class RequestChecker {
         return requestCheckResult;
     }
 
-    private static void promoteSignInRequest(FcReplier replier, String urlHead, Jedis jedis) {
+    private static void promoteSignInRequest(FcReplierHttp replier, String urlHead, Jedis jedis) {
         String data = "A Sign is required in request header.";
         SecureRandom secureRandom = new SecureRandom();
         byte[] bytes = new byte[4];
@@ -509,10 +510,10 @@ public class RequestChecker {
                     \tRequest body:{"url":"%s","nonce":"%d","time":"%d"}"""
                     .formatted(urlHead+ApiNames.Version1 + ApiNames.SignIn,nonce,timestamp);
         }
-        replier.reply(ReplyCodeMessage.Code1000SignMissed, data,jedis);
+        replier.replyHttp(ReplyCodeMessage.Code1000SignMissed, data,jedis);
     }
 
-    private static void promoteJsonRequest(FcReplier replier, String urlHead, Jedis jedis) {
+    private static void promoteJsonRequest(FcReplierHttp replier, String urlHead, Jedis jedis) {
         String data = "A Sign is required in request header.";
         SecureRandom secureRandom = new SecureRandom();
         byte[] bytes = new byte[4];
@@ -536,10 +537,10 @@ public class RequestChecker {
                     """
                     .formatted(urlHead+ApiNames.Version1 + ApiNames.SignIn,nonce,timestamp);
         }
-        replier.reply(ReplyCodeMessage.Code1000SignMissed, data,jedis);
+        replier.replyHttp(ReplyCodeMessage.Code1000SignMissed, data,jedis);
     }
 
-    private static void promoteUrlSignRequest(FcReplier replier, String urlHead, Jedis jedis) {
+    private static void promoteUrlSignRequest(FcReplierHttp replier, String urlHead, Jedis jedis) {
         String data = "A Sign is required in request header.";
         SecureRandom secureRandom = new SecureRandom();
         byte[] bytes = new byte[4];
@@ -558,16 +559,16 @@ public class RequestChecker {
                     """
                     .formatted(urlHead+ApiNames.Version1 + ApiNames.SignIn,nonce,timestamp);
         }
-        replier.reply(ReplyCodeMessage.Code1000SignMissed, data, jedis);
+        replier.replyHttp(ReplyCodeMessage.Code1000SignMissed, data, jedis);
     }
 
-    private static RequestBody getRequestBody(byte[] requestBodyBytes, FcReplier replier, Jedis jedis) {
+    private static RequestBody getRequestBody(byte[] requestBodyBytes, FcReplierHttp replier, Jedis jedis) {
         String requestDataJson = new String(requestBodyBytes);
         RequestBody connectRequestBody;
         try {
             connectRequestBody = new Gson().fromJson(requestDataJson, RequestBody.class);
         }catch(Exception e){
-            replier.reply(ReplyCodeMessage.Code1013BadRequest, "Parsing request body wrong.", jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1013BadRequest, "Parsing request body wrong.", jedis);
             return null;
         }
         return connectRequestBody;
@@ -607,6 +608,7 @@ public class RequestChecker {
         long balance = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(sid, BALANCE),fid);
         return balance < nPrice*price*100000000;
     }
+
 
     private String checkAsySignAndGetPubKey(String fid, String sign, byte[] requestBodyBytes) throws SignatureException {
         String message = new String(requestBodyBytes);

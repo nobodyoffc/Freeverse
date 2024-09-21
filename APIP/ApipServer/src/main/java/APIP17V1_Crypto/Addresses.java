@@ -3,7 +3,7 @@ package APIP17V1_Crypto;
 import constants.ApiNames;
 import constants.FieldNames;
 import crypto.KeyTools;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -14,7 +14,6 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.HashMap;
 import java.util.Map;
 
 @WebServlet(name = ApiNames.Addresses, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version1 +"/"+ApiNames.Addresses)
@@ -29,7 +28,7 @@ public class Addresses extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -52,11 +51,11 @@ public class Addresses extends HttpServlet {
                     pubKey = KeyTools.compressPk65To33(addrOrPubKey);
                     addrMap= KeyTools.pubKeyToAddresses(pubKey);
                 } catch (Exception e) {
-                    replier.replyOtherError("Wrong public key.",null,jedis);
+                    replier.replyOtherErrorHttp("Wrong public key.",null,jedis);
                     return;
                 }
             }else{
-                replier.replyOtherError("FID or Public Key are needed.",null,jedis);
+                replier.replyOtherErrorHttp("FID or Public Key are needed.",null,jedis);
                 return;
             }
             replier.replySingleDataSuccess(addrMap,jedis);

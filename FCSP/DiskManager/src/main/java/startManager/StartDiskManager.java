@@ -25,6 +25,7 @@ import server.reward.RewardInfo;
 import server.reward.RewardManager;
 import server.reward.Rewarder;
 import server.serviceManagers.DiskManager;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -118,7 +119,7 @@ public class StartDiskManager {
                 case 1 -> new DiskManager(service, settings.getApipAccount(), br,symKey, DiskParams.class).menu();
                 case 2 -> new OrderManager(service, counter, br, esClient, jedisPool).menu();
                 case 3 -> new BalanceManager(service, br, esClient,jedisPool).menu();
-                case 4 -> new RewardManager(sid,params.getAccount(),apipClient,esClient,null, jedisPool, br)
+                case 4 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
                 case 5 -> Order.resetNPrices(br, sid, jedisPool);
                 case 6 -> manageIndices(br);//recreateAllIndices(esClient, br);

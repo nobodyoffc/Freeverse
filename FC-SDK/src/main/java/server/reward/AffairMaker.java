@@ -15,7 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.util.*;
 
@@ -108,7 +108,7 @@ public class AffairMaker {
         dataSignTx.setAlg(ALG_SIGN_TX_BY_CRYPTO_SIGN);
 
         affairReward.setFid(account);
-        affairReward.setOp(Op.sign);
+        affairReward.setOp(Op.SIGN);
         affairReward.setData(dataSignTx);
 
         return JsonTools.toNiceJson(affairReward);

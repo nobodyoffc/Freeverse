@@ -3,7 +3,7 @@ package APIP17V1_Crypto;
 import constants.ApiNames;
 import constants.FieldNames;
 import crypto.Hash;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -29,7 +29,7 @@ public class CheckSum4Hex extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -37,7 +37,7 @@ public class CheckSum4Hex extends HttpServlet {
             //Do this request
             String hex = other.get(FieldNames.MESSAGE);
             if(hex==null){
-                replier.replyOtherError("The hex missed.",null,jedis);
+                replier.replyOtherErrorHttp("The hex missed.",null,jedis);
                 return;
             }
             if (RequestChecker.isBadHex(replier, jedis, hex)) return;

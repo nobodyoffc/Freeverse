@@ -1,7 +1,7 @@
 import apip.apipData.RequestBody;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.CashListReturn;
 import fch.fchData.Cash;
 import initial.Initiator;
@@ -33,7 +33,7 @@ public class CashValidForPay extends HttpServlet {
 
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Object other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -44,7 +44,7 @@ public class CashValidForPay extends HttpServlet {
     }
 
 
-    protected void doCashValidRequest(FcReplier replier,Jedis jedis,Object other) {
+    protected void doCashValidRequest(FcReplierHttp replier, Jedis jedis, Object other) {
 
         RequestBody requestBody = replier.getRequestCheckResult().getRequestBody();
         replier.setNonce(requestBody.getNonce());
@@ -53,7 +53,7 @@ public class CashValidForPay extends HttpServlet {
         try{
             addrRequested = requestBody.getFcdsl().getQuery().getTerms().getValues()[0];
         }catch (Exception ignore){
-            replier.reply(ReplyCodeMessage.Code1012BadQuery,null,jedis);
+            replier.replyHttp(ReplyCodeMessage.Code1012BadQuery,null,jedis);
             return;
         }
 
@@ -61,11 +61,11 @@ public class CashValidForPay extends HttpServlet {
         try {
             amount = (long)(Double.parseDouble((String)other)*100000000);
             if(amount<=0){
-                replier.replyOtherError("amount <= 0",null,jedis);
+                replier.replyOtherErrorHttp("amount <= 0",null,jedis);
                 return;
             }
         } catch (Exception e) {
-            replier.replyOtherError(e.getMessage(),null,jedis);
+            replier.replyOtherErrorHttp(e.getMessage(),null,jedis);
             return;
         }
 
@@ -73,7 +73,7 @@ public class CashValidForPay extends HttpServlet {
         CashListReturn cashListReturn = getCashListForPay(amount,addrRequested,Initiator.esClient);
 
         if(cashListReturn.getCode()!=0){
-            replier.replyOtherError(cashListReturn.getMsg(),null,jedis);
+            replier.replyOtherErrorHttp(cashListReturn.getMsg(),null,jedis);
             return;
         }
 
@@ -81,6 +81,6 @@ public class CashValidForPay extends HttpServlet {
         replier.setData(meetList);
         replier.setGot((long) meetList.size());
         replier.setTotal(cashListReturn.getTotal());
-        replier.reply0Success(meetList,jedis, null);
+        replier.reply0SuccessHttp(meetList,jedis, null);
     }
 }

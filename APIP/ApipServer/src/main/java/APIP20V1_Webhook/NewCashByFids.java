@@ -5,13 +5,13 @@ import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import constants.*;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.RequestChecker;
-import server.Settings;
+import settings.Settings;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -37,7 +37,7 @@ public class NewCashByFids extends HttpServlet {
         doRequest(Initiator.sid,request,response,authType, Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -49,7 +49,7 @@ public class NewCashByFids extends HttpServlet {
         }
     }
 
-    private void doNewCashByFidsRequest(FcReplier replier, Jedis jedis, Map<String, String> otherMap) {
+    private void doNewCashByFidsRequest(FcReplierHttp replier, Jedis jedis, Map<String, String> otherMap) {
         String addr =replier.getRequestCheckResult().getFid();
 
         Gson gson = new Gson();
@@ -89,15 +89,15 @@ public class NewCashByFids extends HttpServlet {
                     replier.setData(dataMap);
                 }
                 default -> {
-                    replier.replyOtherError("The op in request body is wrong.", null, jedis);
+                    replier.replyOtherErrorHttp("The op in request body is wrong.", null, jedis);
                     return;
                 }
             }
         } catch (JsonSyntaxException e) {
-            replier.replyOtherError(e.getMessage(), null, jedis);
+            replier.replyOtherErrorHttp(e.getMessage(), null, jedis);
             return;
         }
-        replier.reply0Success(jedis);
+        replier.reply0SuccessHttp(jedis);
     }
 
     private void deleteWebhook(WebhookRequestBody webhookInfo) {

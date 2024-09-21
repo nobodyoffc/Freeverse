@@ -4,7 +4,7 @@ package configure;
 import clients.Client;
 import constants.ApiNames;
 import constants.Strings;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.serviceParams.ApipParams;
 import feip.feipData.serviceParams.DiskParams;
 import feip.feipData.serviceParams.Params;
@@ -18,7 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import server.FreeApi;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -45,6 +45,7 @@ public class ApiProvider {
     private String[] ticks;
     private transient Service service;
     private transient Params apiParams;
+    private String accountPubKey;
 //    private transient List<FreeApi> freeApiList;
 
     public ApiProvider() {}
@@ -123,7 +124,7 @@ public class ApiProvider {
             if(freeApi!=null) apiUrl = freeApi.getUrlHead();
             else apiUrl = Inputer.inputString(br,"Input the urlHead of the APIP service.");
         }
-        FcReplier replier;
+        FcReplierHttp replier;
         try {
             replier = Client.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
         }catch (Exception ignore) {
@@ -275,7 +276,7 @@ public class ApiProvider {
                         apiUrl = Inputer.inputString(br, "Input the urlHead of the APIP service:");
                     }
                     if(apiUrl==null)return;
-                    FcReplier replier = ApipClient.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
+                    FcReplierHttp replier = ApipClient.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
 
                     if(replier==null||replier.getData()==null)return;
                     service = (Service) replier.getData();
@@ -402,7 +403,14 @@ public class ApiProvider {
         this.name = name;
     }
 
-//    public List<FreeApi> getFreeApiList() {
+    public String getAccountPubKey() {
+        return accountPubKey;
+    }
+
+    public void setAccountPubKey(String accountPubKey) {
+        this.accountPubKey = accountPubKey;
+    }
+    //    public List<FreeApi> getFreeApiList() {
 //        return freeApiList;
 //    }
 //

@@ -254,6 +254,12 @@ public class ParseTools {
         return satoshis.setScale(0, RoundingMode.HALF_UP).longValueExact(); // Set scale to 0 (no fractional part) and use HALF_UP rounding
     }
 
+    public static long doubleToLong(double amount,int decimal) {
+        BigDecimal coins = BigDecimal.valueOf(amount);
+        BigDecimal satoshis = coins.multiply(BigDecimal.valueOf(Math.pow(10, decimal))); // Convert BTC to Satoshis
+        return satoshis.setScale(0, RoundingMode.HALF_UP).longValueExact(); // Set scale to 0 (no fractional part) and use HALF_UP rounding
+    }
+
     public static double satoshiToCoin(long satoshis) {
         return NumberTools.roundDouble8((double) satoshis / Constants.COIN_TO_SATOSHI);
     }

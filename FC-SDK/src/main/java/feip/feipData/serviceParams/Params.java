@@ -9,11 +9,12 @@ import javaTools.JsonTools;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.Map;
 
 public abstract class Params {
     protected transient ApipClient apipClient;
-    protected String account;
+    protected String dealer;
     protected String pricePerKBytes;
     protected String minPayment;
     protected String pricePerRequest;
@@ -24,6 +25,67 @@ public abstract class Params {
     protected String currency;
 
     public Params() {
+    }
+
+    public static Params mapToParams(Map<String, String> map) {
+        return new Params() {
+            {
+                dealer = map.get("dealer");
+                pricePerKBytes = map.get("pricePerKBytes");
+                minPayment = map.get("minPayment");
+                pricePerRequest = map.get("pricePerRequest");
+                sessionDays = map.get("sessionDays");
+                urlHead = map.get("urlHead");
+                consumeViaShare = map.get("consumeViaShare");
+                orderViaShare = map.get("orderViaShare");
+                currency = map.get("currency");
+            }
+        };
+    }
+
+    public static <T extends Params> T mapToParams(Map<String, String> map, Class<T> tClass) {
+        try {
+            // Create a new instance of the given class
+            T params = tClass.getDeclaredConstructor().newInstance();
+
+            // Iterate over the map and set fields in the Params object
+            for (Map.Entry<String, String> entry : map.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+
+                try {
+                    // Try to find the field in the current class or its superclasses
+                    Field field = findField(tClass, key);
+
+                    if (field != null) {
+                        field.setAccessible(true);  // Allow access to private/protected fields
+                        field.set(params, value);   // Set the field value
+                    } else {
+                        System.out.println("Field " + key + " does not exist in class " + tClass.getSimpleName());
+                    }
+                } catch (IllegalAccessException e) {
+                    // Handle potential access issues
+                    throw new RuntimeException("Failed to set field value for " + key, e);
+                }
+            }
+
+            return params;
+        } catch (Exception e) {
+            throw new RuntimeException("Error mapping params", e);
+        }
+    }
+
+    // Helper method to search for a field in the current class and its superclasses
+    private static Field findField(Class<?> tClass, String fieldName) {
+        Class<?> currentClass = tClass;
+        while (currentClass != null) {
+            try {
+                return currentClass.getDeclaredField(fieldName);  // Look for the field in the current class
+            } catch (NoSuchFieldException e) {
+                currentClass = currentClass.getSuperclass();  // Move to the superclass
+            }
+        }
+        return null;  // Field not found
     }
 
     public static Class<? extends Params> getParamsClassByApiType(ServiceType type) {
@@ -54,17 +116,17 @@ public abstract class Params {
     }
 
     protected String updateAccount(BufferedReader br, byte[] symKey, ApipClient apipClient) {
-        if(Inputer.askIfYes(br,"The account is "+this.account+". Update it?")){
-            return fch.Inputer.inputOrCreateFid("Input the account:",br,symKey,apipClient);
+        if(Inputer.askIfYes(br,"The dealer is "+this.dealer +". Update it?")){
+            return fch.Inputer.inputOrCreateFid("Input the dealer:",br,symKey,apipClient);
         }
-        return this.account;
+        return this.dealer;
     }
 
     public void updateParams(BufferedReader br, byte[] symKey, ApipClient apipClient){
         try {
             this.urlHead = Inputer.promptAndUpdate(br,"urlHead",this.urlHead);
             this.currency = Inputer.promptAndUpdate(br,"currency",this.currency);
-            this.account = updateAccount(br, symKey, apipClient);
+            this.dealer = updateAccount(br, symKey, apipClient);
             this.pricePerKBytes = Inputer.promptAndUpdate(br, "pricePerKBytes", this.pricePerKBytes);
             this.minPayment = Inputer.promptAndUpdate(br,"minPayment",this.minPayment);
             this.sessionDays = Inputer.promptAndUpdate(br,"sessionDays",this.sessionDays);
@@ -78,7 +140,7 @@ public abstract class Params {
     public void inputParams(BufferedReader br, byte[]symKey, ApipClient apipClient){
         this.urlHead = Inputer.inputString(br,"Input the urlHead:");
         this.currency = Inputer.inputString(br,"Input the currency:");
-        this.account = fch.Inputer.inputOrCreateFid("Input the account:",br,symKey, apipClient);
+        this.dealer = fch.Inputer.inputOrCreateFid("Input the dealer:",br,symKey, apipClient);
         this.pricePerKBytes = Inputer.inputDoubleAsString(br,"Input the pricePerKBytes:");
         this.minPayment = Inputer.inputDoubleAsString(br,"Input the minPayment:");
         this.consumeViaShare = Inputer.inputDoubleAsString(br,"Input the consumeViaShare:");
@@ -89,7 +151,7 @@ public abstract class Params {
         params.currency = map.get("currency");
         params.consumeViaShare = map.get("consumeViaShare");
         params.orderViaShare = map.get("orderViaShare");
-        params.account = map.get("account");
+        params.dealer = map.get("dealer");
         params.pricePerKBytes = map.get("pricePerKBytes");
         params.minPayment = map.get("minPayment");
         params.pricePerRequest = map.get("pricePerRequest");
@@ -101,7 +163,7 @@ public abstract class Params {
         if (this.currency != null) map.put("currency", this.currency);
         if (this.consumeViaShare != null) map.put("consumeViaShare", this.consumeViaShare);
         if (this.orderViaShare != null) map.put("orderViaShare", this.orderViaShare);
-        if (this.account != null) map.put("account", this.account);
+        if (this.dealer != null) map.put("dealer", this.dealer);
         if (this.pricePerKBytes != null) map.put("pricePerKBytes", this.pricePerKBytes);
         if (this.minPayment != null) map.put("minPayment", this.minPayment);
         if (this.pricePerRequest != null) map.put("pricePerRequest", this.pricePerRequest);
@@ -113,12 +175,12 @@ public abstract class Params {
         return JsonTools.toNiceJson(this);
     }
 
-    public String getAccount() {
-        return account;
+    public String getDealer() {
+        return dealer;
     }
 
-    public void setAccount(String account) {
-        this.account = account;
+    public void setDealer(String dealer) {
+        this.dealer = dealer;
     }
 
     public String getPricePerKBytes() {

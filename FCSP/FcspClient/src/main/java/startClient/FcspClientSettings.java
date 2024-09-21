@@ -7,7 +7,7 @@ import configure.ServiceType;
 import feip.feipData.Service;
 import redis.clients.jedis.JedisPool;
 import configure.Configure;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 

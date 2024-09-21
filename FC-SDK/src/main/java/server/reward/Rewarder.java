@@ -1,6 +1,6 @@
 package server.reward;
 
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.TxCreator;
 import fch.Wallet;
 import feip.feipData.serviceParams.Params;
@@ -20,7 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import static constants.FieldNames.*;
 import static constants.Constants.*;
 import static constants.Strings.*;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class Rewarder {
     private static final Logger log = LoggerFactory.getLogger(Rewarder.class);
@@ -161,13 +161,13 @@ public class Rewarder {
 
         String txSigned = TxCreator.createTransactionSignFch(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate);
 
-        FcReplier fcReplier = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
-        if (fcReplier.getCode() != 0) {
+        FcReplierHttp fcReplierHttp = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
+        if (fcReplierHttp.getCode() != 0) {
             log.debug("The balance is insufficient to send rewards.");
-            if (fcReplier.getData() != null) log.debug((String) fcReplier.getData());
+            if (fcReplierHttp.getData() != null) log.debug((String) fcReplierHttp.getData());
             return null;
         }
-        rewardInfo.setRewardId((String) fcReplier.getData());
+        rewardInfo.setRewardId((String) fcReplierHttp.getData());
         rewardInfo.setState(RewardState.paid);
 
         long apiCost = sumApiCost(chargedAccountList);

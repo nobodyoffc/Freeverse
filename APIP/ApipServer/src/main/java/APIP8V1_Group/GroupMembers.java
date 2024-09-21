@@ -3,7 +3,7 @@ package APIP8V1_Group;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
 import constants.IndicesNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import feip.feipData.Group;
 import initial.Initiator;
 import javaTools.http.AuthType;
@@ -36,7 +36,7 @@ public class GroupMembers extends HttpServlet {
         doRequest(Initiator.sid,request,response,authType,Initiator.esClient,Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try (Jedis jedis = jedisPool.getResource()) {
             List<Group> meetList = doRequestForList(sid, IndicesNames.GROUP, Group.class, null, null, null, null, null, request, authType, esClient, replier, jedis);
             if (meetList == null) return;
@@ -45,7 +45,7 @@ public class GroupMembers extends HttpServlet {
             for(Group group:meetList){
                 dataMap.put(group.getGid(),group.getMembers());
             }
-            replier.reply0Success(dataMap, jedis, null);
+            replier.reply0SuccessHttp(dataMap, jedis, null);
         }
     }
 }

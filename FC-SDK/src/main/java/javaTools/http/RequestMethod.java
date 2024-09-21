@@ -1,8 +1,9 @@
 package javaTools.http;
 
-public enum HttpRequestMethod {
+public enum RequestMethod {
     GET("GET"),
     POST("POST"),
+    TCP("TCP"),
     PUT("PUT"),
     DELETE("DELETE"),
     PATCH("PATCH"),
@@ -12,7 +13,7 @@ public enum HttpRequestMethod {
 
     private final String method;
 
-    HttpRequestMethod(String method) {
+    RequestMethod(String method) {
         this.method = method;
     }
 
@@ -26,7 +27,7 @@ public enum HttpRequestMethod {
     }
 
     public static void main(String[] args) {
-        for (HttpRequestMethod method : HttpRequestMethod.values()) {
+        for (RequestMethod method : RequestMethod.values()) {
             System.out.println("HTTP Method: " + method.getMethod());
         }
     }

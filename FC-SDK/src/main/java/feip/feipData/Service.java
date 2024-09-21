@@ -5,7 +5,7 @@ import configure.ServiceType;
 import feip.feipData.serviceParams.Params;
 import javaTools.StringTools;
 import org.jetbrains.annotations.NotNull;
-import server.Settings;
+import settings.Settings;
 
 import java.util.Map;
 
@@ -43,6 +43,11 @@ public class Service {
 	protected Boolean closed;
 	protected String closeStatement;
 
+
+	public String toJson() {
+		Gson gson = new Gson();
+		return gson.toJson(this);
+	}
 	public static Service fromMap(Map<String, String> map, Class<? extends Params> paramsClass) {
 		Service service = new Service();
 

@@ -3,14 +3,14 @@ package api;
 import apip.apipData.Sort;
 import clients.fcspClient.DiskItem;
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
 import server.FcdslRequestHandler;
 import server.RequestCheckResult;
 import server.RequestChecker;
-import server.Settings;
+import settings.Settings;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -40,7 +40,7 @@ public class List extends HttpServlet {
     }
 
     private static void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
-        FcReplier replier = new FcReplier(Initiator.sid, response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid, response);
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
@@ -61,7 +61,7 @@ public class List extends HttpServlet {
             if(meetList==null){
                 return;
             }
-            replier.reply0Success(meetList,jedis, null);
+            replier.reply0SuccessHttp(meetList,jedis, null);
         }
     }
 }

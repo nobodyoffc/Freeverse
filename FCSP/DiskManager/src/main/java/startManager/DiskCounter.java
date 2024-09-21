@@ -8,7 +8,7 @@ import co.elastic.clients.json.JsonData;
 import constants.FieldNames;
 import javaTools.FileTools;
 import server.Counter;
-import server.Settings;
+import settings.Settings;
 
 import java.io.File;
 import java.io.IOException;

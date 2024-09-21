@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.http.AuthType;
 import redis.clients.jedis.Jedis;
@@ -35,7 +35,7 @@ public class Totals extends HttpServlet {
         doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -52,7 +52,7 @@ public class Totals extends HttpServlet {
             }
             replier.setGot((long) allSumMap.size());
             replier.setTotal((long) allSumMap.size());
-            replier.reply0Success(allSumMap, jedis, null);
+            replier.reply0SuccessHttp(allSumMap, jedis, null);
         }
     }
 }

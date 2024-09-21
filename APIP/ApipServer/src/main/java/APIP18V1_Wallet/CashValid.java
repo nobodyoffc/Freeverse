@@ -5,7 +5,7 @@ import apip.apipData.RequestBody;
 import apip.apipData.Sort;
 import constants.ApiNames;
 import constants.FieldNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.CashListReturn;
 import fch.fchData.Cash;
 import initial.Initiator;
@@ -47,7 +47,7 @@ public class CashValid extends HttpServlet {
 
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false);
@@ -60,7 +60,7 @@ public class CashValid extends HttpServlet {
     }
 
 
-    protected void doCashValidRequest(FcReplier replier, Jedis jedis, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+    protected void doCashValidRequest(FcReplierHttp replier, Jedis jedis, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
 
         RequestBody requestBody = replier.getRequestCheckResult().getRequestBody();
         if(requestBody!=null)replier.setNonce(requestBody.getNonce());
@@ -98,27 +98,27 @@ public class CashValid extends HttpServlet {
             ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
             FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, Initiator.esClient);
             List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort, Cash.class, jedis);
-            replier.reply0Success(meetList, jedis, null);
+            replier.reply0SuccessHttp(meetList, jedis, null);
         }else if(amount!=null && amount>0){
             CashListReturn cashListReturn = getCashListForPay(amount,fid,Initiator.esClient);
             if(cashListReturn.getCode()!=0){
-                replier.reply(cashListReturn.getCode(),null,jedis);
+                replier.replyHttp(cashListReturn.getCode(),null,jedis);
                 return;
             }
             List<Cash> meetList = cashListReturn.getCashList();
             replier.setGot((long) meetList.size());
             replier.setTotal(cashListReturn.getTotal());
-            replier.reply0Success(meetList, jedis, null);
+            replier.reply0SuccessHttp(meetList, jedis, null);
         }else if(cd!=null && cd!=0){
             CashListReturn cashListReturn = getCashForCd(fid, cd,Initiator.esClient);
             if(cashListReturn.getCode()!=0){
-                replier.reply(cashListReturn.getCode(),null,jedis);
+                replier.replyHttp(cashListReturn.getCode(),null,jedis);
                 return;
             }
             List<Cash> meetList = cashListReturn.getCashList();
             replier.setGot((long) meetList.size());
             replier.setTotal(cashListReturn.getTotal());
-            replier.reply0Success(meetList, jedis, null);
+            replier.reply0SuccessHttp(meetList, jedis, null);
         }else {
             ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
             Fcdsl fcdsl;
@@ -127,7 +127,7 @@ public class CashValid extends HttpServlet {
             fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(fid);
             FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, Initiator.esClient);
             List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort,Cash.class, jedis);
-            replier.reply0Success(meetList, jedis, null);
+            replier.reply0SuccessHttp(meetList, jedis, null);
         }
     }
 }

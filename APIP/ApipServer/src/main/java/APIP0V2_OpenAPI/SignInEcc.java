@@ -6,12 +6,12 @@ import clients.redisClient.RedisTools;
 import constants.ApiNames;
 import constants.ReplyCodeMessage;
 import constants.Strings;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
-import server.Settings;
+import settings.Settings;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -28,7 +28,7 @@ public class SignInEcc extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         String sid = Initiator.sid;
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
 
         Session session = new Session();
         RequestChecker requestChecker = new RequestChecker();
@@ -54,19 +54,22 @@ public class SignInEcc extends HttpServlet {
             else sessionDays = Long.parseLong(sessionDaysStr);
 
             if ((!jedis.hexists(Settings.addSidBriefToName(sid,Strings.FID_SESSION_NAME), fid)) || RequestBody.SignInMode.REFRESH.equals(mode)) {
-                session = Session.makeNewSession(sid, replier, pubKey, jedis, fid, sessionDays);
+                session = Session.makeNewSession(sid, pubKey, jedis, fid, sessionDays);
             } else {
-                session = Session.getSessionFromJedis(sid, replier, pubKey, jedis, fid, sessionDays);
+                session = Session.getSessionFromJedis(sid, pubKey, jedis, fid, sessionDays);
             }
-            if(session==null)return;
-            replier.reply0Success(session,jedis, null);
+            if(session==null){
+                replier.replyOtherErrorHttp("Failed to get session.",null, jedis);
+                return;
+            }
+            replier.reply0SuccessHttp(session,jedis, null);
             replier.clean();
         }
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier =new FcReplier(Initiator.sid,response);
-        replier.reply(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
+        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
+        replier.replyHttp(ReplyCodeMessage.Code1017MethodNotAvailable,null,null);
     }
 }

@@ -22,6 +22,7 @@ import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.encoders.Hex;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.junit.Test;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -33,6 +34,14 @@ import java.util.HexFormat;
 import java.util.Map;
 
 public class KeyTools {
+
+    @Test
+    public void test(){
+        String pubKeyStr = "030be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a";
+        byte[] pubKey = Hex.decode(pubKeyStr);
+        String addr = CashAddress.createCashAddr(pubKey);
+        System.out.println(addr);
+    }
 
     public static String scriptToMultiAddr(String script) {
         byte[] scriptBytes = HexFormat.of().parseHex(script);
@@ -774,12 +783,6 @@ public class KeyTools {
         String fullHash = HexFormat.of().formatHex(pukHash64Hash);
 
         return "0x" + fullHash.substring(24);
-    }
-
-    public static String pubKeyToAtomAddr(String a) {
-        byte[] sha256 = Hash.sha256(HexFormat.of().parseHex(a));
-        byte[] ripemd160 = Hash.Ripemd160(sha256);
-        return Bech32.encode("cosmos", ripemd160);
     }
 
     public static byte[] getPriKey32(byte[] priKey) {

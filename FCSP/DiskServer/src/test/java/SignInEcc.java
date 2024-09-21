@@ -10,11 +10,11 @@ import crypto.old.EccAes256K1P7;
 import fcData.AlgorithmId;
 import initial.Initiator;
 import javaTools.Hex;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
-import server.Settings;
+import settings.Settings;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -30,7 +30,7 @@ import static constants.Strings.*;
 public class SignInEcc extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         Session session = new Session();
         RequestChecker requestChecker = new RequestChecker();
@@ -62,7 +62,7 @@ public class SignInEcc extends HttpServlet {
                     session.setSessionKeyCipher(sessionKeyCipher);
                     session.setSessionKey(null);
                 } catch (Exception e) {
-                    replier.replyOtherError("Some thing wrong when making sessionKey.\n" + e.getMessage(),null,jedis );
+                    replier.replyOtherErrorHttp("Some thing wrong when making sessionKey.\n" + e.getMessage(),null,jedis );
                 }
             } else {
                 jedis.select(0);
@@ -83,7 +83,7 @@ public class SignInEcc extends HttpServlet {
                     if(cryptoDataByte==null || cryptoDataByte.getCode()!=0){
                         String msg=null;
                         if(cryptoDataByte!=null)msg=cryptoDataByte.getMessage();
-                        replier.replyOtherError("Failed to encrypt sessionKey."+msg,null,jedis);
+                        replier.replyOtherErrorHttp("Failed to encrypt sessionKey."+msg,null,jedis);
                         return;
                     }
                     String sessionKeyCipher = cryptoDataByte.toJson();//EccAes256K1P7.encryptWithPubKey(sessionKey.getBytes(), Hex.fromHex(pubKey));
@@ -92,18 +92,18 @@ public class SignInEcc extends HttpServlet {
                     try {
                         session = new Session().makeSession(Initiator.sid,jedis, fid,sessionDays);
                     } catch (Exception e) {
-                        replier.replyOtherError( "Some thing wrong when making sessionKey.\n" + e.getMessage(),null ,jedis);
+                        replier.replyOtherErrorHttp( "Some thing wrong when making sessionKey.\n" + e.getMessage(),null ,jedis);
                         return;
                     }
                 }
             }
-            replier.reply0Success(session,jedis, null);
+            replier.reply0SuccessHttp(session,jedis, null);
             replier.clean();
         }
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        FcReplier replier =new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
         replier.setCode(ReplyCodeMessage.Code1017MethodNotAvailable);
         replier.setMessage(ReplyCodeMessage.Msg1017MethodNotAvailable);
         response.getWriter().write(replier.toNiceJson());

@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 import server.order.User;
 
 import java.io.BufferedReader;
@@ -21,7 +21,7 @@ import java.util.Set;
 
 import static clients.esClient.EsTools.recreateIndex;
 import static constants.Strings.*;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class BalanceManager {
     private static final Logger log = LoggerFactory.getLogger(BalanceManager.class);

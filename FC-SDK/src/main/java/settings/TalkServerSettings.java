@@ -1,4 +1,4 @@
-package startTalkServer;
+package settings;
 
 import appTools.Menu;
 import appTools.Shower;
@@ -13,7 +13,6 @@ import feip.feipData.serviceParams.TalkParams;
 import javaTools.JsonTools;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
 
 import java.io.BufferedReader;
 import java.io.File;

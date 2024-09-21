@@ -2,17 +2,18 @@ package apip.apipData;
 
 
 import constants.Strings;
+import crypto.Encryptor;
 import crypto.Hash;
 import crypto.old.EccAes256K1P7;
 import crypto.CryptoDataStr;
 import crypto.EncryptType;
-import fcData.FcReplier;
+import fcData.AlgorithmId;
 import javaTools.BytesTools;
 import javaTools.Hex;
 import javaTools.JsonTools;
 import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
-import server.Settings;
+import settings.Settings;
 
 import java.security.SecureRandom;
 import java.util.HashMap;
@@ -29,7 +30,7 @@ public class Session {
     private Long expireTime;
     private String sessionKeyCipher;
 
-    public static Session getSessionFromJedis(String sid, FcReplier replier, String pubKey, Jedis jedis, String fid, long sessionDays) {
+    public static Session getSessionFromJedis(String sid, String pubKey, Jedis jedis, String fid, long sessionDays) {
         jedis.select(0);
         String sessionName = jedis.hget(Settings.addSidBriefToName(sid,Strings.FID_SESSION_NAME), fid);
         Session session =new Session();
@@ -51,7 +52,7 @@ public class Session {
             try {
                 session = new Session().makeSession(sid, jedis, fid, sessionDays);
             } catch (Exception e) {
-                replier.replyOtherError( "Some thing wrong when making sessionKey.\n" + e.getMessage(),null , jedis);
+                System.out.println(e.getMessage());
                 return null;
             }
         }
@@ -60,15 +61,15 @@ public class Session {
     }
 
     @Nullable
-    public static Session makeNewSession(String sid, FcReplier replier, String pubKey, Jedis jedis, String fid, long sessionDays) {
+    public static Session makeNewSession(String sid, String pubKey, Jedis jedis, String fid, long sessionDays) {
         Session session;
         try {
             session = new Session().makeSession(sid, jedis, fid, sessionDays);
-            String sessionKeyCipher = EccAes256K1P7.encryptWithPubKey(session.getSessionKey().getBytes(), Hex.fromHex(pubKey));
+            Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+            String sessionKeyCipher = encryptor.encryptByAsyOneWay(session.getSessionKey().getBytes(), Hex.fromHex(pubKey)).toJson();//EccAes256K1P7.encryptWithPubKey(session.getSessionKey().getBytes(), Hex.fromHex(pubKey));
             session.setSessionKeyCipher(sessionKeyCipher);
-//            session.setSessionKey(null);
         } catch (Exception e) {
-            replier.replyOtherError("Some thing wrong when making sessionKey.\n" + e.getMessage(),null, jedis);
+            System.out.println(e.getMessage());
             return null;
         }
         return session;

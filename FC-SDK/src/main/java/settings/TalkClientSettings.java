@@ -1,4 +1,4 @@
-package startClient;
+package settings;
 
 import appTools.Menu;
 import clients.apipClient.ApipClient;
@@ -7,14 +7,17 @@ import configure.Configure;
 import configure.ServiceType;
 import feip.feipData.Service;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
+import java.util.HashMap;
+import java.util.Map;
 
 import static configure.Configure.saveConfig;
 
 public class TalkClientSettings extends Settings {
-    String talkAccountId;
+    private String talkAccountId;
+    private Map<String, String> sessionCipherMap;
     private transient ApiAccount talkAccount;
 
     public TalkClientSettings(Configure configure) {
@@ -46,6 +49,8 @@ public class TalkClientSettings extends Settings {
             System.out.println("Failed to get necessary API services.");
             System.exit(0);
         }
+
+        if(sessionCipherMap ==null) sessionCipherMap = new HashMap<>();
 
         saveSettings(mainFid);
         saveConfig();
@@ -137,4 +142,11 @@ public class TalkClientSettings extends Settings {
         this.talkAccount = talkAccount;
     }
 
+    public Map<String, String> getSessionCipherMap() {
+        return sessionCipherMap;
+    }
+
+    public void setSessionCipherMap(Map<String, String> sessionCipherMap) {
+        this.sessionCipherMap = sessionCipherMap;
+    }
 }

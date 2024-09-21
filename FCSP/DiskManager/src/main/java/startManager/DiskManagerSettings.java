@@ -13,7 +13,7 @@ import feip.feipData.serviceParams.DiskParams;
 import javaTools.JsonTools;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.Settings;
+import settings.Settings;
 
 import java.io.BufferedReader;
 import java.io.File;

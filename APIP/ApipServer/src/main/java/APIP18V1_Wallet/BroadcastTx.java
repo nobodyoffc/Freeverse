@@ -1,7 +1,7 @@
 package APIP18V1_Wallet;
 
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import initial.Initiator;
 import javaTools.Hex;
 import javaTools.http.AuthType;
@@ -30,7 +30,7 @@ public class BroadcastTx extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         try(Jedis jedis = jedisPool.getResource()) {
             //Do FCDSL other request
             Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis);
@@ -42,8 +42,8 @@ public class BroadcastTx extends HttpServlet {
             if(result.endsWith("\""))result=result.substring(0,result.length()-1);
 
             if(!Hex.isHexString(result))
-                replier.replyOtherError(result,null,jedis);
-            else replier.reply0Success(result, jedis, null);
+                replier.replyOtherErrorHttp(result,null,jedis);
+            else replier.reply0SuccessHttp(result, jedis, null);
         }
     }
 }

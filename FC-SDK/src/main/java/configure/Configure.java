@@ -1,7 +1,6 @@
 package configure;
 
 import appTools.Menu;
-import clients.Client;
 import feip.feipData.ServiceMask;
 import feip.feipData.serviceParams.*;
 import appTools.Inputer;
@@ -31,7 +30,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.FreeApi;
-import server.Settings;
+import settings.Settings;
 import server.serviceManagers.ChatManager;
 import server.serviceManagers.DiskManager;
 import server.serviceManagers.SwapHallManager;
@@ -50,7 +49,7 @@ import static constants.Strings.*;
 import static constants.Strings.SETTINGS;
 import static fch.Inputer.inputPriKey;
 import static fch.Inputer.makePriKeyCipher;
-import static server.Settings.addSidBriefToName;
+import static settings.Settings.addSidBriefToName;
 
 public class Configure {
     protected String nonce;

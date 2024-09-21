@@ -11,7 +11,7 @@ import configure.Configure;
 import constants.ApiNames;
 import crypto.EncryptType;
 import crypto.KeyTools;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.Wallet;
 import fch.fchData.*;
 import feip.feipData.*;
@@ -20,7 +20,7 @@ import javaTools.BytesTools;
 import javaTools.Hex;
 import javaTools.JsonTools;
 import javaTools.http.AuthType;
-import javaTools.http.HttpRequestMethod;
+import javaTools.http.RequestMethod;
 import org.bouncycastle.util.encoders.Base64;
 
 import java.io.BufferedReader;
@@ -173,7 +173,7 @@ public class StartApipClient {
                 case 5 -> getFidCid();
                 case 6 -> getAvatar();
                 case 7 -> cashValid(DEFAULT_SIZE, "valid:desc->birthHeight:desc->cashId:asc");
-                case 8 -> broadcastTx(HttpRequestMethod.GET,AuthType.FREE);
+                case 8 -> broadcastTx(RequestMethod.GET,AuthType.FREE);
                 case 0 -> {
                     return;
                 }
@@ -182,13 +182,13 @@ public class StartApipClient {
     }
 
     private static void ping() {
-        boolean data = (boolean) apipClient.ping(Version1,HttpRequestMethod.GET,AuthType.FREE, ServiceType.APIP);
+        boolean data = (boolean) apipClient.ping(Version1, RequestMethod.GET,AuthType.FREE, ServiceType.APIP);
         System.out.println(data);
     }
 
     public static void getService() {
         System.out.println("Getting the default service information...");
-        FcReplier replier = ApipClient.getService(apipClient.getUrlHead(), ApiNames.Version1, ApipParams.class);
+        FcReplierHttp replier = ApipClient.getService(apipClient.getUrlHead(), ApiNames.Version1, ApipParams.class);
         if(replier!=null)JsonTools.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
@@ -245,21 +245,21 @@ public class StartApipClient {
         System.out.println(JsonTools.toNiceJson(fcdsl));
         Menu.anyKeyToContinue(br);
         System.out.println("Requesting ...");
-        FcReplier replier = apipClient.general(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        FcReplierHttp replier = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(replier);
         Menu.anyKeyToContinue(br);
     }
 
     public static void totalsGet() {
         System.out.println("Get request for totals...");
-        Map<String, String> result = apipClient.totals(HttpRequestMethod.GET, AuthType.FREE);
+        Map<String, String> result = apipClient.totals(RequestMethod.GET, AuthType.FREE);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
     public static void totalsPost( ) {
         System.out.println("Post request for totals...");
-        Map<String, String> result  = apipClient.totals(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Map<String, String> result  = apipClient.totals(RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -317,7 +317,7 @@ public class StartApipClient {
     public static void blockByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input blockIds:", 0);
         System.out.println("Requesting blockByIds...");
-        Map<String, BlockInfo> result = apipClient.blockByIds(HttpRequestMethod.POST,AuthType.FC_SIGN_BODY,ids);
+        Map<String, BlockInfo> result = apipClient.blockByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -326,7 +326,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting blockSearch...");
-        List<BlockInfo> result = apipClient.blockSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<BlockInfo> result = apipClient.blockSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -334,7 +334,7 @@ public class StartApipClient {
     public static void blockByHeights( ) {
         String[] heights = Inputer.inputStringArray(br, "Input block heights:", 0);
         System.out.println("Requesting blockByHeights...");
-        Map<String, BlockInfo> result = apipClient.blockByHeights(HttpRequestMethod.POST,AuthType.FC_SIGN_BODY,heights);
+        Map<String, BlockInfo> result = apipClient.blockByHeights(RequestMethod.POST,AuthType.FC_SIGN_BODY,heights);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -342,7 +342,7 @@ public class StartApipClient {
     public static void cashByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input cashIds:", 0);
         System.out.println("Requesting cashByIds...");
-        Map<String, Cash> result = apipClient.cashByIds(HttpRequestMethod.POST,AuthType.FC_SIGN_BODY,ids);
+        Map<String, Cash> result = apipClient.cashByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -351,7 +351,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting cashValid...");
-        List<Cash> result = apipClient.cashValid(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> result = apipClient.cashValid(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -360,7 +360,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting cashSearch...");
-        List<Cash> result = apipClient.cashSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -368,7 +368,7 @@ public class StartApipClient {
     public static void fidByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting fidByIds...");
-        Map<String, Address> result = apipClient.fidByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Address> result = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -377,7 +377,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting fidSearch...");
-        List<Address> result = apipClient.fidSearch(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Address> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -385,7 +385,7 @@ public class StartApipClient {
     public static void opReturnByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input opReturnIds:", 0);
         System.out.println("Requesting opReturnByIds...");
-        Map<String, OpReturn> result = apipClient.opReturnByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, OpReturn> result = apipClient.opReturnByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -394,7 +394,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting opReturnSearch...");
-        List<OpReturn> result = apipClient.opReturnSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<OpReturn> result = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -402,7 +402,7 @@ public class StartApipClient {
     public static void p2shByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input p2shIds:", 0);
         System.out.println("Requesting p2shByIds...");
-        Map<String, P2SH> result = apipClient.p2shByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, P2SH> result = apipClient.p2shByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -411,7 +411,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting p2shSearch...");
-        List<P2SH> result = apipClient.p2shSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<P2SH> result = apipClient.p2shSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -419,7 +419,7 @@ public class StartApipClient {
     public static void txByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input txIds:", 0);
         System.out.println("Requesting txByIds...");
-        Map<String, TxInfo> result = apipClient.txByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, TxInfo> result = apipClient.txByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -428,7 +428,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting txSearch...");
-        List<TxInfo> result = apipClient.txSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<TxInfo> result = apipClient.txSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -440,7 +440,7 @@ public class StartApipClient {
         String lastStr = Inputer.inputString(br,"Input the last values spited with ','");
         if(!lastStr.isEmpty()) last = lastStr.split(",");
         System.out.println("Requesting txByIds...");
-        List<TxInfo> result = apipClient.txByFid(fid, size, last, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<TxInfo> result = apipClient.txByFid(fid, size, last, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -448,7 +448,7 @@ public class StartApipClient {
     public static void chainInfo() {
         Long height = Inputer.inputLongWithNull(br,"Input the height you want. Enter to query by the best height:");
         System.out.println("Requesting chainInfo...");
-        FchChainInfo result = apipClient.chainInfo(height,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        FchChainInfo result = apipClient.chainInfo(height, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -457,7 +457,7 @@ public class StartApipClient {
         Long endTime = Inputer.inputLongWithNull(br,"Input the end timestamp:");
         Integer count = Inputer.inputInteger(br,"Input the data count:",0);
         System.out.println("Requesting chainInfo...");
-        Map<Long, Long> result = apipClient.blockTimeHistory(startTime,endTime,count,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Map<Long, Long> result = apipClient.blockTimeHistory(startTime,endTime,count, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -467,7 +467,7 @@ public class StartApipClient {
         Long endTime = Inputer.inputLongWithNull(br,"Input the end timestamp:");
         Integer count = Inputer.inputInteger(br,"Input the data count:",0);
         System.out.println("Requesting chainInfo...");
-        Map<Long, String> result = apipClient.difficultyHistory(startTime,endTime,count,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Map<Long, String> result = apipClient.difficultyHistory(startTime,endTime,count, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -476,7 +476,7 @@ public class StartApipClient {
         Long endTime = Inputer.inputLongWithNull(br,"Input the end timestamp:");
         Integer count = Inputer.inputInteger(br,"Input the data count:",0);
         System.out.println("Requesting chainInfo...");
-        Map<Long, String> result = apipClient.hashRateHistory(startTime,endTime,count,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Map<Long, String> result = apipClient.hashRateHistory(startTime,endTime,count, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -529,7 +529,7 @@ public class StartApipClient {
     public static void cidInfoByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting cidInfoByIds...");
-        Map<String, CidInfo> result = apipClient.cidInfoByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, CidInfo> result = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -538,7 +538,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<CidInfo> result = apipClient.cidInfoSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CidInfo> result = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -563,7 +563,7 @@ public class StartApipClient {
     public static void nobodyByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting nobodyByIds...");
-        Map<String, feip.feipData.Nobody> result = apipClient.nobodyByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, feip.feipData.Nobody> result = apipClient.nobodyByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -572,7 +572,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<feip.feipData.Nobody> result = apipClient.nobodySearch(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<feip.feipData.Nobody> result = apipClient.nobodySearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -581,7 +581,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<CidHist> result = apipClient.cidHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CidHist> result = apipClient.cidHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -590,7 +590,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<CidHist> result = apipClient.homepageHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CidHist> result = apipClient.homepageHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -599,7 +599,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<CidHist> result = apipClient.noticeFeeHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CidHist> result = apipClient.noticeFeeHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -608,7 +608,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<CidHist> result = apipClient.reputationHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CidHist> result = apipClient.reputationHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -617,7 +617,7 @@ public class StartApipClient {
         String[] fids = fch.Inputer.inputFidArray(br, "Input FIDs:", 0);
 
         System.out.println("Requesting avatars...");
-        Map<String, String> result = apipClient.avatars(fids, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Map<String, String> result = apipClient.avatars(fids, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if(result==null)return;
         for(String key : result.keySet()){
             try (FileOutputStream fos = new FileOutputStream(key+".png")) {
@@ -677,7 +677,7 @@ public class StartApipClient {
     public static void groupByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input GIDs:", 0);
         System.out.println("Requesting ...");
-        apipClient.groupByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        apipClient.groupByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -686,7 +686,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        apipClient.groupSearch(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -694,7 +694,7 @@ public class StartApipClient {
     public static void groupMembers( ) {
         String[] ids = Inputer.inputStringArray(br, "Input GIDs:", 0);
         System.out.println("Requesting ...");
-        apipClient.groupMembers(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        apipClient.groupMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -702,7 +702,7 @@ public class StartApipClient {
     public static void groupOpHistory(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
-        apipClient.groupOpHistory(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.groupOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -712,14 +712,14 @@ public class StartApipClient {
         String id = Inputer.inputString(br);
         if ("".equals(id)) return;
         System.out.println("Requesting ...");
-        apipClient.myGroups(id,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.myGroups(id, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
     public static void teamByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
-        apipClient.teamByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        apipClient.teamByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -728,7 +728,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        apipClient.teamSearch(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -736,14 +736,14 @@ public class StartApipClient {
     public static void teamMembers( ) {
         String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
         System.out.println("Requesting ...");
-        apipClient.teamMembers(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        apipClient.teamMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
     public static void teamExMembers( ) {
         String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
         System.out.println("Requesting ...");
-        apipClient.teamExMembers(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY,ids);
+        apipClient.teamExMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY,ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -752,7 +752,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        apipClient.teamRateHistory(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.teamRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -761,7 +761,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        apipClient.teamOpHistory(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.teamOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -769,7 +769,7 @@ public class StartApipClient {
     public static void teamOtherPersons( ) {
         String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
         System.out.println("Requesting ...");
-        apipClient.teamOtherPersons(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY,ids);
+        apipClient.teamOtherPersons(RequestMethod.POST, AuthType.FC_SIGN_BODY,ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -779,7 +779,7 @@ public class StartApipClient {
         String id = Inputer.inputString(br);
         if ("".equals(id)) return;
         System.out.println("Requesting ...");
-        apipClient.myTeams(id,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.myTeams(id, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -820,7 +820,7 @@ public class StartApipClient {
     public static void protocolByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input PIDs:", 0);
         System.out.println("Requesting protocolByIds...");
-        Map<String, Protocol> result = apipClient.protocolByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Protocol> result = apipClient.protocolByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -829,7 +829,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting protocolSearch...");
-        List<Protocol> result = apipClient.protocolSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Protocol> result = apipClient.protocolSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -837,7 +837,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting protocolOpHistory...");
-        List<ProtocolHistory> result = apipClient.protocolOpHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<ProtocolHistory> result = apipClient.protocolOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -845,7 +845,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<ProtocolHistory> result = apipClient.protocolRateHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<ProtocolHistory> result = apipClient.protocolRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -853,7 +853,7 @@ public class StartApipClient {
     public static void codeByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Code_IDs:", 0);
         System.out.println("Requesting codeByIds...");
-        Map<String, Code> result = apipClient.codeByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Code> result = apipClient.codeByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -862,7 +862,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting protocolSearch...");
-        List<Code> result = apipClient.codeSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Code> result = apipClient.codeSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -871,7 +871,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting odeRateHistory...");
-        List<CodeHistory> result = apipClient.codeRateHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CodeHistory> result = apipClient.codeRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -880,14 +880,14 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting codeOpHistory...");
-        List<CodeHistory> result = apipClient.codeOpHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<CodeHistory> result = apipClient.codeOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
     public static void serviceByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input SIDs:", 0);
         System.out.println("Requesting ...");
-        Map<String, Service> result = apipClient.serviceByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Service> result = apipClient.serviceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -895,7 +895,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Service> result = apipClient.serviceSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Service> result = apipClient.serviceSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -904,7 +904,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<ServiceHistory> result = apipClient.serviceRateHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<ServiceHistory> result = apipClient.serviceRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -913,7 +913,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<ServiceHistory> result = apipClient.serviceOpHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<ServiceHistory> result = apipClient.serviceOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -921,7 +921,7 @@ public class StartApipClient {
     public static void appByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input AIDs:", 0);
         System.out.println("Requesting ...");
-        Map<String, App> result = apipClient.appByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, App> result = apipClient.appByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -930,7 +930,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<App> result = apipClient.appSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<App> result = apipClient.appSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -939,7 +939,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<AppHistory> result = apipClient.appRateHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<AppHistory> result = apipClient.appRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -948,7 +948,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<AppHistory> result = apipClient.appOpHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<AppHistory> result = apipClient.appOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -987,7 +987,7 @@ public class StartApipClient {
     public static void boxByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input BIDs:", 0);
         System.out.println("Requesting ...");
-        Map<String, Box> result = apipClient.boxByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Box> result = apipClient.boxByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -996,7 +996,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Box> result = apipClient.boxSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Box> result = apipClient.boxSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1005,7 +1005,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<BoxHistory> result = apipClient.boxHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<BoxHistory> result = apipClient.boxHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1014,7 +1014,7 @@ public class StartApipClient {
     public static void contactByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Contact_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, Contact> result = apipClient.contactByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Contact> result = apipClient.contactByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1023,7 +1023,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Contact> result = apipClient.contactSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Contact> result = apipClient.contactSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1031,7 +1031,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Contact> result = apipClient.contactDeleted(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Contact> result = apipClient.contactDeleted(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1040,7 +1040,7 @@ public class StartApipClient {
     public static void secretByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Secret_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, Secret> result = apipClient.secretByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Secret> result = apipClient.secretByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1049,7 +1049,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Secret> result = apipClient.secretSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Secret> result = apipClient.secretSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1057,7 +1057,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Secret> result = apipClient.secretDeleted(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Secret> result = apipClient.secretDeleted(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1066,7 +1066,7 @@ public class StartApipClient {
     public static void mailByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Mail_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, Mail> result = apipClient.mailByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Mail> result = apipClient.mailByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1075,7 +1075,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Mail> result = apipClient.mailSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Mail> result = apipClient.mailSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1083,7 +1083,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Mail> result = apipClient.mailDeleted(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Mail> result = apipClient.mailDeleted(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1096,7 +1096,7 @@ public class StartApipClient {
         Long endTime = Inputer.inputDate(br,"yyyy-mm-dd","Input the end time. Enter to skip:");
 
         System.out.println("Requesting ...");
-        List<Mail> result = apipClient.mailThread(fidA,fidB,startTime,endTime, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Mail> result = apipClient.mailThread(fidA,fidB,startTime,endTime, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1105,7 +1105,7 @@ public class StartApipClient {
     public static void proofByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Proof_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, Proof> result = apipClient.proofByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Proof> result = apipClient.proofByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1114,7 +1114,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Proof> result = apipClient.proofSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Proof> result = apipClient.proofSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1122,7 +1122,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<ProofHistory> result = apipClient.proofHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<ProofHistory> result = apipClient.proofHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1130,7 +1130,7 @@ public class StartApipClient {
     public static void statementByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Statement_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, Statement> result = apipClient.statementByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Statement> result = apipClient.statementByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1139,7 +1139,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Statement> result = apipClient.statementSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Statement> result = apipClient.statementSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1147,14 +1147,14 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Nid> result = apipClient.nidSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Nid> result = apipClient.nidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
     public static void tokenByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Token_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, Token> result = apipClient.tokenByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Token> result = apipClient.tokenByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1163,7 +1163,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<Token> result = apipClient.tokenSearch(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Token> result = apipClient.tokenSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1171,7 +1171,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<TokenHistory> result = apipClient.tokenHistory(fcdsl, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<TokenHistory> result = apipClient.tokenHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1181,14 +1181,14 @@ public class StartApipClient {
         String id = Inputer.inputString(br);
         if ("".equals(id)) return;
         System.out.println("Requesting ...");
-        apipClient.myTokens(id,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.myTokens(id, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
     public static void tokenHoldersByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input Token_Ids:", 0);
         System.out.println("Requesting ...");
-        Map<String, TokenHolder> result = apipClient.tokenHoldersByIds(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, TokenHolder> result = apipClient.tokenHoldersByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1197,7 +1197,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        List<TokenHolder> result = apipClient.tokenHolderSearch(fcdsl,HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<TokenHolder> result = apipClient.tokenHolderSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1249,7 +1249,7 @@ public class StartApipClient {
             int choice = menu.choose(br);
 
             switch (choice) {
-                case 1 -> broadcastTx(HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+                case 1 -> broadcastTx(RequestMethod.POST, AuthType.FC_SIGN_BODY);
                 case 2 -> decodeTx();
                 case 3 -> cashValidForPay();
                 case 4 -> cashValidForCd();
@@ -1264,7 +1264,7 @@ public class StartApipClient {
         }
     }
 
-    public static void broadcastTx(HttpRequestMethod httpRequestMethod, AuthType authType) {
+    public static void broadcastTx(RequestMethod requestMethod, AuthType authType) {
         String txHex;
         while (true) {
             System.out.println("Input the hex of the TX:");
@@ -1273,7 +1273,7 @@ public class StartApipClient {
             System.out.println("It's not a hex. Try again.");
         }
         System.out.println("Requesting ...");
-        apipClient.broadcastTx(txHex, httpRequestMethod, authType);
+        apipClient.broadcastTx(txHex, requestMethod, authType);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1287,7 +1287,7 @@ public class StartApipClient {
             System.out.println("It's not a hex. Try again.");
         }
         System.out.println("Requesting ...");
-        apipClient.decodeTx(txHex,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.decodeTx(txHex, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1304,7 +1304,7 @@ public class StartApipClient {
         Double amount = Inputer.inputDouble(br, "Input the amount:");
         if (amount == null) return;
         System.out.println("Requesting ...");
-        apipClient.cashValid(fid, amount, null, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.cashValid(fid, amount, null, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1320,7 +1320,7 @@ public class StartApipClient {
         }
         long cd = Inputer.inputLong(br, "Input the required CD:");
         System.out.println("Requesting ...");
-        apipClient.cashValid(fid, null,cd, HttpRequestMethod.POST, AuthType.FC_SIGN_BODY);
+        apipClient.cashValid(fid, null,cd, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1328,14 +1328,14 @@ public class StartApipClient {
     public static void unconfirmed( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting ...");
-        apipClient.unconfirmed(HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY,ids);
+        apipClient.unconfirmed(RequestMethod.POST,  AuthType.FC_SIGN_BODY,ids);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
     public static void feeRate( ) {
         System.out.println("Requesting ...");
-        apipClient.feeRate(HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.feeRate(RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1373,7 +1373,7 @@ public class StartApipClient {
         String addrOrKey = Inputer.inputString(br);
         if ("".equals(addrOrKey)) return;
         System.out.println("Requesting ...");
-        apipClient.addresses(addrOrKey,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.addresses(addrOrKey, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1411,7 +1411,7 @@ public class StartApipClient {
         if ("".equals(key)) return;
         System.out.println("Requesting ...");
 
-        apipClient.encrypt(type,msg,key,fid,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.encrypt(type,msg,key,fid, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1421,7 +1421,7 @@ public class StartApipClient {
         String signature = Inputer.inputString(br);
         if ("".equals(signature)) return;
         System.out.println("Requesting ...");
-        apipClient.verify(signature,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.verify(signature, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1431,7 +1431,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.sha256(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.sha256(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1441,7 +1441,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.sha256x2(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.sha256x2(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1451,7 +1451,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.sha256Hex(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.sha256Hex(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1461,7 +1461,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.sha256x2Hex(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.sha256x2Hex(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1471,7 +1471,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.ripemd160Hex(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.ripemd160Hex(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1481,7 +1481,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.KeccakSha3Hex(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.KeccakSha3Hex(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1491,7 +1491,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.hexToBase58(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.hexToBase58(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1501,7 +1501,7 @@ public class StartApipClient {
         String text = Inputer.inputString(br);
         if ("".equals(text)) return;
         System.out.println("Requesting ...");
-        apipClient.checkSum4Hex(text,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.checkSum4Hex(text, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1516,7 +1516,7 @@ public class StartApipClient {
         String msg = Inputer.inputString(br);
         if ("".equals(msg)) msg = null;
         System.out.println("Requesting ...");
-        apipClient.offLineTx(fid,sendToList,msg,null,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.offLineTx(fid,sendToList,msg,null, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -1530,7 +1530,7 @@ public class StartApipClient {
         String msg = Inputer.inputString(br);
         if ("".equals(msg)) msg = null;
         System.out.println("Requesting ...");
-        apipClient.offLineTx(fid,sendToList,msg,cd,HttpRequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.offLineTx(fid,sendToList,msg,cd, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }

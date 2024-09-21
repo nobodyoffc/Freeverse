@@ -1,11 +1,13 @@
 package apip.apipData;
 
 import com.google.gson.Gson;
+import fcData.Op;
 import javaTools.BytesTools;
+import org.elasticsearch.client.RequestOptions;
 
 public class RequestBody {
     private String sid;
-
+    private Op op;
     private String url;
     private Long time;
     private Long nonce;
@@ -38,6 +40,11 @@ public class RequestBody {
     public String toJson() {
         Gson gson = new Gson();
         return gson.toJson(this);
+    }
+
+    public static RequestBody fromJson(String json) {
+        Gson gson = new Gson();
+        return gson.fromJson(json,RequestBody.class);
     }
 
     public void makeRequestBody(String url, String via) {
@@ -117,5 +124,13 @@ public class RequestBody {
 
     public void setSid(String sid) {
         this.sid = sid;
+    }
+
+    public Op getOp() {
+        return op;
+    }
+
+    public void setOp(Op op) {
+        this.op = op;
     }
 }

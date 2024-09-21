@@ -7,7 +7,7 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.ApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.ParseTools;
 import fch.fchData.Address;
 import initial.Initiator;
@@ -42,7 +42,7 @@ public class Richlist extends HttpServlet {
     }
 
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         String numberStr = request.getParameter(FieldNames.NUMBER);
         int number = 0;
         try{

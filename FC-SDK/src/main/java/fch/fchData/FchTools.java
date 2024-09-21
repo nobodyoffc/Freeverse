@@ -29,7 +29,7 @@ public class FchTools {
         Date date = heightToDate(height);
         System.out.println(DateTools.getNiceDate(date));
 
-        System.out.println(DateTools.longToTime(genesisTime+height*60*1000));
+        System.out.println(DateTools.longToTime(genesisTime+height*60*1000,"yyyy/MM/dd HH:mm:ss"));
         System.out.println(dateToHeight(date));
         System.out.println(timeToHeight(date.getTime()));
     }

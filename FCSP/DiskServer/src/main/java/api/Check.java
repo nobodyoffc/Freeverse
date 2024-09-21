@@ -4,7 +4,7 @@ import constants.ApiNames;
 import initial.Initiator;
 import javaTools.FileTools;
 import javaTools.http.AuthType;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
@@ -23,7 +23,7 @@ import static startManager.StartDiskManager.STORAGE_DIR;
 public class Check extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         AuthType authType = AuthType.FC_SIGN_URL;
 
@@ -44,7 +44,7 @@ public class Check extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
 
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
@@ -58,14 +58,14 @@ public class Check extends HttpServlet {
         }
     }
 
-    private void doRequest(HttpServletRequest request, FcReplier replier, Jedis jedis) {
+    private void doRequest(HttpServletRequest request, FcReplierHttp replier, Jedis jedis) {
         String did = replier.getStringFromUrl(request, DID,jedis);
         if (did == null) return;
-        if (FcReplier.isBadHex32(replier, jedis, did)) return;
+        if (FcReplierHttp.isBadHex32(replier, jedis, did)) return;
         String subDir = getSubPathForDisk(did);
         String path = STORAGE_DIR + subDir;
         Boolean isFileExists = Boolean.TRUE.equals(FileTools.checkFileOfFreeDisk(path, did));
-        replier.reply0Success(isFileExists, jedis, null);
+        replier.reply0SuccessHttp(isFileExists, jedis, null);
     }
 
 }

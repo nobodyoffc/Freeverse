@@ -7,7 +7,6 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import constants.ApiNames;
-import constants.Constants;
 import constants.ReplyCodeMessage;
 import constants.Strings;
 import crypto.Hash;
@@ -16,12 +15,12 @@ import javaTools.DateTools;
 import javaTools.FileTools;
 import javaTools.Hex;
 import javaTools.http.AuthType;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import org.jetbrains.annotations.NotNull;
 import redis.clients.jedis.Jedis;
 import server.RequestCheckResult;
 import server.RequestChecker;
-import server.Settings;
+import settings.Settings;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -32,7 +31,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -48,7 +46,7 @@ public class Put extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
         replier.setCode(ReplyCodeMessage.Code1017MethodNotAvailable);
         replier.setMessage(ReplyCodeMessage.Msg1017MethodNotAvailable);
         response.getWriter().write(replier.toNiceJson());
@@ -56,7 +54,7 @@ public class Put extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplier replier = new FcReplier(Initiator.sid,response);
+        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         long dataLifeDays;
         AuthType authType = AuthType.FC_SIGN_URL;
@@ -74,7 +72,7 @@ public class Put extends HttpServlet {
 
             Map<String,String> dataMap = new HashMap<>();
             dataMap.put("did", DidAndLength.did());
-            replier.reply0Success(dataMap, jedis, null);
+            replier.reply0SuccessHttp(dataMap, jedis, null);
 
             //Update item info into ES
             updateDataInfoToEs(dataLifeDays, DidAndLength.bytesLength(), DidAndLength.did());

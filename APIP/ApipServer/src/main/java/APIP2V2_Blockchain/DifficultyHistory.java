@@ -2,7 +2,7 @@ package APIP2V2_Blockchain;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApiNames;
-import fcData.FcReplier;
+import fcData.FcReplierHttp;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
 import javaTools.ObjectTools;
@@ -38,7 +38,7 @@ public class DifficultyHistory extends HttpServlet {
         doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
     }
     protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplier replier = new FcReplier(sid,response);
+        FcReplierHttp replier = new FcReplierHttp(sid,response);
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
             RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
@@ -61,7 +61,7 @@ public class DifficultyHistory extends HttpServlet {
             }
 
             if (count > MAX_REQUEST_COUNT){
-                replier.replyOtherError( "The count can not be bigger than " + FchChainInfo.MAX_REQUEST_COUNT,null,jedis);
+                replier.replyOtherErrorHttp( "The count can not be bigger than " + FchChainInfo.MAX_REQUEST_COUNT,null,jedis);
                 return;
             }
 
@@ -69,14 +69,14 @@ public class DifficultyHistory extends HttpServlet {
             Map<Long, String> hist = FchChainInfo.difficultyHistory(startTime, endTime, count, Initiator.esClient);
 
             if (hist == null){
-                replier.replyOtherError( "Failed to get the difficulty history.",null,jedis);
+                replier.replyOtherErrorHttp( "Failed to get the difficulty history.",null,jedis);
                 return;
             }
 
             replier.setGot((long) hist.size());
             long bestHeight = Long.parseLong(jedis.get(BEST_HEIGHT));
             replier.setTotal( bestHeight- 1);
-            replier.reply0Success(hist,jedis, null);
+            replier.reply0SuccessHttp(hist,jedis, null);
         }
     }
 //    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
