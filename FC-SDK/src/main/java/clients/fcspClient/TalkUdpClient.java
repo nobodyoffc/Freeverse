@@ -12,6 +12,7 @@ import crypto.CryptoDataByte;
 import crypto.Decryptor;
 import crypto.Encryptor;
 import fcData.*;
+import fcData.TalkUnit;
 import javaTools.Hex;
 import javaTools.UdpTools;
 import javaTools.http.AuthType;
@@ -35,8 +36,8 @@ public class TalkUdpClient extends Client {
     public Socket socket;
     public String ip;
     public Integer port;
-    public Map<Integer, TransferUnit> pendingRequestMap;
-    public Map<Integer, TransferUnit> pendingReplierMap;
+    public Map<Integer, TalkUnit> pendingRequestMap;
+    public Map<Integer, TalkUnit> pendingReplierMap;
     public static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
     public transient Map<String,byte[]> sessionKeyMap;
     public TalkUdpClient() {
@@ -52,19 +53,19 @@ public class TalkUdpClient extends Client {
         return null;
     }
 
-    public TransferUnit signInRequest() {
+    public TalkUnit signInRequest() {
         System.out.println("Sign in...");
 
-        TransferUnit transferUnitRequest = new TransferUnit();
-        transferUnitRequest.setFrom(apiAccount.getUserId());
-        transferUnitRequest.setToType(TransferUnit.ToType.SERVER);
-        transferUnitRequest.setDataType(TransferUnit.DataType.ENCRYPTED_REQUEST);
+        TalkUnit talkUnitRequest = new TalkUnit();
+        talkUnitRequest.setFrom(apiAccount.getUserId());
+        talkUnitRequest.setToType(TalkUnit.ToType.SERVER);
+        talkUnitRequest.setDataType(TalkUnit.DataType.ENCRYPTED_REQUEST);
 
         CryptoDataByte cryptoDataByte;
         RequestBody requestBody = new RequestBody();
 
-        requestBody.setNonce(Long.valueOf(transferUnitRequest.getNonce()));
-        requestBody.setTime(transferUnitRequest.getTime());
+        requestBody.setNonce(talkUnitRequest.getNonce());
+        requestBody.setTime(talkUnitRequest.getTime());
         requestBody.setSid(this.apiAccount.getProviderId());
         requestBody.setOp(Op.SIGN_IN);
 
@@ -77,7 +78,7 @@ public class TalkUdpClient extends Client {
         }
 
         Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        String serverPubKey = apiProvider.getAccountPubKey();
+        String serverPubKey = apiProvider.getDealerPubKey();
 
         if(serverPubKey==null)
             apipClient.getPubKey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
@@ -87,37 +88,37 @@ public class TalkUdpClient extends Client {
 
         String cipher = cryptoDataByte.toJson();
 
-        transferUnitRequest.setData(cipher);
+        talkUnitRequest.setData(cipher);
 
         try {
-            UdpTools.send(ip,port,transferUnitRequest.toBytes());
+            UdpTools.send(ip,port, talkUnitRequest.toBundle());
         } catch (IOException e) {
             System.out.println("Failed to sign in.");
             e.printStackTrace();
         }
 
         if(pendingRequestMap==null)pendingRequestMap=new HashMap<>();
-        pendingRequestMap.put(transferUnitRequest.getNonce(), transferUnitRequest);
+        pendingRequestMap.put(talkUnitRequest.getNonce(), talkUnitRequest);
 
-        return transferUnitRequest;
+        return talkUnitRequest;
     }
 
     public FcReplier signInReply(){
         FcReplier replier = null;
-        TransferUnit transferUnitReply;
+        TalkUnit talkUnitReply;
         while(!socket.isClosed()) {
             byte[] bytes = UdpTools.receive(port);
             if(bytes==null)continue;
-            transferUnitReply = TransferUnit.fromBytes(bytes);
+            talkUnitReply = TalkUnit.fromBundle(bytes);
 
-            Signature signature = Signature.fromJson((String) transferUnitReply.getData());
-            signature.setSymKey(sessionKey);
+            Signature signature = Signature.fromJson((String) talkUnitReply.getData());
+            signature.setKey(sessionKey);
             if(!signature.verify()){
                 log.debug("Failed to verify signature when checking sign in reply.");
                 continue;
             }
 
-            Integer nonce = transferUnitReply.getNonce();
+            Integer nonce = talkUnitReply.getNonce();
             if(nonce==null)continue;
 
             if (pendingRequestMap.remove(nonce) == null) continue;
@@ -236,8 +237,8 @@ public class TalkUdpClient extends Client {
         }
 
         private boolean signInRequest() {
-            TransferUnit transferUnitRequest = talkUdpClient.signInRequest();
-            if(transferUnitRequest ==null){
+            TalkUnit talkUnitRequest = talkUdpClient.signInRequest();
+            if(talkUnitRequest ==null){
                 System.out.println("Failed to sign in.");
                 return false;
             }
@@ -247,7 +248,7 @@ public class TalkUdpClient extends Client {
                 } catch (InterruptedException e) {
                     System.out.println(e.getMessage());
                 }
-                if(talkUdpClient.pendingRequestMap.get(transferUnitRequest.getNonce())==null && sessionKey!=null)
+                if(talkUdpClient.pendingRequestMap.get(talkUnitRequest.getNonce())==null && sessionKey!=null)
                     return true;
             }
         }
@@ -291,11 +292,11 @@ public class TalkUdpClient extends Client {
         }
 
         public void run() {
-            TransferUnit transferUnit;
+            TalkUnit talkUnit;
             byte[] receivedBytes;
             receivedBytes = UdpTools.receive(port);
-            transferUnit = TransferUnit.fromBytes(receivedBytes);
-            System.out.println(transferUnit.toNiceJson());
+            talkUnit = TalkUnit.fromBundle(receivedBytes);
+            System.out.println(talkUnit.toNiceJson());
             FcReplier replier = talkTcpClient.signInReply();
             System.out.println(replier.toJson());
 
@@ -307,8 +308,8 @@ public class TalkUdpClient extends Client {
                 if (serverSessionKey == null) return;
 
                 receivedBytes = UdpTools.receive(port);
-                transferUnit = TransferUnit.fromBytes(receivedBytes);
-                System.out.println(transferUnit.toNiceJson());
+                talkUnit = TalkUnit.fromBundle(receivedBytes);
+                System.out.println(talkUnit.toNiceJson());
             }
 
         }

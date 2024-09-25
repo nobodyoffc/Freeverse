@@ -126,6 +126,10 @@ public class Strings {
     public static final String DATA_LIFE_DAYS = "dataLifeDays";
     public static final String DATA = "data";
     public static final String ES_ACCOUNT_ID = "esProviderId";
+    public static final String FID_BALANCE = "fidBalance";
+    public static final String REPLY_ERROR = "replyError";
+    public static final String REPLY = "reply";
+    public static final String NAME_SESSION = "nameSession";
     public static String spendCashMapKey = "spentCashMap";
     public static String newCashMapKey = "newCashMap";
 }

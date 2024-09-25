@@ -35,9 +35,14 @@ public class Decryptor {
 
     public Decryptor() {}
 
-//    public Decryptor(AlgorithmId algorithmId) {
-//        this.algorithmId = algorithmId;
-//    }
+    public CryptoDataByte decrypt(CryptoDataByte cryptoDataByte){
+        switch (cryptoDataByte.getAlg()){
+            case FC_AesCbc256_No1_NrC7 -> decryptBySymKey(cryptoDataByte);
+            case FC_EccK1AesCbc256_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
+            default -> cryptoDataByte.setCodeMessage(1);
+        }
+        return cryptoDataByte;
+    }
     public String decryptJsonBySymKey(@NotNull String cryptoDataJson, @NotNull String symKeyHex) {
         byte[] key;
         try {
@@ -120,7 +125,7 @@ public class Decryptor {
     @NotNull
     private static CryptoDataByte decryptBySymKey(CryptoDataByte cryptoDataByte) {
         switch (cryptoDataByte.getAlg()) {
-            case FC_Aes256Cbc_No1_NrC7 -> AesCbc256.decrypt(cryptoDataByte);
+            case FC_AesCbc256_No1_NrC7 -> AesCbc256.decrypt(cryptoDataByte);
             default -> new EccAes256K1P7().decrypt(cryptoDataByte);
         }
         return cryptoDataByte;
@@ -177,7 +182,7 @@ public class Decryptor {
             cryptoDataByte.setSymKey(key);
 
             switch (cryptoDataByte.getAlg()){
-                case FC_Aes256Cbc_No1_NrC7 -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
+                case FC_AesCbc256_No1_NrC7 -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
                 default -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
             }
         } catch (FileNotFoundException e) {
@@ -212,9 +217,9 @@ public class Decryptor {
         if(iv!=null)cryptoDataByte.setIv(iv);
         AlgorithmId algorithmId;
         if(cryptoDataByte.getAlg()!= null)algorithmId = cryptoDataByte.getAlg();
-        else algorithmId = AlgorithmId.FC_Aes256Cbc_No1_NrC7;
+        else algorithmId = AlgorithmId.FC_AesCbc256_No1_NrC7;
         switch (algorithmId){
-            case FC_Aes256Cbc_No1_NrC7 -> {
+            case FC_AesCbc256_No1_NrC7 -> {
                 AesCbc256.decryptStream(inputStream,outputStream,cryptoDataByte);
             }
             default -> AesCbc256.decryptStream(inputStream,outputStream,cryptoDataByte);
@@ -374,6 +379,7 @@ public class Decryptor {
             decryptStreamByAsy(bis,bos,cryptoDataByte);
             cryptoDataByte.setData(bos.toByteArray());
             cryptoDataByte.makeDid();
+            cryptoDataByte.setCodeMessage(0);
         } catch (IOException e) {
             cryptoDataByte.setCodeMessage(6);
         }
@@ -544,14 +550,14 @@ public class Decryptor {
                 symKey = Ecc256K1.asyKeyToSymKey(priKeyX,pubKeyY, iv);
                 cryptoDataByte.setSymKey(symKey);
                 cryptoDataByte.setType(EncryptType.SymKey);
-                cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+                cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
                 AesCbc256.decryptStream(is,os,cryptoDataByte);
             }
             default -> {
                 symKey = EccAes256K1P7.asyKeyToSymKey(priKeyX,pubKeyY,iv);
                 cryptoDataByte.setSymKey(symKey);
                 cryptoDataByte.setType(EncryptType.SymKey);
-                cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+                cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
                 AesCbc256.decryptStream(is,os,cryptoDataByte);
             }
         }

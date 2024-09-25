@@ -35,7 +35,7 @@ public class DiskManagerSettings extends Settings {
         System.out.println("Initiating service settings...");
         setInitForServer(sid, config, br);
 
-        mainFid = config.getServiceAccount(sid,symKey);
+        mainFid = config.getServiceDealer(sid,symKey);
 
         if(shareApiAccount==null)inputShareApiAccount(br);
 

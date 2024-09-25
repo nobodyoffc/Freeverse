@@ -11,7 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HexFormat;
 
-import static fcData.AlgorithmId.FC_Aes256Cbc_No1_NrC7;
+import static fcData.AlgorithmId.FC_AesCbc256_No1_NrC7;
 import static fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 
 
@@ -29,7 +29,7 @@ public class Tester {
         System.out.println("DID:"+Hex.toHex(Decryptor.sha256(Decryptor.sha256(data))));
 
         String cipherJson;
-        crypto.Encryptor encryptor = new crypto.Encryptor(FC_Aes256Cbc_No1_NrC7);
+        crypto.Encryptor encryptor = new crypto.Encryptor(FC_AesCbc256_No1_NrC7);
         Decryptor decryptor = new Decryptor();
         //Basic encrypt
         System.out.println("\n# Basic encrypt");
@@ -63,7 +63,7 @@ public class Tester {
             byte[] decryptedData = bos.toByteArray();
             cryptoDataByte.setData(decryptedData);
             cryptoDataByte.makeDid();
-            if(!cryptoDataByte.checkSum(FC_Aes256Cbc_No1_NrC7))
+            if(!cryptoDataByte.checkSum(FC_AesCbc256_No1_NrC7))
                 System.out.println("Bad Sum.");
             else System.out.println("Good sum.");
 
@@ -228,11 +228,11 @@ public class Tester {
         System.out.println();
         System.out.println("# Bundle");
         //One way
-        byte[] bundleOneWay = cryptoDataByte9.toBundle(FC_EccK1AesCbc256_No1_NrC7);
+        byte[] bundleOneWay = cryptoDataByte9.toBundle();
         System.out.println("Encrypted:"+ Hex.toHex(bundleOneWay));
 
         //Two way
-        byte[] bundleTwoWay = cryptoDataByte.toBundle(FC_EccK1AesCbc256_No1_NrC7);
+        byte[] bundleTwoWay = cryptoDataByte.toBundle();
         System.out.println("Encrypted:"+ Hex.toHex(bundleTwoWay));
 
 

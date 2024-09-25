@@ -39,7 +39,7 @@ public class ApipManagerSettings extends Settings {
 
         setInitForServer(sid, config, br);
 
-        mainFid = config.getServiceAccount(sid,symKey);
+        mainFid = config.getServiceDealer(sid,symKey);
 
         if(shareApiAccount==null)inputShareApiAccount(br);
 

@@ -10,7 +10,6 @@ import clients.apipClient.ApipClient;
 import clients.esClient.EsClientMaker;
 import clients.fcspClient.DiskClient;
 import clients.fcspClient.TalkTcpClient;
-import clients.fcspClient.TalkUdpClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import crypto.*;
@@ -49,7 +48,7 @@ import static constants.ApiNames.Version1;
 import static constants.Constants.APIP_Account_JSON;
 import static constants.Constants.COIN_TO_SATOSHI;
 import static crypto.KeyTools.priKeyToFid;
-import static fcData.AlgorithmId.FC_Aes256Cbc_No1_NrC7;
+import static fcData.AlgorithmId.FC_AesCbc256_No1_NrC7;
 import static fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 
 public class ApiAccount {
@@ -309,18 +308,18 @@ public class ApiAccount {
         return diskClient;
     }
 
-    private TalkUdpClient connectTalk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, String> fidCipherMap) {
+    private TalkTcpClient connectTalk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, String> fidCipherMap) {
         if(apipClient==null){
             System.out.println("APIP client is required for the TALK service.");
             System.exit(-1);
         }
 
-        TalkUdpClient talkUdpClient;
+        TalkTcpClient talkTcpClient;
         if(client==null){
-            talkUdpClient = new TalkUdpClient(apiProvider,this,symKey,apipClient);
-            client = talkUdpClient;
+            talkTcpClient = new TalkTcpClient(apiProvider,this,symKey,apipClient);
+            client = talkTcpClient;
         }
-        else talkUdpClient = (TalkUdpClient) client;
+        else talkTcpClient = (TalkTcpClient) client;
 
         if(!apiProvider.getType().equals(ServiceType.TALK)){
             System.out.println("It's not Talk provider.");
@@ -340,7 +339,7 @@ public class ApiAccount {
         String accountPubKey = apipClient.getPubKey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
         if (accountPubKey != null) {
-            apiProvider.setAccountPubKey(accountPubKey);
+            apiProvider.setDealerPubKey(accountPubKey);
         }
 
         if (userPriKeyCipher == null) {
@@ -349,7 +348,7 @@ public class ApiAccount {
             else return null;
         }
 
-        return talkUdpClient;
+        return talkTcpClient;
     }
 
     public void closeEs(){
@@ -395,7 +394,7 @@ public class ApiAccount {
             userId = priKeyToFid(priKey32);
             System.out.println("The FID is: \n" + userId);
 
-            Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
+            Encryptor encryptor = new Encryptor(FC_AesCbc256_No1_NrC7);
             CryptoDataByte cryptoDataByte = encryptor.encryptBySymKey(priKey32,symKey);//EccAes256K1P7.encryptWithSymKey(priKey32, symKey);
             if(cryptoDataByte.getCode() !=0){
                 System.out.println(cryptoDataByte.getMessage());
@@ -678,7 +677,7 @@ public class ApiAccount {
     private void inputPasswordCipher(byte[] symKey, BufferedReader br) throws IOException {
         char[] password = Inputer.inputPassword(br, "Input the password. Enter to ignore:");
         if(password!=null)
-            this.passwordCipher = new Encryptor(FC_Aes256Cbc_No1_NrC7).encryptToJsonBySymKey(BytesTools.utf8CharArrayToByteArray(password), symKey);
+            this.passwordCipher = new Encryptor(FC_AesCbc256_No1_NrC7).encryptToJsonBySymKey(BytesTools.utf8CharArrayToByteArray(password), symKey);
         if(this.passwordCipher==null) {
            String input = inputKeyCipher(br, "user's passwordCipher", symKey);
            if (input == null) return;

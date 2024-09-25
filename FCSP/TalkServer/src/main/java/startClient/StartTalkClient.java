@@ -5,7 +5,6 @@ import apip.apipData.Session;
 import appTools.Menu;
 import clients.apipClient.ApipClient;
 import clients.fcspClient.TalkTcpClient;
-import clients.fcspClient.TalkUdpClient;
 import configure.Configure;
 import javaTools.JsonTools;
 import settings.TalkClientSettings;
@@ -18,7 +17,7 @@ import static configure.Configure.saveConfig;
 public class StartTalkClient{
     private static BufferedReader br;
     public static ApipClient apipClient;
-    public static TalkUdpClient talkUdpClient;
+    public static TalkTcpClient talkTcpClient;
     private static TalkClientSettings settings;
     private static byte[] symKey;
 
@@ -40,15 +39,15 @@ public class StartTalkClient{
         settings.initiateClient(fid,symKey, configure, br);
 
         apipClient = (ApipClient) settings.getApipAccount().getClient();
-        talkUdpClient = (TalkUdpClient) settings.getTalkAccount().getClient();
+        talkTcpClient = (TalkTcpClient) settings.getTalkAccount().getClient();
 
 
-        talkUdpClient.start(settings,userPriKeyCipher);
+        talkTcpClient.start(settings,userPriKeyCipher);
     }
 
 
     private static void signInEcc() {
-        Session session = talkUdpClient.signInEcc(settings.getTalkAccount(), RequestBody.SignInMode.NORMAL, symKey);
+        Session session = talkTcpClient.signInEcc(settings.getTalkAccount(), RequestBody.SignInMode.NORMAL, symKey);
         JsonTools.printJson(session);
         saveConfig();
         Menu.anyKeyToContinue(br);

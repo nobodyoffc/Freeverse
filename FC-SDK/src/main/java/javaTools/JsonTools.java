@@ -88,6 +88,18 @@ public class JsonTools {
         rawStr = rawStr.substring(begin, end + 1);
         return rawStr.replaceAll("[\r\n\t]", "");
     }
+
+    public static String jsonToNiceJson(String jsonString) {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        JsonElement jsonElement = JsonParser.parseString(jsonString);
+        return gson.toJson(jsonElement);
+    }
+
+    public static String niceJsonToJson(String prettyJsonString) {
+        Gson gson = new Gson(); // Gson without pretty printing
+        JsonElement jsonElement = JsonParser.parseString(prettyJsonString);
+        return gson.toJson(jsonElement);
+    }
     public static String strToNiceJson(String rawStr){
         rawStr = strToJson(rawStr);
         if(rawStr==null)return null;

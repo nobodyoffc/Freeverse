@@ -1,6 +1,7 @@
 package feip.feipData;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import configure.ServiceType;
 import feip.feipData.serviceParams.Params;
 import javaTools.StringTools;
@@ -46,6 +47,10 @@ public class Service {
 
 	public String toJson() {
 		Gson gson = new Gson();
+		return gson.toJson(this);
+	}
+	public String toNiceJson() {
+		Gson gson = new GsonBuilder().setPrettyPrinting().create();
 		return gson.toJson(this);
 	}
 	public static Service fromMap(Map<String, String> map, Class<? extends Params> paramsClass) {

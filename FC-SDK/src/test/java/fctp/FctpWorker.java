@@ -15,9 +15,10 @@ public class FctpWorker {
     private static Integer resendTime;
     private final boolean isReceiptRequired;
     private final boolean isOrdered;
-    private final Map<BytesTools.ByteArrayAsKey,TransferUnit> sentMap = new HashMap<>();
-    private final Queue<TransferUnit> receivedQueue = new PriorityQueue<>();
-    private final Queue<TransferUnit> sendTaskQueue = new PriorityQueue<>();
+    private final Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap = new HashMap<>();
+    private final Queue<MsgUnit> receivedQueue = new PriorityQueue<>();
+    private final Queue<MsgUnit> sendTaskQueue = new PriorityQueue<>();
+    public static Boolean isRunning;
 
 
     public FctpWorker(String hisHost, Integer myPort, Integer hisPort, boolean isReceiptRequired, boolean isOrdered) {
@@ -31,15 +32,19 @@ public class FctpWorker {
     public void start(){
         SendThread sendThread = new SendThread(hisHost,hisPort,sendTaskQueue,sentMap,receivedQueue);
         sendThread.start();
+
+        ReceiveThread receiveThread = new ReceiveThread(myPort,receivedQueue,sentMap);
+        receiveThread.start();
+        isRunning = true;
     }
 
-    public synchronized TransferUnit receiveOne(){
+    public synchronized MsgUnit receiveOne(){
         return this.receivedQueue.poll();
     }
 
-    public synchronized void sendOne(TransferUnit transferUnit){
+    public synchronized void sendOne(MsgUnit msgUnit){
         synchronized (sendTaskQueue) {
-            this.sendTaskQueue.add(transferUnit);
+            this.sendTaskQueue.add(msgUnit);
             sendTaskQueue.notify();
         }
     }
@@ -49,11 +54,10 @@ public class FctpWorker {
         private static final int RESEND_COUNT = 3;
         private final String hisHost;
         private final int hisPort;
-        private final Queue<TransferUnit> sendTaskQueue;
-        private final Map<BytesTools.ByteArrayAsKey,TransferUnit> sentMap;
-        private Queue<TransferUnit> receivedQueue;
-        private boolean isRunning;
-        public SendThread(String host, int port, Queue<TransferUnit> sendTaskQueue, Map<BytesTools.ByteArrayAsKey, TransferUnit> sentMap, Queue<TransferUnit> receivedQueue) {
+        private final Queue<MsgUnit> sendTaskQueue;
+        private final Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap;
+        private Queue<MsgUnit> receivedQueue;
+        public SendThread(String host, int port, Queue<MsgUnit> sendTaskQueue, Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap, Queue<MsgUnit> receivedQueue) {
             this.hisHost = host;
             this.hisPort = port;
             this.sendTaskQueue = sendTaskQueue;
@@ -82,13 +86,13 @@ public class FctpWorker {
                 //Check resend
                 long now = System.currentTimeMillis();
                 for(BytesTools.ByteArrayAsKey id:this.sentMap.keySet()){
-                    TransferUnit transferUnit = sentMap.get(id);
+                    MsgUnit msgUnit = sentMap.get(id);
                     synchronized (sentMap) {
-                        if(transferUnit.getSendCount() > RESEND_COUNT){
+                        if(msgUnit.getSendCount() > RESEND_COUNT){
                             sentMap.remove(id);
-                        }else if(transferUnit.getTime() - now > resendTime){
+                        }else if(msgUnit.getTime() - now > resendTime){
                             synchronized (sendTaskQueue) {
-                                this.sendTaskQueue.add(transferUnit);
+                                this.sendTaskQueue.add(msgUnit);
                             }
                         this.sentMap.remove(id);
                         }
@@ -97,11 +101,11 @@ public class FctpWorker {
 
                 //Send
                 while (!this.sendTaskQueue.isEmpty()) {
-                    TransferUnit transferUnit;
+                    MsgUnit msgUnit;
                     synchronized (sendTaskQueue) {
-                        transferUnit = sendTaskQueue.poll();
+                        msgUnit = sendTaskQueue.poll();
                     }
-                    byte[] bytes = transferUnit.toBytes();
+                    byte[] bytes = msgUnit.toBytes();
 
                     //TODO check size
 
@@ -109,9 +113,9 @@ public class FctpWorker {
 
                     try (DatagramSocket datagramSocket = new DatagramSocket(this.hisPort)) {
                         datagramSocket.send(datagramPacket);
-                        transferUnit.sendCountAddOne();
+                        msgUnit.sendCountAddOne();
                         synchronized (sentMap) {
-                            sentMap.put(new BytesTools.ByteArrayAsKey(transferUnit.makeIdBytes()), transferUnit);
+                            sentMap.put(new BytesTools.ByteArrayAsKey(msgUnit.makeIdBytes()), msgUnit);
                         }
                     } catch (IOException e) {
                         throw new RuntimeException(e);
@@ -124,18 +128,16 @@ public class FctpWorker {
         }
     }
 
-    public static class receiveThread implements Runnable {
+    public static class ReceiveThread extends Thread {
         private byte[] data;
-        private boolean isRunning;
-        private final String myPort;
-        private final Map<BytesTools.ByteArrayAsKey,TransferUnit> sentMap;
-        private final Queue<TransferUnit> receivedQueue;
+        private final int myPort;
+        private final Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap;
+        private final Queue<MsgUnit> receivedQueue;
 
-        public receiveThread(String myPort, Queue<TransferUnit> receivedQueue, Map<BytesTools.ByteArrayAsKey, TransferUnit> sentMap) {
+        public ReceiveThread(int myPort, Queue<MsgUnit> receivedQueue, Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap) {
             this.myPort = myPort;
             this.sentMap = sentMap;
             this.receivedQueue = receivedQueue;
-            this.isRunning=true;
         }
 
 
@@ -143,7 +145,7 @@ public class FctpWorker {
         public void run() {
             // Process the message
             System.out.println("Processing message: " + Arrays.toString(data));
-            try(DatagramSocket datagramSocket = new DatagramSocket()){
+            try(DatagramSocket datagramSocket = new DatagramSocket(myPort)){
                 byte[] buf = new byte[4096];
                 while(isRunning) {
                     DatagramPacket datagramPacket = new DatagramPacket(buf, 4096);
@@ -155,12 +157,12 @@ public class FctpWorker {
                     this.data = new byte[length];
                     System.arraycopy(datagramPacket.getData(), 0, this.data, 0, length);
 
-                    TransferUnit transferUnit = TransferUnit.fromBytes(this.data);
+                    MsgUnit msgUnit = MsgUnit.fromBytes(this.data);
 
-                    if(TransferUnit.DataType.RECEIPT.equals(transferUnit.getDataType())){
-                        BytesTools.ByteArrayAsKey key = new BytesTools.ByteArrayAsKey((byte[]) transferUnit.getData());
-                        TransferUnit srcTransferUnit = this.sentMap.get(key);
-                        if(srcTransferUnit!=null) {
+                    if(MsgUnit.DataType.RECEIPT.equals(msgUnit.getDataType())){
+                        BytesTools.ByteArrayAsKey key = new BytesTools.ByteArrayAsKey((byte[]) msgUnit.getData());
+                        MsgUnit srcMsgUnit = this.sentMap.get(key);
+                        if(srcMsgUnit !=null) {
                             synchronized (sentMap) {
                                 sentMap.remove(key);
                             }
@@ -169,7 +171,7 @@ public class FctpWorker {
                     }
 
                     synchronized (receivedQueue) {
-                        receivedQueue.add(transferUnit);
+                        receivedQueue.add(msgUnit);
                     }
                 }
             } catch (IOException e) {

@@ -209,7 +209,7 @@ public class RequestChecker {
             code = ReplyCodeMessage.Code1018NonceMissed;
             return new SignInfo(code, null, 0,0,null,null, null, null, null);
         }
-        long nonce = Long.parseLong(nonceStr);
+        int nonce = Integer.parseInt(nonceStr);
         String timeStr = request.getParameter(TIME);
         if(timeStr==null) {
             code = ReplyCodeMessage.Code1019TimeMissed;
@@ -276,7 +276,7 @@ public class RequestChecker {
         return false;
     }
 
-    private record SignInfo(int code, String url, long nonce, long time, String via, String sign, String sessionName,
+    private record SignInfo(int code, String url, int nonce, long time, String via, String sign, String sessionName,
                             byte[] requestBodyBytes, RequestBody requestBody){
     }
 

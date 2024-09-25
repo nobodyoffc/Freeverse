@@ -10,7 +10,7 @@ public class RequestBody {
     private Op op;
     private String url;
     private Long time;
-    private Long nonce;
+    private Integer nonce;
     private String via;
     private Object data;
     private Fcdsl fcdsl;
@@ -20,18 +20,20 @@ public class RequestBody {
     }
 
     public RequestBody() {
+        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.time = System.currentTimeMillis();
     }
 
     public RequestBody(String url, String via) {
         setTime(System.currentTimeMillis());
-        setNonce((BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4))));
+        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
     }
 
     public RequestBody(String url, String via, SignInMode mode) {
         setTime(System.currentTimeMillis());
-        setNonce((BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4))));
+        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
         setMode(mode);
@@ -49,14 +51,14 @@ public class RequestBody {
 
     public void makeRequestBody(String url, String via) {
         setTime(System.currentTimeMillis());
-        setNonce((BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4))));
+        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
     }
 
     public void makeRequestBody(String url, String via, SignInMode mode) {
         setTime(System.currentTimeMillis());
-        setNonce((BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4))));
+        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
         if (mode != null) setMode(mode);
@@ -78,11 +80,11 @@ public class RequestBody {
         this.time = time;
     }
 
-    public Long getNonce() {
+    public Integer getNonce() {
         return nonce;
     }
 
-    public void setNonce(Long nonce) {
+    public void setNonce(Integer nonce) {
         this.nonce = nonce;
     }
 

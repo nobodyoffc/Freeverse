@@ -13,23 +13,43 @@ import javaTools.BytesTools;
 import javaTools.DateTools;
 import javaTools.Hex;
 import javaTools.JsonTools;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
-public class TransferUnit {
+public class MsgUnit implements Comparable<MsgUnit> {
 
-    private transient String id; //for database, time+nonce
+    private transient String idStr; //for database, time+nonce
+    private transient BytesTools.ByteArrayAsKey idBytes;
 
     private final transient byte[] MAGIC = "FCTU".getBytes();  //for file
     private transient Integer size;  //for file
     private transient int sendCount; //for transfer
 
     //UDP 64KB-8
-    private TransferUnitState stata; //For database
+    private MsgUnitState stata; //For database
+
+
+    /*
+        flag
+            0 asm ? sym encrypted?
+            1 slice?
+            2-7 reserved
+        keyName //for decrypt
+
+        tId  //for slice
+        tSize
+        offset
+
+        msgUnit
+            receipt
+
+     */
 
     //Basic fields
     private String from;//FID
@@ -56,35 +76,35 @@ public class TransferUnit {
 
     @Test
     public void test(){
-        TransferUnit transferUnit = new TransferUnit();
-        transferUnit.from = "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK";
+        MsgUnit msgUnit = new MsgUnit();
+        msgUnit.from = "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK";
 //        transferUnit.toType = ToType.FID;
-        transferUnit.toType = ToType.GROUP_LIST;
+        msgUnit.toType = ToType.GROUP_LIST;
 //        transferUnit.to = "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW";
-        transferUnit.toList = new ArrayList<>();
-        transferUnit.toList.add("db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019");
-        transferUnit.toList.add("0be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a");
-        transferUnit.dock = "TALK";
+        msgUnit.toList = new ArrayList<>();
+        msgUnit.toList.add("db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019");
+        msgUnit.toList.add("0be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a");
+        msgUnit.dock = "TALK";
 //        transferUnit.dataType = DataType.TEXT;
-        transferUnit.dataType = DataType.SIGNED_TEXT;
+        msgUnit.dataType = DataType.SIGNED_TEXT;
 
         Signature signature = new Signature();
         signature.setFid("FEk41Kqjar45fLDriztUDTUkdki7mmcjWK");
         signature.sign("hello world!",KeyTools.getPriKey32("L2bHRej6Fxxipvb4TiR5bu1rkT3tRp8yWEsUy4R1Zb8VMm2x7sd8"), AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
 
-        transferUnit.data = signature;
+        msgUnit.data = signature;
 
 
-        transferUnit.toBytes();
+        msgUnit.toBytes();
 
-        System.out.println(Hex.toHex(transferUnit.bytes));
+        System.out.println(Hex.toHex(msgUnit.bytes));
 
-        TransferUnit transferUnit1 = TransferUnit.fromBytes(transferUnit.bytes);
+        MsgUnit msgUnit1 = MsgUnit.fromBytes(msgUnit.bytes);
 
-        System.out.println(transferUnit1.toNiceJson());
+        System.out.println(msgUnit1.toNiceJson());
     }
 
-    public TransferUnit() {
+    public MsgUnit() {
         this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
     }
@@ -97,8 +117,8 @@ public class TransferUnit {
 //        this.to = to;
 //    }
 
-    public static TransferUnit fromJson(String talkItemJson){
-        return new Gson().fromJson(talkItemJson, TransferUnit.class);
+    public static MsgUnit fromJson(String talkItemJson){
+        return new Gson().fromJson(talkItemJson, MsgUnit.class);
     }
 
     public String toJson() {
@@ -113,8 +133,12 @@ public class TransferUnit {
     }
 
     public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"toType\":{\"type\":\"keyword\"},\"to\":{\"type\":\"wildcard\"},\"door\":{\"type\":\"wildcard\"},\"time\":{\"type\":\"long\"},\"nonce\":{\"type\":\"integer\"},\"from\":{\"type\":\"wildcard\"},\"size\":{\"type\":\"long\"},\"dataType\":{\"type\":\"keyword\"},\"data\":{\"type\":\"text\"}}}}";
+    @Override
+    public int compareTo(@NotNull MsgUnit other) {
+        return Arrays.compare(this.idBytes.getBytes(),other.getIdBytes().getBytes());
+    }
 
-    public enum TransferUnitState{
+    public enum MsgUnitState {
         NEW((byte) 0),
         READY((byte) 1),
         SENT((byte) 2),
@@ -123,7 +147,7 @@ public class TransferUnit {
 
         //new, ready, sent, relaying，relayed, got,suspended
         public final byte number;
-        TransferUnitState(byte number) {this.number=number;}
+        MsgUnitState(byte number) {this.number=number;}
     }
     public enum ToType {
         SELF((byte)0),
@@ -248,37 +272,37 @@ public class TransferUnit {
         return this.bytes;
     }
 
-    public static TransferUnit fromBytes(byte[] bytes) {
-        TransferUnit transferUnit = new TransferUnit();
-        transferUnit.time = null;
-        transferUnit.nonce = null;
+    public static MsgUnit fromBytes(byte[] bytes) {
+        MsgUnit msgUnit = new MsgUnit();
+        msgUnit.time = null;
+        msgUnit.nonce = null;
 
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
         // Extract from
         byte[] fromBytes = new byte[20];
         buffer.get(fromBytes);
-        transferUnit.from = KeyTools.hash160ToFchAddr(fromBytes);
+        msgUnit.from = KeyTools.hash160ToFchAddr(fromBytes);
 
         // Extract ToType
         byte toTypeByte = buffer.get();
-        transferUnit.toType = ToType.getToType(toTypeByte);
+        msgUnit.toType = ToType.getToType(toTypeByte);
 
         // Extract 'to' based on ToType
         int toLength = 0;
         byte[] toBytes;
-        switch (transferUnit.toType) {
+        switch (msgUnit.toType) {
             case FID -> {
                 toLength = 20;
                 toBytes = new byte[toLength];
                 buffer.get(toBytes);
-                transferUnit.to = KeyTools.hash160ToFchAddr(toBytes);
+                msgUnit.to = KeyTools.hash160ToFchAddr(toBytes);
             }
             case GROUP, TEAM, ROOM -> {
                 toLength = 32; // Hex
                 toBytes = new byte[toLength];
                 buffer.get(toBytes);
-                transferUnit.to = Hex.toHex(toBytes);
+                msgUnit.to = Hex.toHex(toBytes);
             }
             case FID20_LIST -> {
                 int sizeLength = 4;
@@ -287,10 +311,10 @@ public class TransferUnit {
                 buffer.get(sizeBytes);
                 int size = BytesTools.bytesToIntBE(sizeBytes);
                 toBytes = new byte[itemLength];
-                transferUnit.toList = new ArrayList<>();
+                msgUnit.toList = new ArrayList<>();
                 for(;size>0;size--) {
                     buffer.get(toBytes);
-                    transferUnit.toList.add(KeyTools.hash160ToFchAddr(toBytes));
+                    msgUnit.toList.add(KeyTools.hash160ToFchAddr(toBytes));
                 }
             }
 
@@ -301,10 +325,10 @@ public class TransferUnit {
                 buffer.get(sizeBytes);
                 int size = BytesTools.bytesToIntBE(sizeBytes);
                 toBytes = new byte[itemLength];
-                transferUnit.toList = new ArrayList<>();
+                msgUnit.toList = new ArrayList<>();
                 for(;size>0;size--) {
                     buffer.get(toBytes);
-                    transferUnit.toList.add(Hex.toHex(toBytes));
+                    msgUnit.toList.add(Hex.toHex(toBytes));
                 }
             }
         }
@@ -314,46 +338,46 @@ public class TransferUnit {
         if(dockSize!=0){
             byte[] dockBytes = new byte[dockSize];
             buffer.get(dockBytes);
-            transferUnit.dock = new String(dockBytes);
+            msgUnit.dock = new String(dockBytes);
         }
 
         byte flag = buffer.get();
         // Extract time
         if(Boolean.TRUE.equals(BytesTools.getBit(flag,0)))
-            transferUnit.time = buffer.getLong();
+            msgUnit.time = buffer.getLong();
 
         // Extract nonce
         if(Boolean.TRUE.equals(BytesTools.getBit(flag,1)))
-            transferUnit.nonce = buffer.getInt();
+            msgUnit.nonce = buffer.getInt();
 
         // Extract did
         if(Boolean.TRUE.equals(BytesTools.getBit(flag,2))) {
             byte[] didBytes = new byte[32];
             buffer.get(didBytes);
-            transferUnit.did = new String(didBytes);
+            msgUnit.did = new String(didBytes);
         }
 
         // Extract DataType
         byte dataTypeByte = buffer.get();
-        transferUnit.dataType = DataType.getDataType(dataTypeByte);
+        msgUnit.dataType = DataType.getDataType(dataTypeByte);
 
         // Extract data
         int remaining = buffer.remaining();
         byte[] dataBytes = new byte[remaining];
         buffer.get(dataBytes);
         Gson gson = new Gson();
-        switch (transferUnit.dataType){
-            case BYTES,RECEIPT -> transferUnit.data = dataBytes;
-            case TEXT -> transferUnit.data = new String(dataBytes, StandardCharsets.UTF_8);
-            case HAT -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), Hat.class);
-            case REPLY -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), FcReplier.class);
-            case REQUEST -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), RequestBody.class);
+        switch (msgUnit.dataType){
+            case BYTES,RECEIPT -> msgUnit.data = dataBytes;
+            case TEXT -> msgUnit.data = new String(dataBytes, StandardCharsets.UTF_8);
+            case HAT -> msgUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), Hat.class);
+            case REPLY -> msgUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), FcReplier.class);
+            case REQUEST -> msgUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), RequestBody.class);
             case SIGNED_BYTES,
                     SIGNED_TEXT,
                     SIGNED_HAT,
                     SIGNED_REPLY,
                     SIGNED_REQUEST
-                    -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), Signature.class);
+                    -> msgUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), Signature.class);
             case ENCRYPTED_BYTES,
                     ENCRYPTED_TEXT,
                     ENCRYPTED_HAT,
@@ -365,12 +389,12 @@ public class TransferUnit {
                     ENCRYPTED_SIGNED_HAT,
                     ENCRYPTED_SIGNED_REPLY,
                     ENCRYPTED_SIGNED_REQUEST
-                    -> transferUnit.data = CryptoDataByte.fromJson(new String(dataBytes,StandardCharsets.UTF_8));
+                    -> msgUnit.data = CryptoDataByte.fromJson(new String(dataBytes,StandardCharsets.UTF_8));
         }
-        return transferUnit;
+        return msgUnit;
     }
 
-    public String makeId() {
+    public String makeIdStr() {
         int nonce;
         if(this.nonce!=null)nonce =this.nonce;
         else nonce= Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
@@ -380,20 +404,20 @@ public class TransferUnit {
         else time = System.currentTimeMillis();
 
         String date = DateTools.longToTime(time,"yyyyMMddHHmmssSSS");
-        return date+"_"+nonce;
+        this.idStr = date+"_"+nonce;
+        return this.idStr;
     }
     public byte[] makeIdBytes() {
-        byte[] bytes = BytesTools.bytesMerger(BytesTools.longToBytes(this.time), BytesTools.intToByteArray(this.nonce));
-        this.id = Hex.toHex(bytes);
+        this.idBytes = new BytesTools.ByteArrayAsKey(BytesTools.bytesMerger(BytesTools.longToBytes(this.time), BytesTools.intToByteArray(this.nonce)));
         return bytes;
     }
 
-    public String getId() {
-        return id;
+    public String getIdStr() {
+        return idStr;
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public void setIdStr(String idStr) {
+        this.idStr = idStr;
     }
 
     public Long getTime() {
@@ -472,11 +496,11 @@ public class TransferUnit {
         return MAGIC;
     }
 
-    public TransferUnitState getStata() {
+    public MsgUnitState getStata() {
         return stata;
     }
 
-    public void setStata(TransferUnitState stata) {
+    public void setStata(MsgUnitState stata) {
         this.stata = stata;
     }
 
@@ -518,5 +542,13 @@ public class TransferUnit {
 
     public void setFlag(Byte flag) {
         this.flag = flag;
+    }
+
+    public BytesTools.ByteArrayAsKey getIdBytes() {
+        return idBytes;
+    }
+
+    public void setIdBytes(BytesTools.ByteArrayAsKey idBytes) {
+        this.idBytes = idBytes;
     }
 }

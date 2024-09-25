@@ -1,508 +1,203 @@
 package fcData;
 
-import apip.apipData.RequestBody;
 import com.fasterxml.jackson.core.util.ByteArrayBuilder;
-import com.google.gson.Gson;
 import crypto.CryptoDataByte;
+import crypto.Decryptor;
+import crypto.Encryptor;
 import crypto.KeyTools;
 import javaTools.BytesTools;
-import javaTools.DateTools;
 import javaTools.Hex;
-import javaTools.JsonTools;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.List;
 
-public class TransferUnit{
+public class TransferUnit {
+    private boolean isEncrypted;
+    private boolean isSymEncrypted;
+    private byte flag = 0;//
+    private byte[] keyName;
+    private byte[] data;
 
-    private transient String id; //for database, time+nonce
+//    public TransferUnit(byte[] data) {
+//        this.isEncrypted = false;
+//        this.isSymEncrypted = false;
+//        this.flag = 0;
+//        BytesTools.setBit(this.flag, 0, false);
+//        BytesTools.setBit(this.flag, 1, false);
+//        this.data = data;
+//    }
 
-    private final transient byte[] MAGIC = "FCTU".getBytes();  //for file
-    private transient Integer size;  //for file
-    private transient int sendCount; //for transfer
+//    public TransferUnit(byte[] keyName, byte[] data) {
+//        this.isEncrypted = true;
+//        this.isSymEncrypted = true;
+//        this.flag = 0;
+//        BytesTools.setBit(this.flag, 0, true);
+//        BytesTools.setBit(this.flag, 1, true);
+//        this.keyName = keyName;
+//
+//        this.data = data;
+//    }
+//
+//    public TransferUnit(boolean isEncrypted,boolean isSymEncrypted, byte[] keyName, byte[] data) {
+//        this.isEncrypted = isSymEncrypted;
+//        this.isSymEncrypted = isSymEncrypted;
+//        this.flag = 0;
+//        if(isEncrypted) {
+//            BytesTools.setBit(this.flag, 0, true);
+//            if (isSymEncrypted) {
+//                BytesTools.setBit(this.flag, 1, true);
+//                this.keyName = keyName;
+//            }
+//        }
+//        this.data = data;
+//    }
 
-    //UDP 64KB-8
-    private TransferUnitState stata; //For database
-
-    //Basic fields
-    private String from;//FID
-    private ToType toType;
-    private String to;
-    private List<String> toList;
-    private String dock; //1byte to mark the length
-
-    //Nullable fields
-    private transient Byte flag; //for toBytes
-    private Long time;
-    private Integer nonce;
-    private String did;
-    private DataType dataType;
-
-    //Body
-    private Object data;
-
-    private transient byte[] bytes;
+    public TransferUnit() {}
 
     @Test
     public void test(){
-        TransferUnit transferUnit = new TransferUnit();
-        transferUnit.from = "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK";
-//        transferUnit.toType = ToType.FID;
-        transferUnit.toType = ToType.GROUP_LIST;
-//        transferUnit.to = "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW";
-        transferUnit.toList = new ArrayList<>();
-        transferUnit.toList.add("db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019");
-        transferUnit.toList.add("0be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a");
-        transferUnit.dock = "TALK";
-//        transferUnit.dataType = DataType.TEXT;
-        transferUnit.dataType = DataType.SIGNED_TEXT;
+        TalkUnit talkUnit = new TalkUnit();
+        talkUnit.setFrom("FEk41Kqjar45fLDriztUDTUkdki7mmcjWK");
+        talkUnit.setToType(TalkUnit.ToType.GROUP_LIST);
+        talkUnit.setToList(new ArrayList<>());
+        talkUnit.getToList().add("db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019");
+        talkUnit.getToList().add("0be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a");
+        talkUnit.setDataType(TalkUnit.DataType.SIGNED_TEXT);
 
         Signature signature = new Signature();
         signature.setFid("FEk41Kqjar45fLDriztUDTUkdki7mmcjWK");
-        signature.sign("hello world!",KeyTools.getPriKey32("L2bHRej6Fxxipvb4TiR5bu1rkT3tRp8yWEsUy4R1Zb8VMm2x7sd8"), AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
+        String msg = "hello world!";
+        signature.sign(msg, KeyTools.getPriKey32("L2bHRej6Fxxipvb4TiR5bu1rkT3tRp8yWEsUy4R1Zb8VMm2x7sd8"), AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
 
-        transferUnit.data = signature;
+        talkUnit.setData(signature);
+
+        talkUnit.toBundle();
+        ///Test crypt
+        String symKey = "db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019";
+        byte[] bundle = encrypt(talkUnit, Hex.fromHex(symKey));
+//        byte[] bundle = encryptor.encryptToBundleBySymKey(talkUnit.getBytes(),Hex.fromHex(symKey));
+
+//        Decryptor decryptor = new Decryptor();
+//        CryptoDataByte cryptoDataByte2 = decryptor.decryptBundleBySymKey(bundle,Hex.fromHex(symKey));
+//        System.out.println(cryptoDataByte2.toJson());
 
 
-        transferUnit.toBytes();
+//        TransferUnit transferUnit = new TransferUnit();
+//        transferUnit.setEncrypted(true);
+//        transferUnit.setSymEncrypted(true);
+//        transferUnit.setData(bundle);
 
-        System.out.println(Hex.toHex(transferUnit.bytes));
+        //receive
+//        TransferUnit transferUnit1 = TransferUnit.fromBytes(transferUnit.toBytes());
+//
+//        System.out.println(transferUnit1.getFlag());
+//        System.out.println(Hex.toHex(transferUnit1.getKeyName()));
+//        System.out.println(Hex.toHex(transferUnit1.getData()));
 
-        TransferUnit transferUnit1 = TransferUnit.fromBytes(transferUnit.bytes);
+        //
 
-        System.out.println(transferUnit1.toNiceJson());
+//        byte[] bundle1 = transferUnit1.getData();
+
+        decrypt(bundle, Hex.fromHex(symKey));
     }
 
-    public TransferUnit() {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
-        this.time = System.currentTimeMillis();
-    }
-//    public TransferUnit(String from, ToType toType, String to, DataType dataType) {
-//        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
-//        this.time = System.currentTimeMillis();
-//        this.from =from;
-//        this.dataType = dataType;
-//        this.toType = toType;
-//        this.to = to;
-//    }
-
-    public static TransferUnit fromJson(String talkItemJson){
-        return new Gson().fromJson(talkItemJson, TransferUnit.class);
+    private static byte[] encrypt(TalkUnit talkUnit, byte[] symKey) {
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
+        CryptoDataByte cryptoDataByte = encryptor.encryptBySymKey(talkUnit.getBytes(),symKey);
+        byte[] bundle = cryptoDataByte.toBundle();
+        return bundle;
     }
 
-    public String toJson() {
-        return JsonTools.toJson(this);
-    }
-    public String toNiceJson() {
-        return JsonTools.toNiceJson(this);
-    }
-    @Override
-    public String toString(){
-        return toJson();
+    public static TalkUnit decrypt(byte[] bundle, byte[] symKey) {
+        CryptoDataByte cryptoDataByte1 = CryptoDataByte.fromBundle(bundle);
+        Decryptor decryptor = new Decryptor();
+        cryptoDataByte1.setSymKey(symKey);
+        decryptor.decrypt(cryptoDataByte1);
+        return TalkUnit.fromBundle(cryptoDataByte1.getData());
     }
 
-    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"toType\":{\"type\":\"keyword\"},\"to\":{\"type\":\"wildcard\"},\"door\":{\"type\":\"wildcard\"},\"time\":{\"type\":\"long\"},\"nonce\":{\"type\":\"integer\"},\"from\":{\"type\":\"wildcard\"},\"size\":{\"type\":\"long\"},\"dataType\":{\"type\":\"keyword\"},\"data\":{\"type\":\"text\"}}}}";
-
-    public enum TransferUnitState{
-        NEW((byte) 0),
-        READY((byte) 1),
-        SENT((byte) 2),
-        RELAYING((byte) 3),
-        GOT((byte) 4);
-
-        //new, ready, sent, relaying，relayed, got,suspended
-        public final byte number;
-        TransferUnitState(byte number) {this.number=number;}
-    }
-    public enum ToType {
-        SELF((byte)0),
-
-        FID((byte)1),
-        GROUP((byte)2),
-        TEAM((byte)3),
-        ROOM((byte)4),
-
-        FID20_LIST((byte)5),
-        GROUP_LIST((byte)6),
-        TEAM_LIST((byte)7),
-        ROOM_LIST((byte)8),
-
-        SERVER((byte)9),
-        ANYONE((byte)10),
-        EVERYONE((byte)11);
-
-        public final byte number;
-        ToType(byte number) {this.number=number;}
-        public static ToType getToType(byte number) {
-            for (ToType toType : ToType.values()) {
-                if (toType.number == number) {
-                    return toType;
-                }
-            }
-            return null;
-        }
-    }
-
-
-    public enum DataType {
-        BYTES((byte)0),
-        TEXT((byte)1),
-        HAT((byte)2),
-        REQUEST((byte) 3),
-        REPLY((byte)4),
-
-        SIGNED_BYTES((byte)10),
-        SIGNED_TEXT((byte)11),
-        SIGNED_HAT((byte)12),
-        SIGNED_REQUEST((byte)13),
-        SIGNED_REPLY((byte)14),
-
-        ENCRYPTED_BYTES((byte)20),
-        ENCRYPTED_TEXT((byte)21),
-        ENCRYPTED_HAT((byte)22),
-        ENCRYPTED_REQUEST((byte)23),
-        ENCRYPTED_REPLY((byte)24),
-
-        ENCRYPTED_SIGNED_BYTES((byte)30),
-        ENCRYPTED_SIGNED_TEXT((byte)31),
-        ENCRYPTED_SIGNED_HAT((byte)32),
-        ENCRYPTED_SIGNED_REQUEST((byte)33),
-        ENCRYPTED_SIGNED_REPLY((byte)34);
-
-        public final byte number;
-        DataType(byte number) {this.number=number;}
-
-        public static DataType getDataType(byte number) {
-            for (DataType dataType : DataType.values()) {
-                if (dataType.number == number) {
-                    return dataType;
-                }
-            }
-            return null;
-        }
-    }
 
     public byte[] toBytes(){
-
-        try(ByteArrayBuilder byteArrayBuilder = new ByteArrayBuilder()){
-            byteArrayBuilder.write(KeyTools.addrToHash160(this.from));
-
-            byteArrayBuilder.write(this.toType.number);
-            switch (this.toType){
-                case SELF,SERVER,ANYONE,EVERYONE -> {}
-                case FID -> byteArrayBuilder.write(KeyTools.addrToHash160(to));
-                case GROUP,TEAM,ROOM -> Hex.fromHex(this.to);
-                case FID20_LIST -> {
-                    byteArrayBuilder.write(BytesTools.intToByteArray(this.toList.size()));
-                    for(String fid:toList){
-                        byteArrayBuilder.write(KeyTools.addrToHash160(fid));
-                    }
-                }
-                case GROUP_LIST,TEAM_LIST,ROOM_LIST -> {
-                    byteArrayBuilder.write(BytesTools.intToByteArray(this.toList.size()));
-                    for(String id:toList){
-                        byteArrayBuilder.write(Hex.fromHex(id));
-                    }
-                }
-            }
-
-            if(this.dock!=null){
-                byte[] dockBytes = this.dock.getBytes();
-                int size = dockBytes.length<256?dockBytes.length:255;
-                byteArrayBuilder.write((byte)size);
-                byteArrayBuilder.write(dockBytes);
-            }
-
-            if(this.flag==null)this.flag = 0;
-            if(this.time!=null) this.flag  = BytesTools.setBit(flag,0,true);
-            if(this.nonce!=null) this.flag =BytesTools.setBit(flag,1,true);
-            if(this.did!=null) this.flag = BytesTools.setBit(flag,2,true);
-
-            byteArrayBuilder.write(this.flag);
-
-            if(this.time!=null) byteArrayBuilder.write(BytesTools.longToBytes(this.time));
-            if(this.nonce!=null) byteArrayBuilder.write(BytesTools.intToByteArray(this.nonce));
-            if(this.did!=null) byteArrayBuilder.write(Hex.fromHex(this.did));
-
-            byteArrayBuilder.write(this.dataType.number);
-            switch (this.dataType){
-                case BYTES -> byteArrayBuilder.write((byte[]) data);
-                case TEXT -> byteArrayBuilder.write(((String)data).getBytes());
-                default -> byteArrayBuilder.write(JsonTools.toJson(data).getBytes());
-            }
-
-            this.bytes = byteArrayBuilder.toByteArray();
+        if(isSymEncrypted && keyName==null){
+            System.out.println("The keyName is required.");
+            return null;
         }
-        return this.bytes;
+        try(ByteArrayBuilder byteArrayBuilder = new ByteArrayBuilder()) {
+            byteArrayBuilder.write(flag);
+            if (isEncrypted && isSymEncrypted)
+                byteArrayBuilder.write(keyName);
+            byteArrayBuilder.write(data);
+            return byteArrayBuilder.toByteArray();
+        }
     }
 
     public static TransferUnit fromBytes(byte[] bytes) {
         TransferUnit transferUnit = new TransferUnit();
-        transferUnit.time = null;
-        transferUnit.nonce = null;
+        int offset = 0;
 
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        // Extract the flag (1 byte)
+        transferUnit.flag = bytes[offset];
+        offset += 1;
 
-        // Extract from
-        byte[] fromBytes = new byte[20];
-        buffer.get(fromBytes);
-        transferUnit.from = KeyTools.hash160ToFchAddr(fromBytes);
-
-        // Extract ToType
-        byte toTypeByte = buffer.get();
-        transferUnit.toType = ToType.getToType(toTypeByte);
-
-        // Extract 'to' based on ToType
-        int toLength = 0;
-        byte[] toBytes;
-        switch (transferUnit.toType) {
-            case FID -> {
-                toLength = 20;
-                toBytes = new byte[toLength];
-                buffer.get(toBytes);
-                transferUnit.to = KeyTools.hash160ToFchAddr(toBytes);
-            }
-            case GROUP, TEAM, ROOM -> {
-                toLength = 32; // Hex
-                toBytes = new byte[toLength];
-                buffer.get(toBytes);
-                transferUnit.to = Hex.toHex(toBytes);
-            }
-            case FID20_LIST -> {
-                int sizeLength = 4;
-                int itemLength = 20;
-                byte[] sizeBytes = new byte[sizeLength];
-                buffer.get(sizeBytes);
-                int size = BytesTools.bytesToIntBE(sizeBytes);
-                toBytes = new byte[itemLength];
-                transferUnit.toList = new ArrayList<>();
-                for(;size>0;size--) {
-                    buffer.get(toBytes);
-                    transferUnit.toList.add(KeyTools.hash160ToFchAddr(toBytes));
-                }
-            }
-
-            case GROUP_LIST,TEAM_LIST,ROOM_LIST -> {
-                int sizeLength = 4;
-                int itemLength = 32;
-                byte[] sizeBytes = new byte[sizeLength];
-                buffer.get(sizeBytes);
-                int size = BytesTools.bytesToIntBE(sizeBytes);
-                toBytes = new byte[itemLength];
-                transferUnit.toList = new ArrayList<>();
-                for(;size>0;size--) {
-                    buffer.get(toBytes);
-                    transferUnit.toList.add(Hex.toHex(toBytes));
-                }
-            }
+        // Check if the first bit of the flag is 0 (meaning keyName is included)
+        transferUnit.setEncrypted(Boolean.TRUE.equals(BytesTools.getBit(transferUnit.flag, 0)));
+        transferUnit.setSymEncrypted(Boolean.TRUE.equals(BytesTools.getBit(transferUnit.flag, 1)));
+        if (transferUnit.isEncrypted && transferUnit.isSymEncrypted) {
+            int keyNameLength = 6;
+            transferUnit.keyName = new byte[keyNameLength];
+            System.arraycopy(bytes, offset, transferUnit.keyName, 0, keyNameLength);
+            offset += keyNameLength;
         }
 
-        //Extract dock
-        byte dockSize = buffer.get();
-        if(dockSize!=0){
-            byte[] dockBytes = new byte[dockSize];
-            buffer.get(dockBytes);
-            transferUnit.dock = new String(dockBytes);
-        }
+        // Remaining bytes are the cipherBundle
+        int dataLength = bytes.length - offset;
+        transferUnit.data = new byte[dataLength];
+        System.arraycopy(bytes, offset, transferUnit.data, 0, dataLength);
 
-        byte flag = buffer.get();
-        // Extract time
-        if(Boolean.TRUE.equals(BytesTools.getBit(flag,0)))
-            transferUnit.time = buffer.getLong();
-
-        // Extract nonce
-        if(Boolean.TRUE.equals(BytesTools.getBit(flag,1)))
-            transferUnit.nonce = buffer.getInt();
-
-        // Extract did
-        if(Boolean.TRUE.equals(BytesTools.getBit(flag,2))) {
-            byte[] didBytes = new byte[32];
-            buffer.get(didBytes);
-            transferUnit.did = new String(didBytes);
-        }
-
-        // Extract DataType
-        byte dataTypeByte = buffer.get();
-        transferUnit.dataType = DataType.getDataType(dataTypeByte);
-
-        // Extract data
-        int remaining = buffer.remaining();
-        byte[] dataBytes = new byte[remaining];
-        buffer.get(dataBytes);
-        Gson gson = new Gson();
-        switch (transferUnit.dataType){
-            case BYTES -> transferUnit.data = dataBytes;
-            case TEXT -> transferUnit.data = new String(dataBytes, StandardCharsets.UTF_8);
-            case HAT -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), Hat.class);
-            case REPLY -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), FcReplier.class);
-            case REQUEST -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), RequestBody.class);
-            case SIGNED_BYTES,
-                    SIGNED_TEXT,
-                    SIGNED_HAT,
-                    SIGNED_REPLY,
-                    SIGNED_REQUEST
-                    -> transferUnit.data = gson.fromJson(new String(dataBytes, StandardCharsets.UTF_8), Signature.class);
-            case ENCRYPTED_BYTES,
-                    ENCRYPTED_TEXT,
-                    ENCRYPTED_HAT,
-                    ENCRYPTED_REPLY,
-                    ENCRYPTED_REQUEST,
-
-                    ENCRYPTED_SIGNED_BYTES,
-                    ENCRYPTED_SIGNED_TEXT,
-                    ENCRYPTED_SIGNED_HAT,
-                    ENCRYPTED_SIGNED_REPLY,
-                    ENCRYPTED_SIGNED_REQUEST
-                    -> transferUnit.data = CryptoDataByte.fromJson(new String(dataBytes,StandardCharsets.UTF_8));
-        }
         return transferUnit;
     }
 
-    public String makeId() {
-        int nonce;
-        if(this.nonce!=null)nonce =this.nonce;
-        else nonce= Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
-
-        long time;
-        if(this.time!=null)time=this.time;
-        else time = System.currentTimeMillis();
-
-        String date = DateTools.longToTime(time,"yyyyMMddHHmmssSSS");
-        return date+"_"+nonce;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
-
-    public Long getTime() {
-        return time;
-    }
-
-    public void setTime(Long time) {
-        this.time = time;
-    }
-    public String getTo() {
-        return to;
-    }
-
-    public void setTo(String to) {
-        this.to = to;
-    }
-
-    public byte[] getBytes() {
-        return bytes;
-    }
-
-    public void setBytes(byte[] bytes) {
-        this.bytes = bytes;
-    }
-
-    public Integer getNonce() {
-        return nonce;
-    }
-
-    public void setNonce(Integer nonce) {
-        this.nonce = nonce;
-    }
-
-    public String getFrom() {
-        return from;
-    }
-
-    public void setFrom(String from) {
-        this.from = from;
-    }
-
-    public ToType getToType() {
-        return toType;
-    }
-
-    public void setToType(ToType toType) {
-        this.toType = toType;
-    }
-
-    public DataType getDataType() {
-        return dataType;
-    }
-
-    public void setDataType(DataType dataType) {
-        this.dataType = dataType;
-    }
 
 
-    public String getDock() {
-        return dock;
-    }
-
-    public void setDock(String dock) {
-        this.dock = dock;
-    }
-
-    public Integer getSize() {
-        return size;
-    }
-
-    public void setSize(Integer size) {
-        this.size = size;
-    }
-
-    public byte[] getMAGIC() {
-        return MAGIC;
-    }
-
-    public TransferUnitState getStata() {
-        return stata;
-    }
-
-    public void setStata(TransferUnitState stata) {
-        this.stata = stata;
-    }
-
-    public String getDid() {
-        return did;
-    }
-
-    public void setDid(String did) {
-        this.did = did;
-    }
-
-    public Object getData() {
-        return data;
-    }
-
-    public void setData(Object data) {
-        this.data = data;
-    }
-
-    public int getSendCount() {
-        return sendCount;
-    }
-
-    public void setSendCount(int sendCount) {
-        this.sendCount = sendCount;
-    }
-
-    public List<String> getToList() {
-        return toList;
-    }
-
-    public void setToList(List<String> toList) {
-        this.toList = toList;
-    }
-
-    public Byte getFlag() {
+    public byte getFlag() {
         return flag;
     }
 
-    public void setFlag(Byte flag) {
+    public void setFlag(byte flag) {
         this.flag = flag;
+    }
+
+    public byte[] getKeyName() {
+        return keyName;
+    }
+
+    public void setKeyName(byte[] keyName) {
+        this.keyName = keyName;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public void setData(byte[] data) {
+        this.data = data;
+    }
+
+    public boolean isEncrypted() {
+        return isEncrypted;
+    }
+
+    public void setEncrypted(boolean encrypted) {
+        isEncrypted = encrypted;
+        flag = BytesTools.setBit(flag,0,isEncrypted);
+    }
+
+    public boolean isSymEncrypted() {
+        return isSymEncrypted;
+    }
+
+    public void setSymEncrypted(boolean symEncrypted) {
+        isSymEncrypted = symEncrypted;
+        flag = BytesTools.setBit(flag,1,isSymEncrypted);
     }
 }

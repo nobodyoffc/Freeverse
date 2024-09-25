@@ -121,7 +121,7 @@ public class Configure {
         webServerConfig.setConfigPath(Path.of(confDir,CONFIG+DOT_JSON).toString());
         webServerConfig.setSettingPath(Path.of(confDir,addSidBriefToName(sid,SETTINGS+DOT_JSON)).toString());
         webServerConfig.setDataPath(Settings.getLocalDataDir(sid));
-        CryptoDataByte result = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7).encryptByPassword(symKey, configure.getNonce().toCharArray());
+        CryptoDataByte result = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7).encryptByPassword(symKey, configure.getNonce().toCharArray());
         if(result.getCode()!=0){
             System.out.println("Failed to encrypt symKey for web server.");
             return;
@@ -1165,7 +1165,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
     }
 
     public String addOwner(BufferedReader br) {
-        String owner = fch.Inputer.inputGoodFid(br,"Input the owner fid:");
+        String owner = fch.Inputer.inputGoodFid(br,"Input the owner FID:");
         if(ownerList==null)ownerList = new ArrayList<>();
         ownerList.add(owner);
         saveConfig();
@@ -1178,12 +1178,13 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         return fid;
     }
 
-    public String getServiceAccount(String sid, byte[] symKey) {
-        ServiceMask serviceMask = myServiceMaskMap.get(sid);
-        if(serviceMask!=null && serviceMask.getAccount()!=null)
-            return serviceMask.getAccount();
+    public String getServiceDealer(String sid, byte[] symKey) {
 
-        System.out.println("Set the account of your service which was published on-chain...");
+        ServiceMask serviceMask = myServiceMaskMap.get(sid);
+        if(serviceMask!=null && serviceMask.getDealer()!=null)
+            return serviceMask.getDealer();
+
+        System.out.println("Set the dealer of your service which was published on-chain...");
         return chooseMainFid(symKey);
     }
 

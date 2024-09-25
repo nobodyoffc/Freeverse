@@ -1,5 +1,7 @@
 import com.google.common.hash.Hashing;
 import crypto.Hash;
+import fcData.AlgorithmId;
+import fcData.Signature;
 import javaTools.BytesTools;
 import javaTools.Hex;
 
@@ -28,6 +30,29 @@ public class Test {
 
 
 
+    }
+
+    @org.junit.jupiter.api.Test
+    public void test(){
+        String keyStr = "db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019";
+        byte[] key = Hex.fromHex(keyStr);
+
+        Signature signature1 = new Signature();
+        signature1.sign("hello",key, AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
+
+        System.out.println(signature1.toNiceJson());
+
+        signature1.strToBytes();
+
+        byte[] bytes = signature1.toBundle();
+
+        Signature signature2 = Signature.fromBundle(bytes);
+
+        signature2.bytesToStr();
+        System.out.println(signature2.toNiceJson());
+
+        signature2.setKey(key);
+        System.out.println(signature2.verify());
     }
     public static byte[] sha256(byte[] b) {
         return Hashing.sha256().hashBytes(b).asBytes();

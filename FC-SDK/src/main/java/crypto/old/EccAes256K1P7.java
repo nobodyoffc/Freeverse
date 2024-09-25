@@ -616,7 +616,7 @@ public class EccAes256K1P7 {
 
     public static CryptoDataByte makeIvCipherToCryptoDataByte(byte[] ivCipherBytes) {
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
-        cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
         cryptoDataByte.setType(EncryptType.SymKey);
         byte[] iv = Arrays.copyOfRange(ivCipherBytes, 0, 16);
         byte[] cipher = Arrays.copyOfRange(ivCipherBytes, 16, ivCipherBytes.length);
@@ -995,6 +995,7 @@ public class EccAes256K1P7 {
         }
         cryptoDataByte.setData(msgBytes);
         cryptoDataByte.setSymKey(symKey);
+        cryptoDataByte.set0CodeMessage();
 
         cryptoDataByte.clearAllSensitiveDataButSymKey();
     }
@@ -1092,6 +1093,7 @@ public class EccAes256K1P7 {
             }
             byte[] msg = Aes256CbcP7.decrypt(cryptoDataByte.getCipher(), cryptoDataByte.getSymKey(), cryptoDataByte.getIv());
             cryptoDataByte.setData(msg);
+            cryptoDataByte.set0CodeMessage();
         } catch (NoSuchPaddingException | NoSuchAlgorithmException | NoSuchProviderException |
                  InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException |
                  BadPaddingException e) {
@@ -1436,6 +1438,7 @@ public class EccAes256K1P7 {
             byte[] msg = Aes256CbcP7.decrypt(cryptoDataByte.getCipher(), cryptoDataByte.getSymKey(), cryptoDataByte.getIv());
             cryptoDataByte.setData(msg);
             cryptoDataByte.clearAllSensitiveDataButSymKey();
+            cryptoDataByte.set0CodeMessage();
         } catch (NoSuchPaddingException | NoSuchAlgorithmException | NoSuchProviderException |
                  InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException |
                  BadPaddingException e) {

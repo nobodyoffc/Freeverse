@@ -231,7 +231,7 @@ public class Aes256CbcP7 {
         String msgId = javaTools.Hex.toHex(Hash.sha256(hasherSrc.hash().asBytes()));
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setType(EncryptType.SymKey);
-        cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
         cryptoDataByte.setIv(iv);
 
         CryptoDataStr cryptoDataStr = CryptoDataStr.fromCryptoDataByte(cryptoDataByte);

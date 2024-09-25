@@ -1,5 +1,7 @@
 package javaTools;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -40,24 +42,34 @@ public class BytesTools {
         }
     }
 
-    public static class ByteArrayAsKey {
-        private final byte[] data;
+    public static class ByteArrayAsKey implements Comparable<ByteArrayAsKey>{
+        private final byte[] bytes;
 
         public ByteArrayAsKey(byte[] data) {
-            this.data = data;
+            this.bytes = data;
         }
+
 
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             ByteArrayAsKey that = (ByteArrayAsKey) o;
-            return Arrays.equals(data, that.data);
+            return Arrays.equals(bytes, that.bytes);
         }
 
         @Override
         public int hashCode() {
-            return Arrays.hashCode(data);
+            return Arrays.hashCode(bytes);
+        }
+
+        @Override
+        public int compareTo(@NotNull ByteArrayAsKey other) {
+            return Arrays.compare(this.bytes, other.getBytes());
+        }
+
+        public byte[] getBytes() {
+            return bytes;
         }
     }
 
@@ -446,7 +458,12 @@ public class BytesTools {
     public static int bytes2ToIntBE(byte[] byteArray) {
         return ((byteArray[0] & 0xFF) << 8) | (byteArray[1] & 0xFF);
     }
-
+    public static byte[] intTo2ByteArray(int value) {
+        byte[] result = new byte[2];
+        result[0] = (byte) (value >> 8);  // Extract high byte
+        result[1] = (byte) (value);       // Extract low byte
+        return result;
+    }
     public static int bytes2ToIntLE(byte[] byteArray) {
         return ((byteArray[1] & 0xFF) << 8) | (byteArray[0] & 0xFF);
     }

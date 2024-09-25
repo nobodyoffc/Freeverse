@@ -148,13 +148,13 @@ public abstract class Settings {
         Decryptor decryptor = new Decryptor();
         String mainFid = settings.getMainFid();
         String cipher = settings.getConfig().getFidCipherMap().get(mainFid);
+        if(cipher==null)return null;
         CryptoDataByte result = decryptor.decryptJsonBySymKey(cipher, symKey);
         if(result.getCode()!=0){
             System.out.println("Failed to decrypt the private key of "+mainFid+".");
-//            return;
+            return null;
         }
-        byte[] priKey= result.getData();
-        return priKey;
+        return result.getData();
     }
 
     public CidInfo checkFidInfo(ApipClient apipClient, BufferedReader br) {
@@ -571,7 +571,7 @@ public abstract class Settings {
 
     private String replaceCipher(String oldCipher, byte[] oldSymKey, byte[] newSymKey) {
         byte[] data = new Decryptor().decryptJsonBySymKey(oldCipher, oldSymKey).getData();
-        return new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7).encryptBySymKey(data,newSymKey).toJson();
+        return new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7).encryptBySymKey(data,newSymKey).toJson();
     }
 
 //    public void inputCounterPriKeyCipher(String account, byte[] symKey, BufferedReader br) {

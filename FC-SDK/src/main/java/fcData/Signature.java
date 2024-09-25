@@ -1,6 +1,5 @@
 package fcData;
 
-import apip.apipData.Session;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import crypto.Hash;
@@ -8,9 +7,14 @@ import javaTools.BytesTools;
 import javaTools.Hex;
 import crypto.KeyTools;
 import org.bitcoinj.core.ECKey;
+import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nullable;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.security.SignatureException;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.HexFormat;
 
 public class Signature {
@@ -18,7 +22,7 @@ public class Signature {
     private String msg;
     private String sign;
     private AlgorithmId alg;
-
+    private String keyName;
 
 
     private String address;
@@ -26,17 +30,21 @@ public class Signature {
     private String signature;
     private AlgorithmId algorithm;
 
-    private String symKeyName;
 
 
-    private transient byte[] symKey;
+    private transient byte[] key;
+    private transient byte[] fidBytes;
+    private transient byte[] msgBytes;
+    private transient byte[] signBytes;
+    private transient byte[] algBytes;
+    private transient byte[] keyNameBytes;
 
     public Signature() {
     }
 
     public Signature(String symSign, String symKeyName) {
         this.sign = symSign;
-        this.symKeyName = symKeyName;
+        this.keyName = symKeyName;
     }
 
     public Signature(String fid, String msg, String sign, AlgorithmId alg, String symKeyName) {
@@ -46,7 +54,7 @@ public class Signature {
         }
 
         if (symKeyName != null) {
-            this.symKeyName = symKeyName;
+            this.keyName = symKeyName;
         }
 
         if (msg != null) {
@@ -65,6 +73,172 @@ public class Signature {
         }
     }
 
+    @Test
+    public void test(){
+        String keyStr = "db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019";
+        byte[] key = Hex.fromHex(keyStr);
+
+        Signature signature1 = new Signature();
+        signature1.sign("hello",key,AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7);
+
+        System.out.println(signature1.toJson());
+
+        signature1.strToBytes();
+
+        byte[] bytes = signature1.toBundle();
+
+        Signature signature2 = Signature.fromBundle(bytes);
+
+        System.out.println(signature2.toJson());
+    }
+
+    public void strToBytes() {
+        if(alg!=null)algBytes = switch (alg) {
+            case FC_Sha256SymSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 2};
+            case BTC_EcdsaSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 3};
+            default -> algBytes;
+        };
+
+        if(keyName!=null)
+            keyNameBytes = Hex.fromHex(keyName);
+
+        if(fid!=null)
+            fidBytes = KeyTools.addrToHash160(fid);
+
+        if(sign!=null)
+            signBytes = Base64.getDecoder().decode(sign);
+
+        if(msg!=null)msgBytes=msg.getBytes();
+    }
+
+    public void bytesToStr() {
+        if(algBytes!=null)alg = switch (Arrays.toString(algBytes)) {
+            case "[0, 0, 0, 0, 0, 3]" ->AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 4]" ->AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+            default -> alg;
+        };
+
+        if(keyNameBytes!=null)
+            keyName = Hex.toHex(keyNameBytes);
+
+        if(fidBytes!=null)
+            fid = KeyTools.hash160ToFchAddr(fidBytes);
+
+        if(signBytes!=null)
+            sign = Base64.getEncoder().encodeToString(signBytes);
+
+        if(msgBytes!=null)msg= new String(msgBytes);
+    }
+
+    public byte[] toBundle() {
+        if (msg == null || sign == null) {
+            return null; // Handle basic null checks early
+        }
+        strToBytes();
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+        // Create algorithm byte array
+            switch (alg) {
+                case FC_Sha256SymSignMsg_No1_NrC7 ->{
+                     // Defaults to all zeroes
+                    algBytes = new byte[]{0, 0, 0, 0, 0, 3};
+                    // Write algBytes (6 bytes)
+                    outputStream.write(algBytes);
+
+                    //Write keyName (6 bytes)
+                    if(keyNameBytes==null)return null;
+                    outputStream.write(keyNameBytes);
+                }
+                case BTC_EcdsaSignMsg_No1_NrC7 -> {
+                    algBytes = new byte[]{0, 0, 0, 0, 0, 4};
+                    outputStream.write(algBytes);
+
+                    if(fidBytes==null)return null;
+                    outputStream.write(fidBytes);
+                }
+                default -> {
+                    return null;
+                }
+            }
+
+            //Write sign length
+            if(signBytes==null)return null;
+            int signLength = signBytes.length;
+            byte[] signLengthBytes = BytesTools.intTo2ByteArray(signLength);
+
+            outputStream.write(signLengthBytes);
+            outputStream.write(signBytes);
+
+            outputStream.write(msgBytes);
+
+            // Convert the output stream to a byte array
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            // Handle potential IO exceptions (shouldn't happen with ByteArrayOutputStream)
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+
+    public static Signature fromBundle(byte[] bundle) {
+        if (bundle == null || bundle.length < 12) {
+            return null;
+        }
+
+        Signature signature = new Signature();
+        int offset = 0;
+        // Extract the algorithm bytes (first 6 bytes)
+        byte[] algBytes = new byte[6];
+        System.arraycopy(bundle, 0, algBytes, 0, 6);
+        offset+=6;
+        signature.setAlgBytes(algBytes);
+
+        // Map algorithm bytes back to AlgorithmId
+        AlgorithmId alg;
+        switch (Arrays.toString(algBytes)) {
+            case "[0, 0, 0, 0, 0, 3]" -> {
+                alg = AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7;
+                byte[] keyNameBytes = new byte[6];
+                System.arraycopy(bundle, offset, keyNameBytes, 0, 6);
+                offset+=6;
+                signature.setKeyNameBytes(keyNameBytes);
+            }
+            case "[0, 0, 0, 0, 0, 4]" -> {
+                alg = AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+                byte[] hash120 = new byte[20];
+                System.arraycopy(bundle, offset, hash120, 0, 20);
+                offset+=20;
+                signature.setFidBytes(hash120);
+                signature.setFid(KeyTools.hash160ToFchAddr(hash120));
+            }
+            default -> {
+                return null;
+            }
+        }
+        signature.setAlg(alg);
+
+        byte[] signLengthBytes = new byte[2];
+        System.arraycopy(bundle, offset, signLengthBytes, 0, 2);
+        offset+=2;
+
+        int signBytesLength = BytesTools.bytes2ToIntBE(signLengthBytes);
+        byte[] signBytes = new byte[signBytesLength];
+        System.arraycopy(bundle, offset, signBytes, 0, signBytesLength);
+        offset+=signBytesLength;
+        signature.setSignBytes(signBytes);
+        signature.setSign(Base64.getEncoder().encodeToString(signBytes));
+
+        int msgBytesLength = bundle.length-offset;
+        byte[] msgBytes = new byte[msgBytesLength];
+        System.arraycopy(bundle, offset, msgBytes, 0, msgBytesLength);
+        signature.setMsgBytes(msgBytes);
+        signature.setMsg(new String(msgBytes));
+
+        signature.bytesToStr();
+        return signature;
+    }
+
+
     public static String symSign(String msg, String symKey) {
         if(msg==null || symKey==null)return null;
         byte[] replyJsonBytes = msg.getBytes();
@@ -74,7 +248,19 @@ public class Signature {
         return Hex.toHex(signBytes);
     }
 
+    public static byte[] symSign(byte[] msg, byte[] symKey) {
+        if(msg==null || symKey==null)return null;
+        byte[] bytes = BytesTools.bytesMerger(msg, symKey);
+        return Hash.sha256x2(bytes);
+    }
+    public byte[] sign(byte[] msgBytes,byte[] key,AlgorithmId alg){
+        Signature signature1 = sign(new String(msgBytes),key,alg);
+        if(signature1==null)return null;
+        return signature1.toBundle();
+    }
+
     public Signature sign(String msg,byte[] key,AlgorithmId alg){
+        if(msg==null || key==null || alg==null)return null;
         this.alg = alg;
         this.msg = msg;
         this.sign=null;
@@ -86,15 +272,22 @@ public class Signature {
                 this.fid = KeyTools.priKeyToFid(key);
                 this.sign = ecKey.signMessage(msg);
             }
-            case FC_AesSymSignMsg_No1_NrC7 -> {
+            case FC_Sha256SymSignMsg_No1_NrC7 -> {
                 String keyHex = Hex.toHex(key);
-                this.symKeyName = Session.makeSessionName(keyHex);
+                makeKeyName(key);
                 this.sign = symSign(msg, keyHex);
             }
         }
+        strToBytes();
         return this;
     }
-
+    public void makeKeyName(byte[] key) {
+        if(key==null)return;
+        byte[] keyNameBytes = new byte[6];
+        byte[] hash = Hash.sha256(key);
+        System.arraycopy(hash,0,keyNameBytes,0,6);
+        this.keyName = Hex.toHex(keyNameBytes);
+    }
 
     @Nullable
     public static Signature parseSignature(String rawSignJson) {
@@ -138,23 +331,23 @@ public class Signature {
         return (fid != null && msg != null && sign != null && alg != null);
     }
     public boolean isSymPrepared() {
-        return (symKey!= null &&msg != null && sign != null && alg != null);
+        return (key != null &&msg != null && sign != null && alg != null);
     }
 
     public boolean verify() {
         switch (alg){
             case BTC_EcdsaSignMsg_No1_NrC7 ->{
                 try {
-                    String pubKey = ECKey.signedMessageToKey(message, sign).getPublicKeyAsHex();
+                    String pubKey = ECKey.signedMessageToKey(msg, sign).getPublicKeyAsHex();
                     String signFid = KeyTools.pubKeyToFchAddr(pubKey);
                     return fid.equals(signFid);
                 } catch (SignatureException e) {
                     return false;
                 }
             }
-            case FC_AesSymSignMsg_No1_NrC7 -> {
+            case FC_Sha256SymSignMsg_No1_NrC7 -> {
                 if(sign==null)return false;
-                byte[] signBytes = BytesTools.bytesMerger(msg.getBytes(), symKey);
+                byte[] signBytes = BytesTools.bytesMerger(msg.getBytes(), key);
                 String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
                 return sign.equals(doubleSha256Hash);
             }
@@ -163,13 +356,16 @@ public class Signature {
     }
 
     public String toJson() {
-        Gson gson = new Gson();
+        Gson gson = new GsonBuilder()
+                .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeSerializer())
+                .create();
         return toJson(gson);
     }
 
     public String toNiceJson() {
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.setPrettyPrinting();
+        GsonBuilder gsonBuilder = new GsonBuilder()
+                .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeSerializer())
+                .setPrettyPrinting();
         Gson gson = gsonBuilder.create();
         return toJson(gson);
     }
@@ -179,15 +375,18 @@ public class Signature {
             case BTC_EcdsaSignMsg_No1_NrC7 -> {
                 return gson.toJson(new ShortSign(fid, null, msg, sign, alg));
             }
-            case FC_AesSymSignMsg_No1_NrC7-> {
-                return gson.toJson(new ShortSign(null, symKeyName, msg, sign, alg));
+            case FC_Sha256SymSignMsg_No1_NrC7 -> {
+                return gson.toJson(new ShortSign(null, keyName, msg, sign, alg));
             }
         }
         return new Gson().toJson(this);
     }
 
     public static Signature fromJson(String signatureJson){
-        Signature signature1 = new Gson().fromJson(signatureJson, Signature.class);
+        Gson gson = new GsonBuilder()
+                .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeDeserializer())
+                .create();
+        Signature signature1 = gson.fromJson(signatureJson, Signature.class);
         signature1.makeSignature();
         return signature1;
     }
@@ -238,8 +437,8 @@ public class Signature {
         this.algorithm = algorithm;
     }
 
-    public String getSymKeyName() {
-        return symKeyName;
+    public String getKeyName() {
+        return keyName;
     }
     public enum Type {
         SymSign, AsySign
@@ -247,25 +446,69 @@ public class Signature {
 
     static class ShortSign {
         String fid;
-        String symKeyName;
+        String keyName;
         String msg;
         String sign;
         AlgorithmId alg;
 
-        ShortSign(String fid,String symKeyName, String msg, String sign, AlgorithmId alg) {
+        ShortSign(String fid, String keyName, String msg, String sign, AlgorithmId alg) {
             this.fid = fid;
-            this.symKeyName = symKeyName;
+            this.keyName = keyName;
             this.msg = msg;
             this.sign = sign;
             this.alg = alg;
         }
     }
 
-    public byte[] getSymKey() {
-        return symKey;
+    public byte[] getKey() {
+        return key;
     }
 
-    public void setSymKey(byte[] symKey) {
-        this.symKey = symKey;
+    public void setKey(byte[] key) {
+        this.key = key;
+    }
+
+    public void setKeyName(String keyName) {
+        this.keyName = keyName;
+    }
+
+    public byte[] getFidBytes() {
+        return fidBytes;
+    }
+
+    public void setFidBytes(byte[] fidBytes) {
+        this.fidBytes = fidBytes;
+    }
+
+    public byte[] getMsgBytes() {
+        return msgBytes;
+    }
+
+    public void setMsgBytes(byte[] msgBytes) {
+        this.msgBytes = msgBytes;
+    }
+
+    public byte[] getSignBytes() {
+        return signBytes;
+    }
+
+    public void setSignBytes(byte[] signBytes) {
+        this.signBytes = signBytes;
+    }
+
+    public byte[] getAlgBytes() {
+        return algBytes;
+    }
+
+    public void setAlgBytes(byte[] algBytes) {
+        this.algBytes = algBytes;
+    }
+
+    public byte[] getKeyNameBytes() {
+        return keyNameBytes;
+    }
+
+    public void setKeyNameBytes(byte[] keyNameBytes) {
+        this.keyNameBytes = keyNameBytes;
     }
 }

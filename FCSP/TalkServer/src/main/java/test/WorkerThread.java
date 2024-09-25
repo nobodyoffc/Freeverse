@@ -1,4 +1,4 @@
-package startTalkServer;
+package test;
 
 class WorkerThread implements Runnable {
     private byte[] message;

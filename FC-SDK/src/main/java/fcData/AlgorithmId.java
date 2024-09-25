@@ -10,14 +10,10 @@ public enum AlgorithmId {
     EccAes256K1P7_No1_NrC7("EccAes256K1P7@No1_NrC7"),
     FC_EccK1AesCbc256_No1_NrC7("EccK1AesCbc256@No1_NrC7"),
     BTC_EcdsaSignMsg_No1_NrC7("BTC-EcdsaSignMsg@No1_NrC7"),
-    FC_AesSymSignMsg_No1_NrC7("AesSymSignMsg@No1_NrC7"),
+    FC_Sha256SymSignMsg_No1_NrC7("Sha256SymSignMsg@No1_NrC7"),
     FC_SchnorrSignTx_No1_NrC7("SchnorrSignTx@No1_NrC7"),
-    FC_Aes256Cbc_No1_NrC7("AesCbc256@No1_NrC7");
+    FC_AesCbc256_No1_NrC7("AesCbc256@No1_NrC7");
 
-//    private final String name;
-
-//    AlgorithmType(String name) {
-//    }
     private final String displayName;
 
     AlgorithmId(String displayName) {

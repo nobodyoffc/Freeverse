@@ -17,13 +17,14 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static constants.Strings.N_PRICE;
 
 public class TalkTcpServer {
 
     public static final List<Socket> sockets = new ArrayList<>();
-    public static Map<String,List<Socket>> fidSocketsMap;
+    public static Map<String, Set<Socket>> fidSocketsMap;
     public static Map<String,List<String>> roomIdFidsMap;
     public static Map<Socket,String> socketFidMap;
     public static Map<Socket,Map<String,Integer>> socketPendingContentsMap;
@@ -40,8 +41,9 @@ public class TalkTcpServer {
     public static TalkParams talkParams;
     public static Map<String, Long> nPriceMap;
     private TalkServerSettings settings;
+    private final long price;
 
-    public TalkTcpServer(TalkServerSettings settings, Service service, byte[] accountPriKey, ApipClient apipClient, JedisPool jedisPool) {
+    public TalkTcpServer(TalkServerSettings settings, Service service,long price, byte[] accountPriKey, ApipClient apipClient, JedisPool jedisPool) {
         this.settings = settings;
         this.service = service;
         sid = service.getSid();
@@ -61,7 +63,7 @@ public class TalkTcpServer {
             Map<String, String> nPriceStrMap = jedis.hgetAll(Settings.addSidBriefToName(sid, N_PRICE));
             nPriceMap = ObjectTools.convertToLongMap(nPriceStrMap);
         }
-
+        this.price = price;
     }
 
     public void start() {
@@ -72,7 +74,8 @@ public class TalkTcpServer {
                 Socket socket = serverSocket.accept();
                 System.out.println("New client is connected.");
 
-                new ServerThread(socket, accountPriKey, nPriceMap,service,this.settings,apipClient, jedisPool).start();
+                ServerTcpThread serverTcpThread = new ServerTcpThread(socket, fidSocketsMap, accountPriKey, price, nPriceMap, service, this.settings, apipClient, jedisPool);
+                serverTcpThread.start();
             }
         } catch (IOException e) {
             e.printStackTrace();

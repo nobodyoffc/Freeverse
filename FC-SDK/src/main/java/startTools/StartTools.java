@@ -137,7 +137,7 @@ public class StartTools {
     }
 
     private static void encryptWithPasswordBundle(BufferedReader br) {
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
         String msg = Inputer.inputMsg(br);
         String ask = "Input the password:";
         char[] password = Inputer.inputPassword(br, ask);
@@ -294,7 +294,7 @@ public class StartTools {
         char[] symKeyHex = Inputer.input32BytesKey(br, ask);
         if(symKeyHex==null) return;
         byte[] symKey = BytesTools.hexCharArrayToByteArray(symKeyHex);
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
         String destFileName = Encryptor.makeEncryptedFileName(originalFile.getName());
         System.out.println(encryptor.encryptFileBySymKey(originalFile.getName(),destFileName,symKey));
         Menu.anyKeyToContinue(br);
@@ -330,7 +330,7 @@ public class StartTools {
         char[] symKeyHex = Inputer.input32BytesKey(br, ask);
         if(symKeyHex==null) return;
         byte[] symKey = BytesTools.hexCharArrayToByteArray(symKeyHex);
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
         byte[] bundle = encryptor.encryptToBundleBySymKey(msg.getBytes(),symKey);
         System.out.println(Base64.getEncoder().encodeToString(bundle));
         Menu.anyKeyToContinue(br);
@@ -388,7 +388,7 @@ public class StartTools {
     }
 
     private static void encryptWithSymKey(BufferedReader br)  {
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
         String msg = Inputer.inputMsg(br);
         if(msg==null)return;
         String ask = "Input the symKey in hex:";
@@ -422,7 +422,7 @@ public class StartTools {
 
         System.out.println("Input the plaintext:");
         String msg = br.readLine();
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
         CryptoDataByte cryptoDataByte = encryptor.encryptByPassword(msg.getBytes(),password);
         System.out.println(cryptoDataByte.toNiceJson());
 

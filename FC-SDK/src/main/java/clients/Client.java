@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
 import static constants.ApiNames.*;
 import static constants.Strings.URL_HEAD;
 import static constants.UpStrings.BALANCE;
-import static fcData.AlgorithmId.FC_Aes256Cbc_No1_NrC7;
+import static fcData.AlgorithmId.FC_AesCbc256_No1_NrC7;
 import static fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 import static javaTools.ObjectTools.listToMap;
 
@@ -113,7 +113,7 @@ public class Client {
     }
 
     public static String encryptBySymKey(byte[] data, byte[]symKey) {
-        Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(FC_AesCbc256_No1_NrC7);
         CryptoDataByte cryptoDataByte = encryptor.encryptBySymKey(data,symKey);
         if(cryptoDataByte.getCode()!=0)return null;
         return cryptoDataByte.toJson();
@@ -613,7 +613,7 @@ public class Client {
         String sessionKeyHex = new String(sessionKeyHexBytes);
         sessionKey = Hex.fromHex(sessionKeyHex);
 
-        Encryptor encryptor = new Encryptor(FC_Aes256Cbc_No1_NrC7);
+        Encryptor encryptor = new Encryptor(FC_AesCbc256_No1_NrC7);
         CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymKey(sessionKey, symKey);
         if (cryptoDataByte2.getCode() != 0) return null;
         String newCipher = cryptoDataByte2.toJson();

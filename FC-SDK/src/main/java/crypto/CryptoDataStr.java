@@ -29,6 +29,7 @@ public class CryptoDataStr {
     private String cipher;
     private transient String cipherId;
     private transient char[] symKey;
+    private String keyName;
     private transient char[] password;
     private String pubKeyA;
     private transient String pubKeyB;
@@ -271,6 +272,8 @@ public class CryptoDataStr {
             cryptoDataStr.setCipherId(Hex.toHex(cryptoDataByte.getCipherId()));
         if(cryptoDataByte.getCode()!=null)
             cryptoDataStr.setCode(cryptoDataByte.getCode());
+        if(cryptoDataByte.getKeyName()!=null)
+            cryptoDataStr.setKeyName(Hex.toHex(cryptoDataByte.getKeyName()));
 
         return cryptoDataStr;
     }
@@ -508,5 +511,13 @@ public class CryptoDataStr {
 
     public void setCode(Integer code) {
         this.code = code;
+    }
+
+    public String getKeyName() {
+        return keyName;
+    }
+
+    public void setKeyName(String keyName) {
+        this.keyName = keyName;
     }
 }

@@ -791,7 +791,7 @@ public class FcClientEvent {
         String sign = Session.getSessionKeySign(sessionKey, dataBytes);
         signatureOfRequest = new Signature(sign, ApipTools.getSessionName(sessionKey));
         if(requestHeaderMap==null)requestHeaderMap=new HashMap<>();
-        requestHeaderMap.put(UpStrings.SESSION_NAME, signatureOfRequest.getSymKeyName());
+        requestHeaderMap.put(UpStrings.SESSION_NAME, signatureOfRequest.getKeyName());
         requestHeaderMap.put(SIGN, signatureOfRequest.getSign());
     }
 

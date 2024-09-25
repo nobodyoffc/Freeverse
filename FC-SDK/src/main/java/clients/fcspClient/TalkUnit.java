@@ -1,16 +1,14 @@
 package clients.fcspClient;
 
-import fcData.TransferUnit;
-
-public class TalkUnit extends TransferUnit {
-    private TransferUnit.DataType dataType;
+public class TalkUnit extends fcData.TalkUnit {
+    private fcData.TalkUnit.DataType dataType;
     private String data;
 
-    public TransferUnit.DataType getDataType() {
+    public fcData.TalkUnit.DataType getDataType() {
         return dataType;
     }
 
-    public void setDataType(TransferUnit.DataType dataType) {
+    public void setDataType(fcData.TalkUnit.DataType dataType) {
         this.dataType = dataType;
     }
 

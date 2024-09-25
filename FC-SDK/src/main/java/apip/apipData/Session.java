@@ -60,21 +60,6 @@ public class Session {
         return session;
     }
 
-    @Nullable
-    public static Session makeNewSession(String sid, String pubKey, Jedis jedis, String fid, long sessionDays) {
-        Session session;
-        try {
-            session = new Session().makeSession(sid, jedis, fid, sessionDays);
-            Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-            String sessionKeyCipher = encryptor.encryptByAsyOneWay(session.getSessionKey().getBytes(), Hex.fromHex(pubKey)).toJson();//EccAes256K1P7.encryptWithPubKey(session.getSessionKey().getBytes(), Hex.fromHex(pubKey));
-            session.setSessionKeyCipher(sessionKeyCipher);
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-            return null;
-        }
-        return session;
-    }
-
     public String toJson(){
         return JsonTools.toJson(this);
     }
@@ -98,16 +83,32 @@ public class Session {
         }
         return TRUE;
     }
-    public Session makeSession(String sid,Jedis jedis, String fid, long sessionDays) {
+
+    @Nullable
+    public static Session makeNewSession(String sid, String pubKey, Jedis jedis, String fid, long sessionDays) {
+        Session session;
+        try {
+            session = new Session().makeSession(sid, jedis, fid, sessionDays);
+            Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+            String sessionKeyCipher = encryptor.encryptByAsyOneWay(session.getSessionKey().getBytes(), Hex.fromHex(pubKey)).toJson();//EccAes256K1P7.encryptWithPubKey(session.getSessionKey().getBytes(), Hex.fromHex(pubKey));
+            session.setSessionKeyCipher(sessionKeyCipher);
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            return null;
+        }
+        return session;
+    }
+
+    public static Session makeSession(String sid,Jedis jedis, String fid, long sessionDays) {
         String sessionKey;
         String sessionName;
         Session session;
 
         jedis.select(1);
         do {
-            sessionKey = genSessionKey();
+            sessionKey = genKey(32);
             sessionName = makeSessionName(sessionKey);
-        } while (jedis.exists(sessionName));
+        } while (!jedis.exists(sessionName));
         session = new Session();
         Map<String,String> sessionMap = new HashMap<>();
         sessionMap.put("sessionKey",sessionKey);
@@ -137,9 +138,10 @@ public class Session {
         return session;
     }
 
-    private String genSessionKey() {
+    public static String genKey(Integer length) {
+        if(length==null)return null;
         SecureRandom random = new SecureRandom();
-        byte[] keyBytes = new byte[32];
+        byte[] keyBytes = new byte[length];
         random.nextBytes(keyBytes);
         return BytesTools.bytesToHexStringBE(keyBytes);
     }
@@ -147,6 +149,7 @@ public class Session {
     public static String makeSessionName(String sessionKey) {
         return sessionKey.substring(0,12);
     }
+
 
     public static String encryptSessionKey(String sessionKey, String pubKey, String sign) throws Exception {
         EccAes256K1P7 ecc = new EccAes256K1P7();

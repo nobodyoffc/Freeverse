@@ -14,10 +14,10 @@ public class AesCbc256 {
             cryptoDataByte = new CryptoDataByte();
             cryptoDataByte.setSymKey(key);
             cryptoDataByte.setIv(iv);
-            if(cryptoDataByte.getAlg()==null) cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+            if(cryptoDataByte.getAlg()==null) cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
         }else if(cryptoDataByte.getSymKey()==null)cryptoDataByte.setSymKey(key);
         else if(cryptoDataByte.getIv()==null)cryptoDataByte.setIv(iv);
-        if(cryptoDataByte.getAlg()==null) cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        if(cryptoDataByte.getAlg()==null) cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
         return Encryptor.encryptBySymKeyBase(algorithm,transformation,provider,inputStream,outputStream,cryptoDataByte);
     }
     public static CryptoDataByte encrypt(InputStream inputStream, OutputStream outputStream,CryptoDataByte cryptoDataByte) {
@@ -52,7 +52,7 @@ public class AesCbc256 {
         cryptoDataByte.setSymKey(key);
         cryptoDataByte.setIv(iv);
         cryptoDataByte.setType(EncryptType.SymKey);
-        cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+        cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
         decryptStream(inputStream,outputStream,cryptoDataByte);
         return cryptoDataByte;
     }
@@ -65,7 +65,7 @@ public class AesCbc256 {
             byte[] did = Hash.sha256x2(data);
 
             cryptoDataByte.setDid(did);
-            if(cryptoDataByte.checkSum(AlgorithmId.FC_Aes256Cbc_No1_NrC7)) {
+            if(cryptoDataByte.checkSum(AlgorithmId.FC_AesCbc256_No1_NrC7)) {
                 cryptoDataByte.setData(data);
                 cryptoDataByte.set0CodeMessage();
             }

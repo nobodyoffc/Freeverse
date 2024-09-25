@@ -20,9 +20,11 @@ public class CryptoDataByte {
     public static final String ALG_1 = "000000000001";
     private EncryptType type;
     private AlgorithmId alg;
+
     private transient byte[] data;
     private transient byte[] did;
     private transient byte[] symKey;
+    private transient byte[] keyName;
     private transient byte[] password;
     private transient byte[] pubKeyA;
     private transient byte[] pubKeyB;
@@ -100,6 +102,8 @@ public class CryptoDataByte {
             cryptoDataByte.setDid(Hex.fromHex(cryptoDataStr.getDid()));
         if(cryptoDataStr.getCipherId()!=null)
             cryptoDataByte.setCipherId(Hex.fromHex(cryptoDataStr.getCipherId()));
+        if(cryptoDataStr.getKeyName()!=null)
+            cryptoDataByte.setKeyName(Hex.fromHex(cryptoDataStr.getKeyName()));
 //        cryptoDataByte.setBadSum(cryptoData.isBadSum());
 
         return cryptoDataByte;
@@ -108,40 +112,68 @@ public class CryptoDataByte {
         CryptoDataStr cryptoDataStr = CryptoDataStr.fromJson(json);
         return CryptoDataByte.fromCryptoData(cryptoDataStr);
     }
-    public byte[] toBundle(AlgorithmId algorithmId) {
-        return toBundle(pubKeyA, iv, cipher, sum, type, algorithmId);
-    }
-    public static byte[] toBundle(byte[] pubKeyA, byte[] iv, byte[] cipher, byte[] sum, EncryptType type, AlgorithmId alg) {
-        byte[] bundle;
-        byte[] algBytes = new byte[6];
-        switch (alg){
-            case FC_Aes256Cbc_No1_NrC7 -> Arrays.fill(algBytes, (byte) 0);
-            case FC_EccK1AesCbc256_No1_NrC7 -> algBytes = new byte[]{(byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 0, (byte) 1};
+
+    public byte[] toBundle() {
+        if (iv == null || cipher == null || sum == null || type == null || alg == null) {
+            return null; // Handle basic null checks early
         }
-        switch (type){
-            case AsyOneWay ->  {
-                if(pubKeyA==null||iv==null||cipher==null)return null;
-                bundle = new byte[6+1+pubKeyA.length+iv.length+ sum.length+ cipher.length];
-                System.arraycopy(algBytes,0,bundle,0, 6);
-                System.arraycopy(new byte[]{type.getNumber()},0,bundle,6, 1);
-                System.arraycopy(pubKeyA,0,bundle,6+1, pubKeyA.length);
-                System.arraycopy(iv,0,bundle,6+1+pubKeyA.length, iv.length);
-                System.arraycopy(cipher,0,bundle, 6+1+pubKeyA.length+iv.length, cipher.length);
-                System.arraycopy(sum,0,bundle, 6+1+pubKeyA.length+iv.length+cipher.length, sum.length);
-            }
-            default -> {
-                bundle = new byte[6+ iv.length+ sum.length+ cipher.length];
-                System.arraycopy(algBytes,0,bundle,0, 6);
-                System.arraycopy(new byte[]{type.getNumber()},0,bundle,6, 1);
-                System.arraycopy(iv,0,bundle,6+1, iv.length);
-                System.arraycopy(cipher,0,bundle, 6+1+ iv.length, cipher.length);
-                System.arraycopy(sum,0,bundle, 6+1+ iv.length+ cipher.length, sum.length);
-                return bundle;
+
+        if (type.equals(EncryptType.SymKey) || type.equals(EncryptType.Password)) {
+            if (keyName == null) return null;
+        }
+
+        // Create algorithm byte array
+        byte[] algBytes = switch (alg) {
+            case FC_AesCbc256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 1};  // Defaults to all zeroes
+            case FC_EccK1AesCbc256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 2};
+            default -> null;
+        };
+
+        if (algBytes == null) return null;
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            // Write algBytes (6 bytes)
+            outputStream.write(algBytes);
+
+            // Write EncryptType (1 byte)
+            outputStream.write(type.getNumber());
+
+            // Conditionally write pubKeyA based on EncryptType
+            if (type == EncryptType.AsyOneWay || type == EncryptType.AsyTwoWay) {
+                if (pubKeyA == null) return null; // Check if pubKeyA is needed but not provided
+                outputStream.write(pubKeyA);
             }
 
+            // Conditionally write keyName based on EncryptType
+            if (type == EncryptType.SymKey || type == EncryptType.Password) {
+                outputStream.write(keyName);
+            }
+
+            // Write iv (16 bytes)
+            outputStream.write(iv);
+
+            // Write cipher (variable length)
+            outputStream.write(cipher);
+
+            // Write sum (4 bytes)
+            outputStream.write(sum);
+
+            // Convert the output stream to a byte array
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            // Handle potential IO exceptions (shouldn't happen with ByteArrayOutputStream)
+            e.printStackTrace();
+            return null;
         }
-        return bundle;
     }
+
+    public void makeKeyName(byte[] key) {
+        if(key==null)return;
+        keyName = new byte[6];
+        byte[] hash = Hash.sha256(key);
+        System.arraycopy(hash,0,keyName,0,6);
+    }
+
 
     @NotNull
     private static byte[] makeBundleWithoutPubKey(byte[] iv, byte[] cipher, byte[] sum, byte[] algBytes) {
@@ -155,58 +187,79 @@ public class CryptoDataByte {
     }
 
     public static CryptoDataByte fromBundle(byte[] bundle) {
-        CryptoDataByte cryptoDataByte = new CryptoDataByte();
+        if (bundle == null || bundle.length < 8) { // Minimum 6 for algBytes and 1 for type
+            return null;
+        }
+        int offset = 0;
+        CryptoDataByte cryptoData = new CryptoDataByte();
+
+        // Extract the algorithm bytes
+
         byte[] algBytes = new byte[6];
-        byte[] typeBytes= new byte[1];
+        System.arraycopy(bundle, offset, algBytes, 0, 6);
+        offset += 6;
+        // Map algorithm bytes back to AlgorithmId
+        AlgorithmId alg = switch (Arrays.toString(algBytes)) {
+            case "[0, 0, 0, 0, 0, 1]" -> AlgorithmId.FC_AesCbc256_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 2]" -> AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
+            default -> null;
+        };
+
+        if (alg == null) return null; // Return null if the algorithm ID isn't recognized
+
+        cryptoData.setAlg(alg);
+
+        // Extract the EncryptType byte
+        byte typeByte = bundle[6];
+        offset++;
+        EncryptType type = EncryptType.fromNumber(typeByte); // Assuming EncryptType has a method to get type from a number
+
+        if (type == null) return null;
+
+        cryptoData.setType(type);
+
+        // Check if pubKeyA exists for Asy
+        if (type == EncryptType.AsyOneWay || type == EncryptType.AsyTwoWay) {
+            // Extract pubKeyA (33 bytes)
+            byte[] pubKeyA = new byte[33];
+            System.arraycopy(bundle, offset, pubKeyA, 0, 33);
+            cryptoData.setPubKeyA(pubKeyA);
+            offset += 33;
+        }
+
+        // Check if keyName exists for SymKey or Password
+        if (type == EncryptType.SymKey || type == EncryptType.Password) {
+            // Extract pubKeyA (33 bytes)
+            byte[] keyName = new byte[6];
+            System.arraycopy(bundle, offset, keyName, 0, 6);
+            cryptoData.setKeyName(keyName);
+            offset += 6;
+        }
+
+        // Extract iv (16 bytes)
         byte[] iv = new byte[16];
-        byte[] pubKeyA = new byte[33];
+        System.arraycopy(bundle, offset, iv, 0, 16);
+        cryptoData.setIv(iv);
+        offset += 16;
+
+        // Calculate cipher length dynamically
+        int sumLength = 4;
+        int cipherLength = bundle.length - offset - sumLength;
+
+        if (cipherLength <= 0) return null; // Sanity check to ensure we have a valid cipher length
+
+        // Extract cipher
+        byte[] cipher = new byte[cipherLength];
+        System.arraycopy(bundle, offset, cipher, 0, cipherLength);
+        cryptoData.setCipher(cipher);
+        offset += cipherLength;
+
+        // Extract sum (last 4 bytes)
         byte[] sum = new byte[4];
-        byte[] cipher;
-        System.arraycopy(bundle,0,algBytes,0,6);
-        String algHex = Hex.toHex(algBytes);
-        System.arraycopy(bundle,6,typeBytes,0,1);
-        int typeNumber = typeBytes[0];
-        EncryptType type;
-        switch (typeNumber){
-            case 0 -> type = EncryptType.SymKey;
-            case 1 -> type = EncryptType.AsyOneWay;
-            case 2 -> type = EncryptType.AsyTwoWay;
-            case 3 -> type = EncryptType.Password;
-            default -> type = null;
-        }
-        cryptoDataByte.setType(type);
-        switch (algHex){
-            case ALG_0 -> cryptoDataByte.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
-            case ALG_1 -> cryptoDataByte.setAlg(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        }
-        cryptoDataByte.setType(type);
-        switch (type){
-            case AsyOneWay -> cipher = new byte[bundle.length -6 -iv.length-pubKeyA.length-sum.length];
-            default -> cipher = new byte[bundle.length -6 -iv.length-sum.length];
-        }
-        cryptoDataByte.setType(type);
-        switch (type){
-            case AsyOneWay ->{
-                System.arraycopy(bundle, 6, pubKeyA, 0, pubKeyA.length);
-                cryptoDataByte.setPubKeyA(pubKeyA);
-                System.arraycopy(bundle,6+pubKeyA.length,iv,0,iv.length);
-                cryptoDataByte.setIv(iv);
-                System.arraycopy(bundle,6+pubKeyA.length+iv.length,cipher,0,cipher.length);
-                cryptoDataByte.setCipher(cipher);
-                System.arraycopy(bundle,6+pubKeyA.length+iv.length+cipher.length,sum,0,sum.length);
-                cryptoDataByte.setSum(sum);
-            }
-            default -> {
-                System.arraycopy(bundle, 0, algBytes, 0, 6);
-                System.arraycopy(bundle, 6, iv, 0, iv.length);
-                cryptoDataByte.setIv(iv);
-                System.arraycopy(bundle, 6 + iv.length, cipher, 0, cipher.length);
-                cryptoDataByte.setCipher(cipher);
-                System.arraycopy(bundle, 6 + iv.length + cipher.length, sum, 0, sum.length);
-                cryptoDataByte.setSum(sum);
-            }
-        }
-        return cryptoDataByte;
+        System.arraycopy(bundle, offset, sum, 0, 4);
+        cryptoData.setSum(sum);
+
+        return cryptoData;
     }
 
     public void set0CodeMessage() {
@@ -484,4 +537,13 @@ public class CryptoDataByte {
     public void printCodeMessage() {
         System.out.println(code+" : "+ message);
     }
+
+    public byte[] getKeyName() {
+        return keyName;
+    }
+
+    public void setKeyName(byte[] keyName) {
+        this.keyName = keyName;
+    }
+
 }

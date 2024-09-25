@@ -837,11 +837,11 @@ public class ApipClient extends Client {
         switch (encryptType){
             case SymKey -> {
                 encryptIn.setSymKey(key);
-                encryptIn.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+                encryptIn.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
             }
             case Password -> {
                 encryptIn.setPassword(key);
-                encryptIn.setAlg(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+                encryptIn.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
             }
             case AsyOneWay -> {
                 if(key!=null) {

@@ -1,4 +1,4 @@
-package startTalkServer;
+package test;
 
 import clients.apipClient.ApipClient;
 import feip.feipData.Service;

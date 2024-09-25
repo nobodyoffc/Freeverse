@@ -266,7 +266,7 @@ public class StartApipClient {
 
     public static byte[] signInEccPost(byte[] symKey, RequestBody.SignInMode mode) {
         System.out.println("Post request for signInEcc...");
-        Session session = apipClient.signInEcc(apipClient.getApiAccount(), RequestBody.SignInMode.NORMAL, symKey);
+        Session session = apipClient.signInEcc(apipClient.getApiAccount(), mode, symKey);
         JsonTools.printJson(session);
         Menu.anyKeyToContinue(br);
         return Hex.fromHex(session.getSessionKey());
@@ -274,7 +274,7 @@ public class StartApipClient {
 
     public static byte[] signInPost(byte[] symKey, RequestBody.SignInMode mode) {
         System.out.println("Post request for signIn...");
-        Session session = apipClient.signIn(apipClient.getApiAccount(), RequestBody.SignInMode.NORMAL, symKey);
+        Session session = apipClient.signIn(apipClient.getApiAccount(), mode, symKey);
         JsonTools.printJson(session);
         Menu.anyKeyToContinue(br);
         return Hex.fromHex(session.getSessionKey());

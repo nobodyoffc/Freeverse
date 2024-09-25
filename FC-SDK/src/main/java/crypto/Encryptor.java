@@ -31,6 +31,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.*;
+import java.util.Arrays;
 import java.util.HexFormat;
 
 import static fcData.AlgorithmId.*;
@@ -39,7 +40,7 @@ public class Encryptor {
     AlgorithmId algorithmId;
 
     public Encryptor() {
-        this.algorithmId = FC_Aes256Cbc_No1_NrC7;
+        this.algorithmId = FC_AesCbc256_No1_NrC7;
     }
 
     public Encryptor(AlgorithmId algorithmId) {
@@ -151,14 +152,14 @@ public class Encryptor {
         byte[] iv = BytesTools.getRandomBytes(16);
         CryptoDataByte cryptoDataByte = encryptBySymKey(msg,key, iv);
         if(cryptoDataByte.getCode()!=0)return null;
-        return cryptoDataByte.toBundle(algorithmId);
+        return cryptoDataByte.toBundle();
     }
     public byte[] encryptToBundleByPassword(@NotNull byte[] msg, @NotNull char[] password){
         byte[] iv = BytesTools.getRandomBytes(16);
         byte[] symKey = Encryptor.passwordToSymKey(password,iv);
         CryptoDataByte cryptoDataByte = encryptBySymKey(msg,symKey, iv);
         if(cryptoDataByte.getCode()!=0)return null;
-        return cryptoDataByte.toBundle(algorithmId);
+        return cryptoDataByte.toBundle();
     }
 
     public CryptoDataByte encryptBySymKey(@NotNull byte[] msg, @NotNull byte[] symKey){
@@ -172,15 +173,19 @@ public class Encryptor {
     private CryptoDataByte encryptBySymKey(@NotNull byte[] msg, @Nullable  byte[] key, @Nullable  byte[] iv, @Nullable CryptoDataByte cryptoDataByte){
         try(ByteArrayInputStream bisMsg = new ByteArrayInputStream(msg);
             ByteArrayOutputStream bosCipher = new ByteArrayOutputStream()) {
-
             switch (algorithmId){
-                case FC_Aes256Cbc_No1_NrC7 ->  cryptoDataByte = AesCbc256.encrypt(bisMsg, bosCipher, key,iv, cryptoDataByte);
+                case FC_AesCbc256_No1_NrC7 ->  cryptoDataByte = AesCbc256.encrypt(bisMsg, bosCipher, key,iv, cryptoDataByte);
             }
+
+            if(cryptoDataByte!=null && cryptoDataByte.getKeyName()==null)
+                cryptoDataByte.makeKeyName(key);
 
             byte[] cipher = bosCipher.toByteArray();
             if(cryptoDataByte==null)cryptoDataByte = new CryptoDataByte();
+
             cryptoDataByte.setCipher(cipher);
             cryptoDataByte.set0CodeMessage();
+
             return cryptoDataByte;
         } catch (IOException e) {
             if(cryptoDataByte==null)cryptoDataByte = new CryptoDataByte();
@@ -189,9 +194,11 @@ public class Encryptor {
         }
     }
 
+
+
     public CryptoDataByte encryptStreamBySymKey(@NotNull InputStream inputStream, @NotNull OutputStream outputStream, byte[] key, byte[] iv, CryptoDataByte cryptoDataByte) {
         switch (algorithmId){
-            case FC_Aes256Cbc_No1_NrC7,FC_EccK1AesCbc256_No1_NrC7-> {
+            case FC_AesCbc256_No1_NrC7,FC_EccK1AesCbc256_No1_NrC7-> {
                 return AesCbc256.encrypt(inputStream,outputStream,key,iv,cryptoDataByte);
             }
         }
@@ -273,15 +280,17 @@ public class Encryptor {
     }
     public byte[] encryptByAsyOneWayToBundle(@NotNull byte[] data, @NotNull byte[] pubKeyB){
         CryptoDataByte cryptoDataByte = encryptByAsyOneWay(data,pubKeyB);
-        return cryptoDataByte.toBundle(this.algorithmId);
+        return cryptoDataByte.toBundle();
     }
 
     public CryptoDataByte encryptByAsyTwoWay(@NotNull byte[] data, @NotNull byte[]priKeyA, @NotNull byte[] pubKeyB){
-        return encryptByAsy(data, priKeyA, pubKeyB, EncryptType.AsyTwoWay);
+        CryptoDataByte cryptoDataByte = encryptByAsy(data, priKeyA, pubKeyB, EncryptType.AsyTwoWay);
+        cryptoDataByte.setPubKeyA(KeyTools.priKeyToPubKey(priKeyA));
+        return cryptoDataByte;
     }
     public byte[] encryptByAsyTwoWayToBundle(@NotNull byte[] data,@NotNull byte[]priKeyA, @NotNull byte[] pubKeyB){
         CryptoDataByte cryptoDataByte = encryptByAsyTwoWay(data,priKeyA,pubKeyB);
-        return cryptoDataByte.toBundle(this.algorithmId);
+        return cryptoDataByte.toBundle();
     }
     private CryptoDataByte encryptByAsy(@NotNull byte[] data, byte[]priKeyA, byte[] pubKeyB, EncryptType encryptType){
         CryptoDataByte cryptoDataByte;
@@ -303,6 +312,7 @@ public class Encryptor {
             cryptoDataByte.setCipher(bos.toByteArray());
             cryptoDataByte.makeSum4();
             cryptoDataByte.setType(encryptType);
+            cryptoDataByte.setCodeMessage(0);
 
             return cryptoDataByte;
         } catch (IOException e) {

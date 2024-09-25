@@ -1,4 +1,4 @@
-package startTalkServer;
+package test;
 
 import apip.apipData.RequestBody;
 import clients.apipClient.ApipClient;
@@ -12,7 +12,7 @@ import crypto.KeyTools;
 import fcData.AlgorithmId;
 import fcData.FcReplier;
 import fcData.Signature;
-import fcData.TransferUnit;
+import fcData.TalkUnit;
 import fch.ParseTools;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
@@ -27,6 +27,7 @@ import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import settings.TalkServerSettings;
+import startTalkServer.TalkTcpServer;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -75,7 +76,7 @@ class ServerUdpThread extends Thread {
     public void run() {
         startTime = System.currentTimeMillis();
         String talkItemStr;
-        TransferUnit transferUnit;
+        TalkUnit talkUnit;
 //
 //        sendServiceInfo();
 //
@@ -143,14 +144,14 @@ class ServerUdpThread extends Thread {
     }
 
     @Nullable
-    private void HandleServerRequest(TransferUnit transferUnit, OutputStreamWriter outputStreamWriter) {
+    private void HandleServerRequest(TalkUnit talkUnit, OutputStreamWriter outputStreamWriter) {
         RequestBody requestBody;
         try (Jedis jedis = jedisPool.getResource()) {
-            requestBody = checkRequest(transferUnit, outputStreamWriter, jedis);
+            requestBody = checkRequest(talkUnit, outputStreamWriter, jedis);
 
             switch (requestBody.getOp()){
                 case PING -> {}
-                case SIGN_IN -> handleSignIn(transferUnit, accountPriKey, outputStreamWriter, jedisPool);
+                case SIGN_IN -> handleSignIn(talkUnit, accountPriKey, outputStreamWriter, jedisPool);
 
                 case CREAT_ROOM -> {}
                 case ASK_ROOM_INFO -> {}
@@ -171,15 +172,15 @@ class ServerUdpThread extends Thread {
     }
 
     private void sendServiceInfo(OutputStreamWriter outputStreamWriter) throws IOException {
-        TransferUnit transferUnitTouch = new TransferUnit();
-        transferUnitTouch.setDataType(TransferUnit.DataType.SIGNED_REQUEST);
+        TalkUnit talkUnitTouch = new TalkUnit();
+        talkUnitTouch.setDataType(TalkUnit.DataType.SIGNED_REQUEST);
 
         Signature signature = new Signature();
         signature.sign(service.toJson(), accountPriKey,AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
 
-        transferUnitTouch.setData(signature.toJson());
+        talkUnitTouch.setData(signature.toJson());
 
-        outputStreamWriter.write(transferUnitTouch.toJson()+"\n");
+        outputStreamWriter.write(talkUnitTouch.toJson()+"\n");
         outputStreamWriter.flush();
     }
 
@@ -200,10 +201,10 @@ class ServerUdpThread extends Thread {
 
      */
 
-    private void replyEncrypted(String from, TransferUnit.ToType toType, String to, OutputStreamWriter outputStreamWriter, int code, String data, String otherError, Integer nonce, boolean byAccountPriKey) {
+    private void replyEncrypted(String from, TalkUnit.ToType toType, String to, OutputStreamWriter outputStreamWriter, int code, String data, String otherError, Integer nonce, boolean byAccountPriKey) {
 
 //        TransferUnit transferUnit = new TransferUnit(from,toType,to, TransferUnit.DataType.ENCRYPTED_REPLY);
-        TransferUnit transferUnit = new TransferUnit();
+        TalkUnit talkUnit = new TalkUnit();
         FcReplier replier = new FcReplier();
         String replyJson = replier.reply(code,otherError,data,nonce);
         
@@ -217,7 +218,7 @@ class ServerUdpThread extends Thread {
                 sendToClient(outputStreamWriter,"Server error: no key to encrypt data.");
                 return;
             }
-            encryptor = new Encryptor(AlgorithmId.FC_Aes256Cbc_No1_NrC7);
+            encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
             cryptoDataByte = encryptor.encryptBySymKey(dataBytes, this.sessionKey);
         }else {
             if(accountPriKey==null){
@@ -230,8 +231,8 @@ class ServerUdpThread extends Thread {
             else cryptoDataByte = encryptor.encryptByAsyOneWay(dataBytes, this.accountPriKey);
         }
         
-        transferUnit.setData(cryptoDataByte.toJson());
-        sendToClient(outputStreamWriter, transferUnit.toJson());
+        talkUnit.setData(cryptoDataByte.toJson());
+        sendToClient(outputStreamWriter, talkUnit.toJson());
     }
 
     private static void sendToClient(OutputStreamWriter outputStreamWriter, String msg) {
@@ -285,55 +286,55 @@ class ServerUdpThread extends Thread {
         return newBalance;
     }
 
-    private boolean handleSignIn(TransferUnit transferUnitRequest, byte[] waiterPriKey, OutputStreamWriter osw, JedisPool jedisPool) {
+    private boolean handleSignIn(TalkUnit talkUnitRequest, byte[] waiterPriKey, OutputStreamWriter osw, JedisPool jedisPool) {
 
         try (Jedis jedis = jedisPool.getResource()) {
-            Integer nonce = transferUnitRequest.getNonce();
-            RequestBody requestBody = checkRequest(transferUnitRequest, osw, jedis);
+            Integer nonce = talkUnitRequest.getNonce();
+            RequestBody requestBody = checkRequest(talkUnitRequest, osw, jedis);
             if (requestBody==null) return false;
 
             sessionKey = BytesTools.getRandomBytes(32);
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
             CryptoDataByte result = encryptor.encryptByAsyTwoWay(sessionKey, waiterPriKey,Hex.fromHex(userPubKey));
             if(result==null || result.getCode()!=0)return false;
-            replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw,ReplyCodeMessage.Code0Success, result.toJson(), null, nonce, false);
+            replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw,ReplyCodeMessage.Code0Success, result.toJson(), null, nonce, false);
 
             return true;
         }
     }
 
-    private RequestBody checkRequest(TransferUnit transferUnitRequest, OutputStreamWriter osw, Jedis jedis) {
+    private RequestBody checkRequest(TalkUnit talkUnitRequest, OutputStreamWriter osw, Jedis jedis) {
         RequestBody requestBody;
-        Integer nonce = transferUnitRequest.getNonce();
-        CryptoDataByte cryptoDataByte = decryptWithPriKey(transferUnitRequest, accountPriKey, sessionKey,osw, nonce);
+        Integer nonce = talkUnitRequest.getNonce();
+        CryptoDataByte cryptoDataByte = decryptWithPriKey(talkUnitRequest, accountPriKey, sessionKey,osw, nonce);
         if (cryptoDataByte != null) {
             String requestJson = new String(cryptoDataByte.getData());
 
             requestBody = RequestBody.fromJson(requestJson);
             long windowTime = settings.getWindowTime();//RedisTools.readHashLong(jedis, Settings.addSidBriefToName(TalkServer.sid, SETTINGS), WINDOW_TIME);
             this.userFid = KeyTools.pubKeyToFchAddr(cryptoDataByte.getPubKeyA());
-            if (!userFid.equals(transferUnitRequest.getFrom())) {
+            if (!userFid.equals(talkUnitRequest.getFrom())) {
                 Map<String, String> dataMap = new HashMap<>();
                 dataMap.put("userFid", userFid);
                 dataMap.put("pubKey", Hex.toHex(cryptoDataByte.getPubKeyA()));
-                replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The pubKey is not of the user FID.", nonce, false);
+                replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The pubKey is not of the user FID.", nonce, false);
             } else {
                 if (requestBody.getVia() != null) via = requestBody.getVia();
                 if (isBadBalanceTcp(jedis, TalkTcpServer.sid, userFid)) {
                     String otherError = "Send at lest " + talkParams.getMinPayment() + " F to " + talkParams.getMinPayment() + " to buy the service #" + TalkTcpServer.sid + ".";
                     String data = null;
-                    replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1020OtherError, data, otherError, nonce, false);
+                    replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1020OtherError, data, otherError, nonce, false);
                 } else if (!TalkTcpServer.sid.equals(requestBody.getSid())) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("Signed SID:", requestBody.getSid());
                     dataMap.put("Requested SID:", TalkTcpServer.sid);
-                    replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
+                    replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
                 } else if (isBadNonce(requestBody.getNonce(), windowTime, jedis)) {
-                    replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1007UsedNonce, null, null, nonce, false);
+                    replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1007UsedNonce, null, null, nonce, false);
                 } else if (isBadTime(requestBody.getTime(), windowTime)) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("windowTime", String.valueOf(windowTime));
-                    replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1006RequestTimeExpired, JsonTools.toJson(dataMap), null, nonce, false);
+                    replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw, ReplyCodeMessage.Code1006RequestTimeExpired, JsonTools.toJson(dataMap), null, nonce, false);
                 } else {
                     return requestBody;
                 }
@@ -349,15 +350,15 @@ class ServerUdpThread extends Thread {
         return balance<price;
     }
     @Nullable
-    public CryptoDataByte decryptWithPriKey(TransferUnit transferUnitRequest, byte[] waiterPriKey, byte[] sessionKey, OutputStreamWriter osw, Integer nonce) {
-        CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson((String)transferUnitRequest.getData());
+    public CryptoDataByte decryptWithPriKey(TalkUnit talkUnitRequest, byte[] waiterPriKey, byte[] sessionKey, OutputStreamWriter osw, Integer nonce) {
+        CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson((String) talkUnitRequest.getData());
         Decryptor decryptor = new Decryptor();
         switch (cryptoDataByte.getType()){
             case AsyTwoWay -> 
                 cryptoDataByte.setPriKeyB(waiterPriKey);
             case SymKey -> cryptoDataByte.setSymKey(sessionKey);
             default -> {
-                replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw,ReplyCodeMessage.Code1020OtherError,null,"Failed to decrypt type:"+cryptoDataByte.getType(), nonce, false);
+                replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw,ReplyCodeMessage.Code1020OtherError,null,"Failed to decrypt type:"+cryptoDataByte.getType(), nonce, false);
                 return null;
             }
         }
@@ -365,16 +366,16 @@ class ServerUdpThread extends Thread {
         decryptor.decryptByAsyKey(cryptoDataByte);
 
         if(cryptoDataByte.getCode()!=0){
-            replyEncrypted(talkParams.getDealer(), TransferUnit.ToType.FID, userFid, osw,ReplyCodeMessage.Code1020OtherError,null,"Failed to decrypt request.", nonce, false);
+            replyEncrypted(talkParams.getDealer(), TalkUnit.ToType.FID, userFid, osw,ReplyCodeMessage.Code1020OtherError,null,"Failed to decrypt request.", nonce, false);
             return null;
         }
         return cryptoDataByte;
     }
 
 
-    private void handleText(String content, TransferUnit transferUnit, Socket socket, ApipClient apipClient, byte[] key) {
+    private void handleText(String content, TalkUnit talkUnit, Socket socket, ApipClient apipClient, byte[] key) {
         String fid = TalkTcpServer.socketFidMap.get(socket);
-        String roomId = transferUnit.getTo();
+        String roomId = talkUnit.getTo();
         if (TalkTcpServer.roomIdFidsMap.get(roomId) == null) {
             if (roomId.startsWith("F")) {
                 ArrayList<String> fidList = new ArrayList<>();
@@ -392,27 +393,27 @@ class ServerUdpThread extends Thread {
             } else if (Hex.isHexString(roomId)) {
                 try {
                     pendingContent(content, socket);
-                    askRoomInfo(transferUnit, socket, key);
+                    askRoomInfo(talkUnit, socket, key);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
             if (!TalkTcpServer.roomIdFidsMap.get(roomId).contains(fid)) return;
-            broadcastMessage(content, transferUnit.getTo());
+            broadcastMessage(content, talkUnit.getTo());
         }
     }
 
 
-    private static void askRoomInfo(TransferUnit fromTransferUnit, Socket socket, byte[] key) throws IOException {
-        TransferUnit toTransferUnit = new TransferUnit();
-        toTransferUnit.setDataType(TransferUnit.DataType.ENCRYPTED_REQUEST);
-        toTransferUnit.setTo(fromTransferUnit.getTo());
-        toTransferUnit.setNonce(fromTransferUnit.getNonce());
-        String json = toTransferUnit.toJson();
+    private static void askRoomInfo(TalkUnit fromTalkUnit, Socket socket, byte[] key) throws IOException {
+        TalkUnit toTalkUnit = new TalkUnit();
+        toTalkUnit.setDataType(TalkUnit.DataType.ENCRYPTED_REQUEST);
+        toTalkUnit.setTo(fromTalkUnit.getTo());
+        toTalkUnit.setNonce(fromTalkUnit.getNonce());
+        String json = toTalkUnit.toJson();
         Signature sign = new Signature().sign(Hex.toHex(key), json.getBytes(),AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
-        toTransferUnit.setData(JsonTools.toJson(sign));
+        toTalkUnit.setData(JsonTools.toJson(sign));
         OutputStreamWriter osw = new OutputStreamWriter(socket.getOutputStream());
-        osw.write(toTransferUnit.getData()+ "\n");
+        osw.write(toTalkUnit.getData()+ "\n");
         osw.flush();
     }
 

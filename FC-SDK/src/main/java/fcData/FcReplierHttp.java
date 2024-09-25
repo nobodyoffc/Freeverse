@@ -26,7 +26,7 @@ import static settings.Settings.addSidBriefToName;
 public class FcReplierHttp {
     private Integer code;
     private String message;
-    private Long nonce;
+    private Integer nonce;
     private Long balance;
     private Object data;
     private List<String> last;
@@ -271,10 +271,6 @@ public class FcReplierHttp {
         this.code = code;
     }
 
-    public void setNonce(Long nonce) {
-        this.nonce = nonce;
-    }
-
     public Long getBalance() {
         return balance;
     }
@@ -307,8 +303,12 @@ public class FcReplierHttp {
         this.last = last;
     }
 
-    public Long getNonce() {
+    public Integer getNonce() {
         return nonce;
+    }
+
+    public void setNonce(Integer nonce) {
+        this.nonce = nonce;
     }
 
     public Long getGot() {

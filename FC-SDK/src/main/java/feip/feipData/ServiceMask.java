@@ -1,7 +1,5 @@
 package feip.feipData;
 
-import feip.feipData.serviceParams.Params;
-
 public class ServiceMask {
 
 	protected String sid;
@@ -9,13 +7,13 @@ public class ServiceMask {
 	protected String[] types;
 	protected String ver;
 	protected String owner;
-	protected String account;
+	protected String dealer;
 	protected Long lastTime;
 	protected Long tCdd;
 	protected Float tRate;
 	protected Boolean active;
 
-	public static ServiceMask ServiceToMask(Service service,String account){
+	public static ServiceMask ServiceToMask(Service service,String dealer){
 		ServiceMask serviceMask = new ServiceMask();
 		serviceMask.setSid(service.getSid());
 		serviceMask.setStdName(service.getStdName());
@@ -25,7 +23,7 @@ public class ServiceMask {
 		serviceMask.setLastTime(service.getLastTime());
 		serviceMask.settCdd(service.gettCdd());
 		serviceMask.settRate(service.gettRate());
-		serviceMask.setAccount(account);
+		serviceMask.setDealer(dealer);
 		return serviceMask;
 	}
 
@@ -69,12 +67,12 @@ public class ServiceMask {
 		this.owner = owner;
 	}
 
-	public String getAccount() {
-		return account;
+	public String getDealer() {
+		return dealer;
 	}
 
-	public void setAccount(String account) {
-		this.account = account;
+	public void setDealer(String dealer) {
+		this.dealer = dealer;
 	}
 
 	public Long getLastTime() {

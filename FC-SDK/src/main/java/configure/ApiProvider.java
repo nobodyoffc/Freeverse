@@ -45,7 +45,7 @@ public class ApiProvider {
     private String[] ticks;
     private transient Service service;
     private transient Params apiParams;
-    private String accountPubKey;
+    private String dealerPubKey;
 //    private transient List<FreeApi> freeApiList;
 
     public ApiProvider() {}
@@ -403,12 +403,12 @@ public class ApiProvider {
         this.name = name;
     }
 
-    public String getAccountPubKey() {
-        return accountPubKey;
+    public String getDealerPubKey() {
+        return dealerPubKey;
     }
 
-    public void setAccountPubKey(String accountPubKey) {
-        this.accountPubKey = accountPubKey;
+    public void setDealerPubKey(String dealerPubKey) {
+        this.dealerPubKey = dealerPubKey;
     }
     //    public List<FreeApi> getFreeApiList() {
 //        return freeApiList;
