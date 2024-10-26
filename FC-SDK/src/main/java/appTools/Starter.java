@@ -75,13 +75,14 @@ public class Starter {
         while(true) {
             String sid = configure.chooseSid(serverType);
             //Load the local settings from the file of localSettings.json
-            Settings settings;
-            try {
-                String fileName = FileTools.makeFileName(null, sid, SETTINGS, DOT_JSON);
-                settings = JsonTools.readObjectFromJsonFile(Configure.getConfDir(), fileName, Settings.class);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            Settings settings=null;
+            if(sid!=null)
+                try {
+                    String fileName = FileTools.makeFileName(null, sid, SETTINGS, DOT_JSON);
+                    settings = JsonTools.readObjectFromJsonFile(Configure.getConfDir(), fileName, Settings.class);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
 
             if (settings == null) settings = new Settings(configure, serverType,serviceAliases,settingMap);
             //Check necessary APIs and set them if anyone can't be connected.

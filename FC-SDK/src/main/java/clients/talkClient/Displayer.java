@@ -16,11 +16,17 @@ public class Displayer extends Thread {
         while (running.get()) {
             if (!paused.get()) {
                 synchronized (displayMessageQueue) {
-                        System.out.println(displayMessageQueue.poll());
+                    try {
+                        displayMessageQueue.wait();
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    String msg = displayMessageQueue.poll();
+                        if(msg!=null)System.out.println(msg);
                     }
                 }
             try {
-                Thread.sleep(100); // Small delay to reduce CPU usage
+                Thread.sleep(1000); // Small delay to reduce CPU usage
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }

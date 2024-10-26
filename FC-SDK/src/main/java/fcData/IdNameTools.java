@@ -16,6 +16,10 @@ public class IdNameTools {
         return keyBytes;
     }
 
+    public static String makeDid(String text) {
+        return Hash.sha256x2(text);
+    }
+
     public static String makeKeyName(byte[] sessionKey) {
         return Hex.toHex(Hash.sha256(sessionKey)).substring(0,12);
     }
