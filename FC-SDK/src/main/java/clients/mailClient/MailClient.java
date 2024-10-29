@@ -336,7 +336,7 @@ public class MailClient {
         int maxCashes = Wallet.MAX_CASHE_SIZE;
 
         if (Inputer.askIfYes(br, "Are you sure to do below operation on chain?\n" + feip.toNiceJson() + "\n")) {
-            String txSigned = Wallet.makeTx(priKey, null, sendToList, opReturnStr, cd, maxCashes, apipClient, null);
+            String txSigned = Wallet.makeTx(br, priKey, null, sendToList, opReturnStr, cd, maxCashes, apipClient, null);
             if (txSigned == null) {
                 System.out.println("Failed to make tx.");
                 return null;

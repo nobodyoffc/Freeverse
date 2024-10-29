@@ -58,7 +58,9 @@ public class startContactClient {
         if(lastTimeMap==null)lastTimeMap=new HashMap<>();
 
         ContactClient contactClient = new ContactClient(myFid, apipClient, sid, symKey, myPriKeyCipher, lastTimeMap);
-        
+
+        contactClient.checkContacts(br);
+
         contactClient.menu(br);
     }
 }

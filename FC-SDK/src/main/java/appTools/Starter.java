@@ -93,5 +93,25 @@ public class Starter {
             System.out.println("Try again.");
         }
     }
+    public static Settings startMuteServer(String serverName, String[] serviceAliases, Map<String,Object> settingMap, BufferedReader br) {
+        Configure.loadConfig(br);
+
+        Configure configure = Configure.checkPassword(br);
+        if(configure==null)return null;
+        byte[] symKey = configure.getSymKey();
+            //Load the local settings from the file of localSettings.json
+        Settings settings=null;
+        try {
+            String fileName = FileTools.makeFileName(null, serverName, SETTINGS, DOT_JSON);
+            settings = JsonTools.readObjectFromJsonFile(Configure.getConfDir(), fileName, Settings.class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (settings == null) settings = new Settings(configure, null,serviceAliases,settingMap);
+        //Check necessary APIs and set them if anyone can't be connected.
+        settings.initiateMuteServer(serverName, symKey, configure);
+        return settings;
+    }
 
 }

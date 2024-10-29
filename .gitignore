@@ -24,3 +24,9 @@ Thumbs.db
 # avatar
 *.png
 /avatar
+
+# MapDb
+*.db
+
+# vscode
+.vscode/
