@@ -13,6 +13,7 @@ import fch.Wallet;
 import feip.feipData.Secret;
 import feip.feipData.SecretData;
 import feip.feipData.Feip;
+import handlers.CashHandler;
 import tools.BytesTools;
 import tools.Hex;
 import tools.JsonTools;
@@ -28,9 +29,7 @@ import org.slf4j.LoggerFactory;
 import tools.StringTools;
 
 import static appTools.Inputer.askIfYes;
-import static constants.Constants.HOME;
 import static constants.OpNames.*;
-import static constants.FieldNames.LAST_TIME;
 
 public class SecretClient {
     protected static final Logger log = LoggerFactory.getLogger(SecretClient.class);
@@ -53,23 +52,20 @@ public class SecretClient {
     private final BufferedReader br;
     private final String myFid;
     private final ApipClient apipClient;
-    private final CashClient cashClient;
+    private final CashHandler cashHandler;
     private final byte[] symKey;
     private final String myPriKeyCipher;
     private final byte[] myPubKey;
-    private final tools.PersistentSequenceMap secretFileMap;
-    private final Map<String, Long> lastTimeMap;
+    private final tools.PersistentSequenceMap secretDB;
 
     // Constructor
-    public SecretClient(String myFid, ApipClient apipClient, CashClient cashClient, String oid, byte[] symKey, String myPriKeyCipher, Map<String, Long> lastTimeMap, BufferedReader br) {
+    public SecretClient(String myFid, ApipClient apipClient, CashHandler cashHandler, byte[] symKey, String myPriKeyCipher, BufferedReader br) {
         this.myFid = myFid;
         this.apipClient = apipClient;
-        this.cashClient = cashClient;
+        this.cashHandler = cashHandler;
         this.symKey = symKey;
         this.myPriKeyCipher = myPriKeyCipher;
-        if(lastTimeMap==null)lastTimeMap = new HashMap<>();
-        this.lastTimeMap = lastTimeMap;
-        this.secretFileMap = new tools.PersistentSequenceMap(myFid, oid, constants.Strings.SECRET);
+        this.secretDB = new tools.PersistentSequenceMap(myFid, null, constants.Strings.SECRET);
         this.br = br;
         this.myPubKey = KeyTools.priKeyToPubKey(Client.decryptPriKey(myPriKeyCipher, symKey));
     }
@@ -127,7 +123,7 @@ public class SecretClient {
             List<String> secretIds = new ArrayList<>();
             for (SecretDetail secret : chosenSecrets) {
                 secretIds.add(secret.getSecretId());
-                secretFileMap.remove(secret.getTitle().getBytes());
+                secretDB.remove(secret.getTitle().getBytes());
             }
 
             String result = deleteSecret(secretIds, br);
@@ -166,14 +162,12 @@ public class SecretClient {
     }
 
     public void checkSecrets(BufferedReader br) {
-        Long lastTime = lastTimeMap.get(constants.Strings.SECRET);
-        if(lastTime==null)lastTime=0L;
-        List<Secret> secretList = loadAllSecretList(lastTime, true);
+        long lastHeight = secretDB.getLastHeight();
+        List<Secret> secretList = loadAllSecretList(lastHeight, true);
         List<SecretDetail> secretDetailList = secretToSecretDetail(secretList, true);
 
         if (!secretList.isEmpty()) {
-            lastTimeMap.put(constants.Strings.SECRET, secretList.get(0).getBirthHeight());
-            JsonTools.saveToJsonFile(lastTimeMap, myFid, HOME, LAST_TIME, false);
+            secretDB.setLastHeight(secretList.get(0).getBirthHeight());
             deleteUnreadableSecrets();
         }
 
@@ -271,7 +265,7 @@ public class SecretClient {
         long cd = Constants.CD_REQUIRED;
 
         if (askIfYes(br, "Are you sure to do below operation on chain?\n" + feip.toNiceJson() + "\n")) {
-            String result = Wallet.carve(myFid,priKey, opReturnStr, cd, apipClient, cashClient, br);
+            String result = Wallet.carve(myFid,priKey, opReturnStr, cd, apipClient, cashHandler, br);
             if (Hex.isHex32(result)) {
                 System.out.println("The secrets are " + op.toLowerCase() + "ed: " + result + ".\n Wait a few minutes for confirmations before updating secrets...");
                 return result;
@@ -310,7 +304,7 @@ public class SecretClient {
                     secretDetail.setTitle("Bad cipher: "+secret.getCipher());
                 }
             }
-            secretFileMap.put(secretDetail.getTitle().getBytes(), secretDetail.toBytes());
+            secretDB.put(secretDetail.getTitle().getBytes(), secretDetail.toBytes());
             secretDetailList.add(secretDetail);
         }
         BytesTools.clearByteArray(priKey);
@@ -323,7 +317,7 @@ public class SecretClient {
         int totalDisplayed = 0;
 
         while (true) {
-            List<SecretDetail> currentList = secretFileMap.getListFromEnd(lastKey, DEFAULT_SIZE, (byte[] value) -> SecretDetail.fromBytes(value));
+            List<SecretDetail> currentList = secretDB.getListFromEnd(lastKey, DEFAULT_SIZE, (byte[] value) -> SecretDetail.fromBytes(value));
             if (currentList.isEmpty()) {
                 break;
             }
@@ -444,7 +438,7 @@ public class SecretClient {
     private List<SecretDetail> findSecretDetails(String searchStr) {
         List<SecretDetail> foundSecrets = new ArrayList<>();
         
-        for (Map.Entry<byte[], byte[]> entry : secretFileMap.entrySet()) {
+        for (Map.Entry<byte[], byte[]> entry : secretDB.entrySet()) {
             SecretDetail secretDetail = SecretDetail.fromBytes(entry.getValue());
             if (secretDetail != null) {
                 if ((secretDetail.getTitle() != null && secretDetail.getTitle().contains(searchStr)) ||

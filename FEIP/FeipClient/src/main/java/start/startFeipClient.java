@@ -1,0 +1,119 @@
+package start;
+
+import appTools.Inputer;
+import appTools.Menu;
+import appTools.Settings;
+import appTools.Starter;
+import clients.Client;
+import clients.FeipClient;
+import clients.ApipClient;
+import configure.ApiAccount;
+import configure.Configure;
+import configure.ServiceType;
+import fch.fchData.SendTo;
+import feip.feipData.Feip.ProtocolName;
+import feip.feipData.serviceParams.Params;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static appTools.Inputer.askIfYes;
+
+public class startFeipClient {
+
+    public static final int DEFAULT_SIZE = 20;
+    public static Configure configure;
+    public static Settings settings;
+    public static ApiAccount apipAccount;
+    public static ApipClient apipClient;
+    public static BufferedReader br ;
+    public static String clientName= ServiceType.APIP.name();
+    public static String[] serviceAliases = new String[]{ServiceType.APIP.name()};
+    public static String myFid;
+    public static String sid;
+    public static String myPriKeyCipher;
+    public static Map<String, Long> lastTimeMap;
+
+    public static Map<String,Object> settingMap = new HashMap<>();
+
+    public static void main(String[] args) {
+        Menu.welcome(clientName);
+
+        br = new BufferedReader(new InputStreamReader(System.in));
+        settings = Starter.startClient(clientName, serviceAliases, settingMap, br);
+        if(settings==null)return;
+
+        myFid = settings.getMainFid();
+
+        byte[] symKey = settings.getSymKey();
+        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        configure = settings.getConfig();
+        apipAccount = settings.getApiAccount(ServiceType.APIP);
+
+        myFid = apipAccount.getUserId();
+        sid = apipClient.getApiProvider().getId();
+        myPriKeyCipher = apipAccount.getUserPriKeyCipher();
+
+        lastTimeMap = Client.loadLastTime(myFid,sid);
+        if(lastTimeMap==null)lastTimeMap=new HashMap<>();
+
+        byte[] priKey = Client.decryptPriKey(myPriKeyCipher,symKey);
+        
+        // Create and show the FEIP protocols menu
+        Menu feipMenu = new Menu("FEIP Creator");
+
+        String watchFid;
+        if(askIfYes(br, "Create for a watch fid?"))
+            watchFid = Inputer.inputString(br, "Please input the fid of the receiver:");
+        else watchFid = null;
+
+
+        while(true) {
+            List<SendTo> sendToList =null;
+            System.out.println("Create new FEIP operation...");
+
+            if(askIfYes(br,"Does this FEIP need one or more recipient?"))sendToList = SendTo.inputSendToList(br);
+            else sendToList=null;
+
+            // Add menu items for each protocol
+            for (ProtocolName protocol : ProtocolName.values()) {
+                List<SendTo> finalSendToList = sendToList;
+                feipMenu.add(protocol.getName(), () -> {
+                    try {
+                        switch (protocol) {
+                            case PROTOCOL -> FeipClient.protocol(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case CODE -> FeipClient.code(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case CID -> FeipClient.cid(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case NOBODY -> FeipClient.nobody(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case SERVICE -> FeipClient.service(priKey, watchFid, finalSendToList, null, Params.class, apipClient, null, br);
+                            case MASTER -> FeipClient.master(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case MAIL -> FeipClient.mail(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case STATEMENT -> FeipClient.statement(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case HOMEPAGE -> FeipClient.homepage(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case NOTICE_FEE -> FeipClient.noticeFee(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case NID -> FeipClient.nid(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case CONTACT -> FeipClient.contact(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case BOX -> FeipClient.box(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case PROOF -> FeipClient.proof(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case APP -> FeipClient.app(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case REPUTATION -> FeipClient.reputation(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case SECRET -> FeipClient.secret(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case TEAM -> FeipClient.team(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                            case GROUP -> FeipClient.group(priKey, watchFid, finalSendToList, null, null, apipClient, null, br);
+                            case TOKEN -> FeipClient.token(priKey, watchFid, finalSendToList, null, apipClient, null, br);
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Error executing " + protocol.getName() + ": " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                });
+            }
+
+            // Show the menu and handle selections
+            feipMenu.showAndSelect(br);
+        }
+    }
+}

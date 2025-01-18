@@ -1,0 +1,731 @@
+package fch;
+
+import apip.apipData.Sort;
+import clients.ApipClient;
+import handlers.CashHandler;
+import fch.fchData.*;
+import fcData.FcReplierHttp;
+import feip.feipData.Nobody;
+import tools.*;
+import tools.http.AuthType;
+import tools.http.RequestMethod;
+import nasa.NaSaRpcClient;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
+import com.google.gson.Gson;
+
+import constants.*;
+import crypto.KeyTools;
+import nasa.data.UTXO;
+
+import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tx.DogeTxMaker;
+import tx.TxInputDoge;
+import tx.TxOutputDoge;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static appTools.Inputer.askIfYes;
+import static handlers.CashHandler.*;
+import static constants.ApiNames.Version1;
+import static constants.Constants.*;
+import static constants.FieldNames.*;
+import static fch.TxCreator.*;
+import static fch.fchData.Cash.sumCashValue;
+import static tx.DogeTxMaker.getPriKey32;
+
+public class Wallet {
+    private static final Logger log = LoggerFactory.getLogger(Wallet.class);
+    private ApipClient apipClient;
+    private ElasticsearchClient esClient;
+    private NaSaRpcClient nasaClient;
+    public static final int MAX_CASHE_SIZE = 100;
+
+    public Wallet() {
+    }
+
+    public Wallet(ApipClient apipClient) {
+        this.apipClient = apipClient;
+    }
+
+    public Wallet(ElasticsearchClient esClient) {
+        this.esClient = esClient;
+    }
+
+    public Wallet(NaSaRpcClient nasaClient) {
+        this.nasaClient = nasaClient;
+    }
+
+    public Wallet(ApipClient apipClient, ElasticsearchClient esClient, NaSaRpcClient nasaClient) {
+        this.apipClient = apipClient;
+        this.esClient = esClient;
+        this.nasaClient = nasaClient;
+    }
+
+    public static void main(String[] args) {
+        long num = 899996620;
+        byte[] numBytes = BytesTools.longToBytes(num);
+        System.out.println(numBytes);
+
+        long number = BytesTools.bytes8ToLong(numBytes,false);
+        System.out.println(number);
+
+
+        String str = "/wABAAAAAAX14QACAAAAATBmNWOPwTCoczuJI1aWkKK8rP+qzzpnNd7b53YxHPgNAAAAAAD/////A4CWmAAAAAAAGXapFGHEKrtuNDXmO9iIYvN0aj+LhjVCiKwAAAAAAAAAAFZqTFN7InR5cGUiOiJGRUlQIiwic24iOiIzIiwidmVyIjoiNCIsIm5hbWUiOiJDSUQiLCJkYXRhIjp7Im9wIjoicmVnaXN0ZXIiLCJuYW1lIjoiYyJ9fUZJXQUAAAAAGXapFGHEKrtuNDXmO9iIYvN0aj+LhjVCiKwAAAAA";
+        System.out.println(str);
+        System.out.println("Base64 size:"+str.length());
+        String hex = Hex.toHex(Base64.getDecoder().decode(str));
+        System.out.println(hex);
+        System.out.println("Hex size:"+hex.length());
+
+        String strHex = "02000000010f7d38cd088bfd1432e2974668462ba6b042682c223c67e45529b17df97688e40200000000ffffffff0300e1f505000000001976a91461c42abb6e3435e63bd88862f3746a3f8b86354288ac0000000000000000566a4c537b2274797065223a2246454950222c22736e223a2233222c22766572223a2234222c226e616d65223a22434944222c2264617461223a7b226f70223a227265676973746572222c226e616d65223a2263227d7d92f9ae2f000000001976a91461c42abb6e3435e63bd88862f3746a3f8b86354288ac00000000";
+        System.out.println("hex:"+strHex);
+        System.out.println("Unsigned Tx:");
+        System.out.println(TxCreator.decodeTxFch(strHex));
+
+        System.out.println("Unsigned Tx from Base64:");
+        System.out.println(TxCreator.decodeTxFch(str));
+        byte[] priKey = Hex.fromHex("a048f6c843f92bfe036057f7fc2bf2c27353c624cf7ad97e98ed41432f700575");
+
+
+        String signedTx = TxCreator.signRawTxFch(str, priKey);
+        System.out.println(signedTx);
+        System.out.println(StringTools.base64ToHex(signedTx));
+
+        System.out.println("Signed Tx:");
+
+        System.out.println(TxCreator.decodeTxFch(signedTx));
+    }
+
+    public static String carve(String myFid, byte[] priKey, String opReturnStr, long cd, ApipClient apipClient, CashHandler cashHandler, BufferedReader br) {
+        String txSigned;
+        String sendResult;
+        if(cashHandler !=null) sendResult = cashHandler.send(null,null, CD_REQUIRED,null, opReturnStr, br);
+        else {
+            txSigned = makeTx(br, priKey, myFid, null, opReturnStr, cd, MAX_CASH_SIZE, apipClient, null);
+            if (txSigned == null) {
+                System.out.println("Failed to make tx.");
+                return null;
+            }
+            sendResult = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        }
+        return sendResult;
+    }
+
+    public String send(List<Cash> cashList, byte[] priKey, String toAddr, double toAmount, String msg) {
+        SendTo sendTo = new SendTo();
+        sendTo.setFid(toAddr);
+        sendTo.setAmount(toAmount);
+        List<SendTo> sendToList = new ArrayList<>();
+        sendToList.add(sendTo);
+        String txSigned = createTxFch(cashList, priKey, sendToList, msg);
+        return apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+    }
+
+    public static String signRawTx(String rawTxHex, byte[] priKey) {
+        return TxCreator.signRawTxFch(rawTxHex, priKey);
+    }
+
+    public static String sendTxByApip(BufferedReader br, byte[] priKey, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient) {
+        String txSigned = makeTx(br, priKey, null, sendToList, opReturnStr, cd, maxCashes, apipClient, null);
+        apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Object data = apipClient.checkResult();
+        return (String) data;
+    }
+
+    public static String decodeTxFch(String rawTxHex) {
+        return TxCreator.decodeTxFch(rawTxHex);
+    }
+
+    public static String decodeTxFch(byte[] rawTxBytes) {
+        return TxCreator.decodeTxFch(rawTxBytes);
+    }
+
+    public static String makeTxByEs(BufferedReader br,byte[] priKey, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ElasticsearchClient esClient) {
+        return makeTx(br, priKey, null, sendToList, opReturnStr, cd, maxCashes, null, esClient);
+    }
+
+    public static String makeTxForCs(BufferedReader br, String fid, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient) {
+        return makeTx(br, null, fid, sendToList, opReturnStr, cd, maxCashes, apipClient, null);
+    }
+
+    public static String makeTx(BufferedReader br,byte[] priKey, String fidForOfflineSign, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient, ElasticsearchClient esClient){
+        if(sendToList!=null && !sendToList.isEmpty())if (checkNobodys(br, sendToList, apipClient, esClient)) return null;
+        return makeTx(priKey,fidForOfflineSign,sendToList,opReturnStr,cd,maxCashes,apipClient,esClient, null);
+    }
+
+    public static boolean checkNobodys(BufferedReader br, List<SendTo> sendToList, ApipClient apipClient, ElasticsearchClient esClient) {
+        System.out.println("Check nobodys...");
+        List<String> recipientList = new ArrayList<>();
+        if (!sendToList.isEmpty()) {
+            for (SendTo sendTo : sendToList) {
+                recipientList.add(sendTo.getFid());
+            }
+        }
+        List<Nobody> nobodyList = checkNobodys(recipientList, apipClient, esClient);
+        return !nobodyList.isEmpty() && askIfYes(br, "Cancel sending?");
+    }
+
+    public static String makeTx(byte[] priKey, String fidForOfflineSign, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient, ElasticsearchClient esClient, NaSaRpcClient nasaClient) {
+        String fid;
+        if (priKey != null) fid = KeyTools.priKeyToFid(priKey);
+        else fid = fidForOfflineSign;
+        long amount = 0;
+        double sum = 0;
+        if (sendToList == null) sendToList = new ArrayList<>();
+        else {
+            for(SendTo sendTo :sendToList)sum += sendTo.getAmount();
+        }
+
+        List<Cash> cashList;
+        long bestHeight;
+        int opReturnSize = 0;
+        byte[] opReturnBytes = null;
+        if(opReturnStr!=null) {
+            opReturnBytes= opReturnStr.getBytes();
+            opReturnSize = opReturnBytes.length;
+        }
+
+        if (apipClient != null) {
+            cashList = apipClient.cashValid(fid,sum,cd,sendToList.size(),opReturnSize,RequestMethod.POST,AuthType.FC_SIGN_BODY);
+            bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
+        } else if (esClient != null) {
+            FcReplierHttp replier = getCashListFromEs(fid, true, null, maxCashes, null, null, esClient);
+            if (replier.getCode() != 0) return replier.getMessage();
+            cashList = ObjectTools.objectToList(replier.getData(), Cash.class);//DataGetter.getCashList(replier.getData());
+            bestHeight = getBestHeight(esClient);
+        } else if(nasaClient !=null){
+            UTXO[] utxos = nasaClient.listUnspent(fid, "0", true);
+            cashList = Cash.fromUtxoList(Arrays.asList(utxos));
+            bestHeight = nasaClient.getBestHeight();
+        }else
+            return "No APIP client or ES client to make tx.";
+
+        if (cashList == null) return "No qualified cash found.";
+        Iterator<Cash> iter = cashList.iterator();
+        List<Cash> spendCashList = new ArrayList<>();
+        long valueSum = 0;
+        long cdSum = 0;
+        long fee =0;
+        while (iter.hasNext()) {
+            Cash cash = iter.next();
+
+            if(!cash.isValid()){
+                iter.remove();
+                continue;
+            }
+            if (cash.getIssuer() != null && cash.getIssuer().equals(COINBASE) && (bestHeight - cash.getBirthHeight()) < Constants.TenDayBlocks) {
+                iter.remove();
+                continue;
+            }
+            spendCashList.add(cash);
+            fee = calcTxSize(spendCashList.size(), sendToList.size(), opReturnSize);
+            valueSum += cash.getValue();
+            Long cd1 = ParseTools.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+            cdSum += cd1;
+            if (valueSum >= (amount + fee) && cdSum >= cd) break;
+        }
+
+        if (!(valueSum >= (amount + fee) && cdSum >= cd)) return null;
+
+        if (priKey != null) {
+                return createTxFch(spendCashList, priKey, sendToList, opReturnStr);
+            }
+        else {
+//            return makeTxForOfflineSign(sendToList, opReturnStr, cashList);
+            byte[] unsignedTx = TxCreator.createUnsignedTxFch(spendCashList,sendToList,opReturnBytes,null,Constants.MIN_FEE_RATE);
+            if(unsignedTx==null)return null;
+            return Base64.getEncoder().encodeToString(unsignedTx);
+        }
+    }
+
+    public static List<Nobody> checkNobodys(List<String> recipientList, ApipClient apipClient, ElasticsearchClient esClient) {
+        List<Nobody> nobodyList = new ArrayList<>();
+        if (apipClient != null) {
+            Map<String, Nobody> nobodyMap = apipClient.nobodyByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, recipientList.toArray(new String[0]));
+            if (nobodyMap != null && !nobodyMap.isEmpty()) nobodyList.addAll(nobodyMap.values());
+        } else if (esClient != null) {
+            List<FieldValue> valueList = recipientList.stream().map(FieldValue::of).collect(Collectors.toList());
+            SearchResponse<Nobody> result = null;
+            try {
+                result = esClient.search(s -> s.index(IndicesNames.NOBODY).query(q -> q.terms(t -> t.field(FieldNames.FID).terms(t1 -> t1.value(valueList)))), Nobody.class);
+            } catch (IOException e) {
+                log.error("ElasticSearch Client wrong when checking recipients.");
+            }
+            if (result != null && result.hits() != null && !result.hits().hits().isEmpty()) {
+                nobodyList.addAll(result.hits().hits().stream().map(Hit::source).toList());
+            }
+        } else {
+            System.out.println("No client to check nobodys.");
+        }
+
+        if (!nobodyList.isEmpty()) {
+            System.out.println("The following recipients has lost their private keys:");
+            for (Nobody nobody : nobodyList)
+                System.out.println(nobody.getFid());
+        }
+        return nobodyList;
+    }
+
+    public static String makeTxForOfflineSign(List<SendTo> sendToList, String opReturn, List<Cash> meetList) {
+
+        Gson gson = new Gson();
+        StringBuilder RawTx = new StringBuilder("[");
+        int i = 0;
+        for (Cash cash : meetList) {
+            if (i > 0) RawTx.append(",");
+            RawTxForCs rawTxForCs = new RawTxForCs();
+            rawTxForCs.setAddress(cash.getOwner());
+            rawTxForCs.setAmount(ParseTools.satoshiToCoin(cash.getValue()));
+            rawTxForCs.setTxid(cash.getBirthTxId());
+            rawTxForCs.setIndex(cash.getBirthIndex());
+            rawTxForCs.setSeq(i);
+            rawTxForCs.setDealType(1);
+            RawTx.append(gson.toJson(rawTxForCs));
+            i++;
+        }
+        int j = 0;
+        if (sendToList != null) {
+            for (SendTo sendTo : sendToList) {
+                RawTxForCs rawTxForCs = new RawTxForCs();
+                rawTxForCs.setAddress(sendTo.getFid());
+                rawTxForCs.setAmount(sendTo.getAmount());
+                rawTxForCs.setSeq(j);
+                rawTxForCs.setDealType(2);
+                RawTx.append(",");
+                RawTx.append(gson.toJson(rawTxForCs));
+                j++;
+            }
+        }
+
+        if (opReturn != null) {
+            RawOpReturnForCs rawOpReturnForCs = new RawOpReturnForCs();
+            rawOpReturnForCs.setMsg(opReturn);
+            rawOpReturnForCs.setMsgType(2);
+            rawOpReturnForCs.setSeq(j);
+            rawOpReturnForCs.setDealType(3);
+            RawTx.append(",");
+            RawTx.append(gson.toJson(rawOpReturnForCs));
+        }
+        RawTx.append("]");
+        return RawTx.toString();
+    }
+
+    public static FcReplierHttp sendTx(String txSigned, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient naSaRpcClient) {
+        FcReplierHttp fcReplierHttp = new FcReplierHttp();
+        if(txSigned==null)return null;
+        if (naSaRpcClient != null) {
+            String txid = naSaRpcClient.sendRawTransaction(txSigned);
+            long bestHeight = naSaRpcClient.getBestHeight();
+            if (Hex.isHexString(txid)) {
+                fcReplierHttp.Set0Success();
+                fcReplierHttp.setData(txid);
+                fcReplierHttp.setBestHeight(bestHeight);
+            }
+        } else if (apipClient != null) {
+            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            return apipClient.getFcClientEvent().getResponseBody();
+        } else fcReplierHttp.setOtherError("No client to send tx.");
+        return fcReplierHttp;
+    }
+
+
+
+    public static double calcRestAmount(List<Cash> cashList, List<SendTo> sendToList, int opReturnSize, Double feeRate, boolean isMultiSign, P2SH p2sh) {
+        double cashAmountSum = Cash.sumCashAmount(cashList);
+
+        double sendToAmountSum = 0;
+        if(sendToList!=null){
+            for(SendTo sendTo : sendToList){
+                sendToAmountSum += sendTo.getAmount();
+            }
+        }
+
+        if(feeRate==null)feeRate = DEFAULT_FEE_RATE;
+        int sendSize=0;
+        if(sendToList!=null)sendSize = sendToList.size();
+
+        long feeLong = TxCreator.calcFee(cashList.size(), sendSize, opReturnSize, feeRate, isMultiSign, p2sh);
+
+        double feeCoin = ParseTools.satoshiToCoin(feeLong);
+        return cashAmountSum-feeCoin-sendToAmountSum;
+    }
+
+    public Double getFeeRate() {
+        if (apipClient != null) return apipClient.feeRate(RequestMethod.GET, AuthType.FREE);
+        if (esClient != null) return calcFeeRate(esClient);
+        if (nasaClient != null) return nasaClient.estimateFee(3);
+        return 0.001D;
+    }
+
+    public static Double calcFeeRate(ElasticsearchClient esClient) {
+        SearchResponse<Block> result;
+        try {
+            result = esClient.search(s -> s.index(IndicesNames.BLOCK).size(20).sort(sort -> sort.field(f -> f.field(HEIGHT).order(SortOrder.Desc))), Block.class);
+        } catch (IOException e) {
+            log.error("ElasticSearch Client wrong when calculating fee rate.");
+            return null;
+        }
+        if (result == null || result.hits() == null) return null;
+        List<Block> blockList = new ArrayList<>();
+        Block expensiveBlock = new Block();
+        expensiveBlock.setFee(0L);
+        for (Hit<Block> hit : result.hits().hits()) {
+            Block block = hit.source();
+            if (block == null || block.getTxCount() == 0) continue;
+            blockList.add(block);
+            if (block.getFee() > expensiveBlock.getFee())
+                expensiveBlock = block;
+        }
+        if (blockList.isEmpty()) return 0D;
+        blockList.remove(expensiveBlock);
+        if (blockList.isEmpty()) return 0d;
+        double feeSum = 0;
+        double netBlockSizeSum = 0;
+        for (Block block : blockList) {
+            feeSum += block.getFee();
+            netBlockSizeSum += (block.getSize() - Constants.EMPTY_BLOCK_SIZE);
+        }
+        if (feeSum == 0 || (netBlockSizeSum / 20) < 0.7 * Constants.M_BYTES) return Constants.MIN_FEE_RATE;
+        return Math.max(feeSum / netBlockSizeSum / 1000, Constants.MIN_FEE_RATE);
+    }
+
+    public void mergeCashList(List<Cash> cashList, byte[] priKey) {
+        Iterator<Cash> iter = cashList.iterator();
+        for (int i = 0; i <= cashList.size() % 100; i++) {
+            List<Cash> subCashList = new ArrayList<>();
+            int j = 0;
+            while (iter.hasNext()) {
+                Cash cash = iter.next();
+                subCashList.add(cash);
+                iter.remove();
+                j++;
+                if (j == 100) break;
+            }
+            mergeCashList(subCashList, 0, priKey);
+        }
+    }
+
+    public String mergeCashList(List<Cash> cashList, int issueNum, byte[] priKey) {
+        if (cashList == null || cashList.isEmpty()) return null;
+        String fid = KeyTools.priKeyToFid(priKey);
+
+        Object data;
+        long fee = calcTxSize(cashList.size(), issueNum, 0);
+
+        long sumValue = sumCashValue(cashList) - fee;
+        if (sumValue < 0) {
+            System.out.println("Cash value is too small:" + sumValue + fee + ". Try again.");
+            return null;
+        }
+        long valueForOne = sumValue / issueNum;
+        if (valueForOne < Constants.SatoshiDust) {
+            System.out.println("The sum of all cash values is too small to split. Try again.");
+            return null;
+        }
+        List<SendTo> sendToList = new ArrayList<>();
+        SendTo sendTo = new SendTo();
+        sendTo.setFid(fid);
+        sendTo.setAmount(ParseTools.satoshiToCoin(valueForOne));
+        for (int i = 0; i < issueNum - 1; i++) sendToList.add(sendTo);
+        SendTo sendTo1 = new SendTo();
+        sendTo1.setFid(fid);
+        long lastCashValue = sumValue - (valueForOne * (issueNum - 1));
+        sendTo1.setAmount(ParseTools.satoshiToCoin(lastCashValue));
+        sendToList.add(sendTo1);
+
+        String txSigned = createTxFch(cashList, priKey, sendToList, null);
+
+        if (apipClient != null) {
+            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            data = apipClient.checkResult();
+        } else if (nasaClient != null) {
+            data = nasaClient.sendRawTransaction(txSigned);
+        } else return null;
+        return (String) data;
+    }
+
+    public List<Cash> getAllCashList(String fid, boolean onlyValid, int size, ArrayList<Sort> sortList, List<String> last) {
+        List<Cash> cashList = new ArrayList<>();
+
+        FcReplierHttp fcReplierHttp;
+        if (this.apipClient != null) {
+            do {
+                List<Cash> newCashList = getCashListFromApip(fid, onlyValid, size, sortList, last, null, apipClient);
+                if (newCashList == null) {
+                    log.debug(this.apipClient.getFcClientEvent().getMessage());
+                    return cashList;
+                }
+                if (newCashList.isEmpty()) return cashList;
+                cashList.addAll(newCashList);
+
+                fcReplierHttp = this.apipClient.getFcClientEvent().getResponseBody();
+                last = fcReplierHttp.getLast();
+            } while (cashList.size() < fcReplierHttp.getTotal());
+        } else if (this.esClient != null) {
+            do {
+                fcReplierHttp = getCashListFromEs(fid, onlyValid, null, size, sortList, last, esClient);
+                if (fcReplierHttp.getCode() != 0) {
+                    log.debug(fcReplierHttp.getMessage());
+                    break;
+                }
+                if (fcReplierHttp.getData() != null) {
+                    cashList.addAll(ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
+                } else return cashList;
+                last = ObjectTools.objectToList(fcReplierHttp.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
+            } while (cashList.size() < fcReplierHttp.getTotal());
+        } else if (this.nasaClient != null) {
+            fcReplierHttp = getCashListFromNasaNode(fid, null, true, nasaClient);
+            if (fcReplierHttp.getCode() != 0) {
+                log.debug(fcReplierHttp.getMessage());
+                return cashList;
+            }
+            if (fcReplierHttp.getData() != null)
+                cashList.addAll(ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
+            else return cashList;
+        }
+        return cashList;
+    }
+
+//
+//    public CashListReturn getAllCashList(long value, long cd, int outputNum, int opReturnLength, String addrRequested, ElasticsearchClient esClient) {
+//
+//        CashListReturn cashListReturn = new CashListReturn();
+//
+//        String index = IndicesNames.CASH;
+//
+//        SearchResponse<Cash> result;
+//        try {
+//            SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
+//            searchBuilder.index(index);
+//            searchBuilder.trackTotalHits(tr -> tr.enabled(true));
+//            searchBuilder.sort(s1 -> s1.field(f -> f.field(FieldNames.CD).order(SortOrder.Asc)));
+//            searchBuilder.size(200);
+//
+//            BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
+//
+//            boolQueryBuilder.must(m -> m.term(t -> t.field(FieldNames.OWNER).value(addrRequested)));
+//            boolQueryBuilder.must(m1 -> m1.term(t1 -> t1.field(FieldNames.VALID).value(true)));
+//
+//            searchBuilder.query(q -> q.bool(boolQueryBuilder.build()));
+//
+//            result = esClient.search(searchBuilder.build(), Cash.class);
+//
+//        } catch (IOException e) {
+//            cashListReturn.setCode(ReplyCodeMessage.Code1020OtherError);
+//            cashListReturn.setMsg("Can't get cashes. Check ES.");
+//            return cashListReturn;
+//        }
+//
+//        if (result == null) {
+//            cashListReturn.setCode(ReplyCodeMessage.Code1020OtherError);
+//            cashListReturn.setMsg("Can't get cashes.Check ES.");
+//            return cashListReturn;
+//        }
+//
+//        long total = result.hits().hits().size();
+//
+//        long valueSum = 0;//(long)result.aggregations().get(FieldNames.SUM).valueSum().value();
+//        long cdSum = 0;
+//        long fee = 0;
+//
+//
+//        List<Cash> cashList = new ArrayList<>();
+//        List<Hit<Cash>> hitList = result.hits().hits();
+//
+//        long bestHeight = getBestHeight(esClient);
+//
+//        for (Hit<Cash> hit : hitList) {
+//            Cash cash = hit.source();
+//            if (cash == null) continue;
+//            if (cash.getIssuer() != null && cash.getIssuer().equals(COINBASE) && cash.getBirthHeight() > (bestHeight - Constants.OneDayInterval * 10))
+//                continue;
+//            cashList.add(cash);
+//        }
+//        List<Cash> issuingCashList = cashClient.getIssuingCashListFromJedis(addrRequested);
+//        if (issuingCashList != null && issuingCashList.size() > 0) {
+//            for (Cash cash : issuingCashList) {
+//                cashList.add(cash);
+//            }
+//        }
+//
+//        String[] spendingCashIds = cashClient.getSpendingCashIdFromJedis(addrRequested);
+//        if (spendingCashIds != null) {
+//            for (String id : spendingCashIds) {
+//                Iterator<Cash> iter = cashList.iterator();
+//                while (iter.hasNext()) {
+//                    Cash cash = iter.next();
+//                    if (id.equals(cash.getCashId())) {
+//                        iter.remove();
+//                        break;
+//                    }
+//                }
+//            }
+//        }
+//
+//        List<Cash> meetList = new ArrayList<>();
+//        boolean done = false;
+//        for (Cash cash : cashList) {
+//            meetList.add(cash);
+//            valueSum += cash.getValue();
+//            cdSum += cash.getCd();
+//            fee = calcTxSize(cashList.size(), outputNum, opReturnLength);
+//
+//            if (valueSum > (value + fee) && cdSum > cd) {
+//                done = true;
+//                break;
+//            }
+//        }
+//
+//        if (!done) {
+//            cashListReturn.setCode(ReplyCodeMessage.Code1020OtherError);
+//            cashListReturn.setMsg("Can't meet the conditions.");
+//            return cashListReturn;
+//        }
+//        cashListReturn.setTotal(total);
+//        cashListReturn.setCashList(meetList);
+//
+//        return cashListReturn;
+//    }
+
+    public static Map<String, TxHasInfo> checkMempool(NaSaRpcClient nasaClient, ApipClient apipClient, ElasticsearchClient esClient){
+        String[] txIds = nasaClient.getRawMempoolIds();
+        if(txIds==null)return new HashMap<>();
+        Map<String, TxHasInfo> txInMempoolMap = new HashMap<>();
+        for (String txid : txIds) {
+            String rawTxHex = nasaClient.getRawTx(txid);
+            TxHasInfo txInMempool = null;
+            try {
+                txInMempool = RawTxParser.parseMempoolTx(rawTxHex, txid, apipClient, esClient);
+            } catch (Exception e) {
+                log.error("Parse tx of "+txid+" wrong:"+e.getMessage());
+            }
+            if(txInMempool!=null)txInMempoolMap.put(txid, txInMempool);
+        }
+        return txInMempoolMap;
+    }
+
+    public Long getBestHeight() {
+        try {
+            if (nasaClient != null) return nasaClient.getBestHeight();
+            if (esClient != null) return getBestHeight(esClient);
+            if (apipClient != null) {
+                apipClient.ping(Version1, RequestMethod.POST, AuthType.FC_SIGN_BODY, null);
+                return apipClient.getFcClientEvent().getResponseBody().getBestHeight();
+            }
+        } catch (Exception ignore) {
+        }
+        return null;
+    }
+
+    public static long getBestHeight(ElasticsearchClient esClient) {
+        long bestHeight = 0;
+        try {
+            Block bestBlock = EsTools.getBestBlock(esClient);
+            if (bestBlock != null)
+                bestHeight = bestBlock.getHeight();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return bestHeight;
+    }
+
+    @SuppressWarnings("unused")
+    private static CashToInputsResult cashListToInputs(List<Cash> cashList) {
+        if (cashList == null) return null;
+        List<Map<String, Object>> inputs = new LinkedList<>();
+        long inputSum = 0;
+        long cdSum = 0;
+        for (Cash cash : cashList) {
+            Map<String, Object> transactionInput = new LinkedHashMap<>();
+            transactionInput.put("txid", cash.getBirthTxId());
+            transactionInput.put("vout", cash.getBirthIndex());
+            inputs.add(transactionInput);
+            inputSum = inputSum + cash.getValue();
+            cdSum = cdSum + cash.getCd();
+        }
+        CashToInputsResult cashToInputsResult = new CashToInputsResult();
+        cashToInputsResult.setInputs(inputs);
+        cashToInputsResult.setValueSum(inputSum);
+        cashToInputsResult.setCdSum(cdSum);
+
+        return cashToInputsResult;
+    }
+//
+//    public static List<TxOutput> sendToToTxOutputList(List<SendTo> sendToList) {
+//        List<TxOutput> outputList = new ArrayList<>();
+//        for (SendTo sendTo : sendToList) {
+//            TxOutput txOutput = new TxOutput();
+//            txOutput.setAddress(sendTo.getFid());
+//            txOutput.setAmount((long) (sendTo.getAmount() * COIN_TO_SATOSHI));
+//            outputList.add(txOutput);
+//        }
+//        return outputList;
+//    }
+//
+//    public static List<TxInput> cashToInputList(List<Cash> cashList, byte[] priKey) {
+//        List<TxInput> inputList = new ArrayList<>();
+//        JsonTools.printJson(cashList);
+//        for (Cash cash : cashList) {
+//            TxInput txInput = new TxInput();
+//            txInput.setIndex(cash.getBirthIndex());
+//            txInput.setAmount(cash.getValue());
+//            txInput.setTxId(cash.getBirthTxId());
+//            txInput.setPriKey32(priKey);
+//            inputList.add(txInput);
+//        }
+//        return inputList;
+//    }
+
+    public void sendDogeTest() {
+        String url = "http://127.0.0.1:22555";
+        String username = "username";
+        String password = "password";
+        String fromAddr = "DS8M937nHLtmeNef6hnu17ZXAwmVpM6TXY";
+        String toAddr = "DK22fsq2qaH6aFDZqMUcEyC1JbULjHZqVo";
+        String minConf = "1";
+        tx.Utxo[] utxos = (new tx.ListUnspent()).listUnspent(fromAddr, minConf, url, username, password);
+        if (utxos != null && utxos.length != 0) {
+            List<TxInputDoge> txInputList = new ArrayList<>();
+            int var9 = utxos.length;
+
+            String priKey = null;
+            for (tx.Utxo utxo1 : utxos) {
+                TxInputDoge txInput = new TxInputDoge();
+                txInput.setTxId(utxo1.getTxid());
+                txInput.setAmount((long) (utxo1.getAmount() * 1.0E8));
+                txInput.setIndex(utxo1.getVout());
+                priKey = "L2w6HHF352YhuLsX33YgGDL9r9Uv3auyHz5StzarvGasZWwsP83E";
+                byte[] priKeyBytes = getPriKey32(priKey);
+                shade.bitcoinj159.core.ECKey ecKey = shade.bitcoinj159.core.ECKey.fromPrivate(priKeyBytes);
+                txInput.setPriKey32(ecKey.getPrivKeyBytes());
+                txInputList.add(txInput);
+            }
+
+            TxOutputDoge txOutput = new TxOutputDoge();
+            txOutput.setAddress(toAddr);
+            txOutput.setAmount(63 * COIN_TO_SATOSHI);
+            List<TxOutputDoge> txOutputs = new ArrayList<>();
+            txOutputs.add(txOutput);
+            tx.EstimateFee.ResultSmart fee = (new tx.EstimateFee()).estimatesmartfee(3, url, username, password);
+            String opReturn = "a";
+            String signedTx = DogeTxMaker.createTransactionSignDoge(txInputList, txOutputs, opReturn, fromAddr, fee.getFeerate());
+            System.out.println(signedTx);
+            String txId = new NaSaRpcClient(url, username, password).sendRawTransaction(signedTx);
+            if (txId == null) {
+                throw new RuntimeException("Failed to send tx.");
+            }
+            System.out.println(txId);
+        } else {
+            System.out.println("No UTXOs");
+        }
+    }
+}

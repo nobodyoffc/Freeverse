@@ -1,10 +1,7 @@
 package APIP18V1_Wallet;
 
-import apip.apipData.UnconfirmedInfo;
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import constants.ApiNames;
-import constants.ReplyCodeMessage;
 import fcData.FcReplierHttp;
 import fch.fchData.Cash;
 import initial.Initiator;
@@ -41,7 +38,7 @@ public class UnconfirmedCashes extends HttpServlet {
 
         //Check authorization
         try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false);
+            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
             if (requestCheckResult == null) {
                 return;
             }
