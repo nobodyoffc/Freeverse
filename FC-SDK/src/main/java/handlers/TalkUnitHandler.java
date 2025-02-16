@@ -1,7 +1,10 @@
-package fcData;
+package handlers;
 
+import fcData.TalkUnit;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
+
+import appTools.Settings;
 import tools.FileTools;
 
 import java.io.File;
@@ -12,7 +15,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.*;
 
-public class TalkUnitHandler{
+public class TalkUnitHandler extends Handler {
     private final String dbName;
     private final DB db;
     private final Map<String, ConcurrentHashMap<String, TalkUnit>> mapMap;
@@ -37,6 +40,22 @@ public class TalkUnitHandler{
         this.recentTalkUnits = new ConcurrentHashMap<>();
         this.recentIdQueue = new ConcurrentLinkedQueue<>();
         
+        this.commitScheduler = Executors.newSingleThreadScheduledExecutor();
+        commitScheduler.scheduleWithFixedDelay(this::commitIfNeeded, 5, 5, TimeUnit.SECONDS);
+    }
+
+    public TalkUnitHandler(Settings settings){
+        String userHome = System.getProperty("user.home");
+        this.dbName = FileTools.makeName(settings.getMainFid(), settings.getSid(), "talkUnit", true);
+        String dbPath = Paths.get(userHome, dbName + ".db").toString();
+
+        this.db = DBMaker.fileDB(new File(dbPath))
+                .fileMmapEnable()
+                .closeOnJvmShutdown()
+                .make();
+        this.mapMap = new ConcurrentHashMap<>();
+        this.recentTalkUnits = new ConcurrentHashMap<>();
+        this.recentIdQueue = new ConcurrentLinkedQueue<>();
         this.commitScheduler = Executors.newSingleThreadScheduledExecutor();
         commitScheduler.scheduleWithFixedDelay(this::commitIfNeeded, 5, 5, TimeUnit.SECONDS);
     }

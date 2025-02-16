@@ -5,15 +5,18 @@ import apip.apipData.Fcdsl;
 import apip.apipData.Sort;
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
 import clients.Client;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.TermQuery;
+import co.elastic.clients.elasticsearch._types.query_dsl.TermsQuery;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
@@ -24,11 +27,13 @@ import constants.Constants;
 import constants.FieldNames;
 import constants.IndicesNames;
 import constants.Values;
+import crypto.KeyTools;
 import fch.ParseTools;
 import fch.TxCreator;
 import fch.Wallet;
 import fch.fchData.*;
 import feip.feipData.Cid;
+import feip.feipData.Service;
 import nasa.NaSaRpcClient;
 import nasa.data.UTXO;
 import org.jetbrains.annotations.NotNull;
@@ -42,7 +47,7 @@ import java.io.IOException;
 import java.util.*;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import tools.*;
 import tools.http.AuthType;
 import tools.http.RequestMethod;
@@ -59,13 +64,15 @@ import static constants.Strings.DESC;
 import static constants.Values.*;
 import static fch.TxCreator.DEFAULT_FEE_RATE;
 
-public class CashHandler {
+public class CashHandler extends Handler {
     private static final Logger log = LoggerFactory.getLogger(CashHandler.class);
     private static final int BATCH_SIZE = 50;
     private final Map<String, Integer> unsafeIdJumpNumMap;
     private final ApipClient apipClient;
     private final NaSaRpcClient nasaClient;
     private final ElasticsearchClient esClient;
+    private final MempoolHandler mempoolHandler;
+
     private String myFid;
     private CidInfo cidInfo;
     private final byte[] priKey;
@@ -76,16 +83,32 @@ public class CashHandler {
     private Long lastFee;
 
     public CashHandler(String myFid, String myPriKeyCipher, byte[] symKey,
-                       ApipClient apipClient, NaSaRpcClient nasaClient, ElasticsearchClient esClient,
+                       ApipClient apipClient, NaSaRpcClient nasaClient, String blockDir, ElasticsearchClient esClient, String dbPath,
                        BufferedReader br) {
         this.apipClient = apipClient;
         this.nasaClient = nasaClient;
         this.esClient = esClient;
+        if(nasaClient!=null)this.mempoolHandler = new MempoolHandler(nasaClient, apipClient, esClient, blockDir);
+        else this.mempoolHandler = null;
         this.myFid = myFid;
         this.priKey = Client.decryptPriKey(myPriKeyCipher,symKey);
         this.br =br;
         unsafeIdJumpNumMap=new HashMap<>();
-        this.cashDB = new PersistentSequenceMap(myFid,null, CASH);
+        this.cashDB = new PersistentSequenceMap(myFid,null, CASH, dbPath);
+        freshCashDB();
+    }
+
+    public CashHandler(Settings settings){
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.nasaClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        if(nasaClient!=null)this.mempoolHandler = new MempoolHandler(settings);
+        else this.mempoolHandler = null;
+        this.myFid = settings.getMainFid();
+        this.priKey = Client.decryptPriKey(settings.getMyPriKeyCipher(),settings.getSymKey());
+        this.br = settings.getBr(); 
+        unsafeIdJumpNumMap=new HashMap<>();
+        this.cashDB = new PersistentSequenceMap(settings.getMainFid(),null, CASH, settings.getDbDir());
         freshCashDB();
     }
 
@@ -106,18 +129,7 @@ public class CashHandler {
         return lastFee;
     }
 
-    public Long freshBestHeight(){
-        Long bestHeight=null;
-        if(apipClient!=null)bestHeight = apipClient.bestHeight();
-        else if(esClient!=null) {
-            try {
-                bestHeight = EsTools.getBestBlock(esClient).getHeight();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }else if(nasaClient!=null)bestHeight = nasaClient.getBestHeight();
-        return bestHeight;
-    }
+
     public void menu() {
         Menu menu = new Menu("Cash Management");
         menu.add("View Valid", this::show);
@@ -259,6 +271,8 @@ public class CashHandler {
         if(!askIfYes(br, "Do you sure to carve the words on chain. It's irreversible. "))return;
         swapAll(chosenCashes, words);
     }
+
+    
 
     public String swapAll(List<Cash> cashList, String words) {
             List<SendTo> sendToList = new ArrayList<>();
@@ -430,6 +444,8 @@ public class CashHandler {
        Shower.printUnderline(10);
        if(br!=null)Menu.anyKeyToContinue(br);
    }
+
+   
 
     /**
      * @param cashList if null, choose cashes from cashFileMap.
@@ -695,7 +711,8 @@ public class CashHandler {
             freshValidCashes();
             return;
         }
-        bestHeight = freshBestHeight();
+        bestHeight = Settings.getBestHeight(apipClient,nasaClient,esClient,null);
+
         if(bestHeight>lastHeight){
             if(apipClient!=null){
                 cidInfo = apipClient.cidInfoById(myFid);
@@ -721,7 +738,7 @@ public class CashHandler {
 
     private boolean freshCashFileMapByNasaRpc() {
         cashDB.clear();
-        FcReplierHttp replier = getCashListFromNasaNode(myFid, null, true, nasaClient);
+        ReplyBody replier = getCashListFromNasaNode(myFid, null, true, nasaClient);
         if(replier.getCode()!=0){
             log.error("Failed to get cash list from nasaClient:{}", replier.getMessage());
             return true;
@@ -747,37 +764,31 @@ public class CashHandler {
         List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.LAST_TIME,DESC,FieldNames.CASH_ID,ASC);
         sb.sort(sortOptionsList);
         Query.Builder qb = new Query.Builder();
+        BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
+
+        // Add the owner must clause
+        boolBuilder.must(new Query(new TermQuery.Builder()
+            .field(FieldNames.OWNER)
+            .value(myFid)
+            .build()));
+
+        // Add height conditions if lastHeight is provided
         if (lastHeight != null) {
-            BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
-
-            RangeQuery.Builder spendHeightRb = new RangeQuery.Builder()
-                .field(FieldNames.SPEND_HEIGHT)
+            RangeQuery.Builder lastHeightRb = new RangeQuery.Builder()
+                .field(FieldNames.LAST_HEIGHT)
                 .gt(JsonData.of(lastHeight));
 
-            RangeQuery.Builder birthHeightRb = new RangeQuery.Builder()
-                .field(FieldNames.BIRTH_HEIGHT)
-                .gt(JsonData.of(lastHeight));
-
-            boolBuilder.should(List.of(
-                new Query(spendHeightRb.build()),
-                new Query(birthHeightRb.build())
-            ));
-
-            qb.bool(boolBuilder.build());
+            boolBuilder.must(
+                new Query(lastHeightRb.build())
+            );
         }
 
-        qb.bool(new BoolQuery.Builder()
-            .must(new Query(new TermQuery.Builder()
-                .field(FieldNames.OWNER)
-                .value(myFid)
-                .build()))
-            .build());
+        qb.bool(boolBuilder.build());
+        sb.query(qb.build());
 
         while(true){
             if (last != null && !last.isEmpty())
                 sb.searchAfter(last);
-
-            sb.query(qb.build());
 
             SearchRequest searchRequest = sb.build();
             SearchResponse<Cash> result;
@@ -838,6 +849,58 @@ public class CashHandler {
         System.out.println("Updated "+ total + " cashes.");
     }
 
+    public static List<Cash> getAllCashListByFids(List<String> fids, Boolean valid, Long sinceHeight, int size, ArrayList<Sort> sortList, List<String> last, ApipClient apipClient, NaSaRpcClient nasaClient, ElasticsearchClient esClient) {
+        if (fids == null || fids.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Try APIP client first
+        if (apipClient != null) {
+            Fcdsl fcdsl = new Fcdsl();
+            fcdsl.addSize(size);
+            fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(fids.toArray(new String[0]));
+            if (valid != null) {
+                fcdsl.getQuery().addNewTerms().addNewFields(VALID).addNewValues(valid.toString());
+            }
+            if (sinceHeight != null) {
+                fcdsl.getQuery().addNewRange().addNewFields(FieldNames.BIRTH_HEIGHT).addGt(String.valueOf(sinceHeight));
+            }
+            if (sortList != null) {
+                fcdsl.setSort(sortList);
+            }
+            if (last != null) {
+                fcdsl.setAfter(last);
+            }   
+            List<Cash> cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            if (cashList != null && !cashList.isEmpty()) {
+                return cashList;
+            }
+        }
+
+        // Try Elasticsearch client second
+        if (esClient != null) {
+            try {
+                ReplyBody replier = getAllCashListFromEs(fids, valid, sinceHeight, size, sortList, last, esClient);
+                if (replier.getCode() == 0 && replier.getData() != null) {
+                    return (List<Cash>) replier.getData();
+                }
+            } catch (Exception e) {
+                log.error("Error getting cash list from ES: {}", e.getMessage());
+            }
+        }
+
+        // Try NASA client last
+        if (nasaClient != null) {
+            ReplyBody replier = getCashListFromNasaNode(String.join(",", fids), "1", true, nasaClient);
+            if (replier.getCode() == 0 && replier.getData() != null) {
+                return (List<Cash>) replier.getData();
+            }
+        }
+
+        // Return empty list if all attempts fail
+        return new ArrayList<>();
+    }
+
     public void freshValidCashes(){
         cashDB.clear();
         if(myFid==null){
@@ -865,7 +928,7 @@ public class CashHandler {
             bestHeight = apipClient.getBestHeight();
             cashDB.setLastHeight(bestHeight);
         }else if(esClient!=null){
-            FcReplierHttp replier = getCashListFromEs(myFid, true, null, DEFAULT_CASH_LIST_SIZE, null, null, esClient);
+            ReplyBody replier = getAllCashListFromEs(new ArrayList<>(Arrays.asList(myFid)), true, null, DEFAULT_CASH_LIST_SIZE, null, null, esClient);
             if(replier.getCode()!=0){
                 log.error("Failed to get cash list from esClient:{}", replier.getMessage());
                 return;
@@ -884,7 +947,7 @@ public class CashHandler {
             } catch (IOException ignore) {}
             
         }else {
-            FcReplierHttp replier = getCashListFromNasaNode(myFid, "1", true, nasaClient);
+            ReplyBody replier = getCashListFromNasaNode(myFid, "1", true, nasaClient);
             if(replier.getCode()!=0){
                 log.error("Failed to get cash list from nasaClient:{}", replier.getMessage());
                 return;
@@ -904,8 +967,61 @@ public class CashHandler {
         freshUnconfirmed();
     }
 
+    @NotNull
+    public static ReplyBody getAllCashListFromEs(List<String> fids, Boolean valid, Long afterHeight, int size,
+                                                 ArrayList<Sort> sortList, List<String> last, ElasticsearchClient esClient) {
+    ReplyBody finalReplier = new ReplyBody();
+    List<Cash> allCashes = new ArrayList<>();
+    long totalGot = 0;
+
+    while (true) {
+        ReplyBody replier = getCashListFromEs(fids, valid, afterHeight, size, sortList, last, esClient);
+        
+        if (replier.getCode() != 0) {
+            // If there's an error, return the error replier
+            return replier;
+        }
+
+        List<Cash> cashList = (List<Cash>)replier.getData();
+        if (cashList == null || cashList.isEmpty()) {
+            break;
+        }
+
+        allCashes.addAll(cashList);
+        totalGot += cashList.size();
+
+        // If we got less than requested size, we've reached the end
+        if (cashList.size() < size) {
+            break;
+        }
+
+        // Update last for pagination
+        last = replier.getLast();
+        if (last == null || last.isEmpty()) {
+            break;
+        }
+    }
+
+    // Set the final results
+    finalReplier.set0Success(allCashes);
+    finalReplier.setGot(totalGot);
+    finalReplier.setTotal(totalGot);
+    
+    return finalReplier;
+    }
+
     private void freshUnconfirmed() {
-        if(nasaClient!=null){
+        if(mempoolHandler!=null){
+            List<Cash> unconfirmedCashes = mempoolHandler.checkUnconfirmedCash(myFid);
+            if(unconfirmedCashes!=null){
+                for(Cash cash : unconfirmedCashes){
+                    if(cash.isValid())
+                        cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                    else
+                        cashDB.remove(Hex.fromHex(cash.getCashId()));
+                }
+            }
+        }else if(nasaClient!=null){
             Map<String, TxHasInfo> txInMempoolMap = Wallet.checkMempool(nasaClient, apipClient, esClient);
             for (Map.Entry<String, TxHasInfo> entry : txInMempoolMap.entrySet()) {
                 TxHasInfo txHasInfo = entry.getValue();
@@ -923,7 +1039,9 @@ public class CashHandler {
                 }
             }
         }else if(apipClient!=null){
-            List<Cash> unconfirmedCashes = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            Map<String,List<Cash>> result = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.FC_SIGN_BODY,myFid);
+            if(result==null)return;
+            List<Cash> unconfirmedCashes = result.get(myFid);
             if(unconfirmedCashes!=null){
                 for (Cash cash : unconfirmedCashes) {
                     if(myFid.equals(cash.getOwner())){
@@ -953,72 +1071,72 @@ public class CashHandler {
             cidInfo = apipClient.cidInfoById(myFid);
         }
     }
-//
-//    public List<Cash> getAllCashList(String fid, Boolean valid, ArrayList<Sort> sortList, List<String> last, BufferedReader br) {
-//        List<Cash> cashList = new ArrayList<>();
-//        int chosenSize = 0;
-//
-//        FcReplierHttp fcReplierHttp;
-//        if (this.apipClient != null) {
-//            do {
-//                List<Cash> newCashList = getCashListFromApip(fid, valid, DEFAULT_CASH_LIST_SIZE, sortList, last, null, apipClient);
-//                if (newCashList == null) {
-//                    log.debug(this.apipClient.getFcClientEvent().getMessage());
-//                    return cashList;
-//                }
-//                if (newCashList.isEmpty()) return cashList;
-//
-//                if(br!=null){
-//                    List<Cash> chosenCashList = chooseCasheList(newCashList, chosenSize, br);
-//                    cashList.addAll(chosenCashList);
-//                    chosenSize += chosenCashList.size();
-//                    if(!askIfYes(br,"Do you want to continue to get cashes?")){
-//                        break;
-//                    }
-//                }else cashList.addAll(newCashList);
-//
-//                fcReplierHttp = this.apipClient.getFcClientEvent().getResponseBody();
-//                last = fcReplierHttp.getLast();
-//            } while (cashList.size() < fcReplierHttp.getTotal());
-//        } else if (this.esClient != null) {
-//            do {
-//                fcReplierHttp = getCashListFromEs(fid, valid, null, DEFAULT_CASH_LIST_SIZE, sortList, last, esClient);
-//                if (fcReplierHttp.getCode() != 0) {
-//                    log.debug(fcReplierHttp.getMessage());
-//                    break;
-//                }
-//                if (fcReplierHttp.getData() != null) {
-//                    List<Cash> newCashList = ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class);
-//
-//                    if(br!=null){
-//                        List<Cash> chosenCashList = chooseCasheList(newCashList, chosenSize, br);
-//                        cashList.addAll(chosenCashList);
-//                        chosenSize += chosenCashList.size();
-//                        if(!askIfYes(br,"Do you want to continue to get cashes?")){
-//                            break;
-//                        }
-//                    }else cashList.addAll(newCashList);
-//
-//                } else return cashList;
-//                last = ObjectTools.objectToList(fcReplierHttp.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
-//            } while (cashList.size() < fcReplierHttp.getTotal());
-//        } else if (this.nasaClient != null) {
-//            fcReplierHttp = getCashListFromNasaNode(fid, null, true, nasaClient);
-//            if (fcReplierHttp.getCode() != 0) {
-//                log.debug(fcReplierHttp.getMessage());
-//                return cashList;
-//            }
-//            if (fcReplierHttp.getData() != null){
-//                List<Cash> newCashList = ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class);
-//                if(br!=null){
-//                    List<Cash> chosenCashList = chooseCasheList(newCashList, chosenSize, br);
-//                    cashList.addAll(chosenCashList);
-//                    chosenSize += chosenCashList.size();
-//                }else cashList.addAll(newCashList);
-//            }else return cashList;
-//        }
-//        return cashList;
-//    }
+
+    public List<Cash> getAllCashList(String fid, Boolean valid, ArrayList<Sort> sortList, List<String> last, BufferedReader br) {
+        List<Cash> cashList = new ArrayList<>();
+        int chosenSize = 0;
+
+        ReplyBody replyBody;
+        if (this.apipClient != null) {
+            do {
+                List<Cash> newCashList = getCashListFromApip(fid, valid, DEFAULT_CASH_LIST_SIZE, sortList, last, null, apipClient);
+                if (newCashList == null) {
+                    log.debug(this.apipClient.getFcClientEvent().getMessage());
+                    return cashList;
+                }
+                if (newCashList.isEmpty()) return cashList;
+
+                if(br!=null){
+                    List<Cash> chosenCashList = chooseCasheList(newCashList, chosenSize, br);
+                    cashList.addAll(chosenCashList);
+                    chosenSize += chosenCashList.size();
+                    if(!askIfYes(br,"Do you want to continue to get cashes?")){
+                        break;
+                    }
+                }else cashList.addAll(newCashList);
+
+                replyBody = this.apipClient.getFcClientEvent().getResponseBody();
+                last = replyBody.getLast();
+            } while (cashList.size() < replyBody.getTotal());
+        } else if (this.esClient != null) {
+            do {
+                replyBody = getCashListFromEs(new ArrayList<>(Arrays.asList(fid)), valid, null, DEFAULT_CASH_LIST_SIZE, sortList, last, esClient);
+                if (replyBody.getCode() != 0) {
+                    log.debug(replyBody.getMessage());
+                    break;
+                }
+                if (replyBody.getData() != null) {
+                    List<Cash> newCashList = ObjectTools.objectToList(replyBody.getData(), Cash.class);
+
+                    if(br!=null){
+                        List<Cash> chosenCashList = chooseCasheList(newCashList, chosenSize, br);
+                        cashList.addAll(chosenCashList);
+                        chosenSize += chosenCashList.size();
+                        if(!askIfYes(br,"Do you want to continue to get cashes?")){
+                            break;
+                        }
+                    }else cashList.addAll(newCashList);
+
+                } else return cashList;
+                last = ObjectTools.objectToList(replyBody.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
+            } while (cashList.size() < replyBody.getTotal());
+        } else if (this.nasaClient != null) {
+            replyBody = getCashListFromNasaNode(fid, null, true, nasaClient);
+            if (replyBody.getCode() != 0) {
+                log.debug(replyBody.getMessage());
+                return cashList;
+            }
+            if (replyBody.getData() != null){
+                List<Cash> newCashList = ObjectTools.objectToList(replyBody.getData(), Cash.class);
+                if(br!=null){
+                    List<Cash> chosenCashList = chooseCasheList(newCashList, chosenSize, br);
+                    cashList.addAll(chosenCashList);
+                    chosenSize += chosenCashList.size();
+                }else cashList.addAll(newCashList);
+            }else return cashList;
+        }
+        return cashList;
+    }
 
     public List<Cash> getIssuingCashListFromJedis(String addr, JedisPool jedisPool) {
         List<Cash> issuingCashList = new ArrayList<>();
@@ -1084,9 +1202,9 @@ public class CashHandler {
     }
 
     @NotNull
-    public static FcReplierHttp getCashListFromEs(String fid, Boolean valid, Long afterHeight, int size,
-                                                  ArrayList<Sort> sortList, List<String> last, ElasticsearchClient esClient) {
-        FcReplierHttp replier = new FcReplierHttp();
+    public static ReplyBody getCashListFromEs(List<String> fids, Boolean valid, Long afterHeight, int size,
+                                              ArrayList<Sort> sortList, List<String> last, ElasticsearchClient esClient) {
+        ReplyBody replier = new ReplyBody();
         SearchRequest.Builder sb = new SearchRequest.Builder();
         sb.index(CASH);
         sb.trackTotalHits(t -> t.enabled(true));
@@ -1115,8 +1233,17 @@ public class CashHandler {
         }
         BoolQuery.Builder bb = new BoolQuery.Builder();
         List<Query> queryList = new ArrayList<>();
-        TermQuery tq1 = new TermQuery.Builder().field(OWNER).value(fid).build();
-        queryList.add(new Query(tq1));
+        
+        // Replace multiple Term queries with a single Terms query
+        List<FieldValue> fieldValues= new ArrayList<>();
+        for (String fid : fids) {
+            fieldValues.add(FieldValue.of(fid));
+        }
+        TermsQuery tq = new TermsQuery.Builder()
+            .field(OWNER)
+            .terms(t -> t.value(fieldValues))
+            .build();
+        queryList.add(new Query(tq));
 
         if (valid!=null ){
             if(valid)queryList.add(new Query(new TermQuery.Builder().field(VALID).value(TRUE).build()));
@@ -1126,13 +1253,15 @@ public class CashHandler {
         bb.must(queryList);
 
         qb.bool(bb.build());
-
         sb.query(qb.build());
 
         SearchRequest searchRequest = sb.build();
-        SearchResponse<Cash> result;
         try {
+
+            SearchResponse<Cash> result;
+
             result = esClient.search(searchRequest, Cash.class);
+
             if (result.hits() == null || result.hits().hits() == null) {
                 log.error("Failed to get Hits from esClient.");
                 replier.setOtherError("Failed to get Hits from esClient.");
@@ -1148,12 +1277,11 @@ public class CashHandler {
 
                     newLast = hit.sort();
                 }
-                replier.setData(cashList);
+                replier.set0Success(cashList);
                 replier.setGot((long) cashList.size());
                 replier.setTotal((long) result.hits().hits().size());
                 if (newLast != null)
                     replier.setLast(newLast);
-                replier.set0Success();
             }
         } catch (IOException e) {
             log.error("EsClient error:{}", e.getMessage());
@@ -1162,8 +1290,8 @@ public class CashHandler {
         return replier;
     }
     
-    public static FcReplierHttp getCashListFromNasaNode(String fid, String minConf,
-                                                 boolean includeUnsafe, NaSaRpcClient naSaRpcClient) {
+    public static ReplyBody getCashListFromNasaNode(String fid, String minConf,
+                                                    boolean includeUnsafe, NaSaRpcClient naSaRpcClient) {
         UTXO[] utxos = new NaSaRpcClient(naSaRpcClient.getUrl(), naSaRpcClient.getUsername(), naSaRpcClient.getPassword()).listUnspent(fid, minConf, includeUnsafe);
         List<Cash> cashList = new ArrayList<>();
         for (UTXO utxo : utxos) {
@@ -1175,18 +1303,16 @@ public class CashHandler {
             cash.setLockScript(utxo.getRedeemScript());
             cashList.add(cash);
         }
-        FcReplierHttp fcReplierHttp = new FcReplierHttp();
-        fcReplierHttp.set0Success();
-        fcReplierHttp.setData(cashList);
-        return fcReplierHttp;
+        ReplyBody replyBody = new ReplyBody();
+        replyBody.set0Success();
+        replyBody.setData(cashList);
+        return replyBody;
     }
 
     // Unconfirmed Transaction Methods
-    public static void checkUnconfirmedSpentByJedisPool(List<Cash> meetList, JedisPool jedisPool) {
-        if(jedisPool==null)return;
-        try (Jedis jedis1 = jedisPool.getResource()) {
-            checkUnconfirmedSpentByJedis(meetList, jedis1);
-        }
+    public static void checkUnconfirmed(List<Cash> meetList, String fid, MempoolHandler mempoolHandler, ApipClient apipClient) {
+        if(mempoolHandler!=null)mempoolHandler.updateUnconfirmedValidCash(meetList,fid);
+        if(apipClient!=null)apipClient.updateUnconfirmedValidCash(meetList,fid);
     }
 
     public static void checkUnconfirmedSpentByJedis(List<Cash> cashList, Jedis jedis) {
@@ -1235,10 +1361,10 @@ public class CashHandler {
              if(last!=null){
                  fcdsl.setAfter(last);
              }
-             FcReplierHttp fcReplierHttp = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-             if(fcReplierHttp==null)break;
-             last = fcReplierHttp.getLast();
-             subCashList = ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class);
+             ReplyBody replyBody = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+             if(replyBody ==null)break;
+             last = replyBody.getLast();
+             subCashList = ObjectTools.objectToList(replyBody.getData(), Cash.class);
              if(subCashList == null)break;
              got += subCashList.size();
 
@@ -1288,7 +1414,7 @@ public class CashHandler {
         return cashList.removeIf(cash -> isImmature(cash, bestHeight));
     }
 
-    public static SearchResult<Cash> getValidCashes(String myFid, Long amount, Long cd, Long sinceHeight, int outputSize, int msgSize, ApipClient apipClient, ElasticsearchClient esClient, JedisPool jedisPool) {
+    public static SearchResult<Cash> getValidCashes(String myFid, Long amount, Long cd, Long sinceHeight, int outputSize, int msgSize, ApipClient apipClient, ElasticsearchClient esClient, MempoolHandler mempoolHandler) {
         SearchResult<Cash> searchResult = new SearchResult<>();
         List<Cash> cashList = null;
         Long bestheight = null;
@@ -1317,7 +1443,7 @@ public class CashHandler {
             }catch (Exception ignore){}
 
             if (amount == null && cd == null) {
-                checkUnconfirmedSpentByJedisPool(cashList, jedisPool);
+                checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
                 searchResult.setData(cashList);
                 searchResult.setGot((long) cashList.size());
                 return searchResult;
@@ -1330,8 +1456,8 @@ public class CashHandler {
                 searchBuilder.index(CASH)
                         .trackTotalHits(tr -> tr.enabled(true))
                         .sort(s1 -> s1.field(f -> f.field(FieldNames.CD).order(SortOrder.Asc)))
-                        .sort(s2 -> s2.field(f -> f.field(FieldNames.CASH_ID).order(SortOrder.Asc)))
-                        .size(200);
+                                .sort(s2 -> s2.field(f -> f.field(FieldNames.CASH_ID).order(SortOrder.Asc)))
+                                        .size(200);
 
                 BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
                 TermQuery ownerQuery = new TermQuery.Builder().field(OWNER).value(myFid).build();
@@ -1369,7 +1495,7 @@ public class CashHandler {
                 cashList.add(hit.source());
             }
             if (amount == null && cd == null) {
-                checkUnconfirmedSpentByJedisPool(cashList, jedisPool);
+                checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
                 searchResult.setData(cashList);
                 searchResult.setGot((long) cashList.size());
                 try{
@@ -1384,7 +1510,7 @@ public class CashHandler {
             return searchResult;
         }
 
-        checkUnconfirmedSpentByJedisPool(cashList, jedisPool);
+        checkUnconfirmed(cashList,myFid, mempoolHandler, apipClient);
 
         amount = amount == null ? 0L : amount;
         cd = cd == null ? 0L : cd;
@@ -1485,5 +1611,132 @@ public class CashHandler {
 
     public void setMyFid(String myFid) {
         this.myFid = myFid;
+    }
+
+    /**
+     * Instance method that creates a transaction with an OP_RETURN message and optional CD requirement
+     * @param opReturn The message to be written to the blockchain
+     * @param cd The minimum CD requirement (can be null)
+     * @return The transaction ID if successful, null otherwise
+     */
+    public String carve(String opReturn, Long cd) {
+        return carve(opReturn, cd, this.priKey, this.apipClient);
+    }
+    /**
+     * Creates a transaction with an OP_RETURN message and optional CD requirement
+     * @param opReturn The message to be written to the blockchain
+     * @param cd The minimum CD requirement (can be null)
+     * @param priKey The private key for signing the transaction
+     * @param apipClient The APIP client for broadcasting the transaction
+     * @return The transaction ID if successful, null otherwise
+     */
+    public static String carve(String opReturn, Long cd, byte[] priKey, ApipClient apipClient) {
+        if (opReturn == null || opReturn.isEmpty()) {
+            return null;
+        }
+
+        String fid = KeyTools.priKeyToFid(priKey);
+
+        // Get valid cashes that meet the CD requirement
+        SearchResult<Cash> searchResult = getValidCashes(
+            fid, 
+            null, 
+            cd, 
+            null, 
+            1, 
+            opReturn.getBytes().length, 
+            apipClient, 
+            null, null);
+
+        if (searchResult.hasError() || searchResult.getData().isEmpty()) {
+            return null;
+        }
+
+        List<Cash> cashList = searchResult.getData();
+        
+        // Create and sign the transaction
+        byte[] unSignedTxBytes = TxCreator.createUnsignedTxFch(
+            cashList, 
+            null, 
+            opReturn.getBytes(), 
+            null, 
+            DEFAULT_FEE_RATE
+        );
+
+        if (unSignedTxBytes == null) {
+            return null;
+        }
+
+        byte[] signedTxBytes = TxCreator.signRawTxFch(unSignedTxBytes, priKey);
+        if (signedTxBytes == null) {
+            return null;
+        }
+
+        // Broadcast the transaction
+        String signedTx = Hex.toHex(signedTxBytes);
+        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+    }
+
+    /**
+     * Static method to send FCH to one or more recipients
+     * @param priKey The private key for signing the transaction
+     * @param sendToList List of recipients and amounts
+     * @param apipClient APIP client for blockchain interaction (required)
+     * @param esClient Optional ES client for backup cash lookup
+     * @return Transaction ID if successful, null if failed
+     */
+    public static String send(byte[] priKey, List<SendTo> sendToList, ApipClient apipClient, @Nullable ElasticsearchClient esClient) {
+        if (priKey == null || sendToList == null || sendToList.isEmpty() || apipClient == null) {
+            return null;
+        }
+
+        String fid = KeyTools.priKeyToFid(priKey);
+        if (fid == null) {
+            return null;
+        }
+
+        // Calculate total amount needed
+        double totalAmount = sendToList.stream()
+                .mapToDouble(SendTo::getAmount)
+                .sum();
+
+        // Get valid cashes that meet the amount requirement
+        SearchResult<Cash> searchResult = getValidCashes(
+            fid, 
+            ParseTools.coinToSatoshi(totalAmount), 
+            null, 
+            null, 
+            sendToList.size(), 
+            0, 
+            apipClient, 
+            esClient, null);
+
+        if (searchResult.hasError() || searchResult.getData().isEmpty()) {
+            return null;
+        }
+
+        List<Cash> cashList = searchResult.getData();
+
+        // Create and sign the transaction
+        byte[] unSignedTxBytes = TxCreator.createUnsignedTxFch(
+            cashList, 
+            sendToList,
+                (byte[]) null,
+            null, 
+            DEFAULT_FEE_RATE
+        );
+
+        if (unSignedTxBytes == null) {
+            return null;
+        }
+
+        byte[] signedTxBytes = TxCreator.signRawTxFch(unSignedTxBytes, priKey);
+        if (signedTxBytes == null) {
+            return null;
+        }
+
+        // Broadcast the transaction
+        String signedTx = Hex.toHex(signedTxBytes);
+        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
 }

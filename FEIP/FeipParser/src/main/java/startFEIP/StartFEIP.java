@@ -8,8 +8,8 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.json.JsonData;
 import com.google.gson.Gson;
-import configure.ServiceType;
 import constants.IndicesNames;
+import feip.feipData.Service;
 import tools.JsonTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,8 +34,12 @@ public class StartFEIP {
 
 
 	private final static String serverName = "FEIP Parser";
-	public static String[] serviceAliases = new String[]{
-			ServiceType.ES.name(),
+//	public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{
+//			Service.ServiceType.ES,
+//	};
+
+	public static final Object[] modules = new Object[]{
+			Service.ServiceType.ES
 	};
 
 	public static Map<String,Object>  settingMap = new HashMap<> ();
@@ -48,13 +52,13 @@ public class StartFEIP {
 	public static void main(String[] args)throws Exception{
 		Menu.welcome(serverName);
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-		Settings settings = Starter.startMuteServer(serverName, serviceAliases, settingMap, br);
+		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules);
 		if(settings ==null)return;
 		String opReturnJsonPath = (String) settingMap.get(Settings.OP_RETURN_PATH);
 		byte[] symKey = settings.getSymKey();
 
 		//Prepare API clients
-		ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
+		ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
 
 		Menu menu = new Menu("FEIP Parser");
 

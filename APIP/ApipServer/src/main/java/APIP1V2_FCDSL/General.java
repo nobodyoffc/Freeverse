@@ -1,16 +1,13 @@
 package APIP1V2_FCDSL;
 
 import apip.apipData.Sort;
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import appTools.Settings;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 import server.FcdslRequestHandler;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -22,39 +19,49 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-@WebServlet(name = ApiNames.General, value = "/"+ApiNames.SN_1+"/"+ApiNames.Version1 +"/"+ApiNames.General)
+@WebServlet(name = ApipApiNames.GENERAL, value = "/"+ ApipApiNames.SN_1+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GENERAL)
 public class General extends HttpServlet {
+    private final Settings settings;
+    private final ReplyBody replier;
+    private final HttpRequestChecker httpRequestChecker;
+
+    public General() {
+        this.settings = Initiator.settings;
+        this.replier = new ReplyBody(settings);
+        this.httpRequestChecker = new HttpRequestChecker(settings, replier);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid, request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+                return;
+        }
+        List<Object> meetList;
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+        ArrayList<Sort> defaultSortList = null;
+        String index = httpRequestChecker.getRequestBody().getFcdsl().getIndex();
+        meetList = fcdslRequestHandler.doRequest(index, defaultSortList, Object.class);
+        if(meetList==null){
+            try {
+                response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
+            } catch (IOException ignore) {
                 return;
             }
-            List<Object> meetList;
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-            ArrayList<Sort> defaultSortList = null;
-            String index = requestCheckResult.getRequestBody().getFcdsl().getIndex();
-            meetList = fcdslRequestHandler.doRequest(index, defaultSortList, Object.class, jedis);
-
-
-            if ( meetList== null) return;
-            replier.setGot((long) meetList.size());
-            replier.reply0SuccessHttp(meetList, jedis, null);
         }
+        if ( meetList== null) return;
+        replier.setGot((long) meetList.size());
+        replier.reply0SuccessHttp(meetList,response);
     }
 }
 

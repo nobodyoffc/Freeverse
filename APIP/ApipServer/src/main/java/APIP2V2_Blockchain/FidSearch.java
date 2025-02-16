@@ -1,12 +1,13 @@
 package APIP2V2_Blockchain;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import fch.fchData.Address;
 import initial.Initiator;
 import tools.http.AuthType;
 import server.FcdslRequestHandler;
+import appTools.Settings;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -18,19 +19,25 @@ import java.util.ArrayList;
 
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApiNames.FidSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.FidSearch)
+@WebServlet(name = ApipApiNames.FID_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.FID_SEARCH)
 public class FidSearch extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public FidSearch() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,FID,true,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.ADDRESS, Address.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.ADDRESS, Address.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,FID,true,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.ADDRESS, Address.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.ADDRESS, Address.class, defaultSort, request,response,authType);
     }
 }
 

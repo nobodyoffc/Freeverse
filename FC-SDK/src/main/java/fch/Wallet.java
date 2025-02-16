@@ -4,7 +4,7 @@ import apip.apipData.Sort;
 import clients.ApipClient;
 import handlers.CashHandler;
 import fch.fchData.*;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.Nobody;
 import tools.*;
 import tools.http.AuthType;
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 
 import static appTools.Inputer.askIfYes;
 import static handlers.CashHandler.*;
-import static constants.ApiNames.Version1;
+import static server.ApipApiNames.VERSION_1;
 import static constants.Constants.*;
 import static constants.FieldNames.*;
 import static fch.TxCreator.*;
@@ -198,7 +198,7 @@ public class Wallet {
             cashList = apipClient.cashValid(fid,sum,cd,sendToList.size(),opReturnSize,RequestMethod.POST,AuthType.FC_SIGN_BODY);
             bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
         } else if (esClient != null) {
-            FcReplierHttp replier = getCashListFromEs(fid, true, null, maxCashes, null, null, esClient);
+            ReplyBody replier = getCashListFromEs(new ArrayList<>(Arrays.asList(fid)), true, null, maxCashes, null, null, esClient);
             if (replier.getCode() != 0) return replier.getMessage();
             cashList = ObjectTools.objectToList(replier.getData(), Cash.class);//DataGetter.getCashList(replier.getData());
             bestHeight = getBestHeight(esClient);
@@ -319,22 +319,22 @@ public class Wallet {
         return RawTx.toString();
     }
 
-    public static FcReplierHttp sendTx(String txSigned, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient naSaRpcClient) {
-        FcReplierHttp fcReplierHttp = new FcReplierHttp();
+    public static ReplyBody sendTx(String txSigned, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient naSaRpcClient) {
+        ReplyBody replyBody = new ReplyBody();
         if(txSigned==null)return null;
         if (naSaRpcClient != null) {
             String txid = naSaRpcClient.sendRawTransaction(txSigned);
             long bestHeight = naSaRpcClient.getBestHeight();
             if (Hex.isHexString(txid)) {
-                fcReplierHttp.Set0Success();
-                fcReplierHttp.setData(txid);
-                fcReplierHttp.setBestHeight(bestHeight);
+                replyBody.Set0Success();
+                replyBody.setData(txid);
+                replyBody.setBestHeight(bestHeight);
             }
         } else if (apipClient != null) {
             apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
             return apipClient.getFcClientEvent().getResponseBody();
-        } else fcReplierHttp.setOtherError("No client to send tx.");
-        return fcReplierHttp;
+        } else replyBody.setOtherError("No client to send tx.");
+        return replyBody;
     }
 
 
@@ -456,7 +456,7 @@ public class Wallet {
     public List<Cash> getAllCashList(String fid, boolean onlyValid, int size, ArrayList<Sort> sortList, List<String> last) {
         List<Cash> cashList = new ArrayList<>();
 
-        FcReplierHttp fcReplierHttp;
+        ReplyBody replyBody;
         if (this.apipClient != null) {
             do {
                 List<Cash> newCashList = getCashListFromApip(fid, onlyValid, size, sortList, last, null, apipClient);
@@ -467,29 +467,29 @@ public class Wallet {
                 if (newCashList.isEmpty()) return cashList;
                 cashList.addAll(newCashList);
 
-                fcReplierHttp = this.apipClient.getFcClientEvent().getResponseBody();
-                last = fcReplierHttp.getLast();
-            } while (cashList.size() < fcReplierHttp.getTotal());
+                replyBody = this.apipClient.getFcClientEvent().getResponseBody();
+                last = replyBody.getLast();
+            } while (cashList.size() < replyBody.getTotal());
         } else if (this.esClient != null) {
             do {
-                fcReplierHttp = getCashListFromEs(fid, onlyValid, null, size, sortList, last, esClient);
-                if (fcReplierHttp.getCode() != 0) {
-                    log.debug(fcReplierHttp.getMessage());
+                replyBody = getCashListFromEs(new ArrayList<>(Arrays.asList(fid)), onlyValid, null, size, sortList, last, esClient);
+                if (replyBody.getCode() != 0) {
+                    log.debug(replyBody.getMessage());
                     break;
                 }
-                if (fcReplierHttp.getData() != null) {
-                    cashList.addAll(ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
+                if (replyBody.getData() != null) {
+                    cashList.addAll(ObjectTools.objectToList(replyBody.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
                 } else return cashList;
-                last = ObjectTools.objectToList(fcReplierHttp.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
-            } while (cashList.size() < fcReplierHttp.getTotal());
+                last = ObjectTools.objectToList(replyBody.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
+            } while (cashList.size() < replyBody.getTotal());
         } else if (this.nasaClient != null) {
-            fcReplierHttp = getCashListFromNasaNode(fid, null, true, nasaClient);
-            if (fcReplierHttp.getCode() != 0) {
-                log.debug(fcReplierHttp.getMessage());
+            replyBody = getCashListFromNasaNode(fid, null, true, nasaClient);
+            if (replyBody.getCode() != 0) {
+                log.debug(replyBody.getMessage());
                 return cashList;
             }
-            if (fcReplierHttp.getData() != null)
-                cashList.addAll(ObjectTools.objectToList(fcReplierHttp.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
+            if (replyBody.getData() != null)
+                cashList.addAll(ObjectTools.objectToList(replyBody.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
             else return cashList;
         }
         return cashList;
@@ -618,7 +618,7 @@ public class Wallet {
             if (nasaClient != null) return nasaClient.getBestHeight();
             if (esClient != null) return getBestHeight(esClient);
             if (apipClient != null) {
-                apipClient.ping(Version1, RequestMethod.POST, AuthType.FC_SIGN_BODY, null);
+                apipClient.ping(VERSION_1, RequestMethod.POST, AuthType.FC_SIGN_BODY, null);
                 return apipClient.getFcClientEvent().getResponseBody().getBestHeight();
             }
         } catch (Exception ignore) {

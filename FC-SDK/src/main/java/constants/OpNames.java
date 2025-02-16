@@ -14,6 +14,7 @@ public class OpNames {
     public static final String RATE = "rate";
     public static final String READ = "read";
     public static final String DELETE = "delete";
+    public static final String ADD = "add";
     
     public static boolean contains(String value) {
         return value.equals(UPDATE) || value.equals(PUBLISH) || value.equals(STOP) ||

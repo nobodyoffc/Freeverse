@@ -1,16 +1,15 @@
 package APIP0V2_OpenAPI;
 
+import appTools.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import feip.feipData.Service;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -21,25 +20,33 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@WebServlet(name = ApiNames.Totals, value = "/"+ApiNames.Version1 +"/"+ApiNames.Totals)
+@WebServlet(name = ApipApiNames.TOTALS, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOTALS)
 public class Totals extends HttpServlet {
+    private final Settings settings;
+    private final ReplyBody replier;
+    private final HttpRequestChecker httpRequestChecker;
+
+    public Totals() {
+        this.settings = Initiator.settings;
+        this.replier = new ReplyBody(settings);
+        this.httpRequestChecker = new HttpRequestChecker(settings, replier);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid, request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws IOException {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws IOException {
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
                 return;
             }
 
@@ -49,10 +56,9 @@ public class Totals extends HttpServlet {
             Map<String, String> allSumMap = new HashMap<>();
             for (IndicesRecord record : indicesRecordList) {
                 allSumMap.put(record.index(), record.docsCount());
-            }
-            replier.setGot((long) allSumMap.size());
-            replier.setTotal((long) allSumMap.size());
-            replier.reply0SuccessHttp(allSumMap, jedis, null);
         }
+        replier.setGot((long) allSumMap.size());
+        replier.setTotal((long) allSumMap.size());
+        replier.reply0SuccessHttp(allSumMap,response);
     }
 }

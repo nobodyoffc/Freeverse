@@ -151,7 +151,12 @@ public class JsonTools {
     public static <T> T readObjectFromJsonFile(String filePath, String fileName, Class<T> tClass) throws IOException {
         File file = new File(filePath, fileName);
         if (!file.exists() || file.length() == 0) return null;
-        Gson gson = new Gson();
+        
+        // Create a custom Gson builder with type adapters
+        GsonBuilder gsonBuilder = new GsonBuilder();
+        gsonBuilder.enableComplexMapKeySerialization(); // Enable complex map key serialization
+        Gson gson = gsonBuilder.create();
+        
         FileInputStream fis = new FileInputStream(file);
         byte[] configJsonBytes = new byte[fis.available()];
         fis.read(configJsonBytes);
@@ -432,6 +437,40 @@ public class JsonTools {
         }
 
         return set;
+    }
+
+    public static <T> void showListInNiceJson(List<T> items, BufferedReader br) {
+        if (items == null || items.isEmpty()) {
+            System.out.println("No items to display.");
+            return;
+        }
+
+        // Create pretty-printing Gson instance once
+        Gson prettyGson = new GsonBuilder()
+            .setPrettyPrinting()
+            .create();
+
+        for (int i = 0; i < items.size(); i++) {
+            T item = items.get(i);
+            System.out.println("\n=== Item " + (i + 1) + " of " + items.size() + " ===");
+            try {
+                String jsonOutput = prettyGson.toJson(item);
+                System.out.println(jsonOutput);
+            } catch (Exception e) {
+                System.out.println("Error converting item to JSON: " + e.getMessage());
+                System.out.println("Raw toString(): " + item.toString());
+            }
+
+            // If not the last item, ask to continue
+            if (i < items.size() - 1 && br!=null) {
+                System.out.println("\nPress Enter to see next item...");
+                try {
+                    br.readLine();
+                } catch (IOException e) {
+                    System.out.println("Error reading input: " + e.getMessage());
+                }
+            }
+        }
     }
 
     @Test

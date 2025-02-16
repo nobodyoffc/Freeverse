@@ -6,18 +6,17 @@ import tools.RedisTools;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
 import crypto.Hash;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.FileTools;
 import tools.Hex;
 import tools.http.AuthType;
 import org.jetbrains.annotations.NotNull;
 import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 import appTools.Settings;
 
 import javax.servlet.annotation.WebServlet;
@@ -39,12 +38,12 @@ import static tools.FileTools.getSubPathForDisk;
 import static appTools.Settings.addSidBriefToName;
 import static startManager.StartDiskManager.STORAGE_DIR;
 
-@WebServlet(name = ApiNames.Carve, value = "/"+ApiNames.Version1 +"/"+ApiNames.Carve)
+@WebServlet(name = ApipApiNames.Carve, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.Carve)
 public class Carve extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
         replier.setCode(CodeMessage.Code1017MethodNotAvailable);
         replier.setMessage(CodeMessage.Msg1017MethodNotAvailable);
         response.getWriter().write(replier.toNiceJson());
@@ -52,14 +51,15 @@ public class Carve extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         AuthType authType = AuthType.FC_SIGN_URL;
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
 
@@ -70,7 +70,7 @@ public class Carve extends HttpServlet {
             dataMap.put("did", DidAndLength.did());
 
             Double price = RedisTools.readHashDouble(jedis, addSidBriefToName(Initiator.sid, PARAMS), FieldNames.PRICE_PER_K_BYTES_CARVE);
-            replier.reply0SuccessHttp(dataMap, jedis,price);
+            replier.reply0SuccessHttp(dataMap,response);
 
             //Update item info into ES
             updateCarveDataInfoToEs(DidAndLength.bytesLength(), DidAndLength.did());

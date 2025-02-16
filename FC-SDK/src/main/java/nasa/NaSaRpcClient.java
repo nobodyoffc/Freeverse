@@ -963,6 +963,69 @@ public class NaSaRpcClient {
         return RpcRequest.requestRpc(url, username, password, GETRAWMEMPOOL, jsonRPC2Request);
     }
 
+    private MempoolInfo getMempoolInfo(String url, boolean verbose,String username, String password) {
+        RpcRequest jsonRPC2Request = new RpcRequest(GETMEMPOOLINFO, new Object[]{verbose});
+        Object result = RpcRequest.requestRpc(url, username, password, GETMEMPOOLINFO, jsonRPC2Request);
+        return ObjectTools.objectToClass(result, MempoolInfo.class);
+    }
+
+    public static class MempoolInfo {
+        private int size;
+        private long bytes;
+        private long usage;
+        private long maxmempool;
+        private double mempoolminfee;
+        private double minrelaytxfee;
+
+        public int getSize() {
+            return size;
+        }
+
+        public void setSize(int size) {
+            this.size = size;
+        }
+
+        public long getBytes() {
+            return bytes;
+        }
+
+        public void setBytes(long bytes) {
+            this.bytes = bytes;
+        }
+
+        public long getUsage() {
+            return usage;
+        }
+
+        public void setUsage(long usage) {
+            this.usage = usage;
+        }
+
+        public long getMaxmempool() {
+            return maxmempool;
+        }
+
+        public void setMaxmempool(long maxmempool) {
+            this.maxmempool = maxmempool;
+        }
+
+        public double getMempoolminfee() {
+            return mempoolminfee;
+        }
+
+        public void setMempoolminfee(double mempoolminfee) {
+            this.mempoolminfee = mempoolminfee;
+        }
+
+        public double getMinrelaytxfee() {
+            return minrelaytxfee;
+        }
+
+        public void setMinrelaytxfee(double minrelaytxfee) {
+            this.minrelaytxfee = minrelaytxfee;
+        }
+    }
+
     public static class TxInMempool {
         private long size;
         private double fee;
@@ -1449,7 +1512,5 @@ public class NaSaRpcClient {
     public void setBestHeight(long bestHeight) {
         this.bestHeight = bestHeight;
     }
-    //    public  (){
-//        return new .g(,url,username,password);
-//    }
+
 }

@@ -4,15 +4,15 @@ import fcData.FcSession;
 import apip.apipData.Fcdsl;
 import apip.apipData.RequestBody;
 import constants.*;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import fch.ParseTools;
 import com.google.gson.Gson;
 import configure.ApiAccount;
 import configure.ApiProvider;
-import configure.ServiceType;
 import crypto.*;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
+import server.ApipApiNames;
 import tools.BytesTools;
 import tools.FileTools;
 import tools.Hex;
@@ -35,7 +35,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import static constants.ApiNames.*;
+import static server.ApipApiNames.*;
 import static constants.FieldNames.LAST_TIME;
 import static constants.Strings.DOT_JSON;
 import static constants.Strings.URL_HEAD;
@@ -57,7 +57,7 @@ public class Client {
     protected ApipClient apipClient;
     protected DiskClient diskClient;
     protected boolean isAllowFreeRequest;
-    protected ServiceType serviceType;
+    protected Service.ServiceType serviceType;
     protected Gson gson = new Gson();
     protected boolean sessionFreshen=false;
     protected Long bestHeight;
@@ -85,14 +85,14 @@ public class Client {
         this.serviceType = apiProvider.getType();
     }
 
-    public static FcReplierHttp getService(String urlHead, String apiVersion, Class<? extends Params> paramsClass){
-        ApiUrl apiUrl = new ApiUrl(urlHead,null, apiVersion,ApiNames.GetService, null,false,null);
+    public static ReplyBody getService(String urlHead, String apiVersion, Class<? extends Params> paramsClass){
+        ApiUrl apiUrl = new ApiUrl(urlHead,null, apiVersion, ApipApiNames.GET_SERVICE, null,false,null);
         ApipClientEvent clientEvent = Client.get(apiUrl.getUrl());
         if(clientEvent.checkResponse()!=0){
             System.out.println("Failed to get the service from "+apiUrl.getUrl());
             return null;
         }
-        FcReplierHttp responseBody = clientEvent.getResponseBody();
+        ReplyBody responseBody = clientEvent.getResponseBody();
         Service service = new Gson().fromJson((String) responseBody.getData(), Service.class);
         Params.getParamsFromService(service, paramsClass);
         responseBody.setData(service);
@@ -202,7 +202,7 @@ public class Client {
     public Object requestFile(String sn, String ver, String apiName, Fcdsl fcdsl, String responseFileName, @Nullable String responseFilePath, AuthType authType, byte[] authKey, RequestMethod method){
         String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
         requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, fcdsl, null, null, null, null, ApipClientEvent.ResponseBodyType.FILE, responseFileName, responseFilePath, authType, authKey, method);
-        FcReplierHttp responseBody = apipClientEvent.getResponseBody();
+        ReplyBody responseBody = apipClientEvent.getResponseBody();
         if(responseBody !=null)return responseBody.getData();
         return null;
     }
@@ -257,16 +257,20 @@ public class Client {
             }
         }
         apipClientEvent = new ApipClientEvent(urlHead,urlTail,requestBodyType,fcdsl,requestBodyStr,requestBodyBytes,paramMap,requestFileName, responseBodyType,responseFileName,responseFilePath,authType, authKey, via);
-
-        switch (httpMethod){
-            case GET -> apipClientEvent.get(authKey);
-            case POST -> apipClientEvent.post(authKey);
-            default -> apipClientEvent.setCode(CodeMessage.Code1022NoSuchMethod);
+        try {
+            switch (httpMethod) {
+                case GET -> apipClientEvent.get(authKey);
+                case POST -> apipClientEvent.post(authKey);
+                default -> apipClientEvent.setCode(CodeMessage.Code1022NoSuchMethod);
+            }
+        }catch (Exception e){
+            log.debug("Failed to request. Error:{}",e.getMessage());
+            return null;
         }
         Object result = checkResult();
 
         String apiName = HttpTools.getApiNameFromUrl(urlTail);
-        if(apiName==null||apiName.equals(SignIn) || apiName.equals(SignInEcc))return result;
+        if(apiName==null||apiName.equals(SIGN_IN) || apiName.equals(SIGN_IN_ECC))return result;
         //If any request besides signIn or signInEcc got a session response, it means the client signed in again. So repeat the request.
         try {
             serverSession = (FcSession) result;
@@ -303,7 +307,7 @@ public class Client {
                     log.debug(JsonTools.toJson(apipClientEvent.getResponseBody().getData()));
             }
             if (apipClientEvent.getCode() == CodeMessage.Code1004InsufficientBalance) {
-                if(apipClient==null && this.serviceType.equals(ServiceType.APIP)){
+                if(apipClient==null && this.serviceType.equals(Service.ServiceType.APIP)){
                     apipClient = (ApipClient) this;
                 }
                 double paid = apiAccount.buyApi(symKey, apipClient, null);
@@ -370,7 +374,7 @@ public class Client {
         CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymKey(apiAccount.getUserPriKeyCipher(),symKey);
         if(cryptoDataByte.getCode()!=0) return null;
         byte[] priKey = cryptoDataByte.getData();
-        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null,Version1,ApiNames.SignInEcc);
+        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN_ECC);
         apipClientEvent.signInPost(apiAccount.getVia(), priKey, RequestBody.SignInMode.NORMAL);
         Object data = apipClientEvent.getResponseBody().getData();
         try{
@@ -451,7 +455,7 @@ public class Client {
 //        return (boolean) data;
 //    }
 
-    private void setFreeApiState(Object data, ServiceType serviceType) {
+    private void setFreeApiState(Object data, Service.ServiceType serviceType) {
         Map<String, FreeApi> freeApiMap = listToMap(Settings.freeApiListMap.get(serviceType),URL_HEAD);//listToMap(config.getFreeApipUrlList(),URL_HEAD);
 
         if(data ==null){
@@ -468,8 +472,8 @@ public class Client {
         freeApiMap.get(this.urlHead).setActive(true);
     }
 
-    public Object ping(String version, RequestMethod requestMethod, AuthType authType, ServiceType serviceType) {
-        String urlTail = "/"+version+"/"+Ping;
+    public Object ping(String version, RequestMethod requestMethod, AuthType authType, Service.ServiceType serviceType) {
+        String urlTail = "/"+version+"/"+ PING;
         Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, null, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, authType, sessionKey, requestMethod);
         if(requestMethod.equals(RequestMethod.POST)) {
             return checkBalance(apiAccount, apipClientEvent, symKey, apipClient);
@@ -480,7 +484,7 @@ public class Client {
     }
 
     private void signIn(byte[] priKey, @Nullable RequestBody.SignInMode mode) {
-        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null,Version1,ApiNames.SignIn);
+        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN);
         apipClientEvent.signInPost(apiAccount.getVia(), priKey, mode);
         int paymentsSize;
         if(apiAccount.getPayments()!=null) paymentsSize = apiAccount.getPayments().size();
@@ -498,7 +502,7 @@ public class Client {
     }
 
     public void signInEcc(byte[] priKey, @Nullable RequestBody.SignInMode mode) {
-        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null,Version1,ApiNames.SignInEcc);
+        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN_ECC);
         apipClientEvent.signInPost(apiAccount.getVia(), priKey, mode);
         int paymentsSize;
         if(apiAccount.getPayments()!=null)
@@ -651,6 +655,9 @@ public class Client {
         return fcSession;
     }
 
+    public void close(){
+    }
+
     public boolean isSessionFreshen() {
         return sessionFreshen;
     }
@@ -672,11 +679,11 @@ public class Client {
 //        this.signInUrlTailPath = signInUrlTailPath;
 //    }
 
-    public ServiceType getApiType() {
+    public Service.ServiceType getApiType() {
         return serviceType;
     }
 
-    public void setApiType(ServiceType serviceType) {
+    public void setApiType(Service.ServiceType serviceType) {
         this.serviceType = serviceType;
     }
 
@@ -740,11 +747,11 @@ public class Client {
         this.diskClient = diskClient;
     }
 
-    public ServiceType getServiceType() {
+    public Service.ServiceType getServiceType() {
         return serviceType;
     }
 
-    public void setServiceType(ServiceType serviceType) {
+    public void setServiceType(Service.ServiceType serviceType) {
         this.serviceType = serviceType;
     }
 

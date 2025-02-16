@@ -631,6 +631,7 @@ public class Fcdsl {
     public void promoteInput(BufferedReader br) {
         while (true) {
             Menu menu = new Menu();
+            menu.setTitle("Input FCDSL");
             menu.add(FCDSL_FIELDS);
             menu.show();
             int choice = menu.choose(br);
@@ -660,6 +661,7 @@ public class Fcdsl {
     public void inputMatchAll(BufferedReader br) {
         while (true) {
             Menu menu = new Menu();
+            menu.setTitle("Input Match All");
             menu.add(SIZE, SORT, AFTER);
             menu.show();
             int choice = menu.choose(br);

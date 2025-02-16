@@ -4,25 +4,25 @@ import apip.apipData.Fcdsl;
 import apip.apipData.RequestBody;
 import apip.apipData.Sort;
 import handlers.CashHandler;
-import constants.ApiNames;
+import handlers.MempoolHandler;
+import server.ApipApiNames;
 import constants.FieldNames;
 import constants.CodeMessage;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import handlers.CashHandler.SearchResult;
+import handlers.Handler.HandlerType;
 import fch.fchData.Cash;
 import initial.Initiator;
 import tools.ObjectTools;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 import server.FcdslRequestHandler;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -34,36 +34,37 @@ import static constants.Values.FALSE;
 import static constants.Values.TRUE;
 import static fch.ParseTools.coinToSatoshi;
 
+import appTools.Settings;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import feip.feipData.Service;
 
-@WebServlet(name = ApiNames.CashValid, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.CashValid)
+@WebServlet(name = ApipApiNames.CASH_VALID, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_VALID)
 public class CashValid extends HttpServlet {
-
+    private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FREE;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
 
 
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try(Jedis jedis = jedisPool.getResource()) {
-            //Do FCDSL other request
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            //Do this request
-            doCashValidRequest(replier, jedis,  request);
-        }
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+
+        //Do FCDSL other request
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
+        //Do this request
+        doCashValidRequest(replier, request,response,settings);
+        
     }
 
-    protected void doCashValidRequest(FcReplierHttp replier, Jedis jedis, HttpServletRequest request) {
+    protected void doCashValidRequest(ReplyBody replier, HttpServletRequest request, HttpServletResponse response, Settings settings) {
 
-        RequestBody requestBody = replier.getRequestCheckResult().getRequestBody();
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
         if(requestBody!=null)replier.setNonce(requestBody.getNonce());
 
         String fid = null;
@@ -77,23 +78,36 @@ public class CashValid extends HttpServlet {
         int msgSize = 0;
         int outputSize = 0;
         long sinceHeight = 0;
-        
-        if(requestBody!=null && requestBody.getFcdsl()!=null) {
-            if( requestBody.getFcdsl().getOther()==null) {
-                ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        if (requestBody != null && requestBody.getFcdsl() != null) {
+            if (requestBody.getFcdsl().getOther() == null) {
+                ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME, false, CASH_ID, true, null, null);
                 Fcdsl fcdsl;
                 fcdsl = requestBody.getFcdsl();
-                if(fcdsl.getFilter()==null)fcdsl.addNewFilter().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
-                else if(fcdsl.getFilter().getMatch()==null)fcdsl.getFilter().addNewMatch().addNewFields(VALID).addNewValue(TRUE);
-                else if(fcdsl.getExcept()==null)fcdsl.addNewExcept().addNewTerms().addNewFields(VALID).addNewValues(FALSE);
-                else if(fcdsl.getQuery()==null)fcdsl.addNewQuery().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
-                else if(fcdsl.getQuery().getTerms()==null)fcdsl.getQuery().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
-                FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, Initiator.esClient);
-                List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort, Cash.class, jedis);
-                CashHandler.checkUnconfirmedSpentByJedis(meetList, jedis);
-                replier.reply0SuccessHttp(meetList, jedis, null);
+                if (fcdsl.getFilter() == null)
+                    fcdsl.addNewFilter().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
+                else if (fcdsl.getFilter().getMatch() == null)
+                    fcdsl.getFilter().addNewMatch().addNewFields(VALID).addNewValue(TRUE);
+                else if (fcdsl.getExcept() == null)
+                    fcdsl.addNewExcept().addNewTerms().addNewFields(VALID).addNewValues(FALSE);
+                else if (fcdsl.getQuery() == null)
+                    fcdsl.addNewQuery().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
+                else if (fcdsl.getQuery().getTerms() == null)
+                    fcdsl.getQuery().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
+                FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+                List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort, Cash.class);
+                if(meetList==null){
+                    try {
+                        response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
+                    } catch (IOException ignore) {
+                        return;
+                    }
+                }
+                MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+                mempoolHandler.updateUnconfirmedValidCash(meetList, fid);
+                replier.reply0SuccessHttp(meetList,response);
                 return;
-            }else {
+            } else {
                 try {
                     Object other = requestBody.getFcdsl().getOther();
                     Map<String, String> otherMap;
@@ -108,11 +122,12 @@ public class CashValid extends HttpServlet {
                             sinceHeightStr = otherMap.get(FieldNames.SINCE_HEIGHT);
                         }
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
-        }else if(requestBody==null){
+        } else if (requestBody == null) {
             fid = request.getParameter(FieldNames.FID);
-            amountStr= request.getParameter(AMOUNT);
+            amountStr = request.getParameter(AMOUNT);
             cdStr = request.getParameter(CD);
             msgSizeStr = request.getParameter(FieldNames.MSG_SIZE);
             outputSizeStr = request.getParameter(FieldNames.OUTPUT_SIZE);
@@ -125,17 +140,19 @@ public class CashValid extends HttpServlet {
             if (msgSizeStr != null) msgSize = Integer.parseInt(msgSizeStr);
             if (outputSizeStr != null) outputSize = Integer.parseInt(outputSizeStr);
             if (sinceHeightStr != null) sinceHeight = Long.parseLong(sinceHeightStr);
-        }catch (Exception ignore){}
-
-        SearchResult<Cash> searchResult = CashHandler.getValidCashes(fid,amount,cd,sinceHeight,outputSize,msgSize,null,Initiator.esClient,Initiator.jedisPool);
+        } catch (Exception ignore) {
+        }
+        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+        SearchResult<Cash> searchResult = CashHandler.getValidCashes(fid, amount, cd, sinceHeight, outputSize, msgSize, null, esClient, mempoolHandler);
         if (searchResult.hasError()) {
-            replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(), jedis);
+            replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(),response);
             return;
         }
         replier.setGot(searchResult.getGot());
         replier.setTotal(searchResult.getTotal());
         List<Cash> cashList = searchResult.getData();
-        CashHandler.checkUnconfirmedSpentByJedis(cashList, jedis);
-        replier.reply0SuccessHttp(cashList, jedis, null);
-     }
+        replier.replySingleDataSuccessHttp(cashList,response);
+    }
+
+
 }

@@ -14,9 +14,12 @@ import co.elastic.clients.elasticsearch.indices.CreateIndexResponse;
 import co.elastic.clients.elasticsearch.indices.DeleteIndexResponse;
 import co.elastic.clients.json.JsonData;
 import co.elastic.clients.transport.endpoints.BooleanResponse;
+import constants.IndicesNames;
 import constants.Strings;
 
 import fch.fchData.Block;
+import fch.fchData.OpReturn;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -280,55 +283,45 @@ public class EsTools {
         return result;
     }
 
-    public static <T> ArrayList<T> getListByTermsSinceHeight(ElasticsearchClient esClient, String index, String termField, List<String> termValues, long sinceHeight, String sortField, SortOrder order, Class<T> clazz) throws IOException {
-
+    public static <T> ArrayList<T> getListByTermsSinceHeight(ElasticsearchClient esClient, String index, String termField, List<String> termValues, Long sinceHeight, String sortField, SortOrder order, Class<T> clazz, List<String> last) throws IOException {
+        // Convert term values to FieldValue list
         List<FieldValue> values = new ArrayList<>();
         for (String v : termValues) {
             values.add(FieldValue.of(v));
         }
 
-        SearchResponse<T> result = esClient.search(s -> s.index(index)
-                .query(q -> q.bool(b -> b
-                        .must(m1 -> m1.terms(t -> t.field(termField).terms(t1 -> t1.value(values))))
-                        .must(m2 -> m2.range(r -> r.field(Strings.BIRTH_HEIGHT).gte(JsonData.of(sinceHeight))))
-                ))
-                .size(EsTools.READ_MAX)
-                .sort(s1 -> s1
-                        .field(f -> f
-                                .field(sortField).order(order)
-                        )), clazz);
+        ArrayList<T> itemList = new ArrayList<>();
+        SearchResponse<T> result;
+        // Build search request
+        SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
+        .index(index)
+        .size(EsTools.READ_MAX)
+        .sort(s -> s.field(f -> f.field(sortField).order(order)))
+        .query(q -> q.bool(b -> b
+                .must(m1 -> m1.terms(t -> t.field(termField).terms(t1 -> t1.value(values))))
+                .must(m2 -> m2.range(r -> r.field(Strings.BIRTH_HEIGHT).gte(JsonData.of(sinceHeight))))));
+        do {
+            // Add searchAfter if last is provided
+            if (last != null && !last.isEmpty()) {
+                searchBuilder.searchAfter(last);
+            }
 
-        if (result.hits().hits().isEmpty()) return null;
+            result = esClient.search(searchBuilder.build(), clazz);
 
-        List<String> lastSort = result.hits().hits().get(result.hits().hits().size() - 1).sort();
+            if (result.hits().hits().isEmpty()) {
+                return itemList.isEmpty() ? null : itemList;
+            }
 
-        ArrayList<T> itemList = new ArrayList<T>();
+            // Add results to list
+            for (Hit<T> hit : result.hits().hits()) {
+                itemList.add(hit.source());
+            }
 
-        for (Hit<T> hit : result.hits().hits()) {
-            itemList.add(hit.source());
-        }
-        while (true) {
+            // Update last for next iteration
+            last = result.hits().hits().get(result.hits().hits().size() - 1).sort();
+            
+        } while (result.hits().hits().size() == EsTools.READ_MAX);
 
-            if (result.hits().hits().size() == EsTools.READ_MAX) {
-
-                List<String> lastSort1 = lastSort;
-
-                result = esClient.search(s -> s.index(index)
-                        .query(q -> q.terms(t -> t.field(termField).terms(t1 -> t1.value(values))))
-                        .size(EsTools.READ_MAX)
-                        .sort(s1 -> s1
-                                .field(f -> f
-                                        .field(sortField).order(SortOrder.Asc)
-                                ))
-                        .searchAfter(lastSort1), clazz);
-
-                if (result.hits().hits().isEmpty()) break;
-                lastSort = result.hits().hits().get(result.hits().hits().size() - 1).sort();
-                for (Hit<T> hit : result.hits().hits()) {
-                    itemList.add(hit.source());
-                }
-            } else break;
-        }
         return itemList;
     }
 
@@ -573,5 +566,26 @@ public class EsTools {
         public void setResultList(List<E> resultList) {
             this.resultList = resultList;
         }
+    }
+
+    public static Map<String, OpReturn> getOpReturnsByIds(ElasticsearchClient esClient, Set<String> txIds) throws Exception {
+        if (txIds == null || txIds.isEmpty()) {
+            return new HashMap<>();
+        }
+
+        MgetResult<OpReturn> mgetResult = getMultiByIdList(
+            esClient,
+            IndicesNames.OPRETURN,  // Make sure this matches your index name
+            new ArrayList<>(txIds),
+            OpReturn.class
+        );
+
+        Map<String, OpReturn> resultMap = new HashMap<>();
+        if (mgetResult != null && mgetResult.getResultList() != null) {
+            for (OpReturn opReturn : mgetResult.getResultList()) {
+                resultMap.put(opReturn.getTxId(), opReturn);
+            }
+        }
+        return resultMap;
     }
 }

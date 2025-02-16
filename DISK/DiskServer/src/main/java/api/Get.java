@@ -2,17 +2,16 @@ package api;
 
 
 import apip.apipData.Fcdsl;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
 import initial.Initiator;
+import server.DiskApiNames;
 import tools.FileTools;
 import tools.ObjectTools;
 import tools.http.AuthType;
-import fcData.FcReplierHttp;
-import org.jetbrains.annotations.Nullable;
+import fcData.ReplyBody;
 import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -29,53 +28,58 @@ import static constants.UpStrings.BALANCE;
 import static constants.UpStrings.CODE;
 import static startManager.StartDiskManager.STORAGE_DIR;
 
-@WebServlet(name = ApiNames.Get, value = "/"+ApiNames.Version1 +"/"+ ApiNames.Get)
+@WebServlet(name = DiskApiNames.GET, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.GET)
 public class Get extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         AuthType authType = AuthType.FC_SIGN_URL;
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
-            doGetRequest(request, response, replier,requestCheckResult,jedis);
+            doGetRequest(request, response, replier, httpRequestChecker,jedis);
         }
     }
 
-    @Nullable
-    private void doGetRequest(HttpServletRequest request, HttpServletResponse response, FcReplierHttp replier, RequestCheckResult requestCheckResult, Jedis jedis) throws IOException {
-        String did = replier.getStringFromUrl(request, DID, jedis);
+    private void doGetRequest(HttpServletRequest request, HttpServletResponse response, ReplyBody replier, HttpRequestChecker httpRequestChecker, Jedis jedis) throws IOException {
+        String did = request.getParameter(DID);
+        if(did==null) {
+            replier.replyOtherErrorHttp("Failed to get "+DID+"From the URL.", response);
+            return;
+        }
         doPostRequest(response,replier,did,jedis);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
-        RequestCheckResult requestCheckResult;
+        ReplyBody replier = new ReplyBody(Initiator.settings);
+        HttpRequestChecker httpRequestChecker;
         AuthType authType = AuthType.FC_SIGN_BODY;
         String did;
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
-            Fcdsl fcdsl = requestCheckResult.getRequestBody().getFcdsl();
+            Fcdsl fcdsl = httpRequestChecker.getRequestBody().getFcdsl();
             try {
                 Map<String, String> paramMap = ObjectTools.objectToMap(fcdsl.getOther(), String.class, String.class);
                 did = paramMap.get(DID);
                 if (did == null) {
-                    replier.replyHttp(CodeMessage.Code3009DidMissed, null, jedis);
+                    replier.replyHttp(CodeMessage.Code3009DidMissed, null);
                     return;
                 }
             }catch (Exception e){
-                replier.replyOtherErrorHttp("Failed to get DID.",null,jedis);
+                replier.replyOtherErrorHttp("Failed to get DID.", response);
                 return;
             }
 //            did = replier.getStringFromBodyJsonData(requestCheckResult.getRequestBody(),DID,jedis);
@@ -83,15 +87,15 @@ public class Get extends HttpServlet {
         }
     }
 
-    private void doPostRequest(HttpServletResponse response, FcReplierHttp replier, String did, Jedis jedis) throws IOException {
+    private void doPostRequest(HttpServletResponse response, ReplyBody replier, String did, Jedis jedis) throws IOException {
         if (did == null) return;
         String path = FileTools.getSubPathForDisk(did);
         File file = new File(STORAGE_DIR+path, did);
         if (!file.exists()) {
-            replier.replyHttp(CodeMessage.Code1020OtherError, null, jedis);
+            replier.replyHttp(CodeMessage.Code1020OtherError, null);
             return;
         }
-        Long balance = replier.updateBalance(Initiator.sid, ApiNames.Check, file.length(),jedis, null);
+        Long balance = replier.updateBalance(DiskApiNames.CHECK, file.length());
         if(balance!=null)
             response.setHeader(BALANCE, String.valueOf(balance));
         response.setContentType("application/octet-stream");

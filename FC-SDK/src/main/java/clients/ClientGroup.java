@@ -1,119 +1,214 @@
 package clients;
 
-import configure.ServiceType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.io.IOException;
+import java.io.Serial;
+import java.io.Serializable;
+import java.util.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import appTools.Settings;
+import com.google.gson.Gson;
+import configure.ApiAccount;
+import configure.Configure;
+import feip.feipData.Service;
 
-public class ClientGroup {
-    private static final Logger log = LoggerFactory.getLogger(ClientGroup.class);
-    
-    private final ClientGroupType groupType;
-    private final Map<String, Client> clientMap; // apiAccountId -> Client
-    private int currentClientIndex;
-    private final List<String> clientIds;
+public class ClientGroup implements Serializable {
+    @Serial
+    private static final long serialVersionUID = 1L;
 
-    public ClientGroup(ClientGroupType groupType) {
+    private Service.ServiceType groupType;
+    private List<String> accountIds;
+    private GroupStrategy strategy;
+    private transient int roundRobinIndex = 0;
+    private transient Map<String, Object> clientMap;
+    private transient Map<String, ApiAccount> apiAccountMap;
+
+    public enum GroupStrategy {
+        USE_FIRST,           // Use the first available client
+        USE_ANY_VALID,       // Use any valid client
+        USE_ALL,            // Use all clients
+        USE_ONE_RANDOM,     // Use a random client
+        USE_ONE_ROUND_ROBIN; // Use clients in round-robin fashion
+
+        @Override
+        public String toString() {
+            return name();
+        }
+    }
+
+    public ClientGroup(Service.ServiceType groupType) {
         this.groupType = groupType;
+        this.accountIds = new ArrayList<>();
         this.clientMap = new HashMap<>();
-        this.clientIds = new ArrayList<>();
-        this.currentClientIndex = 0;
+        this.strategy = GroupStrategy.USE_FIRST; // default strategy
     }
 
-    public void addClient(String apiAccountId, Client client) {
-        if (client == null || apiAccountId == null) return;
-        
-        ServiceType expectedType = groupType.getServiceType();
-        if (client instanceof ApipClient && expectedType != ServiceType.APIP ||
-            client instanceof DiskClient && expectedType != ServiceType.DISK) {
-            log.error("Client type doesn't match group type {}", groupType);
-            return;
+    public static void main(String[] args) {
+        ClientGroup clientGroup = new ClientGroup(Service.ServiceType.APIP);
+        clientGroup.getAccountIds().add("account id 1");
+        clientGroup.setStrategy(GroupStrategy.USE_ALL);
+        Map<Service.ServiceType,ClientGroup>  map = new HashMap<>();
+        map.put(Service.ServiceType.APIP,clientGroup);
+        System.out.println(new Gson().toJson(map));
+    }
+
+    public void addClient(String accountId, Object client) {
+        if (!accountIds.contains(accountId)) {
+            accountIds.add(accountId);
         }
+        if(clientMap==null)clientMap = new HashMap<>();
+        clientMap.put(accountId, client);
+    }
+    public void addApiAccount(ApiAccount apiAccount) {
+        if (apiAccountMap == null) apiAccountMap = new HashMap<>();
+        apiAccountMap.put(apiAccount.getId(), apiAccount);
+    }
 
-        clientMap.put(apiAccountId, client);
-        if (!clientIds.contains(apiAccountId)) {
-            clientIds.add(apiAccountId);
+    public void connectAllClients(Configure configure, Settings settings, byte[] symKey) {
+        for (String accountId:accountIds) {
+            ApiAccount apiAccount = configure.getApiAccountMap().get(accountId);
+            if(apiAccount==null) {
+                apiAccount = configure.getApiAccount(symKey, settings.getMainFid(), groupType, (ApipClient) settings.getClient(Service.ServiceType.APIP));
+                if (apiAccount != null) {
+                    this.accountIds.add(apiAccount.getId());
+                    addClient(apiAccount.getId(), apiAccount.getClient());
+                    addApiAccount(apiAccount);
+                    return;
+                }
+                System.out.println("Failed to get ApiAccount "+accountId+". Check the apiAccount in config file.");
+                System.exit(-1);
+            }
+            addApiAccount(apiAccount);
+            Object client = apiAccount.connectApi(configure.getApiProviderMap().get(apiAccount.getProviderId()), symKey);
+            if(client==null)break;
+            apiAccount.setClient(client);
+            addClient(apiAccount.getId(), client);
         }
     }
 
-    public void removeClient(String apiAccountId) {
-        clientMap.remove(apiAccountId);
-        clientIds.remove(apiAccountId);
-    }
-
-    public <T> T executeRequest(ClientRequest<T> request) {
-        if (clientIds.isEmpty()) {
-            log.error("No clients available in group {}", groupType);
+    public String getAccountId() {
+        if (accountIds.isEmpty()) {
             return null;
         }
 
-        int attempts = 0;
-        while (attempts < clientIds.size()) {
-            String currentId = clientIds.get(currentClientIndex);
-            Client currentClient = clientMap.get(currentId);
-            
-            try {
-                T result = request.execute(currentClient);
-                if (result != null) {
-                    return result;
+        switch (strategy) {
+            case USE_FIRST, USE_ALL -> {
+                return accountIds.get(0);
+            }
+            case USE_ANY_VALID -> {
+                // Return first valid client found
+                for (String accountId : accountIds) {
+                    Object client = clientMap.get(accountId);
+                    if (client!=null) {
+                        return accountId;
+                    }
                 }
-            } catch (Exception e) {
-                log.error("Request failed for client {}: {}", currentId, e.getMessage());
+                return null;
             }
-
-            currentClientIndex = (currentClientIndex + 1) % clientIds.size();
-            attempts++;
-        }
-
-        log.error("All clients failed to execute request in group {}", groupType);
-        return null;
-    }
-
-    public void broadcastRequest(ClientAction action) {
-        for (Map.Entry<String, Client> entry : clientMap.entrySet()) {
-            try {
-                action.execute(entry.getValue());
-            } catch (Exception e) {
-                log.error("Failed to execute action on client {}: {}", 
-                    entry.getKey(), e.getMessage());
+            case USE_ONE_RANDOM -> {
+                return accountIds.get(new Random().nextInt(accountIds.size()));
+            }
+            case USE_ONE_ROUND_ROBIN -> {
+                return accountIds.get(roundRobinIndex++ % accountIds.size());
+            }
+            default -> {
+                return null;
             }
         }
     }
 
-    @FunctionalInterface
-    public interface ClientRequest<T> {
-        T execute(Client client);
+    public Object getClient() {
+        if (accountIds.isEmpty()) {
+            return null;
+        }
+
+        switch (strategy) {
+            case USE_FIRST -> {
+                return clientMap.get(accountIds.get(0));
+            }
+            case USE_ANY_VALID -> {
+                // Return first valid client found
+                for (String accountId : accountIds) {
+                    Object client = clientMap.get(accountId);
+                    if (client!=null) {
+                        return client;
+                    }
+                }
+                return null;
+            }
+            case USE_ALL -> {
+                return clientMap;
+            }
+            case USE_ONE_RANDOM -> {
+                String randomId = accountIds.get(new Random().nextInt(accountIds.size()));
+                return clientMap.get(randomId);
+            }
+            case USE_ONE_ROUND_ROBIN -> {
+                String nextId = accountIds.get(roundRobinIndex++ % accountIds.size());
+                return clientMap.get(nextId);
+            }
+            default -> {
+                return null;
+            }
+        }
     }
 
-    @FunctionalInterface
-    public interface ClientAction {
-        void execute(Client client);
+    // Helper method to check if a client is valid/active
+//    private boolean isClientValid(Object client) {
+//        // Implement client validation logic
+//
+//        return client != null; // Basic validation, enhance as needed
+//    }
+
+    private void initTransientFields() {
+        if (clientMap == null) {
+            clientMap = new HashMap<>();
+        }
     }
 
-    // Getters
-    public ClientGroupType getGroupType() {
+
+    private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        initTransientFields();
+    }
+
+    // Getters and setters
+    public Service.ServiceType getGroupType() {
         return groupType;
     }
 
-    public List<String> getClientIds() {
-        return new ArrayList<>(clientIds);
+    public List<String> getAccountIds() {
+        return accountIds;
     }
 
-    public enum ClientGroupType {
-        DISK_GROUP,
-        APIP_GROUP,
-        TALK_GROUP;
+    public Map<String, Object> getClientMap() {
+        return clientMap;
+    }
 
-        public ServiceType getServiceType() {
-            return switch (this) {
-                case DISK_GROUP -> ServiceType.DISK;
-                case APIP_GROUP -> ServiceType.APIP;
-                case TALK_GROUP -> ServiceType.TALK;
-            };
-        }
+    public GroupStrategy getStrategy() {
+        return strategy;
+    }
+
+    public void setStrategy(GroupStrategy strategy) {
+        this.strategy = strategy;
+    }
+
+    public void setGroupType(Service.ServiceType groupType) {
+        this.groupType = groupType;
+    }
+
+    public void setAccountIds(List<String> accountIds) {
+        this.accountIds = accountIds;
+    }
+
+    public void setClientMap(Map<String, Object> clientMap) {
+        this.clientMap = clientMap;
+    }
+
+    public int getRoundRobinIndex() {
+        return roundRobinIndex;
+    }
+
+    public void setRoundRobinIndex(int roundRobinIndex) {
+        this.roundRobinIndex = roundRobinIndex;
     }
 }

@@ -1,7 +1,7 @@
 package tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import crypto.KeyTools;
 import redis.clients.jedis.Jedis;
 
@@ -13,7 +13,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 public class RedisTools {
-
     public static long readHashLong(Jedis jedis, String key, String filed) {
         long var = 0;
         String varStr;
@@ -90,8 +89,6 @@ public class RedisTools {
         }
     }
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
     public static <T> void writeToRedis(Object obj, String key, Jedis jedis, Class<T> tClass) {
     Map<String, String> settingMap = new HashMap<>();
 
@@ -100,20 +97,17 @@ public class RedisTools {
         for (Field field : currentClass.getDeclaredFields()) {
             field.setAccessible(true);
 
-            if (Modifier.isTransient(field.getModifiers())) {
+            if (Modifier.isStatic(field.getModifiers())||Modifier.isTransient(field.getModifiers())) {
                 continue;
             }
 
             try {
-                if (field.getType() == org.slf4j.Logger.class) {
-                    continue;
-                }
                 Object value = field.get(obj);
                 if (value != null) {
                     settingMap.put(field.getName(), serializeValue(value));
                 }
             } catch (IllegalAccessException | JsonProcessingException e) {
-                System.out.println("Failed to write "+tClass+"into redis.");// Log the exception or handle it as needed
+                System.out.println("Failed to write "+tClass+" into redis.");// Log the exception or handle it as needed
             }
         }
         currentClass = currentClass.getSuperclass();
@@ -127,9 +121,9 @@ public static String serializeValue(Object value) throws JsonProcessingException
     } else if (isPrimitiveOrWrapper(value.getClass())) {
         return String.valueOf(value);
     } else if (value instanceof List || value instanceof Map) {
-        return objectMapper.writeValueAsString(value);
+        return new Gson().toJson(value);
     } else {
-        return objectMapper.writeValueAsString(value);
+        return new Gson().toJson(value);
     }
 }
 
@@ -165,12 +159,14 @@ public static Object deserializeValue(String value, Class<?> type) throws JsonPr
         return value.split(",");
     } else if (isPrimitiveOrWrapper(type)) {
         return parsePrimitiveOrWrapper(value, type);
-    } else if (type == List.class) {
-        return objectMapper.readValue(value, List.class);
+    } else
+
+        if (type == List.class) {
+        return JsonTools.listFromJson(value,type);
     } else if (type == Map.class) {
-        return objectMapper.readValue(value, Map.class);
+        return JsonTools.jsonToMap(value,String.class,type);
     } else {
-        return objectMapper.readValue(value, type);
+        return JsonTools.fromJson(value,type);
     }
 }
 
@@ -186,80 +182,6 @@ private static Object parsePrimitiveOrWrapper(String value, Class<?> type) {
     return value; // for String
 }
 
-
-
-    // public static <T> void writeToRedis(Object obj, String key, Jedis jedis, Class<T> tClass) {
-    //     Map<String, String> settingMap = new HashMap<>();
-
-    //     Class<?> currentClass = tClass;
-    //     while (currentClass != null) {
-    //         for (Field field : currentClass.getDeclaredFields()) {
-    //             field.setAccessible(true); // to access private fields
-
-    //             // Skip transient fields
-    //             if (Modifier.isTransient(field.getModifiers())) {
-    //                 continue;
-    //             }
-
-    //             try {
-    //                 if (field.getType() == org.slf4j.Logger.class) {
-    //                     // Skip Logger fields
-    //                     continue;
-    //                 }
-    //                 Object value = field.get(obj);
-    //                 if (value != null) {
-    //                     if (value instanceof String[] array) {
-    //                         String joinedString = String.join(",", array);
-    //                         settingMap.put(field.getName(), joinedString);
-    //                     } else if (isPrimitiveOrWrapper(value.getClass())) {
-    //                         settingMap.put(field.getName(), String.valueOf(value));
-    //                     } else {
-    //                         String jsonString = objectMapper.writeValueAsString(value);
-    //                         settingMap.put(field.getName(), jsonString);
-    //                     }
-    //                 }
-    //             } catch (IllegalAccessException | com.fasterxml.jackson.core.JsonProcessingException ignore) {
-    //                 // Handle exceptions if needed
-    //             }
-    //         }
-    //         currentClass = currentClass.getSuperclass();
-    //     }
-    //     jedis.hmset(key, settingMap);
-    // }
-
-//
-//    public static <T> void writeToRedis(Object obj, String key, Jedis jedis, Class<T> tClass) {
-//        Map<String, String> settingMap = new HashMap<>();
-//
-//        Class<?> currentClass = tClass;
-//        while (currentClass != null) {
-//            for (Field field : currentClass.getDeclaredFields()) {
-//                field.setAccessible(true); // to access private fields
-//                try {
-//                    if (field.getType() == org.slf4j.Logger.class) {
-//                        // Skip Logger fields
-//                        continue;
-//                    }
-//                    Object value = field.get(obj);
-//                    if (value != null) {
-//                        if (value instanceof String[] array) {
-//                            String joinedString = String.join(",", array);
-//                            settingMap.put(field.getName(), joinedString);
-//                        } else if (isPrimitiveOrWrapper(value.getClass())) {
-//                            settingMap.put(field.getName(), String.valueOf(value));
-//                        } else {
-//                            String jsonString = objectMapper.writeValueAsString(value);
-//                            settingMap.put(field.getName(), jsonString);
-//                        }
-//                    }
-//                } catch (IllegalAccessException | com.fasterxml.jackson.core.JsonProcessingException ignore) {
-//                }
-//            }
-//            currentClass = currentClass.getSuperclass();
-//        }
-//
-//        jedis.hmset(key, settingMap);
-//    }
     private static boolean isPrimitiveOrWrapper(Class<?> type) {
         return type.isPrimitive() ||
                 type == Boolean.class ||
@@ -272,5 +194,4 @@ private static Object parsePrimitiveOrWrapper(String value, Class<?> type) {
                 type == Short.class ||
                 type == String.class;
     }
-
 }

@@ -3,12 +3,12 @@ package test;
 import appTools.Menu;
 import appTools.Settings;
 import appTools.Starter;
+import feip.feipData.Service;
 import handlers.AccountHandler;
 import handlers.AccountHandler.Income;
 import clients.ApipClient;
 import handlers.CashHandler;
 import handlers.SessionHandler;
-import configure.ServiceType;
 import fcData.FcSession;
 import redis.clients.jedis.JedisPool;
 import tools.JsonTools;
@@ -24,25 +24,29 @@ public class TestAccountSessionClient {
     private static Settings settings;
     private static JedisPool jedisPool;
     public static String clientName = "Test";
-    public static String[] serviceAliases = new String[]{ServiceType.APIP.name(),ServiceType.REDIS.name()};
+    public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP, Service.ServiceType.REDIS};
     public static Map<String,Object> settingMap = new HashMap<>();
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.REDIS,
+            Service.ServiceType.APIP
+    };
 
     public static void main(String[] args) {
         br = new BufferedReader(new InputStreamReader(System.in));
         Menu.welcome(clientName);
 
-        settings = Starter.startClient(clientName, serviceAliases, settingMap, br);
+        settings = Starter.startClient(clientName, settingMap, br, modules);
         if(settings==null) return;
 
-        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
 //        jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
 
         // Initialize clients
         String sid = null;//"1d01da1b8bcb90bea26c5efcc33c39e66baa24d4d6d28d7bbb6b1a728bb3900e";
-        CashHandler cashHandler = new CashHandler(settings.getMainFid(), settings.getMyPriKeyCipher(),settings.getSymKey(), apipClient, null, null, br);
+        CashHandler cashHandler = new CashHandler(settings);
         cashHandler.updateCashesIfOverJumped();
-        AccountHandler accountHandler = new AccountHandler(settings.getMainFid(), 100000000L, 1L,null, null,null, sid, settings.getMyPriKeyCipher(),settings.getSymKey(), apipClient, cashHandler, jedisPool, settings.getBr());
-        SessionHandler sessionHandler = new SessionHandler(settings.getMainFid(),sid,jedisPool);
+        AccountHandler accountHandler = new AccountHandler(settings);
+        SessionHandler sessionHandler = new SessionHandler(settings);
 
         // Test AccountClient functionality
         testAccountClient(accountHandler);
@@ -85,7 +89,7 @@ public class TestAccountSessionClient {
         System.out.println("\nTesting via balance updates...");
         accountHandler.addViaBalance("FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7", 100000L, "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK");
         accountHandler.addViaBalance("FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7", 200000L, null);
-        System.out.println("Via balance updated: " + accountHandler.checkViaBalance("FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"));
+        System.out.println("Via balance updated: " + accountHandler.getViaBalance("FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"));
 
         // Test distribution
         System.out.println("\nTesting distribution...");

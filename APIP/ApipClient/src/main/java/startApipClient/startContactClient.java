@@ -5,11 +5,14 @@ import appTools.Settings;
 import appTools.Starter;
 import clients.Client;
 import clients.ApipClient;
+import feip.feipData.Service;
 import handlers.CashHandler;
 import handlers.ContactHandler;
 import configure.ApiAccount;
 import configure.Configure;
-import configure.ServiceType;
+import feip.feipData.Service.ServiceType;
+import handlers.Handler;
+import handlers.NewContactHandler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -27,24 +30,26 @@ public class startContactClient {
     public static ApipClient apipClient;
     public static CashHandler cashHandler;
     public static BufferedReader br ;
-    public static String clientName= ServiceType.APIP.name();
-    public static String[] serviceAliases = new String[]{ServiceType.APIP.name()};
+    public static String clientName= Handler.HandlerType.CONTACT.name();
     public static String myFid;
     public static String sid;
     public static byte[] symKey;
     public static String myPriKeyCipher;
     public static Map<String, Long> lastTimeMap;
 
-    public static 	Map<String,Object> settingMap = new HashMap<>();
-
+    public static Map<String,Object> settingMap = new HashMap<>();
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP,
+            Handler.HandlerType.CASH
+    };
     public static void main(String[] args) {
         Menu.welcome(clientName);
 
         br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startClient(clientName, serviceAliases, settingMap, br);
+        settings = Starter.startClient(clientName, settingMap, br, modules);
         if(settings==null)return;
-        byte[] symKey = settings.getSymKey();
         apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        cashHandler = (CashHandler)settings.getHandler(Handler.HandlerType.CASH);
         configure = settings.getConfig();
         apipAccount = settings.getApiAccount(ServiceType.APIP);
 
@@ -55,10 +60,10 @@ public class startContactClient {
         lastTimeMap = Client.loadLastTime(myFid,sid);
         if(lastTimeMap==null)lastTimeMap=new HashMap<>();
 
-        ContactHandler contactHandler = new ContactHandler(myFid, apipClient, cashHandler, symKey, myPriKeyCipher, br);
+        NewContactHandler contactHandler = new NewContactHandler(settings);
 
         contactHandler.checkContacts(br);
 
-        contactHandler.menu();
+        contactHandler.menu(br);
     }
 }

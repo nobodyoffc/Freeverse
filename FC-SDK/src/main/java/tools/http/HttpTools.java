@@ -63,7 +63,12 @@ public class HttpTools {
         return paramMap;
     }
 
-    public static CloseableHttpResponse post(String url, Map<String,String>requestHeaderMap, String requestBodyType, byte[] requestBodyBytes) {
+    public enum BodyType {
+        STRING,
+        BYTES
+    }
+
+    public static CloseableHttpResponse post(String url, Map<String,String>requestHeaderMap, BodyType bodyType, byte[] requestBodyBytes) {
         CloseableHttpResponse httpResponse;
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
 
@@ -74,12 +79,12 @@ public class HttpTools {
                 }
             }
 
-            switch (requestBodyType) {
-                case "string" -> {
+            switch (bodyType) {
+                case STRING -> {
                     StringEntity entity = new StringEntity(new String(requestBodyBytes));
                     httpPost.setEntity(entity);
                 }
-                case "bytes" -> {
+                case BYTES -> {
                     ByteArrayEntity entity = new ByteArrayEntity(requestBodyBytes);
                     httpPost.setEntity(entity);
                 }

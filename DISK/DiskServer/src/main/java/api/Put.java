@@ -1,12 +1,13 @@
 package api;
 
 import fcData.DiskItem;
+import server.DiskApiNames;
 import tools.RedisTools;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
 import constants.Strings;
 import crypto.Hash;
@@ -15,11 +16,10 @@ import tools.DateTools;
 import tools.FileTools;
 import tools.Hex;
 import tools.http.AuthType;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import org.jetbrains.annotations.NotNull;
 import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 import appTools.Settings;
 
 import javax.servlet.annotation.WebServlet;
@@ -41,12 +41,12 @@ import static tools.FileTools.checkFileOfFreeDisk;
 import static tools.FileTools.getSubPathForDisk;
 import static startManager.StartDiskManager.STORAGE_DIR;
 
-@WebServlet(name = ApiNames.Put, value = "/"+ApiNames.Version1 +"/"+ApiNames.Put)
+@WebServlet(name = DiskApiNames.PUT, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.PUT)
 public class Put extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
         replier.setCode(CodeMessage.Code1017MethodNotAvailable);
         replier.setMessage(CodeMessage.Msg1017MethodNotAvailable);
         response.getWriter().write(replier.toNiceJson());
@@ -54,15 +54,16 @@ public class Put extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         long dataLifeDays;
         AuthType authType = AuthType.FC_SIGN_URL;
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
             dataLifeDays = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(Initiator.sid,Strings.PARAMS),DATA_LIFE_DAYS);
@@ -72,7 +73,7 @@ public class Put extends HttpServlet {
 
             Map<String,String> dataMap = new HashMap<>();
             dataMap.put("did", DidAndLength.did());
-            replier.reply0SuccessHttp(dataMap, jedis, null);
+            replier.reply0SuccessHttp(dataMap,response);
 
             //Update item info into ES
             updateDataInfoToEs(dataLifeDays, DidAndLength.bytesLength(), DidAndLength.did());

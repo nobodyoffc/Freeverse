@@ -1,6 +1,5 @@
 package configure;
 
-import apip.ApipTools;
 import clients.*;
 import fcData.FcSession;
 import apip.apipData.RequestBody;
@@ -9,7 +8,7 @@ import appTools.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import crypto.*;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import fcData.IdNameTools;
 import fch.ParseTools;
 import fch.TxCreator;
@@ -38,7 +37,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static appTools.Inputer.*;
-import static constants.ApiNames.Version1;
+import static server.ApipApiNames.VERSION_1;
 import static constants.Constants.APIP_Account_JSON;
 import static constants.Constants.COIN_TO_SATOSHI;
 import static crypto.KeyTools.priKeyToFid;
@@ -266,16 +265,16 @@ public class ApiAccount {
         }
         else diskClient = (DiskClient) client;
 
-        if(!apiProvider.getType().equals(ServiceType.DISK)){
+        if(!apiProvider.getType().equals(Service.ServiceType.DISK)){
             System.out.println("It's not Disk provider.");
             if(br!=null)
-                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ ServiceType.DISK +"?")){
-                apiProvider.setType(ServiceType.DISK);
+                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ Service.ServiceType.DISK +"?")){
+                apiProvider.setType(Service.ServiceType.DISK);
                 }else return null;
             return null;
         }
 
-        if(checkFcApiProvider(apiProvider, ServiceType.DISK, apipClient)==null){
+        if(checkFcApiProvider(apiProvider, Service.ServiceType.DISK, apipClient)==null){
             log.debug("Failed to check service with APIP service {}.", apipClient.getApiProvider().getApiUrl());
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
@@ -311,16 +310,16 @@ public class ApiAccount {
             return null;
         }
 
-        if(!apiProvider.getType().equals(ServiceType.TALK)){
+        if(!apiProvider.getType().equals(Service.ServiceType.TALK)){
             System.out.println("It's not Talk provider.");
             if(br!=null)
-                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ ServiceType.TALK +"?")){
-                    apiProvider.setType(ServiceType.TALK);
+                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ Service.ServiceType.TALK +"?")){
+                    apiProvider.setType(Service.ServiceType.TALK);
                 }else return null;
             return null;
         }
 
-        if(checkFcApiProvider(apiProvider, ServiceType.TALK, apipClient)==null){
+        if(checkFcApiProvider(apiProvider, Service.ServiceType.TALK, apipClient)==null){
             log.debug("Failed to check service with APIP service {}.", apipClient.getApiProvider().getApiUrl());
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
@@ -437,7 +436,7 @@ public class ApiAccount {
         }
 
         if (apiAccount.fcSession.getKeyCipher() == null) {
-            sessionKey = apiAccount.freshSessionKey(symKey, ServiceType.APIP, RequestBody.SignInMode.NORMAL);
+            sessionKey = apiAccount.freshSessionKey(symKey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL);
             if (sessionKey == null) return null;
             revised = true;
         }
@@ -480,7 +479,7 @@ public class ApiAccount {
         System.out.println();
         System.out.println("Set the APIP service buyer(requester)...");
         apiAccount.inputPriKeyCipher(br, symKey);
-        sessionKey = apiAccount.freshSessionKey(symKey, ServiceType.APIP, RequestBody.SignInMode.NORMAL);
+        sessionKey = apiAccount.freshSessionKey(symKey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL);
         if (sessionKey == null) return null;
 
         writeApipParamsToFile(apiAccount, APIP_Account_JSON);
@@ -488,7 +487,7 @@ public class ApiAccount {
     }
 
     static Service getService(String urlHead) {
-        FcReplierHttp replier = ApipClient.getService(urlHead, Version1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(urlHead, VERSION_1, ApipParams.class);
         if(replier==null)return null;
         Service service = (Service) replier.getData();
         if(service!=null) {
@@ -547,8 +546,8 @@ public class ApiAccount {
         try  {
             this.providerId =apiProvider.getId();
             this.apiUrl = apiProvider.getApiUrl();
-            ServiceType type = apiProvider.getType();
-            if(type==null)type = chooseOne(ServiceType.values(), null, "Choose the type:",br);
+            Service.ServiceType type = apiProvider.getType();
+            if(type==null)type = chooseOne(Service.ServiceType.values(), null, "Choose the type:",br);
 
             switch (type) {
                 case ES -> {
@@ -831,11 +830,11 @@ public class ApiAccount {
 
     public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br, Map<String, String> fidCipherMap){
 
-        if(!apiProvider.getType().equals(ServiceType.APIP)){
+        if(!apiProvider.getType().equals(Service.ServiceType.APIP)){
             System.out.println("It's not APIP provider.");
             if(br!=null)
-                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ ServiceType.APIP+"?")){
-                apiProvider.setType(ServiceType.APIP);
+                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ Service.ServiceType.APIP+"?")){
+                apiProvider.setType(Service.ServiceType.APIP);
                 }else return null;
         }
 
@@ -879,7 +878,7 @@ public class ApiAccount {
     }
 
     public boolean checkApipProvider(ApiProvider apiProvider,String apiUrl) {
-        FcReplierHttp replier = ApipClient.getService(apiUrl, Version1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(apiUrl, VERSION_1, ApipParams.class);
         if(replier==null || replier.getData()==null) {
             return false;
         }
@@ -905,7 +904,7 @@ public class ApiAccount {
         return true;
     }
 
-    public ApiProvider checkFcApiProvider(ApiProvider apiProvider, ServiceType type, ApipClient apipClient) {
+    public ApiProvider checkFcApiProvider(ApiProvider apiProvider, Service.ServiceType type, ApipClient apipClient) {
 
         System.out.println("Update API provider from APIP service...");
         Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, apiProvider.getId());
@@ -927,7 +926,7 @@ public class ApiAccount {
         return apiProvider;
     }
 
-    private byte[] checkSessionKey(byte[] symKey, ServiceType type) {
+    private byte[] checkSessionKey(byte[] symKey, Service.ServiceType type) {
         if(this.fcSession ==null)this.fcSession = new FcSession();
         if (this.fcSession.getKeyCipher()== null) {
             this.sessionKey=freshSessionKey(symKey, type, RequestBody.SignInMode.NORMAL);
@@ -944,9 +943,9 @@ public class ApiAccount {
         Client client1 = (Client) client;
 
         client1.setSessionKey(sessionKey);
-        boolean allowFreeRequest = (boolean) client1.ping(Version1, RequestMethod.GET,AuthType.FREE, type);
+        boolean allowFreeRequest = (boolean) client1.ping(VERSION_1, RequestMethod.GET,AuthType.FREE, type);
         if(Settings.freeApiListMap!=null) ((Client) client).setAllowFreeRequest(allowFreeRequest);
-        Object rest = client1.ping(Version1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+        Object rest = client1.ping(VERSION_1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
         if(rest!=null){
             System.out.println((Long)rest+" KB/requests are available on "+ apiUrl);
             return sessionKey;
@@ -954,7 +953,7 @@ public class ApiAccount {
         else return null;
     }
 
-    public byte[] freshSessionKey(byte[] symKey, ServiceType type, RequestBody.SignInMode mode) {
+    public byte[] freshSessionKey(byte[] symKey, Service.ServiceType type, RequestBody.SignInMode mode) {
         System.out.println("Fresh the sessionKey of the "+type+" service...");
 
         FcSession fcSession;

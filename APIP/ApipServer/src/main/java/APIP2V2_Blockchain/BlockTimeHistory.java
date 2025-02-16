@@ -1,16 +1,15 @@
 package APIP2V2_Blockchain;
 
+import appTools.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import feip.feipData.Service;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
 import tools.ObjectTools;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -21,66 +20,70 @@ import java.io.IOException;
 import java.util.Map;
 
 import static constants.FieldNames.*;
-import static constants.Strings.BEST_HEIGHT;
 import static fch.fchData.FchChainInfo.MAX_REQUEST_COUNT;
 
-@WebServlet(name = ApiNames.BlockTimeHistory, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.BlockTimeHistory)
+@WebServlet(name = ApipApiNames.BLOCK_TIME_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BLOCK_TIME_HISTORY)
 public class BlockTimeHistory extends HttpServlet {
+    private final Settings settings;
+
+    public BlockTimeHistory() {
+        this.settings = Initiator.settings;
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
-    protected void doRequest(String sid,  HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
+        ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-
-            long startTime = 0;
-            long endTime = 0;
-            int count = 0;
-            if(requestCheckResult.getRequestBody()!=null && requestCheckResult.getRequestBody().getFcdsl()!=null && requestCheckResult.getRequestBody().getFcdsl().getOther()!=null) {
-                Object other =  requestCheckResult.getRequestBody().getFcdsl().getOther();
-                Map<String, String> paramMap = ObjectTools.objectToMap(other,String.class,String.class);
-                String endTimeStr = paramMap.get("endTime");
-                String startTimeStr = paramMap.get("startTime");
-                String countStr = paramMap.get("count");
-                if (startTimeStr != null) startTime = Long.parseLong(startTimeStr);
-                if (endTimeStr != null) endTime = Long.parseLong(endTimeStr);
-                if (countStr != null) count = Integer.parseInt(countStr);
-            }else {
-                startTime=Long.parseLong(request.getParameter(START_TIME));
-                endTime=Long.parseLong(request.getParameter(END_TIME));
-                count = Integer.parseInt(request.getParameter(COUNT));
-            }
-
-            if (count > MAX_REQUEST_COUNT){
-                replier.replyOtherErrorHttp( "The count can not be bigger than " + FchChainInfo.MAX_REQUEST_COUNT,null,jedis);
-                return;
-            }
-
-
-            Map<Long, Long> hist = FchChainInfo.blockTimeHistory(startTime, endTime, count, esClient);
-
-            if (hist == null){
-                replier.replyOtherErrorHttp( "Failed to get the block time history.",null,jedis);
-                return;
-            }
-
-            replier.setGot((long) hist.size());
-            long bestHeight = Long.parseLong(jedis.get(BEST_HEIGHT));
-            replier.setTotal( bestHeight- 1);
-            replier.reply0SuccessHttp(hist,jedis, null);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return;
         }
+
+        long startTime = 0;
+        long endTime = 0;
+        int count = 0;
+        if(httpRequestChecker.getRequestBody()!=null && httpRequestChecker.getRequestBody().getFcdsl()!=null && httpRequestChecker.getRequestBody().getFcdsl().getOther()!=null) {
+            Object other =  httpRequestChecker.getRequestBody().getFcdsl().getOther();
+            Map<String, String> paramMap = ObjectTools.objectToMap(other,String.class,String.class);
+            String endTimeStr = paramMap.get("endTime");
+            String startTimeStr = paramMap.get("startTime");
+            String countStr = paramMap.get("count");
+            if (startTimeStr != null) startTime = Long.parseLong(startTimeStr);
+            if (endTimeStr != null) endTime = Long.parseLong(endTimeStr);
+            if (countStr != null) count = Integer.parseInt(countStr);
+        }else {
+            startTime=Long.parseLong(request.getParameter(START_TIME));
+            endTime=Long.parseLong(request.getParameter(END_TIME));
+            count = Integer.parseInt(request.getParameter(COUNT));
+        }
+
+        if (count > MAX_REQUEST_COUNT){
+            replier.replyOtherErrorHttp( "The count can not be bigger than " + FchChainInfo.MAX_REQUEST_COUNT, response);
+            return;
+        }
+
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        Map<Long, Long> hist = FchChainInfo.blockTimeHistory(startTime, endTime, count, esClient);
+
+        if (hist == null){
+            replier.replyOtherErrorHttp( "Failed to get the block time history.", response);
+            return;
+        }
+
+        replier.setGot((long) hist.size());
+        replier.setBestBlock();
+        replier.setTotal( replier.getBestHeight()- 1);
+        replier.reply0SuccessHttp(hist, response);
+
     }
 }

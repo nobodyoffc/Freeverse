@@ -25,7 +25,7 @@ import java.util.*;
 import static fcData.TalkUnit.DataType.*;
 import static fcData.TalkUnit.IdType.FID;
 
-public class TalkUnit extends FcData implements Comparable<TalkUnit> {
+public class TalkUnit extends FcEntity implements Comparable<TalkUnit> {
 
     public final static Logger log = (Logger) LoggerFactory.getLogger(TalkUnit.class);
     private transient Integer code;
@@ -100,7 +100,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
 
         TalkUnit replyTalkUnit = new TalkUnit(requestTalkUnit.getTo(), replyBody, ENCRYPTED_REPLY, requestTalkUnit.getFrom(), FID);
         replyTalkUnit.setUnitEncryptType(requestTalkUnit.getUnitEncryptType());
-        replyTalkUnit.setDataEncryptType(replyTalkUnit.getDataEncryptType());
+        replyTalkUnit.setDataEncryptType(requestTalkUnit.getDataEncryptType());
 
         return replyTalkUnit;
     }
@@ -218,7 +218,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
                 return null;
             }
         }
-        talkUnit.setStata(State.DATA_ENCRYPTED);
+        talkUnit.setStata(State.ENCRYPTED);
         return talkUnit;
     }
 
@@ -544,7 +544,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
             }
         }
         log.debug("Parsed talkUnit:{}",parsedUnit.toNiceJson());
-        parsedUnit.setState(State.DATA_READY);
+        parsedUnit.setState(State.READY);
         return parsedUnit;
     }
 
@@ -631,7 +631,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
      * Sign the talk unit id instead of the whole talk unit.
      * Used for talk in a group or team to identify the sender and avoid to sign malicious data when talking.
      */
-    public static class IdSignature extends FcData{
+    public static class IdSignature extends FcEntity {
         private String data;
 
         private String fid;
@@ -770,17 +770,16 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
 
     public enum State {
         NEW((byte) 0),
-        DATA_ENCRYPTED((byte) 1),
-        SENT((byte) 2),
-        RELAYING((byte) 3),
-        RELAYED((byte) 4),
-        GOT((byte) 5),
-        REJECTED((byte) 6),
-        RECEIVED((byte)7),
-        DATA_READY((byte)8),
-        REPLIED((byte)9),
-        PAID((byte)10),
-        FAILED_TO_SEND((byte) 11),
+        READY((byte)1),
+        ENCRYPTED((byte) 2),
+        SENT((byte) 3),
+        RELAYING((byte) 4),
+        RELAYED((byte) 5),
+        GOT((byte) 6),
+        REJECTED((byte) 7),
+        REPLIED((byte)8),
+        PAID((byte)9),
+        FAILED_TO_SEND((byte) 10),
         DONE((byte)99);
 
         //new, ready, sent, relaying，relayed, got,suspended
@@ -1261,7 +1260,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
             talkUnit.setBy(session.getId());
         }
 
-        talkUnit.setStata(State.RECEIVED);
+        talkUnit.setStata(State.GOT);
         talkUnit.setBySession(session);
         talkUnit.setUnitEncryptType(cryptoDataByte.getType());
         return talkUnit;
@@ -1339,7 +1338,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
 //        return requestBody;
 //    }
 
-    public static ReplyBody makeReplyBody( String id,Op op, Integer code,
+    public static ReplyBody makeReplyBody(String id, Op op, Integer code,
                                           String message, Object data, Integer nonce) {
         ReplyBody replyBody = new ReplyBody();
         replyBody.setRequestId(id);
@@ -1371,7 +1370,7 @@ public class TalkUnit extends FcData implements Comparable<TalkUnit> {
     public static byte[] notifyGot(TalkUnit sourseTalkUnit, byte[] myPriKey,FcSession fromSession, FcSession bySession) {
         if(sourseTalkUnit==null)return null;
         if(!sourseTalkUnit.getToType().equals(IdType.FID))return null;
-
+        if(sourseTalkUnit.getFrom().equals(sourseTalkUnit.getTo()))return null;
         TalkUnit notifyUnit = new TalkUnit(sourseTalkUnit.getTo(), sourseTalkUnit.getId(), DataType.ENCRYPTED_GOT, sourseTalkUnit.getFrom(), IdType.FID);
         notifyUnit.setDataEncryptType(sourseTalkUnit.getDataEncryptType());
         notifyUnit.makeTalkUnit(fromSession.getKeyBytes(),myPriKey,fromSession.getPubKey());

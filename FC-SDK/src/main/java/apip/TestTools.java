@@ -4,7 +4,7 @@ import apip.apipData.*;
 import crypto.Hash;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import constants.ApiNames;
+import server.ApipApiNames;
 import appTools.Inputer;
 import appTools.Menu;
 
@@ -236,7 +236,7 @@ public class TestTools {
         if (urlTail == null) return;
         Fcdsl fcdsl = new Fcdsl();
         dataRequestBody.setFcdsl(fcdsl);
-        if (urlTail.equals(ApiNames.APIP1V1Path + ApiNames.General)) askIndex(dataRequestBody);
+        if (urlTail.equals("/sn1/v1/" + ApipApiNames.GENERAL)) askIndex(dataRequestBody);
         if (askByIds(dataRequestBody)) return;
         if (!askMatchAll()) {
             askQuery(dataRequestBody);

@@ -1,7 +1,6 @@
 package feip.feipData.serviceParams;
 
 import clients.ApipClient;
-import configure.ServiceType;
 import feip.feipData.Service;
 import appTools.Inputer;
 import com.google.gson.Gson;
@@ -88,7 +87,7 @@ public class Params {
         return null;  // Field not found
     }
 
-    public static Class<? extends Params> getParamsClassByApiType(ServiceType type) {
+    public static Class<? extends Params> getParamsClassByApiType(Service.ServiceType type) {
         return switch (type){
             case NASA_RPC -> null;
             case APIP -> ApipParams.class;

@@ -1,91 +1,52 @@
 package APIP18V1_Wallet;
 
 import apip.apipData.UnconfirmedInfo;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import constants.ApiNames;
+import appTools.Settings;
+import handlers.Handler.HandlerType;
+import handlers.MempoolHandler;
+import server.ApipApiNames;
 import constants.CodeMessage;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
-import static constants.FieldNames.*;
-
-@WebServlet(name = ApiNames.Unconfirmed, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.Unconfirmed)
+@WebServlet(name = ApipApiNames.UNCONFIRMED, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.UNCONFIRMED)
 public class Unconfirmed extends HttpServlet {
+    private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
 
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool)  {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings)  {
+        ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            if(requestCheckResult.getRequestBody()==null || requestCheckResult.getRequestBody().getFcdsl()==null){
-                replier.replyHttp(CodeMessage.Code1003BodyMissed,null,jedis);
-                return;
-            }
-
-            if (requestCheckResult.getRequestBody().getFcdsl().getIds()==null) {
-                replier.replyHttp(CodeMessage.Code1015FidMissed,null,jedis);
-                return;
-            }
-            List<UnconfirmedInfo> meetList = new ArrayList<>();
-            jedis.select(3);
-            for(String id: requestCheckResult.getRequestBody().getFcdsl().getIds()) {
-                Map<String, String> resultMap = null;
-                try {
-                    resultMap = jedis.hgetAll(id);
-                }catch(Exception e){
-                    UnconfirmedInfo info = new UnconfirmedInfo();
-                    info.setFid(id);
-                    info.setIncomeCount(0);
-                    info.setIncomeValue(0);
-                    info.setSpendCount(0);
-                    info.setSpendValue(0);
-                    info.setNet(0);
-                    meetList.add(info);
-                    continue;
-                }
-                UnconfirmedInfo info = new UnconfirmedInfo();
-                info.setFid(id);
-
-                if (resultMap.get(IncomeCount) != null) info.setIncomeCount(Integer.parseInt(resultMap.get(IncomeCount)));
-                if (resultMap.get(IncomeValue) != null) info.setIncomeValue(Long.parseLong(resultMap.get(IncomeValue)));
-                if (resultMap.get(SpendCount) != null) info.setSpendCount(Integer.parseInt(resultMap.get(SpendCount)));
-                if (resultMap.get(SpendValue) != null) info.setSpendValue(Long.parseLong(resultMap.get(SpendValue)));
-                if(resultMap.get(TxValueMap)!=null){
-                    Type mapType = new TypeToken<Map<String, Long>>(){}.getType();
-
-                    info.setTxValueMap(new Gson().fromJson(resultMap.get(TxValueMap),mapType));
-                }
-                info.setNet(info.getIncomeValue() -info.getSpendValue());
-                meetList.add(info);
-            }
-            replier.replySingleDataSuccess(meetList,jedis);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
+        if(httpRequestChecker.getRequestBody()==null || httpRequestChecker.getRequestBody().getFcdsl()==null){
+            replier.replyHttp(CodeMessage.Code1003BodyMissed,null,response);
+            return;
         }
+
+        if (httpRequestChecker.getRequestBody().getFcdsl().getIds()==null) {
+            replier.replyHttp(CodeMessage.Code1015FidMissed,null,response);
+            return;
+        }
+        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+
+        Map<String, UnconfirmedInfo> resultMap = mempoolHandler.getUnconfirmedInfo(httpRequestChecker.getRequestBody().getFcdsl().getIds());
+        replier.replySingleDataSuccessHttp(resultMap,response);
     }
 }

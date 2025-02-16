@@ -4,7 +4,8 @@ import appTools.Settings;
 import appTools.Starter;
 import clients.DiskClient;
 import clients.TalkClient;
-import configure.ServiceType;
+import feip.feipData.Service;
+import handlers.Handler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -15,19 +16,36 @@ public class Talk{
 
     private Settings settings;
 
-    private String clientName= ServiceType.TALK.name();
-    private String[] serviceAliases = new String[]{ServiceType.APIP.name(),ServiceType.TALK.name()};
+    private String clientName= Service.ServiceType.TALK.name();
+    private Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP, Service.ServiceType.TALK};
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP,
+            Service.ServiceType.TALK,
+            Handler.HandlerType.CID,
+            Handler.HandlerType.CASH,
+            Handler.HandlerType.SESSION,
+            Handler.HandlerType.MAIL,
+            Handler.HandlerType.CONTACT,
+            Handler.HandlerType.GROUP,
+            Handler.HandlerType.TEAM,
+            Handler.HandlerType.HAT,
+            Handler.HandlerType.DISK,
+            Handler.HandlerType.TALK_ID,
+            Handler.HandlerType.TALK_UNIT
+    };
+
     private Map<String,Object> settingMap = new HashMap<>();
 
     public static void main(String[] args) {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         Talk talk = new Talk();
 
-        talk.settings = Starter.startClient(talk.clientName, talk.serviceAliases, talk.getSettingMap(), br);
+        talk.settings = Starter.startClient(talk.clientName,
+                talk.getSettingMap(), br, modules);
         if(talk.settings == null) return;
 
-        TalkClient talkClient = (TalkClient) talk.settings.getApiAccount(ServiceType.TALK).getClient();
-        talkClient.setDiskClient((DiskClient) talk.settings.getClient(ServiceType.DISK));
+        TalkClient talkClient = (TalkClient) talk.settings.getApiAccount(Service.ServiceType.TALK).getClient();
+        talkClient.setDiskClient((DiskClient) talk.settings.getClient(Service.ServiceType.DISK));
 
         try {
             talkClient.start();
@@ -52,11 +70,11 @@ public class Talk{
         this.clientName = clientName;
     }
 
-    public String[] getServiceAliases() {
+    public Service.ServiceType[] getServiceAliases() {
         return serviceAliases;
     }
 
-    public void setServiceAliases(String[] serviceAliases) {
+    public void setServiceAliases(Service.ServiceType[] serviceAliases) {
         this.serviceAliases = serviceAliases;
     }
 

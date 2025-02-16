@@ -1,6 +1,6 @@
 package APIP5V1_Code;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.Code;
 import initial.Initiator;
@@ -13,21 +13,27 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+import appTools.Settings;
 import static constants.FieldNames.CODE_ID;
-import static server.FcdslRequestHandler.doIdsRequest;
+import server.FcdslRequestHandler;
 
 
-@WebServlet(name = ApiNames.CodeByIds, value = "/"+ApiNames.SN_5+"/"+ApiNames.Version1 +"/"+ApiNames.CodeByIds)
+@WebServlet(name = ApipApiNames.CODE_BY_IDS, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CODE_BY_IDS)
 public class CodeByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public CodeByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.CODE, Code.class, CODE_ID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, CODE_ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.CODE, Code.class, CODE_ID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, CODE_ID, request,response,authType);
     }
 }

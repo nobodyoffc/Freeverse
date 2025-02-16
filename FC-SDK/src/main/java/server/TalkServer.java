@@ -3,16 +3,14 @@ package server;
 import appTools.Settings;
 import clients.ApipClient;
 import clients.DiskClient;
-import constants.ApiNames;
 import constants.CodeMessage;
 import crypto.KeyTools;
 import fcData.TalkUnit;
-import fcData.TalkUnitHandler;
+import handlers.TalkUnitHandler;
 import fch.ParseTools;
 import handlers.*;
 import clients.Client;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import configure.ServiceType;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
 import io.netty.bootstrap.ServerBootstrap;
@@ -25,6 +23,7 @@ import nasa.NaSaRpcClient;
 import tools.BytesTools;
 import redis.clients.jedis.JedisPool;
 
+import java.io.BufferedReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
@@ -39,6 +38,12 @@ public class TalkServer {
     private static boolean isRunning=false;
 //    public static String sid = null;
 
+    public static final String[] chargeType = new String[]{
+            TalkUnit.DataType.TEXT.name(),
+            TalkUnit.DataType.HAT.name(),
+            TalkUnit.DataType.BYTES.name(),
+            TalkUnit.DataType.REPLY.name()
+    };
     private final Service service;
     private final ApipClient apipClient;
     private final DiskClient diskClient;
@@ -55,7 +60,6 @@ public class TalkServer {
 
     private final JedisPool jedisPool;
     private static int port;
-    public static TalkParams talkParams;
     public static Map<String, Long> nPriceMap;
     private final Settings settings;
     private final long price;
@@ -63,40 +67,46 @@ public class TalkServer {
 //    private final MapQueue<byte[], FcSession> keyNameSessionKeyMapQueue;
     private final String dealer;
     private final byte[] dealerPriKey;
-    private final ConcurrentHashMap<String, TalkUnit> pendingSentMap = new ConcurrentHashMap<>();
+    private final BufferedReader br;
+    private long dealerMinBalance;
+    private TalkParams talkParams;
 
-    public TalkServer(Settings settings,double price) {
+    private final ConcurrentHashMap<String, TalkUnit> pendingSentMap = new ConcurrentHashMap<>();
+    public TalkServer(Settings settings, double price) {
+        this.br = settings.getBr();
         this.settings = settings;
         this.price = ParseTools.coinToSatoshi(price);
         this.service = settings.getService();
-        talkParams =  (TalkParams)this.service.getParams();
+        this.talkParams = (TalkParams)this.service.getParams();
         this.dealer = talkParams.getDealer();
-        this.apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
-        this.diskClient = (DiskClient) settings.getClient(ServiceType.DISK);
-        this.esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-        this.jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
-        this.nasaClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
-        this.hatHandler = new HatHandler(null,service.getSid());
-        this.sessionHandler = new SessionHandler(null,service.getSid(), jedisPool);
-        this.cashHandler = new CashHandler(talkParams.getDealer(), settings.getMyPriKeyCipher(), settings.getSymKey(), this.apipClient, nasaClient,this.esClient,null);
-        this.diskHandler = new DiskHandler(null, service.getSid());
-        this.talkUnitHandler = new TalkUnitHandler(talkParams.getDealer(),service.getSid());
-        this.teamHandler = new TeamHandler(dealer, apipClient, settings.getSymKey(), settings.getMyPriKeyCipher(), null, settings.getBr());
-        this.groupHandler = new GroupHandler(dealer, apipClient, settings.getSymKey(), settings.getMyPriKeyCipher(), null, settings.getBr());
+        
+        // Get clients from settings
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.diskClient = (DiskClient) settings.getClient(Service.ServiceType.DISK);
+        this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        this.jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        this.nasaClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
 
-        String orderViaShareStr = talkParams.getOrderViaShare();
-        double orderViaShare = Double.parseDouble(orderViaShareStr);
-        String consumeViaShareStr = talkParams.getConsumeViaShare();
-        double consumeViaShare = Double.parseDouble( consumeViaShareStr);
-        this.accountHandler = new AccountHandler(talkParams.getDealer(),100000000L,this.price, ApiNames.TalkApiList, orderViaShare,consumeViaShare, service.getSid(),settings.getMyPriKeyCipher(), settings.getSymKey(),  this.apipClient,this.cashHandler, this.jedisPool,settings.getBr());
+        // Get handlers from settings
+        this.hatHandler = (HatHandler) settings.getHandler(Handler.HandlerType.HAT);
+        this.sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
+        this.cashHandler = (CashHandler) settings.getHandler(Handler.HandlerType.CASH);
+        this.diskHandler = (DiskHandler) settings.getHandler(Handler.HandlerType.DISK);
+        this.talkUnitHandler = (TalkUnitHandler) settings.getHandler(Handler.HandlerType.TALK_UNIT);
+        this.teamHandler = (TeamHandler) settings.getHandler(Handler.HandlerType.TEAM);
+        this.groupHandler = (GroupHandler) settings.getHandler(Handler.HandlerType.GROUP);
+        this.accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
+
+        this.dealerMinBalance = (Long) settings.getSettingMap().get(Settings.DEALER_MIN_BALANCE);
+
         try {
             URL url1 = new URL(talkParams.getUrlHead());
             port = url1.getPort();
         } catch (MalformedURLException e) {
-            System.out.println("Failed to get the URL from:"+talkParams.getUrlHead());
+            System.out.println("Failed to get the URL from:" + talkParams.getUrlHead());
         }
 
-        dealerPriKey = Client.decryptPriKey(settings.getMyPriKeyCipher(),settings.getSymKey());
+        dealerPriKey = Client.decryptPriKey(settings.getMyPriKeyCipher(), settings.getSymKey());
     }
 
     public enum ApiName {
@@ -256,12 +266,8 @@ public class TalkServer {
         TalkServer.port = port;
     }
 
-    public static TalkParams getTalkParams() {
-        return talkParams;
-    }
-
-    public static void setTalkParams(TalkParams talkParams) {
-        TalkServer.talkParams = talkParams;
+    public void setTalkParams(TalkParams talkParams) {
+        this.talkParams = talkParams;
     }
 
     public static void setnPriceMap(Map<String, Long> nPriceMap) {
@@ -334,5 +340,24 @@ public class TalkServer {
 
     public GroupHandler getGroupHandler() {
         return groupHandler;
+    }
+
+    public String[] getChargeType() {
+        return chargeType;
+    }
+
+    public long getDealerMinBalance() {
+        return dealerMinBalance;
+    }
+
+    public void setDealerMinBalance(long dealerMinBalance) {
+        this.dealerMinBalance = dealerMinBalance;
+    }
+
+    public BufferedReader getBr() {
+        return br;
+    }
+    public TalkParams getTalkParams() {
+        return talkParams;
     }
 }

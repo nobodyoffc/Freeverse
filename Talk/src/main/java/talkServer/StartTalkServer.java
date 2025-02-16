@@ -7,7 +7,6 @@ import appTools.Starter;
 import clients.ApipClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.Configure;
-import configure.ServiceType;
 import constants.FieldNames;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
@@ -15,6 +14,8 @@ import fcData.TalkUnit;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import feip.feipData.serviceParams.TalkParams;
+
+import handlers.Handler;
 import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
@@ -29,11 +30,13 @@ import tools.EsTools;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static appTools.Settings.DEFAULT_WINDOW_TIME;
 import static constants.Strings.*;
+import static handlers.AccountHandler.DEFAULT_DEALER_MIN_BALANCE;
 
 public class StartTalkServer {
     private static Settings settings;
@@ -44,25 +47,38 @@ public class StartTalkServer {
     public static Counter counter;
     public static String sid;
     public static double price;
-    public static final ServiceType serverType = ServiceType.TALK;
+    public static final Service.ServiceType serverType = Service.ServiceType.TALK;
 
-    public static String[] serviceAliases = new String[]{
-            ServiceType.APIP.name(),
-            ServiceType.DISK.name(),
-            ServiceType.ES.name(),
-            ServiceType.REDIS.name()};
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP,
+            Service.ServiceType.DISK,
+            Service.ServiceType.ES,
+            Service.ServiceType.REDIS,
+            Handler.HandlerType.SESSION,
+            Handler.HandlerType.CASH,
+            Handler.HandlerType.ACCOUNT,
+            Handler.HandlerType.HAT,
+            Handler.HandlerType.DISK,
+            Handler.HandlerType.TALK_UNIT,
+            Handler.HandlerType.TEAM,
+            Handler.HandlerType.GROUP
+    };
 
-    public static 	Map<String,Object> settingMap = new HashMap<>();
+    public static Map<String,Object> settingMap = new HashMap<>();
+    
     static {
 //        settingMap.put(Settings.FORBID_FREE_API, false);
         settingMap.put(Settings.WINDOW_TIME, DEFAULT_WINDOW_TIME);
+        settingMap.put(Settings.DEALER_MIN_BALANCE,DEFAULT_DEALER_MIN_BALANCE);
 //        settingMap.put(Settings.LISTEN_PATH, System.getProperty(UserHome) + "/fc_data/blocks");
 //        settingMap.put(Settings.FROM_WEBHOOK, true);
     }
 
+    
+
     public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startServer(serverType, serviceAliases,settingMap, br);
+        settings = Starter.startServer(serverType, settingMap, Arrays.stream(TalkServer.chargeType).toList(), modules, null, br);
         if(settings==null)return;
 
         byte[] symKey = settings.getSymKey();
@@ -79,9 +95,9 @@ public class StartTalkServer {
 
 
         //Prepare API clients
-        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
-        esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
+        apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
 
 //        Configure.checkWebConfig(configure.getPasswordName(), sid,configure, settings,symKey, serviceType, jedisPool, br);
 
@@ -123,7 +139,7 @@ public class StartTalkServer {
                     TalkServer talkServer = new TalkServer(settings, price);
                     talkServer.start();
                 }
-                case 2 -> new TalkManager(service, settings.getApiAccount(ServiceType.APIP), br,symKey, TalkParams.class).menu();
+                case 2 -> new TalkManager(service, settings.getApiAccount(Service.ServiceType.APIP), br,symKey, TalkParams.class).menu();
                 case 3 -> Order.resetNPrices(br, sid, jedisPool);
                 case 4 -> recreateAllIndices(esClient, br);
                 case 5 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)

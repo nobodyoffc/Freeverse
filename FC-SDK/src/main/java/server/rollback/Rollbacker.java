@@ -89,5 +89,4 @@ public class Rollbacker {
         String index = addSidBriefToName(sid,ORDER);
         EsTools.bulkDeleteList(esClient, index, idList);
     }
-
 }

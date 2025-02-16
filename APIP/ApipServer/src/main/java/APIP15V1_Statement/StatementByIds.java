@@ -2,7 +2,7 @@
 package APIP15V1_Statement;
 
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -14,22 +14,27 @@ import java.io.IOException;
 import feip.feipData.Statement;
 import initial.Initiator;
 import tools.http.AuthType;
-
+import appTools.Settings;
 import static constants.FieldNames.Statement_Id;
-import static server.FcdslRequestHandler.doIdsRequest;
+import server.FcdslRequestHandler;
 
 
-@WebServlet(name = ApiNames.StatementByIds, value = "/"+ApiNames.SN_15+"/"+ApiNames.Version1 +"/"+ApiNames.StatementByIds)
+@WebServlet(name = ApipApiNames.STATEMENT_BY_IDS, value = "/"+ ApipApiNames.SN_15+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.STATEMENT_BY_IDS)
 public class StatementByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public StatementByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.STATEMENT, Statement.class, Statement_Id, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.STATEMENT, Statement.class, Statement_Id, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.STATEMENT, Statement.class, Statement_Id, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.STATEMENT, Statement.class, Statement_Id, request,response,authType);
     }
 }

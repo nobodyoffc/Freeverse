@@ -41,7 +41,7 @@ public class MailDetail {
         List<MailDetail> chosenMails = new ArrayList<>();
         byte[] lastId = null;
         int totalDisplayed = 0;
-        PersistentSequenceMap mailDB = new PersistentSequenceMap(null,"b0819972aa5f78d28606a571c49356a2577a4df6e257e0e84a61b51fbb4417ba", Strings.MAIL);
+        PersistentSequenceMap mailDB = new PersistentSequenceMap(null,"b0819972aa5f78d28606a571c49356a2577a4df6e257e0e84a61b51fbb4417ba", Strings.MAIL,null);
         List<MailDetail> currentList = mailDB.getListFromEnd(null, 3, (byte[] value) -> MailDetail.fromBytes(value));
         if (currentList.isEmpty()) {
             return;

@@ -12,8 +12,16 @@ import org.mapdb.DataInput2;
 import org.mapdb.DataOutput2;
 import org.mapdb.Serializer;
 
-public class FcData {
+public class FcEntity {
+    protected String id;
 
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
     public String toJson() {
         return new Gson().toJson(this);
     }
@@ -23,7 +31,7 @@ public class FcData {
         return gson.toJson(this);
     }
 
-    public static <T extends FcData> T fromJson(String json, Class<T> clazz) {
+    public static <T extends FcEntity> T fromJson(String json, Class<T> clazz) {
         Gson gson = new Gson();
         return gson.fromJson(json, clazz);
     }
@@ -33,7 +41,7 @@ public class FcData {
         return gson.toJson(this).getBytes();
     }
 
-    public static <T extends FcData> T fromBytes(byte[] bytes, Class<T> clazz) {
+    public static <T extends FcEntity> T fromBytes(byte[] bytes, Class<T> clazz) {
         String json = new String(bytes);
 
         Gson gson = new Gson();
@@ -46,48 +54,7 @@ public class FcData {
         }
     }
 
-    public static Serializer<? extends FcData> serializer(Class<? extends FcData> clazz) {
-        return new Serializer<FcData>() {
-            @Override
-            public void serialize(DataOutput2 out, FcData value) throws IOException {
-                byte[] bytes = value.toBytes();
-                out.writeInt(bytes.length);
-                out.write(bytes);
-            }
-
-            @Override
-            public FcData deserialize(DataInput2 input, int available) throws IOException {
-                int length = input.readInt();
-                byte[] bytes = new byte[length];
-                input.readFully(bytes);
-                return fromBytes(bytes, clazz);
-            }
-        };
-    }
-
-//    public byte[] toBytes() {
-//        try {
-//            MessagePack msgpack = new MessagePack();
-//            msgpack.register(FcObject.class);
-//            return msgpack.write(this);
-//        } catch (Exception e) {
-//            System.out.println("Failed to serialize object to MessagePack bytes:"+e.getMessage());
-//        }
-//        return null;
-//    }
-
-//    public static FcObject fromBytes(byte[] bytes) {
-//        try {
-//            MessagePack msgpack = new MessagePack();
-//            msgpack.register(FcObject.class);
-//            return msgpack.read(bytes, FcObject.class);
-//        } catch (Exception e) {
-//            System.out.println("Failed to deserialize MessagePack bytes to object:"+e.getMessage());
-//        }
-//        return null;
-//    }
-
-    public static void showList(List<FcData> list, String title, List<String> fields, List<Integer> widths) {
+    public static void showList(List<FcEntity> list, String title, List<String> fields, List<Integer> widths) {
         if (fields == null || widths == null || fields.size() != widths.size()) {
             System.out.println("Invalid fields or widths configuration");
             return;
@@ -97,7 +64,7 @@ public class FcData {
         int[] widthArray = widths.stream().mapToInt(Integer::intValue).toArray();
         List<List<Object>> valueListList = new ArrayList<>();
 
-        for (FcData obj : list) {
+        for (FcEntity obj : list) {
             List<Object> showList = new ArrayList<>();
             // Convert object to JSON to access fields dynamically
             @SuppressWarnings("unchecked")
@@ -113,8 +80,8 @@ public class FcData {
         Shower.showDataTable(title, fieldArray, widthArray, valueListList, 0);
     }
 
-    public static <T extends FcData> Serializer<T> getSerializer(Class<T> clazz) {
-        return new Serializer<T>() {
+    public static <T extends FcEntity> Serializer<T> getMapDBSerializer(Class<T> clazz) {
+        return new Serializer<>() {
             @Override
             public void serialize(DataOutput2 out, T value) throws IOException {
                 byte[] bytes = value.toBytes();

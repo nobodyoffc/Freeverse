@@ -1,15 +1,13 @@
 package handlers;
 
 import fcData.Hat;
-import tools.PersistentSequenceMap;
-import constants.FieldNames;
-
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Comparator;
+
+import appTools.Settings;
 
 public class HatHandler extends Handler {
     // Constants
@@ -17,16 +15,20 @@ public class HatHandler extends Handler {
 
     // Instance Variables
     private final String myFid;
-    private final PersistentSequenceMap hatDB;
-    private final ConcurrentHashMap<String, Hat> hatCache;  
-    private final PersistentSequenceMap cipherRawDidMap;
+    private final String sid;
+    private final HatDB hatDB;
+    private final ConcurrentHashMap<String, Hat> hatCache;
 
     // Constructor
-    public HatHandler(String myFid,String sid) {
+    public HatHandler(String myFid, String sid, String dbPath) {
         this.myFid = myFid;
-        this.hatDB = new PersistentSequenceMap(myFid, sid, FieldNames.HAT);
+        this.sid = sid;
+        this.hatDB = new HatDB(myFid, sid, dbPath);
         this.hatCache = new ConcurrentHashMap<>(CACHE_SIZE);
-        this.cipherRawDidMap = new PersistentSequenceMap(myFid, sid, "cipher_raw_did_map");
+    }
+
+    public HatHandler(Settings settings) {
+        this(settings.getMainFid(), settings.getSid(), settings.getDbDir());
     }
 
     // Public Methods
@@ -40,14 +42,11 @@ public class HatHandler extends Handler {
         }
 
         // If not in cache, get from persistent storage
-        byte[] hatBytes = hatDB.get(did.getBytes());
-        if (hatBytes == null) return null;
-
-        hat = Hat.fromJson(new String(hatBytes), Hat.class);
-        if (hat != null) {
-            addToCache(hat);
+        Hat hatFromDB = hatDB.getHat(did);
+        if (hatFromDB != null) {
+            addToCache(hatFromDB);
         }
-        return hat;
+        return hatFromDB;
     }
 
     public void putHat(Hat hat) {
@@ -55,12 +54,7 @@ public class HatHandler extends Handler {
 
         // Update both cache and persistent storage
         addToCache(hat);
-        hatDB.put(hat.getDid().getBytes(), hat.toJson().getBytes());
-        
-        // Add cipher-raw DID mapping if rawDid exists
-        if (hat.getRawDid() != null) {
-            cipherRawDidMap.put(hat.getDid().getBytes(), hat.getRawDid().getBytes());
-        }
+        hatDB.putHat(hat);
     }
 
     public void removeHat(String did) {
@@ -68,27 +62,13 @@ public class HatHandler extends Handler {
 
         // Remove from both cache and persistent storage
         hatCache.remove(did);
-        hatDB.remove(did.getBytes());
+        hatDB.removeHat(did);
     }
 
     public List<Hat> getAllHats() {
-        List<Hat> hats = new ArrayList<>();
-        
-        // Get all values from persistent storage
-        for (Map.Entry<byte[], byte[]> entry : hatDB.entrySet()) {
-            String did = new String(entry.getKey());
-            // Check cache first
-            Hat hat = hatCache.get(did);
-            if (hat == null) {
-                // If not in cache, deserialize from storage
-                hat = Hat.fromJson(new String(entry.getValue()), Hat.class);
-                if (hat != null) {
-                    addToCache(hat);
-                }
-            }
-            if (hat != null) {
-                hats.add(hat);
-            }
+        List<Hat> hats = hatDB.getAllHats();
+        for (Hat hat : hats) {
+            addToCache(hat);
         }
         return hats;
     }
@@ -126,15 +106,12 @@ public class HatHandler extends Handler {
     public void close() {
         hatCache.clear();
         hatDB.close();
-        cipherRawDidMap.close();
     }
 
     // Add new method to get rawDid for a cipher DID
     public String getRawDidForCipher(String cipherDid) {
         if (cipherDid == null) return null;
         
-        byte[] rawDidBytes = cipherRawDidMap.get(cipherDid.getBytes());
-        return rawDidBytes != null ? new String(rawDidBytes) : null;
+        return hatDB.getRawDidForCipher(cipherDid);
     }
-    
 } 

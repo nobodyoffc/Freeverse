@@ -1,16 +1,14 @@
 package APIP16V1_Token;
 
 import apip.apipData.Sort;
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import constants.ApiNames;
+import appTools.Settings;
 import constants.IndicesNames;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.TokenHolder;
 import initial.Initiator;
-import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import server.ApipApiNames;
 import server.FcdslRequestHandler;
+import tools.http.AuthType;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -27,39 +25,40 @@ import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 
 
-@WebServlet(name = ApiNames.TokenHoldersByIds, value = "/"+ApiNames.SN_16+"/"+ApiNames.Version1 +"/"+ApiNames.TokenHoldersByIds)
+@WebServlet(name = ApipApiNames.TOKEN_HOLDERS_BY_IDS, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOKEN_HOLDERS_BY_IDS)
 public class TokenHoldersByIds extends HttpServlet {
+    private final Settings settings;
+    public TokenHoldersByIds() {
+        settings = Initiator.settings;
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT, false, ID, true, null, null);
-        doRequest(Initiator.sid, defaultSort, request, response, authType, Initiator.esClient, Initiator.jedisPool);
+        doRequest(defaultSort,request,response,authType);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT, false, ID, true, null, null);
-        doRequest(Initiator.sid, defaultSort, request, response, authType, Initiator.esClient, Initiator.jedisPool);
+        doRequest(defaultSort,request,response,authType);
     }
 
-    public static void doRequest(String sid, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid, response);
+    public void doRequest(List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(settings);
 
-        try (Jedis jedis = jedisPool.getResource()) {
+        List<TokenHolder> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.TOKEN_HOLDER, TokenHolder.class, null, null, null, null, sort, request, response, authType);
+        if (meetList == null) return;
+        ReplyBody replier = fcdslRequestHandler.getReplyBody();
+        Map<String, Map<String,Double>> meetMap = new HashMap<>();
 
-            List<TokenHolder> meetList = FcdslRequestHandler.doRequestForList(sid, IndicesNames.TOKEN_HOLDER, TokenHolder.class, null, null, null, null, sort, request, authType, esClient, replier, jedis, Initiator.sessionHandler);
-            if (meetList == null) return;
-
-            Map<String, Map<String,Double>> meetMap = new HashMap<>();
-
-            for (TokenHolder tokenHolder : meetList) {
-                Map<String,Double> fidBalanceMap = meetMap.get(tokenHolder.getTokenId());
-                if(fidBalanceMap==null)fidBalanceMap = new HashMap<>();
-                fidBalanceMap.put(tokenHolder.getFid(),tokenHolder.getBalance());
-                meetMap.put(tokenHolder.getTokenId(), fidBalanceMap);
-            }
-            replier.reply0SuccessHttp(meetMap, jedis, null);
+        for (TokenHolder tokenHolder : meetList) {
+            Map<String,Double> fidBalanceMap = meetMap.get(tokenHolder.getTokenId());
+            if(fidBalanceMap==null)fidBalanceMap = new HashMap<>();
+            fidBalanceMap.put(tokenHolder.getFid(),tokenHolder.getBalance());
+            meetMap.put(tokenHolder.getTokenId(), fidBalanceMap);
         }
+        replier.replySingleDataSuccessHttp(meetMap,response);
     }
 }

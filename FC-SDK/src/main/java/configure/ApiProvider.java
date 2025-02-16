@@ -2,9 +2,9 @@ package configure;
 
 
 import clients.Client;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.Strings;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.serviceParams.ApipParams;
 import feip.feipData.serviceParams.DiskParams;
 import feip.feipData.serviceParams.Params;
@@ -26,7 +26,7 @@ import java.util.List;
 
 import static appTools.Inputer.askIfYes;
 import static appTools.Inputer.promptAndUpdate;
-import static configure.ServiceType.*;
+import static feip.feipData.Service.ServiceType.*;
 import static constants.Strings.URL_HEAD;
 import static constants.Ticks.FCH;
 
@@ -35,7 +35,7 @@ public class ApiProvider {
     private static final Logger log = LoggerFactory.getLogger(ApiProvider.class);
     private String id;
     private String name;
-    private ServiceType type;
+    private Service.ServiceType type;
     private String orgUrl;
     private String docUrl;
     private String apiUrl;
@@ -58,7 +58,7 @@ public class ApiProvider {
         this.owner=service.getOwner();
         for(String type : service.getTypes()){
             try{
-                this.type= ServiceType.valueOf(type);
+                this.type= Service.ServiceType.valueOf(type);
                 break;
             }catch (Exception ignore){
                 log.error("Failed to get the type of the service:"+service.getStdName());
@@ -75,7 +75,7 @@ public class ApiProvider {
         fromFcService(service, DiskParams.class);
     }
     @Nullable
-    public static ApiProvider apiProviderFromFcService(Service service, ServiceType type) {
+    public static ApiProvider apiProviderFromFcService(Service service, Service.ServiceType type) {
         if(service==null)return null;
         ApiProvider apiProvider = new ApiProvider();
         apiProvider.setId(service.getSid());
@@ -94,7 +94,7 @@ public class ApiProvider {
         apiProvider.setOwner(service.getOwner());
         for(String typeStr : service.getTypes()){
             try{
-                apiProvider.setType(ServiceType.valueOf(typeStr));
+                apiProvider.setType(Service.ServiceType.valueOf(typeStr));
                 break;
             }catch (Exception ignore){}
         }
@@ -107,7 +107,7 @@ public class ApiProvider {
         return apiProvider;
     }
 
-    public static ApiProvider searchFcApiProvider(ApipClient initApipClient, ServiceType serviceType) {
+    public static ApiProvider searchFcApiProvider(ApipClient initApipClient, Service.ServiceType serviceType) {
         List<Service> serviceList = initApipClient.getServiceListByType(serviceType.toString().toLowerCase());
         Service service = Configure.selectService(serviceList);
         if(service==null)return null;
@@ -117,7 +117,7 @@ public class ApiProvider {
     private void inputOwner(BufferedReader br) throws IOException {
         this.owner = Inputer.promptAndSet(br, "API owner", this.owner);
     }
-    public ApiProvider makeFcProvider(ServiceType serviceType, ApipClient apipClient){
+    public ApiProvider makeFcProvider(Service.ServiceType serviceType, ApipClient apipClient){
         List<Service> serviceList = apipClient.getServiceListByType(serviceType.toString());
         Service service = Configure.selectService(serviceList);
         if(service==null)return null;
@@ -127,14 +127,14 @@ public class ApiProvider {
     public boolean makeApipProvider(BufferedReader br) {
         apiUrl = Inputer.inputString(br,"Input the urlHead of the APIP service. Enter to choose a default one");
         if("".equals(apiUrl)) {
-            List<FreeApi> freeApiList = Settings.freeApiListMap.get(ServiceType.APIP);
+            List<FreeApi> freeApiList = Settings.freeApiListMap.get(Service.ServiceType.APIP);
             FreeApi freeApi = Inputer.chooseOneFromList(freeApiList, URL_HEAD, "Choose an default APIP service:", br);
             if(freeApi!=null) apiUrl = freeApi.getUrlHead();
             else apiUrl = Inputer.inputString(br,"Input the urlHead of the APIP service.");
         }
-        FcReplierHttp replier;
+        ReplyBody replier;
         try {
-            replier = Client.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
+            replier = Client.getService(apiUrl, ApipApiNames.VERSION_1, ApipParams.class);//OpenAPIs.getService(apiUrl);
         }catch (Exception ignore) {
             return false;
         }
@@ -153,7 +153,7 @@ public class ApiProvider {
     }
 
 
-    public boolean makeApiProvider(BufferedReader br, ServiceType serviceType, @Nullable ApipClient apipClient) {
+    public boolean makeApiProvider(BufferedReader br, Service.ServiceType serviceType, @Nullable ApipClient apipClient) {
         try  {
             if(serviceType ==null)serviceType = inputType(br);
             else type = serviceType;
@@ -217,7 +217,7 @@ public class ApiProvider {
     }
 
     @NotNull
-    private String makeSimpleId(ServiceType type) {
+    private String makeSimpleId(Service.ServiceType type) {
         return type.name() + "@" + apiUrl;
     }
 
@@ -237,8 +237,8 @@ public class ApiProvider {
         }
     }
 
-    private ServiceType inputType(BufferedReader br) throws IOException {
-        ServiceType[] choices = ServiceType.values();
+    private Service.ServiceType inputType(BufferedReader br) throws IOException {
+        Service.ServiceType[] choices = Service.ServiceType.values();
         type = Inputer.chooseOne(choices, null, "Choose the type of API provider:",br);
 //
 //        for(int i=0;i<choices.length;i++){
@@ -279,9 +279,9 @@ public class ApiProvider {
     public void updateAll(BufferedReader br) {
         try {
             if(this.type==null)
-                    this.type = Inputer.chooseOne(ServiceType.values(), null, "Choose the type:",br);//ApiType.valueOf(promptAndUpdate(br, "type ("+ Arrays.toString(ApiType.values())+")", String.valueOf(this.type)));
+                    this.type = Inputer.chooseOne(Service.ServiceType.values(), null, "Choose the type:",br);//ApiType.valueOf(promptAndUpdate(br, "type ("+ Arrays.toString(ApiType.values())+")", String.valueOf(this.type)));
             else if(askIfYes(br,"The type is "+this.type+". Update it? "))
-                this.type = Inputer.chooseOne(ServiceType.values(), null, "Choose the type:",br);
+                this.type = Inputer.chooseOne(Service.ServiceType.values(), null, "Choose the type:",br);
 
             switch (this.type){
                 case APIP, DISK ->{
@@ -289,7 +289,7 @@ public class ApiProvider {
                         apiUrl = Inputer.inputString(br, "Input the urlHead of the APIP service:");
                     }
                     if(apiUrl==null)return;
-                    FcReplierHttp replier = ApipClient.getService(apiUrl, ApiNames.Version1, ApipParams.class);//OpenAPIs.getService(apiUrl);
+                    ReplyBody replier = ApipClient.getService(apiUrl, ApipApiNames.VERSION_1, ApipParams.class);//OpenAPIs.getService(apiUrl);
 
                     if(replier==null||replier.getData()==null)return;
                     service = (Service) replier.getData();
@@ -336,11 +336,11 @@ public class ApiProvider {
         this.id = id;
     }
 
-    public ServiceType getType() {
+    public Service.ServiceType getType() {
         return type;
     }
 
-    public void setType(ServiceType type) {
+    public void setType(Service.ServiceType type) {
         this.type = type;
     }
 

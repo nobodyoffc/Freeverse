@@ -1,17 +1,17 @@
 package APIP0V2_OpenAPI;
 
+import appTools.Settings;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import tools.EsTools;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
-import constants.Strings;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.Service;
+import feip.feipData.serviceParams.ApipParams;
 import initial.Initiator;
 import tools.JsonTools;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -22,44 +22,53 @@ import java.io.IOException;
 
 import static constants.Strings.SERVICE;
 
-@WebServlet(name = ApiNames.GetService, value = "/"+ApiNames.Version1 +"/"+ApiNames.GetService)
+@WebServlet(name = ApipApiNames.GET_SERVICE, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_SERVICE)
 public class GetService extends HttpServlet {
+    private final Settings settings;
+    private final ReplyBody replier;
+    private final HttpRequestChecker httpRequestChecker;
+
+    public GetService() {
+        this.settings = Initiator.settings;
+        this.replier = new ReplyBody(settings);
+        // Initialize with ApipParams.class as the expected params type
+        this.httpRequestChecker = new HttpRequestChecker(settings, replier);
+    }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
-
         AuthType authType = AuthType.FREE;
-
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
-                return;
-            }
-            Service service = doRequest(response,replier);
-            if(service!=null) {
-                replier.setTotal(1L);
-                replier.setGot(1L);
-                replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-                String data = JsonTools.toJson(service);
-                replier.reply0SuccessHttp(data, response);
-            }else{
-                replier.replyOtherErrorHttp("Failed to get service info.",response);
-            }
-        }catch (Exception e){
-            replier.replyOtherErrorHttp(e.getMessage(),null,null);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return;
+        }
+        Service service = doRequest(response);
+        if(service != null) {
+            replier.setTotal(1L);
+            replier.setGot(1L);
+            replier.setBestBlock();
+            String data = JsonTools.toJson(service);
+            replier.reply0SuccessHttp(data, response);
+        } else {
+            replier.replyOtherErrorHttp("Failed to get service info.", response);
         }
     }
+
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null,null);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
     }
 
-    private Service doRequest(HttpServletResponse response, FcReplierHttp replier)  {
+    private Service doRequest(HttpServletResponse response) {
         try {
-            return EsTools.getById(Initiator.esClient, SERVICE, Initiator.sid, Service.class);
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            Service service = EsTools.getById(esClient, SERVICE, settings.getSid(), Service.class);
+            if (service != null && service.getParams() != null) {
+                // Convert params to ApipParams
+                service.setParams(ApipParams.fromObject(service.getParams()));
+            }
+            return service;
         } catch (IOException e) {
-            replier.replyOtherErrorHttp("EsClient wrong:"+e.getMessage(),response);
+            replier.replyOtherErrorHttp("EsClient wrong:" + e.getMessage(), response);
             return null;
         }
     }

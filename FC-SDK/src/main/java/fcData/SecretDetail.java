@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.ArrayList;
 import appTools.Shower;
 
-public class SecretDetail {
+public class SecretDetail extends FcEntity {
     private String secretId;
     private String type;
     private String title;

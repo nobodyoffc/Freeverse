@@ -1,14 +1,12 @@
 package APIP8V1_Group;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import constants.ApiNames;
+import appTools.Settings;
 import constants.IndicesNames;
-import fcData.FcReplierHttp;
 import feip.feipData.Group;
 import initial.Initiator;
+import server.ApipApiNames;
+import server.FcdslRequestHandler;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -20,32 +18,34 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static server.FcdslRequestHandler.doRequestForList;
 
-
-@WebServlet(name = ApiNames.GroupMembers, value = "/"+ApiNames.SN_8+"/"+ApiNames.Version1 +"/"+ApiNames.GroupMembers)
+@WebServlet(name = ApipApiNames.GROUP_MEMBERS, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GROUP_MEMBERS)
 public class GroupMembers extends HttpServlet {
+    private final Settings settings;
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public GroupMembers() {
+        this.settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request,response,authType,Initiator.esClient,Initiator.jedisPool);
+        doRequest(request,response,authType, settings);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request,response,authType,Initiator.esClient,Initiator.jedisPool);
+        doRequest(request,response,authType, settings);
     }
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try (Jedis jedis = jedisPool.getResource()) {
-            List<Group> meetList = doRequestForList(sid, IndicesNames.GROUP, Group.class, null, null, null, null, null, request, authType, esClient, replier, jedis, Initiator.sessionHandler);
-            if (meetList == null) return;
-            //Make data
-            Map<String,String[]> dataMap = new HashMap<>();
-            for(Group group:meetList){
-                dataMap.put(group.getGid(),group.getMembers());
-            }
-            replier.reply0SuccessHttp(dataMap, jedis, null);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
+        List<Group> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.GROUP, Group.class, null, null, null, null, null, request, response, authType);
+        if (meetList == null) return;
+        //Make data
+        Map<String,String[]> dataMap = new HashMap<>();
+        for(Group group:meetList){
+            dataMap.put(group.getGid(),group.getMembers());
         }
+        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
     }
 }

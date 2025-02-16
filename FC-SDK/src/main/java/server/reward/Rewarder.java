@@ -1,6 +1,6 @@
 package server.reward;
 
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import fch.TxCreator;
 import fch.Wallet;
 import feip.feipData.Feip;
@@ -161,13 +161,13 @@ public class Rewarder {
 
         String txSigned = TxCreator.createTxFch(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate);
 
-        FcReplierHttp fcReplierHttp = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
-        if (fcReplierHttp.getCode() != 0) {
+        ReplyBody replyBody = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
+        if (replyBody.getCode() != 0) {
             log.debug("The balance is insufficient to send rewards.");
-            if (fcReplierHttp.getData() != null) log.debug((String) fcReplierHttp.getData());
+            if (replyBody.getData() != null) log.debug((String) replyBody.getData());
             return null;
         }
-        rewardInfo.setRewardId((String) fcReplierHttp.getData());
+        rewardInfo.setRewardId((String) replyBody.getData());
         rewardInfo.setState(RewardState.paid);
 
         long apiCost = sumApiCost(chargedAccountList);

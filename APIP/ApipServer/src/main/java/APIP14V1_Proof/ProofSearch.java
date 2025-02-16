@@ -3,7 +3,7 @@ package APIP14V1_Proof;
 
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 
 import javax.servlet.ServletException;
@@ -18,26 +18,31 @@ import feip.feipData.Proof;
 import initial.Initiator;
 import tools.http.AuthType;
 import server.FcdslRequestHandler;
-
-import static constants.FieldNames.Proof_Id;
+import appTools.Settings;
+import static constants.FieldNames.Proof_Id;    
 import static constants.FieldNames.LAST_HEIGHT;
 import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 
-@WebServlet(name = ApiNames.ProofSearch, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version1 +"/"+ApiNames.ProofSearch)
+@WebServlet(name = ApipApiNames.PROOF_SEARCH, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROOF_SEARCH)
 public class ProofSearch extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public ProofSearch() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Proof_Id,true, null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Proof_Id,true, null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
 }

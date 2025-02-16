@@ -3,6 +3,7 @@ package tools;
 import crypto.Hash;
 import fcData.IdNameTools;
 
+import feip.feipData.Service;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 
@@ -191,6 +192,30 @@ public class FileTools {
 
         if(dotAndSuffix!=null)sb.append(dotAndSuffix);
         return sb.toString();
+    }
+
+    public static String getUserDir() {
+        return System.getProperty("user.dir");
+    }
+
+    public static String getHomeDir() {
+        return System.getProperty("user.home");
+    }
+
+    public static String makeServerDataDir(String sid, Service.ServiceType serviceType) {
+        return getHomeDir()+"/data/"+sid+"/"+serviceType.toString();
+    }
+
+    public static boolean checkDirOrMakeIt(String path) {
+        File directory = new File(path);
+        if (!directory.exists()) {
+            boolean done = directory.mkdirs();
+            if(!done){
+                System.out.println("Failed to create path:"+path);
+                return false;
+            }
+        }
+        return true;
     }
 
     //    public static boolean checkFileOfFreeDisk(String storageDir, String did) {

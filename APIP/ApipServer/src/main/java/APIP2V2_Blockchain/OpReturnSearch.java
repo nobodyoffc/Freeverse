@@ -1,7 +1,7 @@
 package APIP2V2_Blockchain;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import fch.fchData.OpReturn;
 import initial.Initiator;
@@ -16,20 +16,27 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import appTools.Settings;
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApiNames.OpReturnSearch, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.OpReturnSearch)
+@WebServlet(name = ApipApiNames.OP_RETURN_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OP_RETURN_SEARCH)
 public class OpReturnSearch extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public OpReturnSearch() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,TX_ID,true);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,TX_ID,true);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType);
     }
 }

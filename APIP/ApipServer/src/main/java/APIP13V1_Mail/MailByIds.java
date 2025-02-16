@@ -2,7 +2,7 @@
 package APIP13V1_Mail;
 
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -14,22 +14,27 @@ import java.io.IOException;
 import feip.feipData.Mail;
 import initial.Initiator;
 import tools.http.AuthType;
-
+import appTools.Settings;
 import static constants.FieldNames.Mail_Id;
-import static server.FcdslRequestHandler.doIdsRequest;
+import server.FcdslRequestHandler;
 
 
-@WebServlet(name = ApiNames.MailByIds, value = "/"+ApiNames.SN_13+"/"+ApiNames.Version1 +"/"+ApiNames.MailByIds)
+@WebServlet(name = ApipApiNames.MAIL_BY_IDS, value = "/"+ ApipApiNames.SN_13+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MAIL_BY_IDS)
 public class MailByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public MailByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.MAIL, Mail.class, Mail_Id, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.MAIL, Mail.class, Mail_Id, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.MAIL, Mail.class, Mail_Id, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.MAIL, Mail.class, Mail_Id, request,response,authType);
     }
 }

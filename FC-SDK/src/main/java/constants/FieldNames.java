@@ -4,6 +4,7 @@ public class FieldNames {
     public static final String OWNER = "owner";
 
     public static final String ISSUER = "issuer";
+    public static final String SIGNER = "signer";
     public static final String ME = "me";
     public static final String TYPES = "types";
     public static final String IDS = "ids";

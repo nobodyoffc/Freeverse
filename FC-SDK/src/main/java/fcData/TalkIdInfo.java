@@ -6,8 +6,7 @@ import feip.feipData.Team;
 import org.jetbrains.annotations.NotNull;
 import tools.StringTools;
 
-public class TalkIdInfo extends FcData{
-    private String id;
+public class TalkIdInfo extends FcEntity {
     private TalkUnit.IdType type;
     private String stdName;
     private String showName;
@@ -42,10 +41,8 @@ public class TalkIdInfo extends FcData{
                (info.getShowName() != null && info.getShowName().toLowerCase().contains(searchTerm));
     }
 
-    public String getId() {
-        return id;
-    }
 
+    @Override
     public void setId(String id) {
         this.id = id;
         if (this.stdName != null && this.showName == null) makeName();

@@ -2,6 +2,7 @@ package handlers;
 
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import clients.ApipClient;
 import clients.Client;
 import constants.Constants;
@@ -15,6 +16,7 @@ import fch.Wallet;
 import feip.feipData.Contact;
 import feip.feipData.ContactData;
 import feip.feipData.Feip;
+import feip.feipData.Service;
 import tools.BytesTools;
 import tools.Hex;
 import tools.JsonTools;
@@ -34,7 +36,7 @@ import static constants.OpNames.*;
 
 import java.io.IOException;
 
-public class ContactHandler {
+public class ContactHandler extends Handler {
     protected static final Logger log = LoggerFactory.getLogger(ContactHandler.class);
     // Constants and Enums
     private static final Integer DEFAULT_SIZE = 10;
@@ -76,6 +78,18 @@ public class ContactHandler {
         this.myPubKey = KeyTools.priKeyToPubKey(Client.decryptPriKey(myPriKeyCipher,symKey));
         this.contactCache = new ConcurrentHashMap<>(CACHE_SIZE);
     }
+
+    public ContactHandler(Settings settings){
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.myFid = settings.getMainFid();
+        this.symKey = settings.getSymKey();
+        this.myPriKeyCipher = settings.getMyPriKeyCipher();
+        this.br = settings.getBr(); 
+        this.myPubKey = KeyTools.priKeyToPubKey(Client.decryptPriKey(myPriKeyCipher,symKey));
+        this.cashHandler = (CashHandler) settings.getHandler(HandlerType.CASH); 
+        this.contactDB = new PersistentKeySortedMap(myFid,null, constants.Strings.CONTACT);
+        this.contactCache = new ConcurrentHashMap<>(CACHE_SIZE);
+    }   
 
     // Public Methods
     public void menu() {
@@ -444,7 +458,7 @@ public class ContactHandler {
         return chosenContacts;
     }
 
-    private static void chooseToShow(List<ContactDetail> contactList, BufferedReader br) {
+    private static void chooseToShowOld(List<ContactDetail> contactList, BufferedReader br) {
         if (contactList == null || contactList.isEmpty()) {
             System.out.println("No contacts to display.");
             return;

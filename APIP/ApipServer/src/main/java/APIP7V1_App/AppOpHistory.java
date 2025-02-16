@@ -1,7 +1,7 @@
 package APIP7V1_App;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.AppHistory;
 import initial.Initiator;
@@ -20,19 +20,24 @@ import static constants.OpNames.RATE;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.AppOpHistory, value = "/"+ApiNames.SN_7+"/"+ApiNames.Version1 +"/"+ApiNames.AppOpHistory)
+@WebServlet(name = ApipApiNames.APP_OP_HISTORY, value = "/"+ ApipApiNames.SN_7+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.APP_OP_HISTORY)
 
 public class AppOpHistory extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public AppOpHistory() {
+        this.fcdslRequestHandler = new FcdslRequestHandler(Initiator.settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList("height",false,"index",false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.APP_HISTORY, AppHistory.class, null,null,OP,RATE, defaultSort,request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.APP_HISTORY, AppHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList("height",false,"index",false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.APP_HISTORY, AppHistory.class, null,null,OP,RATE, defaultSort,request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.APP_HISTORY, AppHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
 }

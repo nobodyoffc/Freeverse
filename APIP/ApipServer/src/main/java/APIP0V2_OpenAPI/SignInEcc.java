@@ -1,69 +1,62 @@
 package APIP0V2_OpenAPI;
 
-import fcData.FcSession;
 import apip.apipData.RequestBody;
-import tools.RedisTools;
-import constants.ApiNames;
 import constants.CodeMessage;
-import constants.Strings;
-import fcData.FcReplierHttp;
+import fcData.FcSession;
+import fcData.ReplyBody;
+import handlers.Handler;
+import handlers.SessionHandler;
 import initial.Initiator;
-import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
-import appTools.Settings;
+import server.ApipApiNames;
+import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Map;
+import appTools.Settings;
 
-import static constants.Strings.*;
-import static initial.Initiator.sessionHandler;
-
-@WebServlet(name = ApiNames.SignInEcc, value = "/"+ApiNames.Version1 +"/"+ ApiNames.SignInEcc)
+@WebServlet(name = ApipApiNames.SIGN_IN_ECC, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SIGN_IN_ECC)
 public class SignInEcc extends HttpServlet {
+    private final Settings settings;
+    private final ReplyBody replier;
+    private final HttpRequestChecker httpRequestChecker;
 
+    public SignInEcc() {
+        this.settings = Initiator.settings;
+        this.replier = new ReplyBody(settings);
+        this.httpRequestChecker = new HttpRequestChecker(settings, replier);
+    }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        String sid = Initiator.sid;
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
 
         FcSession fcSession;
-        RequestChecker requestChecker = new RequestChecker();
         String pubKey;
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            replier.setBestHeight(Long.valueOf(jedis.get(BEST_HEIGHT)));
-            Map<String, String> paramsMap = jedis.hgetAll(Settings.addSidBriefToName(sid, PARAMS));
-            long windowTime = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(sid,SETTINGS), WINDOW_TIME);
-
-            RequestCheckResult requestCheckResult = requestChecker.checkSignInRequest(sid, request, replier, paramsMap, windowTime, jedis, sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            pubKey = requestCheckResult.getPubKey();
-            String fid = requestCheckResult.getFid();
-            RequestBody.SignInMode mode = requestCheckResult.getRequestBody().getMode();
-
-            if ((!jedis.hexists(Settings.addSidBriefToName(sid,Strings.ID_SESSION_NAME), fid)) || RequestBody.SignInMode.REFRESH.equals(mode)) {
-                fcSession = sessionHandler.addNewSession(fid, pubKey);
-            } else {
-                fcSession = sessionHandler.getSessionById(fid);
-            }
-            if(fcSession == null){
-                replier.replyOtherErrorHttp("Failed to get session.", null, jedis);
-                return;
-            }
-            fcSession.setKey(null);
-            replier.reply0SuccessHttp(fcSession, jedis, null);
-            replier.clean();
+        SessionHandler sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
+        boolean isOk = httpRequestChecker.checkSignInRequestHttp(request, response);
+        if (!isOk) {
+            return;
         }
+        pubKey = httpRequestChecker.getPubKey();
+        String fid = httpRequestChecker.getFid();
+        RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
+
+        if (sessionHandler.getSessionById(fid)==null || RequestBody.SignInMode.REFRESH.equals(mode)) {
+            fcSession = sessionHandler.addNewSession(fid, pubKey);
+        } else {
+            fcSession = sessionHandler.getSessionById(fid);
+        }
+        if(fcSession == null){
+            replier.replyOtherErrorHttp("Failed to get session.", response);
+            return;
+        }
+        fcSession.setKey(null);
+        replier.reply0SuccessHttp(fcSession,response);
+        replier.clean();
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null,null);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
     }
 }

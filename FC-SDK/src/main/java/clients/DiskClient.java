@@ -3,7 +3,7 @@ package clients;
 import apip.apipData.Fcdsl;
 import configure.ApiAccount;
 import configure.ApiProvider;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.Constants;
 import constants.CodeMessage;
 import crypto.Hash;
@@ -11,6 +11,7 @@ import fcData.DiskItem;
 import fcData.Hat;
 import handlers.DiskHandler;
 import handlers.HatHandler;
+import server.DiskApiNames;
 import tools.ObjectTools;
 import tools.http.AuthType;
 import tools.http.RequestMethod;
@@ -24,7 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static constants.ApiNames.*;
+import static server.ApipApiNames.*;
 import static constants.FieldNames.*;
 import static tools.ObjectTools.objectToList;
 
@@ -41,19 +42,19 @@ public class DiskClient extends Client {
         Map<String,String> paramMap= new HashMap<>();
         paramMap.put(DID,did);
         fcdsl.setOther(paramMap);
-        Object data = requestFile(ApiNames.Version1, ApiNames.Get, fcdsl, did, localPath, authType, sessionKey, method);
+        Object data = requestFile(ApipApiNames.VERSION_1, DiskApiNames.GET, fcdsl, did, localPath, authType, sessionKey, method);
         return (String)data;
     }
 
     public String check(String did) {
         Map<String,String> urlParamMap= new HashMap<>();
         urlParamMap.put(DID,did);
-        Object data  = requestJsonByUrlParams( ApiNames.Version1,ApiNames.Check, urlParamMap,null);
+        Object data  = requestJsonByUrlParams( ApipApiNames.VERSION_1, DiskApiNames.CHECK, urlParamMap,null);
         return String.valueOf(data);
     }
 
     public List<DiskItem> list(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(Version1, LIST,fcdsl, authType,sessionKey, requestMethod);
+        Object data = requestJsonByFcdsl(VERSION_1, DiskApiNames.LIST,fcdsl, authType,sessionKey, requestMethod);
         return objectToList(data, DiskItem.class);
     }
     public List<DiskItem> list(RequestMethod method, AuthType authType, int size, String sort, String order, String[] last) {
@@ -84,11 +85,11 @@ public class DiskClient extends Client {
     }
 
     public String put(String fileName) {
-        Object data = requestJsonByFile(ApiNames.Version1,ApiNames.Put,null,sessionKey,fileName);
+        Object data = requestJsonByFile(ApipApiNames.VERSION_1, DiskApiNames.PUT,null,sessionKey,fileName);
         return replyPut(fileName, data);
     }
     public String carve(String fileName) {
-        Object data = requestJsonByFile( ApiNames.Version1, Carve,null,sessionKey,fileName);
+        Object data = requestJsonByFile( ApipApiNames.VERSION_1, Carve,null,sessionKey,fileName);
         return replyPut(fileName, data);
     }
 

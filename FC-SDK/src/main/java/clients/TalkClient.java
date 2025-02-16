@@ -56,11 +56,12 @@ public class TalkClient extends Client{
     private byte[] myPriKey;
     private String dealer;
     private String dealerPubKey;
-    private final TalkIdHandler talkIdHandler;
+    private TalkIdHandler talkIdHandler;
     private Displayer displayer;
 
-    private final TalkUnitHandler talkUnitHandler = new TalkUnitHandler(myFid,null);
     private final ConcurrentLinkedQueue<TalkUnit> receivedQueue = new ConcurrentLinkedQueue<>();
+
+    private TalkUnitHandler talkUnitHandler;
     private CidHandler cidHandler;
     private CashHandler cashHandler;
     private SessionHandler sessionHandler;
@@ -81,11 +82,24 @@ public class TalkClient extends Client{
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
     private static final int RECONNECT_DELAY_MS = 2000;
 
-    public TalkClient(String url, BufferedReader br) {
-        this.urlHead=url;
+    public TalkClient(String url, BufferedReader br, Map<Handler.HandlerType, Handler> handlers) {
+        this.urlHead = url;
         this.br = br;
         this.displayer = new Displayer(this);
-        talkIdHandler = null;
+        if(handlers!=null && !handlers.isEmpty()) {
+            // Cast handlers to specific types
+            this.cidHandler = (CidHandler) handlers.get(Handler.HandlerType.CID);
+            this.cashHandler = (CashHandler) handlers.get(Handler.HandlerType.CASH);
+            this.sessionHandler = (SessionHandler) handlers.get(Handler.HandlerType.SESSION);
+            this.mailHandler = (MailHandler) handlers.get(Handler.HandlerType.MAIL);
+            this.contactHandler = (ContactHandler) handlers.get(Handler.HandlerType.CONTACT);
+            this.groupHandler = (GroupHandler) handlers.get(Handler.HandlerType.GROUP);
+            this.teamHandler = (TeamHandler) handlers.get(Handler.HandlerType.TEAM);
+            this.hatHandler = (HatHandler) handlers.get(Handler.HandlerType.HAT);
+            this.diskHandler = (DiskHandler) handlers.get(Handler.HandlerType.DISK);
+            this.talkIdHandler = (TalkIdHandler) handlers.get(Handler.HandlerType.TALK_ID);
+            this.talkUnitHandler = (TalkUnitHandler) handlers.get(Handler.HandlerType.TALK_UNIT);
+        }
     }
 
     public TalkClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symKey, ApipClient apipClient, BufferedReader br) {
@@ -96,41 +110,28 @@ public class TalkClient extends Client{
         this.displayer = new Displayer(this);
         this.dealer = ((TalkParams)apiProvider.getService().getParams()).getDealer();
         this.dealerPubKey = apiProvider.getDealerPubKey();
-        this.talkIdHandler = new TalkIdHandler(apiAccount.getUserId(),null);
+        this.talkIdHandler = new TalkIdHandler(apiAccount.getUserId(),null, null);
         this.diskHandler = new DiskHandler(apiAccount.getUserId(), null);
-        this.hatHandler = new HatHandler(apiAccount.getUserId(),null);
+        this.hatHandler = new HatHandler(settings);
+        this.talkUnitHandler = new TalkUnitHandler(myFid,null);
     }
 
-    private void initHandlers() {
-        setHandlers(cidHandler,cashHandler,sessionHandler,mailHandler,contactHandler,groupHandler,teamHandler);
-    }
-
-    public void setHandlers(
-        CidHandler cidHandler,
-        CashHandler cashHandler,
-        SessionHandler sessionHandler,
-        MailHandler mailHandler,
-        ContactHandler contactHandler,
-        GroupHandler groupHandler,
-        TeamHandler teamHandler
-    ) {
-        this.cidHandler = (cidHandler != null) ? cidHandler : new CidHandler(myFid, sid,apipClient, Settings.DEFAULT_AVATAR_BASE_PATH, Settings.DEFAULT_AVATAR_FILE_PATH);
-        this.cashHandler = (cashHandler != null) ? cashHandler : new CashHandler(myFid, apiAccount.getUserPriKeyCipher(), symKey, apipClient, null, null, br);
-        this.sessionHandler = (sessionHandler != null) ? sessionHandler : new SessionHandler(myFid, null, null);
-        this.mailHandler = (mailHandler != null) ? mailHandler : new MailHandler(myFid, apipClient, this.cashHandler, symKey, apiAccount.getUserPriKeyCipher(), br);
-        this.contactHandler = (contactHandler != null) ? contactHandler : new ContactHandler(myFid, apipClient, this.cashHandler, symKey, apiAccount.getUserPriKeyCipher(), br);
-        this.groupHandler = (groupHandler != null) ? groupHandler : new GroupHandler(myFid, apipClient, symKey, apiAccount.getUserPriKeyCipher(), null, br);
-        this.teamHandler = (teamHandler != null) ? teamHandler : new TeamHandler(myFid, apipClient, symKey, apiAccount.getUserPriKeyCipher(), null, br);
-    }
-
-    private boolean verifyHandlers() {
-        return cidHandler != null && cashHandler != null && sessionHandler != null &&
-                mailHandler != null && contactHandler != null && groupHandler != null &&
-                teamHandler != null;
+    private void checkHandlers() {
+        if(this.cidHandler == null) this.cidHandler = (CidHandler) settings.getHandler(Handler.HandlerType.CID);
+        if(this.cashHandler == null) this.cashHandler = (CashHandler) settings.getHandler(Handler.HandlerType.CASH);
+        if(this.sessionHandler == null) this.sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
+        if(this.mailHandler == null) this.mailHandler = (MailHandler) settings.getHandler(Handler.HandlerType.MAIL);
+        if(this.contactHandler == null) this.contactHandler = (ContactHandler) settings.getHandler(Handler.HandlerType.CONTACT);
+        if(this.groupHandler == null) this.groupHandler = (GroupHandler) settings.getHandler(Handler.HandlerType.GROUP);
+        if(this.teamHandler == null) this.teamHandler = (TeamHandler) settings.getHandler(Handler.HandlerType.TEAM);
+        if(this.hatHandler == null) this.hatHandler = (HatHandler) settings.getHandler(Handler.HandlerType.HAT);
+        if(this.diskHandler == null) this.diskHandler = (DiskHandler) settings.getHandler(Handler.HandlerType.DISK);
+        if(this.talkIdHandler == null) this.talkIdHandler = (TalkIdHandler) settings.getHandler(Handler.HandlerType.TALK_ID);
+        if(this.talkUnitHandler == null) this.talkUnitHandler = (TalkUnitHandler) settings.getHandler(Handler.HandlerType.TALK_UNIT);
     }
 
     public void start() throws Exception {
-        if(!verifyHandlers())initHandlers();
+        checkHandlers();
         if (running) {
             throw new IllegalStateException("Client is already running");
         }

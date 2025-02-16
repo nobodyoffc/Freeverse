@@ -7,8 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HexFormat;
 
-import static constants.ApiNames.apiList;
-import static constants.ApiNames.freeApiList;
+import static server.ApipApiNames.apiList;
+import static server.ApipApiNames.freeApiList;
 
 public class ClientTools {
     public static String getApiNameFromUrl(String url) {

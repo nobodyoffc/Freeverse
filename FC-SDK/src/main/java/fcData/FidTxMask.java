@@ -36,16 +36,18 @@ public class FidTxMask {
         }
 
         fidTxMask.setBalance(ParseTools.satoshiToCoin(sum));
-        fidTxMask.setFee(ParseTools.satoshiToCoin(txInfo.getFee()));
+        if(txInfo.getFee()!=null)fidTxMask.setFee(ParseTools.satoshiToCoin(txInfo.getFee()));
         fidTxMask.setHeight(txInfo.getHeight());
         fidTxMask.setTime(txInfo.getBlockTime());
         fidTxMask.setTxId(txInfo.getTxId());
         fidTxMask.setFid(fid);
         if(sum>0){
             fidTxMask.setTo(fid);
-            CashMark cashMark = txInfo.getSpentCashes().get(0);
-            if(cashMark!=null)fidTxMask.setFrom(cashMark.getOwner());
-            else fidTxMask.setFrom(Constants.COINBASE);
+            if(txInfo.getSpentCashes().size()>0) {
+                CashMark cashMark = txInfo.getSpentCashes().get(0);
+                if (cashMark != null) fidTxMask.setFrom(cashMark.getOwner());
+                else fidTxMask.setFrom(Constants.COINBASE);
+            }else fidTxMask.setFrom(Constants.COINBASE);
         }else{
             fidTxMask.setFrom(fid);
             CashMark cashMark = txInfo.getIssuedCashes().get(0);

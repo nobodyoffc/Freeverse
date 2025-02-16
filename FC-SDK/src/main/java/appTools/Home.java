@@ -2,7 +2,6 @@ package appTools;
 
 import apip.apipData.CidInfo;
 import clients.*;
-import configure.ServiceType;
 import constants.Constants;
 import constants.Strings;
 import crypto.*;
@@ -15,9 +14,8 @@ import fch.fchData.Address;
 import fch.fchData.Cash;
 import fch.fchData.P2SH;
 import fch.fchData.SendTo;
-import handlers.CashHandler;
-import handlers.ContactHandler;
-import handlers.MailHandler;
+import feip.feipData.Service;
+import handlers.*;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.params.MainNetParams;
 import org.jetbrains.annotations.Nullable;
@@ -56,25 +54,30 @@ public class Home {
     private final Settings settings;
     private final ApipClient apipClient;
     private CashHandler cashHandler;
-    private SecretClient secretClient;
+    private SecretHandler secretHandler;
     private ContactHandler contactHandler;
     private MailHandler mailHandler;
     private final BufferedReader br;
     
     // These could remain static if they're truly application-wide constants
     private static final String CLIENT_NAME = "FCH";
-    private static final String[] SERVICE_ALIASES = new String[]{ServiceType.APIP.name()};
+
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP,
+            Handler.HandlerType.CASH,
+            Handler.HandlerType.SECRETE,
+            Handler.HandlerType.CONTACT,
+            Handler.HandlerType.MAIL
+    };
     private static final Map<String,Object> SETTING_MAP = new HashMap<>();
 
-    public Home(Settings settings, byte[] symKey, BufferedReader br) {
+    public Home(Settings settings,BufferedReader br) {
         this.settings = settings;
-        this.apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.myFid = settings.getMainFid();
         this.myPubKey = settings.getMyPubKey();   
         this.myPriKeyCipher = settings.getMyPriKeyCipher();
         this.br = br;
-
-        initializeClients(symKey);
     }
 
 
@@ -82,11 +85,11 @@ public class Home {
         Menu.welcome(CLIENT_NAME);
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        Settings settings = Starter.startClient(CLIENT_NAME, SERVICE_ALIASES, SETTING_MAP, br);
+        Settings settings = Starter.startClient(CLIENT_NAME, SETTING_MAP, br, modules);
         if(settings == null) return;
 
         byte[] symKey = settings.getSymKey();
-        Home home = new Home(settings, symKey, br);
+        Home home = new Home(settings, br);
         home.menu(symKey);
     }
 
@@ -122,7 +125,7 @@ public class Home {
                 case 6 -> keyAndAddress(myPubKey,myPriKeyCipher, symKey, br);
                 case 7 -> hash(br);
                 case 8 -> multiSign(myPriKeyCipher, symKey,apipClient,br);
-                case 9 -> secretClient.menu();
+                case 9 -> secretHandler.menu();
                 case 10 -> contactHandler.menu();
                 case 11 -> mailHandler.menu();
                 case 12 -> switchAsWatchingFid(br);
@@ -1775,10 +1778,10 @@ public class Home {
            }
        }
 
-    private void initializeClients(byte[] symKey) {
-        this.cashHandler = new CashHandler(myFid, myPriKeyCipher, symKey, apipClient, null, null, br);
-        this.secretClient = new SecretClient(myFid, apipClient, cashHandler, symKey, myPriKeyCipher, br);
-        this.contactHandler = new ContactHandler(myFid, apipClient, cashHandler, symKey, myPriKeyCipher, br);
-        this.mailHandler = new MailHandler(myFid, apipClient, cashHandler, symKey, myPriKeyCipher, br);
-    }
+//    private void initializeClients(byte[] symKey) {
+//        this.cashHandler = new CashHandler(settings);
+//        this.secretHandler = new SecretHandler(settings);
+//        this.contactHandler = new ContactHandler(settings);
+//        this.mailHandler = new MailHandler(settings);
+//    }
 }

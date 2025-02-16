@@ -3,12 +3,14 @@ package handlers;
 import apip.apipData.Fcdsl;
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
 import clients.Client;
 import clients.FeipClient;
 import constants.FieldNames;
 import fch.fchData.SendTo;
+import feip.feipData.Service;
 import feip.feipData.Team;
 import feip.feipData.TeamData;
 import tools.Hex;
@@ -23,10 +25,11 @@ import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TeamHandler {
+public class TeamHandler extends Handler {
     // 1. Constants
     public static final int DEFAULT_SIZE = 50;
 
@@ -41,15 +44,25 @@ public class TeamHandler {
 
     // 3. Constructor
     public TeamHandler(String myFid, ApipClient apipClient, byte[] symKey,
-                       String myPriKeyCipher, Map<String, Long> lastTimeMap, BufferedReader br) {
+                       String myPriKeyCipher, Map<String, Long> lastTimeMap, String dbPath, BufferedReader br) {
         this.myFid = myFid;
         this.apipClient = apipClient;
         this.symKey = symKey;
         this.myPriKeyCipher = myPriKeyCipher;
         this.lastTimeMap = lastTimeMap;
-        this.teamDB = new PersistentSequenceMap(myFid,null, FieldNames.TEAM);
+        this.teamDB = new PersistentSequenceMap(myFid, null, FieldNames.TEAM, dbPath);
         this.br = br;
     }
+
+    public TeamHandler(Settings settings){
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.myFid = settings.getMainFid();
+        this.symKey = settings.getSymKey();
+        this.myPriKeyCipher = settings.getMyPriKeyCipher();
+        this.br = settings.getBr(); 
+        this.lastTimeMap = new HashMap<>();
+        this.teamDB = new PersistentSequenceMap(myFid, (String)null, FieldNames.TEAM, settings.getDbDir());
+    }   
 
     // 4. Public Methods - Main Interface
     public void menu() {

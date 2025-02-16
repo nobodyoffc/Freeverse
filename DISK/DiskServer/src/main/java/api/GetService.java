@@ -1,17 +1,16 @@
 package api;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
 import constants.Strings;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.DiskParams;
 import initial.Initiator;
 import tools.JsonTools;
 import tools.http.AuthType;
 import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 import appTools.Settings;
 
 import javax.servlet.ServletException;
@@ -24,17 +23,18 @@ import java.util.Map;
 
 import static constants.Strings.SERVICE;
 
-@WebServlet(name = ApiNames.GetService, value = "/"+ApiNames.Version1 +"/"+ApiNames.GetService)
+@WebServlet(name = ApipApiNames.GET_SERVICE, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_SERVICE)
 public class GetService extends HttpServlet {
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         AuthType authType = AuthType.FREE;
 
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
             Service service = doRequest();
@@ -44,13 +44,13 @@ public class GetService extends HttpServlet {
             String data = JsonTools.toJson(service);
             replier.reply0SuccessHttp(data, response);
         }catch (Exception e){
-            replier.replyOtherErrorHttp(e.getMessage(),e.getStackTrace(),null);
+            replier.replyOtherErrorHttp(e.getMessage(),e.getStackTrace(), response);
         }
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null,null);
+        ReplyBody replier =new ReplyBody(Initiator.settings);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
     }
 
     private Service doRequest()  {

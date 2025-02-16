@@ -1,46 +1,47 @@
 package api;
 
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
 import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-@WebServlet(name = ApiNames.Ping, value = "/"+ApiNames.Version1 +"/"+ ApiNames.Ping)
+@WebServlet(name = ApipApiNames.PING, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PING)
 public class Ping extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
 
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         AuthType authType = AuthType.FC_SIGN_BODY;
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null) return;
-            replier.reply0SuccessHttp(null, jedis, null);
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null) return;
+            replier.reply0SuccessHttp(response);
         }
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response){
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
         AuthType authType = AuthType.FREE;
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
-            replier.reply0SuccessHttp(null, jedis, null);
+            replier.reply0SuccessHttp(response);
         }
     }
 }

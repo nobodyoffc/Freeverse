@@ -3,6 +3,7 @@ package handlers;
 import apip.apipData.CidInfo;
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
 import clients.Client;
@@ -19,6 +20,7 @@ import fch.fchData.SendTo;
 import feip.feipData.Feip;
 import feip.feipData.Mail;
 import feip.feipData.MailData;
+import feip.feipData.Service;
 import org.jetbrains.annotations.Nullable;
 import tools.*;
 import tools.http.AuthType;
@@ -33,7 +35,7 @@ import static appTools.Inputer.askIfYes;
 import static constants.Constants.Dust;
 import static constants.OpNames.*;
 
-public class MailHandler {
+public class MailHandler extends Handler {
     // Constants and Enums
     private static final Integer DEFAULT_SIZE = 50;
 
@@ -61,15 +63,25 @@ public class MailHandler {
     private List<String> failedDecryptMailIdList;
 
     // Constructor
-    public MailHandler(String myFid, ApipClient apipClient, CashHandler cashHandler, byte[] symKey, String myPriKeyCipher, BufferedReader br) {
+    public MailHandler(String myFid, ApipClient apipClient, CashHandler cashHandler, byte[] symKey, String myPriKeyCipher,String dbPath, BufferedReader br) {
         this.myFid = myFid;
         this.apipClient = apipClient;
         this.cashHandler = cashHandler;
         this.symKey = symKey;
         this.myPriKeyCipher = myPriKeyCipher;
         this.br = br;
-        this.mailDB = new PersistentSequenceMap(myFid,null, constants.Strings.MAIL);
+        this.mailDB = new PersistentSequenceMap(myFid,null, constants.Strings.MAIL, dbPath);
     }
+
+    public MailHandler(Settings settings){
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.cashHandler = (CashHandler) settings.getHandler(HandlerType.CASH);
+        this.myFid = settings.getMainFid();
+        this.symKey = settings.getSymKey();
+        this.myPriKeyCipher = settings.getMyPriKeyCipher();
+        this.br = settings.getBr(); 
+        this.mailDB = new PersistentSequenceMap(myFid,null, constants.Strings.MAIL, settings.getDbDir());
+    }   
 
     // Public Methods
     public void menu() {
@@ -564,7 +576,8 @@ public class MailHandler {
         return chosenMails;
     }
 
-    private static void chooseToShow(List<MailDetail> mailList, BufferedReader br) {
+
+    private static void chooseToShowOld(List<MailDetail> mailList, BufferedReader br) {
         if (mailList == null || mailList.isEmpty()) {
             System.out.println("No mails to display.");
             return;

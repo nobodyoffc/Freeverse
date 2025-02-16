@@ -1,6 +1,6 @@
 package APIP2V2_Blockchain;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import fch.fchData.OpReturn;
 import initial.Initiator;
@@ -13,19 +13,26 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+import appTools.Settings;
 import static constants.FieldNames.TX_ID;
-import static server.FcdslRequestHandler.doIdsRequest;
+import server.FcdslRequestHandler;
 
-@WebServlet(name = ApiNames.OpReturnByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.OpReturnByIds)
+@WebServlet(name = ApipApiNames.OP_RETURN_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OP_RETURN_BY_IDS)
 public class OpReturnByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public OpReturnByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, TX_ID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, TX_ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, TX_ID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, TX_ID, request,response,authType);
     }
 }

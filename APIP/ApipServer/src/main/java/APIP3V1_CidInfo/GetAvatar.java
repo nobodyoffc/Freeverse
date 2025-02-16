@@ -1,14 +1,13 @@
 package APIP3V1_CidInfo;
 
+import appTools.Settings;
 import avatar.AvatarMaker;
-import constants.ApiNames;
 import constants.CodeMessage;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import initial.Initiator;
+import server.ApipApiNames;
+import server.HttpRequestChecker;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
 
 import javax.imageio.ImageIO;
 import javax.servlet.ServletOutputStream;
@@ -21,45 +20,54 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 
-import static constants.Strings.*;
-import static initial.Initiator.*;
+import static constants.Strings.FID;
 
 
-@WebServlet(name = ApiNames.GetAvatar, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.GetAvatar)
+@WebServlet(name = ApipApiNames.GET_AVATAR, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_AVATAR)
 public class GetAvatar extends HttpServlet {
+    private final Settings settings = Initiator.settings;
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null,null);
+        ReplyBody replier =new ReplyBody(settings);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FREE;
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid, response);
+        ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-
-            String fid = request.getParameter(FID);
-            if (fid == null) {
-                replier.replyOtherErrorHttp("No qualified FID.", null, jedis);
-                return;
-            }
-
-            AvatarMaker.getAvatars(new String[]{fid}, avatarElementsPath, avatarPngPath);
-
-            response.reset();
-            response.setContentType("image/png");
-            File file = new File(avatarPngPath + fid + ".png");
-            BufferedImage buffImg = ImageIO.read(new FileInputStream(file));
-            ServletOutputStream servletOutputStream = response.getOutputStream();
-            ImageIO.write(buffImg, "png", servletOutputStream);
-            servletOutputStream.close();
-            file.delete();
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return;
         }
+
+        String fid = request.getParameter(FID);
+        if (fid == null) {
+            replier.replyOtherErrorHttp("No qualified FID.", response);
+            return;
+        }
+
+        String avatarPngPath;
+        String avatarElementsPath;
+        try {
+            avatarPngPath = (String) settings.getSettingMap().get(Settings.AVATAR_PNG_PATH);
+            avatarElementsPath = (String)settings.getSettingMap().get(Settings.AVATAR_ELEMENTS_PATH);
+            AvatarMaker.getAvatars(new String[]{fid}, avatarElementsPath, avatarPngPath);
+        }catch (Exception e){
+            replier.replyOtherErrorHttp("Failed to get the png.",e.getMessage(), response);
+            return;
+        }
+
+        response.reset();
+        response.setContentType("image/png");
+
+        File file = new File(avatarPngPath + fid + ".png");
+        BufferedImage buffImg = ImageIO.read(new FileInputStream(file));
+        ServletOutputStream servletOutputStream = response.getOutputStream();
+        ImageIO.write(buffImg, "png", servletOutputStream);
+        servletOutputStream.close();
+        file.delete();
     }
 }

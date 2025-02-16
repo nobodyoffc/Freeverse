@@ -45,6 +45,11 @@ public class Signature {
     public Signature() {
     }
 
+    public Signature(String msg, byte[] symKey) {
+        this.msg = msg;
+        this.key = symKey;
+    }
+
     public Signature(String symSign, String symKeyName) {
         this.sign = symSign;
         this.keyName = symKeyName;
@@ -359,10 +364,11 @@ public class Signature {
                 }
             }
             case FC_Sha256SymSignMsg_No1_NrC7 -> {
-                if(sign==null)return false;
-                byte[] signBytes = BytesTools.bytesMerger(msg.getBytes(), key);
-                String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
-                return sign.equals(doubleSha256Hash);
+                return verifySha256SymSign(msg,key,sign);
+//                if(sign==null)return false;
+//                byte[] signBytes = BytesTools.bytesMerger(msg.getBytes(), key);
+//                String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
+//                return sign.equals(doubleSha256Hash);
             }
             case FC_SchnorrSignMsg_No1_NrC7 -> {
                 return schnorrMsgVerify(msg, sign, fid);
@@ -372,6 +378,18 @@ public class Signature {
                 return false;
             }
         }
+    }
+
+    public static boolean verifySha256SymSign(String msg,byte[] key, String sign){
+        byte[] msgBytes = msg.getBytes();
+        return verifySha256SymSign(msgBytes,key,sign);
+    }
+
+    public static boolean verifySha256SymSign(byte[] msgBytes,byte[] key, String sign){
+        if(sign==null)return false;
+        byte[] signBytes = BytesTools.bytesMerger(msgBytes, key);
+        String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
+        return sign.equals(doubleSha256Hash);
     }
 
     public String toJson() {

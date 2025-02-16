@@ -11,7 +11,7 @@ public class MainClient {
 
         try {
             System.out.println("Attempting to connect to localhost:8888...");
-            TalkClient client = new TalkClient("http://localhost:8888", br);
+            TalkClient client = new TalkClient("http://localhost:8888", br,null);
             client.start();
             
             // Add a test message

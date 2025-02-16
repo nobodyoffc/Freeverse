@@ -1,7 +1,7 @@
 package APIP6V1_Service;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.ServiceHistory;
 import initial.Initiator;
@@ -16,23 +16,30 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import appTools.Settings;
 import static constants.OpNames.RATE;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.ServiceOpHistory, value = "/"+ApiNames.SN_6+"/"+ApiNames.Version1 +"/"+ApiNames.ServiceOpHistory)
+@WebServlet(name = ApipApiNames.SERVICE_OP_HISTORY, value = "/"+ ApipApiNames.SN_6+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SERVICE_OP_HISTORY)
 
 public class ServiceOpHistory extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public ServiceOpHistory() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList("height",false,"index",false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.SERVICE_HISTORY, ServiceHistory.class, null,null,OP,RATE, defaultSort,request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.SERVICE_HISTORY, ServiceHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList("height",false,"index",false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.SERVICE_HISTORY, ServiceHistory.class, null,null,OP,RATE, defaultSort,request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.SERVICE_HISTORY, ServiceHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
 }

@@ -1,64 +1,64 @@
 package APIP17V1_Crypto;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.FieldNames;
 import crypto.KeyTools;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import initial.Initiator;
+import server.HttpRequestChecker;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
+import appTools.Settings;
 
-@WebServlet(name = ApiNames.Addresses, value = "/"+ApiNames.SN_17+"/"+ApiNames.Version1 +"/"+ApiNames.Addresses)
+@WebServlet(name = ApipApiNames.ADDRESSES, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.ADDRESSES)
 public class Addresses extends HttpServlet {
+    private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
 
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try(Jedis jedis = jedisPool.getResource()) {
-            //Do FCDSL other request
-            Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis, Initiator.sessionHandler);
-            if (other == null) return;
-            //Do this request
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        //Do FCDSL other request
+        Map<String, String> other = httpRequestChecker.checkOtherRequestHttp(request, response, authType);
+        if (other == null) return;
+        //Do this request
 
-            String addrOrPubKey = other.get(FieldNames.ADDR_OR_PUB_KEY);
+        String addrOrPubKey = other.get(FieldNames.ADDR_OR_PUB_KEY);
 
-            Map<String, String> addrMap;
-            String pubKey;
+        Map<String, String> addrMap;
+        String pubKey;
 
-            if(addrOrPubKey.startsWith("F")||addrOrPubKey.startsWith("1")||addrOrPubKey.startsWith("D")||addrOrPubKey.startsWith("L")){
-                byte[] hash160 = KeyTools.addrToHash160(addrOrPubKey);
-                addrMap = KeyTools.hash160ToAddresses(hash160);
-            }else if (addrOrPubKey.startsWith("02")||addrOrPubKey.startsWith("03")){
-                pubKey = addrOrPubKey;
+        if(addrOrPubKey.startsWith("F")||addrOrPubKey.startsWith("1")||addrOrPubKey.startsWith("D")||addrOrPubKey.startsWith("L")){
+            byte[] hash160 = KeyTools.addrToHash160(addrOrPubKey);
+            addrMap = KeyTools.hash160ToAddresses(hash160);
+        }else if (addrOrPubKey.startsWith("02")||addrOrPubKey.startsWith("03")){
+            pubKey = addrOrPubKey;
+            addrMap= KeyTools.pubKeyToAddresses(pubKey);
+        }else if(addrOrPubKey.startsWith("04")){
+            try {
+                pubKey = KeyTools.compressPk65To33(addrOrPubKey);
                 addrMap= KeyTools.pubKeyToAddresses(pubKey);
-            }else if(addrOrPubKey.startsWith("04")){
-                try {
-                    pubKey = KeyTools.compressPk65To33(addrOrPubKey);
-                    addrMap= KeyTools.pubKeyToAddresses(pubKey);
-                } catch (Exception e) {
-                    replier.replyOtherErrorHttp("Wrong public key.",null,jedis);
-                    return;
-                }
-            }else{
-                replier.replyOtherErrorHttp("FID or Public Key are needed.",null,jedis);
+            } catch (Exception e) {
+                replier.replyOtherErrorHttp("Wrong public key.", response);
                 return;
             }
-            replier.replySingleDataSuccess(addrMap,jedis);
+        }else{
+            replier.replyOtherErrorHttp("FID or Public Key are needed.", response);
+            return;
         }
+        replier.replySingleDataSuccessHttp(addrMap,response);
+    
     }
 }

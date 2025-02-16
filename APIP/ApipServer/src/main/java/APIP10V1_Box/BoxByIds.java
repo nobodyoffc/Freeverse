@@ -1,6 +1,6 @@
 package APIP10V1_Box;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
 import feip.feipData.Box;
@@ -14,20 +14,25 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import static constants.FieldNames.BID;
-import static server.FcdslRequestHandler.doIdsRequest;
+import appTools.Settings;
+import server.FcdslRequestHandler;
 
-@WebServlet(name = ApiNames.BoxByIds, value = "/"+ApiNames.SN_10+"/"+ApiNames.Version1 +"/"+ApiNames.BoxByIds)
+@WebServlet(name = ApipApiNames.BOX_BY_IDS, value = "/"+ ApipApiNames.SN_10+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BOX_BY_IDS)
 public class BoxByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public BoxByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }   
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.BID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.BID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.BOX, Box.class, BID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.BID, request,response,authType);
     }
 }

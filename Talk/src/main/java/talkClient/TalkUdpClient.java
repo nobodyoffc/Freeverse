@@ -8,12 +8,12 @@ import clients.Client;
 import clients.ApipClient;
 import configure.ApiAccount;
 import configure.ApiProvider;
-import configure.ServiceType;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
 import crypto.Encryptor;
 import fcData.*;
 import fcData.TalkUnit;
+import feip.feipData.Service;
 import tools.Hex;
 import tools.UdpTools;
 import tools.http.AuthType;
@@ -49,7 +49,7 @@ public class TalkUdpClient extends Client {
     }
 
 
-    public FcSession ping(String version, AuthType authType, ServiceType serviceType) {
+    public FcSession ping(String version, AuthType authType, Service.ServiceType serviceType) {
         System.out.println("Sign in...");
         return null;
     }

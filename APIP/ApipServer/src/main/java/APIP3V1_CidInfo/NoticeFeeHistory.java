@@ -1,7 +1,7 @@
 package APIP3V1_CidInfo;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.CidHist;
 import initial.Initiator;
@@ -16,21 +16,29 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import appTools.Settings;
+
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApiNames.NoticeFeeHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.NoticeFeeHistory)
+@WebServlet(name = ApipApiNames.NOTICE_FEE_HISTORY, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NOTICE_FEE_HISTORY)
 public class NoticeFeeHistory extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public NoticeFeeHistory() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.CID_HISTORY, CidHist.class,"sn","10", null, null, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.CID_HISTORY, CidHist.class,"sn","10", null, null, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.CID_HISTORY, CidHist.class,"sn","10", null, null, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.CID_HISTORY, CidHist.class,"sn","10", null, null, defaultSort, request,response,authType);
     }
 }

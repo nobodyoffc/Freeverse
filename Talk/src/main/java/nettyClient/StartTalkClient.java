@@ -5,7 +5,7 @@
 //import appTools.Starter;
 //import clients.ApipClient;
 //import talkClient.ClientTalk;
-//import configure.ServiceType;
+//import feip.feipData.Service.ServiceType;
 //
 //import java.io.BufferedReader;
 //import java.io.InputStreamReader;

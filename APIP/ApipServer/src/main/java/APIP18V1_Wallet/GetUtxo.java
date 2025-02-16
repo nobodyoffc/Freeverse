@@ -1,19 +1,21 @@
 package APIP18V1_Wallet;
 
+import appTools.Settings;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import feip.feipData.Service;
 import handlers.CashHandler;
 import constants.*;
 import crypto.KeyTools;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import fch.ParseTools;
 import handlers.CashHandler.SearchResult;
+import handlers.Handler.HandlerType;
 import fch.fchData.Cash;
 import initial.Initiator;
+import server.ApipApiNames;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
-
+import server.HttpRequestChecker;
+import handlers.MempoolHandler;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -25,61 +27,59 @@ import static constants.FieldNames.AMOUNT;
 import static constants.IndicesNames.ADDRESS;
 
 
-@WebServlet(name = ApiNames.GetUtxo, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.GetUtxo)
+@WebServlet(name = ApipApiNames.GET_UTXO, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_UTXO)
 public class GetUtxo extends HttpServlet {
-
+    private final Settings settings = Initiator.settings;
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
 
     @SuppressWarnings("null")
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try(Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
-                return;
-            }
-            String idRequested = request.getParameter(ADDRESS);
-            if (idRequested==null || !KeyTools.isValidFchAddr(idRequested)){
-                replier.replyHttp(CodeMessage.Code2003IllegalFid,null,jedis);
-                return;
-            }
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
 
-            Long amount;
-            Long cd;
-
-            if(request.getParameter(AMOUNT)!=null){
-                amount= ParseTools.coinStrToSatoshi(request.getParameter(AMOUNT));
-            }else{
-                amount=0L;
-            }
-            if(request.getParameter(FieldNames.CD)!=null){
-                cd= Long.parseLong(request.getParameter(FieldNames.CD));
-            }else{
-                cd=0L;
-            }
-
-            SearchResult<Cash> searchResult = CashHandler.getValidCashes(idRequested,amount,cd,null,0,0,null,Initiator.esClient,Initiator.jedisPool);
-            if (searchResult.hasError()) {
-                replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(), jedis);
-                return;
-            }
-
-            List<apip.apipData.Utxo> utxoList = new ArrayList<>();
-            for(Cash cash:searchResult.getData())
-                utxoList.add(apip.apipData.Utxo.cashToUtxo(cash));
-    
-            replier.setGot((long) utxoList.size());
-            replier.setTotal(searchResult.getTotal());
-            replier.reply0SuccessHttp(utxoList, jedis, null);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
+        String idRequested = request.getParameter(ADDRESS);
+        if (idRequested==null || !KeyTools.isValidFchAddr(idRequested)){
+            replier.replyHttp(CodeMessage.Code2003IllegalFid,null,response);
+            return;
         }
+
+        Long amount;
+        Long cd;
+
+        if(request.getParameter(AMOUNT)!=null){
+            amount= ParseTools.coinStrToSatoshi(request.getParameter(AMOUNT));
+        }else{
+            amount=0L;
+        }
+        if(request.getParameter(FieldNames.CD)!=null){
+            cd= Long.parseLong(request.getParameter(FieldNames.CD));
+        }else{
+            cd=0L;
+        }
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+        SearchResult<Cash> searchResult = CashHandler.getValidCashes(idRequested,amount,cd,null,0,0,null,esClient, mempoolHandler);
+        if (searchResult.hasError()) {
+            replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(),response);
+            return;
+        }
+
+        List<apip.apipData.Utxo> utxoList = new ArrayList<>();
+        for(Cash cash:searchResult.getData())
+            utxoList.add(apip.apipData.Utxo.cashToUtxo(cash));
+
+        replier.setGot((long) utxoList.size());
+        replier.setTotal(searchResult.getTotal());
+        replier.replySingleDataSuccessHttp(utxoList,response);
     }
 }

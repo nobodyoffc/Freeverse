@@ -1,15 +1,14 @@
 package endpoint;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import appTools.Settings;
+import feip.feipData.Service;
+import nasa.NaSaRpcClient;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -19,30 +18,25 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 
-@WebServlet(name = ApiNames.Circulating, value = "/"+ApiNames.Circulating)
+@WebServlet(name = ApipApiNames.CIRCULATING, value = "/"+ ApipApiNames.CIRCULATING)
 public class Circulating extends HttpServlet {
+    private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FREE;
-        doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.esClient, Initiator.jedisPool);
+        doRequest(request, response, authType, settings);
     }
 
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            FchChainInfo freecashInfo = new FchChainInfo();
-            freecashInfo.infoBest(Initiator.naSaRpcClient);
-            response.getWriter().write(freecashInfo.getCirculating());
-        }catch (Exception e){
-            e.printStackTrace();
-        }
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
+        FchChainInfo freecashInfo = new FchChainInfo();
+        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        freecashInfo.infoBest(naSaRpcClient);
+        response.getWriter().write(freecashInfo.getCirculating());
     }
 }

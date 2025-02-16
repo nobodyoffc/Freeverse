@@ -9,10 +9,11 @@ import clients.FeipClient;
 import clients.ApipClient;
 import configure.ApiAccount;
 import configure.Configure;
-import configure.ServiceType;
 import fch.fchData.SendTo;
 import feip.feipData.Feip.ProtocolName;
+import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
+import feip.feipData.Service.ServiceType;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -30,12 +31,16 @@ public class startFeipClient {
     public static ApiAccount apipAccount;
     public static ApipClient apipClient;
     public static BufferedReader br ;
-    public static String clientName= ServiceType.APIP.name();
-    public static String[] serviceAliases = new String[]{ServiceType.APIP.name()};
+    public static String clientName= Service.ServiceType.APIP.name();
+    public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP};
     public static String myFid;
     public static String sid;
     public static String myPriKeyCipher;
     public static Map<String, Long> lastTimeMap;
+
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP
+    };
 
     public static Map<String,Object> settingMap = new HashMap<>();
 
@@ -43,13 +48,13 @@ public class startFeipClient {
         Menu.welcome(clientName);
 
         br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startClient(clientName, serviceAliases, settingMap, br);
+        settings = Starter.startClient(clientName, settingMap, br, modules);
         if(settings==null)return;
 
         myFid = settings.getMainFid();
 
         byte[] symKey = settings.getSymKey();
-        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         configure = settings.getConfig();
         apipAccount = settings.getApiAccount(ServiceType.APIP);
 

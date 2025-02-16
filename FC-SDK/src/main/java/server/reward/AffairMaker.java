@@ -84,7 +84,7 @@ public class AffairMaker {
 
         HashMap<String, SendTo> sendToMap = makeSendToMap(rewardInfo);
 
-        SearchResult<Cash> cashListReturn = CashHandler.getValidCashes(account,rewardT, null, null, sendToMap.size(), msg.getBytes().length,null,esClient,jedisPool);
+        SearchResult<Cash> cashListReturn = CashHandler.getValidCashes(account,rewardT, null, null, sendToMap.size(), msg.getBytes().length,null,esClient, null);
 
         if(cashListReturn.hasError()){
             log.debug(cashListReturn.getMessage());

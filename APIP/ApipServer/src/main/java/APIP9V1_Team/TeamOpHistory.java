@@ -1,7 +1,7 @@
 package APIP9V1_Team;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.TeamHistory;
 import initial.Initiator;
@@ -16,25 +16,32 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import appTools.Settings;
 import static constants.FieldNames.INDEX;
 import static constants.OpNames.RATE;
 import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApiNames.TeamOpHistory, value = "/"+ApiNames.SN_9+"/"+ApiNames.Version1 +"/"+ApiNames.TeamOpHistory)
+@WebServlet(name = ApipApiNames.TEAM_OP_HISTORY, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_OP_HISTORY)
 
 public class TeamOpHistory extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public TeamOpHistory() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.TEAM_HISTORY, TeamHistory.class, null,null,OP,RATE, defaultSort,request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.TEAM_HISTORY, TeamHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.TEAM_HISTORY, TeamHistory.class, null,null,OP,RATE, defaultSort,request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.TEAM_HISTORY, TeamHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
 }

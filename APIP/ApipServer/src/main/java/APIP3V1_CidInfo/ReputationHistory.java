@@ -1,7 +1,7 @@
 package APIP3V1_CidInfo;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.RepuHist;
 import initial.Initiator;
@@ -16,22 +16,30 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import appTools.Settings;
+
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApiNames.ReputationHistory, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.ReputationHistory)
+@WebServlet(name = ApipApiNames.REPUTATION_HISTORY, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.REPUTATION_HISTORY)
 public class ReputationHistory extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public ReputationHistory() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.REPUTATION_HISTORY, RepuHist.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.REPUTATION_HISTORY, RepuHist.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.REPUTATION_HISTORY, RepuHist.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.REPUTATION_HISTORY, RepuHist.class, defaultSort, request,response,authType);
     }
 }
 

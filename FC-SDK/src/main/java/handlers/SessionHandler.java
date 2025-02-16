@@ -4,6 +4,7 @@ import crypto.CryptoDataByte;
 import crypto.Encryptor;
 import fcData.AlgorithmId;
 import fcData.FcSession;
+import feip.feipData.Service;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import tools.FileTools;
@@ -12,22 +13,24 @@ import tools.JsonTools;
 import tools.MapQueue;
 
 import java.util.Map;
+
+import appTools.Settings;
+
 import java.util.List;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.ArrayList;
 
 import fcData.IdNameTools;
-import fcData.SessionDB;
 /**
  * FcSessionClient is a client for managing sessions.
  * There are two ways to store sessions: 1) MapQueue in memory and MapDB for persistence; 2) JedisPool in Redis.
  */
-public class SessionHandler {
+public class SessionHandler extends Handler<FcSession> {
     private static final String ID_SESSION_NAME = "idSessionName";
     private static final String SESSIONS = "sessions";
     private final JedisPool jedisPool;
-    private final String dbName;
+    // private final String dbName;
     private final String jedisNameSessionKey;
     private final String jedisIdNameKey;
     private final SessionDB sessionDB;
@@ -40,22 +43,37 @@ public class SessionHandler {
     private final Map<String, List<String>> usedSessionsMap;
     
         
-    public SessionHandler(String mainFid, String sid, JedisPool jedisPool) {
+    public SessionHandler(String mainFid, String sid, JedisPool jedisPool, String dbPath) {
         this.mainFid = mainFid;
         this.sid = sid;
         this.jedisPool = jedisPool;
         this.useRedis = (jedisPool != null);
         
-        this.dbName = sid==null? FileTools.makeFileName(mainFid, sid, SESSIONS, constants.Strings.DOT_DB) 
-            : FileTools.makeFileName(null, sid, SESSIONS, constants.Strings.DOT_DB);
+        
         this.jedisNameSessionKey = useRedis ? FileTools.makeFileName(null, sid, SESSIONS, null) : null;
         this.jedisIdNameKey = useRedis ? FileTools.makeFileName(null, sid, ID_SESSION_NAME, null) : null;
-        this.sessionDB = useRedis ? null : new SessionDB(mainFid, sid);
+        this.sessionDB = useRedis ? null : new SessionDB(mainFid, sid, dbPath);
         this.nameSessionMap = useRedis ? null : new MapQueue<>(1000);
         this.idNameMap = useRedis ? null : new MapQueue<>(1000);
         this.jedisUsedSessionsKey = useRedis ? FileTools.makeFileName(null, sid, "usedSessions", null) : null;
         this.usedSessionsMap = useRedis ? null : new HashMap<>();
     }
+
+    public SessionHandler(Settings settings){
+        this.mainFid = settings.getMainFid();
+        this.sid = settings.getSid();
+        this.jedisPool = (JedisPool)settings.getClient(Service.ServiceType.REDIS);
+        this.useRedis = (jedisPool != null);
+        // this.dbName = settings.getSid()==null? FileTools.makeFileName(mainFid, sid, SESSIONS, constants.Strings.DOT_DB) 
+        //     : FileTools.makeFileName(null, sid, SESSIONS, constants.Strings.DOT_DB);
+        this.jedisNameSessionKey = useRedis ? FileTools.makeFileName(null, sid, SESSIONS, null) : null;
+        this.jedisIdNameKey = useRedis ? FileTools.makeFileName(null, sid, ID_SESSION_NAME, null) : null;
+        this.sessionDB = useRedis ? null : new SessionDB(mainFid, sid, settings.getDbDir());
+        this.nameSessionMap = useRedis ? null : new MapQueue<>(1000);
+        this.idNameMap = useRedis ? null : new MapQueue<>(1000);
+        this.jedisUsedSessionsKey = useRedis ? FileTools.makeFileName(null, sid, "usedSessions", null) : null;
+        this.usedSessionsMap = useRedis ? null : new HashMap<>();
+    }     
 
     public FcSession getSessionByName(String sessionName) {
         if(sessionName==null)return null;
@@ -321,9 +339,9 @@ public class SessionHandler {
         }
     }
 
-    public String getDbName() {
-        return dbName;
-    }
+    // public String getDbName() {
+    //     return dbName;
+    // }
 
     public String getJedisNameSessionKey() {
         return jedisNameSessionKey;

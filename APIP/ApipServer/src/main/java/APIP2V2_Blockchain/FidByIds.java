@@ -1,6 +1,6 @@
 package APIP2V2_Blockchain;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import fch.fchData.Address;
 import initial.Initiator;
@@ -13,19 +13,26 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+import appTools.Settings;
 import static constants.Strings.FID;
-import static server.FcdslRequestHandler.doIdsRequest;
+import server.FcdslRequestHandler;
 
-@WebServlet(name = ApiNames.FidByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.FidByIds)
+@WebServlet(name = ApipApiNames.FID_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.FID_BY_IDS)
 public class FidByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public FidByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }   
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.ADDRESS, Address.class, FID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.ADDRESS, Address.class, FID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.ADDRESS, Address.class, FID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.ADDRESS, Address.class, FID, request,response,authType);
     }
 }

@@ -13,6 +13,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.io.File;
 
 public class PersistentSequenceMap {
     private final String sid;
@@ -24,19 +25,26 @@ public class PersistentSequenceMap {
     private volatile HTreeMap<String, Long> metaMap;
     private volatile long currentIndex;
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
-
-    public PersistentSequenceMap(String myFid,String sid, String mapName) {
+    private final String dbPath;
+    public PersistentSequenceMap(String myFid,String sid, String mapName, String dbPath) {
         this.sid = sid;
         this.mapName = mapName;
         this.myFid = myFid;
+        if(dbPath==null)dbPath = FileTools.getUserDir()+"/db/";
+        if(!dbPath.endsWith("/"))dbPath += "/";
+        this.dbPath = dbPath;
     }
 
     private void initializeDb() {
+        if (!FileTools.checkDirOrMakeIt(dbPath)) return;
         rwLock.writeLock().lock();
         try {
             if (db == null || db.isClosed()) {
                 String dbName = FileTools.makeFileName(myFid, sid, mapName, constants.Strings.DOT_DB);
-                db = DBMaker.fileDB(dbName).transactionEnable().make();
+                // Ensure proper path separator and file permissions
+                db = DBMaker.fileDB(new File(dbPath, dbName))
+                        .transactionEnable()
+                        .make();
                 map = db.hashMap(mapName)
                         .keySerializer(Serializer.BYTE_ARRAY)
                         .valueSerializer(Serializer.BYTE_ARRAY)

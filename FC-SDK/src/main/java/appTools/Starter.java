@@ -1,7 +1,6 @@
 package appTools;
 
-import static clients.FeipClient.setCid;
-import static clients.FeipClient.setMaster;
+import static clients.FeipClient.*;
 import static constants.Strings.DOT_JSON;
 import static constants.Strings.SETTINGS;
 
@@ -12,22 +11,22 @@ import java.util.*;
 import apip.apipData.CidInfo;
 import clients.ApipClient;
 import configure.Configure;
-import configure.ServiceType;
-import fch.Wallet;
+import feip.feipData.Service;
+import handlers.Handler;
 import tools.FileTools;
 import tools.JsonTools;
 
 public class Starter {
 
-    public static Settings startClient(String clientName, String[] serviceAliases, Map<String, Object> settingMap, BufferedReader br)  {
-        //Load config info from the file of config.json
+    public static Settings startClient(String clientName,
+                                       Map<String, Object> settingMap, BufferedReader br, Object[] modules) {
+        // Load config info from the file of config.json
         Configure.loadConfig(br);
         Configure configure = Configure.checkPassword(br);
-        if(configure ==null)return null;
+        if(configure == null) return null;
         byte[] symKey = configure.getSymKey();
     
         String fid = configure.chooseMainFid(symKey);
-
         Settings settings;
 
         try {
@@ -37,17 +36,18 @@ public class Starter {
             throw new RuntimeException(e);
         }
 
-        if(settings ==null) {
+        if(settings == null) {
             settings = new Settings(configure);
-            if(serviceAliases!=null)settings.setServiceAliases(serviceAliases);
-            if(settingMap!=null)settings.setSettingMap(settingMap);
+            settings.setModules(modules);
+            if(settingMap != null) settings.setSettingMap(settingMap);
         }
 
-        fid = settings.initiateClient(fid, clientName, symKey,configure, br);
+        // Initialize clients and handlers
+        settings.initiateClient(fid, clientName, symKey, configure, br);
 
-        ApipClient apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        ApipClient apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
 
-        long bestHeight = apipClient.getBestHeight();//new Wallet(apipClient).getBestHeight();
+        long bestHeight = apipClient.bestHeight();//new Wallet(apipClient).getBestHeight();
         CidInfo fidInfo = settings.checkFidInfo(apipClient, br);
         String userPriKeyCipher = configure.getFidCipherMap().get(fid);
 
@@ -66,11 +66,12 @@ public class Starter {
         return settings;
     }
 
-    public static Settings startServer(ServiceType serverType, String[] serviceAliases, Map<String,Object> settingMap, BufferedReader br) {
+    public static Settings startServer(Service.ServiceType serverType,
+                                       Map<String, Object> settingMap, List<String> apiList, Object[] modules, Handler.HandlerType[] runningHandlers, BufferedReader br) {
+        // Load config info from the file of config.json
         Configure.loadConfig(br);
-
         Configure configure = Configure.checkPassword(br);
-        if(configure==null)return null;
+        if(configure == null) return null;
         byte[] symKey = configure.getSymKey();
         while(true) {
             String sid = configure.chooseSid(serverType);
@@ -78,22 +79,22 @@ public class Starter {
             Settings settings=null;
             if(sid!=null)
                 try {
-                    String fileName = FileTools.makeFileName(null, sid, SETTINGS, DOT_JSON);
+                    String fileName = Settings.makeSettingsFileName(null,sid);//FileTools.makeFileName(null, sid, SETTINGS, DOT_JSON);
                     settings = JsonTools.readObjectFromJsonFile(Configure.getConfDir(), fileName, Settings.class);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
 
-            if (settings == null) settings = new Settings(configure, serverType,serviceAliases,settingMap);
+            if (settings == null) settings = new Settings(configure, serverType, settingMap, modules, runningHandlers);
             //Check necessary APIs and set them if anyone can't be connected.
-            settings.initiateServer(sid, symKey, configure);
+            settings.initiateServer(sid, symKey, configure,apiList);
             if(settings.getService()!=null){
                 return settings;
             }
             System.out.println("Try again.");
         }
     }
-    public static Settings startMuteServer(String serverName, String[] serviceAliases, Map<String,Object> settingMap, BufferedReader br) {
+    public static Settings startMuteServer(String serverName, Map<String,Object> settingMap, BufferedReader br, Object[] modules) {
         Configure.loadConfig(br);
 
         Configure configure = Configure.checkPassword(br);
@@ -108,7 +109,7 @@ public class Starter {
             throw new RuntimeException(e);
         }
 
-        if (settings == null) settings = new Settings(configure, null,serviceAliases,settingMap);
+        if (settings == null) settings = new Settings(configure, null, settingMap, modules, null);
         //Check necessary APIs and set them if anyone can't be connected.
         settings.initiateMuteServer(serverName, symKey, configure);
         return settings;

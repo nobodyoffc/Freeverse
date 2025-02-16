@@ -2,7 +2,7 @@ package tools;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.Cid;
 
 import java.io.BufferedReader;
@@ -15,17 +15,17 @@ import java.util.*;
 public class ObjectTools {
 
     public static void main(String[] args) {
-        FcReplierHttp fcReplierHttp = new FcReplierHttp();
+        ReplyBody replyBody = new ReplyBody();
 
         Cid cid = new Cid();
         cid.setCid("liu");
         cid.setHot(13424L);
         Map<String,Cid> map = new HashMap<>();
         map.put(cid.getCid(),cid);
-        fcReplierHttp.setData(map);
+        replyBody.setData(map);
         Gson gson = new Gson();
-        String json = gson.toJson(fcReplierHttp);
-        Object data = gson.fromJson(json, FcReplierHttp.class).getData();
+        String json = gson.toJson(replyBody);
+        Object data = gson.fromJson(json, ReplyBody.class).getData();
         Map<String, Cid> newMap = objectToMap(data, String.class, Cid.class);
         JsonTools.printJson(newMap);
     }
@@ -88,6 +88,7 @@ public class ObjectTools {
     }
 
     public static <T> T objectToClass(Object ob,Class<T> tClass) {
+        if(ob==null)return null;
         Gson gson = new Gson();
         return gson.fromJson(gson.toJson(ob),tClass);
     }
@@ -304,5 +305,17 @@ public class ObjectTools {
         }
         
         return selectedItems;
+    }
+
+    public static <K, T> Map<K, List<T>> objectToMapWithListValues(Object obj, Class<K> kClass, Class<T> tClass) {
+        Gson gson = new Gson();
+        Type listType = TypeToken.getParameterized(List.class, tClass).getType();
+        Type mapType = TypeToken.getParameterized(Map.class, kClass, listType).getType();
+        try {
+            String jsonString = (obj instanceof String) ? (String) obj : gson.toJson(obj);
+            return new HashMap<>(gson.fromJson(jsonString, mapType));
+        } catch (Exception ignore) {
+            return null;
+        }
     }
 }

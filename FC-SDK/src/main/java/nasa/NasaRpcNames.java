@@ -11,6 +11,8 @@ public class NasaRpcNames {
     public static final String GETBLOCKHEADER = "getblockheader";
     public static final String GETRAWTRANSACTION = "getrawtransaction";
     public static final String GETRAWMEMPOOL = "getrawmempool";
+    public static final String GETMEMPOOLINFO = "getmempoolinfo";
+    public static final String GETMEMPOOLENTRY = "getmempoolentry";
     public static final String GETTRANSACTION = "gettransaction";
     public static final String LISTSINCEBLOCK = "listsinceblock";
     public static final String LISTUNSPENT = "listunspent";

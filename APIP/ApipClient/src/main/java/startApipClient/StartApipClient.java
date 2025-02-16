@@ -8,12 +8,12 @@ import appTools.Menu;
 import appTools.Shower;
 import clients.ApipClient;
 import configure.ApiAccount;
-import configure.ServiceType;
+import feip.feipData.Service.ServiceType;
 import configure.Configure;
-import constants.ApiNames;
+import server.ApipApiNames;
 import crypto.EncryptType;
 import crypto.KeyTools;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import fcData.FcSession;
 import fcData.FidTxMask;
 import fch.fchData.*;
@@ -37,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static appTools.Inputer.inputString;
-import static constants.ApiNames.*;
+import static server.ApipApiNames.*;
 import static fch.Inputer.inputGoodFid;
 
 public class StartApipClient {
@@ -49,15 +49,16 @@ public class StartApipClient {
     public static BufferedReader br ;
     public static String clientName= ServiceType.APIP.name();
 
-    public static String[] serviceAliases = new String[]{ServiceType.APIP.name()};
-
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP,
+    };
     public static 	Map<String,Object> settingMap = new HashMap<>();
 
     public static void main(String[] args) {
         Menu.welcome(clientName);
 
         br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startClient(clientName, serviceAliases, settingMap, br);
+        settings = Starter.startClient(clientName, settingMap, br, modules);
         if(settings==null)return;
         byte[] symKey = settings.getSymKey();
         apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
@@ -152,7 +153,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Free GET methods");
-            menu.add(ApiNames.FreeAPIs);
+            menu.add(ApipApiNames.freeAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -173,13 +174,13 @@ public class StartApipClient {
     }
 
     private static void ping() {
-        boolean data = (boolean) apipClient.ping(Version1, RequestMethod.GET,AuthType.FREE, ServiceType.APIP);
+        boolean data = (boolean) apipClient.ping(VERSION_1, RequestMethod.GET,AuthType.FREE, ServiceType.APIP);
         System.out.println(data);
     }
 
     public static void getService() {
         System.out.println("Getting the default service information...");
-        FcReplierHttp replier = ApipClient.getService(apipClient.getUrlHead(), ApiNames.Version1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(apipClient.getUrlHead(), ApipApiNames.VERSION_1, ApipParams.class);
         if(replier!=null)JsonTools.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
@@ -236,7 +237,7 @@ public class StartApipClient {
         System.out.println(JsonTools.toNiceJson(fcdsl));
         Menu.anyKeyToContinue(br);
         System.out.println("Requesting ...");
-        FcReplierHttp replier = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        ReplyBody replier = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         JsonTools.printJson(replier);
         Menu.anyKeyToContinue(br);
     }
@@ -280,29 +281,30 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Blockchain");
-            menu.add(ApiNames.BlockchainAPIs);
+            menu.add(ApipApiNames.blockchainAPIs);
             menu.show();
             int choice = menu.choose(br);
 
             switch (choice) {
                 case 1 -> blockSearch(DEFAULT_SIZE, "height:desc->blockId:asc");
-                case 2 -> blockByIds();
-                case 3 -> blockByHeights();
-                case 4 -> cashSearch(DEFAULT_SIZE, "valid:desc->birthHeight:desc->cashId:asc");
-                case 5 -> cashByIds();
-                case 6 -> fidSearch(DEFAULT_SIZE, "lastHeight:desc->fid:asc");
-                case 7 -> fidByIds();
-                case 8 -> opReturnSearch(DEFAULT_SIZE, "height:desc->txIndex:desc->txId:asc");
-                case 9 -> opReturnByIds();
-                case 10 -> p2shSearch(DEFAULT_SIZE, "birthHeight:desc->fid:asc");
-                case 11 -> p2shByIds();
-                case 12 -> txSearch(DEFAULT_SIZE, "height:desc->txId:asc");
-                case 13 -> txByIds();
-                case 14 -> txByFid();
-                case 15 -> chainInfo();
-                case 16 -> blockTimeHistory();
-                case 17 -> difficultyHistory();
-                case 18 -> hashRateHistory();
+                case 2 -> bestBlock();
+                case 3 -> blockByIds();
+                case 4 -> blockByHeights();
+                case 5 -> cashSearch(DEFAULT_SIZE, "valid:desc->birthHeight:desc->cashId:asc");
+                case 6 -> cashByIds();
+                case 7 -> fidSearch(DEFAULT_SIZE, "lastHeight:desc->fid:asc");
+                case 8 -> fidByIds();
+                case 9 -> opReturnSearch(DEFAULT_SIZE, "height:desc->txIndex:desc->txId:asc");
+                case 10 -> opReturnByIds();
+                case 11 -> p2shSearch(DEFAULT_SIZE, "birthHeight:desc->fid:asc");
+                case 12 -> p2shByIds();
+                case 13 -> txSearch(DEFAULT_SIZE, "height:desc->txId:asc");
+                case 14 -> txByIds();
+                case 15 -> txByFid();
+                case 16 -> chainInfo();
+                case 17 -> blockTimeHistory();
+                case 18 -> difficultyHistory();
+                case 19 -> hashRateHistory();
                 case 0 -> {
                     return;
                 }
@@ -336,6 +338,14 @@ public class StartApipClient {
         Map<String, BlockInfo> result = apipClient.blockByHeights(RequestMethod.POST,AuthType.FC_SIGN_BODY,heights);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
+        JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void bestBlock() {
+        System.out.println("Requesting bestBlock...");
+        Block result = apipClient.bestBlock(RequestMethod.POST,AuthType.FC_SIGN_BODY);
+        if(result==null)return;
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -535,7 +545,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Identity");
-            menu.add(ApiNames.IdentityAPIs);
+            menu.add(ApipApiNames.identityAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -702,7 +712,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Organize");
-            menu.add(ApiNames.OrganizeAPIs);
+            menu.add(ApipApiNames.organizeAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -845,7 +855,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Construct");
-            menu.add(ApiNames.ConstructAPIs);
+            menu.add(ApipApiNames.constructAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -1047,7 +1057,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Personal");
-            menu.add(ApiNames.PersonalAPIs);
+            menu.add(ApipApiNames.personalAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -1345,7 +1355,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Publish");
-            menu.add(ApiNames.PublishAPIs);
+            menu.add(ApipApiNames.publishAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -1381,7 +1391,9 @@ public class StartApipClient {
                 "Get valid cashes",
                 "Unconfirmed",
                 "Fee Rate",
-                "Get offLine Tx");
+                "Get offLine Tx",
+                    "Balance by FIDs"
+            );
             menu.show();
             int choice = menu.choose(br);
 
@@ -1392,11 +1404,22 @@ public class StartApipClient {
                 case 4 -> unconfirmed();
                 case 5 -> feeRate();
                 case 6 -> offLineTx();
+                case 7 -> balanceByIds();
                 case 0 -> {
                     return;
                 }
             }
         }
+    }
+
+    public static void balanceByIds( ) {
+        String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
+        System.out.println("Requesting fidByIds...");
+        Map<String, Long> result = apipClient.balanceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
     }
 
     public static void broadcastTx(RequestMethod requestMethod, AuthType authType) {
@@ -1467,7 +1490,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("CryptoTools");
-            menu.add(ApiNames.CryptoAPIs);
+            menu.add(ApipApiNames.cryptoAPIs);
             menu.show();
             int choice = menu.choose(br);
 
@@ -1648,7 +1671,7 @@ public class StartApipClient {
         while (true) {
             Menu menu = new Menu();
             menu.setTitle("Endpoint");
-            menu.add(EndpointAPIs);
+            menu.add(endpointAPIs);
             menu.show();
             int choice = menu.choose(br);
 

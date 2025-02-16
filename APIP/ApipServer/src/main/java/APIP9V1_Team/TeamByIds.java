@@ -1,57 +1,57 @@
 package APIP9V1_Team;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import feip.feipData.Team;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import appTools.Settings;
 
 import java.io.IOException;
 import java.util.Map;
 
 import static constants.FieldNames.TID;
-import static server.FcdslRequestHandler.getTMap;
+import server.FcdslRequestHandler;
 
 
-@WebServlet(name = ApiNames.TeamByIds, value = "/"+ApiNames.SN_9+"/"+ApiNames.Version1 +"/"+ApiNames.TeamByIds)
+@WebServlet(name = ApipApiNames.TEAM_BY_IDS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_BY_IDS)
 public class TeamByIds extends HttpServlet {
+    private final Settings settings;
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public TeamByIds() {
+        this.settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doTeamIdsRequest( Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool);
+        doTeamIdsRequest( request,response,authType,settings);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doTeamIdsRequest(Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool);
+        doTeamIdsRequest( request,response,authType,settings);
     }
 
-    public static void doTeamIdsRequest( String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            Map<String, Team> meetMap = getTMap(IndicesNames.TEAM, Team.class, TID, sid, request, authType, esClient, replier, jedis, Initiator.sessionHandler);
-            if (meetMap == null) return;
-            for(Team team :meetMap.values()){
-                team.setMembers(null);
-                team.setExMembers(null);
-                team.setNotAgreeMembers(null);
-                team.setInvitees(null);
-                team.setTransferee(null);
-            }
-            replier.reply0SuccessHttp(meetMap, jedis, null);
+    public void doTeamIdsRequest( HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        Map<String, Team> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, TID);
+        if (meetMap == null) return;
+        for(Team team :meetMap.values()){
+            team.setMembers(null);
+            team.setExMembers(null);
+            team.setNotAgreeMembers(null);
+            team.setInvitees(null);
+            team.setTransferee(null);
         }
+        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
+
     }
 }

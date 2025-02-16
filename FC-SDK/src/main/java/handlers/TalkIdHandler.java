@@ -1,8 +1,7 @@
 package handlers;
 
 import apip.apipData.CidInfo;
-import fcData.RoomInfo;
-import fcData.TalkIdDB;
+import appTools.Settings;
 import fcData.TalkIdInfo;
 import feip.feipData.Group;
 import feip.feipData.Team;
@@ -15,22 +14,28 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class TalkIdHandler {
+public class TalkIdHandler extends Handler {
     private final TalkIdDB talkIdDB;
     private final Map<String, TalkIdInfo> talkIdInfoCache;
     private final Map<String, String> tempNameTalkIdMap;
     private final Map<String, String> talkIdTempNameMap;
     private String lastTalkId;
 
-    public TalkIdHandler(String myFid, String sid) {
-        this.talkIdDB = new TalkIdDB(myFid, sid);
+    public TalkIdHandler(String myFid, String sid, String dbPath) {
+        this.talkIdDB = new TalkIdDB(myFid, sid, dbPath);
         this.talkIdInfoCache = new ConcurrentHashMap<>();
         this.tempNameTalkIdMap = new ConcurrentHashMap<>();
         this.talkIdTempNameMap = new ConcurrentHashMap<>();
         this.lastTalkId = talkIdDB.getLastTalkId();
     }
 
-    
+    public TalkIdHandler(Settings settings){
+        this.talkIdDB = new TalkIdDB(settings.getMainFid(), settings.getSid(), settings.getDbDir());
+        this.talkIdInfoCache = new ConcurrentHashMap<>();
+        this.tempNameTalkIdMap = new ConcurrentHashMap<>();
+        this.talkIdTempNameMap = new ConcurrentHashMap<>();
+        this.lastTalkId = talkIdDB.getLastTalkId();
+    }   
 
     public String getLastTalkId() {
         if(lastTalkId == null) {

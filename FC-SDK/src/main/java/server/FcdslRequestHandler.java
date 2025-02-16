@@ -1,7 +1,8 @@
 package server;
 
 import apip.apipData.*;
-import handlers.SessionHandler;
+import appTools.Settings;
+import feip.feipData.Service;
 import tools.EsTools;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -15,20 +16,17 @@ import co.elastic.clients.elasticsearch.core.mget.MultiGetResponseItem;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.elasticsearch.core.search.TrackHits;
 import co.elastic.clients.json.JsonData;
-import constants.ApiNames;
 import constants.Constants;
 import constants.IndicesNames;
 import constants.CodeMessage;
-import fcData.FcReplierHttp;
 import fcData.FidTxMask;
+import fcData.ReplyBody;
 import fch.fchData.*;
 import feip.feipData.Cid;
 import tools.ObjectTools;
 import tools.http.AuthType;
 
 import org.jetbrains.annotations.Nullable;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -41,115 +39,262 @@ import static constants.IndicesNames.CASH;
 import static constants.Strings.HEIGHT;
 
 public class FcdslRequestHandler {
-    private final FcReplierHttp replier;
+    private RequestBody requestBody;
     private final ElasticsearchClient esClient;
-    private final RequestBody dataRequestBody;
+    private final Settings settings;
+    private ReplyBody replyBody;
+    private String finalReplyJson = null;
 
-    public FcdslRequestHandler(RequestBody dataRequestBody, FcReplierHttp replier, ElasticsearchClient esClient) {
-        this.dataRequestBody = Objects.requireNonNullElseGet(dataRequestBody, RequestBody::new);
-        if(this.dataRequestBody.getFcdsl()==null)
-            this.dataRequestBody.setFcdsl(new Fcdsl());
-        this.esClient = esClient;
-
-        this.replier = replier;
+    public FcdslRequestHandler(Settings settings) {
+        this.settings = settings;
+        this.replyBody = new ReplyBody(settings);
+        this.requestBody = null;
+        // if(this.requestBody.getFcdsl()==null)
+        //     this.requestBody.setFcdsl(new Fcdsl());
+        if(settings.getClient(Service.ServiceType.ES)!=null)
+          this.esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+        else this.esClient = null;
     }
 
-    public static <T> void doIdsRequest(String indexName, Class<T>  tClass, String keyFieldName, String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            Map<String, T> meetMap = getTMap(indexName, tClass, keyFieldName, sid, request, authType, esClient, replier, jedis, sessionHandler);
-            if (meetMap == null) return;
-            replier.reply0SuccessHttp(meetMap, jedis, null);
+    public FcdslRequestHandler(ReplyBody replyBody, Settings settings) {
+        this.settings = settings;
+        this.replyBody = replyBody;
+        this.requestBody = replyBody.getRequestChecker().getRequestBody();
+        if(this.requestBody.getFcdsl()==null)
+            this.requestBody.setFcdsl(new Fcdsl());
+        if(settings.getClient(Service.ServiceType.ES)!=null)
+          this.esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+        else this.esClient = null;
+    }
+
+
+    public  <T> List<T> doRequest(String index, List<Sort> defaultSortList, Class<T> tClass) {
+
+        if(index==null||tClass==null)return null;
+
+        SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
+        SearchRequest searchRequest;
+        searchBuilder.index(index);
+
+
+        Fcdsl fcdsl;
+        if (requestBody.getFcdsl() == null) {
+            MatchAllQuery matchAllQuery = getMatchAllQuery();
+            searchBuilder.query(q -> q.matchAll(matchAllQuery));
+        } else {
+            fcdsl = requestBody.getFcdsl();
+
+            if (fcdsl.getIds() != null)
+                return doIdsRequest(index, tClass);
+
+            if (fcdsl.getQuery() == null && fcdsl.getExcept() == null && fcdsl.getFilter() == null) {
+                MatchAllQuery matchAllQuery = getMatchAllQuery();
+                searchBuilder.query(q -> q.matchAll(matchAllQuery));
+            } else {
+                List<Query> queryList = null;
+                if (fcdsl.getQuery() != null) {
+                    FcQuery fcQuery = fcdsl.getQuery();
+                    queryList = getQueryList(fcQuery);
+                    if(queryList==null)return null;
+                }
+
+                List<Query> filterList = null;
+                if (fcdsl.getFilter() != null) {
+                    Filter fcFilter = fcdsl.getFilter();
+                    filterList = getQueryList(fcFilter);
+                    if(filterList==null)return null;
+                }
+
+                List<Query> exceptList = null;
+                if (fcdsl.getExcept() != null) {
+                    Except fcExcept = fcdsl.getExcept();
+                    exceptList = getQueryList(fcExcept);
+                    if(exceptList==null)return null;
+                }
+
+                BoolQuery.Builder bBuilder = QueryBuilders.bool();
+                if (queryList != null && queryList.size() > 0)
+                    bBuilder.must(queryList);
+                if (filterList != null && filterList.size() > 0)
+                    bBuilder.filter(filterList);
+                if (exceptList != null && exceptList.size() > 0)
+                    bBuilder.mustNot(exceptList);
+
+                searchBuilder.query(q -> q.bool(bBuilder.build()));
+            }
+
+            int size = 0;
+            try {
+                if (fcdsl.getSize() != null) {
+                    size = Integer.parseInt(fcdsl.getSize());
+                }
+            } catch (Exception e) {
+                finalReplyJson = replyBody.reply(CodeMessage.Code1012BadQuery, null,e.getMessage());
+                return null;
+            }
+            if (size == 0 || size > Constants.MaxRequestSize) size = Constants.DefaultSize;
+            searchBuilder.size(size);
+
+            if (fcdsl.getSort() != null) {
+                defaultSortList = fcdsl.getSort();
+            }
+            if (defaultSortList != null) {
+                if (defaultSortList.size() > 0) {
+                    searchBuilder.sort(Sort.getSortList(defaultSortList));
+                }
+            }
+            if (fcdsl.getAfter() != null) {
+                List<String> after = fcdsl.getAfter();
+                searchBuilder.searchAfter(after);
+            }
         }
-    }
+        TrackHits.Builder tb = new TrackHits.Builder();
+        tb.enabled(true);
+        searchBuilder.trackTotalHits(tb.build());
+        searchRequest = searchBuilder.build();
 
-    @Nullable
-    public static <T> Map<String, T> getTMap(String indexName, Class<T> tClass, String keyFieldName, String sid, HttpServletRequest request, AuthType authType, ElasticsearchClient esClient, FcReplierHttp replier, Jedis jedis, SessionHandler sessionHandler) {
-        RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-        if (requestCheckResult == null) {
+        SearchResponse<T> result;
+        try {
+            result = esClient.search(searchRequest, tClass);
+        }catch(Exception e){
+            finalReplyJson = replyBody.replyError(CodeMessage.Code1012BadQuery);
+            e.printStackTrace();
             return null;
         }
 
-        if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-            replier.replyOtherErrorHttp("The parameter 'ids' is required.", null, jedis);
+        if(result==null){
+            finalReplyJson = replyBody.replyError(CodeMessage.Code1012BadQuery);
+            return null;
+        }
+
+        replyBody.setTotal((long) result.hits().hits().size());
+
+        List<Hit<T>> hitList = result.hits().hits();
+        if(hitList.size()==0){
+            finalReplyJson = replyBody.replyError(CodeMessage.Code1011DataNotFound);
+            return null;
+        }
+
+        List<T> tList = new ArrayList<>();
+        for(Hit<T> hit : hitList){
+            tList.add(hit.source());
+        }
+
+        List<String> sortList = hitList.get(hitList.size()-1).sort();
+
+        if(sortList.size()>0)
+            replyBody.setLast(sortList);
+
+        return tList;
+    }
+
+    public  <T> void doIdsRequest(String indexName, Class<T>  tClass, String keyFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return;
+        }
+        replyBody = httpRequestChecker.getReplyBody();
+        requestBody = httpRequestChecker.getRequestBody();
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replyBody,settings);
+        Map<String, T> meetMap = fcdslRequestHandler.doRequestForMap(indexName, tClass, keyFieldName);
+        if (meetMap == null) {
+            replyBody.responseFinalJsonHttp(response);
+            return;
+        }
+        replyBody.replySingleDataSuccessHttp(meetMap, response);
+    }
+
+    @Nullable
+    public <T> Map<String, T> doRequestForMap(String indexName, Class<T> tClass, String keyFieldName) {
+        HttpRequestChecker httpRequestChecker = replyBody.getRequestChecker();
+        if (httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
+            replyBody.replyOtherErrorHttp("The parameter 'ids' is required.", null);
             return null;
         }
 
         List<T> meetList;
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-        meetList = fcdslRequestHandler.doRequest(indexName, null, tClass, jedis);
-
-        if (meetList == null || meetList.size() == 0) return null;
-
-        Map<String, T> meetMap = ObjectTools.listToMap(meetList, keyFieldName);
-
-        replier.setGot((long) meetMap.size());
-        replier.setTotal((long) meetMap.size());
-        return meetMap;
-    }
-
-    public static <T> void doSearchRequest(String sid, String indexName, Class<T> tClass, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
-        doSearchRequest(sid,indexName,tClass,null,null, null, null, sort,request,response,authType,esClient,jedisPool, sessionHandler);
-    }
-    public static <T> void doSearchRequest(String sid, String indexName, Class<T> tClass, String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-
-        try (Jedis jedis = jedisPool.getResource()) {
-
-            List<T> meetList = doRequestForList(sid, indexName, tClass, filterField, filterValue, exceptField, exceptValue, sort, request, authType, esClient, replier, jedis, sessionHandler);
-            if (meetList == null) return;
-
-            replier.reply0SuccessHttp(meetList, jedis, null);
-        }
-    }
-
-    @Nullable
-    public static <T> List<T> doRequestForList(String sid, String indexName, Class<T> tClass, String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, AuthType authType, ElasticsearchClient esClient, FcReplierHttp replier, Jedis jedis, SessionHandler sessionHandler) {
-        RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-        if (requestCheckResult == null) {
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replyBody, settings);
+        meetList = fcdslRequestHandler.doRequest(indexName, null, tClass);
+        if(meetList==null){
             return null;
         }
 
-        RequestBody requestBody = requestCheckResult.getRequestBody();
-        if(requestBody==null){
-            replier.replyHttp(CodeMessage.Code1013BadRequest, null, jedis);
+        if (meetList.size() == 0) return new HashMap<>();
+
+        Map<String, T> meetMap = ObjectTools.listToMap(meetList, keyFieldName);
+
+        replyBody.setGot((long) meetMap.size());
+        replyBody.setTotal((long) meetMap.size());
+        return meetMap;
+    }
+
+    public  <T> void doSearchRequest(String indexName, Class<T> tClass, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+        doSearchRequest(indexName,tClass,null,null, null, null, sort,request,response,authType);
+    }
+    public <T> void doSearchRequest(String indexName, Class<T> tClass, String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+
+        List<T> meetList = doRequestForList(indexName, tClass, filterField, filterValue, exceptField, exceptValue, sort, request, response, authType);
+        if (meetList == null) return;
+
+        replyBody.replySingleDataSuccessHttp(meetList,response);
+    }
+
+    @Nullable
+    public <T> List<T> doRequestForList(String indexName, Class<T> tClass, String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return null;
+        }
+        replyBody = httpRequestChecker.getReplyBody();
+        requestBody = httpRequestChecker.getRequestBody();
+
+        if (requestBody == null) {
+            replyBody.replyHttp(CodeMessage.Code1013BadRequest, null);
             return null;
         }
         Fcdsl fcdsl = requestBody.getFcdsl();
         if (fcdsl == null) fcdsl = new Fcdsl();
 
-        if(filterField !=null)requestBody.getFcdsl().setFilterTerms(filterField, filterValue);
-        if(exceptField !=null)requestBody.getFcdsl().setExceptTerms(exceptField, exceptValue);
+        if (filterField != null) requestBody.getFcdsl().setFilterTerms(filterField, filterValue);
+        if (exceptField != null) requestBody.getFcdsl().setExceptTerms(exceptField, exceptValue);
 
-        if(fcdsl.getSort()==null){
+        if (fcdsl.getSort() == null) {
             fcdsl.setSort(sort);
         }
         //Request
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestBody, replier, esClient);
-        List<T> meetList = fcdslRequestHandler.doRequest(indexName, fcdsl.getSort(), tClass, jedis);
-        if (meetList == null || meetList.isEmpty()) return null;
+        List<T> meetList = doRequest(indexName, fcdsl.getSort(), tClass);
+        if (meetList == null) {
+            replyBody.responseFinalJsonHttp(response);
+            return null;
+        }
         return meetList;
     }
 
-    public static void doBlockInfoRequest(String sid, boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
+    public void doBlockInfoRequest(boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+        try{
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
 
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-            if (requestCheckResult == null) {
+            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (!isOk) {
                 return;
             }
 
-            if (requestCheckResult.getApiName().equals(ApiNames.BlockByIds) && requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-                replier.replyOtherErrorHttp("The parameter 'ids' is required.", null, jedis);
+            replyBody = httpRequestChecker.getReplyBody();
+            requestBody = httpRequestChecker.getRequestBody();
+
+            if (httpRequestChecker.getApiName().equals(ApipApiNames.BLOCK_BY_IDS) && httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
+                replyBody.replyOtherErrorHttp("The parameter 'ids' is required.", response);
                 return;
             }
 
-            if (requestCheckResult.getApiName().equals(ApiNames.BlockByHeights)) {
-                FcQuery query = requestCheckResult.getRequestBody().getFcdsl().getQuery();
+            if (httpRequestChecker.getApiName().equals(ApipApiNames.BLOCK_BY_HEIGHTS)) {
+                FcQuery query = httpRequestChecker.getRequestBody().getFcdsl().getQuery();
                 if(query == null||query.getTerms()==null) {
-                    replier.replyOtherErrorHttp("The terms query on the height field is required.", null, jedis);
+                    replyBody.replyOtherErrorHttp("The terms query on the height field is required.", response);
                     return;
                 }
             }
@@ -160,8 +305,7 @@ public class FcdslRequestHandler {
             //Request
             String index = IndicesNames.BLOCK_HAS;
 
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-            List<BlockHas> blockHasList = fcdslRequestHandler.doRequest(index, defaultSortList, BlockHas.class, jedis);
+            List<BlockHas> blockHasList = doRequest(index, defaultSortList, BlockHas.class);
             if (blockHasList == null || blockHasList.size() == 0) {
                 return;
             }
@@ -172,14 +316,18 @@ public class FcdslRequestHandler {
             }
 
             List<Block> blockList;
-
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            if(esClient == null) {
+                replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
+                return;
+            }
             blockList = EsTools.getMultiByIdList(esClient, IndicesNames.BLOCK, idList, Block.class).getResultList();
             if (blockList == null ) {
-                replier.replyOtherErrorHttp("Failed to get block info.", null, jedis);
+                replyBody.replyOtherErrorHttp("Failed to get block info.", response);
                 return;
             }
             if (blockList.size()==0 ) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound,null,jedis);
+                replyBody.replyHttp(CodeMessage.Code1011DataNotFound,null);
                 return;
             }
 
@@ -190,71 +338,74 @@ public class FcdslRequestHandler {
 
             if(isForMap){
                 meetMap= ObjectTools.listToMap(meetList,idFieldName);
-                replier.setLast(null);
+                replyBody.setLast(null);
             }
 
             //response
-            replier.setGot((long) meetList.size());
-            replier.setTotal((long) meetList.size());
-            if(isForMap)replier.reply0SuccessHttp(meetMap, jedis, null);
-            else replier.reply0SuccessHttp(meetList,jedis, null);
+            replyBody.setGot((long) meetList.size());
+            replyBody.setTotal((long) meetList.size());
+            if(isForMap)replyBody.replySingleDataSuccessHttp(meetMap, response);
+            else replyBody.replySingleDataSuccessHttp(meetList, response);
 
         } catch (Exception e) {
-            replier.replyOtherErrorHttp(e.getMessage(), null, null);
+            e.printStackTrace();
+            replyBody.replyOtherErrorHttp(e.getMessage(), response);
         }
     }
 
-    public static void doCidInfoByIdsRequest(String sid, ArrayList<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    public void doCidInfoByIdsRequestHttp(ArrayList<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            List<String> idList = requestCheckResult.getRequestBody().getFcdsl().getIds();
-            if (idList == null || idList.isEmpty()) {
-                replier.replyOtherErrorHttp("The parameter 'ids' is required.", null, jedis);
-                return;
-            }
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
 
-            List<Address> meetAddrList;
-            List<Cid> meetCidList;
-
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-            meetAddrList = fcdslRequestHandler.doRequest(ADDRESS, sort, Address.class, jedis);
-
-            if (meetAddrList == null) return;
-
-            EsTools.MgetResult<Cid> multiResult;
-            try {
-                multiResult = EsTools.getMultiByIdList(esClient, CID, idList, Cid.class);
-            } catch (Exception e) {
-                replier.replyOtherErrorHttp("Reading ES wrong.",null,jedis);
-                return;
-            }
-            meetCidList = multiResult.getResultList();
-
-            List<CidInfo> cidInfoList = CidInfo.mergeCidInfoList(meetAddrList, meetCidList);
-
-            if (cidInfoList.size() == 0) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound, null, jedis);
-                return;
-            }
-
-            for (CidInfo cidInfo : cidInfoList) {
-                cidInfo.reCalcWeight();
-            }
-
-            Map<String, CidInfo> meetMap;
-            meetMap= ObjectTools.listToMap(cidInfoList,FID);
-            replier.setGot((long) cidInfoList.size());
-            replier.setTotal((long) cidInfoList.size());
-            replier.reply0SuccessHttp(meetMap, jedis, null);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return;
         }
+        replyBody = httpRequestChecker.getReplyBody();
+        requestBody = httpRequestChecker.getRequestBody();
+        List<String> idList = httpRequestChecker.getRequestBody().getFcdsl().getIds();
+        if (idList == null || idList.isEmpty()) {
+            replyBody.replyOtherErrorHttp("The parameter 'ids' is required.", response);
+            return;
+        }
+
+        List<Address> meetAddrList;
+        List<Cid> meetCidList;
+
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replyBody, settings);
+        meetAddrList = fcdslRequestHandler.doRequest(ADDRESS, sort, Address.class);
+
+        if (meetAddrList == null) return;
+
+        EsTools.MgetResult<Cid> multiResult;
+        try {
+            multiResult = EsTools.getMultiByIdList(esClient, CID, idList, Cid.class);
+        } catch (Exception e) {
+            replyBody.replyOtherErrorHttp("Reading ES wrong.",null);
+            return;
+        }
+        meetCidList = multiResult.getResultList();
+
+        List<CidInfo> cidInfoList = CidInfo.mergeCidInfoList(meetAddrList, meetCidList);
+
+        if (cidInfoList.size() == 0) {
+            replyBody.replyHttp(CodeMessage.Code1011DataNotFound, null);
+            return;
+        }
+
+        for (CidInfo cidInfo : cidInfoList) {
+            cidInfo.reCalcWeight();
+        }
+
+        Map<String, CidInfo> meetMap;
+        meetMap= ObjectTools.listToMap(cidInfoList,FID);
+        replyBody.setGot((long) cidInfoList.size());
+        replyBody.setTotal((long) cidInfoList.size());
+        replyBody.replySingleDataSuccessHttp(meetMap, response);
     }
 
-    public static Map<String, Long> sumCashValueByOwners(List<String> idList, ElasticsearchClient esClient) {
+    public Map<String, Long> sumCashValueByOwners(List<String> idList, ElasticsearchClient esClient) {
         if (idList == null || idList.isEmpty() || esClient == null) {
             return Collections.emptyMap();
         }
@@ -313,32 +464,33 @@ public class FcdslRequestHandler {
         }
     }
 
-    
-
-    public static void doCidInfoSearchRequest(String sid, ArrayList<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    public void doCidInfoSearchRequest(ArrayList<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+        ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-            if (requestCheckResult == null) {
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        try {
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (!isOk) {
                 return;
             }
-
+            replyBody = httpRequestChecker.getReplyBody();
+            requestBody = httpRequestChecker.getRequestBody();
             List<Cid> meetCidList=null;
             List<Address> meetAddrList=null;
             List<CidInfo> cidInfoList = new ArrayList<>();
             List<String> idList;
 
             try{
-                FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-                meetAddrList = fcdslRequestHandler.doRequest(ADDRESS, sort, Address.class, jedis);
+                FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+                meetAddrList = fcdslRequestHandler.doRequest(ADDRESS, sort, Address.class);
             }catch(Exception ignored){
             }
 
             if(meetAddrList==null)
                 try{
-                    FcdslRequestHandler fcdslRequestHandlerCid = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-                    meetCidList = fcdslRequestHandlerCid.doRequest(CID, sort, Cid.class, jedis);
+                    FcdslRequestHandler fcdslRequestHandlerCid = new FcdslRequestHandler(replier, settings);
+                    meetCidList = fcdslRequestHandlerCid.doRequest(CID, sort, Cid.class);
                 }catch(Exception ignored){
                 }
 
@@ -353,13 +505,13 @@ public class FcdslRequestHandler {
                 meetAddrList = result.getResultList();
                 cidInfoList = CidInfo.mergeCidInfoList(meetAddrList, meetCidList);
             }else {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound, null, jedis);
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
                 return;
             }
 
 
             if (cidInfoList.size() == 0) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound, null, jedis);
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
                 return;
             }
 
@@ -369,35 +521,38 @@ public class FcdslRequestHandler {
 
             replier.setGot((long) cidInfoList.size());
             replier.setTotal((long) cidInfoList.size());
-            replier.reply0SuccessHttp(cidInfoList, jedis, null);
+            replier.replySingleDataSuccessHttp(cidInfoList, response);
         } catch (Exception ignore) {
         }
     }
 
-    private static boolean ifForMapWithoutIds(boolean isForMap, FcReplierHttp replier, Jedis jedis, RequestCheckResult requestCheckResult) {
+    private boolean ifForMapWithoutIds(boolean isForMap, ReplyBody replier, HttpServletResponse response, HttpRequestChecker httpRequestChecker) {
         if(isForMap)
-            if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-                replier.replyOtherErrorHttp("The parameter 'ids' is required.", null, jedis);
+            if (httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
+                replier.replyOtherErrorHttp("The parameter 'ids' is required.", response);
                 return true;
             }
         return false;
     }
 
 
-    public static void doFidTxMaskRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
+    public void doFidTxMaskRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
 
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-            if (requestCheckResult == null) {
+        ReplyBody replier = new ReplyBody(settings);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        try {
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (!isOk) {
                 return;
             }
-
+            replyBody = httpRequestChecker.getReplyBody();
+            requestBody = httpRequestChecker.getRequestBody();
             String fid;
             try {
-                fid = requestCheckResult.getRequestBody().getFcdsl().getQuery().getTerms().getValues()[0];
+                fid = httpRequestChecker.getRequestBody().getFcdsl().getQuery().getTerms().getValues()[0];
             }catch (Exception e){
-                replier.replyOtherErrorHttp("Failed to get the FID.", null, jedis);
+                replier.replyOtherErrorHttp("Failed to get the FID.", null);
                 return;
             }
 
@@ -407,8 +562,8 @@ public class FcdslRequestHandler {
             //Request
             String index = IndicesNames.TX_HAS;
 
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-            List<TxHas> txHasList = fcdslRequestHandler.doRequest(index, defaultSortList, TxHas.class, jedis);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+            List<TxHas> txHasList = fcdslRequestHandler.doRequest(index, defaultSortList, TxHas.class);
             if (txHasList == null || txHasList.size() == 0) {
                 return;
             }
@@ -423,11 +578,11 @@ public class FcdslRequestHandler {
 
             txList = EsTools.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
             if (txList == null ) {
-                replier.replyOtherErrorHttp("Failed to get TX info.", null, jedis);
+                replier.replyOtherErrorHttp("Failed to get TX info.", response);
                 return;
             }
             if (txList.size()==0 ) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound,null,jedis);
+                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
 
@@ -441,30 +596,35 @@ public class FcdslRequestHandler {
             //response
             replier.setGot((long) fidTxMaskList.size());
             replier.setTotal((long) fidTxMaskList.size());
-            replier.reply0SuccessHttp(fidTxMaskList,jedis, null);
+            replier.replySingleDataSuccessHttp(fidTxMaskList, response);
 
         } catch (Exception e) {
-            replier.replyOtherErrorHttp(e.getMessage(), null, null);
+            replier.replyOtherErrorHttp(e.getMessage(), response);
+            e.printStackTrace();
         }
     }
 
-    public static void doTxInfoRequest(String sid, boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, ElasticsearchClient esClient, JedisPool jedisPool, SessionHandler sessionHandler) {
+    public void doTxInfoRequest(boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
 
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, sessionHandler);
-            if (requestCheckResult == null) {
+        ReplyBody replier = new ReplyBody(settings);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        try {
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (!isOk) {
                 return;
             }
-            if (ifForMapWithoutIds(isForMap, replier, jedis, requestCheckResult)) return;
+            replyBody = httpRequestChecker.getReplyBody();
+            requestBody = httpRequestChecker.getRequestBody();
+            if (ifForMapWithoutIds(isForMap, replier, response, httpRequestChecker)) return;
             //Set default sort.
             ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, TX_ID, true, null, null);
 
             //Request
             String index = IndicesNames.TX_HAS;
 
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier, esClient);
-            List<TxHas> txHasList = fcdslRequestHandler.doRequest(index, defaultSortList, TxHas.class, jedis);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+            List<TxHas> txHasList = fcdslRequestHandler.doRequest(index, defaultSortList, TxHas.class);
             if (txHasList == null || txHasList.size() == 0) {
                 return;
             }
@@ -478,11 +638,11 @@ public class FcdslRequestHandler {
 
             txList = EsTools.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
             if (txList == null ) {
-                replier.replyOtherErrorHttp("Failed to get TX info.", null, jedis);
+                replier.replyOtherErrorHttp("Failed to get TX info.", response);
                 return;
             }
             if (txList.size()==0 ) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound,null,jedis);
+                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
 
@@ -495,130 +655,15 @@ public class FcdslRequestHandler {
             //response
             replier.setGot((long) meetList.size());
             replier.setTotal((long) meetList.size());
-            if(isForMap)replier.reply0SuccessHttp(meetMap, jedis, null);
-            else replier.reply0SuccessHttp(meetList,jedis, null);
+            if(isForMap)replier.replySingleDataSuccessHttp(meetMap, response);
+            else replier.replySingleDataSuccessHttp(meetList, response);
 
         } catch (Exception e) {
-            replier.replyOtherErrorHttp(e.getMessage(), null, null);
+            replier.replyOtherErrorHttp(e.getMessage(), null);
         }
     }
 
-    public <T> List<T> doRequest(String index, List<Sort> defaultSortList, Class<T> tClass, Jedis jedis) {
-        if(index==null||tClass==null)return null;
-
-        SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-        SearchRequest searchRequest;
-        searchBuilder.index(index);
-
-        Fcdsl fcdsl;
-
-        if(dataRequestBody.getFcdsl()==null){
-            MatchAllQuery matchAllQuery = getMatchAllQuery();
-            searchBuilder.query(q->q.matchAll(matchAllQuery));
-        }else{
-            fcdsl = dataRequestBody.getFcdsl();
-
-            if(fcdsl.getIds()!=null)
-                return doIdsRequest(index,tClass, jedis);
-
-            if(fcdsl.getQuery() == null && fcdsl.getExcept()==null && fcdsl.getFilter()==null){
-                MatchAllQuery matchAllQuery = getMatchAllQuery();
-                searchBuilder.query(q->q.matchAll(matchAllQuery));
-            }else {
-                List<Query> queryList = null;
-                if(fcdsl.getQuery()!=null) {
-                    FcQuery fcQuery = fcdsl.getQuery();
-                    queryList = getQueryList(fcQuery,jedis);
-                }
-                
-                List<Query> filterList = null;
-                if(fcdsl.getFilter()!=null) {
-                    Filter fcFilter = fcdsl.getFilter();
-                    filterList = getQueryList(fcFilter, jedis);
-                }
-                
-                List<Query> exceptList = null;
-                if(fcdsl.getExcept()!=null) {
-                    Except fcExcept = fcdsl.getExcept();
-                    exceptList = getQueryList(fcExcept, jedis);
-                }
-
-                BoolQuery.Builder bBuilder = QueryBuilders.bool();
-                if(queryList!=null && queryList.size()>0)
-                    bBuilder.must(queryList);
-                if(filterList!=null && filterList.size()>0)
-                    bBuilder.filter(filterList);
-                if(exceptList!=null && exceptList.size()>0)
-                    bBuilder.mustNot(exceptList);
-
-                searchBuilder.query(q -> q.bool(bBuilder.build()));
-            }
-
-            int size=0;
-            try {
-                if(fcdsl.getSize()!= null) {
-                    size = Integer.parseInt(fcdsl.getSize());
-                }
-            }catch(Exception e){
-                replier.replyHttp(CodeMessage.Code1012BadQuery, e.getMessage(), jedis);
-                return null;
-            }
-            if(size==0 || size> Constants.MaxRequestSize) size= Constants.DefaultSize;
-            searchBuilder.size(size);
-
-            if(fcdsl.getSort()!=null) {
-                defaultSortList = fcdsl.getSort();
-            }
-            if(defaultSortList!=null) {
-                if (defaultSortList.size() > 0) {
-                    searchBuilder.sort(Sort.getSortList(defaultSortList));
-                }
-            }
-            if(fcdsl.getAfter()!=null){
-                List<String>  after = fcdsl.getAfter();
-                searchBuilder.searchAfter(after);
-            }
-        }
-
-        TrackHits.Builder tb = new TrackHits.Builder();
-        tb.enabled(true);
-        searchBuilder.trackTotalHits(tb.build());
-        searchRequest = searchBuilder.build();
-
-        SearchResponse<T> result;
-        try {
-            result = esClient.search(searchRequest, tClass);
-        }catch(Exception e){
-            replier.replyHttp(CodeMessage.Code1012BadQuery, e.getMessage(),jedis);
-            return null;
-        }
-
-        if(result==null){
-            replier.replyHttp(CodeMessage.Code1012BadQuery, null, jedis);
-            return null;
-        }
-
-        replier.setTotal((long) result.hits().hits().size());
-
-        List<Hit<T>> hitList = result.hits().hits();
-        if(hitList.size()==0){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound, null,jedis);
-            return null;
-        }
-
-        List<T> tList = new ArrayList<>();
-        for(Hit<T> hit : hitList){
-            tList.add(hit.source());
-        }
-
-        List<String> sortList = hitList.get(hitList.size()-1).sort();
-
-        if(sortList.size()>0)
-            replier.setLast(sortList);
-        return tList;
-    }
-
-    private List<Query> getQueryList(FcQuery query, Jedis jedis) {
+    private List<Query> getQueryList(FcQuery query) {
         BoolQuery termsQuery;
         BoolQuery partQuery;
         BoolQuery matchQuery;
@@ -635,7 +680,8 @@ public class FcdslRequestHandler {
         }
 
         if(query.getPart()!=null){
-            partQuery = getPartQuery(query.getPart(), jedis);
+            partQuery = getPartQuery(query.getPart());
+            if(partQuery==null)return null;
             Query q = new Query.Builder().bool(partQuery).build();
             if(q!=null)queryList.add(q);
         }
@@ -659,7 +705,7 @@ public class FcdslRequestHandler {
         }
 
         if(query.getEquals()!=null){
-            equalsQuery = getEqualQuery(query.getEquals(),jedis);
+            equalsQuery = getEqualQuery(query.getEquals());
             Query q = new Query.Builder().bool(equalsQuery).build();
             if(q!=null)queryList.add(q);
         }
@@ -677,12 +723,12 @@ public class FcdslRequestHandler {
         return queryList;
     }
 
-    private <T> List<T> doIdsRequest(String index, Class<T> clazz, Jedis jedis) {
+    private <T> List<T> doIdsRequest(String index, Class<T> clazz) {
 
-        List<String> idList = dataRequestBody.getFcdsl().getIds();
+        List<String> idList = requestBody.getFcdsl().getIds();
         if(idList.size()> Constants.MaxRequestSize) {
             Integer data = new HashMap<String, Integer>().put("maxSize", Constants.MaxRequestSize);
-            replier.replyHttp(CodeMessage.Code1010TooMuchData, data,jedis);
+            finalReplyJson = replyBody.reply(CodeMessage.Code1010TooMuchData, null,data);
             return null;
         }
 
@@ -690,7 +736,7 @@ public class FcdslRequestHandler {
         try {
             result = esClient.mget(m -> m.index(index).ids(idList), clazz);
         }catch(Exception e){
-            replier.replyHttp(CodeMessage.Code1012BadQuery, null, jedis);
+            finalReplyJson = replyBody.reply(CodeMessage.Code1012BadQuery, null,null);
             return null;
         }
         List<MultiGetResponseItem<T>> items = result.docs();
@@ -705,7 +751,7 @@ public class FcdslRequestHandler {
         }
 
         if(meetList.size()==0) {
-            replier.replyHttp(CodeMessage.Code1011DataNotFound, null, jedis);
+            finalReplyJson = replyBody.replyError(CodeMessage.Code1011DataNotFound);
             return null;
         }else return meetList;
     }
@@ -756,7 +802,7 @@ public class FcdslRequestHandler {
         return ueBuilder.mustNot(queryList).build();
     }
 
-    private BoolQuery getEqualQuery(Equals equals, Jedis jedis) {
+    private BoolQuery getEqualQuery(Equals equals) {
         if(equals.getValues()==null|| equals.getFields()==null)return null;
 
         BoolQuery.Builder boolBuilder;
@@ -768,14 +814,14 @@ public class FcdslRequestHandler {
                 try {
                     valueList.add(FieldValue.of(Double.parseDouble(str)));
                 }catch(Exception e){
-                    replier.replyHttp(CodeMessage.Code1012BadQuery, null,jedis);
+                    replyBody.replyHttp(CodeMessage.Code1012BadQuery, null);
                     return null;
                 }
             }else{
                 try {
                     valueList.add(FieldValue.of(Long.parseLong(str)));
                 }catch(Exception e){
-                    replier.replyHttp(CodeMessage.Code1012BadQuery, null, jedis);
+                    replyBody.replyHttp(CodeMessage.Code1012BadQuery, null);
                     return null;
                 }
             }
@@ -830,13 +876,13 @@ public class FcdslRequestHandler {
         return bBuilder.build();
     }
 
-    private BoolQuery getPartQuery(Part part, Jedis jedis) {
+    private BoolQuery getPartQuery(Part part) {
         BoolQuery.Builder partBoolBuilder = new BoolQuery.Builder();
         boolean isCaseInSensitive;
         try{
            isCaseInSensitive = Boolean.parseBoolean(part.getIsCaseInsensitive());
         }catch(Exception e){
-            replier.replyHttp(CodeMessage.Code1012BadQuery, e.getMessage(), jedis);
+            replyBody.replyError(CodeMessage.Code1012BadQuery);
             return null;
         }
 
@@ -891,7 +937,7 @@ public class FcdslRequestHandler {
         return queryBuilder.build();
     }
 
-    public static void updateAddressBalances(Map<String, Long> fidBalanceMap, ElasticsearchClient esClient) {
+    public void updateAddressBalances(Map<String, Long> fidBalanceMap, ElasticsearchClient esClient) {
         if (fidBalanceMap == null || fidBalanceMap.isEmpty() || esClient == null) {
             return;
         }
@@ -945,4 +991,19 @@ public class FcdslRequestHandler {
         }
     }
 
+    public ReplyBody getReplyBody() {
+        return replyBody;
+    }
+
+    public void setReplyBody(ReplyBody replyBody) {
+        this.replyBody = replyBody;
+    }
+
+    public String getFinalReplyJson() {
+        return finalReplyJson;
+    }
+
+    public void setFinalReplyJson(String finalReplyJson) {
+        this.finalReplyJson = finalReplyJson;
+    }
 }

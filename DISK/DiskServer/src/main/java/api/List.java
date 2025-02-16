@@ -2,14 +2,13 @@ package api;
 
 import apip.apipData.Sort;
 import fcData.DiskItem;
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
 import redis.clients.jedis.Jedis;
 import server.FcdslRequestHandler;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 import appTools.Settings;
 
 import javax.servlet.annotation.WebServlet;
@@ -19,12 +18,12 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import static constants.ApiNames.LIST;
+import static server.DiskApiNames.LIST;
 import static constants.FieldNames.DID;
 import static constants.FieldNames.SINCE;
 import static constants.Strings.DATA;
 
-@WebServlet(name = LIST, value ="/"+ApiNames.Version1 +"/"+ LIST)
+@WebServlet(name = LIST, value ="/"+ ApipApiNames.VERSION_1 +"/"+ LIST)
 public class List extends HttpServlet {
 
     @Override
@@ -40,28 +39,34 @@ public class List extends HttpServlet {
     }
 
     private static void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid, response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         //Check authorization
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
+            httpRequestChecker.checkRequestHttp(request, response, authType);
+            if (httpRequestChecker ==null){
                 return;
             }
             //Do request
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(requestCheckResult.getRequestBody(), replier,Initiator.esClient);
+            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, Initiator.settings);
             ArrayList<Sort> defaultSortList=null;
 
-            if(requestCheckResult.getRequestBody()==null || requestCheckResult.getRequestBody().getFcdsl()==null||requestCheckResult.getRequestBody().getFcdsl().getSort()==null)
+            if(httpRequestChecker.getRequestBody()==null || httpRequestChecker.getRequestBody().getFcdsl()==null|| httpRequestChecker.getRequestBody().getFcdsl().getSort()==null)
                 defaultSortList = Sort.makeSortList(SINCE, true, DID, true, null, null);
 
 
-            java.util.List<DiskItem> meetList = fcdslRequestHandler.doRequest(Settings.addSidBriefToName(Initiator.sid, DATA), defaultSortList, DiskItem.class, jedis);
+            java.util.List<DiskItem> meetList = fcdslRequestHandler.doRequest(Settings.addSidBriefToName(Initiator.sid, DATA), defaultSortList, DiskItem.class);
 
             if(meetList==null){
-                return;
+                try {
+                    response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
+                } catch (IOException ignore) {
+                    return;
+                }
             }
-            replier.reply0SuccessHttp(meetList,jedis, null);
+
+            replier.reply0SuccessHttp(meetList,response);
         }
     }
 }

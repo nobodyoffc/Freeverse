@@ -2,11 +2,8 @@ package feip.feipData;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import configure.ServiceType;
 import feip.feipData.serviceParams.Params;
 import tools.StringTools;
-import org.jetbrains.annotations.NotNull;
-import appTools.Settings;
 
 import java.util.Map;
 
@@ -86,10 +83,6 @@ public class Service {
 		return service;
 	}
 
-    @NotNull
-    public static String makeServerDataDir(String sid, ServiceType serviceType) {
-        return System.getProperty("user.home") + "/" + Settings.addSidBriefToName(sid, serviceType.name().toLowerCase() + "_data");
-    }
 
     public String[] getServices() {
 		return services;
@@ -241,4 +234,35 @@ public class Service {
 	public Boolean getClosed() {
 		return closed;
 	}
+
+    public enum ServiceType {
+        NASA_RPC,
+        APIP,
+        FEIP,
+        ES,
+        REDIS,
+        DISK,
+        OTHER,
+        TALK,
+        MAP,
+        SWAP_HALL;
+
+        @Override
+        public String toString() {
+            return this.name();
+        }
+
+        // New method to check if a string matches a ServiceType
+        public static ServiceType fromString(String input) {
+            if (input == null) {
+                return null;
+            }
+            for (ServiceType type : ServiceType.values()) {
+                if (type.name().equalsIgnoreCase(input)) {
+                    return type;
+                }
+            }
+            return null;
+        }
+    }
 }

@@ -1,6 +1,6 @@
 package fcData;
 
-public class Affair extends FcData {
+public class Affair extends FcEntity {
     private String meta = "FC";
     private Op op; // For operating affairs.
     private Relation rela; //For description affairs.

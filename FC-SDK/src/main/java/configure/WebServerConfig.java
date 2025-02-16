@@ -3,9 +3,18 @@ package configure;
 public class WebServerConfig {
     private String passwordName;
     private String sid;
+    private String dbPath;
     private String configPath;
     private String settingPath;
     private String dataPath;
+
+    public String getDbPath() {
+        return dbPath;
+    }
+
+    public void setDbPath(String dbPath) {
+        this.dbPath = dbPath;
+    }
 
     public String getSid() {
         return sid;

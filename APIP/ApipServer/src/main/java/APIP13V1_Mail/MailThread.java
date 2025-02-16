@@ -1,7 +1,7 @@
 package APIP13V1_Mail;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.Mail;
 import initial.Initiator;
@@ -21,20 +21,25 @@ import static constants.FieldNames.Mail_Id;
 import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
-
-@WebServlet(name = ApiNames.MailThread, value = "/"+ApiNames.SN_13+"/"+ApiNames.Version1 +"/"+ApiNames.MailThread)
+import appTools.Settings;
+@WebServlet(name = ApipApiNames.MAIL_THREAD, value = "/"+ ApipApiNames.SN_13+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MAIL_THREAD)
 public class MailThread extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public MailThread() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Mail_Id,true, null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.MAIL, Mail.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.MAIL, Mail.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Mail_Id,true, null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.MAIL, Mail.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.MAIL, Mail.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
 }

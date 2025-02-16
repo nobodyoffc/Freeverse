@@ -1,7 +1,7 @@
 package APIP11V1_Contact;
 
 
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -10,25 +10,31 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
+import appTools.Settings;
 import feip.feipData.Contact;
 import initial.Initiator;
 import tools.http.AuthType;
 
 import static constants.FieldNames.Contact_Id;
-import static server.FcdslRequestHandler.doIdsRequest;
+import server.FcdslRequestHandler;
 
 
-@WebServlet(name = ApiNames.ContactByIds, value = "/"+ApiNames.SN_11+"/"+ApiNames.Version1 +"/"+ApiNames.ContactByIds)
+@WebServlet(name = ApipApiNames.CONTACT_BY_IDS, value = "/"+ ApipApiNames.SN_11+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CONTACT_BY_IDS)
 public class ContactByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public ContactByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.CONTACT, Contact.class, Contact_Id, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CONTACT, Contact.class, Contact_Id, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.CONTACT, Contact.class, Contact_Id, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CONTACT, Contact.class, Contact_Id, request,response,authType);
     }
 }

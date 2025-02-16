@@ -24,10 +24,9 @@ import static constants.FieldNames.PUB_KEY;
 import static constants.FieldNames.SESSION_KEY;
 import static constants.Values.TRUE;
 
-public class FcSession extends FcData {
+public class FcSession extends FcEntity {
     private String name;
     private String key;
-    private String id;
     private String pubKey;
     private String keyCipher;
     private transient byte[] keyBytes;
@@ -185,13 +184,13 @@ public class FcSession extends FcData {
         this.keyBytes = keyBytes;
     }
 
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
+//    public String getId() {
+//        return id;
+//    }
+//
+//    public void setId(String id) {
+//        this.id = id;
+//    }
 
     public String getKey() {
         return key;

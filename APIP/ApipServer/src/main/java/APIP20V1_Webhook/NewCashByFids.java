@@ -1,16 +1,17 @@
 package APIP20V1_Webhook;
 
-import apip.apipData.WebhookRequestBody;
-import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import constants.*;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
+import handlers.Handler;
+import handlers.WebhookHandler;
 import initial.Initiator;
+import server.ApipApiNames;
+import server.HttpRequestChecker;
 import tools.http.AuthType;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.RequestChecker;
 import appTools.Settings;
 
 import javax.servlet.ServletException;
@@ -21,133 +22,141 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import feip.feipData.Service;
 
-@WebServlet(name = ApiNames.NewCashByFids, value = "/"+ApiNames.SN_20+"/"+ApiNames.Version1 +"/"+ApiNames.NewCashByFids)
+@WebServlet(name = ApipApiNames.NEW_CASH_BY_FIDS, value = "/"+ ApipApiNames.SN_20+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NEW_CASH_BY_FIDS)
 public class NewCashByFids extends HttpServlet {
-
+    private final Settings settings = Initiator.settings;
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request,response,authType, Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request,response,authType, Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
-        try(Jedis jedis = jedisPool.getResource()) {
-            //Do FCDSL other request
-            Map<String, String> other = RequestChecker.checkOtherRequest(sid, request, authType, replier, jedis,Initiator.sessionHandler);
-            if (other == null) return;
-            //Do this request
-            doNewCashByFidsRequest(replier, jedis, other);
-        }catch (Exception e){
-            e.printStackTrace();
-        }
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+
+        //Do FCDSL other request
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        Map<String, String> other = httpRequestChecker.checkOtherRequestHttp(request, response, authType);
+        if (other == null) return;
+        //Do this request
+        doNewCashByFidsRequest(replier,other,settings, response);
+
     }
 
-    private void doNewCashByFidsRequest(FcReplierHttp replier, Jedis jedis, Map<String, String> otherMap) {
-        String addr =replier.getRequestCheckResult().getFid();
+    private void doNewCashByFidsRequest(ReplyBody replier, Map<String, String> otherMap, Settings settings, HttpServletResponse response) {
+        String addr =replier.getRequestChecker().getFid();
 
         Gson gson = new Gson();
-        WebhookRequestBody webhookRequestBody;
+        WebhookHandler.WebhookRequestBody webhookRequestBody;
 
         String hookUserId=null;
 
+        WebhookHandler webhookHandler = (WebhookHandler)settings.getHandler(Handler.HandlerType.WEBHOOK);
+
         try {
-            webhookRequestBody = gson.fromJson(otherMap.get(FieldNames.WEBHOOK_REQUEST_BODY), WebhookRequestBody.class);
+            webhookRequestBody = gson.fromJson(otherMap.get(FieldNames.WEBHOOK_REQUEST_BODY), WebhookHandler.WebhookRequestBody.class);
             webhookRequestBody.setUserId(addr);
-            webhookRequestBody.setMethod(ApiNames.NewCashByFids);
-            hookUserId = WebhookRequestBody.makeHookUserId(Initiator.sid, ApiNames.NewCashByFids, addr);
-            webhookRequestBody.setHookUserId(hookUserId);
+            webhookRequestBody.setMethod(ApipApiNames.NEW_CASH_BY_FIDS);
+            webhookRequestBody.makeHookUserId(settings.getSid());
+
             Map<String, String> dataMap = new HashMap<>();
             switch (webhookRequestBody.getOp()) {
                 case Strings.SUBSCRIBE -> {
-                    saveSubscribe(webhookRequestBody);
+//                    saveSubscribe(webhookRequestBody,settings);
+                    webhookHandler.put(hookUserId, webhookRequestBody);
+
                     dataMap.put(Strings.OP, Strings.SUBSCRIBE);
                     dataMap.put(Strings.HOOK_USER_ID, hookUserId);
                     replier.setData(dataMap);
                 }
                 case Strings.UNSUBSCRIBE -> {
-                    deleteWebhook(webhookRequestBody);
+//                    deleteWebhook(webhookRequestBody,settings);
+                    webhookHandler.remove(hookUserId);
                     dataMap.put(Strings.OP, Strings.UNSUBSCRIBE);
                     dataMap.put(Strings.HOOK_USER_ID, hookUserId);
                     replier.setData(dataMap);
                 }
                 case Strings.CHECK -> {
-                    String subscription = getWebhookFromRedis(webhookRequestBody.getUserId());
+//                    String subscription = getWebhookFromRedis(webhookRequestBody.getUserId());
+                    WebhookHandler.WebhookRequestBody subscription = (WebhookHandler.WebhookRequestBody) webhookHandler.get(webhookRequestBody.getUserId());
                     dataMap.put(Strings.OP, Strings.CHECK);
                     if (subscription == null) {
                         dataMap.put(Strings.FOUND, Values.FALSE);
                     } else {
                         dataMap.put(Strings.FOUND, Values.TRUE);
-                        dataMap.put(Strings.SUBSCRIBE, subscription);
+                        dataMap.put(Strings.SUBSCRIBE, subscription.toJson());
                     }
                     replier.setData(dataMap);
                 }
                 default -> {
-                    replier.replyOtherErrorHttp("The op in request body is wrong.", null, jedis);
+                    replier.replyOtherErrorHttp("The op in request body is wrong.", response);
                     return;
                 }
             }
+
+            replier.reply0SuccessHttp(response);
         } catch (JsonSyntaxException e) {
-            replier.replyOtherErrorHttp(e.getMessage(), null, jedis);
-            return;
-        }
-        replier.reply0SuccessHttp(jedis);
-    }
-
-    private void deleteWebhook(WebhookRequestBody webhookInfo) {
-        deleteWebhookFromRedis(webhookInfo.getUserId());
-        deleteWebhookFromEs(webhookInfo.getHookUserId());
-    }
-
-    private void deleteWebhookFromRedis(String userId) {
-        try(Jedis jedis = Initiator.jedisPool.getResource()){
-            jedis.select(Constants.RedisDb4Webhook);
-            jedis.hdel(ApiNames.NewCashByFids,userId);
-            jedis.del(userId);
+            replier.replyOtherErrorHttp(e.getMessage(), response);
         }
     }
 
-    private String getWebhookFromRedis(String owner) {
-        try(Jedis jedis = Initiator.jedisPool.getResource()){
-            jedis.select(Constants.RedisDb4Webhook);
-            return jedis.hget(ApiNames.NewCashByFids, owner);
-        }
-    }
+//    private void deleteWebhook(WebhookHandler.WebhookRequestBody webhookInfo, Settings settings) {
+//        deleteWebhookFromRedis(webhookInfo.getUserId(),settings);
+//        deleteWebhookFromEs(webhookInfo.getHookUserId());
+//    }
 
-    private void saveSubscribe(WebhookRequestBody webhookInfo) {
-        addSubscribeToRedis(webhookInfo);
-        saveSubscribeToEs(webhookInfo);
-    }
+//    private void deleteWebhookFromRedis(String userId) {
+//        try(Jedis jedis = jedisPool.getResource()){
+//            jedis.select(Constants.RedisDb4Webhook);
+//            jedis.hdel(ApipApiNames.NEW_CASH_BY_FIDS,userId);
+//            jedis.del(userId);
+//        }
+//    }
 
-    private void saveSubscribeToEs(WebhookRequestBody webhookInfo) {
-        try {
-            IndexResponse result = Initiator.esClient.index(i -> i.index(Settings.addSidBriefToName(Initiator.sid, IndicesNames.WEBHOOK)).id(webhookInfo.getHookUserId()).document(webhookInfo));
-            System.out.println("Save webhook subscription into ES: "+result.result().jsonValue());
-        } catch (IOException e) {
-            System.out.println("ES client wrong.");
-        }
-    }
+//    private String getWebhookFromRedis(String owner) {
+//        try(Jedis jedis = jedisPool.getResource()){
+//            jedis.select(Constants.RedisDb4Webhook);
+//            return jedis.hget(ApipApiNames.NEW_CASH_BY_FIDS, owner);
+//        }
+//    }
 
-    private void deleteWebhookFromEs(String hookId) {
-        try {
-            Initiator.esClient.delete(d -> d.index(IndicesNames.WEBHOOK).id(hookId));
-        } catch (IOException e) {
-            System.out.println("ES client wrong.");
-        }
-    }
-
-    private void addSubscribeToRedis(WebhookRequestBody webhookRequestBody) {
-        Gson gson = new Gson();
-        try(Jedis jedis = Initiator.jedisPool.getResource()){
-            jedis.select(Constants.RedisDb4Webhook);
-            String dataJson = gson.toJson(webhookRequestBody);
-            jedis.hset(Settings.addSidBriefToName(Initiator.sid,webhookRequestBody.getMethod()),webhookRequestBody.getUserId(),dataJson);
-        }
-    }
+//    private void saveSubscribe(WebhookHandler.WebhookRequestBody webhookInfo,Settings settings) {
+//        addSubscribeToRedis(webhookInfo,settings);
+//        saveSubscribeToEs(webhookInfo,settings);
+//    }
+//
+//    private void saveSubscribeToEs(WebhookHandler.WebhookRequestBody webhookInfo,Settings settings) {
+//        try {
+//            IndexResponse result = esClient.index(i -> i.index(Settings.addSidBriefToName(settings.getSid(), IndicesNames.WEBHOOK)).id(webhookInfo.getHookUserId()).document(webhookInfo));
+//            System.out.println("Save webhook subscription into ES: "+result.result().jsonValue());
+//        } catch (IOException e) {
+//            System.out.println("ES client wrong.");
+//        }
+//    }
+//
+//    private void deleteWebhookFromEs(String hookId) {
+//        try {
+//            esClient.delete(d -> d.index(IndicesNames.WEBHOOK).id(hookId));
+//        } catch (IOException e) {
+//            System.out.println("ES client wrong.");
+//        }
+//    }
+//
+//    private void addSubscribeToRedis(WebhookHandler.WebhookRequestBody webhookRequestBody,Settings settings) {
+//        Gson gson = new Gson();
+//        String sid = settings.getSid();
+//        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+//        try(Jedis jedis = jedisPool.getResource()){
+//            jedis.select(Constants.RedisDb4Webhook);
+//            String dataJson = gson.toJson(webhookRequestBody);
+//            jedis.hset(Settings.addSidBriefToName(sid,webhookRequestBody.getMethod()),webhookRequestBody.getUserId(),dataJson);
+//        }
+//    }
 }

@@ -1,12 +1,10 @@
 package apip.apipData;
 
-import com.google.gson.Gson;
-
-import fcData.FcData;
+import fcData.FcEntity;
 import fcData.Op;
 import tools.BytesTools;
 
-public class RequestBody extends FcData{
+public class RequestBody extends FcEntity {
     private String sid;
     private Op op;
     private String url;

@@ -2,7 +2,7 @@
 package APIP14V1_Proof;
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
 import tools.http.AuthType;
@@ -16,22 +16,29 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import appTools.Settings;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
 
-@WebServlet(name = ApiNames.ProofHistory, value = "/"+ApiNames.SN_14+"/"+ApiNames.Version1 +"/"+ApiNames.ProofHistory)
+@WebServlet(name = ApipApiNames.PROOF_HISTORY, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROOF_HISTORY)
 public class ProofHistory extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public ProofHistory() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.PROOF_HISTORY, feip.feipData.ProofHistory.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.PROOF_HISTORY, feip.feipData.ProofHistory.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.PROOF_HISTORY,ProofHistory.class, defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.PROOF_HISTORY,ProofHistory.class, defaultSort, request,response,authType);
     }
 }

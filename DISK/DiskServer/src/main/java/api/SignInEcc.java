@@ -4,13 +4,12 @@ import constants.FieldNames;
 import fcData.FcSession;
 import apip.apipData.RequestBody;
 import tools.RedisTools;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 import appTools.Settings;
 
 import javax.servlet.annotation.WebServlet;
@@ -22,28 +21,25 @@ import java.util.Map;
 
 import static constants.Strings.*;
 
-@WebServlet(name = ApiNames.SignInEcc, value = "/"+ApiNames.Version1 +"/"+ ApiNames.SignInEcc)
+@WebServlet(name = ApipApiNames.SIGN_IN_ECC, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SIGN_IN_ECC)
 public class SignInEcc extends HttpServlet {
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         String sid = Initiator.sid;
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+        ReplyBody replier = new ReplyBody(Initiator.settings);
 
         FcSession fcSession;
-        RequestChecker requestChecker = new RequestChecker();
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
         String pubKey;
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
             replier.setBestHeight(Long.valueOf(jedis.get(BEST_HEIGHT)));
             Map<String, String> paramsMap = jedis.hgetAll(Settings.addSidBriefToName(sid, PARAMS));
             long windowTime = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(sid,SETTINGS), WINDOW_TIME);
 
-            RequestCheckResult requestCheckResult = requestChecker.checkSignInRequest(sid, request, replier, paramsMap, windowTime, jedis,Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            pubKey = requestCheckResult.getPubKey();
-            String fid = requestCheckResult.getFid();
-            RequestBody.SignInMode mode = requestCheckResult.getRequestBody().getMode();
+            httpRequestChecker.checkSignInRequestHttp(request, response);
+            pubKey = httpRequestChecker.getPubKey();
+            String fid = httpRequestChecker.getFid();
+            RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
 
             if ((!jedis.hexists(Settings.addSidBriefToName(sid, FieldNames.ID_SESSION_NAME), fid)) || RequestBody.SignInMode.REFRESH.equals(mode)) {
                 fcSession = Initiator.sessionHandler.addNewSession(fid, pubKey);
@@ -51,18 +47,18 @@ public class SignInEcc extends HttpServlet {
                 fcSession = Initiator.sessionHandler.getSessionById(fid);
             }
             if(fcSession == null) {
-                replier.replyOtherErrorHttp("Failed to get session.", null, jedis);
+                replier.replyOtherErrorHttp("Failed to get session.", response);
                 return;
             }
             fcSession.setKey(null);
-            replier.reply0SuccessHttp(fcSession, jedis, null);
+            replier.reply0SuccessHttp(fcSession,response);
             replier.clean();
         }
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        FcReplierHttp replier =new FcReplierHttp(Initiator.sid,response);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null,null);
+        ReplyBody replier =new ReplyBody(Initiator.settings);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
     }
 }

@@ -1,5 +1,12 @@
-[] pay for share
-[] merge codeMsg: reply,crypto,talkUnit. 3 http, 4 crypto, 5 connect
+
+[] FcData id
+
+[x] mempoolHandler
+[] test
+
+
+[x] pay for share
+[x] merge codeMsg: reply,crypto,talkUnit. 3 http, 4 crypto, 5 connect
 
 # 结构
     1. Home：cash,Tool,contact,secret,

@@ -12,12 +12,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.logging.Logger;
 
-public class DiskHandler {
+import appTools.Settings;
+
+public class DiskHandler extends Handler {
     private static final Logger log = Logger.getLogger(DiskHandler.class.getName());
     private final String storageDir;
 
     public DiskHandler(String fid,String oid) {
         this.storageDir = IdNameTools.makeKeyName(fid, oid, "DISK", true);
+    }
+    public DiskHandler(Settings settings){
+        this.storageDir = IdNameTools.makeKeyName(settings.getMainFid(), settings.getSid(), "DISK", true);
     }
 
     /**

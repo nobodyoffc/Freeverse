@@ -1,9 +1,12 @@
-package fcData;
+package handlers;
 
+import fcData.FcEntity;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
+
+import fcData.TalkIdInfo;
 import tools.FileTools;
 
 import java.io.File;
@@ -16,9 +19,9 @@ public class TalkIdDB {
     private final HTreeMap<String, TalkIdInfo> talkIdInfoMap;
     private final HTreeMap<String, String> metaMap;
 
-    public TalkIdDB(String myFid, String sid) {
-        String dbPath = FileTools.makeFileName(myFid, sid, TALK_ID_DB, constants.Strings.DOT_DB);
-        File file = new File(dbPath);
+    public TalkIdDB(String myFid, String sid, String dbPath) {
+        String fileName = FileTools.makeFileName(myFid, sid, TALK_ID_DB, constants.Strings.DOT_DB);
+        File file = new File(dbPath,fileName);
         this.db = DBMaker.fileDB(file)
                 .fileMmapEnable()
                 .checksumHeaderBypass()
@@ -27,7 +30,7 @@ public class TalkIdDB {
 
         this.talkIdInfoMap = db.hashMap("talkIdInfoMap")
                 .keySerializer(Serializer.STRING)
-                .valueSerializer((Serializer<TalkIdInfo>)TalkIdInfo.serializer(TalkIdInfo.class))
+                .valueSerializer(FcEntity.getMapDBSerializer(TalkIdInfo.class))//(Serializer<TalkIdInfo>)TalkIdInfo.mapDbSerializer(TalkIdInfo.class))
                 .createOrOpen();
 
         this.metaMap = db.hashMap("metaMap")

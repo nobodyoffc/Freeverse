@@ -1,6 +1,7 @@
 package APIP2V2_Blockchain;
 
-import constants.ApiNames;
+import server.ApipApiNames;
+import server.FcdslRequestHandler;
 import constants.IndicesNames;
 import fch.fchData.Cash;
 import initial.Initiator;
@@ -11,21 +12,30 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import appTools.Settings;
+
 import java.io.IOException;
 
 import static constants.FieldNames.CASH_ID;
-import static server.FcdslRequestHandler.doIdsRequest;
 
-@WebServlet(name = ApiNames.CashByIds, value = "/"+ApiNames.SN_2+"/"+ApiNames.Version1 +"/"+ApiNames.CashByIds)
+@WebServlet(name = ApipApiNames.CASH_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_BY_IDS)
 public class CashByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
+
+    public CashByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
+
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doIdsRequest(IndicesNames.CASH, Cash.class, CASH_ID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, CASH_ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doIdsRequest(IndicesNames.CASH, Cash.class, CASH_ID, Initiator.sid, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, CASH_ID, request,response,authType);
     }
 }

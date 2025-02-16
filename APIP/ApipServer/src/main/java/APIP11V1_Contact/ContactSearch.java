@@ -2,7 +2,7 @@ package APIP11V1_Contact;
 
 
 import apip.apipData.Sort;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.IndicesNames;
 
 import javax.servlet.ServletException;
@@ -17,26 +17,31 @@ import feip.feipData.Contact;
 import initial.Initiator;
 import tools.http.AuthType;
 import server.FcdslRequestHandler;
-
+import appTools.Settings;
 import static constants.FieldNames.Contact_Id;
 import static constants.FieldNames.LAST_HEIGHT;
 import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 
-@WebServlet(name = ApiNames.ContactSearch, value = "/"+ApiNames.SN_11+"/"+ApiNames.Version1 +"/"+ApiNames.ContactSearch)
+@WebServlet(name = ApipApiNames.CONTACT_SEARCH, value = "/"+ ApipApiNames.SN_11+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CONTACT_SEARCH)
 public class ContactSearch extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public ContactSearch() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Contact_Id,true, null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Contact_Id,true, null,null);
-        FcdslRequestHandler.doSearchRequest(Initiator.sid,IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType,Initiator.esClient,Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
 }

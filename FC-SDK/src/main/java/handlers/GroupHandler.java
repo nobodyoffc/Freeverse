@@ -3,6 +3,7 @@ package handlers;
 import apip.apipData.Fcdsl;
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
 import clients.Client;
@@ -11,6 +12,7 @@ import constants.FieldNames;
 import fch.fchData.SendTo;
 import feip.feipData.Group;
 import feip.feipData.GroupData;
+import feip.feipData.Service;
 import tools.Hex;
 import tools.JsonTools;
 import tools.PersistentSequenceMap;
@@ -23,10 +25,11 @@ import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class GroupHandler {
+public class GroupHandler extends Handler {
     // 1. Constants
     public static final int DEFAULT_SIZE = 50;
 
@@ -42,16 +45,26 @@ public class GroupHandler {
 
     // 3. Constructor
     public GroupHandler(String myFid, ApipClient apipClient, byte[] symKey,
-                        String myPriKeyCipher, Map<String, Long> lastTimeMap, BufferedReader br) {
+                        String myPriKeyCipher, Map<String, Long> lastTimeMap, String dbPath, BufferedReader br) {
         this.myFid = myFid;
         this.apipClient = apipClient;
         // this.sid = sid;
         this.symKey = symKey;
         this.myPriKeyCipher = myPriKeyCipher;
         this.lastTimeMap = lastTimeMap;
-        this.groupDB = new PersistentSequenceMap(myFid,null, FieldNames.GROUP);
+        this.groupDB = new PersistentSequenceMap(myFid, null, FieldNames.GROUP, dbPath);
         this.br = br;
     }
+
+    public GroupHandler(Settings settings){
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.myFid = settings.getMainFid();
+        this.symKey = settings.getSymKey();
+        this.myPriKeyCipher = settings.getMyPriKeyCipher();
+        this.br = settings.getBr(); 
+        this.lastTimeMap = new HashMap<>();
+        this.groupDB = new PersistentSequenceMap(myFid, null, FieldNames.GROUP, settings.getDbDir());
+    }   
 
     // 4. Public Methods - Main Interface
     public void menu() {

@@ -1,15 +1,13 @@
 package APIP3V1_CidInfo;
 
+import appTools.Settings;
 import avatar.AvatarMaker;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.CodeMessage;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -23,59 +21,69 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 
-import static initial.Initiator.avatarElementsPath;
-import static initial.Initiator.avatarPngPath;
-
-@WebServlet(name = ApiNames.Avatars, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.Avatars)
+@WebServlet(name = ApipApiNames.AVATARS, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.AVATARS)
 public class Avatars extends HttpServlet {
+    private final Settings settings;
+
+    public Avatars() {
+        this.settings = Initiator.settings;
+    }
+
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request,response,authType,Initiator.jedisPool);
+        doRequest(request,response,authType, settings);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request,response,authType,Initiator.jedisPool);
+        doRequest(request,response,authType, settings);
     }
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool) throws ServletException, IOException {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
+        ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-
-            if (requestCheckResult.getRequestBody().getFcdsl().getIds() == null) {
-                replier.replyHttp(CodeMessage.Code1012BadQuery, null, jedis);
-                return;
-            }
-            String[] addrs = requestCheckResult.getRequestBody().getFcdsl().getIds().toArray(new String[0]);
-            if (addrs.length == 0) {
-                replier.replyOtherErrorHttp("No qualified FID.",null,jedis);
-                return;
-            }
-
-            AvatarMaker.getAvatars(addrs, avatarElementsPath, avatarPngPath);
-
-            Base64.Encoder encoder = Base64.getEncoder();
-            Map<String, String> addrPngBase64Map = new HashMap<>();
-            for (String addr1 : addrs) {
-                File file = new File(avatarPngPath + addr1 + ".png");
-                FileInputStream fis = new FileInputStream(file);
-                String pngStr = encoder.encodeToString(fis.readAllBytes());
-                addrPngBase64Map.put(addr1, pngStr);
-                file.delete();
-                fis.close();
-            }
-            //response
-            replier.setData(addrPngBase64Map);
-            replier.setGot((long) addrPngBase64Map.size());
-            replier.setTotal((long) addrPngBase64Map.size());
-
-            replier.reply0SuccessHttp(addrPngBase64Map,jedis, null);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return;
         }
+
+        if (httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
+            replier.replyHttp(CodeMessage.Code1012BadQuery, null);
+            return;
+        }
+        String[] addrs = httpRequestChecker.getRequestBody().getFcdsl().getIds().toArray(new String[0]);
+        if (addrs.length == 0) {
+            replier.replyOtherErrorHttp("No qualified FID.", response);
+            return;
+        }
+
+        String avatarPngPath;
+        String avatarElementsPath;
+        try {
+            avatarPngPath = (String) settings.getSettingMap().get(Settings.AVATAR_PNG_PATH);
+            avatarElementsPath = (String)settings.getSettingMap().get(Settings.AVATAR_ELEMENTS_PATH);
+            AvatarMaker.getAvatars(addrs, avatarElementsPath, avatarPngPath);
+        }catch (Exception e){
+            replier.replyOtherErrorHttp("Failed to get the png.",e.getMessage(), response);
+            return;
+        }
+        Base64.Encoder encoder = Base64.getEncoder();
+        Map<String, String> addrPngBase64Map = new HashMap<>();
+        for (String addr1 : addrs) {
+            File file = new File(avatarPngPath + addr1 + ".png");
+            FileInputStream fis = new FileInputStream(file);
+            String pngStr = encoder.encodeToString(fis.readAllBytes());
+            addrPngBase64Map.put(addr1, pngStr);
+            file.delete();
+            fis.close();
+        }
+        //response
+        replier.setData(addrPngBase64Map);
+        replier.setGot((long) addrPngBase64Map.size());
+        replier.setTotal((long) addrPngBase64Map.size());
+        replier.reply0SuccessHttp(addrPngBase64Map, response);
+
     }
 }

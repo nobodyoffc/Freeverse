@@ -1,4 +1,4 @@
-package fcData;
+package handlers;
 
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -21,11 +21,15 @@ import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.io.File;
+import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 public class AccountDB {
     private static final String ACCOUNT_DB = "account";
     private final String myFid;
     private final String sid;
+    private final String dbPath;
     
     private volatile DB db;
     private volatile ConcurrentMap<String, Long> userBalanceMap;
@@ -43,11 +47,12 @@ public class AccountDB {
     private volatile HTreeMap<Long, String> expenseOrderMap;
     private volatile long currentExpenseIndex;
     private final Object lock = new Object();
-    private volatile ConcurrentMap<String, Long> payoffMap;  
+    private volatile ConcurrentMap<String, Long> payoffMap;
 
-    public AccountDB(String myFid, String sid) {
+    public AccountDB(String myFid, String sid, String dbPath) {
         this.myFid = myFid;
         this.sid = sid;
+        this.dbPath = dbPath;
         initializeDb();
     }
 
@@ -55,7 +60,9 @@ public class AccountDB {
         if (db == null || db.isClosed()) {
             synchronized (lock) {
                 if (db == null || db.isClosed()) {
-                    String dbName = FileTools.makeFileName(myFid, sid, ACCOUNT_DB, constants.Strings.DOT_DB);
+                    String fileName = FileTools.makeFileName(myFid, sid, ACCOUNT_DB, constants.Strings.DOT_DB);
+                    String dbName = dbPath+fileName;
+                    
                     db = DBMaker.fileDB(dbName)
                             .fileMmapEnable()
                             .checksumHeaderBypass()
@@ -538,6 +545,8 @@ public class AccountDB {
         return result;
     }
 
+    
+
     public Map<String, Income> getIncomeMap() {
         return new HashMap<>(incomeMap);
     }
@@ -548,7 +557,14 @@ public class AccountDB {
 
     // Add new method for batch income updates
     public void updateIncomes(Map<String, Income> incomes) {
+        // Add all incomes to the incomeMap
         incomeMap.putAll(incomes);
+        
+        // Update the order mapping for each new income
+        for (String cashId : incomes.keySet()) {
+            incomeOrderMap.put(currentIncomeIndex++, cashId);
+        }
+        
         db.commit();
     }
 
@@ -563,7 +579,14 @@ public class AccountDB {
 
     // Add this method for batch expense updates
     public void updateExpenses(Map<String, Expense> expenses) {
+        // Add all expenses to the expenseMap
         expenseMap.putAll(expenses);
+        
+        // Update the order mapping for each new expense
+        for (String cashId : expenses.keySet()) {
+            expenseOrderMap.put(currentExpenseIndex++, cashId);
+        }
+        
         db.commit();
     }
 
@@ -651,4 +674,171 @@ public class AccountDB {
         metaMap.put("nPrice_" + apiName, value.toString());
         db.commit();
     }
+
+    public void setDealerMinBalance(Long balance) {
+        if(balance == null) return;
+        metaMap.put("dealerMinBalance", balance.toString());
+        db.commit();
+    }
+
+    public Long getDealerMinBalance() {
+        String balance = metaMap.getOrDefault("dealerMinBalance", "");
+        return balance.isEmpty() ? null : Long.parseLong(balance);
+    }
+
+    public void setMinDistributeBalance(Long balance) {
+        if(balance == null) return;
+        metaMap.put("minDistributeBalance", balance.toString());
+        db.commit();
+    }
+
+    public Long getMinDistributeBalance() {
+        String balance = metaMap.getOrDefault("minDistributeBalance", "");
+        return balance.isEmpty() ? null : Long.parseLong(balance);
+    }
+
+    public void setAutoScanStrategy(AccountHandler.AutoScanStrategy strategy) {
+        if (strategy == null) return;
+        metaMap.put("autoScanStrategy", strategy.name());
+        db.commit();
+    }
+
+    public AccountHandler.AutoScanStrategy getAutoScanStrategy() {
+        String strategyName = metaMap.getOrDefault("autoScanStrategy", "");
+        if (strategyName.isEmpty()) {
+            return null;
+        }
+        try {
+            return AccountHandler.AutoScanStrategy.valueOf(strategyName);
+        } catch (IllegalArgumentException e) {
+            // Handle case where stored value doesn't match any enum value
+            return null;
+        }
+    }
+
+    public void setAutoUpdate(boolean autoUpdate) {
+        // Deprecated - kept for backward compatibility
+        // Convert boolean to strategy
+        AccountHandler.AutoScanStrategy strategy = autoUpdate ? 
+            AccountHandler.AutoScanStrategy.APIP_CLIENT : 
+            AccountHandler.AutoScanStrategy.NO_AUTO_SCAN;
+        setAutoScanStrategy(strategy);
+    }
+
+    public Boolean getAutoUpdate() {
+        // Deprecated - kept for backward compatibility
+        AccountHandler.AutoScanStrategy strategy = getAutoScanStrategy();
+        return strategy != null && strategy != AccountHandler.AutoScanStrategy.NO_AUTO_SCAN;
+    }
+
+    // Update these methods to use Long for lastHeight
+    public void setLastHeight(Long height) {
+        if(height == null) return;
+        metaMap.put("lastHeight", height.toString());
+        db.commit();
+    }
+
+    public Long getLastHeight() {
+        String height = metaMap.getOrDefault("lastHeight", "");
+        return height.isEmpty() ? null : Long.parseLong(height);
+    }
+
+    public void setLastBlockId(String blockId) {
+        if(blockId == null) return;
+        metaMap.put("lastBlockId", blockId);
+        db.commit();
+    }
+
+    public String getLastBlockId() {
+        return metaMap.getOrDefault("lastBlockId", "");
+    }
+
+    public void setListenPath(String path) {
+        if (path == null) return;
+        metaMap.put("listenPath", path);
+        db.commit();
+    }
+
+    public String getListenPath() {
+        return metaMap.getOrDefault("listenPath", "");
+    }
+
+    public void removeIncomeSinceHeight(long height) {
+        // Create a list to store cashIds to remove
+        List<String> cashIdsToRemove = new ArrayList<>();
+        
+        // Scan through incomeMap to find entries to remove
+        incomeMap.forEach((cashId, income) -> {
+            if (income.getBirthHeight() > height) {
+                cashIdsToRemove.add(cashId);
+            }
+        });
+        
+        // Remove the entries and their order mappings
+        for (String cashId : cashIdsToRemove) {
+            incomeMap.remove(cashId);
+            // Remove from order map by finding and removing the corresponding entry
+            incomeOrderMap.entrySet().removeIf(entry -> cashId.equals(entry.getValue()));
+        }
+        
+        // Update currentIncomeIndex
+        currentIncomeIndex = incomeOrderMap.size();
+        db.commit();
+    }
+
+    public void removeExpenseSinceHeight(long height) {
+        // Create a list to store cashIds to remove
+        List<String> cashIdsToRemove = new ArrayList<>();
+        
+        // Scan through expenseMap to find entries to remove
+        expenseMap.forEach((cashId, expense) -> {
+            if (expense.getBirthHeight() > height) {
+                cashIdsToRemove.add(cashId);
+            }
+        });
+        
+        // Remove the entries and their order mappings
+        for (String cashId : cashIdsToRemove) {
+            expenseMap.remove(cashId);
+            // Remove from order map by finding and removing the corresponding entry
+            expenseOrderMap.entrySet().removeIf(entry -> cashId.equals(entry.getValue()));
+        }
+        
+        // Update currentExpenseIndex
+        currentExpenseIndex = expenseOrderMap.size();
+        db.commit();
+    }
+
+    public void setIncomeMap(HTreeMap<String, Income> incomeMap) {
+        this.incomeMap = incomeMap;
+    }
+
+    public HTreeMap<Long, String> getIncomeOrderMap() {
+        return incomeOrderMap;
+    }
+
+    public void setIncomeOrderMap(HTreeMap<Long, String> incomeOrderMap) {
+        this.incomeOrderMap = incomeOrderMap;
+    }
+
+    public void setExpenseMap(HTreeMap<String, Expense> expenseMap) {
+        this.expenseMap = expenseMap;
+    }
+
+    public HTreeMap<Long, String> getExpenseOrderMap() {
+        return expenseOrderMap;
+    }
+
+    public void setExpenseOrderMap(HTreeMap<Long, String> expenseOrderMap) {
+        this.expenseOrderMap = expenseOrderMap;
+    }
+
+    public Income getIncomeById(String cashId) {
+        return incomeMap.get(cashId);
+    }
+
+    public Expense getExpenseById(String cashId) {
+        return expenseMap.get(cashId);
+    }
+
 } 

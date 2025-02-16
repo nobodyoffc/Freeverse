@@ -1,4 +1,4 @@
-package fcData;
+package handlers;
 
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
@@ -17,19 +17,22 @@ public class CidDB {
     private volatile ConcurrentMap<String, String> cidFidMap;
     private volatile ConcurrentMap<String, String> fidAvatarMap;
     private final Object lock = new Object();
-
-    public CidDB(String myFid, String sid) {
+    private final String dbPath;
+    public CidDB(String myFid, String sid, String dbPath) {
         this.myFid = myFid;
         this.sid = sid;
+        if(!dbPath.endsWith("/"))dbPath += "/";
+        this.dbPath = dbPath;
         initializeDb();
     }
 
     private void initializeDb() {
+        if (!FileTools.checkDirOrMakeIt(dbPath)) return;
         if (db == null || db.isClosed()) {
             synchronized (lock) {
                 if (db == null || db.isClosed()) {
                     String dbName = FileTools.makeFileName(myFid, sid, CID_DB, constants.Strings.DOT_DB);
-                    db = DBMaker.fileDB(dbName)
+                    db = DBMaker.fileDB(dbPath+dbName)
                             .fileMmapEnable()
                             .checksumHeaderBypass()
                             .transactionEnable()

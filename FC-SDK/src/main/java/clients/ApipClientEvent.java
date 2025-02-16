@@ -61,7 +61,7 @@ public class ApipClientEvent {
     protected String requestBodyStr;
     protected byte[] requestBodyBytes;
     protected Map<String, String> responseHeaderMap;
-    protected FcReplierHttp responseBody;
+    protected ReplyBody responseBody;
     protected String responseBodyStr;
     protected String requestFileName;
     protected ResponseBodyType responseBodyType;
@@ -328,7 +328,7 @@ public class ApipClientEvent {
 
             return makeReply(sessionKey);
         } catch (IOException e) {
-            log.error("Error when requesting post.", e);
+//            log.error("Error when requesting post.", e);
             code = CodeMessage.Code3007ErrorWhenRequestingPost;
             message = CodeMessage.Msg3007ErrorWhenRequestingPost+":"+e.getMessage();
             return false;
@@ -408,7 +408,7 @@ public class ApipClientEvent {
         if(responseFileName==null)
             Files.move(Paths.get(fileName),Paths.get(gotDid), StandardCopyOption.REPLACE_EXISTING);
 
-        if(responseBody==null)responseBody=new FcReplierHttp();
+        if(responseBody==null)responseBody=new ReplyBody();
         responseBody.setCode(CodeMessage.Code0Success);
         responseBody.setMessage(CodeMessage.Msg0Success);
         responseBody.setData(gotDid);
@@ -421,7 +421,7 @@ public class ApipClientEvent {
         responseBodyStr = new String(responseBodyBytes);
         parseFcResponse(httpResponse);
         try {
-            this.responseBody = new Gson().fromJson(responseBodyStr, FcReplierHttp.class);
+            this.responseBody = new Gson().fromJson(responseBodyStr, ReplyBody.class);
         } catch (JsonSyntaxException ignore) {
             log.debug("Failed to parse responseBody json.");
             code= CodeMessage.Code1020OtherError;
@@ -440,7 +440,7 @@ public class ApipClientEvent {
                 code = responseBody.getCode();
             }
         }
-        return code == 0;
+        return code != null && code == 0;
     }
 
 
@@ -529,24 +529,6 @@ public class ApipClientEvent {
     public boolean post() {
         return post(null);
     }
-//    public boolean post(String requestFileName) {
-//        return post(null,RequestBodyType.FILE,null,requestFileName,null,null);
-//    }
-//    public boolean post(byte[] sessionKey) {
-//        return post(sessionKey,null,null,null,null,null);
-//    }
-//    public boolean post(byte[] sessionKey, RequestBodyType requestBodyType) {
-//        return post(sessionKey, requestBodyType,null,null,null,null);
-//    }
-//    public boolean post(byte[] sessionKey, RequestBodyType requestBodyType,ResponseBodyType responseBodyType) {
-//        return post(sessionKey, requestBodyType,responseBodyType,null,null,null);
-//    }
-//    public boolean post(byte[] sessionKey, RequestBodyType requestBodyType, String fileName) {
-//        return post(sessionKey, requestBodyType,null,fileName,null,null);
-//    }
-//    public boolean post(byte[] sessionKey, ResponseBodyType responseBodyType, String responseFileName, String responseFilePath) {
-//        return post(sessionKey, null,responseBodyType,null,responseFileName,responseFilePath);
-//    }
 
     public boolean post(@Nullable byte[] sessionKey) {
         if(this.requestBodyType==null)requestBodyType= STRING;
@@ -615,6 +597,7 @@ public class ApipClientEvent {
 
             if (httpResponse.getStatusLine().getStatusCode() != 200) {
                 log.debug("Post response status: {}.{}", httpResponse.getStatusLine().getStatusCode(), httpResponse.getStatusLine().getReasonPhrase());
+                log.debug("Post response error: {}", httpResponse.getEntity().getContent().toString());
                 if(httpResponse.getHeaders(UpStrings.CODE)!=null&&httpResponse.getHeaders(UpStrings.CODE).length>0){
                     if(httpResponse.getHeaders(UpStrings.CODE)[0]!=null) {
                         code = Integer.valueOf(httpResponse.getHeaders(UpStrings.CODE)[0].getValue());
@@ -796,7 +779,7 @@ public class ApipClientEvent {
         Gson gson = new Gson();
         String sign;
         try {
-            this.responseBody = gson.fromJson(responseBodyStr, FcReplierHttp.class);
+            this.responseBody = gson.fromJson(responseBodyStr, ReplyBody.class);
         } catch (JsonSyntaxException ignore) {
             return false;
         }
@@ -885,11 +868,11 @@ public class ApipClientEvent {
         this.responseHeaderMap = responseHeaderMap;
     }
 
-    public FcReplierHttp getResponseBody() {
+    public ReplyBody getResponseBody() {
         return responseBody;
     }
 
-    public void setResponseBody(FcReplierHttp responseBody) {
+    public void setResponseBody(ReplyBody responseBody) {
         this.responseBody = responseBody;
     }
 

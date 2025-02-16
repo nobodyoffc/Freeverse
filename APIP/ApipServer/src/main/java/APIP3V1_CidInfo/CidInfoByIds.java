@@ -1,6 +1,6 @@
 package APIP3V1_CidInfo;
 
-import constants.ApiNames;
+import server.ApipApiNames;
 
 import initial.Initiator;
 import tools.http.AuthType;
@@ -12,18 +12,24 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApiNames.CidInfoByIds, value = "/"+ApiNames.SN_3+"/"+ApiNames.Version1 +"/"+ApiNames.CidInfoByIds)
+import appTools.Settings;
+@WebServlet(name = ApipApiNames.CID_INFO_BY_IDS, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CID_INFO_BY_IDS)
 public class CidInfoByIds extends HttpServlet {
+    private final FcdslRequestHandler fcdslRequestHandler;
 
+    public CidInfoByIds() {
+        Settings settings = Initiator.settings;
+        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+    }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        FcdslRequestHandler.doCidInfoByIdsRequest(Initiator.sid, null, request, response, authType,Initiator.esClient, Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doCidInfoByIdsRequestHttp(null, request, response, authType);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        FcdslRequestHandler.doCidInfoByIdsRequest(Initiator.sid, null, request, response, authType,Initiator.esClient, Initiator.jedisPool, Initiator.sessionHandler);
+        fcdslRequestHandler.doCidInfoByIdsRequestHttp(null, request, response, authType);
     }
 }

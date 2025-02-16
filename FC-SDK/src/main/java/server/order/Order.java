@@ -1,13 +1,12 @@
 package server.order;
 
-import fcData.FcSession;
 import appTools.Shower;
 import constants.FieldNames;
 import feip.feipData.serviceParams.Params;
 import appTools.Inputer;
 import clients.ApipClient;
 import configure.ApiAccount;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.Strings;
 import tools.Hex;
 import tools.JsonTools;
@@ -25,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static appTools.Inputer.askIfYes;
-import static constants.ApiNames.WebhookPoint;
+import static server.ApipApiNames.WEBHOOK_POINT;
 import static constants.Strings.*;
 
 public class Order {
@@ -64,7 +63,7 @@ public class Order {
         System.out.println("Check webhook...");
         String urlHead = params.getUrlHead();
         if(!urlHead.endsWith("/"))urlHead=urlHead+"/";
-        String endpoint = urlHead+ApiNames.Version1+"/"+WebhookPoint;
+        String endpoint = urlHead+ ApipApiNames.VERSION_1 +"/"+ WEBHOOK_POINT;
         ApipClient apipClient = (ApipClient) apipAccount.getClient();
 
         Map<String, String> dataMap = apipClient.checkSubscription(hookMethod, endpoint);

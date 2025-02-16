@@ -1,46 +1,47 @@
 package APIP0V2_OpenAPI;
 
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import appTools.Settings;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-@WebServlet(name = ApiNames.Ping, value = "/"+ApiNames.Version1 +"/"+ ApiNames.Ping)
+@WebServlet(name = ApipApiNames.PING, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PING)
 public class Ping extends HttpServlet {
+    private final ReplyBody replier;
+    private final HttpRequestChecker httpRequestChecker;
+
+    public Ping() {
+        Settings settings = Initiator.settings;
+        this.replier = new ReplyBody(settings);
+        this.httpRequestChecker = new HttpRequestChecker(settings, replier);
+    }
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
 
         AuthType authType = AuthType.FC_SIGN_BODY;
 
         //Check authorization
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null) return;
-            replier.reply0SuccessHttp(null, jedis, null);
-        }
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
+        replier.reply0SuccessHttp(response);
+
     }
 
     protected void doGet(HttpServletRequest request, HttpServletResponse response){
-        FcReplierHttp replier = new FcReplierHttp(Initiator.sid,response);
         AuthType authType = AuthType.FREE;
 
         //Check authorization
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(Initiator.sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult==null){
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk){
                 return;
-            }
-            replier.reply0SuccessHttp(null, jedis, null);
         }
+        replier.reply0SuccessHttp(response);
     }
 }

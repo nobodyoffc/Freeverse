@@ -1,7 +1,8 @@
-package clients;
+package handlers;
 
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import constants.Constants;
 import crypto.CryptoDataByte;
 import crypto.Encryptor;
@@ -13,7 +14,7 @@ import fch.Wallet;
 import feip.feipData.Secret;
 import feip.feipData.SecretData;
 import feip.feipData.Feip;
-import handlers.CashHandler;
+import feip.feipData.Service;
 import tools.BytesTools;
 import tools.Hex;
 import tools.JsonTools;
@@ -24,6 +25,9 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import appTools.Shower;
+import clients.ApipClient;
+import clients.Client;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.StringTools;
@@ -31,8 +35,8 @@ import tools.StringTools;
 import static appTools.Inputer.askIfYes;
 import static constants.OpNames.*;
 
-public class SecretClient {
-    protected static final Logger log = LoggerFactory.getLogger(SecretClient.class);
+public class SecretHandler extends Handler {
+    protected static final Logger log = LoggerFactory.getLogger(SecretHandler.class);
     private static final Integer DEFAULT_SIZE = 10;
     private final List<String> fakeSecretDetailList = new ArrayList<>();
 
@@ -59,31 +63,41 @@ public class SecretClient {
     private final tools.PersistentSequenceMap secretDB;
 
     // Constructor
-    public SecretClient(String myFid, ApipClient apipClient, CashHandler cashHandler, byte[] symKey, String myPriKeyCipher, BufferedReader br) {
+    public SecretHandler (String myFid, ApipClient apipClient, CashHandler cashHandler, byte[] symKey, String myPriKeyCipher,String dbPath, BufferedReader br) {
         this.myFid = myFid;
         this.apipClient = apipClient;
         this.cashHandler = cashHandler;
         this.symKey = symKey;
         this.myPriKeyCipher = myPriKeyCipher;
-        this.secretDB = new tools.PersistentSequenceMap(myFid, null, constants.Strings.SECRET);
+        this.secretDB = new tools.PersistentSequenceMap(myFid, null, constants.Strings.SECRET,dbPath);
         this.br = br;
         this.myPubKey = KeyTools.priKeyToPubKey(Client.decryptPriKey(myPriKeyCipher, symKey));
+    }
+
+    public SecretHandler(Settings settings){
+        this.myFid = settings.getMainFid();
+        this.br = settings.getBr();
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.cashHandler = (CashHandler) settings.getHandler(HandlerType.CASH);
+        this.symKey = settings.getSymKey();
+        this.myPriKeyCipher = settings.getMyPriKeyCipher();
+        this.secretDB = new tools.PersistentSequenceMap(myFid, null, constants.Strings.SECRET,settings.getDbDir());
+        this.myPubKey = KeyTools.priKeyToPubKey(Client.decryptPriKey(settings.getMyPriKeyCipher(), settings.getSymKey()));
     }
 
     // Public Methods
     public void menu() {
         Menu menu = new Menu("Secret Menu");
-        menu.add(UPDATE, () -> checkSecrets(br));
-        menu.add(READ, () -> readSecrets(br));
+        menu.add("Check Secrets On Chain", () -> checkSecrets(br));
         menu.add(FIND, () -> findSecret(br));
-        menu.add(SecretOp.ADD.toLowerCase(), () -> addSecrets(br));
-        menu.add(SecretOp.DELETE.toLowerCase(), () -> deleteSecrets(br));
-        menu.add(SecretOp.RECOVER.toLowerCase(), () -> recoverSecrets(br));
+        menu.add(SecretOp.ADD.toLowerCase()+" On Chain", () -> addSecrets(br));
+        menu.add(SecretOp.DELETE.toLowerCase()+" On Chain", () -> deleteSecrets(br));
+        menu.add(SecretOp.RECOVER.toLowerCase()+" On Chain", () -> recoverSecrets(br));
         menu.showAndSelect(br);
     }
 
     public String addSecret(BufferedReader br) {
-        return opSecret(null, null, br, SecretOp.ADD);
+        return opSecret(null, br, SecretOp.ADD);
     }
 
     public void addSecrets(BufferedReader br) {
@@ -102,7 +116,7 @@ public class SecretClient {
     }
 
     public String deleteSecret(List<String> secretIds, BufferedReader br) {
-        return opSecret(null, secretIds, br, SecretOp.DELETE);
+        return opSecret(secretIds, br, SecretOp.DELETE);
     }
     public void deleteSecrets(BufferedReader br) {
         List<SecretDetail> chosenSecrets = chooseSecretDetails(br);
@@ -136,7 +150,7 @@ public class SecretClient {
     }
 
     public String recoverSecret(List<String> secretIds, BufferedReader br) {
-        return opSecret(null, secretIds, br, SecretOp.RECOVER);
+        return opSecret(secretIds, br, SecretOp.RECOVER);
     }
 
     public void recoverSecrets(BufferedReader br) {
@@ -178,7 +192,7 @@ public class SecretClient {
     private void deleteUnreadableSecrets() {
         if (fakeSecretDetailList.isEmpty()) return;
         if (!askIfYes(br, "Got " + fakeSecretDetailList.size() + " unreadable secrets. Delete them?")) return;
-        String result = opSecret(null, fakeSecretDetailList, br, SecretOp.DELETE);
+        String result = opSecret(fakeSecretDetailList, br, SecretOp.DELETE);
         if (Hex.isHex32(result)) {
             fakeSecretDetailList.clear();
         } else {
@@ -186,47 +200,47 @@ public class SecretClient {
         }
     }
 
-    public void readSecrets(BufferedReader br) {
-        List<SecretDetail> chosenSecrets = null;
+    // public void readSecrets(BufferedReader br) {
+    //     List<SecretDetail> chosenSecrets = null;
         
-        String input;
-        while (true) {
-            input = Inputer.inputString(br, "Input search string or secret ID. 'q' to quit. Enter to list all secrets and choose some:");
-            if ("q".equals(input)) return;
-            if ("".equals(input)) {
-                chosenSecrets = chooseSecretDetails(br);
-                if (chosenSecrets.isEmpty()) {
-                    return;
-                }
-            } else {
-                List<SecretDetail> foundSecretDetailList = findSecretDetails(input);
-                chosenSecrets = choseFromSecretDetailList(foundSecretDetailList, br);
-                if(chosenSecrets.isEmpty())return;
-            }
+    //     String input;
+    //     while (true) {
+    //         input = Inputer.inputString(br, "Input search string or secret ID. 'q' to quit. Enter to list all secrets and choose some:");
+    //         if ("q".equals(input)) return;
+    //         if ("".equals(input)) {
+    //             chosenSecrets = chooseSecretDetails(br);
+    //             if (chosenSecrets.isEmpty()) {
+    //                 return;
+    //             }
+    //         } else {
+    //             List<SecretDetail> foundSecretDetailList = findSecretDetails(input);
+    //             chosenSecrets = choseFromSecretDetailList(foundSecretDetailList, br);
+    //             if(chosenSecrets.isEmpty())return;
+    //         }
 
-            System.out.println("You chosen " + chosenSecrets.size() + " secrets.");
+    //         System.out.println("You chosen " + chosenSecrets.size() + " secrets.");
 
-            String op = Inputer.chooseOne(
-                    new String[]{READ, SecretOp.DELETE.toLowerCase(), SecretOp.RECOVER.toLowerCase()},
-                    null, "Select to operate the secrets:", br);
+    //         String op = Inputer.chooseOne(
+    //                 new String[]{READ, SecretOp.DELETE.toLowerCase(), SecretOp.RECOVER.toLowerCase()},
+    //                 null, "Select to operate the secrets:", br);
 
-            switch (op) {
-                case READ:
-                    chooseToShow(chosenSecrets, br);
-                    break;
-                case DELETE:
-                    deleteSecrets(chosenSecrets, br);
-                    break;
-                case RECOVER:
-                    recoverSecrets(chosenSecrets, br);
-                    break;
-                default:
-                    break;
-            }
-        }
-    }
+    //         switch (op) {
+    //             case READ:
+    //                 chooseToShow(chosenSecrets, br);
+    //                 break;
+    //             case DELETE:
+    //                 deleteSecrets(chosenSecrets, br);
+    //                 break;
+    //             case RECOVER:
+    //                 recoverSecrets(chosenSecrets, br);
+    //                 break;
+    //             default:
+    //                 break;
+    //         }
+    //     }
+    // }
 
-    private String opSecret(String secretId, List<String> secretIds, BufferedReader br, SecretOp op) {
+    private String opSecret(List<String> secretIds, BufferedReader br, SecretOp op) {
         if (op == null) return null;
         SecretData secretData = new SecretData();
         secretData.setOp(op.toLowerCase());
@@ -265,7 +279,7 @@ public class SecretClient {
         long cd = Constants.CD_REQUIRED;
 
         if (askIfYes(br, "Are you sure to do below operation on chain?\n" + feip.toNiceJson() + "\n")) {
-            String result = Wallet.carve(myFid,priKey, opReturnStr, cd, apipClient, cashHandler, br);
+            String result = cashHandler.carve(opReturnStr, null);
             if (Hex.isHex32(result)) {
                 System.out.println("The secrets are " + op.toLowerCase() + "ed: " + result + ".\n Wait a few minutes for confirmations before updating secrets...");
                 return result;
@@ -378,7 +392,7 @@ public class SecretClient {
         return chosenSecrets;
     }
 
-    private static void chooseToShow(List<SecretDetail> secretList, BufferedReader br) {
+    private static void chooseToShowOld(List<SecretDetail> secretList, BufferedReader br) {
         if (secretList == null || secretList.isEmpty()) {
             System.out.println("No secrets to display.");
             return;

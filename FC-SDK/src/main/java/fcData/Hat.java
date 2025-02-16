@@ -1,6 +1,6 @@
 package fcData;
 
-public class Hat extends FcData{
+public class Hat extends FcEntity {
     //basic
     private String did;
     private String hAlg;

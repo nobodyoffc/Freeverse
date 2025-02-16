@@ -1,78 +1,51 @@
 package APIP18V1_Wallet;
 
-import com.google.gson.Gson;
-import constants.ApiNames;
-import fcData.FcReplierHttp;
+import server.ApipApiNames;
+import fcData.ReplyBody;
 import fch.fchData.Cash;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import server.RequestCheckResult;
-import server.RequestChecker;
+import server.HttpRequestChecker;
+import handlers.MempoolHandler;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static constants.FieldNames.*;
+import appTools.Settings;
+import handlers.Handler.HandlerType;
 
-@WebServlet(name = ApiNames.UnconfirmedCashes, value = "/"+ApiNames.SN_18+"/"+ApiNames.Version1 +"/"+ApiNames.UnconfirmedCashes)
+@WebServlet(name = ApipApiNames.UNCONFIRMED_CASHES, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.UNCONFIRMED_CASHES)
 public class UnconfirmedCashes extends HttpServlet {
+    private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(Initiator.sid,request, response, authType,Initiator.jedisPool);
+        doRequest(request, response, authType,settings);
     }
 
 
-    protected void doRequest(String sid, HttpServletRequest request, HttpServletResponse response, AuthType authType, JedisPool jedisPool)  {
-        FcReplierHttp replier = new FcReplierHttp(sid,response);
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings)  {
+        ReplyBody replier = new ReplyBody(settings);
 
-        //Check authorization
-        try (Jedis jedis = jedisPool.getResource()) {
-            RequestCheckResult requestCheckResult = RequestChecker.checkRequest(sid, request, replier, authType, jedis, false, Initiator.sessionHandler);
-            if (requestCheckResult == null) {
-                return;
-            }
-            List<String> fidList = null;
-            if(requestCheckResult.getRequestBody()!=null && requestCheckResult.getRequestBody().getFcdsl()!=null && requestCheckResult.getRequestBody().getFcdsl().getIds()!=null){
-                fidList = requestCheckResult.getRequestBody().getFcdsl().getIds();
-            }
-            List<Cash> meetList = new ArrayList<>();
-            jedis.select(3);
-            
-
-            Map<String, String> spentCashesStringMap = jedis.hgetAll(SPEND_CASHES);
-            for(Map.Entry<String, String> entry: spentCashesStringMap.entrySet()){
-                Cash cash = new Gson().fromJson(entry.getValue(), Cash.class);
-                if(fidList!=null && fidList.size()>0){
-                    if(fidList.contains(cash.getOwner())){
-                        meetList.add(cash);
-                    }
-                }else{
-                    meetList.add(cash);
-                }   
-            }
-            Map<String, String> newCashesStringMap = jedis.hgetAll(NEW_CASHES);
-            for(Map.Entry<String, String> entry: newCashesStringMap.entrySet()){
-                Cash cash = new Gson().fromJson(entry.getValue(), Cash.class);
-                if(fidList!=null && fidList.size()>0){
-                    if(fidList.contains(cash.getOwner())){
-                        meetList.add(cash);
-                    }
-                }else{
-                    meetList.add(cash);
-                }
-            }
-            replier.replySingleDataSuccess(meetList,jedis);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
+        List<String> fidList = null;
+        if(httpRequestChecker.getRequestBody()!=null && httpRequestChecker.getRequestBody().getFcdsl()!=null && httpRequestChecker.getRequestBody().getFcdsl().getIds()!=null){
+            fidList = httpRequestChecker.getRequestBody().getFcdsl().getIds();
         }
+        Map<String,List<Cash>> meetList = new HashMap<>();
+
+        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+        meetList = mempoolHandler.checkUnconfirmedCash(fidList);
+        
+        replier.replySingleDataSuccessHttp(meetList,response);
     }
 }

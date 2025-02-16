@@ -3,6 +3,7 @@ package handlers;
 import fcData.Room;
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 import constants.FieldNames;
 import tools.JsonTools;
 import tools.PersistentSequenceMap;
@@ -29,12 +30,19 @@ public class RoomHandler extends Handler {
     private final ConcurrentHashMap<String, Room> roomCache;
 
     // 3. Constructor
-    public RoomHandler(String myFid, BufferedReader br) {
+    public RoomHandler(String myFid, BufferedReader br,String dbPath) {
         this.myFid = myFid;
         this.br = br;
-        this.roomDB = new PersistentSequenceMap(myFid, null, FieldNames.ROOM);
+        this.roomDB = new PersistentSequenceMap(myFid, null, FieldNames.ROOM,dbPath);
         this.roomCache = new ConcurrentHashMap<>(CACHE_SIZE);
     }
+
+    public RoomHandler(Settings settings){
+        this.myFid = settings.getMainFid();
+        this.br = settings.getBr(); 
+        this.roomDB = new PersistentSequenceMap(myFid, null, FieldNames.ROOM,settings.getDbDir());
+        this.roomCache = new ConcurrentHashMap<>(CACHE_SIZE);
+    }   
 
     // 4. Public Methods - Main Interface
     public void menu() {

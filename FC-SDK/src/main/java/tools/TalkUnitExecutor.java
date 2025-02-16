@@ -17,10 +17,7 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import server.TalkServer;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -53,7 +50,7 @@ public class TalkUnitExecutor {
     private TalkUnit executeTalkUnit;
     private String displayText;
     private Map<String,Integer> payToForBytes;
-    private List<TalkUnit> sendTalkUnitList;
+    private List<TalkUnit> sendTalkUnitList = new ArrayList<>();
 
     public TalkUnitExecutor(TalkServer talkServer){
         this.talkServer = talkServer;
@@ -141,7 +138,7 @@ public class TalkUnitExecutor {
     }
 
     public static Boolean checkGotOrRelay(TalkUnit decryptedTalkUnit, TalkUnitHandler talkUnitHandler) {
-        if(decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_GOT && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_RELAYED)return false;
+        if(decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_GOT && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_RELAYED && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_SIGNED_GOT && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_SIGNED_RELAYED)return false;
         if(!(decryptedTalkUnit.getData() instanceof String id))return false;
 
         TalkUnit sourceTalkUnit = talkUnitHandler.get(id,decryptedTalkUnit);
@@ -305,14 +302,14 @@ public class TalkUnitExecutor {
             case SHARE_HAT ->  done = saveHat(parsedTalkUnit,hatHandler);
             default -> {
                 setCodeMsg(CodeMessage.Code1032NoSuchOperation);
-                this.displayText = title+"[REPLY-"+replyBody.getOp()+"] Failed!";
+                this.displayText = title+"[REPLY-"+ replyBody.getOp()+"] Failed!";
             }
         }
         if(done){
-            this.displayText = title+"[REPLY-"+replyBody.getOp()+"] Done.";
+            this.displayText = title+"[REPLY-"+ replyBody.getOp()+"] Done.";
             closeRequestUnit(talkUnitHandler, parsedTalkUnit, replyBody);
         }
-        else this.displayText = title+"[REPLY-"+replyBody.getOp()+"] Failed.";
+        else this.displayText = title+"[REPLY-"+ replyBody.getOp()+"] Failed.";
         return done;
     }
 
@@ -485,7 +482,7 @@ public class TalkUnitExecutor {
 
             if(id.length()==34){
                 // Ask for the key of a FID
-                if(!id.equals(parsedTalkUnit.getTo()))return false;
+                if(!parsedTalkUnit.getTo().equals(parsedTalkUnit.getFrom()) && !id.equals(parsedTalkUnit.getTo()))return false;
                 shareSession = sessionHandler.getSessionById(parsedTalkUnit.getFrom());
                 if(shareSession==null){
                     shareSession = sessionHandler.addNewSession(id,parsedTalkUnit.getFromSession().getPubKey());

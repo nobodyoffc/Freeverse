@@ -2,10 +2,11 @@ package handlers;
 
 import avatar.AvatarMaker;
 import clients.ApipClient;
-import fcData.CidDB;
+import feip.feipData.Service;
 import tools.MapQueue;
 import appTools.Inputer;
 import appTools.Menu;
+import appTools.Settings;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -16,7 +17,7 @@ import java.util.Map;
 
 import apip.apipData.CidInfo;
 
-public class CidHandler {
+public class CidHandler extends Handler {
     private static final int MAX_FID_CID_CACHE_SIZE = 100;
     private static final int MAX_CID_FID_CACHE_SIZE = 100;
     private static final int MAX_FID_AVATAR_CACHE_SIZE = 50;
@@ -33,14 +34,26 @@ public class CidHandler {
     private final MapQueue<String, String> fidAvatarCache;
 
     public CidHandler(String mainFid, String sid, ApipClient apipClient,
-                      String avatarBasePath, String avatarFilePath) {
+                      String avatarBasePath, String avatarFilePath, String dbPath) {
         this.mainFid = mainFid;
         this.sid = sid;
         this.apipClient = apipClient;
         this.avatarBasePath = avatarBasePath;
         this.avatarFilePath = avatarFilePath;
-        this.cidDB = new CidDB(mainFid, sid);
+        this.cidDB = new CidDB(mainFid, sid, dbPath);
         
+        this.fidCidCache = new MapQueue<>(MAX_FID_CID_CACHE_SIZE);
+        this.cidFidCache = new MapQueue<>(MAX_CID_FID_CACHE_SIZE);
+        this.fidAvatarCache = new MapQueue<>(MAX_FID_AVATAR_CACHE_SIZE);
+    }
+
+    public CidHandler(Settings settings){
+        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.mainFid = settings.getMainFid();
+        this.sid = settings.getSid();
+        this.avatarBasePath = Settings.DEFAULT_AVATAR_BASE_PATH;
+        this.avatarFilePath = Settings.DEFAULT_AVATAR_FILE_PATH;
+        this.cidDB = new CidDB(mainFid,sid, settings.getDbDir());
         this.fidCidCache = new MapQueue<>(MAX_FID_CID_CACHE_SIZE);
         this.cidFidCache = new MapQueue<>(MAX_CID_FID_CACHE_SIZE);
         this.fidAvatarCache = new MapQueue<>(MAX_FID_AVATAR_CACHE_SIZE);

@@ -2,7 +2,7 @@ package api;
 
 import apip.apipData.WebhookPushBody;
 import com.google.gson.Gson;
-import constants.ApiNames;
+import server.ApipApiNames;
 import constants.FieldNames;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
@@ -19,7 +19,7 @@ import static constants.Strings.*;
 import static constants.Strings.DOT_JSON;
 import static fcData.Signature.symSign;
 
-@WebServlet(name = ApiNames.WebhookPoint, value ="/"+ApiNames.Version1 +"/"+ ApiNames.WebhookPoint)
+@WebServlet(name = ApipApiNames.WEBHOOK_POINT, value ="/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.WEBHOOK_POINT)
 public class WebhookPoint extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {

@@ -9,6 +9,8 @@ import java.util.Map;
 import tools.StringTools;
 
 public class Shower {
+    public static final int DEFAULT_SIZE = 20;
+
     public static <T> void showDataTable(String title, List<T> dataList, int beginFrom) {
         if (dataList == null || dataList.isEmpty()) {
             return;
@@ -174,6 +176,32 @@ public class Shower {
             System.out.println("\nInput an integer within:" + min + "~" + max + ".");
         }
         return choice;
+    }
+
+    public static List<Integer> chooseMulti(BufferedReader br, int min, int max) {
+        List<Integer> choices = new ArrayList<>();
+        int choice = 0;
+        while (true) {
+            System.out.println("\nInput the numbers to choose. Separate by comma. '0' to quit:\n");
+            try {
+                String input = br.readLine();
+                String[] inputs = input.split(",");
+                for (String input1 : inputs) {
+                    choice = Integer.parseInt(input1);
+                    if (choice <= max && choice >= min) {
+                        choices.add(choice);
+                    }else{
+                        System.out.println("\nInput an integer within:" + min + "~" + max + ". Try again.");
+                        break;
+                    }
+                }
+                break;
+            } catch (Exception e) {
+                System.out.println("\nInput an integer within:" + min + "~" + max + ". Try again.");
+                continue;
+            }
+        }
+        return choices;
     }
 
     public static int getVisualWidth(String str) {

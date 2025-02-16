@@ -1,10 +1,11 @@
-package fcData;
+package handlers;
 
+import fcData.FcEntity;
 import org.mapdb.DB;
 import org.mapdb.DBMaker;
 import org.mapdb.Serializer;
 
-import jakarta.json.Json;
+import fcData.FcSession;
 import tools.FileTools;
 import tools.JsonTools;
 
@@ -19,6 +20,7 @@ public class SessionDB {
     private static final String SESSION_DB = "session";
     private final String mainFid;
     private final String sid;
+    private final String dbPath;
     
     private volatile DB db;
     private volatile HTreeMap<String, FcSession> nameSessionMap;
@@ -26,18 +28,22 @@ public class SessionDB {
     private volatile HTreeMap<String, List<String>> usedSessionsMap;
     private final Object lock = new Object();
 
-    public SessionDB(String mainFid, String sid) {
+    public SessionDB(String mainFid, String sid, String dbPath) {
         this.mainFid = mainFid;
         this.sid = sid;
+        if(dbPath==null)dbPath = FileTools.getUserDir()+"/db/";
+        if(!dbPath.endsWith("/"))dbPath += "/";
+        this.dbPath = dbPath;
         initializeDb();
     }
 
     private void initializeDb() {
+        if (!FileTools.checkDirOrMakeIt(dbPath)) return;
         if (db == null || db.isClosed()) {
             synchronized (lock) {
                 if (db == null || db.isClosed()) {
                     String dbName = FileTools.makeFileName(mainFid, sid, SESSION_DB, constants.Strings.DOT_DB);
-                    db = DBMaker.fileDB(dbName)
+                    db = DBMaker.fileDB(dbPath+dbName)
                             .fileMmapEnable()
                             .checksumHeaderBypass()
                             .transactionEnable()
@@ -56,7 +62,7 @@ public class SessionDB {
                             int length = input.unpackInt();
                             byte[] bytes = new byte[length];
                             input.readFully(bytes);
-                            return FcData.fromBytes(bytes, FcSession.class);
+                            return FcEntity.fromBytes(bytes, FcSession.class);
                         }
                     };
                     

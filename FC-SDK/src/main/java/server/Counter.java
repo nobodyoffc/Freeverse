@@ -2,9 +2,9 @@ package server;
 
 import apip.apipData.WebhookPushBody;
 import appTools.Inputer;
-import configure.ServiceType;
 import fch.fchData.Block;
 import fch.fchData.FchTools;
+import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import clients.ApipClient;
 import apip.apipData.Fcdsl;
@@ -89,10 +89,10 @@ public class Counter implements Runnable {
         this.account= params.getDealer();
         this.minPayment  = params.getMinPayment();
 
-        this.esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-        this.naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
-        this.apipClient =(ApipClient)settings.getClient(ServiceType.APIP);
-        this.jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
+        this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        this.naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        this.apipClient =(ApipClient)settings.getClient(Service.ServiceType.APIP);
+        this.jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
         this.paidApiAccountList = settings.getPaidAccountList();
         this.counterPriKey=counterPriKey;
     }
@@ -266,7 +266,7 @@ protected void waitNewOrder() {
 
     protected List<Cash> getNewCashListFromFile(long lastHeight,String listenPath) {
         long initLastHeight = lastHeight;
-        String method = ApiNames.NewCashByFids;
+        String method = ApipApiNames.NEW_CASH_BY_FIDS;
         long bestHeight = 0;
         List<Cash> allCashList = new ArrayList<>();
 

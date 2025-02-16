@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import appTools.Shower;
 import tools.DateTools;
 
-public class ContactDetail {
+public class ContactDetail extends FcEntity {
     private String fid;
     private String cid;
     private String pubKey;

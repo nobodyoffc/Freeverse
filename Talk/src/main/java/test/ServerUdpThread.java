@@ -4,6 +4,7 @@ import apip.apipData.RequestBody;
 import appTools.Settings;
 import clients.ApipClient;
 import constants.FieldNames;
+import handlers.NonceHandler;
 import tools.RedisTools;
 import constants.CodeMessage;
 import crypto.CryptoDataByte;
@@ -34,8 +35,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static constants.FieldNames.BALANCE;
-import static server.RequestChecker.isBadNonce;
-import static server.RequestChecker.isBadTime;
 import static appTools.Settings.addSidBriefToName;
 
 @SuppressWarnings("unused")
@@ -191,7 +190,7 @@ class ServerUdpThread extends Thread {
 //        TransferUnit transferUnit = new TransferUnit(from,toType,to, TransferUnit.DataType.ENCRYPTED_REPLY);
         TalkUnit talkUnit = new TalkUnit();
         ReplyBody replier = new ReplyBody();
-        String replyJson = replier.reply(code,otherError,data,nonce);
+        String replyJson = replier.reply(code,otherError,data);
         
         Encryptor encryptor;
         CryptoDataByte cryptoDataByte;
@@ -316,7 +315,7 @@ class ServerUdpThread extends Thread {
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
                 } else if (isBadNonce(requestBody.getNonce(), windowTime, jedis)) {
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1007UsedNonce, null, null, nonce, false);
-                } else if (isBadTime(requestBody.getTime(), windowTime)) {
+                } else if (NonceHandler.isBadTime(requestBody.getTime(), windowTime)) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("windowTime", String.valueOf(windowTime));
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1006RequestTimeExpired, JsonTools.toJson(dataMap), null, nonce, false);
@@ -371,5 +370,16 @@ class ServerUdpThread extends Thread {
         osw.write(toTalkUnit.getData()+ "\n");
         osw.flush();
     }
-
+    public boolean isBadNonce(long nonce, long windowTime, Jedis jedis){
+        if(windowTime==0)return false;
+        jedis.select(2);
+        if (nonce == 0) return true;
+        String nonceStr = String.valueOf(nonce);
+        if (jedis.get(nonceStr) != null)
+            return true;
+        jedis.set(nonceStr, "");
+        jedis.expire(nonceStr, windowTime);
+        jedis.select(0);
+        return false;
+    }
 }

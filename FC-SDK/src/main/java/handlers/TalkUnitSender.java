@@ -9,7 +9,6 @@ import crypto.KeyTools;
 import fcData.AlgorithmId;
 import fcData.FcSession;
 import fcData.TalkUnit;
-import fcData.TalkUnitHandler;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -25,7 +24,7 @@ import java.util.Set;
 
 import static fcData.TalkUnit.IdType.FID;
 
-public class TalkUnitSender {
+public class TalkUnitSender extends Handler {
     private byte[] myPriKey;
 
     private AccountHandler accountHandler=null;
@@ -150,7 +149,7 @@ public class TalkUnitSender {
     }
 
     public static void sayGot(ChannelHandlerContext ctx, byte[] myPriKey, TalkUnit parsedTalkUnit) {
-        if(parsedTalkUnit.getToType().equals(TalkUnit.IdType.FID)) {
+        if(parsedTalkUnit.getToType().equals(TalkUnit.IdType.FID)) { //Don't say got to team or group.
             byte[] gotBytes = TalkUnit.notifyGot(parsedTalkUnit, myPriKey, parsedTalkUnit.getFromSession(), parsedTalkUnit.getBySession());
             sendBytesByNettyCtx(gotBytes,ctx);
         }
@@ -162,12 +161,13 @@ public class TalkUnitSender {
         long cost;
         Long price = accountHandler.getPriceBase();
         Long nPrice = accountHandler.getnPriceMap().get(chargeType);
-        if(chargeType != null)
+        if(price!=null && nPrice!=null)
             cost = length * nPrice * price;
-        else
+        else if(price!=null)
             cost = length * price;
+        else cost =0;
         newBalance = accountHandler.addUserBalance(userFid, -cost);
-        if(newBalance >= 0) accountHandler.addViaBalance(userFid, cost, null);
+        if(newBalance!= null && newBalance >= 0) accountHandler.addViaBalance(userFid, cost, null);
         return newBalance;
     }
 

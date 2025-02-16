@@ -4,7 +4,7 @@
 //import apip.apipData.RequestBody;
 //import appTools.Settings;
 //import clients.ApipClient;
-//import configure.ServiceType;
+//import feip.feipData.Service.ServiceType;
 //import crypto.CryptoDataByte;
 //import crypto.Decryptor;
 //import crypto.Encryptor;

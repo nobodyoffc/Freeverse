@@ -7,12 +7,14 @@ import clients.Client;
 import clients.ApipClient;
 import clients.DiskClient;
 import fcData.DiskItem;
-import configure.ServiceType;
-import constants.ApiNames;
+import handlers.Handler;
+import server.ApipApiNames;
 import crypto.CryptoDataStr;
 import crypto.Hash;
-import fcData.FcReplierHttp;
+import fcData.ReplyBody;
+import feip.feipData.Service;
 import feip.feipData.serviceParams.ApipParams;
+import server.DiskApiNames;
 import tools.Hex;
 import tools.JsonTools;
 import tools.http.AuthType;
@@ -28,34 +30,39 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static configure.Configure.saveConfig;
-import static constants.ApiNames.Version1;
+import static server.ApipApiNames.VERSION_1;
 
 public class StartDiskClient {
     private static BufferedReader br;
     public static ApipClient apipClient;
     public static DiskClient diskClient;
     private static Settings settings;
-    public static String clientName= ServiceType.DISK.name();
-    public static String[] serviceAliases = new String[]{ServiceType.APIP.name(),ServiceType.DISK.name()};
+    public static String clientName= Service.ServiceType.DISK.name();
+    public static final Object[] modules = new Object[]{
+            Service.ServiceType.APIP,
+            Service.ServiceType.DISK,
+            Handler.HandlerType.HAT,
+            Handler.HandlerType.DISK
+    };
+//    public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP, Service.ServiceType.DISK};
     public static Map<String,Object> settingMap = new HashMap<>();
 
     public static final String MY_DATA_DIR = System.getProperty("user.home")+"/myData";
-
+//    public static HandlerType[] requiredHandlers = new HandlerType[]{
+//            HandlerType.HAT,
+//            HandlerType.DISK
+//    };
     public static void main(String[] args) {
         br = new BufferedReader(new InputStreamReader(System.in));
         Menu.welcome(clientName);
 
-        settings = Starter.startClient(clientName, serviceAliases, settingMap, br);
+        settings = Starter.startClient(clientName, settingMap, br, modules);
         if(settings==null)return;
-        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);//settings.getApipAccount().getClient();
-        diskClient = (DiskClient) settings.getClient(ServiceType.DISK);//settings.getDiskAccount().getClient();
+        apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);//settings.getApipAccount().getClient();
+        diskClient = (DiskClient) settings.getClient(Service.ServiceType.DISK);//settings.getDiskAccount().getClient();
         byte[] symKey = settings.getSymKey();
 
         disk(symKey);
-    }
-
-    private static void talk(byte[] symKey) {
-        System.out.println("Under coding...");
     }
 
     private static void disk(byte[] symKey) {
@@ -88,14 +95,14 @@ public class StartDiskClient {
     }
 
     private static void signInEcc(byte[] symKey) {
-        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(ServiceType.DISK), RequestBody.SignInMode.NORMAL, symKey);
+        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL, symKey);
         JsonTools.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);
     }
 
     private static void signIn(byte[] symKey) {
-        FcSession fcSession = diskClient.signIn(settings.getApiAccount(ServiceType.DISK), RequestBody.SignInMode.NORMAL,symKey);
+        FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL,symKey);
         JsonTools.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);
@@ -103,21 +110,21 @@ public class StartDiskClient {
 
     public static void getService() {
         System.out.println("Getting the service information...");
-        FcReplierHttp replier = DiskClient.getService(diskClient.getUrlHead(), Version1, ApipParams.class);
+        ReplyBody replier = DiskClient.getService(diskClient.getUrlHead(), VERSION_1, ApipParams.class);
         if(replier!=null)JsonTools.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
     }
 
     public static void pingFree(BufferedReader br){
-        boolean done = (boolean) diskClient.ping(Version1, RequestMethod.GET,AuthType.FREE, ServiceType.DISK);
+        boolean done = (boolean) diskClient.ping(VERSION_1, RequestMethod.GET,AuthType.FREE, Service.ServiceType.DISK);
         if(done) System.out.println("OK!");
         else System.out.println("Failed!");
         Menu.anyKeyToContinue(br);
     }
 
     public static void ping(BufferedReader br){
-        Object rest = diskClient.ping(Version1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+        Object rest = diskClient.ping(VERSION_1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
         if(rest!=null) System.out.println("OK! "+rest+" KB/requests are available.");
         else System.out.println("Failed!");
 
@@ -127,14 +134,14 @@ public class StartDiskClient {
     public static void put(BufferedReader br){
         String fileName = getFileName(br);
         String dataResponse = diskClient.put(fileName);
-        showPutResult(dataResponse, ApiNames.Put);
+        showPutResult(dataResponse, DiskApiNames.PUT);
         Menu.anyKeyToContinue(br);
     }
 
     public static void carve(BufferedReader br){
         String fileName = getFileName(br);
         String dataResponse = diskClient.carve(fileName);
-        showPutResult(dataResponse,ApiNames.Carve);
+        showPutResult(dataResponse, ApipApiNames.Carve);
         Menu.anyKeyToContinue(br);
     }
 
