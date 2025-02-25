@@ -10,8 +10,6 @@ import initial.Initiator;
 import server.ApipApiNames;
 import server.HttpRequestChecker;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 import appTools.Settings;
 
 import javax.servlet.ServletException;
@@ -22,7 +20,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import feip.feipData.Service;
 
 @WebServlet(name = ApipApiNames.NEW_CASH_BY_FIDS, value = "/"+ ApipApiNames.SN_20+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NEW_CASH_BY_FIDS)
 public class NewCashByFids extends HttpServlet {
@@ -70,7 +67,7 @@ public class NewCashByFids extends HttpServlet {
             switch (webhookRequestBody.getOp()) {
                 case Strings.SUBSCRIBE -> {
 //                    saveSubscribe(webhookRequestBody,settings);
-                    webhookHandler.put(hookUserId, webhookRequestBody);
+                    webhookHandler.putWebhookRequestBody(hookUserId, webhookRequestBody);
 
                     dataMap.put(Strings.OP, Strings.SUBSCRIBE);
                     dataMap.put(Strings.HOOK_USER_ID, hookUserId);
@@ -85,7 +82,7 @@ public class NewCashByFids extends HttpServlet {
                 }
                 case Strings.CHECK -> {
 //                    String subscription = getWebhookFromRedis(webhookRequestBody.getUserId());
-                    WebhookHandler.WebhookRequestBody subscription = (WebhookHandler.WebhookRequestBody) webhookHandler.get(webhookRequestBody.getUserId());
+                    WebhookHandler.WebhookRequestBody subscription = webhookHandler.getWebhookRequestBody(webhookRequestBody.getUserId());
                     dataMap.put(Strings.OP, Strings.CHECK);
                     if (subscription == null) {
                         dataMap.put(Strings.FOUND, Values.FALSE);

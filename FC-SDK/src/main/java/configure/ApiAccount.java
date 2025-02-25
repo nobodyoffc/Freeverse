@@ -125,18 +125,22 @@ public class ApiAccount {
     }
 
 
-    public Object connectApi(ApiProvider apiProvider, byte[] symKey) {
+    public Object connectApi(ApiProvider apiProvider, byte[] symKey){
 
         if (!checkApiGeneralParams(apiProvider)) return null;
-
-        return switch (apiProvider.getType()){
-            case APIP -> connectApip(apiProvider,symKey,null,null);
-            case NASA_RPC ->  connectNaSaRPC(symKey);
-            case ES -> connectEs(symKey);
-            case REDIS -> connectRedis();
-            case DISK -> connectDisk(apiProvider,symKey,apipClient,null,null);
-            default -> connectOtherApi(apiProvider, symKey);
-        };
+        try {
+            return switch (apiProvider.getType()) {
+                case APIP -> connectApip(apiProvider, symKey, null, null);
+                case NASA_RPC -> connectNaSaRPC(symKey);
+                case ES -> connectEs(symKey);
+                case REDIS -> connectRedis();
+                case DISK -> connectDisk(apiProvider, symKey, apipClient, null, null);
+                default -> connectOtherApi(apiProvider, symKey);
+            };
+        }catch (Exception e){
+            e.printStackTrace();
+            return null;
+        }
     }
 
 
@@ -840,7 +844,6 @@ public class ApiAccount {
 
         if(!checkApipProvider(apiProvider,apiUrl)){
             log.debug("Failed to get service from {}", apiProvider.getApiUrl());
-            System.out.println("Failed to get APIP service.");
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
         }

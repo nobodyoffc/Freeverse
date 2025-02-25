@@ -154,5 +154,100 @@ public class FieldNames {
     public static final String BALANCE = "balance";
     public static final String SESSION_KEY_CIPHER = "sessionKeyCipher";
     public static final String ID_SESSION_NAME = "idSessionName";
+
+    public static final String SECRET_ID = "secretId";
+    public static final String ACCOUNT_ID = "accountId";
+    public static final String CONTACT_ID = "contactId";
+    public static final String CID_ID = "cidId";
+    public static final String DISK_ID = "diskId";
+    public static final String GROUP_ID = "groupId";
+    public static final String HAT_ID = "hatId";
+    public static final String MAIL_ID = "mailId";
+    public static final String NONCE_ID = "nonceId";
+    public static final String MEMPOOL_ID = "mempoolId";
+    public static final String WEBHOOK_ID = "webhookId";
+    public static final String TALK_ID = "talkId";
+    public static final String TALK_UNIT_ID = "talkUnitId";
+    public static final String TEAM_ID = "teamId";
+
+    public static final String ALG = "alg";
+    public static final String CIPHER = "cipher";
+    public static final String SECRET_IDS = "secretIds";
+    public static final String CONTACT_IDS = "contactIds";
+    public static final String BIDS = "bids";
+    public static final String CONTAIN = "contain";
+
+    public static final String DOWNLOADS = "downloads";
+
+    public static final String AIDS = "aids";
+
+    public static final String RATE = "rate";
+
+    public static final String CODE_IDS = "codeIds";
+
+    public static final String GIDS = "gids";
+
+    public static final String HOMEPAGES = "homepages";
+
+    public static final String MAIL_IDS = "mailIds";
+
+    public static final String CIPHER_SEND = "cipherSend";
+
+    public static final String CIPHER_RECI = "cipherReci";
+
+    public static final String TEXT_ID = "textId";
+
+    public static final String OID = "oid";
+
+    public static final String NAMES = "names";
+
+    public static final String PROOF_ID = "proofId";
+
+    public static final String PROOF_IDS = "proofIds";
+
+    public static final String TITLE = "title";
+
+    public static final String COSIGNERS = "cosigners";
+
+    public static final String TRANSFERABLE = "transferable";
+
+    public static final String ALL_SIGNS_REQUIRED = "allSignsRequired";
+
+    public static final String PIDS = "pids";
+
+    public static final String PRE_DID = "preDid";
+
+    public static final String FILE_URLS = "fileUrls";
+
+    public static final String PARAMS = "params";
+
+    public static final String SIDS = "sids";
+
+    public static final String TOKEN_ID = "tokenId";
+
+    public static final String ISSUE_TO = "issueTo";
+
+    public static final String TRANSFER_TO = "transferTo";
+
+    public static final String TOKEN_IDS = "tokenIds";
+
+    public static final String MAX_AMT_PER_ISSUE = "maxAmtPerIssue";
+
+    public static final String MIN_CDD_PER_ISSUE = "minCddPerIssue";
+
+    public static final String MAX_ISSUES_PER_ADDR = "maxIssuesPerAddr";
+
+    public static final String DECIMAL = "decimal";
+
+    public static final String CLOSABLE = "closable";
+
+    public static final String OPEN_ISSUE = "openIssue";
+
+    public static final String CONSENSUS_ID = "consensusId";
+
+    public static final String CAPACITY = "capacity";
+    public static final String LANG = "lang";
+    public static final String LANGS = "langs";
+
 }
 

@@ -59,7 +59,7 @@ public class MempoolHandler extends Handler<Object>{
     }
 
     public MempoolHandler(Settings settings) {
-        super(settings,HandlerType.MEMPOOL, false);
+        super(settings,HandlerType.MEMPOOL);
         this.nasaClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
         this.apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         this.esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);

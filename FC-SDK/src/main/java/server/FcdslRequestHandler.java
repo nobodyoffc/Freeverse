@@ -167,7 +167,8 @@ public class FcdslRequestHandler {
             return null;
         }
 
-        replyBody.setTotal((long) result.hits().hits().size());
+        if(result.hits().total()!=null)
+            replyBody.setTotal(result.hits().total().value());
 
         List<Hit<T>> hitList = result.hits().hits();
         if(hitList.size()==0){
@@ -184,6 +185,8 @@ public class FcdslRequestHandler {
 
         if(sortList.size()>0)
             replyBody.setLast(sortList);
+
+        replyBody.setGot((long)tList.size());
 
         return tList;
     }
@@ -238,7 +241,7 @@ public class FcdslRequestHandler {
         List<T> meetList = doRequestForList(indexName, tClass, filterField, filterValue, exceptField, exceptValue, sort, request, response, authType);
         if (meetList == null) return;
 
-        replyBody.replySingleDataSuccessHttp(meetList,response);
+        replyBody.reply0SuccessHttp(meetList,response);
     }
 
     @Nullable
@@ -814,14 +817,14 @@ public class FcdslRequestHandler {
                 try {
                     valueList.add(FieldValue.of(Double.parseDouble(str)));
                 }catch(Exception e){
-                    replyBody.replyHttp(CodeMessage.Code1012BadQuery, null);
+                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",str);
                     return null;
                 }
             }else{
                 try {
                     valueList.add(FieldValue.of(Long.parseLong(str)));
                 }catch(Exception e){
-                    replyBody.replyHttp(CodeMessage.Code1012BadQuery, null);
+                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",str);
                     return null;
                 }
             }

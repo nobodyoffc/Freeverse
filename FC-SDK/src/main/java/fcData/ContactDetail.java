@@ -113,6 +113,7 @@ public class ContactDetail extends FcEntity {
                 ContactDetail decryptedDetail = JsonTools.fromJson(decryptedContent, ContactDetail.class);
                 
                 if (decryptedDetail != null) {
+                    decryptedDetail.setContactId(contact.getContactId());
                     decryptedDetail.setUpdateHeight(contact.getLastHeight());
                     return decryptedDetail;
                 }

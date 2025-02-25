@@ -27,7 +27,6 @@ import feip.feipData.serviceParams.*;
 import handlers.*;
 import nasa.NaSaRpcClient;
 
-import org.bouncycastle.asn1.dvcs.ServiceType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -45,7 +44,9 @@ import tools.http.AuthType;
 import tools.http.RequestMethod;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -53,7 +54,6 @@ import static appTools.Inputer.askIfYes;
 import static appTools.Inputer.chooseOneFromList;
 import static configure.Configure.*;
 import static feip.feipData.Service.ServiceType.*;
-import static handlers.Handler.HandlerType.MEMPOOL;
 import static server.ApipApiNames.VERSION_1;
 import static constants.Constants.UserDir;
 import static constants.Strings.*;
@@ -94,6 +94,7 @@ public class Settings {
     private Service.ServiceType serverType;
     private Map<String,Long> bestHeightMap;
     private Service service;
+    private String clientName;
 
     private String sid; //For server
     private String mainFid; //For Client
@@ -110,13 +111,14 @@ public class Settings {
     private List<String> apiList;
     private String dbDir;
 
-    public Settings(Configure configure) {
+    public Settings(Configure configure, String clientName) {
         if(configure!=null) {
             this.config = configure;
             this.br = configure.getBr();
             freeApiListMap = configure.getFreeApiListMap();
             clientGroups = new HashMap<>();
             checkDbDir(null);
+            this.clientName = clientName;
         }
     }
 
@@ -176,18 +178,15 @@ public class Settings {
     public Block getBestBlock(){
         ElasticsearchClient esClient = null;
         ApipClient apipClient = null;
-        NaSaRpcClient naSaRpcClient = null;
-        if(getClient(NASA_RPC)!=null)
-            naSaRpcClient = (NaSaRpcClient)getClient(NASA_RPC);
         if(getClient(APIP)!=null)
             apipClient = (ApipClient)getClient(APIP);
         if(getClient(ES)!=null)
             esClient = (ElasticsearchClient)getClient(ES);
-        return getBestBlock(jedisPool,esClient,apipClient,naSaRpcClient);
+        return getBestBlock(null,apipClient,esClient,null);
     }
 
 
-    public static Block getBestBlock(JedisPool jedisPool,ElasticsearchClient esClient,ApipClient apipClient,NaSaRpcClient naSaRpcClient) {
+    public static Block getBestBlock(JedisPool jedisPool,ApipClient apipClient,ElasticsearchClient esClient,NaSaRpcClient naSaRpcClient) {
 
         if(jedisPool!=null){
             try(Jedis jedis = jedisPool.getResource()) {
@@ -252,7 +251,7 @@ public class Settings {
         }
 
         if(apipClient!=null){
-            return apipClient.getBestHeight();
+            return apipClient.bestHeight();
         }
 
         if(esClient!=null) {
@@ -412,9 +411,6 @@ public class Settings {
             for(Object module: runningModules){
                 if(module instanceof Handler<?> handler){
                     handler.close();
-                }else if(module instanceof ServiceType serviceType){
-                    // ServiceType is an enum, no need to switch on it
-                    // Just close any resources if needed
                 }
             }
         } catch (IOException e) {
@@ -724,16 +720,16 @@ public class Settings {
         return service;
     }
 
-    private  void setInitForServer(String sid, Configure config, BufferedReader br) {
-        this.config= config;
-        this.br = br;
-        if(sid==null) {
-            System.out.println("No service yet. We will set it later.");
-            Menu.anyKeyToContinue(br);
-        }
-        else this.sid = sid;
-        freeApiListMap = config.getFreeApiListMap();
-    }
+    // private  void setInitForServer(String sid, Configure config, BufferedReader br) {
+    //     this.config= config;
+    //     this.br = br;
+    //     if(sid==null) {
+    //         System.out.println("No service yet. We will set it later.");
+    //         Menu.anyKeyToContinue(br);
+    //     }
+    //     else this.sid = sid;
+    //     freeApiListMap = config.getFreeApiListMap();
+    // }
 
     private  void writeServiceToRedis(Service service, Class<? extends Params> paramsClass) {
         try(Jedis jedis = jedisPool.getResource()) {
@@ -776,22 +772,19 @@ public class Settings {
     }
 
 
-    private  void initService(String accountAlias, Service.ServiceType type, String apipAccountId, byte[] symKey, Configure config) {
-        ApiAccount apiAccount = config.checkAPI(apipAccountId, mainFid, type,symKey);
-        switch (type){
-            case APIP,TALK,SWAP_HALL,MAP -> apiAccount = checkIfMainFidIsApiAccountUser(symKey,config,br,apiAccount, mainFid);
-        }
-        if(apiAccount.getClient()!=null){
-            apipAccountId=apiAccount.getId();
-            ClientGroup clientGroup = clientGroups.get(accountAlias);
-            clientGroup.addClient(apipAccountId,apiAccount.getClient());
-//            aliasAccountMap.put(accountAlias,apiAccount);
-//            aliasAccountIdMap.put(accountAlias,apipAccountId);
-//            aliasClientMap.put(accountAlias,apiAccount.getClient());
-            if(type.equals(APIP))config.setApipClient((ApipClient) apiAccount.getClient());
-        }
-        else System.out.println("Failed to connect service:"+accountAlias);
-    }
+    // private  void initService(String accountAlias, Service.ServiceType type, String apipAccountId, byte[] symKey, Configure config) {
+    //     ApiAccount apiAccount = config.checkAPI(apipAccountId, mainFid, type,symKey);
+    //     switch (type){
+    //         case APIP,TALK,SWAP_HALL,MAP -> apiAccount = checkIfMainFidIsApiAccountUser(symKey,config,br,apiAccount, mainFid);
+    //     }
+    //     if(apiAccount.getClient()!=null){
+    //         apipAccountId=apiAccount.getId();
+    //         ClientGroup clientGroup = clientGroups.get(accountAlias);
+    //         clientGroup.addClient(apipAccountId,apiAccount.getClient());
+    //         if(type.equals(APIP))config.setApipClient((ApipClient) apiAccount.getClient());
+    //     }
+    //     else System.out.println("Failed to connect service:"+accountAlias);
+    // }
 
     public void writeToFile(String fid, String oid){
         fileName = FileTools.makeFileName(fid, oid, SETTINGS, DOT_JSON);
@@ -816,7 +809,7 @@ public class Settings {
         }
     }
 
-    public void setting(byte[] symKey, BufferedReader br, @Nullable Service.ServiceType serviceTypeOnlyForServer) {
+    public void setting(BufferedReader br, @Nullable Service.ServiceType serviceTypeOnlyForServer) {
         System.out.println("Setting...");
         while (true) {
             Menu menu = new Menu();
@@ -830,7 +823,8 @@ public class Settings {
                     "Delete API account",
                     "Reset Default APIs",
                     "Watching FIDs",
-                    "Check settings"
+                    "Check settings",
+                    "Remove Me"
             );
             menu.show();
             int choice = menu.choose(br);
@@ -850,11 +844,64 @@ public class Settings {
                 case 8 -> resetApi(symKey,apipClient);
                 case 9 -> watchingFids(apipClient, br);
                 case 10 -> checkSetting(br);
+                case 11 -> RemoveMe(br);
                 case 0 -> {
                     return;
                 }
             }
         }
+    }
+
+    public void RemoveMe(BufferedReader br) {
+        System.out.println("Removing user...");
+        
+        // Get the password to confirm deletion
+        if (!checkPassword(br, symKey, config)) {
+            System.out.println("Wrong password. Removal cancelled.");
+            return;
+        }
+
+        // Remove from configureMap
+        if(!Inputer.askIfYes(br, "Are you sure you want to remove "+mainFid+"? \nThis action cannot be undone."))
+            return;
+
+        config.getFidCipherMap().remove(mainFid);
+        
+        if(Inputer.askIfYes(br, "Remove from the owner list?")) {
+            config.getOwnerList().remove(mainFid);
+        }
+
+        for(ApiAccount apiAccount : config.getApiAccountMap().values()) {
+            if(apiAccount.getUserId()!=null && apiAccount.getUserId().equals(mainFid)) {
+                config.getApiAccountMap().remove(apiAccount.getId());
+            }
+        }
+
+        for(ServiceMask serviceMask : config.getMyServiceMaskMap().values()) {
+            if(serviceMask.getDealer().equals(mainFid)) {
+                config.getMyServiceMaskMap().remove(serviceMask.getSid());
+            }
+        }
+        
+        saveConfig();
+
+        // Delete settings file
+        String midName=null;
+        if((clientName!=null) && (!clientName.isEmpty())) midName = clientName;
+        else midName = sid;
+        String fileName = FileTools.makeFileName(mainFid,midName , SETTINGS, DOT_JSON);
+
+        String settingsPath = Path.of(getConfDir(), fileName).toString();
+        File settingsFile = new File(settingsPath);
+        if (settingsFile.exists()) {
+            if (settingsFile.delete()) {
+                System.out.println("Settings file deleted successfully.");
+            } else {
+                System.out.println("Failed to delete settings file.");
+            }
+        }
+
+        System.out.println("User is deleted successfully.");
     }
 
     public void watchingFids(ApipClient apipClient, BufferedReader br) {
@@ -1382,7 +1429,7 @@ public class Settings {
             case TALK_ID -> handlers.put(type, new TalkIdHandler(this));
             case TALK_UNIT -> handlers.put(type, new TalkUnitHandler(this));
             case ACCOUNT -> handlers.put(type, new AccountHandler(this));
-            case SECRETE -> handlers.put(type,new SecretHandler(this));
+            case SECRET -> handlers.put(type,new SecretHandler(this));
             case MEMPOOL -> handlers.put(type,new MempoolHandler(this));
             case WEBHOOK -> handlers.put(type,new WebhookHandler(this));
             default -> throw new IllegalArgumentException("Unexpected handler type: " + type);

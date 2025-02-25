@@ -12,12 +12,27 @@ public class Menu {
     private int itemNum = 0;
     private String title;
     private List<MenuItem> items;
+    private Runnable exitAction;
+
     public Menu() {
     }
+
     public Menu(String title) {
         this.title = title;
         this.items = new ArrayList<>();
+        this.exitAction = () -> {};
     }
+    public Menu(String title, Runnable close) {
+        this.title = title;
+        this.items = new ArrayList<>();
+        this.exitAction = close;
+    }
+
+//    public Menu(String title, Runnable exitAction) {
+//        this.title = title;
+//        this.items = new ArrayList<>();
+//        this.exitAction = exitAction;
+//    }
 
     public static void anyKeyToContinue(BufferedReader br) {
         System.out.println(ANY_KEY);
@@ -157,6 +172,7 @@ public class Menu {
                 int choice = Integer.parseInt(input);
 
                 if (choice == 0) {
+                    exitAction.run();
                     return;
                 } else if (choice > 0 && choice <= items.size()) {
                     items.get(choice - 1).getAction().run();

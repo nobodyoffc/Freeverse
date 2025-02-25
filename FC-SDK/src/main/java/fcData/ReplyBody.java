@@ -291,14 +291,7 @@ public class ReplyBody extends FcEntity {
     }
 
     public void reply0SuccessHttp(Object data, HttpServletResponse response) {
-        code = CodeMessage.Code0Success;
-        message = CodeMessage.getMsg(code);
-        this.data = data;
-        try {
-            response.getWriter().write(this.toNiceJson());
-        } catch (IOException ignore) {
-            System.out.println("Failed to reply success.");
-        }
+        replyHttp(CodeMessage.Code0Success,data,response);
     }
 
     public void replyOtherErrorHttp(String otherError, Object data, HttpServletResponse response) {
@@ -327,6 +320,7 @@ public class ReplyBody extends FcEntity {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        clean();
     }
 
     public void responseFinalJsonHttp(HttpServletResponse response) {

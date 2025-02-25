@@ -21,9 +21,9 @@ public class ConstructParser {
 		
 		Gson gson = new Gson();
 
-		ProtocolData protocolRaw = new ProtocolData();
+		ProtocolOpData protocolRaw = new ProtocolOpData();
 		try {
-			protocolRaw = gson.fromJson(gson.toJson(feip.getData()), ProtocolData.class);
+			protocolRaw = gson.fromJson(gson.toJson(feip.getData()), ProtocolOpData.class);
 			if(protocolRaw==null)return null;
 		}catch(Exception e) {
 			e.printStackTrace();
@@ -131,10 +131,10 @@ public class ConstructParser {
 	public ServiceHistory makeService(OpReturn opre, Feip feip) {
 		
 		Gson gson = new Gson();
-		ServiceData serviceRaw = new ServiceData();
+		ServiceOpData serviceRaw = new ServiceOpData();
 
 		try {
-			serviceRaw = gson.fromJson(gson.toJson(feip.getData()), ServiceData.class);
+			serviceRaw = gson.fromJson(gson.toJson(feip.getData()), ServiceOpData.class);
 			if(serviceRaw==null)return null;
 		}catch(Exception e) {
 			return null;
@@ -237,10 +237,10 @@ public class ConstructParser {
 		
 		Gson gson = new Gson();
 
-		AppData appRaw = new AppData();
+		AppOpData appRaw = new AppOpData();
 
 		try {
-			appRaw = gson.fromJson(gson.toJson(feip.getData()), AppData.class);
+			appRaw = gson.fromJson(gson.toJson(feip.getData()), AppOpData.class);
 			if(appRaw==null)return null;
 		}catch(Exception e) {
 			return null;
@@ -344,10 +344,10 @@ public class ConstructParser {
 	public CodeHistory makeCode(OpReturn opre, Feip feip) {
 		
 		Gson gson = new Gson();
-		CodeData codeRaw = new CodeData();
+		CodeOpData codeRaw = new CodeOpData();
 
 		try {
-			codeRaw = gson.fromJson(gson.toJson(feip.getData()), CodeData.class);
+			codeRaw = gson.fromJson(gson.toJson(feip.getData()), CodeOpData.class);
 			if(codeRaw==null)return null;
 		}catch(Exception e) {
 			return null;

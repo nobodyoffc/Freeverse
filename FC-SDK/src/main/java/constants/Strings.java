@@ -11,6 +11,8 @@ public class Strings {
     public static final String TOMCAT_BASE_PATH = "tomcatBasePath";
     public static final String ES_IP = "esIp";
     public static final String SIGN = "sign";
+    public static final String GOOD = "good";
+    public static final String BAD = "bad";
     public static final String ES_PORT = "esPort";
 
     public static final String SCAN_MEMPOOL = "scanMempool";

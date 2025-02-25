@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static constants.Constants.UserHome;
 import static startFEIP.IndicesFEIP.createAllIndices;
 import static startFEIP.IndicesFEIP.deleteAllIndices;
 
@@ -45,7 +44,7 @@ public class StartFEIP {
 	public static Map<String,Object>  settingMap = new HashMap<> ();
 
 	static {
-		settingMap.put(Settings.LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
+//		settingMap.put(Settings.LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 		settingMap.put(Settings.OP_RETURN_PATH,"/home/user1/freeverse/opreturn");
 	}
 
@@ -54,7 +53,7 @@ public class StartFEIP {
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules);
 		if(settings ==null)return;
-		String opReturnJsonPath = (String) settingMap.get(Settings.OP_RETURN_PATH);
+		String opReturnJsonPath = (String) settings.getSettingMap().get(Settings.OP_RETURN_PATH);
 		byte[] symKey = settings.getSymKey();
 
 		//Prepare API clients
@@ -79,7 +78,7 @@ public class StartFEIP {
 			case 2 -> restartFromFile(esClient, opReturnJsonPath);
 			case 3 -> restartSinceHeight(opReturnJsonPath, br, esClient);
 			case 4 -> reparseIdList(br, esClient);
-			case 5 -> settings.setting(symKey, br, null);
+			case 5 -> settings.setting(br, null);
 			case 0 -> settings.close();
 			default -> {
 			}

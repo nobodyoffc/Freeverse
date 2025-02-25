@@ -1,6 +1,6 @@
 package startAPIP;
 
-import feip.feipData.ServiceData;
+import feip.feipData.ServiceOpData;
 
 public class Feip5 {
 	public final String type = "feip";
@@ -9,12 +9,12 @@ public class Feip5 {
 	public  final String name = "service";
 	public  final String pid = "";
 	
-	private ServiceData data;
+	private ServiceOpData data;
 	
-	public ServiceData getData() {
+	public ServiceOpData getData() {
 		return data;
 	}
-	public void setData(ServiceData data) {
+	public void setData(ServiceOpData data) {
 		this.data = data;
 	}
 }

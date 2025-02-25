@@ -105,26 +105,8 @@ public class StartDiskManager {
         //Check indices in ES
         checkEsIndices(esClient);
 
-         AccountHandler accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
-        // accountHandler.start();
+        AccountHandler accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
 
-        //Check API prices
-//        Order.setNPrices(sid, ApiNames.DiskApiList, jedisPool, br,false);
-
-        //Check user balance
-//        Counter.checkUserBalance(sid, jedisPool, esClient, br);
-
-        //Check webhooks for new orders.
-//        if(settings.getSettingMap().get(Settings.FROM_WEBHOOK).equals(Boolean.TRUE))
-//            if (!Order.checkWebhook(ApiNames.NewCashByFids, params, apipClient.getApiAccount(), br, jedisPool)){
-//                close();
-//                return;
-//            }
-//
-//        Rewarder.checkRewarderParams(sid, params, jedisPool, br);
-//
-//        startCounterThread(symKey, settings,params);
-        
         //Show the main menu
         Menu menu = new Menu();
         menu.setTitle("Disk Manager");
@@ -145,12 +127,12 @@ public class StartDiskManager {
                 case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symKey, DiskParams.class).menu();
 //                case 2 -> new OrderManager(service, counter, br, esClient, jedisPool).menu();
 //                case 3 -> new BalanceManager(service, br, esClient,jedisPool).menu();
-                case 2 -> accountHandler.menu(br);
+                case 2 -> accountHandler.menu(br, false);
                 case 3 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
                 case 4 -> Order.resetNPrices(br, sid, jedisPool);
                 case 5 -> manageIndices(br);//recreateAllIndices(esClient, br);
-                case 6 -> settings.setting(symKey, br, serverType);
+                case 6 -> settings.setting(br, serverType);
                 case 0 -> {
 //                    if (counter != null) counter.close();
                     accountHandler.close();

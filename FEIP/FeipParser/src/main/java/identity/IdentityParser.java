@@ -22,9 +22,9 @@ public class IdentityParser {
 	public CidHist makeCid(OpReturn opre, Feip feip) throws ElasticsearchException, IOException {
 
 		Gson gson = new Gson();
-		CidData cidRaw;
+		CidOpData cidRaw;
 		try {
-			cidRaw = gson.fromJson(gson.toJson(feip.getData()), CidData.class);
+			cidRaw = gson.fromJson(gson.toJson(feip.getData()), CidOpData.class);
 		}catch(Exception e) {
 			return null;
 		}
@@ -60,9 +60,9 @@ public class IdentityParser {
 	public CidHist makeNobody(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
-		NobodyData nobodyRaw;
+		NobodyOpData nobodyRaw;
 		try {
-			nobodyRaw = gson.fromJson(gson.toJson(feip.getData()), NobodyData.class);
+			nobodyRaw = gson.fromJson(gson.toJson(feip.getData()), NobodyOpData.class);
 		}catch(Exception e) {
 			return null;
 		}
@@ -92,9 +92,9 @@ public class IdentityParser {
 	public CidHist makeMaster(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
-		MasterData masterRaw;
+		MasterOpData masterRaw;
 		try {
-			masterRaw = gson.fromJson(gson.toJson(feip.getData()), MasterData.class);
+			masterRaw = gson.fromJson(gson.toJson(feip.getData()), MasterOpData.class);
 		}catch(Exception e) {
 			return null;
 		}
@@ -123,9 +123,9 @@ public class IdentityParser {
 	public CidHist makeHomepage(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
-		HomepageData homepageRaw;
+		HomepageOpData homepageRaw;
 		try {
-			homepageRaw = gson.fromJson(gson.toJson(feip.getData()), HomepageData.class);
+			homepageRaw = gson.fromJson(gson.toJson(feip.getData()), HomepageOpData.class);
 		}catch(Exception e) {
 			return null;
 		}
@@ -156,9 +156,9 @@ public class IdentityParser {
 	public CidHist makeNoticeFee(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
-		NoticeFeeData noticeFeeRaw;
+		NoticeFeeOpData noticeFeeRaw;
 		try {
-			noticeFeeRaw = gson.fromJson(gson.toJson(feip.getData()), NoticeFeeData.class);
+			noticeFeeRaw = gson.fromJson(gson.toJson(feip.getData()), NoticeFeeOpData.class);
 		}catch(Exception e) {
 			return null;
 		}
@@ -183,9 +183,9 @@ public class IdentityParser {
 
 		if (opre.getCdd() < StartFEIP.CddRequired) return null;
 		Gson gson = new Gson();
-		ReputationData reputationRaw;
+		ReputationOpData reputationRaw;
 		try {
-			reputationRaw = gson.fromJson(gson.toJson(feip.getData()), ReputationData.class);
+			reputationRaw = gson.fromJson(gson.toJson(feip.getData()), ReputationOpData.class);
 		}catch(Exception e) {
 			return null;
 		}

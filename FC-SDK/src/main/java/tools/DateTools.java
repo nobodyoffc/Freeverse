@@ -7,6 +7,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class DateTools {
+    public static final String FULL_FORMAT = "yyyy/MM/dd HH:mm:ss";
+    public static final String SHORT_FORMAT = "dd/MM/yyyy";
     public static String longToTime(long timestamp,String format) {
         Date date = new Date(timestamp);
         return getNiceDate(date,format);
@@ -27,8 +29,7 @@ public class DateTools {
     }
     @NotNull
     public static String getNiceDate(Date date) {
-        String pattern ="yyyy/MM/dd HH:mm:ss";
-        return getNiceDate(date, pattern);
+        return getNiceDate(date, FULL_FORMAT);
     }
 
     @NotNull

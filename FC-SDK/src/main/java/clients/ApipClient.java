@@ -72,7 +72,7 @@ public class ApipClient extends Client {
             return;
         }
         if (Inputer.askIfYes(br, "Assign the master for " + fid + "?"))
-            FeipClient.setMaster(fid, priKeyCipher, bestHeight, symKey, apipClient, br);
+            FeipClient.setMaster(fid, priKeyCipher, bestHeight, symKey, this, br);
     }
 
     //OpenAPIs: Ping(Client),GetService(Client),SignIn,SignInEccAPI,Totals
@@ -768,26 +768,49 @@ public class ApipClient extends Client {
         return objectToList(data,Secret.class);
     }
 
-    public List<Secret> freshSecretSinceHeight(String myFid, Long lastHeight, Integer size, final List<String> last, Boolean active) {
+//    public List<Secret> freshSecretSinceHeight(String myFid, Long lastHeight, Integer size, List<String> last, Boolean active) {
+//        Fcdsl fcdsl = new Fcdsl();
+//        fcdsl.setIndex(SECRET);
+//        String heightStr = String.valueOf(lastHeight);
+//        fcdsl.addNewQuery().addNewRange().addNewFields(LAST_HEIGHT).addGt(heightStr);
+//
+//        fcdsl.getQuery().addNewTerms().addNewFields(OWNER).addNewValues(myFid);
+//        if(active!=null) {
+//            fcdsl.getQuery().addNewMatch().addNewFields(ACTIVE).addNewValue(String.valueOf(active));
+//        }
+//        fcdsl.addSize(size);
+//
+//        fcdsl.addSort(LAST_HEIGHT,Strings.ASC).addSort(Secret_Id,ASC);
+//
+//        if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
+//
+//        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.FC_SIGN_BODY);
+//
+//        Object data = result.getData();
+//        return objectToList(data, Secret.class);
+//    }
+
+
+    public <T> List<T> loadSinceHeight(String index,String idField,String sortField,String termField,String myFid, Long lastHeight, Integer size, List<String> last, Boolean active,Class<T> tClass) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex(SECRET);
+        fcdsl.setIndex(index);
         String heightStr = String.valueOf(lastHeight);
         fcdsl.addNewQuery().addNewRange().addNewFields(LAST_HEIGHT).addGt(heightStr);
 
-        fcdsl.getQuery().addNewTerms().addNewFields(OWNER).addNewValues(myFid);
+        fcdsl.getQuery().addNewTerms().addNewFields(termField).addNewValues(myFid);
         if(active!=null) {
             fcdsl.getQuery().addNewMatch().addNewFields(ACTIVE).addNewValue(String.valueOf(active));
         }
         fcdsl.addSize(size);
 
-        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(Secret_Id,ASC);
+        fcdsl.addSort(sortField,Strings.ASC).addSort(idField,ASC);
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 
         ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
         Object data = result.getData();
-        return objectToList(data, Secret.class);
+        return objectToList(data, tClass);
     }
 
     public Map<String, Mail> mailByIds(RequestMethod requestMethod, AuthType authType, String... ids){
@@ -1216,7 +1239,7 @@ public class ApipClient extends Client {
         if(meetList==null || meetList.isEmpty())return;
         List<Cash> addingList = new ArrayList<>();
         List<String> removingIdList = new ArrayList<>();
-        Map<String, List<Cash>> result = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.FC_SIGN_BODY,fid);
+        Map<String, List<Cash>> result = unconfirmedCaches(RequestMethod.POST, AuthType.FC_SIGN_BODY,fid);
         if(result!=null){
             List<Cash> unconfirmedCashList = result.get(fid);
             if(unconfirmedCashList!=null){
@@ -1239,4 +1262,31 @@ public class ApipClient extends Client {
         }
     }
     
+    @Nullable
+    public <T> Map<String,T> loadOnChainItemByIds(String index, Class<T> tClass, String idFieldName, List<String> ids) {
+        if (ids == null || ids.isEmpty()) return null;
+        
+        // Create Fcdsl object
+        Fcdsl fcdsl = new Fcdsl();
+        fcdsl.setIndex(index);
+        fcdsl.addIds(ids);
+
+        // Make request
+        ReplyBody result = general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null || result.getData()==null) return null;
+        // Convert and return result
+        List<T> dataList = objectToList(result.getData(),tClass);
+        Map<String,T> resultMap = new HashMap<>();
+        for(T data : dataList){
+            try {
+                java.lang.reflect.Field field = data.getClass().getDeclaredField(idFieldName);
+                field.setAccessible(true);
+                String id = field.get(data).toString();
+                resultMap.put(id, data);
+            } catch (NoSuchFieldException | IllegalAccessException e) {
+                System.out.println("Error accessing " + idFieldName + " field: " + e.getMessage());
+            }
+        }
+        return resultMap;
+    }
 }

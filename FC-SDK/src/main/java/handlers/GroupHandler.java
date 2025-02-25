@@ -11,7 +11,7 @@ import clients.FeipClient;
 import constants.FieldNames;
 import fch.fchData.SendTo;
 import feip.feipData.Group;
-import feip.feipData.GroupData;
+import feip.feipData.GroupOpData;
 import feip.feipData.Service;
 import tools.Hex;
 import tools.JsonTools;
@@ -69,7 +69,7 @@ public class GroupHandler extends Handler {
     // 4. Public Methods - Main Interface
     public void menu() {
         byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
-        Menu menu = new Menu("Group");
+        Menu menu = new Menu("Group", this::close);
         menu.add("List", () -> handleListGroups(priKey, br));
         menu.add("Check", () -> checkGroup(br));
         menu.add("Create", () -> handleCreateGroup(priKey, br));
@@ -235,25 +235,25 @@ public class GroupHandler extends Handler {
     // 6. Group Operation Methods
     public String createGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList,
             String name, String desc, ApipClient apipClient, NaSaRpcClient nasaClient) {
-        GroupData data = GroupData.makeCreate(name, desc);
+        GroupOpData data = GroupOpData.makeCreate(name, desc);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
     public String updateGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList,
                                      Long cd, NaSaRpcClient nasaClient, String gid, String name, String desc, ApipClient apipClient) {
-        GroupData data = GroupData.makeUpdate(gid, name, desc);
+        GroupOpData data = GroupOpData.makeUpdate(gid, name, desc);
         return FeipClient.group(priKey, offLineFid, sendToList, cd, data, apipClient, nasaClient, null);
     }
     public String joinGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList,
             String gid, ApipClient apipClient, NaSaRpcClient nasaClient) {
-        GroupData data = GroupData.makeJoin(gid);
+        GroupOpData data = GroupOpData.makeJoin(gid);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
     public String leaveGroups(byte[] priKey, String offLineFid, List<SendTo> sendToList,
             List<String> gids, ApipClient apipClient, NaSaRpcClient nasaClient) {
-        GroupData data = GroupData.makeLeave(gids);
+        GroupOpData data = GroupOpData.makeLeave(gids);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
-    public String opGroup(byte[] priKey,String offLineFid,List<SendTo> sendToList,GroupData data,ApipClient apipClient,NaSaRpcClient nasaClient,BufferedReader br){
+    public String opGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList, GroupOpData data, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br){
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, br);
     }
 

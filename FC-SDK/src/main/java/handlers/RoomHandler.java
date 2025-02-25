@@ -46,7 +46,7 @@ public class RoomHandler extends Handler {
 
     // 4. Public Methods - Main Interface
     public void menu() {
-        Menu menu = new Menu("Room");
+        Menu menu = new Menu("Room", this::close);
         menu.add("List", () -> handleListRooms(br));
         menu.add("Create", () -> handleCreateRoom(br));
         menu.add("Join", () -> handleJoinRoom(br));

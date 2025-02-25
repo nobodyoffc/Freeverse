@@ -65,7 +65,7 @@ public class Home {
     public static final Object[] modules = new Object[]{
             Service.ServiceType.APIP,
             Handler.HandlerType.CASH,
-            Handler.HandlerType.SECRETE,
+            Handler.HandlerType.SECRET,
             Handler.HandlerType.CONTACT,
             Handler.HandlerType.MAIL
     };
@@ -125,12 +125,12 @@ public class Home {
                 case 6 -> keyAndAddress(myPubKey,myPriKeyCipher, symKey, br);
                 case 7 -> hash(br);
                 case 8 -> multiSign(myPriKeyCipher, symKey,apipClient,br);
-                case 9 -> secretHandler.menu();
-                case 10 -> contactHandler.menu();
+                case 9 -> secretHandler.menu(br, false);
+                case 10 -> contactHandler.menu(br, false);
                 case 11 -> mailHandler.menu();
                 case 12 -> switchAsWatchingFid(br);
                 case 13 -> {
-                    settings.setting(symKey,br,null);
+                    settings.setting(br,null);
                     symKey = settings.getSymKey();
                 }
                 case 0 -> {

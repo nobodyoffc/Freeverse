@@ -123,7 +123,7 @@ public class ClientGroup implements Serializable {
 
         switch (strategy) {
             case USE_FIRST -> {
-                return clientMap.get(accountIds.get(0));
+                return clientMap==null ?null:clientMap.get(accountIds.get(0));
             }
             case USE_ANY_VALID -> {
                 // Return first valid client found

@@ -28,10 +28,10 @@ public class PublishParser {
     public TokenHistory makeToken(OpReturn opre, Feip feip) {
 
         Gson gson = new Gson();
-        TokenData tokenRaw = new TokenData();
+        TokenOpData tokenRaw = new TokenOpData();
 
         try {
-            tokenRaw = gson.fromJson(gson.toJson(feip.getData()), TokenData.class);
+            tokenRaw = gson.fromJson(gson.toJson(feip.getData()), TokenOpData.class);
             if(tokenRaw==null)return null;
         }catch(com.google.gson.JsonSyntaxException e) {
             return null;
@@ -126,10 +126,10 @@ public class PublishParser {
     public ProofHistory makeProof(OpReturn opre, Feip feip) {
 
         Gson gson = new Gson();
-        ProofData proofRaw = new ProofData();
+        ProofOpData proofRaw = new ProofOpData();
 
         try {
-            proofRaw = gson.fromJson(gson.toJson(feip.getData()), ProofData.class);
+            proofRaw = gson.fromJson(gson.toJson(feip.getData()), ProofOpData.class);
             if(proofRaw==null)return null;
         }catch(com.google.gson.JsonSyntaxException e) {
             return null;
@@ -198,10 +198,10 @@ public class PublishParser {
 
         Gson gson = new Gson();
 
-        StatementData statementRaw = new StatementData();
+        StatementOpData statementRaw = new StatementOpData();
 
         try {
-            statementRaw = gson.fromJson(gson.toJson(feip.getData()), StatementData.class);
+            statementRaw = gson.fromJson(gson.toJson(feip.getData()), StatementOpData.class);
             if(statementRaw==null)return isValid;   
         }catch(com.google.gson.JsonSyntaxException e) {
             return isValid;
@@ -636,10 +636,10 @@ public class PublishParser {
 
         Gson gson = new Gson();
 
-        NidData nidRaw = new NidData();
+        NidOpData nidRaw = new NidOpData();
 
         try {
-            nidRaw = gson.fromJson(gson.toJson(feip.getData()), NidData.class);
+            nidRaw = gson.fromJson(gson.toJson(feip.getData()), NidOpData.class);
             if(nidRaw==null)return false;
         }catch(com.google.gson.JsonSyntaxException e) {
             return false;

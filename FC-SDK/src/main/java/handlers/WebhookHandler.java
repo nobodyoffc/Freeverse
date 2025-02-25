@@ -81,6 +81,12 @@ public class WebhookHandler extends Handler {
         initializeDatabase(dbPath);
     }
 
+    public void putWebhookRequestBody(String id, WebhookRequestBody item) {
+        put(id,item);
+    }
+    public WebhookRequestBody getWebhookRequestBody(String id) {
+        return (WebhookRequestBody) get(id);
+    }
     private void initializeDatabase(String dbPath) {
         // Initialize MapDB
         this.db = DBMaker.fileDB(dbPath + "/webhook.db")

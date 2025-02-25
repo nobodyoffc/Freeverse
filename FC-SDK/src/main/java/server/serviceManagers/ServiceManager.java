@@ -3,7 +3,7 @@ package server.serviceManagers;
 import clients.ApipClient;
 import feip.feipData.Feip;
 import feip.feipData.Service;
-import feip.feipData.ServiceData;
+import feip.feipData.ServiceOpData;
 import feip.feipData.serviceParams.Params;
 import appTools.Menu;
 import appTools.Shower;
@@ -90,7 +90,7 @@ public abstract class ServiceManager {
 
         Feip dataOnChain = setFcInfoForService();
 
-        ServiceData data = new ServiceData();
+        ServiceOpData data = new ServiceOpData();
 
         data.setOp(OpNames.PUBLISH);
 
@@ -140,7 +140,7 @@ public abstract class ServiceManager {
 
         Feip dataOnChain = setFcInfoForService();
 
-        ServiceData data = new ServiceData();
+        ServiceOpData data = new ServiceOpData();
 
         serviceToServiceData(service,data);
 
@@ -172,7 +172,7 @@ public abstract class ServiceManager {
     }
 
 
-    private void serviceToServiceData(Service service, ServiceData data) {
+    private void serviceToServiceData(Service service, ServiceOpData data) {
         data.setTypes(service.getTypes());
         data.setSid(service.getSid());
         data.setUrls(service.getUrls());
@@ -208,7 +208,7 @@ public abstract class ServiceManager {
 
         Feip dataOnChain = setFcInfoForService();
 
-        ServiceData data = new ServiceData();
+        ServiceOpData data = new ServiceOpData();
 
         data.setOp(op);
         data.setSid(service.getSid());

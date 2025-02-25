@@ -318,4 +318,15 @@ public class ObjectTools {
             return null;
         }
     }
+
+    public static <T> String getValueByFieldName(T item, String fieldName) throws Exception {
+        // Try direct method first
+        try {
+            return String.valueOf(item.getClass().getMethod(fieldName).invoke(item));
+        } catch (NoSuchMethodException e) {
+            // Try getter method
+            String getterMethod = "get" + fieldName.substring(0, 1).toUpperCase() + fieldName.substring(1);
+            return String.valueOf(item.getClass().getMethod(getterMethod).invoke(item));
+        }
+    }
 }

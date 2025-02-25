@@ -302,7 +302,7 @@ public class TalkClient extends Client{
             case 2 -> groupHandler.menu();
             case 3 -> teamHandler.menu();
             case 4 -> mailHandler.menu();
-            case 5 -> contactHandler.menu();
+            case 5 -> contactHandler.menu(br, false);
             case 6 -> cashHandler.menu();
             case 7 -> findTalkId(br);
             case 8 -> askKey(inputs[1],null,null,apipClient,br);
@@ -958,7 +958,7 @@ public class TalkClient extends Client{
 
         // 2. Search in contacts using ContactHandler
         if(results.isEmpty() || allResources) {
-            List<ContactDetail> contacts = contactHandler.findContactDetails(lowerSearchString);
+            List<ContactDetail> contacts = contactHandler.searchContacts(lowerSearchString);
             for (ContactDetail contact : contacts) {
                 if (contact.getCid() != null && contact.getCid().toLowerCase().contains(lowerSearchString)) {
                     results.add(TalkIdInfo.fromContact(contact));
@@ -994,7 +994,7 @@ public class TalkClient extends Client{
 
         // 2. Search in contacts using ContactHandler
         if(results.isEmpty() || allResources) {
-            List<ContactDetail> contacts = contactHandler.findContactDetails(searchString);
+            List<ContactDetail> contacts = contactHandler.searchContacts(searchString);
             for (ContactDetail contact : contacts) {
                 if (contact.getFid() != null && contact.getFid().toLowerCase().contains(lowerSearchString)) {
                     results.add(TalkIdInfo.fromContact(contact));

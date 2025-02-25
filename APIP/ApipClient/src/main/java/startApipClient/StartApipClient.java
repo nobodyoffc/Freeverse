@@ -102,7 +102,7 @@ public class StartApipClient {
                 case 11 -> crypto();
                 case 12 -> endpoint();
                 case 13 -> {
-                    settings.setting(symKey, br, null);
+                    settings.setting(br, null);
                     symKey = settings.getSymKey();
                 }
                 case 0 -> {

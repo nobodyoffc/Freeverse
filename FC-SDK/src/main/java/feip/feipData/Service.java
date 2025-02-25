@@ -2,6 +2,7 @@ package feip.feipData;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import constants.FieldNames;
 import feip.feipData.serviceParams.Params;
 import tools.StringTools;
 
@@ -78,7 +79,7 @@ public class Service {
 		service.closed = StringTools.parseBoolean(map.get(CLOSED));
 		if(map.get(CLOSE_STATEMENT)!=null)service.closeStatement = map.get(CLOSE_STATEMENT);
 
-		service.params = new Gson().fromJson(map.get(PARAMS),paramsClass);
+		service.params = new Gson().fromJson(map.get(FieldNames.PARAMS),paramsClass);
 
 		return service;
 	}

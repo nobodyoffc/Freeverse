@@ -12,7 +12,6 @@ import configure.ApiAccount;
 import configure.Configure;
 import feip.feipData.Service.ServiceType;
 import handlers.Handler;
-import handlers.NewContactHandler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -60,10 +59,10 @@ public class startContactClient {
         lastTimeMap = Client.loadLastTime(myFid,sid);
         if(lastTimeMap==null)lastTimeMap=new HashMap<>();
 
-        NewContactHandler contactHandler = new NewContactHandler(settings);
+        ContactHandler contactHandler = new ContactHandler(settings);
 
-        contactHandler.checkContacts(br);
+        contactHandler.freshOnChainContacts(br);
 
-        contactHandler.menu(br);
+        contactHandler.menu(br, false);
     }
 }

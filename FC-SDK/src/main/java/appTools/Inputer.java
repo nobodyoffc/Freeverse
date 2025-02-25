@@ -1,10 +1,10 @@
 package appTools;
 
 import crypto.KeyTools;
-import feip.feipData.AppData;
+import feip.feipData.AppOpData;
 import tools.BytesTools;
+import tools.DateTools;
 import tools.Hex;
-import tools.JsonTools;
 import tools.NumberTools;
 import tools.ObjectTools;
 import tools.StringTools;
@@ -30,7 +30,6 @@ public class Inputer {
 
     @SuppressWarnings("unused")
     private static char[] inputPassword(String ask) {
-        System.out.println(ask);
         Console console = System.console();
         if (console == null) {
             System.out.println("Couldn't get Console instance. Maybe you're running this from within an IDE, which doesn't support Console.");
@@ -38,7 +37,9 @@ public class Inputer {
         }
         return console.readPassword(ask);
     }
-
+//    public static char[] inputPassword(BufferedReader br, String ask) {
+//        return inputPassword(ask);
+//    }
     public static char[] inputPassword(BufferedReader br, String ask) {
         System.out.println(ask);
         char[] input = new char[64];
@@ -1177,7 +1178,7 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
                     newValue = createFromUserInput(reader, fieldType, "op", opFieldsMap);
                     if (newValue != null) field.set(instance, newValue);
                 } else {
-                    updateFromUserInput(reader, currentValue, "op", AppData.Op.class, opFieldsMap);
+                    updateFromUserInput(reader, currentValue, "op", AppOpData.Op.class, opFieldsMap);
                 }
             }
         } else {
@@ -1218,11 +1219,7 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
         }
     }
 
-    public static void main(String[] args) throws IOException, ReflectiveOperationException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        AppData appData = createFromInput(br, AppData.class);
-        System.out.println(JsonTools.toNiceJson(appData));
-    }
+
 
     public static <T> T chooseOneFromListShowingMultiField(
         List<T> values, 
@@ -1286,6 +1283,27 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
         int choice = inputInt(br, "Choose the number. 0 to skip:", values.size());
         if (choice == 0) return null;
         return values.get(choice - 1);
+    }
+
+    public static <T> List<T> chooseMultiFromListShowingMultiFieldBatch(
+        List<T> values, 
+        @Nullable List<String> showStringFieldNameList,
+        List<Integer> widthList,
+        String ask,
+        Integer startWith,
+        BufferedReader br,int batchSize) {
+        if(startWith==null)startWith=0;
+        if(batchSize<=0) return new ArrayList<>();
+
+        List<T> selectedItems = new ArrayList<>();
+        int totalSize = values.size();
+        int batchCount = (int) Math.ceil((double) totalSize / batchSize);
+        for(int i=0;i<batchCount;i++){
+            List<T> batchItems = chooseMultiFromListShowingMultiField(values, showStringFieldNameList, widthList, ask, startWith, br);
+            startWith += batchSize;
+            selectedItems.addAll(batchItems);
+        }
+        return selectedItems;
     }
 
     public static <T> List<T> chooseMultiFromListShowingMultiField(
@@ -1416,6 +1434,312 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
             } catch (Exception e) {
                 System.out.println("It isn't an integer. Input again:");
             }
+        }
+    }
+
+    public static List<Integer> chooseMulti(BufferedReader br, int min, int max) {
+        List<Integer> choices = new ArrayList<>();
+        int choice = 0;
+
+        while (true) {
+            System.out.println("\nInput the numbers to choose. Separate by comma. 'a' to choose all. Enter to ignore:\n");
+            try {
+                String input = br.readLine();
+                if("".equals(input)) break;
+                if("a".equals(input)){
+                    choices.add(-1);
+                    break;
+                }
+                // Clean up the input by removing spaces
+                String[] inputs = input.replaceAll("\\s+", "").split(",");
+                boolean validInput = true;
+                for (String input1 : inputs) {
+                    try {
+                        choice = Integer.parseInt(input1);
+                        if (choice <= max && choice > min) {
+                            choices.add(choice);
+                        } else {
+                            System.out.println("\nInput an integer within: " + (min+1) + "~" + max + ". Try again.");
+                            choices.clear();
+                            validInput = false;
+                            break;
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("\nInvalid number format. Try again.");
+                        choices.clear();
+                        validInput = false;
+                        break;
+                    }
+                }
+                if (validInput) break;
+            } catch (IOException e) {
+                System.out.println("\nError reading input. Try again.");
+            }
+        }
+        return choices;
+    }
+
+    public static List<String> chooseMultiFromList(List<String> values, Integer startWith, Integer batchSize, String ask, BufferedReader br) {
+        if(startWith==null)startWith=0;
+        if(batchSize<=0) return new ArrayList<>();
+        List<String> selectedItems = new ArrayList<>();
+        int totalSize = values.size();
+        int batchCount = (int) Math.ceil((double) totalSize / batchSize);
+        Iterator<String> iterator = values.iterator();
+        for(int i=0;i<batchCount;i++){
+            List<String> subValues = new ArrayList<>();
+            while(iterator.hasNext() && subValues.size()<batchSize){
+                subValues.add(iterator.next());
+            }
+            System.out.println();
+            System.out.println(ask);
+            Shower.printUnderline(10);
+            Shower.showStringList(subValues, startWith);
+            Shower.printUnderline(10);
+            List<Integer> choices = chooseMulti(br, startWith, startWith+subValues.size());
+            if(choices.isEmpty()) return selectedItems;
+            for(Integer choice:choices){
+                if(choice==-1) return values;
+                selectedItems.add(subValues.get(choice-1));
+            }
+            startWith += batchSize;
+        }
+        return selectedItems;
+    }
+
+    public static <T> List<T> chooseMultiFromListGeneric(List<T> values, Integer startWith, Integer batchSize, String ask, BufferedReader br) {
+        if(startWith==null)startWith=0;
+        if(batchSize<=0) return new ArrayList<>();
+        List<T> selectedItems = new ArrayList<>();
+        int totalSize = values.size();
+        int batchCount = (int) Math.ceil((double) totalSize / batchSize);
+        
+        // Check if T is a native type
+        boolean isNativeType = false;
+        boolean isLongType = false;
+        if (!values.isEmpty()) {
+            T firstValue = values.get(0);
+            isNativeType = firstValue == null || 
+                          firstValue instanceof String ||
+                          firstValue instanceof Number ||
+                          firstValue instanceof Boolean ||
+                          firstValue instanceof Character;
+            isLongType = firstValue instanceof Long;
+        }
+        
+        Iterator<T> iterator = values.iterator();
+        for(int i=0;i<batchCount;i++){
+            List<T> subValues = new ArrayList<>();
+            while(iterator.hasNext() && subValues.size()<batchSize){
+                subValues.add(iterator.next());
+            }
+            System.out.println();
+            System.out.println(ask);
+            Shower.printUnderline(10);
+            
+            // Show each element on a separate line
+            for(int j = 0; j < subValues.size(); j++) {
+                T value = subValues.get(j);
+                String displayValue;
+                
+                if (isNativeType) {
+                    if (isLongType && value != null) {
+                        long timestamp = (Long) value;
+                        if (timestamp > 0 && timestamp < 4102444800000L) {
+                            displayValue = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
+                        } else {
+                            displayValue = value.toString();
+                        }
+                    } else {
+                        displayValue = value != null ? value.toString() : "null";
+                    }
+                } else {
+                    displayValue = value != null ? value.toString() : "null";
+                }
+                
+                displayValue = displayValue.length() > 13 ? StringTools.omitMiddle(displayValue, 13) : displayValue;
+                System.out.println(String.format("%d %s", (startWith + j + 1), displayValue));
+            }
+            Shower.printUnderline(10);
+            List<Integer> choices = chooseMulti(br, startWith, startWith+subValues.size());
+            if(choices.isEmpty()) return selectedItems;
+            for(Integer choice:choices){
+                if(choice==-1) return values;
+                selectedItems.add(subValues.get(choice-startWith-1));
+            }
+            startWith += batchSize;
+        }
+        return selectedItems;
+    }
+
+    public static <T> Map<String,T> chooseMultiFromMapGeneric(
+            Map<String,T> map, 
+            String shownValueField,
+            Integer startWith, 
+            Integer batchSize, 
+            String ask, 
+            BufferedReader br) {
+        if(startWith==null) startWith=0;
+        if(batchSize<=0) return new HashMap<>();
+        
+        Map<String,T> selectedItems = new HashMap<>();
+        List<String> keys = new ArrayList<>(map.keySet());
+        if(keys.isEmpty()) return selectedItems;
+        
+        int totalSize = keys.size();
+        int batchCount = (int) Math.ceil((double) totalSize / batchSize);
+        
+        // Check if T is a native type or complex object
+        T firstValue = map.get(keys.get(0));
+        boolean isNativeType = firstValue == null || 
+                              firstValue instanceof String ||
+                              firstValue instanceof Number ||
+                              firstValue instanceof Boolean ||
+                              firstValue instanceof Character;
+        
+        // Check if T is specifically Long type
+        boolean isLongType = firstValue instanceof Long;
+        
+        Field valueField = null;
+        if (!isNativeType && shownValueField != null) {
+            try {
+                valueField = firstValue.getClass().getDeclaredField(shownValueField);
+                valueField.setAccessible(true);
+            } catch (NoSuchFieldException e) {
+                System.out.println("Warning: Field '" + shownValueField + "' not found in value class. Using toString() instead.");
+            }
+        }
+
+        Iterator<String> iterator = keys.iterator();
+        for(int i=0; i<batchCount; i++) {
+            List<String> batchKeys = new ArrayList<>();
+            while(iterator.hasNext() && batchKeys.size()<batchSize) {
+                batchKeys.add(iterator.next());
+            }
+            
+            System.out.println();
+            System.out.println(ask);
+            Shower.printUnderline(10);
+            
+            // Show each entry on a separate line
+            for(int j = 0; j < batchKeys.size(); j++) {
+                String key = batchKeys.get(j);
+                T value = map.get(key);
+                String valueDisplay;
+                
+                if (isNativeType) {
+                    if (isLongType && value != null) {
+                        long timestamp = (Long) value;
+                        if (timestamp > 0 && timestamp < 4102444800000L) {
+                            valueDisplay = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
+                        } else {
+                            valueDisplay = value.toString();
+                        }
+                    } else {
+                        valueDisplay = value != null ? value.toString() : "null";
+                    }
+                } else {
+                    try {
+                        if (valueField != null) {
+                            Object fieldValue = valueField.get(value);
+                            valueDisplay = fieldValue != null ? fieldValue.toString() : "null";
+                        } else {
+                            valueDisplay = value != null ? value.toString() : "null";
+                        }
+                    } catch (IllegalAccessException e) {
+                        valueDisplay = "Error accessing field";
+                    }
+                }
+                
+                // Truncate both key and value if too long
+                String displayKey = key.length() > 13 ? StringTools.omitMiddle(key, 13) : key;
+                valueDisplay = valueDisplay.length() > 13 ? StringTools.omitMiddle(valueDisplay, 13) : valueDisplay;
+                System.out.printf("%d %s %s%n", (startWith + j + 1), displayKey, valueDisplay);
+            }
+            
+            Shower.printUnderline(10);
+            List<Integer> choices = chooseMulti(br, startWith, startWith+batchKeys.size());
+            
+            if(choices.isEmpty()) return selectedItems;
+            
+            for(Integer choice:choices) {
+                if(choice==-1) return map;
+                String selectedKey = batchKeys.get(choice-startWith-1);
+                selectedItems.put(selectedKey, map.get(selectedKey));
+            }
+            
+            startWith += batchSize;
+        }
+        
+        return selectedItems;
+    }
+
+    public static void main(String[] args) {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    
+        // Test chooseMultiFromListGeneric with different types
+        System.out.println("\n=== Testing chooseMultiFromListGeneric ===");
+        
+        // Test with Strings
+        List<String> stringList = Arrays.asList("Apple", "Banana", "Cherry", "Date", "Elderberry");
+        System.out.println("\nSelecting from String list:");
+        List<String> selectedStrings = chooseMultiFromListGeneric(stringList, 0, 3, "Choose fruits:", br);
+        System.out.println("Selected items: " + selectedStrings);
+    
+        // Test with Integers
+        List<Integer> numberList = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
+        System.out.println("\nSelecting from Integer list:");
+        List<Integer> selectedNumbers = chooseMultiFromListGeneric(numberList, 0, 4, "Choose numbers:", br);
+        System.out.println("Selected items: " + selectedNumbers);
+    
+        // Test chooseMultiFromMapGeneric with different types
+        System.out.println("\n=== Testing chooseMultiFromMapGeneric ===");
+    
+        // Test with String values
+        Map<String, String> stringMap = new HashMap<>();
+        stringMap.put("key1", "Value One");
+        stringMap.put("key2", "Value Two");
+        stringMap.put("key3", "Value Three");
+        System.out.println("\nSelecting from String Map:");
+        Map<String, String> selectedStringMap = chooseMultiFromMapGeneric(
+            stringMap, null, 0, 2, "Choose string values:", br);
+        System.out.println("Selected items: " + selectedStringMap);
+    
+        // Test with Long timestamps
+        Map<String, Long> timestampMap = new HashMap<>();
+        timestampMap.put("Today", System.currentTimeMillis());
+        timestampMap.put("Yesterday", System.currentTimeMillis() - DateTools.dayToLong(1));
+        timestampMap.put("Last Week", System.currentTimeMillis() - DateTools.dayToLong(7));
+        timestampMap.put("Next Week", System.currentTimeMillis() + DateTools.dayToLong(7));
+        System.out.println("\nSelecting from Timestamp Map:");
+        Map<String, Long> selectedTimestamps = chooseMultiFromMapGeneric(
+            timestampMap, null, 0, 2, "Choose dates:", br);
+        System.out.println("Selected items: " + selectedTimestamps);
+    
+        // Test with a custom class
+        Map<String, TestPerson> personMap = new HashMap<>();
+        personMap.put("p1", new TestPerson("John Doe", 25));
+        personMap.put("p2", new TestPerson("Jane Smith", 30));
+        personMap.put("p3", new TestPerson("Bob Johnson", 35));
+        System.out.println("\nSelecting from Person Map (showing names):");
+        Map<String, TestPerson> selectedPeople = chooseMultiFromMapGeneric(
+            personMap, "name", 0, 2, "Choose people:", br);
+        System.out.println("Selected items: " + selectedPeople);
+    }
+    
+    // Test class for demonstration
+    private static class TestPerson {
+        private String name;
+        private int age;
+    
+        public TestPerson(String name, int age) {
+            this.name = name;
+            this.age = age;
+        }
+    
+        @Override
+        public String toString() {
+            return "TestPerson{name='" + name + "', age=" + age + '}';
         }
     }
 }

@@ -429,8 +429,8 @@ public class AccountHandler extends Handler {
         }
     }
 
-    public void menu(BufferedReader br) {
-        Menu menu = new Menu("Account Management Menu");
+    public void menu(BufferedReader br, boolean withSettings) {
+        Menu menu = new Menu("Account Management Menu", this::close);
         
         // Replace toggle auto update option with strategy selection
         menu.add("Change Auto Scan Strategy", () -> {

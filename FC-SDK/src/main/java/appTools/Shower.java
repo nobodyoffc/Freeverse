@@ -9,16 +9,22 @@ import java.util.Map;
 import tools.StringTools;
 
 public class Shower {
-    public static final int DEFAULT_SIZE = 20;
+    public static final int DEFAULT_SIZE = 2;
 
-    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom) {
+    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom, List<String> hideFields) {
         if (dataList == null || dataList.isEmpty()) {
             return;
         }
         // Get fields from first element
         T firstElement = dataList.get(0);
         java.lang.reflect.Field[] classFields = firstElement.getClass().getDeclaredFields();
-        String[] fields = Arrays.stream(classFields)
+        
+        // Filter out hidden fields
+        List<java.lang.reflect.Field> visibleFields = Arrays.stream(classFields)
+            .filter(field -> hideFields == null || !hideFields.contains(field.getName()))
+            .toList();
+        
+        String[] fields = visibleFields.stream()
             .map(java.lang.reflect.Field::getName)
             .toArray(String[]::new);
 
@@ -33,10 +39,10 @@ public class Shower {
 
         // Find max value length for each field
         for (T element : dataList) {
-            for (int i = 0; i < classFields.length; i++) {
-                classFields[i].setAccessible(true);
+            for (int i = 0; i < visibleFields.size(); i++) {
+                visibleFields.get(i).setAccessible(true);
                 try {
-                    Object value = classFields[i].get(element);
+                    Object value = visibleFields.get(i).get(element);
                     if (value != null) {
                         widths[i] = Math.max(widths[i], value.toString().length());
                     }
@@ -50,7 +56,7 @@ public class Shower {
         List<List<Object>> valueListList = new ArrayList<>();
         for (T element : dataList) {
             List<Object> row = new ArrayList<>();
-            for (java.lang.reflect.Field field : classFields) {
+            for (java.lang.reflect.Field field : visibleFields) {
                 field.setAccessible(true);
                 try {
                     row.add(field.get(element));
@@ -63,6 +69,11 @@ public class Shower {
 
         // Call existing showDataTable method
         showDataTable(title, fields, widths, valueListList, beginFrom);
+    }
+
+    // Add overloaded method for backward compatibility
+    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom) {
+        showDataTable(title, dataList, beginFrom, null);
     }
 
     public static void showDataTable(String title, Map<String, Integer> fieldWidthMap, List<List<Object>> valueListList, int beginFrom) {
@@ -178,32 +189,6 @@ public class Shower {
         return choice;
     }
 
-    public static List<Integer> chooseMulti(BufferedReader br, int min, int max) {
-        List<Integer> choices = new ArrayList<>();
-        int choice = 0;
-        while (true) {
-            System.out.println("\nInput the numbers to choose. Separate by comma. '0' to quit:\n");
-            try {
-                String input = br.readLine();
-                String[] inputs = input.split(",");
-                for (String input1 : inputs) {
-                    choice = Integer.parseInt(input1);
-                    if (choice <= max && choice >= min) {
-                        choices.add(choice);
-                    }else{
-                        System.out.println("\nInput an integer within:" + min + "~" + max + ". Try again.");
-                        break;
-                    }
-                }
-                break;
-            } catch (Exception e) {
-                System.out.println("\nInput an integer within:" + min + "~" + max + ". Try again.");
-                continue;
-            }
-        }
-        return choices;
-    }
-
     public static int getVisualWidth(String str) {
         return str.codePoints().map(ch -> Character.isIdeographic(ch) ? 2 : 1).sum();
     }
@@ -238,5 +223,22 @@ public class Shower {
         result.append(lastHalf.substring(startPos));
         
         return result.toString();
+    }
+
+    public static void showStringList(List<String> strList, int startWith) {
+        if (strList == null || strList.isEmpty()) {
+            System.out.println("Nothing to show.");
+            return;
+        }
+
+        // Calculate the width needed for order numbers
+        int orderWidth = String.valueOf(strList.size() + startWith).length() + 2;
+
+        // Print each string with its order number
+        for (int i = 0; i < strList.size(); i++) {
+            int ordinal = i + startWith + 1;
+            System.out.print(formatString(String.valueOf(ordinal), orderWidth));
+            System.out.println(strList.get(i));
+        }
     }
 }

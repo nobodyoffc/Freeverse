@@ -42,6 +42,6 @@ public class Ping extends HttpServlet {
         if (!isOk){
                 return;
         }
-        replier.reply0SuccessHttp(response);
+        replier.reply0SuccessHttp(true,response);
     }
 }

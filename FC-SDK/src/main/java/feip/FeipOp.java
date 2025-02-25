@@ -27,7 +27,8 @@ public enum FeipOp {
     DEPLOY("deploy"),
     ISSUE("issue"),
     DESTROY("destroy"),
-    SIGN("sign");
+    SIGN("sign"),
+    DROP("drop");
 
     private final String value;
 
@@ -46,5 +47,11 @@ public enum FeipOp {
             }
         }
         throw new IllegalArgumentException("No constant with text " + text + " found");
+    }
+
+    public interface FeipOpFields {
+        String getValue();
+        String[] getRequiredFields();
+        String toLowerCase();
     }
 }

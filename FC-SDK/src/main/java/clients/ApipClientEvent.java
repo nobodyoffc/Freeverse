@@ -369,6 +369,7 @@ public class ApipClientEvent {
     }
 
     private boolean checkReplySign(byte[] sessionKey) {
+        if(authType==AuthType.FREE)return true;
         if (responseHeaderMap != null && responseHeaderMap.get(SIGN) != null) {
             if (sessionKey ==null || !checkResponseSign(sessionKey)) {
                 code = CodeMessage.Code1008BadSign;

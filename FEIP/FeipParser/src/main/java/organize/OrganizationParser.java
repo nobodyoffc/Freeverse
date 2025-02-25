@@ -19,10 +19,10 @@ public class OrganizationParser {
 
 		Gson gson = new Gson();
 
-		GroupData groupRaw = new GroupData();
+		GroupOpData groupRaw = new GroupOpData();
 
 		try {
-			groupRaw = gson.fromJson(gson.toJson(feip.getData()), GroupData.class);
+			groupRaw = gson.fromJson(gson.toJson(feip.getData()), GroupOpData.class);
 			if(groupRaw==null)return null;
 		}catch(com.google.gson.JsonSyntaxException e) {
 			return null;
@@ -301,10 +301,10 @@ public class OrganizationParser {
 
 		Gson gson = new Gson();
 
-		TeamData teamRaw = new TeamData();
+		TeamOpData teamRaw = new TeamOpData();
 
 		try {
-			teamRaw = gson.fromJson(gson.toJson(feip.getData()), TeamData.class);
+			teamRaw = gson.fromJson(gson.toJson(feip.getData()), TeamOpData.class);
 			if(teamRaw==null)return null;
 		}catch(com.google.gson.JsonSyntaxException e) {
 			return null;

@@ -86,7 +86,7 @@ public class StartDiskClient {
                 case 11 -> carve(br);
                 case 12 -> signIn(symKey);
                 case 13 -> signInEcc(symKey);
-                case 14 -> settings.setting(symKey, br, null);
+                case 14 -> settings.setting(br, null);
                 case 0 -> {
                     return;
                 }

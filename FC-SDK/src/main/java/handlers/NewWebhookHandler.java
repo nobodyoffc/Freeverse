@@ -52,7 +52,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
     // private static final String METHOD_FID_ENDPOINT_INFO_MAP_MAP = "methodFidEndpointInfoMapMap";
 
 
-    public NewWebhookHandler(Settings settings,List<String> methods, HandlerType handlerType, LocalDB.SortType sortType, Serializer<WebhookHandler.WebhookRequestBody> valueSerializer) {
+    public NewWebhookHandler(Settings settings, List<String> methods, HandlerType handlerType, db.LocalDB.SortType sortType, Serializer<WebhookHandler.WebhookRequestBody> valueSerializer) {
         super(settings, handlerType, sortType, valueSerializer, WebhookHandler.WebhookRequestBody.class, true);
         this.sid = settings.getSid();
         this.listenPath = (String) settings.getSettingMap().get(Settings.LISTEN_PATH);
@@ -256,8 +256,8 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
     }
 
     @Override
-    public void menu(BufferedReader br) {
-        Menu menu = new Menu("Webhook Management");
+    public void menu(BufferedReader br, boolean withSettings) {
+        Menu menu = new Menu("Webhook Management", this::close);
         menu.add("Start Pusher Thread", this::startPusherThread);
         menu.add("Push Webhook Data", this::pushWebhookData);
         menu.add("Subscribe", () -> {
@@ -270,7 +270,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
             WebhookHandler.WebhookRequestBody requestBody = new WebhookHandler.WebhookRequestBody();
             unsubscribe(requestBody);
         });
-        menu.add("Show Webhook Requests", () -> showItems("Webhook Requests",null,br,true,false));
+        menu.add("Show Webhook Requests", () -> showAndChooseItems("Showing Webhook Requests...",null, 20, br,true,false));
 
         addBasicMenuItems(br, menu);
         

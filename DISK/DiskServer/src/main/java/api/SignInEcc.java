@@ -52,7 +52,6 @@ public class SignInEcc extends HttpServlet {
             }
             fcSession.setKey(null);
             replier.reply0SuccessHttp(fcSession,response);
-            replier.clean();
         }
     }
 

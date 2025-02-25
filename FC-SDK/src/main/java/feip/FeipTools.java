@@ -1,11 +1,11 @@
 package feip;
 
 import fch.fchData.OpReturn;
-import feip.feipData.CidData;
+import feip.feipData.CidOpData;
 import feip.feipData.Feip;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
-import feip.feipData.MasterData;
+import feip.feipData.MasterOpData;
 import tools.JsonTools;
 import org.slf4j.Logger;
 
@@ -49,12 +49,12 @@ public class FeipTools {
         data.setName(Master);
         data.setVer(String.valueOf(6));
 
-        MasterData masterData = new MasterData();
-        masterData.setMaster(master);
-        masterData.setPromise(MasterData.PROMISE);
-        masterData.setCipherPriKey(priKeyCipher);
+        MasterOpData masterOpData = new MasterOpData();
+        masterOpData.setMaster(master);
+        masterOpData.setPromise(MasterOpData.PROMISE);
+        masterOpData.setCipherPriKey(priKeyCipher);
 
-        data.setData(masterData);
+        data.setData(masterOpData);
 
         return JsonTools.toJson(data);
     }
@@ -69,11 +69,11 @@ public class FeipTools {
         data.setName(CID);
         data.setVer(String.valueOf(4));
 
-        CidData cidData = new CidData();
-        cidData.setOp(op);
-        if(name!=null)cidData.setName(name);
+        CidOpData cidOpData = new CidOpData();
+        cidOpData.setOp(op);
+        if(name!=null) cidOpData.setName(name);
 
-        data.setData(cidData);
+        data.setData(cidOpData);
         return JsonTools.toJson(data);
     }
 }

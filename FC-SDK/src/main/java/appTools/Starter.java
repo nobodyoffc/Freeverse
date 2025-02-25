@@ -10,17 +10,25 @@ import java.util.*;
 
 import apip.apipData.CidInfo;
 import clients.ApipClient;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.Configure;
 import feip.feipData.Service;
 import handlers.Handler;
+import nasa.NaSaRpcClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import redis.clients.jedis.JedisPool;
 import tools.FileTools;
 import tools.JsonTools;
 
 public class Starter {
+    protected static final Logger log = LoggerFactory.getLogger(Starter.class);
+
 
     public static Settings startClient(String clientName,
                                        Map<String, Object> settingMap, BufferedReader br, Object[] modules) {
         // Load config info from the file of config.json
+
         Configure.loadConfig(br);
         Configure configure = Configure.checkPassword(br);
         if(configure == null) return null;
@@ -37,7 +45,7 @@ public class Starter {
         }
 
         if(settings == null) {
-            settings = new Settings(configure);
+            settings = new Settings(configure,clientName);
             settings.setModules(modules);
             if(settingMap != null) settings.setSettingMap(settingMap);
         }
@@ -47,22 +55,26 @@ public class Starter {
 
         ApipClient apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
 
+        if(apipClient==null){
+            log.error("Failed to fresh bestHeight due to the absence of apipClient, nasaClient, and esClient.");
+            return settings;
+        }
         long bestHeight = apipClient.bestHeight();//new Wallet(apipClient).getBestHeight();
+
         CidInfo fidInfo = settings.checkFidInfo(apipClient, br);
         String userPriKeyCipher = configure.getFidCipherMap().get(fid);
 
-        if(fidInfo !=null && fidInfo.getCid()==null){
-            if(fch.Inputer.askIfYes(br,"No CID yet. Set CID?")){
-                setCid(fid, userPriKeyCipher, bestHeight, symKey,apipClient,br);
+        if (fidInfo != null && fidInfo.getCid() == null) {
+            if (fch.Inputer.askIfYes(br, "No CID yet. Set CID?")) {
+                setCid(fid, userPriKeyCipher, bestHeight, symKey, apipClient, br);
             }
         }
 
-        if(fidInfo !=null && fidInfo.getMaster()==null){
-            if(fch.Inputer.askIfYes(br,"No master yet. Set master for this FID?")){
-                setMaster(fid, userPriKeyCipher, bestHeight, symKey,apipClient,br);
+        if (fidInfo != null && fidInfo.getMaster() == null) {
+            if (fch.Inputer.askIfYes(br, "No master yet. Set master for this FID?")) {
+                setMaster(fid, userPriKeyCipher, bestHeight, symKey, apipClient, br);
             }
         }
-
         return settings;
     }
 

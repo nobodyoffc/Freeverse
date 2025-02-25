@@ -19,7 +19,7 @@ import fch.Wallet;
 import fch.fchData.SendTo;
 import feip.feipData.Feip;
 import feip.feipData.Mail;
-import feip.feipData.MailData;
+import feip.feipData.MailOpData;
 import feip.feipData.Service;
 import org.jetbrains.annotations.Nullable;
 import tools.*;
@@ -85,7 +85,7 @@ public class MailHandler extends Handler {
 
     // Public Methods
     public void menu() {
-        Menu menu = new Menu("Mail Menu");
+        Menu menu = new Menu("Mail Menu", this::close);
         menu.add(READ, () -> readMails(br));
         menu.add(UPDATE, () -> checkMail(br));
         menu.add(MailOp.SEND.toLowerCase(), () -> sendMails(br));
@@ -272,8 +272,8 @@ public class MailHandler extends Handler {
     private String opMail(String mailId, List<String> mailIds, BufferedReader br, MailOp op) {
         if (op == null) return null;
 
-        MailData mailData = new MailData();
-        mailData.setOp(op.toLowerCase());
+        MailOpData mailOpData = new MailOpData();
+        mailOpData.setOp(op.toLowerCase());
         byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
         if (priKey == null) {
             System.out.println("Failed to get the priKey of " + myFid);
@@ -302,7 +302,7 @@ public class MailHandler extends Handler {
             String msg = Inputer.inputString(br,"Input the message:");
             if (msg == null) return null;
 
-            mailData.setTextId(IdNameTools.makeDid(msg));
+            mailOpData.setTextId(IdNameTools.makeDid(msg));
 //            mailData.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7.getDisplayName());
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
             String pubKey = cidInfo.getPubKey();
@@ -315,7 +315,7 @@ public class MailHandler extends Handler {
                 System.out.println("Failed to encrypt message: " + cryptoDataByte.getMessage());
                 return null;
             }
-            mailData.setCipher(cryptoDataByte.toJson());
+            mailOpData.setCipher(cryptoDataByte.toJson());
         } else {
             if (mailIds == null){
                 mailIds = new ArrayList<>();
@@ -336,11 +336,11 @@ public class MailHandler extends Handler {
                 }
             }
             if (mailIds.isEmpty()) return null;
-            mailData.setMailIds(mailIds);
+            mailOpData.setMailIds(mailIds);
         }
 
         Feip feip = getFeip();
-        feip.setData(mailData);
+        feip.setData(mailOpData);
 
         String opReturnStr = feip.toJson();
         long cd = Constants.CD_REQUIRED;

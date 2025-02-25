@@ -63,16 +63,16 @@ public class PersonalParser {
 		}
 	}
 
-	public boolean parseContact(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws ElasticsearchException, IOException {
+	public boolean parseContact(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
 
 		boolean isValid = false;
 
 		Gson gson = new Gson();
 
-		ContactData contactRaw = new ContactData();
+		ContactOpData contactRaw = new ContactOpData();
 
 		try {
-			contactRaw = gson.fromJson(gson.toJson(feip.getData()), ContactData.class);
+			contactRaw = gson.fromJson(gson.toJson(feip.getData()), ContactOpData.class);
 			if(contactRaw==null)return isValid;
 		}catch(Exception e) {
 			return isValid;
@@ -102,15 +102,14 @@ public class PersonalParser {
 				isValid = true;
 				break;
 			case "delete":
-				if(contactRaw.getContactId() ==null)return isValid;
+				if(contactRaw.getContactIds() ==null)return isValid;
 				height = opre.getHeight();
-				ContactData contactRaw1 = contactRaw;
 
-				GetResponse<Contact> result = esClient.get(g->g.index(IndicesNames.CONTACT).id(contactRaw1.getContactId()), Contact.class);
+				MgetResult<Contact> result = EsTools.getMultiByIdList(esClient, IndicesNames.CONTACT, contactRaw.getContactIds(), Contact.class);
 
-				if(!result.found())return isValid;
+				if(result.getResultList() == null || result.getResultList().isEmpty())return isValid;
 
-				contact = result.source();
+				contact = result.getResultList().get(0);
 
 				if(!contact.getOwner().equals(opre.getSigner()))return isValid;
 
@@ -126,7 +125,7 @@ public class PersonalParser {
 				if(contactRaw.getContactId() ==null)return isValid;
 				height = opre.getHeight();
 
-				ContactData contactRaw2 = contactRaw;
+				ContactOpData contactRaw2 = contactRaw;
 
 				GetResponse<Contact> result1 = esClient.get(g->g.index(IndicesNames.CONTACT).id(contactRaw2.getContactId()), Contact.class);
 
@@ -155,11 +154,10 @@ public class PersonalParser {
 
 		Gson gson = new Gson();
 
-		MailData mailRaw = new MailData();
+		MailOpData mailRaw = new MailOpData();
 
-		boolean isValid = false;
 		try {
-			mailRaw = gson.fromJson(gson.toJson(feip.getData()), MailData.class);
+			mailRaw = gson.fromJson(gson.toJson(feip.getData()), MailOpData.class);
 			if(mailRaw==null)return false;
 		}catch(com.google.gson.JsonSyntaxException e) {
 			return false;
@@ -265,42 +263,8 @@ public class PersonalParser {
 						);
 					}
 					esClient.bulk(br.build());
-					isValid = true;
 					break;
-//				case "recover":
-//					if(mailRaw.getMailIds() ==null)return false;
-//					height = opre.getHeight();
-//					MailData mailRaw2 = mailRaw;
-//
-//					MgetResult<Mail> result1 = EsTools.getMultiByIdList(esClient, IndicesNames.MAIL, mailRaw2.getMailIds(), Mail.class);
-//					if(result1==null || result1.getResultList()==null || result1.getResultList().isEmpty())return false;
-//					List<Mail> mailList1 = result1.getResultList();
-//
-//					Iterator<Mail> iterator1 = mailList1.iterator();
-//					while(iterator1.hasNext()) {
-//						Mail mail1 = iterator1.next();
-//						if(!mail1.getRecipient().equals(opre.getSigner())){
-//							iterator1.remove();
-//							continue;
-//						}
-//						mail1.setActive(true);
-//						mail1.setLastHeight(height);
-//					}
-//					if(mailList1.isEmpty())return false;
-//
-//					BulkRequest.Builder br1 = new BulkRequest.Builder();
-//					for(Mail mail1 : mailList1) {
-//						br1.operations(op -> op
-//								.index(idx -> idx
-//										.index(IndicesNames.MAIL)
-//										.id(mail1.getMailId())
-//										.document(mail1)
-//								)
-//						);
-//					}
-//					esClient.bulk(br1.build());
-//					isValid = true;
-//					break;
+
 				default:
 					break;
 			}
@@ -314,10 +278,10 @@ public class PersonalParser {
 
 		Gson gson = new Gson();
 
-		SecretData secretRaw = new SecretData();
+		SecretOpData secretRaw = new SecretOpData();
 
 		try {
-			secretRaw = gson.fromJson(gson.toJson(feip.getData()), SecretData.class);
+			secretRaw = gson.fromJson(gson.toJson(feip.getData()), SecretOpData.class);
 			if(secretRaw==null || secretRaw.getOp()==null)return false;
 		}catch(com.google.gson.JsonSyntaxException e) {
 			return false;
@@ -356,7 +320,7 @@ public class PersonalParser {
 			case "delete":
 				if(secretRaw.getSecretIds() ==null)return false;
 				height = opre.getHeight();
-				SecretData secretRaw1 = secretRaw;
+				SecretOpData secretRaw1 = secretRaw;
 
 				MgetResult<Secret> result = EsTools.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw1.getSecretIds(), Secret.class);
 				if(result==null || result.getResultList()==null || result.getResultList().isEmpty())return false;
@@ -390,7 +354,7 @@ public class PersonalParser {
 			case "recover":
 				if(secretRaw.getSecretIds() ==null)return false;
 				height = opre.getHeight();
-				SecretData secretRaw2 = secretRaw;
+				SecretOpData secretRaw2 = secretRaw;
 
 				MgetResult<Secret> result1 = EsTools.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw2.getSecretIds(), Secret.class);
 				if(result1.getResultList() == null || result1.getResultList().isEmpty())return false;
@@ -430,10 +394,10 @@ public class PersonalParser {
 	public BoxHistory makeBox(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
-		BoxData boxRaw = new BoxData();
+		BoxOpData boxRaw = new BoxOpData();
 
 		try {
-			boxRaw = gson.fromJson(gson.toJson(feip.getData()), BoxData.class);
+			boxRaw = gson.fromJson(gson.toJson(feip.getData()), BoxOpData.class);
 			if(boxRaw==null)return null;
 		}catch(com.google.gson.JsonSyntaxException e) {
 			return null;

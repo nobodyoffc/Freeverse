@@ -3,15 +3,23 @@ package fcData;
 import appTools.Shower;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.jetbrains.annotations.NotNull;
 import org.mapdb.DataInput2;
 import org.mapdb.DataOutput2;
 import org.mapdb.Serializer;
+import org.mapdb.serializer.GroupSerializer;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class FcEntity {
     protected String id;
 
@@ -81,22 +89,157 @@ public class FcEntity {
     }
 
     public static <T extends FcEntity> Serializer<T> getMapDBSerializer(Class<T> clazz) {
-        return new Serializer<>() {
-            @Override
-            public void serialize(DataOutput2 out, T value) throws IOException {
-                byte[] bytes = value.toBytes();
-                out.packInt(bytes.length);
-                out.write(bytes);
-            }
+        return new FcEntitySerializer<>(clazz);
+    }
 
-            @Override
-            public T deserialize(DataInput2 input, int available) throws IOException {
-                int length = input.unpackInt();
-                byte[] bytes = new byte[length];
-                input.readFully(bytes);
-                return fromBytes(bytes, clazz);
+    // Update the serializer class to extend GroupSerializer
+    public static class FcEntitySerializer<T extends FcEntity> implements GroupSerializer<T> {
+        private final Class<T> entityClass;
+        private final Gson gson = new Gson();
+
+        public FcEntitySerializer(Class<T> clazz) {
+            this.entityClass = clazz;
+        }
+
+        @Override
+        public void serialize(DataOutput2 out, T value) throws IOException {
+            byte[] bytes = value.toBytes();
+            out.packInt(bytes.length);
+            out.write(bytes);
+        }
+
+        @Override
+        public T deserialize(DataInput2 input, int available) throws IOException {
+            int length = input.unpackInt();
+            byte[] bytes = new byte[length];
+            input.readFully(bytes);
+            return fromBytes(bytes, entityClass);
+        }
+
+        @Override
+        public boolean equals(T a1, T a2) {
+            if (a1 == a2) return true;
+            if (a1 == null || a2 == null) return false;
+            return gson.toJson(a1).equals(gson.toJson(a2));
+        }
+
+        @Override
+        public int hashCode(T t, int seed) {
+            return t == null ? 0 : gson.toJson(t).hashCode() + seed;
+        }
+
+        @Override
+        public int compare(T o1, T o2) {
+            if (o1 == o2) return 0;
+            if (o1 == null) return -1;
+            if (o2 == null) return 1;
+            return gson.toJson(o1).compareTo(gson.toJson(o2));
+        }
+
+        @Override
+        public boolean isTrusted() {
+            return true;
+        }
+
+        public Class<T> getEntityClass() {
+            return entityClass;
+        }
+
+        @Override
+        public int valueArraySearch(Object keys, T key) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArraySearch'");
+        }
+
+        @Override
+        public int valueArraySearch(Object keys, T key, Comparator comparator) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArraySearch'");
+        }
+
+        @Override
+        public void valueArraySerialize(DataOutput2 out, Object vals) throws IOException {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArraySerialize'");
+        }
+
+        @Override
+        public Object valueArrayDeserialize(DataInput2 in, int size) throws IOException {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayDeserialize'");
+        }
+
+        @Override
+        public T valueArrayGet(Object vals, int pos) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayGet'");
+        }
+
+        @Override
+        public int valueArraySize(Object vals) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArraySize'");
+        }
+
+        @Override
+        public Object valueArrayEmpty() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayEmpty'");
+        }
+
+        @Override
+        public Object valueArrayPut(Object vals, int pos, T newValue) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayPut'");
+        }
+
+        @Override
+        public Object valueArrayUpdateVal(Object vals, int pos, T newValue) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayUpdateVal'");
+        }
+
+        @Override
+        public Object valueArrayFromArray(Object[] objects) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayFromArray'");
+        }
+
+        @Override
+        public Object valueArrayCopyOfRange(Object vals, int from, int to) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayCopyOfRange'");
+        }
+
+        @Override
+        public Object valueArrayDeleteValue(Object vals, int pos) {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'valueArrayDeleteValue'");
+        }
+    }
+
+    public static class GsonSerializer implements Serializer<Object> {
+        private final Gson gson = new GsonBuilder()
+                // .serializeNulls()
+                .create();
+    
+        @Override
+        public void serialize(@NotNull DataOutput2 out, @NotNull Object value) throws IOException {
+            String json = gson.toJson(value);
+            out.writeUTF(json);
+        }
+    
+        @Override
+        public Object deserialize(@NotNull DataInput2 input, int available) throws IOException {
+            String json = input.readUTF();
+            // Try to determine the type from the JSON structure
+            if (json.startsWith("[")) {
+                return gson.fromJson(json, new TypeToken<Set<String>>(){}.getType());
+            } else if (json.startsWith("{")) {
+                return gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
             }
-        };
+            return gson.fromJson(json, Object.class);
+        }
     }
 
 }

@@ -4,1104 +4,617 @@ import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
-import fcData.ContactDetail;
-import fcData.FcEntity;
+import clients.ApipClient;
+import db.LocalDB;
+import db.MapDBDatabase;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
-import org.mapdb.HTreeMap;
+import feip.feipData.Service;
+import org.jetbrains.annotations.NotNull;
 import org.mapdb.Serializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import tools.Hex;
 import tools.JsonTools;
+import tools.ObjectTools;
+import tools.StringTools;
 
 import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.stream.Collectors;
 
+import static constants.FieldNames.LAST;
+import static constants.FieldNames.LAST_HEIGHT;
+
+/**
+ * This class is a generic handler for all types of FC handlers.
+ * It has a handler type to identify the type of data it handles.
+ * It has a sort type to identify the sort type of the main local database.
+ * It has a main persistent local database with class type T.
+ * It has a meta map to persist metadata of the handler.
+ * Other persistent maps can be created and used by createMap(), putInMap(), getFromMap(), putAllInMap(), removeFromMap(), clearMap().
+ */
 public class Handler<T>{
-    protected final LocalDB<T> localDB;
+    protected static final Logger log = LoggerFactory.getLogger(Handler.class);
+    protected final db.LocalDB<T> localDB;
     protected final Serializer<T> valueSerializer;
     protected final Class<T> itemClass;
+    protected final ApipClient apipClient;
+    protected final CashHandler cashHandler;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final Gson gson = new Gson();
-    private final Settings settings;
     protected final String mainFid;
     private final String sid;
     private final byte[] symKey;
-    private final byte[] priKey;
+    protected final byte[] priKey;
+    protected final String itemName;
     private final HandlerType handlerType;
+    protected final Settings settings;
     protected volatile AtomicBoolean isRunning = new AtomicBoolean(false);
-
-    public Handler(){
-        this.handlerType = null;
-        this.settings = null;
-        this.mainFid = null;
-        this.sid = null;
-        this.symKey = null;
-        this.priKey = null;
-        this.valueSerializer = null;
-        this.localDB = null;
-        this.itemClass = null;
-    }
-    public Handler(HandlerType handlerType){
-        this.handlerType = handlerType;
-        this.settings = null;
-        this.mainFid = null;
-        this.sid = null;
-        this.symKey = null;
-        this.priKey = null;
-        this.valueSerializer = null;
-        this.localDB = null;
-        this.itemClass = null;
-    }
-
-    public Handler(HandlerType handlerType, String dbDir, LocalDB.SortType sortType, Serializer<T> valueSerializer, Class<T> itemClass) {
-        this.handlerType = handlerType;
-        this.valueSerializer = valueSerializer;
-        this.localDB = new MapDBDatabase(valueSerializer, sortType);
-        this.localDB.initialize(dbDir, handlerType.toString());
-        this.settings = null;
-        this.mainFid = null;
-        this.sid = null;
-        this.symKey = null;
-        this.priKey = null;
-        this.itemClass = itemClass;
-    }
-    public Handler(Settings settings, HandlerType handlerType, boolean withLocalDB){
-        this(settings,handlerType,null,null,null, withLocalDB);
-    }
-    public Handler(Settings settings, HandlerType handlerType, LocalDB.SortType sortType, Serializer<T> valueSerializer, Class<T> itemClass, boolean withLocalDB) {
-        this.settings = settings;
-        this.handlerType = handlerType;
-        this.mainFid = settings.getMainFid();
-        this.sid = settings.getSid();
-        this.symKey = settings.getSymKey();
-        this.priKey = Settings.getMainFidPriKey(symKey,settings);
-
-        if(withLocalDB){
-            String dbDir = settings.getDbDir();
-            this.valueSerializer = valueSerializer;
-            this.localDB = new MapDBDatabase(valueSerializer, sortType);
-            this.localDB.initialize(dbDir, handlerType.name());
-        }else{
+    protected List<String> hideFieldsInListing;
+    
+        public Handler(){
+            this.handlerType = null;
+            this.mainFid = null;
+            this.sid = null;
+            this.symKey = null;
+            this.priKey = null;
             this.valueSerializer = null;
             this.localDB = null;
+            this.itemClass = null;
+            this.apipClient = null;
+            this.itemName = null;
+            this.cashHandler = null;
+            this.settings = null;
         }
-
-        this.itemClass = itemClass;
-    }
-
-//    public Handler(Settings settings, HandlerType handlerType, Class<T> itemClass){
-//        this.handlerType = handlerType;
-//        this.settings = settings;
-//        this.mainFid = settings.getMainFid();
-//        this.sid = settings.getSid();
-//        this.symKey = settings.getSymKey();
-//        this.priKey = Settings.getMainFidPriKey(symKey,settings);
-//        this.valueSerializer = null;
-//        this.localDB = null;
-//        this.itemClass = itemClass;
-//    }
-
-    public void put(String id, T item) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.put(id, item);
-        } finally {
-            lock.writeLock().unlock();
+        public Handler(HandlerType handlerType){
+            this.handlerType = handlerType;
+            this.mainFid = null;
+            this.sid = null;
+            this.symKey = null;
+            this.priKey = null;
+            this.valueSerializer = null;
+            this.localDB = null;
+            this.itemClass = null;
+            this.apipClient = null;
+            this.itemName = handlerType.name().toLowerCase();
+            this.cashHandler = null;
+            this.settings = null;
         }
-    }
-
-    public void putAll(Map<String, T> items) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.putAll(items);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    public T get(String id) {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.get(id);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    public Map<String, T> getAll() {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.getAll();
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    public NavigableMap<Long, String> getIndexIdMap() {
-        if (localDB == null) return null;
-        return localDB.getIndexIdMap();
-    }
-
-    public NavigableMap<String, Long> getIdIndexMap() {
-        if (localDB == null) return null;
-        return localDB.getIdIndexMap();
-    }
-
-    public T getItemById(String id) {
-        if (localDB == null) return null;
-        return localDB.get(id);
-    }
-
-    public T getItemByIndex(long index) {
-        if (localDB == null) return null;
-        String id = localDB.getIndexIdMap().get(index);
-        return id != null ? localDB.get(id) : null;
-    }
-
-    public Long getIndexById(String id) {
-        if (localDB == null) return null;
-        return localDB.getIdIndexMap().get(id);
-    }
-
-    public String getIdByIndex(long index) {
-        if (localDB == null) return null;
-        return localDB.getIndexIdMap().get(index);
-    }
-
-    public List<T> getItemList(int size, boolean isFromEnd) {
-        if (localDB == null) return null;
-        return localDB.getItemList(size, null, null, false, null, null, false, isFromEnd);
-    } 
-
-    public List<T> getItemList(int size, Long fromIndex, String fromId, 
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        if (localDB == null) return null;
-        return localDB.getItemList(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
-    } 
     
-    public NavigableMap<String, T> getItemMap(int size, Long fromIndex, String fromId, 
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.getItemMap(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
-        } finally {
-            lock.readLock().unlock();
+        public Handler(HandlerType handlerType, String dbDir, LocalDB.SortType sortType, Serializer<T> valueSerializer, Class<T> itemClass, ApipClient apipClient, CashHandler cashHandler) {
+            this.handlerType = handlerType;
+            this.valueSerializer = valueSerializer;
+            this.localDB = new MapDBDatabase<>(this, valueSerializer, sortType);
+            this.localDB.initialize(dbDir, handlerType.toString());
+            createMap(LocalDB.LOCAL_REMOVED_MAP, Serializer.LONG);
+            createMap(LocalDB.ON_CHAIN_DELETED_MAP, Serializer.LONG);
+            this.mainFid = null;
+            this.sid = null;
+            this.symKey = null;
+            this.priKey = null;
+            this.itemClass = itemClass;
+            this.apipClient = apipClient;
+            this.itemName = handlerType.name().toLowerCase();
+            this.cashHandler = cashHandler;
+            this.settings = null;
         }
-    }
-
-    public void close() {
-        if (localDB == null) return;
-        localDB.close();
-        isRunning.set(false);
-    }
-
-    public LocalDB.SortType getDatabaseSortType() {
-        if (localDB == null) return null;
-        return localDB.getSortType();
-    }
-
-    public AtomicBoolean getIsRunning() {
-        return isRunning;
-    }
-
-    public void setIsRunning(AtomicBoolean isRunning) {
-        this.isRunning = isRunning;
-    }
-
-    public enum HandlerType {
-        TEST,
-        ACCOUNT,
-        CASH,
-        CONTACT,
-        CID,
-        DISK,
-        GROUP,
-        HAT,
-        MAIL,
-        SECRETE,
-        ROOM,
-        SESSION,
-        NONCE,
-        MEMPOOL,
-        WEBHOOK,
-        TALK_ID,
-        TALK_UNIT,
-        TEAM;
-
-        @Override
-        public String toString() {
-            return this.name();
+        public Handler(Settings settings, HandlerType handlerType){
+            this(settings,handlerType,null,null,null, false);
         }
-
-        public static HandlerType fromString(String input) {
-            if (input == null) {
+        public Handler(Settings settings, HandlerType handlerType, db.LocalDB.SortType sortType, Serializer<T> valueSerializer, Class<T> itemClass, boolean withLocalDB) {
+            this.handlerType = handlerType;
+            this.settings = settings;
+            this.mainFid = settings.getMainFid();
+            this.sid = settings.getSid();
+            this.symKey = settings.getSymKey();
+            this.priKey = Settings.getMainFidPriKey(symKey,settings);
+    
+            if(withLocalDB){
+                String dbDir = settings.getDbDir();
+                this.valueSerializer = valueSerializer;
+                this.localDB = new MapDBDatabase<>(this, valueSerializer, sortType);
+                this.localDB.initialize(dbDir, handlerType.name());
+            }else{
+                this.valueSerializer = null;
+                this.localDB = null;
+            }
+    
+            this.itemClass = itemClass;
+            this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+            this.itemName = handlerType.name().toLowerCase();
+            this.cashHandler = (CashHandler) settings.getHandler(HandlerType.CASH);
+        }
+    
+        public void menu(BufferedReader br, boolean withSettings) {
+            Menu menu = new Menu(handlerType.toString(), this::close);
+    
+            addBasicMenuItems(br, menu);
+            if(withSettings)
+                menu.add("Settings", () -> settings.setting(br, null));
+    
+            menu.showAndSelect(br);
+        }
+    
+        protected void put(String id, T item) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.put(id, item);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        protected void putAll(Map<String, T> items) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.putAll(items);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        protected void putAll(List<T> items, String idField) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.putAll(items, idField);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+    
+        protected T get(String id) {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.get(id);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+        protected List<T> get(List<String> ids) {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.get(ids);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+        protected Map<String, T> getAll() {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.getAll();
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+        protected NavigableMap<Long, String> getIndexIdMap() {
+            if (localDB == null) return null;
+            return localDB.getIndexIdMap();
+        }
+    
+        protected NavigableMap<String, Long> getIdIndexMap() {
+            if (localDB == null) return null;
+            return localDB.getIdIndexMap();
+        }
+    
+        protected T getItemById(String id) {
+            if (localDB == null) return null;
+            return localDB.get(id);
+        }
+    
+        protected T getItemByIndex(long index) {
+            if (localDB == null) return null;
+            String id = localDB.getIndexIdMap().get(index);
+            return id != null ? localDB.get(id) : null;
+        }
+    
+        protected Long getIndexById(String id) {
+            if (localDB == null) return null;
+            return localDB.getIdIndexMap().get(id);
+        }
+    
+        protected String getIdByIndex(long index) {
+            if (localDB == null) return null;
+            return localDB.getIndexIdMap().get(index);
+        }
+    
+        protected List<T> getItemList(Integer size, Long fromIndex, String fromId,
+                boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
+            if (localDB == null) return null;
+            return localDB.getList(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
+        }
+    
+        protected LinkedHashMap<String, T> getItemMap(int size, Long fromIndex, String fromId,
+                boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.getMap(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+        public db.LocalDB.SortType getDatabaseSortType() {
+            if (localDB == null) return null;
+            return localDB.getSortType();
+        }
+    
+        public AtomicBoolean getIsRunning() {
+            return isRunning;
+        }
+    
+        public void setIsRunning(AtomicBoolean isRunning) {
+            this.isRunning = isRunning;
+        }
+    
+        protected <T2> List<T2> loadAllOnChainItems(String index, String idField, String sortField, String termField, Long lastHeight, Boolean active, ApipClient apipClient, Class<T2> tClass, BufferedReader br) {
+            if(apipClient==null){
+                System.out.println("No ApipClient is available.");
                 return null;
             }
-            for (HandlerType type : HandlerType.values()) {
-                if (type.name().equalsIgnoreCase(input)) {
-                    return type;
-                }
+            List<T2> itemList = new ArrayList<>();
+            Object obj = getMeta(LAST);
+            List<String> last = ObjectTools.objectToList(obj,String.class);
+    
+            while (true) {
+                List<T2> subSecretList = apipClient.loadSinceHeight(index,idField,sortField,termField,mainFid, lastHeight, ApipClient.DEFAULT_SIZE, last, active,tClass);
+                if (subSecretList == null || subSecretList.isEmpty()) break;
+                List<T2> batchChosenList;
+                if(br!=null) {
+                    batchChosenList = Inputer.chooseMultiFromListGeneric(subSecretList, 0, subSecretList.size(), "Choose the items you want:", br);
+                    itemList.addAll(batchChosenList);
+                }else itemList.addAll(subSecretList);
+                last = apipClient.getFcClientEvent().getResponseBody().getLast();
+    
+                if (subSecretList.size() < ApipClient.DEFAULT_SIZE) break;
+            }
+            Long bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
+            if(bestHeight==null)bestHeight = apipClient.bestHeight();
+            if(last!=null && !last.isEmpty())putMeta(LAST, last);
+            putMeta(LAST_HEIGHT, bestHeight);
+            return itemList;
+        }
+    
+        @org.jetbrains.annotations.Nullable
+        protected String carve(String opReturnStr, long cd, BufferedReader br) {
+            if (br != null && !Inputer.askIfYes(br, "Are you sure to do below operation on chain?\n" + JsonTools.jsonToNiceJson(opReturnStr)+ "\n")) {
+                return null;
+            }
+    
+            String result;
+            if(cashHandler!=null) result = cashHandler.carve(opReturnStr, cd);
+            else if(apipClient!=null) result = CashHandler.carve(opReturnStr, cd, priKey, apipClient);
+            else return null;
+    
+            if (Hex.isHex32(result)) {
+                System.out.println("Carved: " + result + ".\nWait a few minutes for confirmations before updating secrets...");
+                log.info("Carved: "+result);
+                return result;
+            } else if (StringTools.isBase64(result)) {
+                System.out.println("Sign the TX and broadcast it:\n" + result);
+            } else {
+                System.out.println("Failed to carve:" + result);
+                log.debug("Carve failed:" + result);
             }
             return null;
         }
-    }
-        
-    public interface LocalDB<T> {
-        static enum SortType {
-            KEY_ORDER,      // Sorted by key
-            UPDATE_ORDER,   // Most recent updated at end
-            BIRTH_ORDER     // Most recent created at end
+    
+        protected void showItemDetails(List<T> items, BufferedReader br) {
+            JsonTools.showListInNiceJson(items, br);
         }
-
-        void initialize(String dbPath, String dbName);
-        SortType getSortType();
-        void put(String key, T value);
-        T get(String key);
-        void remove(String key);
-        void commit();
-        void close();
-        boolean isClosed();
-        
-        // Map access methods
-        @SuppressWarnings("rawtypes")
-        HTreeMap getItemMap();
-        NavigableMap<Long, String> getIndexIdMap();
-        NavigableMap<String, Long> getIdIndexMap();
-        HTreeMap<String, Object> getMetaMap();
-        
-        // Add these new methods
-        Long getIndexById(String id);
-        String getIdByIndex(long index);
-        int getSize();
-        Object getMeta(String key);
-        
-        // Rename existing method to getItemMap
-        NavigableMap<String, T> getItemMap(Integer size, String fromId, Long fromIndex, 
-                boolean isFromInclude, String toId, Long toIndex, boolean isToInclude, boolean isFromEnd);
-        
-        // Add new method that returns List
-        List<T> getItemList(Integer size, String fromId, Long fromIndex, 
-                boolean isFromInclude, String toId, Long toIndex, boolean isToInclude, boolean isFromEnd);
-        
-        // Add these new methods
-        void putAll(Map<String, T> items);
-        Map<String, T> getAll();
-
-        List<String> searchString(String part);
-
-        // Add these new methods
-        void putMeta(String key, Object value);
-        void removeMeta(String key);
-        void clear();
-
-        // Add new method to remove multiple items
-        void remove(List<String> ids);
-    }
-
-    @SuppressWarnings("hiding")
-    public class MapDBDatabase implements LocalDB<T> {
-        private volatile DB db;
-        @SuppressWarnings("rawtypes")
-        private volatile HTreeMap itemMap;
-        private volatile ConcurrentNavigableMap<Long, String> indexIdMap;
-        private volatile ConcurrentNavigableMap<String, Long> idIndexMap;
-        private volatile HTreeMap<String, Object> metaMap;
-        private final ReadWriteLock dbLock = new ReentrantReadWriteLock();
-        private final AtomicLong currentIndex = new AtomicLong(0);
-        private final Serializer<T> valueSerializer;
-        private final SortType sortType;
-        
-        public MapDBDatabase(Serializer<T> valueSerializer, SortType sortType) {
-            this.valueSerializer = valueSerializer;
-            this.sortType = sortType;
-        }
-
-        @Override
-        public SortType getSortType() {
-            return sortType;
-        }
-        
-        @SuppressWarnings("unchecked")
-        @Override
-        public void initialize(String dbPath, String dbName) {
-            dbLock.writeLock().lock();
-            try {
-                if (db == null || db.isClosed()) {
-                    String path = Path.of(dbPath, dbName.toLowerCase()+".db").toString();
-                    System.out.println("Initializing MapDBDatabase with path: " + path);
-                    db = DBMaker.fileDB(path)
-                            .fileMmapEnable()
-                            .checksumHeaderBypass()
-                            .transactionEnable()
-                            .make();
-                                
-                    itemMap = db.hashMap("items_" + dbName)
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(valueSerializer)
-                            .createOrOpen();
-                                
-                    indexIdMap = new ConcurrentSkipListMap<>(
-                        db.treeMap("indexId_" + dbName)
-                            .keySerializer(Serializer.LONG)
-                            .valueSerializer(Serializer.STRING)
-                            .createOrOpen()
-                    );
-                                
-                    idIndexMap = new ConcurrentSkipListMap<>(
-                        db.treeMap("idIndex_" + dbName)
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen()
-                    );
-
-                    metaMap = db.hashMap("meta_" + dbName)
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.JAVA)
-                            .createOrOpen();
-                }
-            } finally {
-                dbLock.writeLock().unlock();
+    
+        protected void removeItems(List<String> itemIds, BufferedReader br) {
+            if(itemIds==null || itemIds.isEmpty()) return;
+            if(Inputer.askIfYes(br, "Remove " + itemIds.size() + " items from local?")){
+                remove(itemIds);
             }
+            System.out.println("Removed " + itemIds.size() + " items from local.");
         }
-        
-        @SuppressWarnings("unchecked")
-        @Override
-        public void put(String key, T value) {
-            dbLock.writeLock().lock();
-            try {
-                itemMap.put(key, value);
-                updateIndex(key);
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
+    
+        public enum HandlerType {
+            TEST,
+            ACCOUNT,
+            CASH,
+            CONTACT,
+            CID,
+            DISK,
+            GROUP,
+            HAT,
+            MAIL,
+            SECRET,
+            ROOM,
+            SESSION,
+            NONCE,
+            MEMPOOL,
+            WEBHOOK,
+            TALK_ID,
+            TALK_UNIT,
+            TEAM;
+    
+            @Override
+            public String toString() {
+                return this.name();
             }
-        }
-        
-        @SuppressWarnings("unchecked")
-        @Override
-        public T get(String key) {
-            dbLock.readLock().lock();
-            try {
-                return (T) itemMap.get(key);
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-        
-        @Override
-        public void remove(String key) {
-            dbLock.writeLock().lock();
-            try {
-                Long index = idIndexMap.get(key);
-                if (index != null) {
-                    indexIdMap.remove(index);
-                    idIndexMap.remove(key);
-                }
-                itemMap.remove(key);
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-        
-        @Override
-        public void commit() {
-            db.commit();
-        }
-        
-        @Override
-        public void close() {
-            dbLock.writeLock().lock();
-            try {
-                if (db != null && !db.isClosed()) {
-                    db.close();
-                    db = null;
-                    itemMap = null;
-                    indexIdMap = null;
-                    idIndexMap = null;
-                    metaMap = null;
-                }
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-        
-        @Override
-        public boolean isClosed() {
-            return db == null || db.isClosed();
-        }
-
-        @SuppressWarnings("rawtypes")
-        @Override
-        public HTreeMap getItemMap() {
-            return itemMap;
-        }
-
-        @Override
-        public NavigableMap<Long, String> getIndexIdMap() {
-            return indexIdMap;
-        }
-
-        @Override
-        public NavigableMap<String, Long> getIdIndexMap() {
-            return idIndexMap;
-        }
-
-        @Override
-        public HTreeMap<String, Object> getMetaMap() {
-            return metaMap;
-        }
-
-        @Override
-        public Long getIndexById(String id) {
-            dbLock.readLock().lock();
-            try {
-                return idIndexMap.get(id);
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        @Override
-        public String getIdByIndex(long index) {
-            dbLock.readLock().lock();
-            try {
-                return indexIdMap.get(index);
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        @Override
-        public int getSize() {
-            dbLock.readLock().lock();
-            try {
-                return itemMap.size();
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        @Override
-        public Object getMeta(String key) {
-            dbLock.readLock().lock();
-            try {
-                return metaMap.get(key);
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        @Override
-        public NavigableMap<String, T> getItemMap(Integer size, String fromId, Long fromIndex,
-                boolean isFromInclude, String toId, Long toIndex, boolean isToInclude, boolean isFromEnd) {
-            dbLock.readLock().lock();
-            try {
-                NavigableMap<Long, String> subMap = indexIdMap;
-                
-                // Handle start boundary
-                if (fromIndex != null || fromId != null) {
-                    long startIndex = fromIndex != null ? fromIndex : idIndexMap.get(fromId);
-                    subMap = subMap.tailMap(startIndex, isFromInclude);
-                }
-                
-                // Handle end boundary
-                if (toIndex != null || toId != null) {
-                    long endIndex = toIndex != null ? toIndex : idIndexMap.get(toId);
-                    subMap = subMap.headMap(endIndex, isToInclude);
-                }
-
-                // Reverse if needed
-                if (isFromEnd) {
-                    subMap = subMap.descendingMap();
-                }
-
-                // Build result map
-                NavigableMap<String, T> result = new TreeMap<>();
-                for (Map.Entry<Long, String> entry : subMap.entrySet()) {
-                    // Break if we've reached the size limit (only if size is not null)
-                    if (size != null && result.size() >= size) break;
-                    
-                    String id = entry.getValue();
-                    @SuppressWarnings("unchecked")
-                    T item = (T) itemMap.get(id);
-                    if (item != null) {
-                        result.put(id, item);
-                    }
-                }
-                
-                return result;
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        @Override
-        public List<T> getItemList(Integer size, String fromId, Long fromIndex,
-                boolean isFromInclude, String toId, Long toIndex, boolean isToInclude, boolean isFromEnd) {
-            return getItemMap(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd).values().stream().collect(Collectors.toList());
-        }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void putAll(Map<String, T> items) {
-            dbLock.writeLock().lock();
-            try {
-                for (Map.Entry<String, T> entry : items.entrySet()) {
-                    itemMap.put(entry.getKey(), entry.getValue());
-                    updateIndex(entry.getKey());
-                }
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        @Override
-        public Map<String, T> getAll() {
-            dbLock.readLock().lock();
-            try {
-                Map<String, T> result = new HashMap<>();
-                for (Object entry : itemMap.entrySet()) {
-                    @SuppressWarnings("rawtypes")
-                    Map.Entry mapEntry = (Map.Entry) entry;
-                    @SuppressWarnings("unchecked")
-                    T value = (T) mapEntry.getValue();
-                    result.put((String) mapEntry.getKey(), value);
-                }
-                return result;
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        private void updateIndex(String id) {
-            Long existingIndex = idIndexMap.get(id);
-            
-            switch (sortType) {
-                case KEY_ORDER:
-                    if (existingIndex == null) {
-                        long insertIndex = 1;
-                        for (Map.Entry<Long, String> entry : indexIdMap.entrySet()) {
-                            if (id.compareTo(entry.getValue()) < 0) {
-                                break;
-                            }
-                            insertIndex = entry.getKey() + 1;
-                        }
-                        
-                        // Shift entries atomically
-                        for (long i = currentIndex.get() + 1; i >= insertIndex; i--) {
-                            String existingId = indexIdMap.get(i);
-                            if (existingId != null) {
-                                indexIdMap.put(i + 1, existingId);
-                                idIndexMap.put(existingId, i + 1);
-                            }
-                        }
-                        
-                        indexIdMap.put(insertIndex, id);
-                        idIndexMap.put(id, insertIndex);
-                        currentIndex.set(Math.max(currentIndex.get() + 1, insertIndex));
-                    }
-                    break;
-                    
-                case UPDATE_ORDER:
-                    // Always update index for UPDATE_ORDER
-                    long newIndex = currentIndex.incrementAndGet();
-                    if (existingIndex != null) {
-                        indexIdMap.remove(existingIndex);
-                    }
-                    indexIdMap.put(newIndex, id);
-                    idIndexMap.put(id, newIndex);
-                    break;
-
-                case BIRTH_ORDER:
-                    // Only set index if it doesn't exist (preserve birth order)
-                    if (existingIndex == null) {
-                        long birthIndex = currentIndex.incrementAndGet();
-                        indexIdMap.put(birthIndex, id);
-                        idIndexMap.put(id, birthIndex);
-                    }
-                    break;
-            }
-        }
-
-        // Method to create a new map by name
-        public void createMap(String mapName, Serializer<?> serializer) {
-            dbLock.writeLock().lock();
-            try {
-                db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .valueSerializer(serializer)
-                    .createOrOpen();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        // Method to put an item into a named map
-        public <V> void putInMap(String mapName, String key, V value, Serializer<V> serializer) {
-            dbLock.writeLock().lock();
-            try {
-                HTreeMap<String, V> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .valueSerializer(serializer)
-                    .createOrOpen();
-                map.put(key, value);
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        // Method to get an item from a named map
-        public <V> V getFromMap(String mapName, String key, Serializer<V> serializer) {
-            dbLock.readLock().lock();
-            try {
-                HTreeMap<String, V> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .valueSerializer(serializer)
-                    .createOrOpen();
-                return map.get(key);
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        public <V> Map<String, V> getAllFromMap(String mapName, Serializer<V> serializer) {
-            dbLock.readLock().lock();
-            try {
-                HTreeMap<String, V> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .valueSerializer(serializer)
-                    .createOrOpen();
-                return map.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        @Override
-        public List<String> searchString(String part) {
-            dbLock.readLock().lock();
-            try {
-                List<String> matchingKeys = new ArrayList<>();
-                for (Object entry : itemMap.entrySet()) {
-                    @SuppressWarnings("rawtypes")
-                    Map.Entry mapEntry = (Map.Entry) entry;
-                    String key = (String) mapEntry.getKey();
-                    @SuppressWarnings("unchecked")
-                    T value = (T) mapEntry.getValue();
-
-                    if (value instanceof String) {
-                        if (((String) value).contains(part)) {
-                            matchingKeys.add(key);
-                        }
-                    } else {
-                        try {
-                            String json = gson.toJson(value);
-                            Type mapType = new TypeToken<Map<String, Object>>(){}.getType();
-                            Map<String, Object> valueMap = gson.fromJson(json, mapType);
-
-                            boolean matchFound = valueMap.values().stream().anyMatch(val -> {
-                                if (val instanceof String) {
-                                    return ((String) val).contains(part);
-                                } else if (val instanceof Number) {
-                                    return val.toString().contains(part);
-                                } else if (val instanceof byte[]) {
-                                    String utf8String = new String((byte[]) val, StandardCharsets.UTF_8);
-                                    return utf8String.contains(part);
-                                }
-                                return false;
-                            });
-
-                            if (matchFound) {
-                                matchingKeys.add(key);
-                            }
-                        } catch (JsonSyntaxException e) {
-                            // Handle the case where the value is not a JSON object
-                            System.err.println("Error parsing JSON for key: " + key + " - " + e.getMessage());
-                        }
-                    }
-                }
-                return matchingKeys;
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        // Method to get multiple items from a named map
-        public List<T> getFromMap(String mapName, List<String> keyList) {
-            dbLock.readLock().lock();
-            try {
-                HTreeMap<String, T> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .valueSerializer(valueSerializer)
-                    .createOrOpen();
-                List<T> result = new ArrayList<>();
-                for (String key : keyList) {
-                    result.add(map.get(key));
-                }
-                return result;
-            } finally {
-                dbLock.readLock().unlock();
-            }
-        }
-
-        // Method to put multiple items into a named map
-        public <V> void putAllInMap(String mapName, List<String> keyList, List<V> valueList, Serializer<V> serializer) {
-            dbLock.writeLock().lock();
-            try {
-                HTreeMap<String, V> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .valueSerializer(serializer)
-                    .createOrOpen();
-                for (int i = 0; i < keyList.size(); i++) {
-                    map.put(keyList.get(i), valueList.get(i));
-                }
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        // Method to remove an item from a named map
-        public void removeFromMap(String mapName, String key) {
-            dbLock.writeLock().lock();
-            try {
-                HTreeMap<String, ?> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .createOrOpen();
-                map.remove(key);
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        // Method to clear all items from a named map
-        public void clearMap(String mapName) {
-            dbLock.writeLock().lock();
-            try {
-                HTreeMap<String, ?> map = db.hashMap(mapName)
-                    .keySerializer(Serializer.STRING)
-                    .createOrOpen();
-                map.clear();
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        @Override
-        public void clear() {
-            dbLock.writeLock().lock();
-            try {
-                itemMap.clear();
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-
-        @Override
-        public void putMeta(String key, Object value) {
-            dbLock.writeLock().lock();
-            try {
-                metaMap.put(key, value);
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        @Override
-        public void removeMeta(String key) {
-            dbLock.writeLock().lock();
-            try {
-                metaMap.remove(key);
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-
-        @Override
-        public void remove(List<String> ids) {
-            dbLock.writeLock().lock();
-            try {
-                for (String key : ids) {
-                    Long index = idIndexMap.get(key);
-                    if (index != null) {
-                        indexIdMap.remove(index);
-                        idIndexMap.remove(key);
-                    }
-                    itemMap.remove(key);
-                }
-                commit();
-            } finally {
-                dbLock.writeLock().unlock();
-            }
-        }
-    }
-
-    // Method to create a new map by name
-    public void createMap(String mapName, Serializer<?> serializer) {
-        lock.writeLock().lock();
-        try {
-            ((MapDBDatabase) localDB).createMap(mapName, serializer);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    // Method to put an item into a named map
-    public <V> void putInMap(String mapName, String key, V value, Serializer<V> serializer) {
-        lock.writeLock().lock();
-        try {
-            ((MapDBDatabase) localDB).putInMap(mapName, key, value, serializer);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    // Method to get an item from a named map
-    public <V> V getFromMap(String mapName, String key, Serializer<V> serializer) {
-        lock.readLock().lock();
-        try {
-            return ((MapDBDatabase) localDB).getFromMap(mapName, key, serializer);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    public List<String> searchInValue(String part) {
-        return localDB.searchString(part);
-    }
-
-    // Method to get multiple items from a named map
-    public List<T> getFromMap(String mapName, List<String> keyList) {
-        lock.readLock().lock();
-        try {
-            return ((MapDBDatabase) localDB).getFromMap(mapName, keyList);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    public <V> Map<String, V> getAllFromMap(String mapName, Serializer<V> serializer) {
-        lock.readLock().lock();
-        try {
-            return ((MapDBDatabase) localDB).getAllFromMap(mapName, serializer);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-
-    // Method to put multiple items into a named map
-    public <V> void putAllInMap(String mapName, List<String> keyList, List<V> valueList, Serializer<V> serializer) {
-        lock.writeLock().lock();
-        try {
-            ((MapDBDatabase) localDB).putAllInMap(mapName, keyList, valueList, serializer);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    // Method to remove an item from a named map
-    public void removeFromMap(String mapName, String key) {
-        lock.writeLock().lock();
-        try {
-            ((MapDBDatabase) localDB).removeFromMap(mapName, key);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    // Method to clear all items from a named map
-    public void clearMap(String mapName) {
-        lock.writeLock().lock();
-        try {
-            ((MapDBDatabase) localDB).clearMap(mapName);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    public Object getMeta(String key) {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.getMeta(key);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    public void putMeta(String key, Object value) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.putMeta(key, value);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    public void removeMeta(String key) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.removeMeta(key);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    public <T> List<T>   chooseToShow(List<T> itemList, BufferedReader br){
-        if(itemList.isEmpty()){
-            return null;
-        }
-        List<T> chosenItems = showItems(handlerType.toString(), itemList, br, true, true);
-        if(chosenItems==null || chosenItems.isEmpty()){
-            return null;
-        }
-        showItemsDetails(chosenItems, br);
-        return chosenItems;
-    }
-
-    public <T> List<T> showItems(String title, @Nullable List<T> itemList, @Nullable BufferedReader br,boolean isFromEnd,boolean withChoose) {
-        // Implement the logic to display webhook requests
-        System.out.println("Displaying "+title+"...");
-        int count = 0;
-        int size;
-        if(br!=null){
-            size = Inputer.inputInteger(br, "Enter the size of a page: ", 1, 100);
-        }else{
-            size = Shower.DEFAULT_SIZE;
-        }
-        int totalItems = localDB.getSize();
-        int totalPages = (totalItems + size - 1) / size; // Ceiling division to handle non-even division
-        int currentPage = 0;
-        String fromId = null;
-        List<T> chosenItems = new ArrayList<>();
-
-        if(itemList!=null){
-            showItemList(title, itemList, count);
-            if(withChoose){
-                List<Integer> choices = Shower.chooseMulti(br, count, count+itemList.size());
-                if(choices.isEmpty()){
+    
+            public static HandlerType fromString(String input) {
+                if (input == null) {
                     return null;
                 }
-                for(Integer choice : choices){
-                    chosenItems.add(itemList.get(choice-1));
+                for (HandlerType type : HandlerType.values()) {
+                    if (type.name().equalsIgnoreCase(input)) {
+                        return type;
+                    }
                 }
-                showItemList("Chosen", chosenItems, 0);
+                return null;
             }
-            return chosenItems;
         }
-        while(true){
-            NavigableMap<String, T> itemMap =  (NavigableMap<String, T>) getItemMap(size, null, fromId, false, null, null, true, isFromEnd);
-            List<T> batchItemList = new ArrayList<>(itemMap.values());
-            showItemList(title, batchItemList, count);
-            if(withChoose){
-                List<Integer> choices = Shower.chooseMulti(br, count, count+size);
-                if(choices.isEmpty()){
+    
+        // Method to create a new map by name
+        @SuppressWarnings("unchecked")
+        public void createMap(String mapName, Serializer<?> serializer) {
+            lock.writeLock().lock();
+            try {
+                // Get existing map names from meta
+                Set<String> mapNames = (Set<String>) localDB.getMetaMap().getOrDefault(LocalDB.MAP_NAMES_META_KEY, new HashSet<String>());
+                
+                // Create the new map if it doesn't exist
+                if (!mapNames.contains(mapName)) {
+                    // Add new map name to the set and update meta
+                    mapNames.add(mapName);
+                    localDB.putMeta(LocalDB.MAP_NAMES_META_KEY, mapNames);
+                    localDB.putMeta(mapName + "_serializer", ((MapDBDatabase<?>) localDB).getSerializerInfo(serializer));
+                }
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        // Method to put an item into a named map
+        public <V> void putInMap(String mapName, String key, V value, Serializer<V> serializer) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.putInMap(mapName, key, value, serializer);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        // Method to get an item from a named map
+        public <V> V getFromMap(String mapName, String key, Serializer<V> serializer) {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.getFromMap(mapName, key, serializer);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+        public List<T> searchInValue(String part) {
+            return localDB.searchString(part);
+        }
+    
+        // Method to get multiple items from a named map
+        public <V> List<V> getFromMap(String mapName, List<String> keyList, Serializer<V> serializer) {
+            lock.readLock().lock();
+            try {
+                return localDB.getFromMap(mapName, keyList,serializer);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+        public <V> Map<String, V> getAllFromMap(String mapName, Serializer<V> serializer) {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.getAllFromMap(mapName, serializer);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+    
+        // Method to put multiple items into a named map
+        public <V> void putAllInMap(String mapName, List<String> keyList, List<V> valueList, Serializer<V> serializer) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.putAllInMap(mapName, keyList, valueList, serializer);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        // Method to remove an item from a named map
+        public void removeFromMap(String mapName, String key) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.removeFromMap(mapName, key);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        public void removeFromMap(String mapName, List<String> keys) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.removeFromMap(mapName, keys);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        // Method to clear all items from a named map
+        public void clearMap(String mapName) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.clearMap(mapName);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        public Object getMeta(String key) {
+            if (localDB == null) return null;
+            lock.readLock().lock();
+            try {
+                return localDB.getMeta(key);
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+    
+        public void putMeta(String key, Object value) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.putMeta(key, value);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        public void removeMeta(String key) {
+            if (localDB == null) return;
+            lock.writeLock().lock();
+            try {
+                localDB.removeMeta(key);
+            } finally {
+                lock.writeLock().unlock();
+            }
+        }
+    
+        public void chooseToShow(List<T> itemList, BufferedReader br){
+            if(itemList.isEmpty()){
+                return;
+            }
+            List<T> chosenItems = showAndChooseItems("Choose to show items...", itemList, 20, br, true, true);
+            if(chosenItems==null || chosenItems.isEmpty()){
+                return;
+            }
+            JsonTools.showListInNiceJson(chosenItems, br);
+        }
+    
+    
+        public List<T> showAndChooseItems(String promote, @Nullable List<T> itemList, Integer sizeInPage, @Nullable BufferedReader br, boolean isFromEnd, boolean withChoose) {
+            // Implement the logic to display webhook requests
+            System.out.println(promote);
+            int count = 0;
+    
+             if(sizeInPage==null){
+                sizeInPage = Shower.DEFAULT_SIZE;
+            }
+    
+            int totalItems = localDB.getSize();
+            int totalPages = (totalItems + sizeInPage - 1) / sizeInPage; // Ceiling division to handle non-even division
+            int currentPage;
+    
+            List<T> chosenItems = new ArrayList<>();
+            if(itemList!=null){
+                showItemList(promote, itemList, count);
+                if(br!=null && withChoose){
+                    List<Integer> choices = Inputer.chooseMulti(br, count, count+itemList.size());
+                    if(choices.size()==1 && choices.get(0)==(-1))
+                        return itemList;
+                    if(choices.isEmpty()){
+                        return null;
+                    }
+                    for(Integer choice : choices){
+                        chosenItems.add(itemList.get(choice-1));
+                    }
+                }
+                if(withChoose)System.out.println(chosenItems.size() +" items are chosen.");
+                return chosenItems;
+            }
+    
+            Long fromIndex = null;
+            while(true){
+                List<T> batchItemList = getItemList(sizeInPage,fromIndex , null, false, null, null, true, isFromEnd);
+    
+                if(batchItemList.isEmpty())break;
+    
+                try {
+                    fromIndex = localDB.getTempIndex();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+    
+                showItemList(promote, batchItemList, 0);//count);
+                if(br!=null && withChoose){
+                    List<Integer> choices = Inputer.chooseMulti(br, 0, batchItemList.size());
+                    if(choices.isEmpty()){
+                        continue;
+                    }
+                    if(choices.size()==1 && choices.get(0)==(-1)){
+                        chosenItems.addAll(batchItemList);
+                    }else {
+                        List<T> items = new ArrayList<>();
+                        for (Integer choice : choices) {
+                            items.add(batchItemList.get(choice - 1));
+                        }
+                        chosenItems.addAll(items);
+                        System.out.println(items.size() + " added.");
+                    }
+                }
+                count += sizeInPage;
+                currentPage = count / sizeInPage;
+                if(currentPage >= totalPages){
                     break;
                 }
-                List<T> items = new ArrayList<>();
-                for(Integer choice : choices){
-                    items.add(batchItemList.get(choice-1));
+                if(br!=null && Inputer.askIfYes(br, "Do you want to stop?")){
+                    break;
+                }else{
+                    fromIndex = localDB.getTempIndex();
                 }
-                chosenItems.addAll(items);
-                showItemList("Chosen", chosenItems, 0);
             }
-            count += size;
-            currentPage = count / size;
-            if(currentPage >= totalPages){
-                break;
-            }
-            if(Inputer.askIfYes(br, "Do you want to continue?")){
-                fromId = itemMap.lastKey();
-            }else{
-                break;
-            }
+            System.out.println(chosenItems.size() +" items are chosen.");
+            return chosenItems;
         }
-        return chosenItems;
+    
+        protected void showItemList(String title, List<T> itemList, int beginFrom) {
+            Shower.showDataTable(title, itemList,beginFrom,hideFieldsInListing);
     }
-
-    protected <T> void showItemList(String title, List<T> itemList, int beginFrom) {
-        Shower.showDataTable(title, itemList,beginFrom);
-    }
-
-    // private List<T> chooseItems(List<Collection<T>> of, BufferedReader br) {
-    //     List<T> chosenItems = new ArrayList<>();
-    //     for (Collection<T> collection : of) {
-    //         chosenItems.addAll(collection);
-    //     }
-    //     return chosenItems;
-    // }
-
-    public void menu(BufferedReader br) {
-        Menu menu = new Menu(handlerType.toString());
-
-        addBasicMenuItems(br, menu);
-
-        menu.showAndSelect(br);
-    }
-
-    public void opItems(List<T> items, String ask, BufferedReader br){
+    protected void opItems(List<T> items, String ask, BufferedReader br){
         System.out.println("To override this method, implement it in the subclass.");
     }
 
-    public void findItems(BufferedReader br){
-        List<T> foundItems = searchItems(br, false, true);
-        if(foundItems==null || foundItems.isEmpty()){
-            return;
-        }
-    }
-
-    public List<T> searchItems(BufferedReader br, boolean withChoose,boolean withOperation){
+    protected List<T> searchItems(BufferedReader br, boolean withChoose,boolean withOperation){
         String searchStr = Inputer.inputString(br, "Input the search string:");
-        List<String> foundIdList = searchInValue(searchStr);
-        System.out.println("");
-        if(Inputer.askIfYes(br, "Found "+foundIdList.size()+" items. List them?")){
-            List<T> foundItems = new ArrayList<>();
-            for(String id:foundIdList){
-                foundItems.add(get(id));
-            }
+        List<T> foundItems = searchInValue(searchStr);
+        System.out.println();
+        if(foundItems.size()>0 && Inputer.askIfYes(br, "Found "+foundItems.size()+" items. List and choose?")){
             showItemList(handlerType.toString(), foundItems, 0);
             if(withChoose){
-                List<Integer> choices = Shower.chooseMulti(br, 0, foundItems.size());
+                List<Integer> choices = Inputer.chooseMulti(br, 0, foundItems.size());
                 if(choices.isEmpty()){
                     return null;
                 }
                 List<T> items = new ArrayList<>();
-                for(Integer choice : choices){
-                    items.add(foundItems.get(choice-1));
+
+                if(choices.size()==1 && choices.get(0)==(-1)){
+                    items.addAll(foundItems);
+                }else {
+                    for (Integer choice : choices) {
+                        items.add(foundItems.get(choice - 1));
+                    }
                 }
                 if(withOperation){
                     opItems(items, "Operate on the selected items", br);
@@ -1114,68 +627,51 @@ public class Handler<T>{
         return null;
     }
 
-    protected void addBasicMenuItems(BufferedReader br, Menu menu) {
-        menu.add("Read Local Items", () -> showItemsDetails(null, br));
-        menu.add("Find Local Items", () -> searchItems(br, true,true));
-        menu.add("Get Local Item", () -> {
-            try {
-                System.out.print("Enter ID: ");
-                String id = br.readLine().trim();
-                System.out.println("Item: " + get(id));
-            } catch (IOException e) {
-                System.out.println("Error: " + e.getMessage());
-            }
-        });
-        menu.add("Add Items to Local DB", () -> {
+    public void addBasicMenuItems(BufferedReader br, Menu menu) {
+        menu.add("List Local "+StringTools.capitalize(itemName), () -> listItems(br));
+        menu.add("Search Local "+StringTools.capitalize(itemName), () -> searchItems(br, true,true));
+        menu.add("Add Local "+StringTools.capitalize(itemName), addItemsToLocalDB(br, itemName));
+        menu.add("Clear Local Database", () -> clearTheDatabase(br));
+    }
+
+    private void clearTheDatabase(BufferedReader br) {
+        if(Inputer.askIfYes(br, "Are you sure you want to clear the entire database? This will remove ALL data including metadata.")){
+            clearDB();
+            System.out.println("Database cleared completely.");
+        }
+    }
+
+    @NotNull
+    private Runnable addItemsToLocalDB(BufferedReader br, String itemName) {
+        return () -> {
             try {
                 Map<String, T> items = new HashMap<>();
-                System.out.print("Enter number of items: ");
+                System.out.print("Enter number of "+itemName+": ");
                 int numItems = Integer.parseInt(br.readLine().trim());
                 for (int i = 0; i < numItems; i++) {
                     System.out.print("Enter ID: ");
                     String id = br.readLine().trim();
-                    System.out.print("Enter Item: ");
+                    System.out.print("Enter "+itemName+": ");
                     T item = Inputer.createFromUserInput(br, itemClass, null, null);
+                    if(item==null)return;
                     items.put(id, item);
                 }
                 putAll(items);
-            } catch (IOException e) {
-                System.out.println("Error: " + e.getMessage());
-            } catch (ReflectiveOperationException e) {
-                System.out.println("Error: " + e.getMessage());
-            }
-        });
-        menu.add("Get All Local Items", () -> System.out.println("All Items: " + getAll()));
-        menu.add("Remove Local Item", () -> {
-            try {
-                System.out.print("Enter ID to remove: ");
-                String id = br.readLine().trim();
-                remove(id);
-                System.out.println("Item removed.");
-            } catch (IOException e) {
+                System.out.println("\n"+items.size() +" "+ itemName+ "s added.");
+            } catch (IOException | ReflectiveOperationException e) {
                 System.out.println("Error: " + e.getMessage());
             }
-        });
-        menu.add("Clear All Local Items", () -> {
-            if(Inputer.askIfYes(br, "Are you sure you want to clear all items?")){
-                clear();
-                System.out.println("All items cleared.");
-            }
-        });
+        };
     }
 
 
+    protected void listItems(BufferedReader br){
+        List<T> chosenItems = showAndChooseItems("Chose to show details...",null,Shower.DEFAULT_SIZE,br,true,true);
 
-    public <T> void showItemsDetails(@Nullable List<T> items,BufferedReader br){
-        List<T> chosenItems = showItems(handlerType.toString(), items, br, true, true);
         if(chosenItems==null || chosenItems.isEmpty()){
             return;
         }
-        BufferedReader reader = null;
-        if(br!=null && Inputer.askIfYes(br, "Show one by one with Enter?")){
-            reader = br;
-        }
-        JsonTools.showListInNiceJson(chosenItems, reader);
+        opItems(chosenItems,"What you want to do with them?",br);
     }
 
     public void remove(String id) {
@@ -1183,6 +679,7 @@ public class Handler<T>{
         lock.writeLock().lock();
         try {
             localDB.remove(id);
+            markAsLocallyRemoved(Arrays.asList(id));
         } finally {
             lock.writeLock().unlock();
         }
@@ -1202,7 +699,7 @@ public class Handler<T>{
         if (localDB == null) return;
         lock.writeLock().lock();
         try {
-            localDB.remove(ids);
+            localDB.removeList(ids);
         } finally {
             lock.writeLock().unlock();
         }
@@ -1213,7 +710,7 @@ public class Handler<T>{
         List<T> chosenItems = new ArrayList<>();
         String lastKey = null;
         int totalDisplayed = 0;
-        int size = Inputer.inputInteger(br, "Enter the size of a page: ", 1, 0);
+        Integer size = Shower.DEFAULT_SIZE; //Inputer.inputInteger(br, "Enter the size of a page: ", 1, 0);
 
         while (true) {
             List<T> currentList = getItemList(size, null, lastKey, false, null, null, true, true);
@@ -1221,58 +718,70 @@ public class Handler<T>{
                 break;
             }
 
-            List<T> result = chooseItemList(currentList, chosenItems, totalDisplayed, br);
-            if (result == null) {
-                totalDisplayed += currentList.size();
-                lastKey = getIdByIndex(totalDisplayed - 1);
-                continue;
-            } else if (result.contains(null)) {
-                result.remove(null);  // Remove the break signal
-                break;
-            }
+            lastKey = localDB.getTempId();//currentList.get(currentList.size()-1);
+
+            List<T> result = chooseItemList(currentList,  totalDisplayed, br);
 
             totalDisplayed += currentList.size();
-            lastKey = getIdByIndex(totalDisplayed - 1);
+
+            if (result == null)
+                continue;
+            result.remove(null);  // Remove the break signal
+            chosenItems.addAll(result);
         }
 
         return chosenItems;
     }
 
-    private List<T> chooseItemList(List<T> currentList, List<T> chosenItems, int totalDisplayed, BufferedReader br) {
+    private List<T> chooseItemList(List<T> currentList, int totalDisplayed, BufferedReader br) {
         String title = "Choose Items";
+        List<T> chosenItems = new ArrayList<>();
         Shower.showDataTable(title, currentList, totalDisplayed);
 
         System.out.println("Enter item numbers to select (comma-separated), 'a' for all. 'q' to quit, or press Enter for more:");
-        String input = Inputer.inputString(br);
+        String input;
+        while(true) {
+            input = Inputer.inputString(br);
 
-        if ("".equals(input)) {
-            return null;  // Signal to continue to next page
-        }
-
-        if (input.equals("q")) {
-            chosenItems.add(null);  // Signal to break the loop
-            return chosenItems;
-        }
-
-        if (input.equals("a")) {
-            chosenItems.addAll(currentList);
-            chosenItems.add(null);  // Signal to break the loop
-            return chosenItems;
-        }
-
-        String[] selections = input.split(",");
-        for (String selection : selections) {
-            try {
-                int index = Integer.parseInt(selection.trim()) - 1;
-                if (index >= 0 && index < totalDisplayed + currentList.size()) {
-                    int listIndex = index - totalDisplayed;
-                    chosenItems.add(currentList.get(listIndex));
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid input: " + selection);
+            if ("".equals(input)) {
+                return null;  // Signal to continue to next page
             }
+
+            if (input.equals("q")) {
+                return chosenItems;
+            }
+
+            if (input.equals("a")) {
+                chosenItems.addAll(currentList);
+                chosenItems.add(null);  // Signal to break the loop
+                return chosenItems;
+            }
+
+            String[] selections = input.split(",");
+            try {
+                boolean hasInvalidInput = false;
+                for (String selection : selections) {
+                    try {
+                        int index = Integer.parseInt(selection.trim()) - 1;
+                        if (index >= 0 && index < totalDisplayed + currentList.size()) {
+                            int listIndex = index - totalDisplayed;
+                            chosenItems.add(currentList.get(listIndex));
+                        }
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid input: " + selection+". Try again.");
+                        hasInvalidInput = true;
+                        break;
+                    }
+                }
+                if (hasInvalidInput) {
+                    continue;  
+                }
+            } catch (Exception e) {
+                System.out.println("Error processing input. Try again.");
+                continue;
+            }
+            return chosenItems;
         }
-        return chosenItems;
     }
 
     public HandlerType getHandlerType() {
@@ -1280,176 +789,299 @@ public class Handler<T>{
     }
 
     public static void main(String[] args) {
-        // Create directory first
+        // Test each sort type
+        testSortType(db.LocalDB.SortType.KEY_ORDER);
+        testSortType(db.LocalDB.SortType.UPDATE_ORDER);
+        testSortType(db.LocalDB.SortType.BIRTH_ORDER);
+    }
+
+    private static void testSortType(db.LocalDB.SortType sortType) {
+        System.out.println("\n=== Testing " + sortType + " ===");
+        
+        // Create directory
         File directory = new File("test_db");
-        if (!directory.exists()) {
-            if (!directory.mkdirs()) {
-                System.err.println("Failed to create directory: test_db");
-                return;
-            }
+        if (!directory.exists() && !directory.mkdirs()) {
+            System.err.println("Failed to create directory: test_db");
+            return;
         }
 
-        // Initialize handler with String serializer and UPDATE_ORDER sort type
+        // Initialize handler
         Handler<String> handler = new Handler<>(
             HandlerType.TEST,
             "test_db",
-            LocalDB.SortType.UPDATE_ORDER,
+            sortType,
             Serializer.STRING,
-            String.class
-        );
+            String.class,
+                null, null);
 
         try {
-            // Test basic put and get
-            System.out.println("Testing basic put and get...");
-            handler.put("key1", "value1");
-            handler.put("key2", "value2");
-            System.out.println("Get key1: " + handler.get("key1"));
-            System.out.println("Get key2: " + handler.get("key2"));
-
-            // Test putAll and getAll
-            System.out.println("\nTesting putAll and getAll...");
-            Map<String, String> items = new HashMap<>();
+            // Test batch insert
+            System.out.println("\nTesting batch insert...");
+            Map<String, String> items = new LinkedHashMap<>();
             items.put("key3", "value3");
+            items.put("key1", "value1");
+            items.put("key2", "value2");
+            items.put("key5", "value5");
             items.put("key4", "value4");
+            
             handler.putAll(items);
-            System.out.println("All items: " + handler.getAll());
+            printCurrentState(handler);
 
-            // Test index-based operations
-            System.out.println("\nTesting index operations...");
-            NavigableMap<Long, String> indexIdMap = handler.getIndexIdMap();
-            NavigableMap<String, Long> idIndexMap = handler.getIdIndexMap();
-            System.out.println("Index-ID map: " + indexIdMap);
-            System.out.println("ID-Index map: " + idIndexMap);
+            // Test individual insert
+            System.out.println("\nTesting individual insert...");
+            handler.put("key0", "value0");
+            printCurrentState(handler);
 
-            // Test getting items by index
-            System.out.println("\nTesting getItemByIndex...");
-            for (Long index : indexIdMap.keySet()) {
-                System.out.println("Item at index " + index + ": " + handler.getItemByIndex(index));
-            }
+            // Test batch remove
+            System.out.println("\nTesting batch remove...");
+            List<String> toRemove = Arrays.asList("key1", "key3", "key5");
+            handler.remove(toRemove);
+            printCurrentState(handler);
 
-            // Test ordered list retrieval
-            System.out.println("\nTesting getItemOrderedList...");
-            NavigableMap<String, String> orderedList = handler.getItemMap(
-                2,      // size
-                null,   // fromIndex
-                null,   // fromId
-                true,   // isFromInclude
-                null,   // toIndex
-                null,   // toId
-                false   // isFromEnd
-                , false
-            );
-            System.out.println("Ordered list (first 2 items): " + orderedList);
+            // Test individual remove
+            System.out.println("\nTesting individual remove...");
+            handler.remove("key2");
+            printCurrentState(handler);
 
-            // Test reverse ordered list
-            System.out.println("\nTesting reverse ordered list...");
-            NavigableMap<String, String> reverseList = handler.getItemMap(
-                2,      // size
-                null,   // fromIndex
-                null,   // fromId
-                true,   // isFromInclude
-                null,   // toIndex
-                null,   // toId
-                true    // isFromEnd
-                , false
-            );
-            System.out.println("Reverse ordered list (last 2 items): " + reverseList);
+            // Test update existing keys
+            System.out.println("\nTesting updates...");
+            handler.put("key4", "updated_value4");
+            handler.put("key0", "updated_value0");
+            printCurrentState(handler);
 
-            // Test searchString
-            System.out.println("\nTesting searchString...");
-            List<String> searchResults = handler.searchInValue("value");
-            System.out.println("Search results for 'value': " + searchResults);
+            // Test clear
+            System.out.println("\nTesting clear...");
+            handler.clear();
+            printCurrentState(handler);
 
-            searchResults = handler.searchInValue("1");
-            System.out.println("Search results for '1': " + searchResults);
-
-            // Test createMap, putInMap, getFromMap, getAllFromMap, putAllInMap, removeFromMap, clearMap
-            System.out.println("\nTesting createMap, putInMap, getFromMap, getAllFromMap, putAllInMap, removeFromMap, clearMap...");
-            String mapName = "newMap";
-            handler.createMap(mapName, Serializer.STRING);
-            handler.putInMap(mapName, "mapKey1", "value1", Serializer.STRING);
-            handler.putInMap(mapName, "mapKey2", "value2", Serializer.STRING); 
-            System.out.println("Get mapKey1 from newMap: " + handler.getFromMap(mapName, "mapKey1", Serializer.STRING));
-            System.out.println("Get mapKey2 from newMap: " + handler.getFromMap(mapName, "mapKey2", Serializer.STRING));
-            System.out.println("All items from newMap: " + handler.getAllFromMap(mapName, Serializer.STRING));
-
-            List<String> keyList = new ArrayList<>();
-            keyList.add("mapKey1");
-            keyList.add("mapKey2");
-            List<String> valueList = new ArrayList<>();
-            valueList.add("value1");
-            valueList.add("value2");
-            handler.putAllInMap(mapName, keyList, valueList, Serializer.STRING);
-            System.out.println("All items from newMap after putAllInMap: " + handler.getAllFromMap(mapName, Serializer.STRING));
-
-            // Test removeFromMap
-            System.out.println("\nTesting removeFromMap...");
-            handler.removeFromMap(mapName, "mapKey1");
-            System.out.println("Get mapKey1 from newMap after removal: " + handler.getFromMap(mapName, "mapKey1", Serializer.STRING));
-
-            // Test clearMap
-            System.out.println("\nTesting clearMap...");
-            handler.clearMap(mapName);
-            System.out.println("Get mapKey2 from newMap after clearing: " + handler.getFromMap(mapName, "mapKey2", Serializer.STRING));
-
-            // Additional tests for different value types
-            System.out.println("\nTesting maps with different value types...");
-            String intMapName = "intMap";
-            handler.createMap(intMapName, Serializer.INTEGER);
-            handler.putInMap(intMapName, "intKey1", 100, Serializer.INTEGER);
-            System.out.println("Get intKey1 from intMap: " + handler.getFromMap(intMapName, "intKey1", Serializer.INTEGER));
-
-            String doubleMapName = "doubleMap";
-            handler.createMap(doubleMapName, Serializer.DOUBLE);
-            handler.putInMap(doubleMapName, "doubleKey1", 99.99, Serializer.DOUBLE);
-            System.out.println("Get doubleKey1 from doubleMap: " + handler.getFromMap(doubleMapName, "doubleKey1", Serializer.DOUBLE));
-
-
-            //Test ContactDetail Handler
-            System.out.println("\nTesting ContactDetail Handler...");
-
-            File directory1 = new File("test_contact_db");
-            if (!directory1.exists()) {
-                if (!directory1.mkdirs()) {
-                    System.err.println("Failed to create directory: test_contact_db");
-                    return;
-                }
-            }
-            // Initialize handler with correct path and filename
-            Handler<ContactDetail> contactHandler = new Handler<>(
-                    HandlerType.TEST,
-                    "test_contact_db",                              // directory path
-                    LocalDB.SortType.UPDATE_ORDER,
-                    FcEntity.getMapDBSerializer(ContactDetail.class),
-                    ContactDetail.class
-            );
-
-            // Create test contact
-            ContactDetail contact = new ContactDetail();
-            contact.setFid("test_fid_123");
-            contact.setMemo("Test memo");
-            contact.setSeeStatement(true);
-            contact.setSeeWritings(false);
-
-            // Store the contact
-            contactHandler.put(contact.getFid(), contact);
-            System.out.println("Stored contact successfully");
-
-            // Retrieve the contact
-            ContactDetail retrieved = contactHandler.get(contact.getFid());
-            System.out.println("Retrieved contact: " + retrieved.toNiceJson());
-
-            // Clean up
-            contactHandler.close();
-            System.out.println("Test completed successfully");
+            // Test mixed operations
+            System.out.println("\nTesting mixed operations...");
+            Map<String, String> newItems = new LinkedHashMap<>();
+            newItems.put("keyB", "valueB");
+            newItems.put("keyA", "valueA");
+            newItems.put("keyC", "valueC");
+            handler.putAll(newItems);
+            handler.put("keyD", "valueD");
+            handler.remove("keyB");
+            handler.put("keyE", "valueE");
+            printCurrentState(handler);
 
         } catch (Exception e) {
             System.err.println("Error during testing: " + e.getMessage());
             e.printStackTrace();
         } finally {
-            // Clean up
             handler.close();
-            System.out.println("\nHandler closed.");
+            System.out.println("\nHandler closed for " + sortType);
         }
     }
+
+    private static void printCurrentState(Handler<String> handler) {
+        System.out.println("Current state:");
+        System.out.println("Main map: " + handler.getAll());
+        System.out.println("Index->ID map: " + handler.getIndexIdMap());
+        System.out.println("ID->Index map: " + handler.getIdIndexMap());
+        
+        // Verify index consistency
+        boolean consistent = verifyIndexConsistency(handler);
+        System.out.println("Index consistency: " + (consistent ? "OK" : "FAILED"));
+    }
+
+    private static boolean verifyIndexConsistency(Handler<String> handler) {
+        Map<String, String> mainMap = handler.getAll();
+        NavigableMap<Long, String> indexIdMap = handler.getIndexIdMap();
+        NavigableMap<String, Long> idIndexMap = handler.getIdIndexMap();
+
+        // Check size consistency
+        if (mainMap.size() != indexIdMap.size() || mainMap.size() != idIndexMap.size()) {
+            System.out.println("Size mismatch: main=" + mainMap.size() + 
+                             ", indexId=" + indexIdMap.size() + 
+                             ", idIndex=" + idIndexMap.size());
+            return false;
+        }
+
+        // Check bidirectional mapping consistency
+        for (Map.Entry<Long, String> entry : indexIdMap.entrySet()) {
+            Long index = entry.getKey();
+            String id = entry.getValue();
+            
+            // Check if ID exists in main map
+            if (!mainMap.containsKey(id)) {
+                System.out.println("ID " + id + " in index map but not in main map");
+                return false;
+            }
+            
+            // Check if index mapping is consistent
+            Long reverseIndex = idIndexMap.get(id);
+            if (!index.equals(reverseIndex)) {
+                System.out.println("Index mismatch for ID " + id + 
+                                 ": indexId=" + index + 
+                                 ", idIndex=" + reverseIndex);
+                return false;
+            }
+        }
+
+        // For KEY_ORDER, verify ordering
+        if (handler.getDatabaseSortType() == db.LocalDB.SortType.KEY_ORDER) {
+            String prevId = null;
+            for (String id : indexIdMap.values()) {
+                if (prevId != null && id.compareTo(prevId) < 0) {
+                    System.out.println("Key order violation: " + prevId + " -> " + id);
+                    return false;
+                }
+                prevId = id;
+            }
+        }
+
+        return true;
+    }
+
+    // Method to get all map names
+    public Set<String> getMapNames() {
+        if (localDB == null) return new HashSet<>();
+        lock.readLock().lock();
+        try {
+            return localDB.getMapNames();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public void clearDB() {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            localDB.clearDB();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    // Add new methods for managing removed and deleted items
+    public void markAsLocallyRemoved(List<String> ids) {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            List<Long> times = new ArrayList<>();
+            long currentTime = System.currentTimeMillis();
+            for(String ignored : ids){
+                times.add(currentTime);
+            }
+            putAllInMap(LocalDB.LOCAL_REMOVED_MAP, ids, times, Serializer.LONG);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void markAsOnChainDeleted(List<String> ids) {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            List<Long> times = new ArrayList<>();
+            long currentTime = System.currentTimeMillis();
+            for(String ignored : ids){
+                times.add(currentTime);
+            }
+            putAllInMap(LocalDB.ON_CHAIN_DELETED_MAP, ids, times, Serializer.LONG);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public Long getLocalRemovalTime(String id) {
+        if (localDB == null) return null;
+        lock.readLock().lock();
+        try {
+            return getFromMap(LocalDB.LOCAL_REMOVED_MAP, id, Serializer.LONG);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public Long getOnChainDeletionTime(String id) {
+        if (localDB == null) return null;
+        lock.readLock().lock();
+        try {
+            return getFromMap(LocalDB.ON_CHAIN_DELETED_MAP, id, Serializer.LONG);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public Map<String, Long> getAllLocallyRemoved() {
+        if (localDB == null) return new HashMap<>();
+        lock.readLock().lock();
+        try {
+            return getAllFromMap(LocalDB.LOCAL_REMOVED_MAP, Serializer.LONG);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public Map<String, Long> getAllOnChainDeleted() {
+        if (localDB == null) return new HashMap<>();
+        lock.readLock().lock();
+        try {
+            return getAllFromMap(LocalDB.ON_CHAIN_DELETED_MAP, Serializer.LONG);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public void clearLocallyRemoved(String id) {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            removeFromMap(LocalDB.LOCAL_REMOVED_MAP, id);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void clearOnChainDeleted(String id) {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, id);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void clearAllLocallyRemoved() {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            clearMap(LocalDB.LOCAL_REMOVED_MAP);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public void clearAllOnChainDeleted() {
+        if (localDB == null) return;
+        lock.writeLock().lock();
+        try {
+            clearMap(LocalDB.ON_CHAIN_DELETED_MAP);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    public Serializer<T> getValueSerializer() {
+        return valueSerializer;
+    }
+
+    public String getMainFid() {
+        return mainFid;
+    }
+
+    public String getSid() {
+        return sid;
+    }
+    public void close() {
+        if (localDB != null)
+            localDB.close();
+        isRunning.set(false);
+    }
+
 }

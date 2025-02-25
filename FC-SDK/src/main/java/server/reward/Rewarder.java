@@ -1,5 +1,6 @@
 package server.reward;
 
+import constants.FieldNames;
 import fcData.ReplyBody;
 import fch.TxCreator;
 import fch.Wallet;
@@ -29,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 import static constants.FieldNames.*;
 import static constants.Constants.*;
+import static constants.FieldNames.PARAMS;
 import static constants.Strings.*;
 import static appTools.Settings.addSidBriefToName;
 
@@ -361,7 +363,7 @@ public class Rewarder {
                 Map<String, String> costMap = jedis.hgetAll(Settings.addSidBriefToName(sid,COST_MAP));
                 rewardParams.setCostMap(costMap);
 
-                rewardParams.setOrderViaShare(jedis.hget(Settings.addSidBriefToName(sid,PARAMS), ORDER_VIA_SHARE));
+                rewardParams.setOrderViaShare(jedis.hget(Settings.addSidBriefToName(sid, PARAMS), ORDER_VIA_SHARE));
 
                 rewardParams.setConsumeViaShare(jedis.hget(Settings.addSidBriefToName(sid,PARAMS), CONSUME_VIA_SHARE));
 

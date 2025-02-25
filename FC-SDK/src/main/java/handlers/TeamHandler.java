@@ -12,7 +12,7 @@ import constants.FieldNames;
 import fch.fchData.SendTo;
 import feip.feipData.Service;
 import feip.feipData.Team;
-import feip.feipData.TeamData;
+import feip.feipData.TeamOpData;
 import tools.Hex;
 import tools.JsonTools;
 import tools.PersistentSequenceMap;
@@ -67,7 +67,7 @@ public class TeamHandler extends Handler {
     // 4. Public Methods - Main Interface
     public void menu() {
         byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
-        Menu menu = new Menu("Team");
+        Menu menu = new Menu("Team", this::close);
         menu.add("List", () -> handleListTeams(priKey, br));
         menu.add("Check", () -> checkTeam(br));
         menu.add("Create", () -> handleCreateTeam(priKey, br));
@@ -115,19 +115,19 @@ public class TeamHandler extends Handler {
     public String createTeam(byte[] priKey, String offLineFid, List<SendTo> sendToList,
             String stdName, String consensusId, String[] localNames, String[] waiters, 
             String[] accounts, String desc, ApipClient apipClient, NaSaRpcClient nasaClient) {
-        TeamData data = TeamData.makeCreate(stdName, consensusId, localNames, waiters, accounts, desc);
+        TeamOpData data = TeamOpData.makeCreate(stdName, consensusId, localNames, waiters, accounts, desc);
         return FeipClient.team(priKey, offLineFid, sendToList,  data, apipClient, nasaClient, br);
     }
 
     public String joinTeam(byte[] priKey, String offLineFid, List<SendTo> sendToList,
             String tid, String consensusId, ApipClient apipClient, NaSaRpcClient nasaClient) {
-        TeamData data = TeamData.makeJoin(tid, consensusId);
+        TeamOpData data = TeamOpData.makeJoin(tid, consensusId);
         return FeipClient.team(priKey, offLineFid, sendToList,  data, apipClient, nasaClient, br);
     }
 
     public String leaveTeams(byte[] priKey, String offLineFid, List<SendTo> sendToList,
             List<String> tids, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br) {
-        TeamData data = TeamData.makeLeave(tids);
+        TeamOpData data = TeamOpData.makeLeave(tids);
         return FeipClient.team(priKey, offLineFid, sendToList,  data, apipClient, nasaClient, br);
     }
 
@@ -196,7 +196,7 @@ public class TeamHandler extends Handler {
             inviteeList.add(member);
         }
         
-        TeamData data = TeamData.makeInvite(team.getTid(), inviteeList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeInvite(team.getTid(), inviteeList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Invitation sent successfully.");
@@ -218,7 +218,7 @@ public class TeamHandler extends Handler {
             withdrawList.add(member);
         }
         
-        TeamData data = TeamData.makeWithdrawInvitation(team.getTid(), withdrawList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeWithdrawInvitation(team.getTid(), withdrawList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Invitation withdrawn successfully.");
@@ -240,7 +240,7 @@ public class TeamHandler extends Handler {
             dismissList.add(member);
         }
         
-        TeamData data = TeamData.makeDismiss(team.getTid(), dismissList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeDismiss(team.getTid(), dismissList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Members dismissed successfully.");
@@ -262,7 +262,7 @@ public class TeamHandler extends Handler {
             appointList.add(member);
         }
 
-        TeamData data = TeamData.makeAppoint(team.getTid(), appointList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeAppoint(team.getTid(), appointList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Members appointed successfully.");
@@ -284,7 +284,7 @@ public class TeamHandler extends Handler {
             cancelList.add(member);
         }
         
-        TeamData data = TeamData.makeCancelAppointment(team.getTid(), cancelList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeCancelAppointment(team.getTid(), cancelList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Appointments cancelled successfully.");
@@ -298,7 +298,7 @@ public class TeamHandler extends Handler {
         Integer rate = Inputer.inputInteger(br, "Input rating (0-5):", 0, 5);
         if(rate == null) return;
         
-        TeamData data = TeamData.makeRate(tid, rate);
+        TeamOpData data = TeamOpData.makeRate(tid, rate);
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Rating submitted successfully.");
@@ -319,7 +319,7 @@ public class TeamHandler extends Handler {
         String transferee = Inputer.inputString(br, "Input the FID you want to transfer the team to:");
         if(transferee == null || transferee.isEmpty()) return;
         
-        TeamData data = TeamData.makeTransfer(team.getTid(), transferee);
+        TeamOpData data = TeamOpData.makeTransfer(team.getTid(), transferee);
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Team transferred successfully.");
@@ -353,7 +353,7 @@ public class TeamHandler extends Handler {
                 continue;
             }
 
-            TeamData data = TeamData.makeTakeOver(team.getTid(), consensusId);
+            TeamOpData data = TeamOpData.makeTakeOver(team.getTid(), consensusId);
             String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
             if(!Hex.isHexString(result)) System.out.println(result);
             else System.out.println("Team taken over successfully.");

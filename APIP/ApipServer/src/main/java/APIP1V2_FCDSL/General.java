@@ -56,12 +56,10 @@ public class General extends HttpServlet {
             try {
                 response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
             } catch (IOException ignore) {
-                return;
             }
+            return;
         }
-        if ( meetList== null) return;
         replier.setGot((long) meetList.size());
-        replier.reply0SuccessHttp(meetList,response);
+        replier.reply0SuccessHttp(meetList,response);    
     }
 }
-

@@ -158,8 +158,8 @@ public class CidHandler extends Handler {
         cidDB.close();
     }
 
-    public void menu(BufferedReader br) {
-        Menu menu = new Menu("CID Management Menu");
+    public void menu(BufferedReader br, boolean withSettings) {
+        Menu menu = new Menu("CID Management Menu", this::close);
         
         menu.add("Get CID by FID", () -> {
             String fid = Inputer.inputString(br, "Input FID:");

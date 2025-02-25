@@ -296,6 +296,7 @@ public class Client {
             return apipClientEvent.getResponseBodyStr();
 
         if(apipClientEvent ==null || apipClientEvent.getCode()==null)return null;
+
         if(apipClientEvent.getCode()!= CodeMessage.Code0Success) {
             if (apipClientEvent.getResponseBody()== null) {
                 log.debug("ResponseBody is null when requesting "+this.apipClientEvent.getApiUrl().getUrl());
@@ -306,6 +307,7 @@ public class Client {
                 if (apipClientEvent.getResponseBody().getData() != null)
                     log.debug(JsonTools.toJson(apipClientEvent.getResponseBody().getData()));
             }
+
             if (apipClientEvent.getCode() == CodeMessage.Code1004InsufficientBalance) {
                 if(apipClient==null && this.serviceType.equals(Service.ServiceType.APIP)){
                     apipClient = (ApipClient) this;

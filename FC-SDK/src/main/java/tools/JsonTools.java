@@ -1,5 +1,7 @@
 package tools;
 
+import appTools.Inputer;
+import appTools.Menu;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 
@@ -450,25 +452,18 @@ public class JsonTools {
             .setPrettyPrinting()
             .create();
 
+        boolean oneByOne = br != null && items.size() > 1 && Inputer.askIfYes(br, "Show them one by one with enter?");
+
         for (int i = 0; i < items.size(); i++) {
             T item = items.get(i);
             System.out.println("\n=== Item " + (i + 1) + " of " + items.size() + " ===");
             try {
                 String jsonOutput = prettyGson.toJson(item);
                 System.out.println(jsonOutput);
+                if(oneByOne) Menu.anyKeyToContinue(br);
             } catch (Exception e) {
                 System.out.println("Error converting item to JSON: " + e.getMessage());
                 System.out.println("Raw toString(): " + item.toString());
-            }
-
-            // If not the last item, ask to continue
-            if (i < items.size() - 1 && br!=null) {
-                System.out.println("\nPress Enter to see next item...");
-                try {
-                    br.readLine();
-                } catch (IOException e) {
-                    System.out.println("Error reading input: " + e.getMessage());
-                }
             }
         }
     }

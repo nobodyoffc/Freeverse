@@ -131,7 +131,7 @@ public class CashHandler extends Handler {
 
 
     public void menu() {
-        Menu menu = new Menu("Cash Management");
+        Menu menu = new Menu("Cash Management", this::close);
         menu.add("View Valid", this::show);
         menu.add("Cash Detail", this::cashDetail);
         menu.add("Incomes", this::incomes);
@@ -709,6 +709,10 @@ public class CashHandler extends Handler {
         long lastHeight = cashDB.getLastHeight();
         if(lastHeight==0){
             freshValidCashes();
+            return;
+        }
+        if(apipClient==null && nasaClient==null && esClient==null){
+            log.error("Failed to fresh bestHeight due to the absence of apipClient, nasaClient, and esClient.");
             return;
         }
         bestHeight = Settings.getBestHeight(apipClient,nasaClient,esClient,null);
@@ -1427,7 +1431,7 @@ public class CashHandler extends Handler {
         }
         if(apipClient!=null){
             Fcdsl fcdsl = new Fcdsl();
-            if(myFid!=null)fcdsl.addNewQuery().addNewEquals().addNewFields(OWNER).addNewValues(myFid);
+            if(myFid!=null)fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(myFid);
             fcdsl.addNewFilter().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
             if(sinceHeight!=null)fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(String.valueOf(sinceHeight));
             fcdsl.addSize(MAX_CASH_SIZE);
@@ -1521,7 +1525,10 @@ public class CashHandler extends Handler {
 
         for (Cash cash : cashList) {
             if(Boolean.TRUE.equals(isImmature(cash, bestheight)))continue;
-            long cdd = ParseTools.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+            long cdd=0;
+            if(cash.getBirthTime()!=null) {
+                cdd = ParseTools.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+            }
             fchSum += cash.getValue();
             cdSum += cdd;
             meetList.add(cash);

@@ -2,7 +2,13 @@ package feip.feipData;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import constants.FieldNames;
+
 import java.util.List;
+
+import feip.FeipOp;
+
 public class SecretData {
 
 	private String op;
@@ -52,41 +58,50 @@ public class SecretData {
 	}
 	
 	
-	public enum Op {
-        ADD("add"),
-        DELETE("delete"),
-        RECOVER("recover");
+	public enum Op implements FeipOp.FeipOpFields {
+        ADD(FeipOp.ADD, new String[]{FieldNames.ALG, FieldNames.CIPHER}),
+        DELETE(FeipOp.DELETE, new String[]{FieldNames.SECRET_IDS}),
+        RECOVER(FeipOp.RECOVER, new String[]{FieldNames.SECRET_IDS});
 
-        private final String value;
+        private final FeipOp feipOp;
+        private final String[] requiredFields;
 
-        Op(String value) {
-            this.value = value;
+        Op(FeipOp feipOp, String[] requiredFields) {
+            this.feipOp = feipOp;
+            this.requiredFields = requiredFields;
         }
 
+        @Override
         public String getValue() {
-            return value;
+            return feipOp.getValue();
+        }
+
+        @Override
+        public String[] getRequiredFields() {
+            return requiredFields;
+        }
+
+        @Override
+        public String toLowerCase() {
+            return getValue().toLowerCase();
         }
 
         public static Op fromString(String text) {
             for (Op op : Op.values()) {
-                if (op.value.equalsIgnoreCase(text)) {
+                if (op.getValue().equalsIgnoreCase(text)) {
                     return op;
                 }
             }
             throw new IllegalArgumentException("No constant with text " + text + " found");
         }
-
-        public String toLowerCase() {
-            return this.value.toLowerCase();
-        }
     }
 
-    public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
-
-    static {
-        OP_FIELDS.put(Op.ADD.toLowerCase(), new String[]{"alg", "cipher"});
-        OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{"secretIds"});
-        OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{"secretIds"});
+    public static Map<String, String[]> getOpFields() {
+        Map<String, String[]> fields = new HashMap<>();
+        for (Op op : Op.values()) {
+            fields.put(op.toLowerCase(), op.getRequiredFields());
+        }
+        return fields;
     }
 
     // Factory method for ADD operation

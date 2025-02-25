@@ -144,7 +144,7 @@ public class StartTalkServer {
                 case 4 -> recreateAllIndices(esClient, br);
                 case 5 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
-                case 6 -> settings.setting(symKey, br, null);
+                case 6 -> settings.setting(br, null);
                 case 0 -> {
                     if (counter != null) counter.close();
                     close();
