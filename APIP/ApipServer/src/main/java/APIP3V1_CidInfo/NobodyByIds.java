@@ -14,7 +14,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import appTools.Settings;
-import static constants.FieldNames.FID;
+import static constants.FieldNames.ID;
+
 import server.FcdslRequestHandler;
 
 @WebServlet(name = ApipApiNames.NOBODY_BY_IDS, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NOBODY_BY_IDS)
@@ -28,11 +29,11 @@ public class NobodyByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.NOBODY, Nobody.class, FID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.NOBODY, Nobody.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.NOBODY, Nobody.class, FID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.NOBODY, Nobody.class, ID, request,response,authType);
     }
 }

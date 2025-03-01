@@ -4,13 +4,13 @@ import apip.apipData.EncryptIn;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import com.google.gson.Gson;
+import fch.fchData.Cid;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
 import crypto.CryptoDataByte;
 import crypto.Encryptor;
 import fcData.ReplyBody;
-import fch.fchData.Address;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import tools.Hex;
@@ -69,13 +69,13 @@ public class Encrypt extends HttpServlet {
                             cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getPubKey()));
                         else if(encryptInput.getFid()!=null){
                             ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-                            GetResponse<Address> result = esClient.get(g -> g.index(IndicesNames.ADDRESS).id(encryptInput.getFid()), Address.class);
-                            Address address = result.source();
-                            if(address==null||address.getPubKey()==null){
+                            GetResponse<Cid> result = esClient.get(g -> g.index(IndicesNames.CID).id(encryptInput.getFid()), Cid.class);
+                            Cid cid = result.source();
+                            if(cid ==null|| cid.getPubKey()==null){
                                 replier.replyOtherErrorHttp("Failed to get pubkey.", response);
                                 return;
                             }
-                            cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(address.getPubKey()));
+                            cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(cid.getPubKey()));
                         }
                     }
                     default -> new IllegalArgumentException("Unexpected value: " + encryptInput.getType()).printStackTrace();

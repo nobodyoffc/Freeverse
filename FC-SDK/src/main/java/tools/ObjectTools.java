@@ -3,7 +3,7 @@ package tools;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import fcData.ReplyBody;
-import feip.feipData.Cid;
+import fch.fchData.Cid;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -72,7 +72,21 @@ public class ObjectTools {
         Map<K, T> resultMap = new HashMap<>();
         try {
             if (list != null && !list.isEmpty()) {
-                Field keyField = list.get(0).getClass().getDeclaredField(keyFieldName);
+                // Get the field from the class or its superclasses
+                Class<?> currentClass = list.get(0).getClass();
+                Field keyField = null;
+                while (currentClass != null && keyField == null) {
+                    try {
+                        keyField = currentClass.getDeclaredField(keyFieldName);
+                    } catch (NoSuchFieldException e) {
+                        currentClass = currentClass.getSuperclass();
+                    }
+                }
+                
+                if (keyField == null) {
+                    throw new NoSuchFieldException(keyFieldName);
+                }
+                
                 keyField.setAccessible(true);
 
                 for (T item : list) {
@@ -90,7 +104,11 @@ public class ObjectTools {
     public static <T> T objectToClass(Object ob,Class<T> tClass) {
         if(ob==null)return null;
         Gson gson = new Gson();
-        return gson.fromJson(gson.toJson(ob),tClass);
+        try{
+            return gson.fromJson(gson.toJson(ob),tClass);
+        }catch (Exception e) {
+            return null;
+        }
     }
 
     public static Map<String, Long> convertToLongMap(Map<String, String> stringStringMap) {

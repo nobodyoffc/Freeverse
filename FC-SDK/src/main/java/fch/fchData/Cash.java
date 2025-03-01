@@ -8,6 +8,7 @@ import com.google.gson.Gson;
 
 import appTools.Shower;
 import constants.FieldNames;
+import fcData.FcObject;
 import fch.ParseTools;
 import tools.DateTools;
 import nasa.data.UTXO;
@@ -17,10 +18,9 @@ import static constants.Constants.OneDayInterval;
 import static constants.FieldNames.*;
 import static constants.Strings.FCH;
 
-public class Cash {
+public class Cash extends FcObject {
 
 	//calculated
-	private String cashId;	//hash of this cash: sha256(sha256(tx + index)).
 	private String issuer; //first input fid when this cash was born.
 
 	//from utxo
@@ -137,7 +137,7 @@ public class Cash {
 	}
 
     public static void showCashList(List<Cash> cashList, String title, int totalDisplayed, String myFid) {
-        String[] fields = new String[]{BIRTH_TIME,VALID, FROM,TO, FCH,FieldNames.CD,FieldNames.CDD,CASH_ID};
+        String[] fields = new String[]{BIRTH_TIME,VALID, FROM,TO, FCH,FieldNames.CD,FieldNames.CDD,ID};
         int[] widths = new int[]{10,6, 17,17,16, 12,12,64};
         List<List<Object>> valueListList = new ArrayList<>();
 
@@ -163,10 +163,10 @@ public class Cash {
             showList.add(formattedValue);
             showList.add(cash.getCd()==null?"":cash.getCd());
 			showList.add(cash.getCdd()==null?"":cash.getCdd());
-			showList.add(cash.getCashId());
+			showList.add(cash.getId());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed);
+        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
     }
 
     public String getBirthBlockId() {
@@ -192,12 +192,6 @@ public class Cash {
 		this.spendTxIndex = spendTxIndex;
 	}
 
-	public String getCashId() {
-		return cashId;
-	}
-	public void setCashId(String cashId) {
-		this.cashId = cashId;
-	}
 	public Integer getBirthIndex() {
 		return birthIndex;
 	}
@@ -336,6 +330,4 @@ public class Cash {
 	public void setLastHeight(Long lastHeight) {
 		this.lastHeight = lastHeight;
 	}
-
-
 }

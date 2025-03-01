@@ -2,7 +2,6 @@ package APIP9V1_Team;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fcData.ReplyBody;
 import feip.feipData.Team;
 import initial.Initiator;
 import tools.http.AuthType;
@@ -17,7 +16,7 @@ import appTools.Settings;
 import java.io.IOException;
 import java.util.Map;
 
-import static constants.FieldNames.TID;
+import static constants.FieldNames.ID;
 import server.FcdslRequestHandler;
 
 
@@ -42,7 +41,7 @@ public class TeamByIds extends HttpServlet {
     }
 
     public void doTeamIdsRequest( HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
-        Map<String, Team> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, TID);
+        Map<String, Team> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, ID);
         if (meetMap == null) return;
         for(Team team :meetMap.values()){
             team.setMembers(null);

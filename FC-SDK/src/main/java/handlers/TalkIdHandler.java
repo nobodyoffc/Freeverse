@@ -1,6 +1,6 @@
 package handlers;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import appTools.Settings;
 import fcData.TalkIdInfo;
 import feip.feipData.Group;
@@ -75,15 +75,15 @@ public class TalkIdHandler extends Handler {
         return tempName.toString();
     }
 
-    public TalkIdInfo fromCid(CidInfo cidInfo) {
-        String id = cidInfo.getFid();
+    public TalkIdInfo fromCid(Cid cid) {
+        String id = cid.getId();
         TalkIdInfo cached = talkIdInfoCache.get(id);
         if (cached != null) {
             setLastTalkId(id);
             return cached;
         }
 
-        TalkIdInfo info = TalkIdInfo.fromCidInfo(cidInfo);
+        TalkIdInfo info = TalkIdInfo.fromCidInfo(cid);
         talkIdInfoCache.put(id, info);
         talkIdDB.put(id, info);
         setLastTalkId(id);
@@ -91,7 +91,7 @@ public class TalkIdHandler extends Handler {
     }
 
     public TalkIdInfo fromGroup(Group group) {
-        String id = group.getGid();
+        String id = group.getId();
         TalkIdInfo cached = talkIdInfoCache.get(id);
         if (cached != null) {
             setLastTalkId(id);
@@ -106,7 +106,7 @@ public class TalkIdHandler extends Handler {
     }
 
     public TalkIdInfo fromTeam(Team team) {
-        String id = team.getTid();
+        String id = team.getId();
         TalkIdInfo cached = talkIdInfoCache.get(id);
         if (cached != null) {
             setLastTalkId(id);

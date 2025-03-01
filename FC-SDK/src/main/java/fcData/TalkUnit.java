@@ -25,7 +25,7 @@ import java.util.*;
 import static fcData.TalkUnit.DataType.*;
 import static fcData.TalkUnit.IdType.FID;
 
-public class TalkUnit extends FcEntity implements Comparable<TalkUnit> {
+public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
 
     public final static Logger log = (Logger) LoggerFactory.getLogger(TalkUnit.class);
     private transient Integer code;

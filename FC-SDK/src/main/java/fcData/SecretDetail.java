@@ -1,6 +1,6 @@
 package fcData;
 
-import tools.DateTools;
+import tools.FchTools;
 import tools.JsonTools;
 import feip.feipData.Secret;
 import crypto.Decryptor;
@@ -12,8 +12,7 @@ import java.util.List;
 import java.util.ArrayList;
 import appTools.Shower;
 
-public class SecretDetail extends FcEntity {
-    private String secretId;
+public class SecretDetail extends FcObject{
     private String type;
     private String title;
     private String content;
@@ -52,7 +51,7 @@ public class SecretDetail extends FcEntity {
                             byte[] dataBytes = Bitcore.decrypt(cipherBytes, priKey);
                             SecretDetail secretDetail = JsonTools.fromJson(new String(dataBytes), SecretDetail.class);
                             if (secretDetail != null) {
-                                secretDetail.setSecretId(secret.getSecretId());
+                                secretDetail.setId(secret.getId());
                                 secretDetail.setUpdateHeight(secret.getLastHeight());
                                 return secretDetail;
                             }
@@ -83,7 +82,7 @@ public class SecretDetail extends FcEntity {
                 SecretDetail decryptedDetail = JsonTools.fromJson(decryptedContent, SecretDetail.class);
                 
                 if (decryptedDetail != null) {
-                    decryptedDetail.setSecretId(secret.getSecretId());
+                    decryptedDetail.setId(secret.getId());
                     decryptedDetail.setUpdateHeight(secret.getLastHeight());
                     return decryptedDetail;
                 }
@@ -99,24 +98,24 @@ public class SecretDetail extends FcEntity {
 
         for (SecretDetail secret : secretList) {
             List<Object> showList = new ArrayList<>();
-            showList.add(secret.getSecretId());
-            if(secret.getUpdateHeight()!=null)showList.add(DateTools.longToTime(secret.getUpdateHeight(), "yyyy-MM-dd"));
+            showList.add(secret.getId());
+            if(secret.getUpdateHeight()!=null)showList.add(showList.add(FchTools.heightToLongDate(secret.getUpdateHeight())));
             else showList.add(null);
             showList.add(secret.getTitle());
             showList.add(secret.getType());
             showList.add(secret.getMemo());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed);
+        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
     }
 
     // Getters and Setters
-    public String getSecretId() {
-        return secretId;
+    public String getId() {
+        return id;
     }
 
-    public void setSecretId(String secretId) {
-        this.secretId = secretId;
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getType() {

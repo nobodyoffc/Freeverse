@@ -55,9 +55,9 @@ public class BlockTimeHistory extends HttpServlet {
         if(httpRequestChecker.getRequestBody()!=null && httpRequestChecker.getRequestBody().getFcdsl()!=null && httpRequestChecker.getRequestBody().getFcdsl().getOther()!=null) {
             Object other =  httpRequestChecker.getRequestBody().getFcdsl().getOther();
             Map<String, String> paramMap = ObjectTools.objectToMap(other,String.class,String.class);
-            String endTimeStr = paramMap.get("endTime");
-            String startTimeStr = paramMap.get("startTime");
-            String countStr = paramMap.get("count");
+            String endTimeStr = paramMap.get(END_TIME);
+            String startTimeStr = paramMap.get(START_TIME);
+            String countStr = paramMap.get(COUNT);
             if (startTimeStr != null) startTime = Long.parseLong(startTimeStr);
             if (endTimeStr != null) endTime = Long.parseLong(endTimeStr);
             if (countStr != null) count = Integer.parseInt(countStr);

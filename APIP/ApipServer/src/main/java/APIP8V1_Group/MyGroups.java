@@ -2,15 +2,11 @@ package APIP8V1_Group;
 
 import apip.apipData.Sort;
 import appTools.Settings;
-import feip.feipData.Service;
-import redis.clients.jedis.JedisPool;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fcData.ReplyBody;
 import feip.feipData.Group;
 import initial.Initiator;
 import tools.http.AuthType;
-import redis.clients.jedis.Jedis;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -36,12 +32,12 @@ public class MyGroups extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,GID,true,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true,null,null);
         doRequest(defaultSort,request,response,authType, settings);  }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,GID,true,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true,null,null);
         doRequest(defaultSort,request,response,authType, settings);
     }
     protected void doRequest(List<Sort> sortList, HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {

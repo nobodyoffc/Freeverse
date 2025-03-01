@@ -1,8 +1,8 @@
 package feip.feipData;
 
-public class Token {
+import fcData.FcObject;
 
-	private String tokenId;
+public class Token extends FcObject {
 	private String name;
 	private String desc;
 	private String consensusId;
@@ -23,14 +23,6 @@ public class Token {
 	private String lastTxId;
 	private Long lastTime;
 	private Long lastHeight;
-
-	public String getTokenId() {
-		return tokenId;
-	}
-
-	public void setTokenId(String tokenId) {
-		this.tokenId = tokenId;
-	}
 
 	public String getName() {
 		return name;

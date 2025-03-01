@@ -1,9 +1,10 @@
 package feip.feipData;
 
+import fcData.FcObject;
+
 import java.util.List;
 
-public class Secret {
-	private String secretId;
+public class Secret extends FcObject {
 	private List<String> secretIds;
     private String alg;
 	private String cipher;
@@ -13,13 +14,6 @@ public class Secret {
 	private Long birthHeight;
 	private Long lastHeight;
 	private Boolean active;
-	
-	public String getSecretId() {
-		return secretId;
-	}
-	public void setSecretId(String secretId) {
-		this.secretId = secretId;
-	}
 
     public String getAlg() {
         return alg;

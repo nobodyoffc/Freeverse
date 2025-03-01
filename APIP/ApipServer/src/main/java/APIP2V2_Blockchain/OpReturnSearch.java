@@ -30,13 +30,13 @@ public class OpReturnSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,TX_ID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,TX_ID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType);
     }
 }

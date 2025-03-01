@@ -104,7 +104,7 @@ public class SecretHandler extends Handler<SecretDetail> {
 
     @NotNull
     public Map<String, Secret> reloadSecretsFromChain(BufferedReader br, List<String> selectedIds) {
-        Map<String,Secret> items = apipClient.loadOnChainItemByIds(SECRET, Secret.class, FieldNames.SECRET_ID, selectedIds);
+        Map<String,Secret> items = apipClient.loadOnChainItemByIds(SECRET, Secret.class, selectedIds);
 
         List<Secret> reloadedList = new ArrayList<>();
         if(items==null|| items.isEmpty())return new HashMap<>();
@@ -123,7 +123,7 @@ public class SecretHandler extends Handler<SecretDetail> {
             if(Inputer.askIfYes(br, "There are " + deletedSecretList.size() + " on chain deleted secrets. Choose to recover them?")){
                 chosenDeletedSecretList = Inputer.chooseMultiFromListGeneric(deletedSecretList, 0, 20, "Choose the deleted secrets to reload:", br);
                 if(chosenDeletedSecretList!=null){
-                    recovered = recoverSecrets(chosenDeletedSecretList.stream().map(Secret::getSecretId).collect(Collectors.toList()), null, br);
+                    recovered = recoverSecrets(chosenDeletedSecretList.stream().map(Secret::getId).collect(Collectors.toList()), null, br);
                     if(recovered) {
                         reloadedList.addAll(chosenDeletedSecretList);
                     }
@@ -137,7 +137,7 @@ public class SecretHandler extends Handler<SecretDetail> {
 
         putAllSecretDetail(secretDetailList);
 
-        List<String> reloadedIdList = reloadedList.stream().map(Secret::getSecretId).collect(Collectors.toList());
+        List<String> reloadedIdList = reloadedList.stream().map(Secret::getId).collect(Collectors.toList());
         // Remove from locally removed tracking
         removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
 
@@ -302,7 +302,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         if (Inputer.askIfYes(br, "Delete " + chosenSecrets.size() + " secrets?")) {
             List<String> secretIds = new ArrayList<>();
             for (SecretDetail secret : chosenSecrets) {
-                secretIds.add(secret.getSecretId());
+                secretIds.add(secret.getId());
             }
 
             String result = deleteSecret(secretIds, br);
@@ -321,36 +321,50 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     public void recoverSecrets(BufferedReader br) {
-        Map<String, Long> deletedIds = getAllOnChainDeleted();
+        Map<String, Long> deletedIds = getAllOnChainDeletedRecords();
         List<String> chosenIds;
         int count = 0;
+        Map<String, Secret> localDeletedSecrets = new HashMap<>();
 
-        if(!deletedIds.isEmpty()) {
+        if(deletedIds!=null && !deletedIds.isEmpty()) {
             System.out.println("There are "+deletedIds.size()+" on chain deleted record in local DB.");
             chosenIds = listAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
             if(chosenIds!=null && !chosenIds.isEmpty()) {
-                Map<String, Secret> result = reloadSecretsFromChain(br, chosenIds);
-                count += result.size();
+                localDeletedSecrets = reloadSecretsFromChain(br, chosenIds);
+                count += localDeletedSecrets.size();
             }
         }else System.out.println("No local records of on chain deleted secrets.");
 
         if(!Inputer.askIfYes(br,"Check more deleted secrets from blockchain?"))return;
 
-        List<Secret> secretList = loadAllOnChainItems(SECRET,Secret_Id,LAST_HEIGHT,OWNER,0L, false,apipClient,Secret.class, br);
-
-        Iterator<Secret> iterator = secretList.iterator();
-        Set<String> checkedRemovedIds = deletedIds.keySet();
-        while (iterator.hasNext()){
-            if(checkedRemovedIds.contains(iterator.next().getSecretId()))
-                iterator.remove();
+        List<Secret> onChainDeleted = loadAllOnChainItems(SECRET, LAST_HEIGHT,OWNER,0L, false,apipClient,Secret.class, br, false);
+        if(onChainDeleted.isEmpty()){
+            System.out.println("No deleted items on chain.");
         }
 
-        List<SecretDetail> secretDetailList = secretToSecretDetail(secretList, false);
+        Iterator<Secret> iterator = onChainDeleted.iterator();
+        Set<String> checkedRemovedIds = null;
+        if(deletedIds!=null && !deletedIds.isEmpty())
+            checkedRemovedIds = deletedIds.keySet();
 
-        List<SecretDetail> chosenSecrets = chooseSecretDetailList(secretDetailList, new ArrayList<>(), 0, br);
+        while (iterator.hasNext()){
+            if(checkedRemovedIds != null && checkedRemovedIds.contains(iterator.next().getId()))
+                iterator.remove();
+            else iterator.next();
+        }
+
+        List<Secret> finalChosenDeleted = new ArrayList<>();
+        finalChosenDeleted.addAll(onChainDeleted);
+        finalChosenDeleted.addAll(localDeletedSecrets.values());
+
+        List<SecretDetail> secretDetailList = secretToSecretDetail(finalChosenDeleted, false);
+
+        List<SecretDetail> chosenSecrets = chooseSecretDetailList(secretDetailList, 0, br);
+
+        recoverSecrets(null, chosenSecrets, br);
 
         if(chosenSecrets!=null && !chosenSecrets.isEmpty()) {
-            putAll(chosenSecrets, SECRET_ID);
+            putAllSecretDetail(chosenSecrets);
             count += chosenSecrets.size();
         }
 
@@ -364,7 +378,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         if(secretIds!=null && !secretIds.isEmpty() && Inputer.askIfYes(br, "Recover " + secretIds.size() + " secrets?")){
             result = recoverSecret(secretIds, br);
         }else if (chosenSecrets!=null && Inputer.askIfYes(br, "Recover " + chosenSecrets.size() + " secrets?")) {
-            result = recoverSecret(chosenSecrets.stream().map(SecretDetail::getSecretId).collect(Collectors.toList()), br);
+            result = recoverSecret(chosenSecrets.stream().map(SecretDetail::getId).collect(Collectors.toList()), br);
         }else return false;
 
         if (Hex.isHex32(result)) {
@@ -399,7 +413,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         long lastHeight;
         if(lastHeightObj==null) lastHeight = 0;
         else  lastHeight = ((Number)lastHeightObj).longValue();
-        List<Secret> secretList = loadAllOnChainItems(SECRET,Secret_Id,LAST_HEIGHT,OWNER,lastHeight, true,apipClient,Secret.class, null);
+        List<Secret> secretList = loadAllOnChainItems(SECRET, LAST_HEIGHT,OWNER,lastHeight, true,apipClient,Secret.class, null, true);
         List<SecretDetail> secretDetailList;
         if (secretList!=null && !secretList.isEmpty()) {
             secretDetailList = secretToSecretDetail(secretList, true);
@@ -416,7 +430,7 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     public void putAllSecretDetail(List<SecretDetail> secretDetailList) {
-        putAll(secretDetailList,SECRET_ID);
+        putAll(secretDetailList,ID);
     }
 
     private void deleteUnreadableSecrets(BufferedReader br) {
@@ -434,7 +448,7 @@ public class SecretHandler extends Handler<SecretDetail> {
     public void opItems(List<SecretDetail> items, String ask, BufferedReader br) {
         Menu menu = new Menu("Secret Operations", () -> {});
         menu.add("Show details", () -> showItemDetails(items, br));
-        menu.add("Remove from local", () -> removeItems(items.stream().map(SecretDetail::getSecretId).collect(Collectors.toList()),br));
+        menu.add("Remove from local", () -> removeItems(items.stream().map(SecretDetail::getId).collect(Collectors.toList()),br));
         menu.add("Delete on chain", () -> deleteSecrets(items, br));
         menu.add("Recover on chain", () -> recoverSecrets(null, items, br));
         menu.add("Add to chain", () -> addSecrets(items, br));
@@ -463,7 +477,7 @@ public class SecretHandler extends Handler<SecretDetail> {
             if(secretOpData == null) return null;
         } else {
             if (secretIds == null) {
-                secretIds = Inputer.inputStringList(br, FieldNames.SECRET_ID, 0);
+                secretIds = Inputer.inputStringList(br, "Input the secret IDs:", 0);
                 if(secretIds.isEmpty()) return null;
             }
             secretOpData.setSecretIds(secretIds);
@@ -490,7 +504,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         if(secretDetail==null)return null;
         secretDetail.setUpdateHeight(null);
         secretDetail.setId(null);
-        secretDetail.setSecretId(null);
+        secretDetail.setId(null);
         SecretOpData secretOpData = new SecretOpData();
         Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
         CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonTools.toJson(secretDetail).getBytes(), myPubKey);
@@ -512,10 +526,10 @@ public class SecretHandler extends Handler<SecretDetail> {
         for (Secret secret : secretList) {
             SecretDetail secretDetail = SecretDetail.fromSecret(secret, priKey);
             if (secretDetail == null) {
-                fakeSecretCipherMap.put(secret.getSecretId(), DateTools.longToTime(secret.getBirthTime(),DateTools.FULL_FORMAT)+" "+secret.getCipher());
+                fakeSecretCipherMap.put(secret.getId(), DateTools.longToTime(secret.getBirthTime(),DateTools.LONG_FORMAT)+" "+secret.getCipher());
                 if (!ignoreBadCipher) {
                     secretDetail = new SecretDetail();
-                    secretDetail.setSecretId(secret.getSecretId());
+                    secretDetail.setId(secret.getId());
                     secretDetail.setTitle("Bad cipher: " + secret.getCipher());
                 }
                 continue;
@@ -525,8 +539,10 @@ public class SecretHandler extends Handler<SecretDetail> {
 
         return secretDetailList;
     }
-    private List<SecretDetail> chooseSecretDetailList(List<SecretDetail> currentList, List<SecretDetail> chosenSecrets,
+    private List<SecretDetail> chooseSecretDetailList(List<SecretDetail> currentList,
                                                       int totalDisplayed, BufferedReader br) {
+        List<SecretDetail> chosenSecrets = new ArrayList<>();
+
         String title = "Choose Secrets";
         SecretDetail.showSecretDetailList(currentList, title, totalDisplayed);
 
@@ -536,10 +552,23 @@ public class SecretHandler extends Handler<SecretDetail> {
         if ("".equals(input)) {
             return null;  // Signal to continue to next page
         }
-
+        if("a".equals(input)) {
+            return currentList;  // Signal to continue to next page
+        }
         if (input.equals("q")) {
             chosenSecrets.add(null);  // Signal to break the loop
             return chosenSecrets;
+        }
+        String[] inputs = input.split(",");
+        for (String input1 : inputs) {
+            try {
+                int index = Integer.parseInt(input1.trim()) - 1;
+                if (index >= 0 && index < currentList.size()) {
+                    chosenSecrets.add(currentList.get(index));  
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input: " + input1);
+            }
         }
 
         return chosenSecrets;

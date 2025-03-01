@@ -11,46 +11,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 
-public class TransferUnit {
+public class TransferUnit extends FcObject{
     private boolean isEncrypted;
     private boolean isSymEncrypted;
     private byte flag = 0;//
     private byte[] keyName;
     private byte[] data;
-
-//    public TransferUnit(byte[] data) {
-//        this.isEncrypted = false;
-//        this.isSymEncrypted = false;
-//        this.flag = 0;
-//        BytesTools.setBit(this.flag, 0, false);
-//        BytesTools.setBit(this.flag, 1, false);
-//        this.data = data;
-//    }
-
-//    public TransferUnit(byte[] keyName, byte[] data) {
-//        this.isEncrypted = true;
-//        this.isSymEncrypted = true;
-//        this.flag = 0;
-//        BytesTools.setBit(this.flag, 0, true);
-//        BytesTools.setBit(this.flag, 1, true);
-//        this.keyName = keyName;
-//
-//        this.data = data;
-//    }
-//
-//    public TransferUnit(boolean isEncrypted,boolean isSymEncrypted, byte[] keyName, byte[] data) {
-//        this.isEncrypted = isSymEncrypted;
-//        this.isSymEncrypted = isSymEncrypted;
-//        this.flag = 0;
-//        if(isEncrypted) {
-//            BytesTools.setBit(this.flag, 0, true);
-//            if (isSymEncrypted) {
-//                BytesTools.setBit(this.flag, 1, true);
-//                this.keyName = keyName;
-//            }
-//        }
-//        this.data = data;
-//    }
 
     public TransferUnit() {}
 

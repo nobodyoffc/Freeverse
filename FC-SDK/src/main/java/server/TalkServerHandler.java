@@ -165,7 +165,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }
 
         talkServer.getEsClient().index(i -> i
-            .index(Settings.addSidBriefToName(talkServer.getService().getSid(), IndicesNames.DATA))
+            .index(Settings.addSidBriefToName(talkServer.getService().getId(), IndicesNames.DATA))
             .id(finalTalkUnit.makeId())
             .document(indexTalkUnit));
     }

@@ -8,6 +8,9 @@ public class Constants {
     public static final int DEFAULT_SESSION_DAYS = 100;
     public static final String YYYYMMDD_HHMMSSSSS = "yyyyMMdd_HHmmssSSS";
     public static final String FUND_FID = "FTqiqAyXHnK7uDTXzMap3acvqADK4ZGzts";
+    public static final byte[] MAGIC_BYTES = new byte[]{(byte)0xf9,(byte)0xbe,(byte)0xb4,(byte)0xd9};
+    public static final String FUND_ADDR = "FTqiqAyXHnK7uDTXzMap3acvqADK4ZGzts";
+
     public static long CDD_CHECK_HEIGHT =3000000;
     public static long CD_REQUIRED =0;
     public static final Long COIN_TO_SATOSHI = 100000000L;
@@ -104,4 +107,10 @@ public class Constants {
     public static final String GENESIS_BLOCK_ID = "00000000cbe04361b1d6de82b893a7d8419e76e99dd2073ac0db2ba0e652eea8";
     public static final double TWO_POWER_32 = 4294967296D;
     public static final String MINER = "miner";
+
+    public static final long TIMESTAMP_2000 = 946684800000L; // 2000-01-01 00:00:00
+    public static final long TIMESTAMP_2100 = 4102444800000L; // 2100-01-01 00:00:00
+    public static final long TIMESTAMP_2000_SECONDS = 946684800L; // 2000-01-01 00:00:00 in seconds
+    public static final long TIMESTAMP_2100_SECONDS = 4102444800L; // 2100-01-01 00:00:00 in seconds
+    public static final long TIMESTAMP_2200 = 4314336000000L; // 2200-01-01 00:00:00
 }

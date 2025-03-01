@@ -40,7 +40,7 @@ public class MempoolCleaner implements Runnable {
                     Block block = getBestBlock(esClient);
 
                     jedis1.set(Strings.BEST_HEIGHT,String.valueOf(block.getHeight()));
-                    jedis1.set(Strings.BEST_BLOCK_ID,block.getBlockId());
+                    jedis1.set(Strings.BEST_BLOCK_ID,block.getId());
                 }
             }
         }catch (Exception e){

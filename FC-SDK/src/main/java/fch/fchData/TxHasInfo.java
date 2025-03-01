@@ -1,8 +1,10 @@
 package fch.fchData;
 
+import fcData.FcObject;
+
 import java.util.ArrayList;
 
-public class TxHasInfo {
+public class TxHasInfo extends FcObject {
     private Tx tx;
     private ArrayList<Cash> inCashList;
     private ArrayList<Cash> outCashList;

@@ -1,20 +1,16 @@
 package fch.fchData;
 
+import fcData.FcObject;
+
 import java.util.ArrayList;
 
-public class TxHas {
-	private String txId;			//txid
+public class TxHas extends FcObject {
+	private String id;			//txid
 	private String rawTx;
 	private Long height;		//height
 	private ArrayList<CashMark> inMarks;
 	private  ArrayList<CashMark> outMarks;
-	
-	public String getTxId() {
-		return txId;
-	}
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
+
 	public Long getHeight() {
 		return height;
 	}

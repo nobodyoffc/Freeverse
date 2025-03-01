@@ -40,7 +40,7 @@ public class BlockInfo {
             blockInfo.setSize(block.getSize());
             blockInfo.setHeight(block.getHeight());
             blockInfo.setVersion(block.getVersion());
-            blockInfo.setPreId(block.getPreBlockId());
+            blockInfo.setPreId(block.getPreId());
             blockInfo.setMerkleRoot(block.getMerkleRoot());
             blockInfo.setTime(block.getTime());
             blockInfo.setBits(block.getBits());
@@ -50,13 +50,13 @@ public class BlockInfo {
             blockInfo.setOutValueT(block.getOutValueT());
             blockInfo.setFee(block.getFee());
             blockInfo.setCdd(block.getCdd());
-            blockInfo.setBlockId(block.getBlockId());
+            blockInfo.setBlockId(block.getId());
 
-            blockInfoMap.put(block.getBlockId(), blockInfo);
+            blockInfoMap.put(block.getId(), blockInfo);
         }
 
         for (BlockHas blockHas : blockHasList) {
-            BlockInfo blockInfo = blockInfoMap.get(blockHas.getBlockId());
+            BlockInfo blockInfo = blockInfoMap.get(blockHas.getId());
             if (blockInfo != null) {
                 blockInfo.setTxList(blockHas.getTxMarks());
             }

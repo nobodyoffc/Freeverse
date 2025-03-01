@@ -1,11 +1,11 @@
 package feip.feipData;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import fcData.FcObject;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class CodeHistory {
-	
-	private String txId;
+public class CodeHistory extends FcObject {
+	//txId
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -26,14 +26,6 @@ public class CodeHistory {
 	private String closeStatement;
 	
 	private Long cdd;
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
 
 	public Long getHeight() {
 		return height;

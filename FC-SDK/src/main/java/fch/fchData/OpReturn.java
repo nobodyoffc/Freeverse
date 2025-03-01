@@ -2,7 +2,7 @@ package fch.fchData;
 
 public class OpReturn {
 
-	private String txId;		//txid
+	private String id;		//txid
 	private Long height;		//block height
 	private Long time;
 	private Integer txIndex;		//tx index in the block
@@ -12,10 +12,10 @@ public class OpReturn {
 	private Long cdd;
 
 	public String getTxId() {
-		return txId;
+		return id;
 	}
-	public void setTxId(String txId) {
-		this.txId = txId;
+	public void setId(String id) {
+		this.id = id;
 	}
 	public Long getHeight() {
 		return height;

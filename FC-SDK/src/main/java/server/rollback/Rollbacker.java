@@ -69,7 +69,7 @@ public class Rollbacker {
 
             jedis0Common.set(addSidBriefToName(sid,ORDER_LAST_HEIGHT), String.valueOf(height));
             Block block = getBlockByHeight(esClient, height);
-            jedis0Common.set(Strings.ORDER_LAST_BLOCK_ID, block.getBlockId());
+            jedis0Common.set(Strings.ORDER_LAST_BLOCK_ID, block.getId());
         }catch (Exception e){
             e.printStackTrace();
         }

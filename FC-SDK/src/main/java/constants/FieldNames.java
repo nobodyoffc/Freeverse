@@ -3,6 +3,7 @@ package constants;
 public class FieldNames {
     public static final String OWNER = "owner";
 
+    public static final String ADDRESS = "address";
     public static final String ISSUER = "issuer";
     public static final String SIGNER = "signer";
     public static final String ME = "me";
@@ -65,7 +66,6 @@ public class FieldNames {
     public static final String LAST = "last";
     public static final String DID = "did";
     public static final String HAT = "hat";
-    public static final String TXID = "txId";
     public static final String INDEX = "index";
     public static final String SINCE = "since";
     public static final String HOOK_SESSION_NAME_KEY = "hookSessionNameKey";
@@ -76,6 +76,7 @@ public class FieldNames {
     public static final String CDD = "cdd";
     public static final String SHOW_NAME = "showName";
     public static final String ACCOUNTS = "accounts";
+    public static final String ORPHAN_HEIGHT = "orphanHeight";
 
     public static final String BLOCK_ID = "blockId";
     public static final String TX_INDEX = "txIndex";
@@ -154,6 +155,8 @@ public class FieldNames {
     public static final String BALANCE = "balance";
     public static final String SESSION_KEY_CIPHER = "sessionKeyCipher";
     public static final String ID_SESSION_NAME = "idSessionName";
+    public static final String EXPEND = "expend";
+    public static final String CASH = "cash";
 
     public static final String SECRET_ID = "secretId";
     public static final String ACCOUNT_ID = "accountId";

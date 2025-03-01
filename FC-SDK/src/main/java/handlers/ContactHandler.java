@@ -47,6 +47,8 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
+import static constants.IndicesNames.CONTACT;
+
 public class ContactHandler extends Handler<ContactDetail> {
     private static final Logger log = LoggerFactory.getLogger(ContactHandler.class);
     public static final String FAKE_CONTACT_DETAIL = "fakeContactDetail";
@@ -101,7 +103,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
     @NotNull
     public Map<String, Contact> reloadContactsFromChain(BufferedReader br, List<String> selectedIds) {
-        Map<String,Contact> items = apipClient.loadOnChainItemByIds("contact", Contact.class, FieldNames.CONTACT_ID, selectedIds);
+        Map<String,Contact> items = apipClient.loadOnChainItemByIds("contact", Contact.class, selectedIds);
 
         List<Contact> reloadedList = new ArrayList<>();
         if(items==null|| items.isEmpty())return new HashMap<>();
@@ -120,7 +122,7 @@ public class ContactHandler extends Handler<ContactDetail> {
             if(Inputer.askIfYes(br, "There are " + deletedContactList.size() + " on chain deleted contacts. Choose to recover them?")){
                 chosenDeletedContactList = Inputer.chooseMultiFromListGeneric(deletedContactList, 0, 20, "Choose the deleted contacts to reload:", br);
                 if(chosenDeletedContactList!=null){
-                    recovered = recoverContacts(chosenDeletedContactList.stream().map(Contact::getContactId).collect(Collectors.toList()), null, br);
+                    recovered = recoverContacts(chosenDeletedContactList.stream().map(Contact::getId).collect(Collectors.toList()), null, br);
                     if(recovered) {
                         reloadedList.addAll(chosenDeletedContactList);
                     }
@@ -134,7 +136,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
         putAllContactDetail(contactDetailList);
 
-        List<String> reloadedIdList = reloadedList.stream().map(Contact::getContactId).collect(Collectors.toList());
+        List<String> reloadedIdList = reloadedList.stream().map(Contact::getId).collect(Collectors.toList());
         removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
 
         handleFakeContactData(br);
@@ -271,12 +273,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
     public void addContacts(BufferedReader br) {
         do {
-            String result = addContact(br);
-            if (Hex.isHex32(result)) {
-                System.out.println("Contact added successfully: " + result);
-            } else {
-                System.out.println("Failed to add contact: " + result);
-            }
+            addContact(br);
         } while (Inputer.askIfYes(br, "Do you want to add another contact?"));
     }
 
@@ -367,10 +364,10 @@ public class ContactHandler extends Handler<ContactDetail> {
             byte[] b = cryptoDataByte.toBundle();
             String cipher = Base64.getEncoder().encodeToString(b);
             contactOpData.setCipher(cipher);
-        } else if (op.equals(ContactOpData.Op.DELETE)) {
+        } else {
             if (contactIds == null) return null;
             contactOpData.setContactIds(contactIds);
-        } else return null;
+        }
 
         Feip feip = getFeip();
         feip.setData(contactOpData);
@@ -381,7 +378,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         if (Inputer.askIfYes(br, "Are you sure to do below operation on chain?\n" + feip.toNiceJson() + "\n")) {
             String result = CashHandler.carve(opReturnStr, cd, priKey, apipClient);
             if (Hex.isHex32(result)) {
-                System.out.println("The contact is " + op.toLowerCase() + "ed: " + result + ".\n Wait a few minutes for confirmations before updating contacts...");
+                System.out.println("The contact is " + op.toLowerCase() + "ed: " + result + ".\nWait a few minutes for confirmations before updating contacts...");
                 return result;
             } else if (StringTools.isBase64(result)) {
                 System.out.println("Sign the TX and broadcast it:\n" + result);
@@ -402,7 +399,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         if(lastHeightObj==null) lastHeight = 0;
         else lastHeight = ((Number)lastHeightObj).longValue();
 
-        List<Contact> contactList = loadAllOnChainItems("contact", FieldNames.CONTACT_ID, FieldNames.LAST_HEIGHT, FieldNames.OWNER, lastHeight, true, apipClient, Contact.class, null);
+        List<Contact> contactList = loadAllOnChainItems("contact", FieldNames.LAST_HEIGHT, FieldNames.OWNER, lastHeight, true, apipClient, Contact.class, null, true);
         List<ContactDetail> contactDetailList;
         
         if (contactList!=null && !contactList.isEmpty()) {
@@ -481,34 +478,46 @@ public class ContactHandler extends Handler<ContactDetail> {
     }
 
     public void recoverContacts(BufferedReader br) {
-        Map<String, Long> deletedIds = getAllOnChainDeleted();
+        Map<String, Long> deletedIds = getAllOnChainDeletedRecords();
         List<String> chosenIds;
         int count = 0;
-
+        Map<String, Contact> localDeletedContacts = new HashMap<>();
         if(deletedIds!=null && !deletedIds.isEmpty()) {
             System.out.println("There are "+deletedIds.size()+" on chain deleted record in local DB.");
             chosenIds = listAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
             if(chosenIds!=null && !chosenIds.isEmpty()) {
-                Map<String, Contact> result = reloadContactsFromChain(br, chosenIds);
-                count += result.size();
+                localDeletedContacts = reloadContactsFromChain(br, chosenIds);
+                count += localDeletedContacts.size();
             }
         }else System.out.println("No local records of on chain deleted contacts.");
 
         if(!Inputer.askIfYes(br,"Check more deleted contacts from blockchain?"))return;
 
-        List<Contact> contactList = loadAllOnChainItems("contact",FieldNames.CONTACT_ID,FieldNames.LAST_HEIGHT,FieldNames.OWNER,0L, false,apipClient,Contact.class, br);
-
-        Iterator<Contact> iterator = contactList.iterator();
-        Set<String> checkedRemovedIds = deletedIds.keySet();
+        List<Contact> onChainDeleted = loadAllOnChainItems(CONTACT, FieldNames.LAST_HEIGHT,FieldNames.OWNER,0L, false,apipClient,Contact.class, br, false);
+        if(onChainDeleted.isEmpty()){
+            System.out.println("No deleted items on chain.1");
+//            return;
+        }
+        Iterator<Contact> iterator = onChainDeleted.iterator();
+        Set<String> checkedRemovedIds = null;
+        if(deletedIds!=null && !deletedIds.isEmpty())
+            checkedRemovedIds = deletedIds.keySet();
 
         while (iterator.hasNext()){
-            if(checkedRemovedIds.contains(iterator.next().getContactId()))
+            if(checkedRemovedIds != null && checkedRemovedIds.contains(iterator.next().getId()))
                 iterator.remove();
+            else iterator.next();
         }
 
-        List<ContactDetail> contactDetailList = contactToContactDetail(contactList);
+        List<Contact> finalChosenDeleted = new ArrayList<>();
+        finalChosenDeleted.addAll(onChainDeleted);
+        finalChosenDeleted.addAll(localDeletedContacts.values());
 
-        List<ContactDetail> chosenContacts = chooseContactDetailList(contactDetailList, new ArrayList<>(), 0, br);
+        List<ContactDetail> contactDetailList = contactToContactDetail(finalChosenDeleted);
+
+        List<ContactDetail> chosenContacts = chooseContactDetailList(contactDetailList,  0, br);
+
+        recoverContacts(null,chosenContacts,br);
 
         if(chosenContacts!=null && !chosenContacts.isEmpty()) {
             putAllContactDetail(chosenContacts);
@@ -527,8 +536,8 @@ public class ContactHandler extends Handler<ContactDetail> {
         for (Contact contact : contactList) {
             ContactDetail contactDetail = ContactDetail.fromContact(contact, priKey, apipClient);
             if (contactDetail == null) {
-                fakeContactCipherMap.put(contact.getContactId(), 
-                    DateTools.longToTime(contact.getBirthTime(),DateTools.FULL_FORMAT)+" "+contact.getCipher());
+                fakeContactCipherMap.put(contact.getId(),
+                    DateTools.longToTime(contact.getBirthTime(),DateTools.LONG_FORMAT)+" "+contact.getCipher());
                 continue;
             }
             contactDetailList.add(contactDetail);
@@ -537,10 +546,11 @@ public class ContactHandler extends Handler<ContactDetail> {
         return contactDetailList;
     }
 
-    private List<ContactDetail> chooseContactDetailList(List<ContactDetail> currentList, List<ContactDetail> chosenContacts,
-                                                      int totalDisplayed, BufferedReader br) {
+    private List<ContactDetail> chooseContactDetailList(List<ContactDetail> currentList, int totalDisplayed, BufferedReader br) {
+
+        List<ContactDetail> chosenContacts = new ArrayList<>();
         String title = "Choose Contacts";
-        ContactDetail.showContactDetailList(currentList, title, totalDisplayed);
+        ContactDetail.showContactDetailList(currentList, title, totalDisplayed,true);
 
         System.out.println("Enter contact numbers to select (comma-separated), 'a' for all. 'q' to quit, or press Enter for more:");
         String input = Inputer.inputString(br);
@@ -549,9 +559,25 @@ public class ContactHandler extends Handler<ContactDetail> {
             return null;  // Signal to continue to next page
         }
 
+        if ("a".equals(input)) {
+            return currentList;  // Signal to continue to next page
+        }
+
         if (input.equals("q")) {
             chosenContacts.add(null);  // Signal to break the loop
             return chosenContacts;
+        }
+
+        String[] inputs = input.split(",");
+        for (String input1 : inputs) {
+            try {
+                int index = Integer.parseInt(input1.trim()) - 1;
+                if (index >= 0 && index < currentList.size()) {
+                    chosenContacts.add(currentList.get(index)); 
+                }
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input: " + input1);
+            }
         }
 
         return chosenContacts;

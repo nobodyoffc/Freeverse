@@ -1,5 +1,6 @@
 package organize;
 
+import fch.fchData.Cid;
 import tools.EsTools;
 import tools.EsTools.MgetResult;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -39,7 +40,7 @@ public class OrganizationParser {
 				if(groupRaw.getName()==null)return null;
 				if(groupRaw.getGid()!=null)return null;
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				groupHist.setTxId(opre.getTxId());
+				groupHist.setId(opre.getTxId());
 				groupHist.setGid(opre.getTxId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
@@ -56,7 +57,7 @@ public class OrganizationParser {
 				if(groupRaw.getGid()==null) return null;
 				if(groupRaw.getName()==null) return null;
 				groupHist.setGid(groupRaw.getGid());
-				groupHist.setTxId(opre.getTxId());
+				groupHist.setId(opre.getTxId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -73,7 +74,7 @@ public class OrganizationParser {
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) return null;
 				groupHist.setGid(groupRaw.getGid());
 
-				groupHist.setTxId(opre.getTxId());
+				groupHist.setId(opre.getTxId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -84,7 +85,7 @@ public class OrganizationParser {
 				if(groupRaw.getGids()==null || groupRaw.getGids().isEmpty())return null;
 				groupHist.setGids(groupRaw.getGids());
 
-				groupHist.setTxId(opre.getTxId());
+				groupHist.setId(opre.getTxId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -107,7 +108,7 @@ public class OrganizationParser {
 				group = EsTools.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 				if(group==null) {
 					group = new Group();
-					group.setGid(groupHist.getTxId());
+					group.setId(groupHist.getId());
 					group.setName(groupHist.getName());
 					group.setDesc(groupHist.getDesc());
 
@@ -124,7 +125,7 @@ public class OrganizationParser {
 					group.setBirthTime(groupHist.getTime());
 					group.setBirthHeight(groupHist.getHeight());
 
-					group.setLastTxId(groupHist.getTxId());
+					group.setLastTxId(groupHist.getId());
 					group.setLastTime(groupHist.getTime());
 					group.setLastHeight(groupHist.getHeight());
 
@@ -167,7 +168,7 @@ public class OrganizationParser {
 				group.setMembers(activeMembers);
 				group.setMemberNum((long) activeMembers.length);
 
-				group.setLastTxId(groupHist.getTxId());
+				group.setLastTxId(groupHist.getId());
 				group.setLastTime(groupHist.getTime());
 				group.setLastHeight(groupHist.getHeight());
 
@@ -220,7 +221,7 @@ public class OrganizationParser {
 
 				group.setNamers(namers);
 
-				group.setLastTxId(groupHist.getTxId());
+				group.setLastTxId(groupHist.getId());
 				group.setLastTime(groupHist.getTime());
 				group.setLastHeight(groupHist.getHeight());
 
@@ -260,14 +261,14 @@ public class OrganizationParser {
 					//TODO Important: If no one is in this group, delete the group and its history.
 					if(activeMembers1.length==0){
 						Group finalGroup = group1;
-						esClient.delete(d->d.index(IndicesNames.GROUP).id(finalGroup.getGid()));
+						esClient.delete(d->d.index(IndicesNames.GROUP).id(finalGroup.getId()));
 						Group finalGroup1 = group1;
-						esClient.deleteByQuery(d->d.index(IndicesNames.GROUP_HISTORY).query(q->q.term(t->t.field("gid").value(finalGroup1.getGid()))));
+						esClient.deleteByQuery(d->d.index(IndicesNames.GROUP_HISTORY).query(q->q.term(t->t.field("gid").value(finalGroup1.getId()))));
 						isValid = false;
 						return isValid;
 					}
 	
-					group1.setLastTxId(groupHist.getTxId());
+					group1.setLastTxId(groupHist.getId());
 					group1.setLastTime(groupHist.getTime());
 					group1.setLastHeight(groupHist.getHeight());
 	
@@ -280,7 +281,7 @@ public class OrganizationParser {
 					br.operations(op -> op
 						.index(idx -> idx
 							.index(IndicesNames.GROUP)
-							.id(group4.getGid())
+							.id(group4.getId())
 							.document(group4)
 						)
 					);
@@ -322,7 +323,7 @@ public class OrganizationParser {
 				if(teamRaw.getTid()!=null) return null;
 				if(teamRaw.getConsensusId()==null) return null;
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setTid(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
@@ -342,7 +343,7 @@ public class OrganizationParser {
 				if(teamRaw.getTids()==null)return null;
 				teamHist.setTids(teamRaw.getTids());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -355,7 +356,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setTransferee(teamRaw.getTransferee());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -367,7 +368,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -380,7 +381,7 @@ public class OrganizationParser {
 				if(teamRaw.getConsensusId()==null) return null;
 
 				teamHist.setTid(teamRaw.getTid());
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -401,7 +402,7 @@ public class OrganizationParser {
 				if(teamRaw.getConsensusId()!=null)
 					teamHist.setConsensusId(teamRaw.getConsensusId());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -414,7 +415,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setList(teamRaw.getList());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -427,7 +428,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -442,7 +443,7 @@ public class OrganizationParser {
 				teamHist.setRate(teamRaw.getRate());
 				teamHist.setCdd(opre.getCdd());
 
-				teamHist.setTxId(opre.getTxId());
+				teamHist.setId(opre.getTxId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -464,7 +465,7 @@ public class OrganizationParser {
 				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 				if(team==null) {
 					team = new Team();
-					team.setTid(teamHist.getTxId());
+					team.setId(teamHist.getId());
 					team.setOwner(teamHist.getSigner());
 					team.setStdName(teamHist.getStdName());
 					if(teamHist.getLocalNames()!=null)team.setLocalNames(teamHist.getLocalNames());
@@ -485,7 +486,7 @@ public class OrganizationParser {
 					team.setBirthTime(teamHist.getTime());
 					team.setBirthHeight(teamHist.getHeight());
 
-					team.setLastTxId(teamHist.getTxId());
+					team.setLastTxId(teamHist.getId());
 					team.setLastTime(teamHist.getTime());
 					team.setLastHeight(teamHist.getHeight());
 
@@ -523,7 +524,7 @@ public class OrganizationParser {
 					if(Boolean.FALSE.equals(team1.isActive())) {
 						continue;
 					}
-					team1.setLastTxId(teamHist.getTxId());
+					team1.setLastTxId(teamHist.getId());
 					team1.setLastTime(teamHist.getTime());
 					team1.setLastHeight(teamHist.getHeight());
 					team1.setActive(false);
@@ -532,7 +533,7 @@ public class OrganizationParser {
 					br.operations(op -> op
 						.index(idx -> idx
 							.index(IndicesNames.TEAM)
-							.id(team2.getTid())
+							.id(team2.getId())
 							.document(team2)
 						)
 					);
@@ -572,7 +573,7 @@ public class OrganizationParser {
 					team.setTransferee(null);
 				}else team.setTransferee(teamHist.getTransferee());
 
-				team.setLastTxId(teamHist.getTxId());
+				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());
 
@@ -688,7 +689,7 @@ public class OrganizationParser {
 					}
 				}
 
-				team.setLastTxId(teamHist.getTxId());
+				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());
 
@@ -737,7 +738,7 @@ public class OrganizationParser {
 						team.setNotAgreeMembers(null);
 					}else team.setNotAgreeMembers(notAgreeMembers);
 
-					team.setLastTxId(teamHist.getTxId());
+					team.setLastTxId(teamHist.getId());
 					team.setLastTime(teamHist.getTime());
 					team.setLastHeight(teamHist.getHeight());
 
@@ -783,7 +784,7 @@ public class OrganizationParser {
 
 							String[] invitees = inviteeSet.toArray(new String[inviteeSet.size()]);
 							team.setInvitees(invitees);
-							team.setLastTxId(teamHist.getTxId());
+							team.setLastTxId(teamHist.getId());
 							team.setLastTime(teamHist.getTime());
 							team.setLastHeight(teamHist.getHeight());
 
@@ -824,7 +825,7 @@ public class OrganizationParser {
 							}
 							String[] invitees = inviteeSet.toArray(new String[inviteeSet.size()]);
 							team.setInvitees(invitees);
-							team.setLastTxId(teamHist.getTxId());
+							team.setLastTxId(teamHist.getId());
 							team.setLastTime(teamHist.getTime());
 							team.setLastHeight(teamHist.getHeight());
 
@@ -897,7 +898,7 @@ public class OrganizationParser {
 							}
 							team.setMembers(activeMembers);
 							team.setMemberNum((long) activeMembers.length);
-							team.setLastTxId(teamHist.getTxId());
+							team.setLastTxId(teamHist.getId());
 							team.setLastTime(teamHist.getTime());
 							team.setLastHeight(teamHist.getHeight());
 
@@ -974,7 +975,7 @@ public class OrganizationParser {
 						String[] managers = magagerSet.toArray(new String[0]);
 						team.setManagers(managers);
 					}
-					team.setLastTxId(teamHist.getTxId());
+					team.setLastTxId(teamHist.getId());
 					team.setLastTime(teamHist.getTime());
 					team.setLastHeight(teamHist.getHeight());
 
@@ -983,7 +984,7 @@ public class OrganizationParser {
 					br1.operations(op -> op
 							.index(idx -> idx
 								.index(IndicesNames.TEAM)
-								.id(team7.getTid())
+								.id(team7.getId())
 								.document(team7)
 							)
 						);
@@ -1061,7 +1062,7 @@ public class OrganizationParser {
 							team.setManagers(magagers);
 						}
 
-						team.setLastTxId(teamHist.getTxId());
+						team.setLastTxId(teamHist.getId());
 						team.setLastTime(teamHist.getTime());
 						team.setLastHeight(teamHist.getHeight());
 
@@ -1115,7 +1116,7 @@ public class OrganizationParser {
 				String[] managers = magagerSet.toArray(new String[0]);
 
 				team.setManagers(managers);
-				team.setLastTxId(teamHist.getTxId());
+				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());
 
@@ -1162,7 +1163,7 @@ public class OrganizationParser {
 				String[] magagers1 = magagerSet1.toArray(new String[magagerSet1.size()]);
 
 				team.setManagers(magagers1);
-				team.setLastTxId(teamHist.getTxId());
+				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());
 
@@ -1198,7 +1199,7 @@ public class OrganizationParser {
 						team.settCdd(team.gettCdd() + teamHist.getCdd());
 					}
 
-				team.setLastTxId(teamHist.getTxId());
+				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());
 

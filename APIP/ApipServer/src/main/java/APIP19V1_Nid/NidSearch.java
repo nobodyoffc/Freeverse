@@ -34,13 +34,13 @@ public class NidSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false, FieldNames.NID,true, null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false, FieldNames.ID,true, null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,NID,true, null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
     }
 }

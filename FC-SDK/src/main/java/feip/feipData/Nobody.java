@@ -1,20 +1,14 @@
 package feip.feipData;
 
-public class Nobody {
-    private String fid;
+import fcData.FcObject;
+
+public class Nobody extends FcObject {
+    private String id;
     private String priKey;
     private Long deathTime;
     private Long deathHeight;
     private String deathTxId;
     private Integer deathTxIndex;
-
-    public String getFid() {
-        return fid;
-    }
-
-    public void setFid(String fid) {
-        this.fid = fid;
-    }
 
     public String getPriKey() {
         return priKey;

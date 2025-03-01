@@ -1,6 +1,6 @@
 package handlers;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import apip.apipData.Fcdsl;
 import apip.apipData.Sort;
 import appTools.Inputer;
@@ -32,7 +32,6 @@ import fch.ParseTools;
 import fch.TxCreator;
 import fch.Wallet;
 import fch.fchData.*;
-import feip.feipData.Cid;
 import feip.feipData.Service;
 import nasa.NaSaRpcClient;
 import nasa.data.UTXO;
@@ -64,7 +63,7 @@ import static constants.Strings.DESC;
 import static constants.Values.*;
 import static fch.TxCreator.DEFAULT_FEE_RATE;
 
-public class CashHandler extends Handler {
+public class CashHandler extends Handler<Cash> {
     private static final Logger log = LoggerFactory.getLogger(CashHandler.class);
     private static final int BATCH_SIZE = 50;
     private final Map<String, Integer> unsafeIdJumpNumMap;
@@ -74,7 +73,7 @@ public class CashHandler extends Handler {
     private final MempoolHandler mempoolHandler;
 
     private String myFid;
-    private CidInfo cidInfo;
+    private Cid cid;
     private final byte[] priKey;
     private final BufferedReader br;
     private long bestHeight;
@@ -121,8 +120,8 @@ public class CashHandler extends Handler {
         return bestHeight;
     }
 
-    public CidInfo getCidInfo() {
-        return cidInfo;
+    public Cid getCidInfo() {
+        return cid;
     }
 
     public Long getLastFee() {
@@ -158,7 +157,7 @@ public class CashHandler extends Handler {
             Cash.showCashList(cashList, "Your cashes", total, myFid);
             if(cashList.size()<BATCH_SIZE)return;
             if(!askIfYes(br,"Continue?"))return;
-            start = cashList.get(cashList.size()-1).getCashId().getBytes();
+            start = cashList.get(cashList.size()-1).getId().getBytes();
         }
     }
 
@@ -387,7 +386,7 @@ public class CashHandler extends Handler {
 
        System.out.println("Sender:  " + sender);
 
-       System.out.println("Balance: "+ParseTools.satoshiToCoin(cidInfo.getBalance())+".\nCashes:  "+cidInfo.getCash());
+       System.out.println("Balance: "+ParseTools.satoshiToCoin(cid.getBalance())+".\nCashes:  "+ cid.getCash());
 
        List<SendTo> sendToList = SendTo.inputSendToList(br);
 
@@ -510,11 +509,11 @@ public class CashHandler extends Handler {
             return null;
         }
         for(Cash cash : meetList){
-            cashDB.remove(Hex.fromHex(cash.getCashId()));
+            cashDB.remove(Hex.fromHex(cash.getId()));
         }
 
-        Long balance = cidInfo.getBalance();
-        Long cashCount = cidInfo.getCash();
+        Long balance = cid.getBalance();
+        Long cashCount = cid.getCash();
         if(sendToList!=null){
             for(int i=0; i<sendToList.size();i++){
                 SendTo sendTo = sendToList.get(i);
@@ -537,8 +536,8 @@ public class CashHandler extends Handler {
             cashCount++;
         }
 
-        cidInfo.setBalance(balance);
-        cidInfo.setCash(cashCount);
+        cid.setBalance(balance);
+        cid.setCash(cashCount);
 
         maxJumpNum = getMaxJumpNum();
         if(maxJumpNum>=Constants.MAX_JUMP_NUM){
@@ -592,7 +591,7 @@ public class CashHandler extends Handler {
     public Integer getMaxJumpNum(List<Cash> cashList) {
         int maxJumpNum = 0;
         for (Cash cash : cashList) {
-            Integer jumpNum = unsafeIdJumpNumMap.get(cash.getCashId());
+            Integer jumpNum = unsafeIdJumpNumMap.get(cash.getId());
             if (jumpNum!=null && jumpNum > maxJumpNum) maxJumpNum = jumpNum;
         }
         return maxJumpNum;
@@ -609,7 +608,7 @@ public class CashHandler extends Handler {
             if(chosenCashes!=null && !chosenCashes.isEmpty()){
                 finalCashes.addAll(chosenCashes);
                 if(currentList.size()<BATCH_SIZE)break;
-                start = currentList.get(currentList.size()-1).getCashId().getBytes();
+                start = currentList.get(currentList.size()-1).getId().getBytes();
             }else{
                 return finalCashes;
             }
@@ -698,10 +697,10 @@ public class CashHandler extends Handler {
         cash.setBirthTxId(txId);
         cash.setBirthIndex(index);
         cash.setValue(ParseTools.coinToSatoshi(amount));
-        cash.setCashId(ParseTools.calcTxoId(txId, index));
+        cash.setId(ParseTools.calcTxoId(txId, index));
 
-        cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
-        unsafeIdJumpNumMap.put(cash.getCashId(), maxJumpNum + 1);
+        cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
+        unsafeIdJumpNumMap.put(cash.getId(), maxJumpNum + 1);
 
     }
 
@@ -719,21 +718,20 @@ public class CashHandler extends Handler {
 
         if(bestHeight>lastHeight){
             if(apipClient!=null){
-                cidInfo = apipClient.cidInfoById(myFid);
-                if(cidInfo==null){
+                cid = apipClient.cidInfoById(myFid);
+                if(cid ==null){
                     log.error("Failed to get cidInfo from apipClient when checkValidCashes.");
                 }
                 freshCashFileMapByApip(lastHeight);
             }else if(esClient!=null){
                 try{    
                     Cid cid = EsTools.getById(esClient,CID,myFid, Cid.class);
-                    Address address = EsTools.getById(esClient,IndicesNames.ADDRESS,myFid, Address.class);
-                    if(cid!=null && address!=null)cidInfo = CidInfo.mergeCidInfo(cid, address);
+                    if(cid!=null) this.cid = cid;
                     freshCashFileMapByEs(lastHeight);
                 }catch (Exception e){
                     log.error("EsClient error:{}", e.getMessage());
                 }
-            }else if(nasaClient!=null){
+            }else {
                 if (freshCashFileMapByNasaRpc()) return;
             }
         }
@@ -749,7 +747,7 @@ public class CashHandler extends Handler {
         }
         List<Cash> cashList = (List<Cash>) replier.getData();
         for (Cash cash : cashList) {
-            cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+            cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
         }
         bestHeight = nasaClient.getBestHeight();
         cashDB.setLastHeight(bestHeight);
@@ -817,9 +815,9 @@ public class CashHandler extends Handler {
         for (Cash cash : cashList) {
             total++;
             if(cash.isValid())
-                cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
             else
-                cashDB.remove(Hex.fromHex(cash.getCashId()));
+                cashDB.remove(Hex.fromHex(cash.getId()));
         }
 
         cashDB.setLastHeight(bestHeight);
@@ -841,9 +839,9 @@ public class CashHandler extends Handler {
             for (Cash cash : cashList) {
                 total++;
                 if(cash.isValid()){
-                    cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                    cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
                 }else{
-                    cashDB.remove(Hex.fromHex(cash.getCashId()));
+                    cashDB.remove(Hex.fromHex(cash.getId()));
                 }
             }
             if(cashList.size()<DEFAULT_CASH_LIST_SIZE)break;
@@ -916,8 +914,8 @@ public class CashHandler extends Handler {
             return;
         }
         if(apipClient!=null){
-            cidInfo = apipClient.cidInfoById(myFid);
-            if(cidInfo==null){
+            cid = apipClient.cidInfoById(myFid);
+            if(cid ==null){
                 log.error("Failed to get cidInfo from apipClient when checkValidCashes.");
             }
 
@@ -927,7 +925,7 @@ public class CashHandler extends Handler {
                 return;
             }
             for (Cash cash : cashList) {
-                cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
             }
             bestHeight = apipClient.getBestHeight();
             cashDB.setLastHeight(bestHeight);
@@ -943,7 +941,7 @@ public class CashHandler extends Handler {
                 return;
             }
             for (Cash cash : cashList) {
-                cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
             }
             try {
                 bestHeight = EsTools.getBestBlock(esClient).getHeight();
@@ -962,7 +960,7 @@ public class CashHandler extends Handler {
                 return;
             }
             for (Cash cash : cashList) {
-                cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
             }
             bestHeight = nasaClient.getBestHeight();
             cashDB.setLastHeight(bestHeight);
@@ -1020,9 +1018,9 @@ public class CashHandler extends Handler {
             if(unconfirmedCashes!=null){
                 for(Cash cash : unconfirmedCashes){
                     if(cash.isValid())
-                        cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                        cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
                     else
-                        cashDB.remove(Hex.fromHex(cash.getCashId()));
+                        cashDB.remove(Hex.fromHex(cash.getId()));
                 }
             }
         }else if(nasaClient!=null){
@@ -1031,13 +1029,13 @@ public class CashHandler extends Handler {
                 TxHasInfo txHasInfo = entry.getValue();
                 if(txHasInfo.getInCashList()!=null){
                     for (Cash cash : txHasInfo.getInCashList()) {
-                        cashDB.remove(Hex.fromHex(cash.getCashId()));
+                        cashDB.remove(Hex.fromHex(cash.getId()));
                     }
                 }
                 if(txHasInfo.getOutCashList()!=null){
                     for (Cash cash : txHasInfo.getOutCashList()) {
                         if(myFid.equals(cash.getOwner())){
-                            cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                            cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
                         }
                     }
                 }
@@ -1050,9 +1048,9 @@ public class CashHandler extends Handler {
                 for (Cash cash : unconfirmedCashes) {
                     if(myFid.equals(cash.getOwner())){
                         if(cash.isValid())
-                            cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
+                            cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
                         else
-                            cashDB.remove(Hex.fromHex(cash.getCashId()));
+                            cashDB.remove(Hex.fromHex(cash.getId()));
                     }
                 }
             }
@@ -1069,10 +1067,10 @@ public class CashHandler extends Handler {
             List<Cash> cashes = getCashListFromApip(myFid, true, 200, null, null, cashDB.getLastHeight(), apipClient);
             if(cashes==null)return;
             for(Cash cash : cashes){
-                cashDB.put(Hex.fromHex(cash.getCashId()), cash.toBytes());
-                unsafeIdJumpNumMap.remove(cash.getCashId());
+                cashDB.put(Hex.fromHex(cash.getId()), cash.toBytes());
+                unsafeIdJumpNumMap.remove(cash.getId());
             }
-            cidInfo = apipClient.cidInfoById(myFid);
+            cid = apipClient.cidInfoById(myFid);
         }
     }
 
@@ -1321,7 +1319,7 @@ public class CashHandler extends Handler {
 
     public static void checkUnconfirmedSpentByJedis(List<Cash> cashList, Jedis jedis) {
         jedis.select(Constants.RedisDb3Mempool);
-        cashList.removeIf(cash -> jedis.hget(FieldNames.SPEND_CASHES, cash.getCashId()) != null);
+        cashList.removeIf(cash -> jedis.hget(FieldNames.SPEND_CASHES, cash.getId()) != null);
         jedis.select(0);
     }
 
@@ -1600,7 +1598,7 @@ public class CashHandler extends Handler {
         cash.setBirthTxId("6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b");  // Example transaction ID
         cash.setBirthIndex(0);
         cash.setValue(100000000L);  // 1 FCH in satoshis
-        cash.setCashId(ParseTools.calcTxoId(cash.getBirthTxId(), cash.getBirthIndex()));
+        cash.setId(ParseTools.calcTxoId(cash.getBirthTxId(), cash.getBirthIndex()));
         cash.setBirthTime(System.currentTimeMillis() / 1000);  // Current Unix timestamp
         cash.setBirthHeight(100000L);  // Example block height
         cash.setValid(true);

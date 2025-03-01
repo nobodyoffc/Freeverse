@@ -44,7 +44,7 @@ public class GroupMembers extends HttpServlet {
         //Make data
         Map<String,String[]> dataMap = new HashMap<>();
         for(Group group:meetList){
-            dataMap.put(group.getGid(),group.getMembers());
+            dataMap.put(group.getId(),group.getMembers());
         }
         fcdslRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
     }

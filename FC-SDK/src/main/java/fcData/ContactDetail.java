@@ -2,8 +2,9 @@ package fcData;
 
 import crypto.Algorithm.Bitcore;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import clients.ApipClient;
+import tools.FchTools;
 import feip.feipData.Contact;
 import crypto.Decryptor;
 import crypto.CryptoDataByte;
@@ -13,9 +14,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.ArrayList;
 import appTools.Shower;
-import tools.DateTools;
 
-public class ContactDetail extends FcEntity {
+public class ContactDetail extends FcObject {
     private String fid;
     private String cid;
     private String pubKey;
@@ -28,15 +28,15 @@ public class ContactDetail extends FcEntity {
     private Long updateHeight;
     private String contactId;
 
-    public static ContactDetail fromCidInfo(CidInfo cidInfo) {
+    public static ContactDetail fromCidInfo(Cid cid) {
         ContactDetail contactDetail = new ContactDetail();
-        contactDetail.setFid(cidInfo.getFid());
-        contactDetail.setCid(cidInfo.getCid());
-        String fee = cidInfo.getNoticeFee();
+        contactDetail.setFid(cid.getId());
+        contactDetail.setCid(cid.getCid());
+        String fee = cid.getNoticeFee();
         if(fee!=null)
             contactDetail.setNoticeFee(Double.valueOf(fee));
-        contactDetail.setPubKey(cidInfo.getPubKey());
-        contactDetail.setUpdateHeight(cidInfo.getLastHeight());
+        contactDetail.setPubKey(cid.getPubKey());
+        contactDetail.setUpdateHeight(cid.getLastHeight());
         return contactDetail;
     }
 
@@ -85,7 +85,7 @@ public class ContactDetail extends FcEntity {
                         }
                         ContactDetail contactDetail = JsonTools.fromJson(new String(dataBytes), ContactDetail.class);
                         if(contactDetail!=null){
-                            contactDetail.setContactId(contact.getContactId());
+                            contactDetail.setContactId(contact.getId());
                             contactDetail.setUpdateHeight(contact.getLastHeight());
                             return contactDetail;
                         }
@@ -113,7 +113,7 @@ public class ContactDetail extends FcEntity {
                 ContactDetail decryptedDetail = JsonTools.fromJson(decryptedContent, ContactDetail.class);
                 
                 if (decryptedDetail != null) {
-                    decryptedDetail.setContactId(contact.getContactId());
+                    decryptedDetail.setContactId(contact.getId());
                     decryptedDetail.setUpdateHeight(contact.getLastHeight());
                     return decryptedDetail;
                 }
@@ -124,20 +124,20 @@ public class ContactDetail extends FcEntity {
 
     private static ContactDetail makeContactDetail(ContactDetail contactDetail, ApipClient apipClient) {
         if (contactDetail == null) return null;
-        CidInfo cidInfo = apipClient.getFidCid(contactDetail.getFid());
-        if (cidInfo == null) return null;
-        contactDetail.setFid(cidInfo.getFid());
-        contactDetail.setPubKey(cidInfo.getPubKey());
-        String fee = cidInfo.getNoticeFee();
+        Cid cid = apipClient.getFidCid(contactDetail.getFid());
+        if (cid == null) return null;
+        contactDetail.setFid(cid.getId());
+        contactDetail.setPubKey(cid.getPubKey());
+        String fee = cid.getNoticeFee();
         if(fee!=null)
             contactDetail.setNoticeFee(Double.valueOf(fee));
-        contactDetail.setCid(cidInfo.getCid());
+        contactDetail.setCid(cid.getCid());
         return contactDetail;
     }
 
-    public static void showContactDetailList(List<ContactDetail> contactList, String title, int totalDisplayed) {
+    public static void showContactDetailList(List<ContactDetail> contactList, String title, int totalDisplayed,boolean isShortTimestamp) {
         String[] fields = new String[]{"CID", "FID", "Memo", "Notice Fee", "Update Time"};
-        int[] widths = new int[]{10, 10, 10, 25, 10};
+        int[] widths = new int[]{10, 10, 10, 25, 20};
         List<List<Object>> valueListList = new ArrayList<>();
 
         for (ContactDetail contact : contactList) {
@@ -146,10 +146,10 @@ public class ContactDetail extends FcEntity {
             showList.add(contact.getFid());
             showList.add(contact.getMemo());
             showList.add(contact.getNoticeFee());
-            showList.add(DateTools.longToTime(contact.getUpdateHeight(), "yyyy-MM-dd"));
+            showList.add(FchTools.heightToLongDate(contact.getUpdateHeight()));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed);
+        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, isShortTimestamp);
     }
 
     public String getFid() {

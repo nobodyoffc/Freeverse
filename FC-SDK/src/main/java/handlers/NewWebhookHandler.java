@@ -346,7 +346,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
             }
             
             // Use the Shower class to display the data
-            Shower.showDataTable(title, webhookRequestBodyList, 0);
+            Shower.showDataTable(title, webhookRequestBodyList, 0, true);
         }
     }
 } 

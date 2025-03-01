@@ -1,8 +1,9 @@
 package feip.feipData;
 
-public class Cid {
-	
-	private String fid;
+import fcData.FcObject;
+
+public class Cid extends FcObject {
+
 	private String cid;
 	private String [] usedCids;
 	private String priKey;
@@ -13,14 +14,6 @@ public class Cid {
 	private Long hot;
 	private Long nameTime;
 	private Long lastHeight;
-
-	public String getFid() {
-		return fid;
-	}
-
-	public void setFid(String fid) {
-		this.fid = fid;
-	}
 
 	public String getCid() {
 		return cid;

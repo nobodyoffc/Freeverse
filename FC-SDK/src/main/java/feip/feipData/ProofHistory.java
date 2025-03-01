@@ -1,10 +1,12 @@
 package feip.feipData;
 
+import fcData.FcObject;
+
 import java.util.List;
 
-public class ProofHistory {
+public class ProofHistory extends FcObject {
 	
-	private String txId;
+	private String id;
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -26,14 +28,6 @@ public class ProofHistory {
 
 	public void setRecipient(String recipient) {
 		this.recipient = recipient;
-	}
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
 	}
 
 	public Long getHeight() {

@@ -115,7 +115,7 @@ public class PublishParser {
 
     public static void setTxInfo(OpReturn opre, TokenHistory tokenHist) {
         if(tokenHist==null)return;
-        tokenHist.setTxId(opre.getTxId());
+        tokenHist.setId(opre.getTxId());
         tokenHist.setHeight(opre.getHeight());
         tokenHist.setIndex(opre.getTxIndex());
         tokenHist.setTime(opre.getTime());
@@ -147,7 +147,7 @@ public class PublishParser {
                 if(proofRaw.getContent()==null) return null;
                 if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100)
                     return null;
-                proofHist.setTxId(opre.getTxId());
+                proofHist.setId(opre.getTxId());
                 proofHist.setProofId(opre.getTxId());
                 proofHist.setHeight(opre.getHeight());
                 proofHist.setIndex(opre.getTxIndex());
@@ -168,7 +168,7 @@ public class PublishParser {
             case "destroy":
                 if(proofRaw.getProofId()==null) return null;
                 proofHist.setProofId(proofRaw.getProofId());
-                proofHist.setTxId(opre.getTxId());
+                proofHist.setId(opre.getTxId());
                 proofHist.setHeight(opre.getHeight());
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
@@ -177,7 +177,7 @@ public class PublishParser {
             case "transfer":
                 if(proofRaw.getProofId()==null) return null;
                 proofHist.setProofId(proofRaw.getProofId());
-                proofHist.setTxId(opre.getTxId());
+                proofHist.setId(opre.getTxId());
                 proofHist.setHeight(opre.getHeight());
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
@@ -209,7 +209,7 @@ public class PublishParser {
 
         Statement statement = new Statement();
 
-        statement.setStatementId(opre.getTxId());
+        statement.setId(opre.getTxId());
 
         if(statementRaw.getConfirm()==null)return isValid;
 
@@ -229,7 +229,7 @@ public class PublishParser {
         statement.setBirthTime(opre.getTime());
         statement.setBirthHeight(opre.getHeight());
 
-        esClient.index(i->i.index(IndicesNames.STATEMENT).id(statement.getStatementId()).document(statement));
+        esClient.index(i->i.index(IndicesNames.STATEMENT).id(statement.getId()).document(statement));
         isValid = true;
 
         return isValid;
@@ -245,7 +245,7 @@ public class PublishParser {
 
                 token = new Token();
 
-                token.setTokenId(tokenHist.getTxId());
+                token.setId(tokenHist.getId());
                 if(tokenHist.getName()!=null)token.setName(tokenHist.getName());
                 if(tokenHist.getDesc()!=null)token.setDesc(tokenHist.getDesc());
                 if(tokenHist.getConsensusId()!=null)token.setConsensusId(tokenHist.getConsensusId());
@@ -299,7 +299,7 @@ public class PublishParser {
                     if(isBadDecimal(token, issueTo))return false;
                     amount += issueTo.getAmount();
                     receiverAmountMapIssue.put(issueTo.getFid(),issueTo.getAmount());
-                    String tokenHolderId = getTokenHolderId(issueTo.getFid(), tokenHist.getTokenId());
+                    String tokenHolderId = TokenHolder.getTokenHolderId(issueTo.getFid(), tokenHist.getTokenId());
                     idReceiverMapIssue.put(tokenHolderId,issueTo.getFid());
                     tokenRecipientIdListIssue.add(tokenHolderId);
                 }
@@ -376,7 +376,7 @@ public class PublishParser {
                 if(token==null || token.getClosed().equals(TRUE))return false;
                 int decimal = Integer.parseInt(token.getDecimal());
                 String fromFid = tokenHist.getSigner();
-                String tokenHolderId = getTokenHolderId(fromFid, tokenHist.getTokenId());
+                String tokenHolderId = TokenHolder.getTokenHolderId(fromFid, tokenHist.getTokenId());
                 TokenHolder tokenHolder = EsTools.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderId, TokenHolder.class);
                 if(tokenHolder==null)return false;
                 double senderOldBalance = tokenHolder.getBalance();
@@ -391,7 +391,7 @@ public class PublishParser {
                 for (SendTo sendTo : tokenHist.getTransferTo()) {
                     if(!KeyTools.isValidFchAddr(sendTo.getFid()))return false;
                     if(isBadDecimal(token, sendTo))return false;
-                    String id = getTokenHolderId(sendTo.getFid(), tokenHist.getTokenId());
+                    String id = TokenHolder.getTokenHolderId(sendTo.getFid(), tokenHist.getTokenId());
                     tokenHolderIdListTransfer.add(id);
                     sum+=sendTo.getAmount();
                     receiverAmountMap.put(sendTo.getFid(),sendTo.getAmount());
@@ -439,7 +439,7 @@ public class PublishParser {
                 token = EsTools.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
                 if(token==null || token.getClosed().equals(TRUE))return false;
                 decimal = Integer.parseInt(token.getDecimal());
-                String tokenReceiverId=getTokenHolderId(tokenHist.getSigner(), tokenHist.getTokenId());
+                String tokenReceiverId= TokenHolder.getTokenHolderId(tokenHist.getSigner(), tokenHist.getTokenId());
                 TokenHolder tokenHolderDestroy = EsTools.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenReceiverId, TokenHolder.class);
 
                 if(tokenHolderDestroy==null)return false;
@@ -481,7 +481,7 @@ public class PublishParser {
         if(tokenHist==null)return;
         token.setLastHeight(tokenHist.getHeight());
         token.setLastTime(tokenHist.getTime());
-        token.setLastTxId(tokenHist.getTxId());
+        token.setLastTxId(tokenHist.getId());
     }
 
     private static boolean isBadDecimal(Token token, SendTo issueTo) {
@@ -494,10 +494,6 @@ public class PublishParser {
         }
     }
 
-    private static String getTokenHolderId(String fid, String tokenId) {
-        return HexFormat.of().formatHex(Hash.sha256((fid + tokenId).getBytes()));
-    }
-
     public boolean parseProof(ElasticsearchClient esClient, ProofHistory proofHist) throws Exception {
         if(proofHist==null || proofHist.getOp()==null)return false;
         Proof proof;
@@ -507,7 +503,7 @@ public class PublishParser {
                 if(proof!=null)return false;
 
                 proof = new Proof();
-                proof.setProofId(proofHist.getTxId());
+                proof.setId(proofHist.getId());
                 proof.setTitle(proofHist.getTitle());
                 proof.setContent(proofHist.getContent());
                 proof.setActive(true);
@@ -535,7 +531,7 @@ public class PublishParser {
                 proof.setBirthTime(proofHist.getTime());
                 proof.setBirthHeight(proofHist.getHeight());
 
-                proof.setLastTxId(proofHist.getTxId());
+                proof.setLastTxId(proofHist.getId());
                 proof.setLastTime(proofHist.getTime());
                 proof.setLastHeight(proofHist.getHeight());
 
@@ -573,7 +569,7 @@ public class PublishParser {
                         if(cosignerSigned.length==proof.getCosignersInvited().length)proof.setActive(true);
 
                         proof.setCosignersSigned(cosignerSigned);
-                        proof.setLastTxId(proofHist.getTxId());
+                        proof.setLastTxId(proofHist.getId());
                         proof.setLastTime(proofHist.getTime());
                         proof.setLastHeight(proofHist.getHeight());
                         Proof finalProof = proof;
@@ -619,7 +615,7 @@ public class PublishParser {
                     br.operations(op -> op
                         .index(idx -> idx
                             .index(IndicesNames.PROTOCOL)
-                            .id(proofItem.getProofId())
+                            .id(proofItem.getId())
                             .document(proofItem)
                         )
                     );
@@ -655,7 +651,7 @@ public class PublishParser {
                 if(nidRaw.getName()==null)return false;
                 if(nidRaw.getOid()==null) return false;
 
-                nid.setNid(Hash.sha256x2(nidRaw.getName()+opre.getSigner()));
+                nid.setId(Hash.sha256x2(nidRaw.getName()+opre.getSigner()));
                 nid.setName(nidRaw.getName());
                 nid.setDesc(nidRaw.getDesc());
                 nid.setOid(nidRaw.getOid());
@@ -669,7 +665,7 @@ public class PublishParser {
 
                 Nid nid0 = nid;
 
-                esClient.index(i->i.index(IndicesNames.NID).id(nid0.getNid()).document(nid0));
+                esClient.index(i->i.index(IndicesNames.NID).id(nid0.getId()).document(nid0));
                 isValid = true;
                 break;
 
@@ -695,7 +691,7 @@ public class PublishParser {
                     br.operations(op -> op
                         .index(idx -> idx
                             .index(IndicesNames.NID)
-                            .id(nid1.getNid())
+                            .id(nid1.getId())
                             .document(nid1)
                         )
                     );

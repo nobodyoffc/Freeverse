@@ -2,6 +2,7 @@ package startApipClient;
 
 
 import apip.apipData.*;
+import fch.fchData.Cid;
 import appTools.Starter;
 import appTools.Inputer;
 import appTools.Menu;
@@ -385,7 +386,7 @@ public class StartApipClient {
     public static void fidByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting fidByIds...");
-        Map<String, Address> result = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, fch.fchData.Cid> result = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -396,7 +397,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting fidSearch...");
-        List<Address> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<fch.fchData.Cid> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -572,7 +573,7 @@ public class StartApipClient {
     public static void cidInfoByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting cidInfoByIds...");
-        Map<String, CidInfo> result = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Cid> result = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -583,7 +584,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting cidInfoSearch...");
-        List<CidInfo> result = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cid> result = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -604,7 +605,7 @@ public class StartApipClient {
         System.out.println("Input FID or CID:");
         String id = Inputer.inputString(br);
         System.out.println("Requesting getFidCid...");
-        CidInfo result = apipClient.getFidCid(id);
+        Cid result = apipClient.getFidCid(id);
         if(result==null)return;
         System.out.println("Got "+result.getCid()+".");
         JsonTools.printJson(apipClient.getFcClientEvent().getResponseBody());

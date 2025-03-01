@@ -578,17 +578,21 @@ public class MapDBDatabase <T> implements LocalDB<T> {
 
     // Method to remove an item from a named map
     public void removeFromMap(String mapName, String key) {
-        HTreeMap<String, ?> map = getOrCreateMap(mapName, null);
-        map.remove(key);
-        commit();
+        HTreeMap<String, ?> map = namedMaps.get(mapName);
+        if (map != null) {
+            map.remove(key);
+            commit();
+        }
     }
 
     public void removeFromMap(String mapName, List<String> keys) {
-        HTreeMap<String, ?> map = getOrCreateMap(mapName, null);
-        for(String key:keys){
-            map.remove(key);
+        HTreeMap<String, ?> map = namedMaps.get(mapName);
+        if (map != null) {
+            for(String key : keys) {
+                map.remove(key);
+            }
+            commit();
         }
-        commit();
     }
 
     // Method to clear all items from a named map

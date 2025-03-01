@@ -3,7 +3,6 @@ package APIP3V1_CidInfo;
 import apip.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fch.fchData.Cash;
 import feip.feipData.Nobody;
 import initial.Initiator;
 import tools.http.AuthType;
@@ -31,13 +30,13 @@ public class NobodySearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(DEATH_HEIGHT,false, DEATH_TX_INDEX,true,FID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(DEATH_HEIGHT,false, DEATH_TX_INDEX,true,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.NOBODY, Nobody.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.CASH, Cash.class, defaultSort, request,response,authType);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(DEATH_HEIGHT,false, DEATH_TX_INDEX,true,ID,true);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.NOBODY, Nobody.class, defaultSort, request,response,authType);
     }
 }

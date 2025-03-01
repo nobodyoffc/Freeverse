@@ -1,8 +1,10 @@
 package feip.feipData;
 
-public class Protocol {
+import fcData.FcObject;
 
-	private String pid;
+public class Protocol extends FcObject {
+
+	private String id;
 	private String type;
 	private String sn;
 	private String ver;
@@ -26,13 +28,7 @@ public class Protocol {
 	private Boolean active;
 	private Boolean closed;
 	private String closeStatement;
-	
-	public String getPid() {
-		return pid;
-	}
-	public void setPid(String pid) {
-		this.pid = pid;
-	}
+
 	public String getType() {
 		return type;
 	}

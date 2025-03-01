@@ -15,7 +15,7 @@ import feip.feipData.Proof;
 import initial.Initiator;
 import tools.http.AuthType;
 import appTools.Settings;
-import static constants.FieldNames.Proof_Id;
+import static constants.FieldNames.ID;
 import server.FcdslRequestHandler;
 
 
@@ -30,11 +30,11 @@ public class ProofByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, Proof_Id, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, Proof_Id, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
     }
 }

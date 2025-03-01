@@ -13,7 +13,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import static constants.FieldNames.AID;
+import static constants.FieldNames.ID;
+
 import server.FcdslRequestHandler;
 
 
@@ -27,11 +28,11 @@ public class AppByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.APP, App.class, AID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.APP, App.class, AID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
     }
 }

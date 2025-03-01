@@ -1,7 +1,7 @@
 package handlers;
 
 import crypto.Hash;
-import fcData.IdNameTools;
+import tools.IdNameTools;
 import tools.FileTools;
 import tools.Hex;
 

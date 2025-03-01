@@ -1,7 +1,8 @@
 package feip.feipData;
 
-public class RepuHist {
-	private String txId;
+import fcData.FcObject;
+
+public class RepuHist extends FcObject {
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -11,13 +12,6 @@ public class RepuHist {
 	private Long reputation;
 	private Long hot;
 	private String cause;
-	
-	public String getTxId() {
-		return txId;
-	}
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
 	public Long getHeight() {
 		return height;
 	}

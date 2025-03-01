@@ -100,7 +100,7 @@ public class TeamHandler extends Handler {
             return;
         }
         for (Team team : teamList) {
-            teamDB.put(Hex.fromHex(team.getTid()), team.toJson().getBytes());
+            teamDB.put(Hex.fromHex(team.getId()), team.toJson().getBytes());
         }
 
         if (!teamList.isEmpty()) {
@@ -138,19 +138,19 @@ public class TeamHandler extends Handler {
             byte[] priKey, String offLineFid, ApipClient apipClient, BufferedReader br) {
         for(Team team : chosenTeamList) {
             if(isMyTeamList) {
-                System.out.println("You have already joined this team: ["+team.getTid()+"]");
+                System.out.println("You have already joined this team: ["+team.getId()+"]");
                 continue;
             } else {
-                System.out.println("Team: "+ StringTools.omitMiddle(team.getTid(), 15)+" - "+team.getStdName());
+                System.out.println("Team: "+ StringTools.omitMiddle(team.getId(), 15)+" - "+team.getStdName());
                 if(!Inputer.askIfYes(br,"Join this team?")) continue;
-                List<String> members = getTeamMembers(team.getTid(), apipClient);
+                List<String> members = getTeamMembers(team.getId(), apipClient);
                 if(members!=null && members.contains(myFid)) {
-                    System.out.println("You are already a member of ["+team.getTid()+"]. ");
+                    System.out.println("You are already a member of ["+team.getId()+"]. ");
                     continue;
                 }
             }
             String consensusId = Inputer.inputString(br, "Input consensus ID:");
-            String joinResult = joinTeam(priKey, offLineFid, null, team.getTid(), consensusId, apipClient, null);
+            String joinResult = joinTeam(priKey, offLineFid, null, team.getId(), consensusId, apipClient, null);
             if(!Hex.isHexString(joinResult)) System.out.println(joinResult);
             else System.out.println("Joined ["+team.getStdName()+"].");
             if(!Inputer.askIfYes(br,"Join next team?")) break;
@@ -166,12 +166,12 @@ public class TeamHandler extends Handler {
         List<String> leaveIdList = new ArrayList<>();
         if (!isMyTeamList) {
             for (Team team : chosenTeamList) {
-                List<String> members = getTeamMembers(team.getTid(), apipClient);
+                List<String> members = getTeamMembers(team.getId(), apipClient);
                 if (members != null && !members.contains(myFid)) {
-                    System.out.println("You are not a member of [" + team.getTid() + "].");
+                    System.out.println("You are not a member of [" + team.getId() + "].");
                     continue;
                 }
-                leaveIdList.add(team.getTid());
+                leaveIdList.add(team.getId());
             }
         }
 
@@ -190,13 +190,13 @@ public class TeamHandler extends Handler {
         List<String> inviteeList = new ArrayList<>();
         for(String member : memberList) {
             if(team.getMembers() != null && Arrays.asList(team.getMembers()).contains(member)) {
-                System.out.println("["+member+"] is already a member of ["+team.getTid()+"].");
+                System.out.println("["+member+"] is already a member of ["+team.getId()+"].");
                 continue;
             }
             inviteeList.add(member);
         }
         
-        TeamOpData data = TeamOpData.makeInvite(team.getTid(), inviteeList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeInvite(team.getId(), inviteeList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Invitation sent successfully.");
@@ -212,13 +212,13 @@ public class TeamHandler extends Handler {
         List<String> withdrawList = new ArrayList<>();
         for(String member : memberList) {
             if(team.getInvitees() == null || !Arrays.asList(team.getInvitees()).contains(member)) {
-                System.out.println("["+member+"] is not in the invitation list of ["+team.getTid()+"].");
+                System.out.println("["+member+"] is not in the invitation list of ["+team.getId()+"].");
                 continue;
             }
             withdrawList.add(member);
         }
         
-        TeamOpData data = TeamOpData.makeWithdrawInvitation(team.getTid(), withdrawList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeWithdrawInvitation(team.getId(), withdrawList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Invitation withdrawn successfully.");
@@ -234,13 +234,13 @@ public class TeamHandler extends Handler {
         List<String> dismissList = new ArrayList<>();
         for(String member : memberList) {
             if(team.getMembers() == null || !Arrays.asList(team.getMembers()).contains(member)) {
-                System.out.println("["+member+"] is not a member of ["+team.getTid()+"].");
+                System.out.println("["+member+"] is not a member of ["+team.getId()+"].");
                 continue;
             }
             dismissList.add(member);
         }
         
-        TeamOpData data = TeamOpData.makeDismiss(team.getTid(), dismissList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeDismiss(team.getId(), dismissList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Members dismissed successfully.");
@@ -256,13 +256,13 @@ public class TeamHandler extends Handler {
         List<String> appointList = new ArrayList<>();
         for(String member : memberList) {
             if(team.getMembers() == null || !Arrays.asList(team.getMembers()).contains(member)) {
-                System.out.println("["+member+"] is not a member of ["+team.getTid()+"].");
+                System.out.println("["+member+"] is not a member of ["+team.getId()+"].");
                 continue;
             }
             appointList.add(member);
         }
 
-        TeamOpData data = TeamOpData.makeAppoint(team.getTid(), appointList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeAppoint(team.getId(), appointList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Members appointed successfully.");
@@ -278,13 +278,13 @@ public class TeamHandler extends Handler {
         List<String> cancelList = new ArrayList<>();
         for(String member : memberList) {
             if(team.getMembers() == null || !Arrays.asList(team.getMembers()).contains(member)) {
-                System.out.println("["+member+"] is not a manager of ["+team.getTid()+"].");
+                System.out.println("["+member+"] is not a manager of ["+team.getId()+"].");
                 continue;
             }
             cancelList.add(member);
         }
         
-        TeamOpData data = TeamOpData.makeCancelAppointment(team.getTid(), cancelList.toArray(new String[0]));
+        TeamOpData data = TeamOpData.makeCancelAppointment(team.getId(), cancelList.toArray(new String[0]));
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Appointments cancelled successfully.");
@@ -294,7 +294,7 @@ public class TeamHandler extends Handler {
         Team team = searchAndChooseTeam(apipClient, br);
         if(team == null) return;
         
-        String tid = team.getTid();
+        String tid = team.getId();
         Integer rate = Inputer.inputInteger(br, "Input rating (0-5):", 0, 5);
         if(rate == null) return;
         
@@ -319,7 +319,7 @@ public class TeamHandler extends Handler {
         String transferee = Inputer.inputString(br, "Input the FID you want to transfer the team to:");
         if(transferee == null || transferee.isEmpty()) return;
         
-        TeamOpData data = TeamOpData.makeTransfer(team.getTid(), transferee);
+        TeamOpData data = TeamOpData.makeTransfer(team.getId(), transferee);
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Team transferred successfully.");
@@ -336,7 +336,7 @@ public class TeamHandler extends Handler {
 
         List<String> tidList = new ArrayList<>();   
         for(Team team : teamList) {
-            tidList.add(team.getTid());
+            tidList.add(team.getId());
         }
 
         Map<String, Team> teamMap = apipClient.teamOtherPersons(null, null, tidList.toArray(new String[0]));
@@ -346,14 +346,14 @@ public class TeamHandler extends Handler {
         }
         
         for(Team team : teamMap.values()) {
-            if(!Inputer.askIfYes(br, "Take over team: " + team.getTid() + " - " + team.getStdName() + "?")) continue;
+            if(!Inputer.askIfYes(br, "Take over team: " + team.getId() + " - " + team.getStdName() + "?")) continue;
             String consensusId = team.getConsensusId();
             if(consensusId == null || consensusId.isEmpty()) {
-                System.out.println("No consensus ID for this team: " + team.getTid() + " - " + team.getStdName());
+                System.out.println("No consensus ID for this team: " + team.getId() + " - " + team.getStdName());
                 continue;
             }
 
-            TeamOpData data = TeamOpData.makeTakeOver(team.getTid(), consensusId);
+            TeamOpData data = TeamOpData.makeTakeOver(team.getId(), consensusId);
             String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
             if(!Hex.isHexString(result)) System.out.println(result);
             else System.out.println("Team taken over successfully.");
@@ -413,13 +413,13 @@ public class TeamHandler extends Handler {
         List<List<Object>> valueListList = new ArrayList<>();
         for(Team team : teamList) {
             List<Object> valueList = new ArrayList<>();
-            valueList.add(StringTools.omitMiddle(team.getTid(), 15));
+            valueList.add(StringTools.omitMiddle(team.getId(), 15));
             valueList.add(team.getMemberNum());
             valueList.add(StringTools.omitMiddle(team.getStdName(), 20));
             valueList.add(StringTools.omitMiddle(team.getDesc(), 25));
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, 0);
+        Shower.showDataTable(title, fields, widths, valueListList, 0, true);
     }
 
     public List<String> getTeamMembers(String tid, ApipClient apipClient) {
@@ -529,7 +529,7 @@ public class TeamHandler extends Handler {
         List<Team> chosenTeamList = pullLocalTeamList(true, br);
         if(chosenTeamList == null || chosenTeamList.isEmpty()) return;
         List<String> idList = new ArrayList<>();
-        for(Team team : chosenTeamList) idList.add(team.getTid());
+        for(Team team : chosenTeamList) idList.add(team.getId());
         showTeamList(chosenTeamList, br);
         if(Inputer.askIfYes(br, "Leave all teams?")) {
             String leaveResult = leaveTeams(priKey, myFid, null, idList, apipClient, null, br);
@@ -541,7 +541,7 @@ public class TeamHandler extends Handler {
     private void handleJoinTeam(byte[] priKey, BufferedReader br) {
         Team chosenTeam = searchAndChooseTeam(apipClient, br);
         if(chosenTeam == null) return;
-        String tid = chosenTeam.getTid();
+        String tid = chosenTeam.getId();
         String consensusId = Inputer.inputString(br, "Input consensus ID:");
         String joinResult = joinTeam(priKey, myFid, null, tid, consensusId, apipClient, null);
         if(!Hex.isHexString(joinResult)) System.out.println(joinResult);
@@ -583,7 +583,7 @@ public class TeamHandler extends Handler {
 
     private void viewTeamMembers(List<Team> chosenTeamList, ApipClient apipClient, BufferedReader br) {
         for(Team team : chosenTeamList) {
-            List<String> members = getTeamMembers(team.getTid(), apipClient);
+            List<String> members = getTeamMembers(team.getId(), apipClient);
             System.out.println("Members of [" + team.getStdName() + "]:");
             System.out.println(members);
             System.out.println();

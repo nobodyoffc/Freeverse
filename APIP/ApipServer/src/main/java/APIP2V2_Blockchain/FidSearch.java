@@ -3,7 +3,7 @@ package APIP2V2_Blockchain;
 import apip.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fch.fchData.Address;
+import fch.fchData.Cid;
 import initial.Initiator;
 import tools.http.AuthType;
 import server.FcdslRequestHandler;
@@ -30,14 +30,14 @@ public class FidSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,FID,true,null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.ADDRESS, Address.class, defaultSort, request,response,authType);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true,null,null);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.CID, Cid.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,FID,true,null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.ADDRESS, Address.class, defaultSort, request,response,authType);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true,null,null);
+        fcdslRequestHandler.doSearchRequest(IndicesNames.CID, Cid.class, defaultSort, request,response,authType);
     }
 }
 

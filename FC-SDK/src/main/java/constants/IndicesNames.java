@@ -68,7 +68,7 @@ public class IndicesNames {
         TX_HAS(IndicesNames.TX_HAS,4),
         CASH(IndicesNames.CASH,5),
         OPRETURN(IndicesNames.OPRETURN,6),
-        ADDRESS(IndicesNames.ADDRESS,7),
+        ADDRESS(IndicesNames.CID,7),
         P2SH(IndicesNames.P2SH,8),
         BLOCK_MARK(IndicesNames.BLOCK_MARK,9),
 

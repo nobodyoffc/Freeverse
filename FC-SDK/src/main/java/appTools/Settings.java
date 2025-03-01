@@ -1,6 +1,6 @@
 package appTools;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import clients.ApipClient;
 import clients.Client;
 import clients.ClientGroup;
@@ -17,9 +17,8 @@ import crypto.Decryptor;
 import crypto.Encryptor;
 import crypto.KeyTools;
 import fcData.AlgorithmId;
-import fcData.IdNameTools;
+import tools.IdNameTools;
 import fch.ParseTools;
-import fch.fchData.Address;
 import fch.fchData.Block;
 import feip.feipData.Service;
 import feip.feipData.ServiceMask;
@@ -194,7 +193,7 @@ public class Settings {
                 String bestHeightStr = jedis.get(BEST_HEIGHT);
                 long bestHeight = Long.parseLong(bestHeightStr);
                 String bestBlockId = jedis.get(BEST_BLOCK_ID);
-                block.setBlockId(bestBlockId);
+                block.setId(bestBlockId);
                 block.setHeight(bestHeight);
                 return block;
             }
@@ -203,7 +202,7 @@ public class Settings {
             Block block = new Block();
             naSaRpcClient.freshBestBlock();
             block.setHeight(naSaRpcClient.getBestHeight());
-            block.setBlockId(naSaRpcClient.getBestBlockId());
+            block.setId(naSaRpcClient.getBestBlockId());
             return block;
         }
 
@@ -308,7 +307,7 @@ public class Settings {
 
         setMyKeys(symKey, config);
 
-        saveServerSettings(service.getSid());
+        saveServerSettings(service.getId());
 
         Configure.saveConfig();
     }
@@ -353,28 +352,47 @@ public class Settings {
 
     public void initiateClient(String fid, String clientName, byte[] symKey, Configure config, BufferedReader br){
         System.out.println("Initiating Client settings...");
-
-        this.config = config;
+        this.br= br;
         this.symKey = symKey;
-        this.br = config.getBr();
         this.mainFid = fid;
         this.myPriKeyCipher = config.getFidCipherMap().get(fid);
-
-        if(clientGroups==null)clientGroups = new HashMap<>();
         if(this.config==null)this.config = config;
 
-        setInitForClient(fid, config, br);
+        if(clientGroups==null)clientGroups = new HashMap<>();
+
+        freeApiListMap = config.getFreeApiListMap();
+        if(bestHeightMap==null)
+            bestHeightMap=new HashMap<>();
 
         checkSetting(br);
 
-//        initBasicServices(requiredBasicServices, symKey, config);
         initModels();
+
         clientDataFileName = FileTools.makeFileName(mainFid,clientName,DATA,DOT_JSON);
 
         setMyKeys(symKey, config);
 
         saveClientSettings(mainFid,clientName);
         Configure.saveConfig();
+    }
+
+    public void initiateTool(String toolName, byte[] symKey, Configure config, BufferedReader br){
+        System.out.println("Initiating Client settings...");
+
+        this.config = config;
+        this.symKey = symKey;
+
+        if(clientGroups==null) clientGroups = new HashMap<>();
+        this.br= br;
+        freeApiListMap = config.getFreeApiListMap();
+
+        checkSetting(br);
+
+        initModels();
+
+        Configure.saveConfig();
+
+        saveClientSettings(null,toolName);
     }
 
     public void close() {
@@ -408,11 +426,12 @@ public class Settings {
                 }
             }
 
-            for(Object module: runningModules){
-                if(module instanceof Handler<?> handler){
-                    handler.close();
+            if(runningModules != null)
+                for(Object module: runningModules){
+                    if(module instanceof Handler<?> handler){
+                        handler.close();
+                    }
                 }
-            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -448,7 +467,7 @@ public class Settings {
         Menu.anyKeyToContinue(br);
 
         if(jedisPool!=null)writeServiceToRedis(service, ApipParams.class);
-        this.sid = service.getSid();
+        this.sid = service.getId();
         return service;
     }
 
@@ -543,8 +562,8 @@ public class Settings {
         return result.getData();
     }
 
-    public CidInfo checkFidInfo(ApipClient apipClient, BufferedReader br) {
-        CidInfo fidInfo = apipClient.cidInfoById(mainFid);
+    public Cid checkFidInfo(ApipClient apipClient, BufferedReader br) {
+        Cid fidInfo = apipClient.cidInfoById(mainFid);
 
         if(fidInfo!=null) {
             long bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
@@ -563,13 +582,6 @@ public class Settings {
         return fidInfo;
     }
 
-    private  void setInitForClient(String fid, Configure config, BufferedReader br) {
-        this.config= config;
-        this.br= br;
-        freeApiListMap = config.getFreeApiListMap();
-        this.mainFid = fid;
-        if(bestHeightMap==null)bestHeightMap=new HashMap<>();
-    }
 //    public void initBasicServices(){
 //        initBasicServices(requiredBasicServices, symKey, config);
 //    }
@@ -670,14 +682,14 @@ public class Settings {
         }
         if (params == null) return service;
         service.setParams(params);
-        this.sid = service.getSid();
+        this.sid = service.getId();
         this.mainFid = params.getDealer();
         if(config.getFidCipherMap().get(mainFid)==null) {
             System.out.println("The dealer of "+mainFid+" is new...");
             config.addUser(mainFid, symKey);
         }
 
-        config.getMyServiceMaskMap().put(service.getSid(),ServiceMask.ServiceToMask(service,this.mainFid));
+        config.getMyServiceMaskMap().put(service.getId(),ServiceMask.ServiceToMask(service,this.mainFid));
         saveConfig();
         return service;
     }
@@ -733,7 +745,7 @@ public class Settings {
 
     private  void writeServiceToRedis(Service service, Class<? extends Params> paramsClass) {
         try(Jedis jedis = jedisPool.getResource()) {
-            String key = Settings.addSidBriefToName(service.getSid(),SERVICE);
+            String key = Settings.addSidBriefToName(service.getId(),SERVICE);
             RedisTools.writeToRedis(service, key,jedis,service.getClass());
             String paramsKey = Settings.addSidBriefToName(sid,PARAMS);
             RedisTools.writeToRedis(service.getParams(), paramsKey,jedis,paramsClass);
@@ -746,23 +758,6 @@ public class Settings {
             return true;
         }
         return false;
-    }
-
-    public static void showServiceList(List<Service> serviceList) {
-        String title = "Services";
-        String[] fields = new String[]{"",FieldNames.STD_NAME,FieldNames.SID};
-        int[] widths = new int[]{2,24,64};
-        List<List<Object>> valueListList = new ArrayList<>();
-        int i=1;
-        for(Service service : serviceList){
-            List<Object> valueList = new ArrayList<>();
-            valueList.add(i);
-            valueList.add(service.getStdName());
-            valueList.add(service.getSid());
-            valueListList.add(valueList);
-            i++;
-        }
-        Shower.showDataTable(title,fields,widths,valueListList, 0);
     }
 
     public String chooseFid(Configure config, BufferedReader br, byte[] symKey) {
@@ -879,7 +874,7 @@ public class Settings {
 
         for(ServiceMask serviceMask : config.getMyServiceMaskMap().values()) {
             if(serviceMask.getDealer().equals(mainFid)) {
-                config.getMyServiceMaskMap().remove(serviceMask.getSid());
+                config.getMyServiceMaskMap().remove(serviceMask.getId());
             }
         }
         
@@ -914,12 +909,12 @@ public class Settings {
                 for(String fid : this.getWatchFidPubKeyMap().keySet()) {
                     valueListList.add(List.of(fid));
                 }
-                Shower.showDataTable("Watching FIDs", new String[]{"FID"}, new int[]{24}, valueListList, 0);
+                Shower.showDataTable("Watching FIDs", new String[]{"FID"}, new int[]{24}, valueListList, 0, true);
                 Menu.anyKeyToContinue(br);
             }
             case "Add" -> {
                 String[] fids = Inputer.inputFidArray(br, "Input the FIDs you want to watch, enter to exit:", 0);
-                Map<String,Address> fidMap = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fids);
+                Map<String, fch.fchData.Cid> fidMap = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fids);
                 if(fidMap == null || fidMap.isEmpty()) {
                     System.out.println("No FIDs found.");
                     return;

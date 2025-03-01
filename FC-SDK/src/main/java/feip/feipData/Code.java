@@ -1,7 +1,8 @@
 package feip.feipData;
 
-public class Code {
-	private String codeId;
+import fcData.FcObject;
+
+public class Code extends FcObject {
 	private String name;
 	private String ver;
 	private String did;
@@ -22,13 +23,7 @@ public class Code {
 	private Boolean active;
 	private Boolean closed;
 	private String closeStatement;
-	
-	public String getCodeId() {
-		return codeId;
-	}
-	public void setCodeId(String codeId) {
-		this.codeId = codeId;
-	}
+
 	public String getName() {
 		return name;
 	}

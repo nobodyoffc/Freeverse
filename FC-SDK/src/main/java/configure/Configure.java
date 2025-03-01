@@ -359,7 +359,7 @@ public class Configure {
     }
     public static void showServices(List<Service> serviceList) {
         String title = "Services";
-        String[] fields = new String[]{FieldNames.STD_NAME, TYPES,FieldNames.SID};
+        String[] fields = new String[]{FieldNames.STD_NAME, TYPES,FieldNames.ID};
         int[] widths = new int[]{24,24,64};
         List<List<Object>> valueListList = new ArrayList<>();
         for(Service service : serviceList){
@@ -372,10 +372,10 @@ public class Configure {
             }
             if(sb.length()>1)sb.deleteCharAt(sb.lastIndexOf(","));
             valueList.add(sb.toString());
-            valueList.add(service.getSid());
+            valueList.add(service.getId());
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title,fields,widths,valueListList, 0);
+        Shower.showDataTable(title,fields,widths,valueListList, 0, true);
     }
 //    private ApiAccount chooseApi(byte[] symKey, ServiceType type, ApipClient apipClient) {
 //        System.out.println("The " + type.name() + " is not ready. Set it...");
@@ -436,7 +436,7 @@ public class Configure {
             valueList.add(Arrays.toString(apiProvider.getTicks()));
             valueListList.add(valueList);
         }
-        Shower.showDataTable("API providers", fields, widths, valueListList, 0);
+        Shower.showDataTable("API providers", fields, widths, valueListList, 0, true);
     }
 
     public void showAccounts(Map<String, ApiAccount> apiAccountMap) {
@@ -453,7 +453,7 @@ public class Configure {
             valueList.add(apiAccount.getProviderId());
             valueListList.add(valueList);
         }
-        Shower.showDataTable("API accounts", fields, widths, valueListList, 0);
+        Shower.showDataTable("API accounts", fields, widths, valueListList, 0, true);
     }
 
     public String getNonce() {

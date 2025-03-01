@@ -1,8 +1,9 @@
 package feip.feipData;
 
-public class CidHist {
-	
-	private String txId;
+import fcData.FcObject;
+
+public class CidHist extends FcObject {
+	//txId
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -18,14 +19,6 @@ public class CidHist {
 	private String alg;
 	private String[] homepages;
 	private String noticeFee;
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
 
 	public Long getHeight() {
 		return height;

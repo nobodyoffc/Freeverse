@@ -12,6 +12,8 @@ import tools.StringTools;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import constants.Constants;
+
 import java.io.BufferedReader;
 import java.io.Console;
 import java.io.File;
@@ -827,15 +829,16 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
     return returnValue ? map.get(key) : key;
 }
 
-//private static String formatValue(Object value) {
-//    if (value == null) return "null";
-//    if (value.getClass().isArray()) {
-//        return Arrays.deepToString((Object[]) value);
-//    }
-//    return value.toString();
-//}
-
-// ... rest of the class ...
+private static String formatTimestamp(Object value) {
+    if (value == null) return "null";
+    if (!(value instanceof Long)) return value.toString();
+    
+    long timestamp = (Long) value;
+    if (timestamp > Constants.TIMESTAMP_2000 && timestamp < Constants.TIMESTAMP_2100) { // Valid range: Jan 1, 2000 to ~2100
+        return DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
+    }
+    return String.valueOf(timestamp);
+}
 
     public static boolean isGoodShare(Map<String, String> map) {
         float sum=0;
@@ -1513,6 +1516,7 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
         List<T> selectedItems = new ArrayList<>();
         int totalSize = values.size();
         int batchCount = (int) Math.ceil((double) totalSize / batchSize);
+        int fieldWidth = 13;
         
         // Check if T is a native type
         boolean isNativeType = false;
@@ -1544,32 +1548,69 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
                 
                 if (isNativeType) {
                     if (isLongType && value != null) {
-                        long timestamp = (Long) value;
-                        if (timestamp > 0 && timestamp < 4102444800000L) {
-                            displayValue = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
-                        } else {
-                            displayValue = value.toString();
-                        }
+                        displayValue = formatTimestamp(value);
                     } else {
-                        displayValue = value != null ? value.toString() : "null";
+                        displayValue = value != null ? value.toString() : "N/A";
+                        displayValue = displayValue.length() > fieldWidth ? StringTools.omitMiddle(displayValue, fieldWidth) : displayValue;
                     }
                 } else {
-                    displayValue = value != null ? value.toString() : "null";
+                    // Handle non-native type by getting all field values
+                    displayValue = makeObjInLine(fieldWidth, value, null);
                 }
                 
-                displayValue = displayValue.length() > 13 ? StringTools.omitMiddle(displayValue, 13) : displayValue;
                 System.out.println(String.format("%d %s", (startWith + j + 1), displayValue));
             }
+
             Shower.printUnderline(10);
             List<Integer> choices = chooseMulti(br, startWith, startWith+subValues.size());
+            
             if(choices.isEmpty()) return selectedItems;
+            
             for(Integer choice:choices){
                 if(choice==-1) return values;
                 selectedItems.add(subValues.get(choice-startWith-1));
             }
+            
             startWith += batchSize;
         }
+        
         return selectedItems;
+    }
+
+    @NotNull
+    public static <T> String makeObjInLine(Integer fieldWidth, T value, List<Object> ignoreValues) {
+        String displayValue;
+        StringBuilder fieldValues = new StringBuilder();
+        if (value != null) {
+            Field[] fields = value.getClass().getDeclaredFields();
+            for (Field field : fields) {
+                if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+                field.setAccessible(true);
+                try {
+                    Object fieldValue = field.get(value);
+                    if(ignoreValues!=null && ignoreValues.contains(fieldValue)) continue;
+                    String fieldStr;
+                    
+                    // Handle timestamp fields (long/Long type)
+                    if (fieldValue != null && (field.getType() == long.class || field.getType() == Long.class)) {
+                        fieldStr = formatTimestamp(fieldValue);
+                    } else {
+                        fieldStr = fieldValue != null ? fieldValue.toString() : "N/A";
+                    }
+                    
+                    // Only apply omitMiddle if fieldWidth is not null
+                    if (fieldWidth != null && fieldStr.length() > fieldWidth) {
+                        fieldStr = StringTools.omitMiddle(fieldStr, fieldWidth);
+                    }
+                    
+                    fieldValues.append(fieldStr).append(" ");
+                } catch (IllegalAccessException e) {
+                    fieldValues.append("ERROR ");
+                }
+            }
+        }
+        displayValue = fieldValues.length() > 0 ? fieldValues.toString().trim() : "null";
+        return displayValue;
     }
 
     public static <T> Map<String,T> chooseMultiFromMapGeneric(
@@ -1581,6 +1622,7 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
             BufferedReader br) {
         if(startWith==null) startWith=0;
         if(batchSize<=0) return new HashMap<>();
+        Integer fieldWidth = 13;
         
         Map<String,T> selectedItems = new HashMap<>();
         List<String> keys = new ArrayList<>(map.keySet());
@@ -1629,31 +1671,26 @@ public static <K, V> Object chooseOneFromMapArray(Map<K, V> map, boolean showVal
                 
                 if (isNativeType) {
                     if (isLongType && value != null) {
-                        long timestamp = (Long) value;
-                        if (timestamp > 0 && timestamp < 4102444800000L) {
-                            valueDisplay = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
-                        } else {
-                            valueDisplay = value.toString();
-                        }
+                        valueDisplay = formatTimestamp(value);
                     } else {
-                        valueDisplay = value != null ? value.toString() : "null";
+                        valueDisplay = value != null ? value.toString() : "N/A";
                     }
                 } else {
                     try {
+                        Object fieldValue = null;
                         if (valueField != null) {
-                            Object fieldValue = valueField.get(value);
-                            valueDisplay = fieldValue != null ? fieldValue.toString() : "null";
-                        } else {
-                            valueDisplay = value != null ? value.toString() : "null";
-                        }
+                            fieldValue = valueField.get(value);
+                            if (fieldValue == null) continue;
+                        } 
+                        valueDisplay = makeObjInLine(fieldWidth, fieldValue,List.of(key));
                     } catch (IllegalAccessException e) {
                         valueDisplay = "Error accessing field";
                     }
                 }
                 
                 // Truncate both key and value if too long
-                String displayKey = key.length() > 13 ? StringTools.omitMiddle(key, 13) : key;
-                valueDisplay = valueDisplay.length() > 13 ? StringTools.omitMiddle(valueDisplay, 13) : valueDisplay;
+                String displayKey = key.length() > fieldWidth ? StringTools.omitMiddle(key, fieldWidth) : key;
+                valueDisplay = valueDisplay.length() > fieldWidth ? StringTools.omitMiddle(valueDisplay, fieldWidth) : valueDisplay;
                 System.out.printf("%d %s %s%n", (startWith + j + 1), displayKey, valueDisplay);
             }
             

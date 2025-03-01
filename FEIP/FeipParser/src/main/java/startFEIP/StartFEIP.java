@@ -7,7 +7,11 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.json.JsonData;
+
+import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import com.google.protobuf.Type;
+
 import constants.IndicesNames;
 import feip.feipData.Service;
 import tools.JsonTools;
@@ -54,83 +58,73 @@ public class StartFEIP {
 		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules);
 		if(settings ==null)return;
 		String opReturnJsonPath = (String) settings.getSettingMap().get(Settings.OP_RETURN_PATH);
-		byte[] symKey = settings.getSymKey();
 
 		//Prepare API clients
 		ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
 
 		Menu menu = new Menu("FEIP Parser");
+		menu.add("Start New Parse from file", () -> startNewParse(opReturnJsonPath, br, esClient));
+		menu.add("Restart from interruption", () -> restartFromFile(esClient, opReturnJsonPath));
+		menu.add("Manual start from a height", () -> restartSinceHeight(opReturnJsonPath, br, esClient));
+		menu.add("Reparse ID list", () -> reparseIdList(br, esClient));
+		menu.add("Config", () -> settings.setting(br, null));
 
-		ArrayList<String> menuItemList = new ArrayList<>();
-		menuItemList.add("Start New Parse from file");
-		menuItemList.add("Restart from interruption");
-		menuItemList.add("Manual start from a height");
-		menuItemList.add("Reparse ID list");
-		menuItemList.add("Config");
-
-		menu.add(menuItemList);
-
-		System.out.println(" << FEIP parser >> \n");
-		menu.show();
-		int choice = menu.choose(br);
-		switch (choice) {
-			case 1 -> startNewParse(opReturnJsonPath, br, esClient);
-			case 2 -> restartFromFile(esClient, opReturnJsonPath);
-			case 3 -> restartSinceHeight(opReturnJsonPath, br, esClient);
-			case 4 -> reparseIdList(br, esClient);
-			case 5 -> settings.setting(br, null);
-			case 0 -> settings.close();
-			default -> {
-			}
-		}
-
+		menu.showAndSelect(br);
 	}
 
-	private static void reparseIdList(BufferedReader br, ElasticsearchClient esClient) throws Exception {
+	private static void reparseIdList(BufferedReader br, ElasticsearchClient esClient)  {
 		System.out.println("Input the name of ES index:");
-		String index = br.readLine();
-		System.out.println("Input the ID list in compressed Json string:");
-		String idListJsonStr = br.readLine();
-		Gson gson = new Gson();
-		List idList = gson.fromJson(idListJsonStr, ArrayList.class);
-		FileParser fileParser = new FileParser();
-		fileParser.reparseIdList(esClient, index, idList);
+		try{
+			String index = br.readLine();
+			System.out.println("Input the ID list in compressed Json string:");
+			String idListJsonStr = br.readLine();
+			List<String> idList = JsonTools.listFromJson(idListJsonStr,String.class);
+			FileParser fileParser = new FileParser();
+			fileParser.reparseIdList(esClient, index, idList);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
-	private static void restartSinceHeight(String opReturnJsonPath, BufferedReader br, ElasticsearchClient esClient) throws Exception {
+	private static void restartSinceHeight(String opReturnJsonPath, BufferedReader br, ElasticsearchClient esClient)  {
 		System.out.println("Input the height that parsing begin with: ");
 		long bestHeight;
-		while (true) {
-			String input = br.readLine();
-			try{
-				bestHeight = Long.parseLong(input);
-				break;
-			}catch (Exception e){
-				System.out.println("\nInput the number of the height:");
+		try{
+
+			while (true) {
+				String input = br.readLine();
+					bestHeight = Long.parseLong(input);
+					break;
 			}
+			manualRestartFromFile(esClient, opReturnJsonPath, bestHeight);
+		}catch (Exception e){
+			System.out.println("\nInput the number of the height:");
 		}
-		manualRestartFromFile(esClient, opReturnJsonPath, bestHeight);
 	}
 
-	private static void startNewParse(String opReturnJsonPath, BufferedReader br, ElasticsearchClient esClient) throws Exception {
+	private static void startNewParse(String opReturnJsonPath, BufferedReader br, ElasticsearchClient esClient)  {
 		System.out.println("Start from 0, all indices will be deleted. Do you want? y or n:");
-		String delete = br.readLine();
-		if (delete.equals("y")) {
-			System.out.println("Do you sure? y or n:");
-			delete = br.readLine();
+		try {
+			String delete = br.readLine();
 			if (delete.equals("y")) {
+				System.out.println("Do you sure? y or n:");
+				delete = br.readLine();
+				if (delete.equals("y")) {
 
-				System.out.println("Deleting indices...");
-				deleteAllIndices(esClient);
-				TimeUnit.SECONDS.sleep(3);
+					System.out.println("Deleting indices...");
+					deleteAllIndices(esClient);
+					TimeUnit.SECONDS.sleep(3);
 
-				System.out.println("Creating indices...");
-				createAllIndices(esClient);
-				TimeUnit.SECONDS.sleep(2);
+					System.out.println("Creating indices...");
+					createAllIndices(esClient);
+					TimeUnit.SECONDS.sleep(2);
 
-				startNewFromFile(esClient, opReturnJsonPath);
+					startNewFromFile(esClient, opReturnJsonPath);
 
+				}
 			}
+		}catch (Exception e){
+			e.printStackTrace();
 		}
 	}
 
@@ -148,11 +142,10 @@ public class StartFEIP {
 		
 		boolean isRollback = false;
 		fileParser.parseFile(esClient, isRollback);
-		// TODO Auto-generated method stub
 	}
 
-	private static void restartFromFile(ElasticsearchClient esClient, String path) throws Exception {
-		
+	private static void restartFromFile(ElasticsearchClient esClient, String path)  {
+		try {
 		SearchResponse<ParseMark> result = esClient.search(s->s
 				.index(IndicesNames.FEIP_MARK)
 				.size(1)
@@ -163,7 +156,7 @@ public class StartFEIP {
 								)
 						)
 				, ParseMark.class);
-
+			
 		ParseMark parseMark = result.hits().hits().get(0).source();
 
 		if (parseMark == null) throw new AssertionError();
@@ -181,7 +174,9 @@ public class StartFEIP {
 		
 		boolean isRollback = false;
 		boolean error = fileParser.parseFile(esClient,isRollback);
-		
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		System.out.println("restartFromFile.");
 	}
 

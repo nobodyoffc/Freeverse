@@ -45,7 +45,7 @@ public class OpReFileTools {
 
             byte[] txidArr = Arrays.copyOfRange(opbytes, offset, offset + 32);
             offset += 32;
-            op.setTxId(BytesTools.bytesToHexStringBE(txidArr));
+            op.setId(BytesTools.bytesToHexStringBE(txidArr));
 
             byte[] heiArr = Arrays.copyOfRange(opbytes, offset, offset + 8);
             offset += 8;

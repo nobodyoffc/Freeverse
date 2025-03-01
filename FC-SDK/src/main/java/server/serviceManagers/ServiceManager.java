@@ -71,7 +71,7 @@ public abstract class ServiceManager {
     }
 
     private void reloadServices(BufferedReader br, byte[] symKey) {
-        String sid = service.getSid();
+        String sid = service.getId();
         ApipClient apipClient = (ApipClient) apipAccount.getClient();
         Service service1 = apipClient.serviceById(sid);
         if(service1==null)return;
@@ -174,7 +174,7 @@ public abstract class ServiceManager {
 
     private void serviceToServiceData(Service service, ServiceOpData data) {
         data.setTypes(service.getTypes());
-        data.setSid(service.getSid());
+        data.setSid(service.getId());
         data.setUrls(service.getUrls());
         data.setStdName(service.getStdName());
         data.setLocalNames(service.getLocalNames());
@@ -211,10 +211,10 @@ public abstract class ServiceManager {
         ServiceOpData data = new ServiceOpData();
 
         data.setOp(op);
-        data.setSid(service.getSid());
+        data.setSid(service.getId());
         dataOnChain.setData(data);
 
-        System.out.println("The owner can send a TX with below json in OpReturn to "+op+" the service: "+service.getSid());
+        System.out.println("The owner can send a TX with below json in OpReturn to "+op+" the service: "+service.getId());
         System.out.println(JsonTools.toNiceJson(dataOnChain));
 
         System.out.println("you can replace the value of 'data.sid' to "+op+" other your own service services.");

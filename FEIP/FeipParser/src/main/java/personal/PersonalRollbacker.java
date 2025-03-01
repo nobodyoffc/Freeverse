@@ -63,7 +63,7 @@ public class PersonalRollbacker {
 
 			BoxHistory item = hit.source();
 			if(item.getOp().equals("create")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getBid());
 			}

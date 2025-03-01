@@ -17,7 +17,7 @@ import appTools.Settings;
 
 import java.io.IOException;
 
-import static constants.FieldNames.CASH_ID;
+import static constants.FieldNames.ID;
 
 @WebServlet(name = ApipApiNames.CASH_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_BY_IDS)
 public class CashByIds extends HttpServlet {
@@ -31,11 +31,11 @@ public class CashByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, CASH_ID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, CASH_ID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, ID, request,response,authType);
     }
 }

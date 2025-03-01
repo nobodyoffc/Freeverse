@@ -252,7 +252,7 @@ public class Pusher implements Runnable{
         List<String> idList = ObjectTools.objectToList(idsObj,String.class);
         if(idList==null)return null;
         try {
-            return EsTools.getListByTermsSinceHeight(esClient,IndicesNames.CASH, FieldNames.OWNER,idList,sinceHeight, FieldNames.CASH_ID,SortOrder.Asc,Cash.class, null);
+            return EsTools.getListByTermsSinceHeight(esClient,IndicesNames.CASH, FieldNames.OWNER,idList,sinceHeight, FieldNames.ID,SortOrder.Asc,Cash.class, null);
         } catch (IOException e) {
             log.error("Get new cash list for "+ ApipApiNames.NEW_CASH_BY_FIDS +" from ES wrong.",e);
             return null;

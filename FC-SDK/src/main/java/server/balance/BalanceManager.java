@@ -38,7 +38,7 @@ public class BalanceManager {
         this.jedisPool = jedisPool;
         this.br = br;
         this.service = service;
-        BalanceManager.sid = service.getSid();
+        BalanceManager.sid = service.getId();
     }
 
     public void menu()  {

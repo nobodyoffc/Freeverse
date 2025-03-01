@@ -3,7 +3,7 @@ package server;
 import apip.apipData.WebhookPushBody;
 import appTools.Inputer;
 import fch.fchData.Block;
-import fch.fchData.FchTools;
+import tools.FchTools;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import clients.ApipClient;
@@ -447,7 +447,7 @@ protected void waitNewOrder() {
             }
 
             Order order = new Order();
-            order.setOrderId(cash.getCashId());
+            order.setOrderId(cash.getId());
             order.setFromFid(cash.getIssuer());
             order.setAmount(cash.getValue());
             order.setHeight(cash.getBirthHeight());
@@ -521,7 +521,7 @@ protected void waitNewOrder() {
 
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(String.valueOf(lastHeight));
-        fcdsl.addSort(BIRTH_HEIGHT,DESC).addSort(FieldNames.CASH_ID,ASC);
+        fcdsl.addSort(BIRTH_HEIGHT,DESC).addSort(FieldNames.ID,ASC);
         fcdsl.addNewFilter().addNewTerms().addNewFields(OWNER).addNewValues(account);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ACTIVE).addNewValues(FALSE);
         fcdsl.setSize(String.valueOf(3000));
@@ -536,7 +536,7 @@ protected void waitNewOrder() {
                     IndicesNames.CASH,
                     BIRTH_HEIGHT,
                     lastHeight,
-                    FieldNames.CASH_ID,
+                    FieldNames.ID,
                     SortOrder.Asc,
                     OWNER,
                     account,

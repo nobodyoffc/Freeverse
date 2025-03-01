@@ -8,9 +8,6 @@ import java.io.File;
 import java.io.IOException;
 
 public class BlockFileTools {
-//	public static void main(String[] args) {
-//		System.out.println(getLastBlockFileName("/Users/liuchangyong/fc_data/blocks/"));
-//	}
 
     public static int getFileOrder(String currentFile) {
         String s = String.copyValueOf(currentFile.toCharArray(), 3, 5);

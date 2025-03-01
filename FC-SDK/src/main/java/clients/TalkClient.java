@@ -1,6 +1,6 @@
 package clients;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import apip.apipData.Fcdsl;
 import apip.apipData.RequestBody;
 import appTools.Inputer;
@@ -16,7 +16,6 @@ import crypto.*;
 import fcData.*;
 import fcData.TalkUnit.DataType;
 import fcData.TalkUnit.IdSignature;
-import fch.fchData.Address;
 import feip.feipData.Group;
 import feip.feipData.Team;
 import feip.feipData.serviceParams.TalkParams;
@@ -685,9 +684,9 @@ public class TalkClient extends Client{
     }
 
     public TalkIdInfo searchCidOrFid(ApipClient apipClient, BufferedReader br) {
-        CidInfo cidInfo = apipClient.searchCidOrFid(br);
-        if(cidInfo==null)return null;
-        return TalkIdInfo.fromCidInfo(cidInfo);
+        Cid cid = apipClient.searchCidOrFid(br);
+        if(cid ==null)return null;
+        return TalkIdInfo.fromCidInfo(cid);
     }
 
 
@@ -698,7 +697,7 @@ public class TalkClient extends Client{
         int[] widths = {10,20};
         List<List<Object>> valueListList = new ArrayList<>();
         for(TalkIdInfo talkIdInfo:talkIdInfoList)valueListList.add(Arrays.asList(talkIdInfo.getIdType(),talkIdInfo.getShowName()));
-        Shower.showDataTable(title, fields, widths, valueListList, 1);
+        Shower.showDataTable(title, fields, widths, valueListList, 1, true);
     }
 
 
@@ -808,17 +807,17 @@ public class TalkClient extends Client{
     public TalkIdInfo searchFid(String part, BufferedReader br) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FID).addNewValue(part);
-        List<Address> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-        Address fid = Inputer.chooseOneFromList(result, FID, "Choose the FID:", br);
+        List<fch.fchData.Cid> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        fch.fchData.Cid fid = Inputer.chooseOneFromList(result, FID, "Choose the FID:", br);
         if (fid == null) return null;
 
         TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(fid.getFid());
+        talkIdInfo.setId(fid.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.FID);
 
-        CidInfo cidInfo = apipClient.cidInfoById(fid.getFid());
-        if (cidInfo != null) {
-            talkIdInfo.setShowName(cidInfo.getCid());
+        Cid cid = apipClient.cidInfoById(fid.getId());
+        if (cid != null) {
+            talkIdInfo.setShowName(cid.getCid());
         }
 
         return talkIdInfo;
@@ -827,13 +826,13 @@ public class TalkClient extends Client{
     public TalkIdInfo searchCid(String part, BufferedReader br) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.USED_CIDS).addNewValue(part);
-        List<CidInfo> result = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-        CidInfo cidInfo = Inputer.chooseOneFromList(result, FieldNames.CID, "Choose the CID:", br);
-        if (cidInfo == null) return null;
+        List<Cid> result = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        Cid cid = Inputer.chooseOneFromList(result, FieldNames.CID, "Choose the CID:", br);
+        if (cid == null) return null;
 
         TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(cidInfo.getFid());
-        talkIdInfo.setShowName(cidInfo.getCid());
+        talkIdInfo.setId(cid.getId());
+        talkIdInfo.setShowName(cid.getCid());
         talkIdInfo.setIdType(TalkUnit.IdType.FID);
 
         return talkIdInfo;
@@ -920,9 +919,9 @@ public class TalkClient extends Client{
             return talkIdInfo;
         }
 
-        CidInfo cidInfo = apipClient.searchCidOrFid(br);
-        if (cidInfo != null) {
-            talkIdInfo = TalkIdInfo.fromCidInfo(cidInfo);
+        Cid cid = apipClient.searchCidOrFid(br);
+        if (cid != null) {
+            talkIdInfo = TalkIdInfo.fromCidInfo(cid);
             talkIdHandler.put(fid, talkIdInfo);
             return talkIdInfo;
         }
@@ -970,12 +969,12 @@ public class TalkClient extends Client{
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.USED_CIDS).addNewValue(searchString);
-            List<CidInfo> apiResults = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Cid> apiResults = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
-            for (CidInfo cidInfo : apiResults) {
-                results.add(TalkIdInfo.fromCidInfo(cidInfo));
+            for (Cid cid : apiResults) {
+                results.add(TalkIdInfo.fromCidInfo(cid));
                 // Add to TalkIdHandler cache
-                talkIdHandler.put(cidInfo.getFid(), TalkIdInfo.fromCidInfo(cidInfo));
+                talkIdHandler.put(cid.getId(), TalkIdInfo.fromCidInfo(cid));
             }
         }
 
@@ -1006,12 +1005,12 @@ public class TalkClient extends Client{
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.FID).addNewValue(searchString);
-            List<CidInfo> apiResults = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Cid> apiResults = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
-            for (CidInfo cidInfo : apiResults) {
-                results.add(TalkIdInfo.fromCidInfo(cidInfo));
+            for (Cid cid : apiResults) {
+                results.add(TalkIdInfo.fromCidInfo(cid));
                 // Add to TalkIdHandler cache
-                talkIdHandler.put(cidInfo.getFid(), TalkIdInfo.fromCidInfo(cidInfo));
+                talkIdHandler.put(cid.getId(), TalkIdInfo.fromCidInfo(cid));
             }
         }
 
@@ -1039,7 +1038,7 @@ public class TalkClient extends Client{
                 TalkIdInfo info = TalkIdInfo.fromGroup(group);
                 results.add(info);
                 // Add to TalkIdHandler cache
-                talkIdHandler.put(group.getGid(), info);
+                talkIdHandler.put(group.getId(), info);
             }
         }
 
@@ -1067,7 +1066,7 @@ public class TalkClient extends Client{
                 TalkIdInfo info = TalkIdInfo.fromTeam(team);
                 results.add(info);
                 // Add to TalkIdHandler cache
-                talkIdHandler.put(team.getTid(), info);
+                talkIdHandler.put(team.getId(), info);
             }
         }
 
@@ -1110,11 +1109,11 @@ public class TalkClient extends Client{
         }
 
         // 6. Check apipClient.cidInfoByIds as last resort
-        Map<String, CidInfo> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
+        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
-            CidInfo cidInfo = cidInfoMap.get(talkId);
-            if (cidInfo != null) {
-                talkIdInfo = TalkIdInfo.fromCidInfo(cidInfo);
+            Cid cid = cidInfoMap.get(talkId);
+            if (cid != null) {
+                talkIdInfo = TalkIdInfo.fromCidInfo(cid);
                 talkIdHandler.put(talkId, talkIdInfo);
                 return talkIdInfo;
             }

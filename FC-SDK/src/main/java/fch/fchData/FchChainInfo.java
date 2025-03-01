@@ -10,6 +10,7 @@ import constants.Constants;
 import constants.IndicesNames;
 import constants.Strings;
 
+import fcData.FcObject;
 import fch.ParseTools;
 import tools.JsonTools;
 import tools.NumberTools;
@@ -19,7 +20,7 @@ import java.io.IOException;
 import java.util.*;
 
 @SuppressWarnings("unused")
-public class FchChainInfo {
+public class FchChainInfo extends FcObject {
     public static final long MAX_REQUEST_COUNT = 1000;
     public static final long DEFAULT_COUNT = 100;
     private String height;
@@ -204,7 +205,7 @@ public class FchChainInfo {
                 double hashRate = ParseTools.difficultyToHashRate(difficulty);
                 this.difficulty=NumberTools.numberToPlainString(String.valueOf(difficulty),"0");
                 this.hashRate=NumberTools.numberToPlainString(String.valueOf(hashRate),"0");
-                this.blockId=block.getBlockId();
+                this.blockId=block.getId();
             }
         } catch (IOException e) {
             System.out.println("Failed to get block information from ES.");

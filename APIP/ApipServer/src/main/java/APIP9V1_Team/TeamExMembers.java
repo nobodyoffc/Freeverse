@@ -2,7 +2,6 @@ package APIP9V1_Team;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fcData.ReplyBody;
 import feip.feipData.Team;
 import initial.Initiator;
 import tools.http.AuthType;
@@ -45,7 +44,7 @@ public class TeamExMembers extends HttpServlet {
         //Make data
         Map<String,String[]> dataMap = new HashMap<>();
         for(Team team:meetList){
-            dataMap.put(team.getTid(),team.getExMembers());
+            dataMap.put(team.getId(),team.getExMembers());
         }
         fcdslRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
     }

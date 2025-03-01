@@ -23,4 +23,5 @@ public class UpStrings {
     public static final String DRIVE = "Drive";
     public static final String MAIL = "Mail";
     public static final String CONTACT = "Contact";
+    public static final String CHAIN = "Chain";
 }

@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 
 public class CidHandler extends Handler {
     private static final int MAX_FID_CID_CACHE_SIZE = 100;
@@ -74,10 +74,10 @@ public class CidHandler extends Handler {
         }
 
         // Query API
-        Map<String, CidInfo> cidInfoMap = apipClient.cidInfoByIds(tools.http.RequestMethod.POST, 
+        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(tools.http.RequestMethod.POST,
                                                                  tools.http.AuthType.FC_SIGN_BODY, fid);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
-            CidInfo cidInfo = cidInfoMap.get(fid);
+            Cid cidInfo = cidInfoMap.get(fid);
             if (cidInfo != null) {
                 cid = cidInfo.getCid();
                 if (cid != null) {

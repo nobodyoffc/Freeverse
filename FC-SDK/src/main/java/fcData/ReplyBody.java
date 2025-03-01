@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 
-public class ReplyBody extends FcEntity {
+public class ReplyBody extends FcObject {
     protected String requestId;
     protected Op op;
     protected Integer code;
@@ -71,7 +71,7 @@ public class ReplyBody extends FcEntity {
         Block block = settings.getBestBlock();
 
         this.bestHeight = block.getHeight();
-        this.bestBlockId = block.getBlockId();
+        this.bestBlockId = block.getId();
     }
 
     public void set0Success() {

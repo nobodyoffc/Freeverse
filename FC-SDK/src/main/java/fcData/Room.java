@@ -4,8 +4,7 @@ import java.util.List;
 
 import tools.JsonTools;
 
-public class Room {
-	private String roomId;
+public class Room extends FcObject{
 	private String owner;
 	private String name;
 	private List<String> members;
@@ -24,12 +23,12 @@ public class Room {
 		return JsonTools.fromJson(json, Room.class);
 	}
 
-	public String getRoomId() {
-		return roomId;
+	public String getId() {
+		return id;
 	}
 
-	public void setRoomId(String roomId) {
-		this.roomId = roomId;
+	public void setId(String id) {
+		this.id = id;
 	}
 
 	public String getOwner() {

@@ -20,9 +20,8 @@ import org.mapdb.serializer.GroupSerializer;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class FcEntity {
+public abstract class FcEntity {
     protected String id;
-
     public String getId() {
         return id;
     }
@@ -85,9 +84,11 @@ public class FcEntity {
             valueListList.add(showList);
         }
 
-        Shower.showDataTable(title, fieldArray, widthArray, valueListList, 0);
+        Shower.showDataTable(title, fieldArray, widthArray, valueListList, 0, true);
     }
 
+
+    //MapDB Serializer
     public static <T extends FcEntity> Serializer<T> getMapDBSerializer(Class<T> clazz) {
         return new FcEntitySerializer<>(clazz);
     }

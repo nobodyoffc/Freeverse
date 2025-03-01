@@ -28,11 +28,11 @@ public class BoxByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.BID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.BID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.ID, request,response,authType);
     }
 }

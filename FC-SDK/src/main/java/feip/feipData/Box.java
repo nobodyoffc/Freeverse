@@ -1,7 +1,8 @@
 package feip.feipData;
 
-public class Box {
-    private String bid;
+import fcData.FcObject;
+
+public class Box extends FcObject {
     private String name;
     private String desc;
     private Object contain;
@@ -29,13 +30,6 @@ public class Box {
 
     public void setCipher(String cipher) {
         this.cipher = cipher;
-    }
-    public String getBid() {
-        return bid;
-    }
-
-    public void setBid(String bid) {
-        this.bid = bid;
     }
 
     public String getName() {

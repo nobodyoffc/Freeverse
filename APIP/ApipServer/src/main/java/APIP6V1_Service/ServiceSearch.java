@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import appTools.Settings;
 import static constants.FieldNames.T_RATE;
 import static constants.Strings.ACTIVE;
-import static constants.Strings.SID;
+import static constants.FieldNames.ID;
 
 
 @WebServlet(name = ApipApiNames.SERVICE_SEARCH, value = "/"+ ApipApiNames.SN_6+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SERVICE_SEARCH)
@@ -33,13 +33,13 @@ public class ServiceSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,SID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.SERVICE, Service.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,SID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.SERVICE, Service.class, defaultSort, request,response,authType);
     }
 }

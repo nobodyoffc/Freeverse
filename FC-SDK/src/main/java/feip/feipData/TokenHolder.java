@@ -1,19 +1,26 @@
 package feip.feipData;
 
-public class TokenHolder {
-    private String id;
+import crypto.Hash;
+import fcData.FcObject;
+
+import java.util.HexFormat;
+
+public class TokenHolder extends FcObject {
     private String fid;
     private String tokenId;
     private Double balance;
     private Long firstHeight;
     private Long lastHeight;
 
-    public String getId() {
-        return id;
+    public static String getTokenHolderId(String fid, String tokenId) {
+        return HexFormat.of().formatHex(Hash.sha256((fid + tokenId).getBytes()));
     }
 
-    public void setId(String id) {
-        this.id = id;
+    @Override
+    public String getId() {
+        if(this.id==null)
+            this.id = HexFormat.of().formatHex(Hash.sha256((fid + tokenId).getBytes()));
+        return this.id;
     }
 
     public String getFid() {

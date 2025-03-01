@@ -1,12 +1,13 @@
 package feip.feipData;
 
+import fcData.FcObject;
 import feip.FeipOp;
 import java.util.HashMap;
 import java.util.Map;
 
 import constants.FieldNames;
 
-public class CidOpData {
+public class CidOpData{
 	
 	private String op;
 	private String name;

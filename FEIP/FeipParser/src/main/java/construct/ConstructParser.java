@@ -1,5 +1,6 @@
 package construct;
 
+import fch.fchData.Cid;
 import tools.EsTools;
 import constants.IndicesNames;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -46,7 +47,7 @@ public class ConstructParser {
 			case "publish":
 				if(protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName())) return null;
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				protocolHist.setTxId(opre.getTxId());
+				protocolHist.setId(opre.getTxId());
 
 				protocolHist.setPid(opre.getTxId());
 				protocolHist.setHeight(opre.getHeight());
@@ -71,7 +72,7 @@ public class ConstructParser {
 
 				if(protocolRaw.getPid()==null|| protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName()))
 					return null;
-				protocolHist.setTxId(opre.getTxId());
+				protocolHist.setId(opre.getTxId());
 				protocolHist.setHeight(opre.getHeight());
 				protocolHist.setIndex(opre.getTxIndex());
 				protocolHist.setTime(opre.getTime());
@@ -98,7 +99,7 @@ public class ConstructParser {
 					return null;
 				}
 				protocolHist.setPids(protocolRaw.getPids());
-				protocolHist.setTxId(opre.getTxId());
+				protocolHist.setId(opre.getTxId());
 				protocolHist.setHeight(opre.getHeight());
 				protocolHist.setIndex(opre.getTxIndex());
 				protocolHist.setTime(opre.getTime());
@@ -116,7 +117,7 @@ public class ConstructParser {
 				protocolHist.setRate(protocolRaw.getRate());
 				protocolHist.setCdd(opre.getCdd());
 
-				protocolHist.setTxId(opre.getTxId());
+				protocolHist.setId(opre.getTxId());
 				protocolHist.setHeight(opre.getHeight());
 				protocolHist.setIndex(opre.getTxIndex());
 				protocolHist.setTime(opre.getTime());
@@ -151,7 +152,7 @@ public class ConstructParser {
 				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName()))return null;
 				if(serviceRaw.getSid()!=null) return null;
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				serviceHist.setTxId(opre.getTxId());
+				serviceHist.setId(opre.getTxId());
 				serviceHist.setSid(opre.getTxId());
 				serviceHist.setHeight(opre.getHeight());
 				serviceHist.setIndex(opre.getTxIndex());
@@ -176,7 +177,7 @@ public class ConstructParser {
 				if(serviceRaw.getSid()==null) return null;
 				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName())) return null;
 
-				serviceHist.setTxId(opre.getTxId());
+				serviceHist.setId(opre.getTxId());
 				serviceHist.setSid(serviceRaw.getSid());
 				serviceHist.setHeight(opre.getHeight());
 				serviceHist.setIndex(opre.getTxIndex());
@@ -204,7 +205,7 @@ public class ConstructParser {
 					return null;
 				}
 				serviceHist.setSids(serviceRaw.getSids());
-				serviceHist.setTxId(opre.getTxId());
+				serviceHist.setId(opre.getTxId());
 				serviceHist.setHeight(opre.getHeight());
 				serviceHist.setIndex(opre.getTxIndex());
 				serviceHist.setTime(opre.getTime());
@@ -219,7 +220,7 @@ public class ConstructParser {
 				if(serviceRaw.getRate()<0 ||serviceRaw.getRate()>5)return null;
             	if (opre.getCdd() < StartFEIP.CddRequired) return null;
 				serviceHist.setSid(serviceRaw.getSid());
-				serviceHist.setTxId(opre.getTxId());
+				serviceHist.setId(opre.getTxId());
 				serviceHist.setHeight(opre.getHeight());
 				serviceHist.setIndex(opre.getTxIndex());
 				serviceHist.setTime(opre.getTime());
@@ -257,7 +258,7 @@ public class ConstructParser {
 				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())) return null;
 				if(appRaw.getAid()!=null) return null;
             if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				appHist.setTxId(opre.getTxId());
+				appHist.setId(opre.getTxId());
 				appHist.setAid(opre.getTxId());
 				appHist.setHeight(opre.getHeight());
 				appHist.setIndex(opre.getTxIndex());
@@ -283,7 +284,7 @@ public class ConstructParser {
 				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())) return null;
 
 				appHist.setAid(appRaw.getAid());
-				appHist.setTxId(opre.getTxId());
+				appHist.setId(opre.getTxId());
 				appHist.setHeight(opre.getHeight());
 				appHist.setIndex(opre.getTxIndex());
 				appHist.setTime(opre.getTime());
@@ -311,7 +312,7 @@ public class ConstructParser {
 				}
 				appHist.setAids(appRaw.getAids());
 
-				appHist.setTxId(opre.getTxId());
+				appHist.setId(opre.getTxId());
 				appHist.setHeight(opre.getHeight());
 				appHist.setIndex(opre.getTxIndex());
 				appHist.setTime(opre.getTime());
@@ -329,7 +330,7 @@ public class ConstructParser {
 				appHist.setRate(appRaw.getRate());
 				appHist.setCdd(opre.getCdd());
 
-				appHist.setTxId(opre.getTxId());
+				appHist.setId(opre.getTxId());
 				appHist.setHeight(opre.getHeight());
 				appHist.setIndex(opre.getTxIndex());
 				appHist.setTime(opre.getTime());
@@ -364,7 +365,7 @@ public class ConstructParser {
 				if(codeRaw.getName()==null||"".equals(codeRaw.getName())) return null;
 				if(codeRaw.getCodeId()!=null) return null;
             if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				codeHist.setTxId(opre.getTxId());
+				codeHist.setId(opre.getTxId());
 				codeHist.setCodeId(opre.getTxId());
 				codeHist.setHeight(opre.getHeight());
 				codeHist.setIndex(opre.getTxIndex());
@@ -384,7 +385,7 @@ public class ConstructParser {
 				if(codeRaw.getCodeId()==null) return null;
 				if(codeRaw.getName()==null||"".equals(codeRaw.getName()))return null;
 
-				codeHist.setTxId(opre.getTxId());
+				codeHist.setId(opre.getTxId());
 				codeHist.setCodeId(codeRaw.getCodeId());
 				codeHist.setHeight(opre.getHeight());
 				codeHist.setIndex(opre.getTxIndex());
@@ -408,7 +409,7 @@ public class ConstructParser {
 				}
 				codeHist.setCodeIds(codeRaw.getCodeIds());
 
-				codeHist.setTxId(opre.getTxId());
+				codeHist.setId(opre.getTxId());
 				codeHist.setHeight(opre.getHeight());
 				codeHist.setIndex(opre.getTxIndex());
 				codeHist.setTime(opre.getTime());
@@ -423,7 +424,7 @@ public class ConstructParser {
 				if(codeRaw.getRate()<0 ||codeRaw.getRate()>5)return null;
             if (opre.getCdd() < StartFEIP.CddRequired) return null;
 				codeHist.setCodeId(codeRaw.getCodeId());
-				codeHist.setTxId(opre.getTxId());
+				codeHist.setId(opre.getTxId());
 				codeHist.setHeight(opre.getHeight());
 				codeHist.setIndex(opre.getTxIndex());
 				codeHist.setTime(opre.getTime());
@@ -447,7 +448,7 @@ public class ConstructParser {
 				protocol = EsTools.getById(esClient, IndicesNames.PROTOCOL, protocolHist.getPid(), Protocol.class);
 				if (protocol == null) {
 					protocol = new Protocol();
-					protocol.setPid(protocolHist.getPid());
+					protocol.setId(protocolHist.getPid());
 					protocol.setType(protocolHist.getType());
 					protocol.setSn(protocolHist.getSn());
 					protocol.setVer(protocolHist.getVer());
@@ -462,11 +463,11 @@ public class ConstructParser {
 					protocol.setTitle(protocolHist.getType() + protocolHist.getSn() + "V" + protocolHist.getVer() + "_" + protocolHist.getName() + "(" + protocolHist.getLang() + ")");
 					protocol.setOwner(protocolHist.getSigner());
 
-					protocol.setBirthTxId(protocolHist.getTxId());
+					protocol.setBirthTxId(protocolHist.getId());
 					protocol.setBirthTime(protocolHist.getTime());
 					protocol.setBirthHeight(protocolHist.getHeight());
 
-					protocol.setLastTxId(protocolHist.getTxId());
+					protocol.setLastTxId(protocolHist.getId());
 					protocol.setLastTime(protocolHist.getTime());
 					protocol.setLastHeight(protocolHist.getHeight());
 
@@ -509,7 +510,7 @@ public class ConstructParser {
 				protocol.setPrePid(protocolHist.getPrePid());
 				protocol.setFileUrls(protocolHist.getFileUrls());
 				protocol.setTitle(protocolHist.getType() + protocolHist.getSn() + "V" + protocolHist.getVer() + "_" + protocolHist.getName() + "(" + protocolHist.getLang() + ")");
-				protocol.setLastTxId(protocolHist.getTxId());
+				protocol.setLastTxId(protocolHist.getId());
 				protocol.setLastTime(protocolHist.getTime());
 				protocol.setLastHeight(protocolHist.getHeight());
 				Protocol protocol2 = protocol;
@@ -554,7 +555,7 @@ public class ConstructParser {
 							break;
 					}
 
-					protocolItem.setLastTxId(protocolHist.getTxId());
+					protocolItem.setLastTxId(protocolHist.getId());
 					protocolItem.setLastTime(protocolHist.getTime());
 					protocolItem.setLastHeight(protocolHist.getHeight());
 
@@ -567,7 +568,7 @@ public class ConstructParser {
 						br.operations(op -> op
 							.index(idx -> idx
 								.index(IndicesNames.PROTOCOL)
-								.id(updatedProtocol.getPid())
+								.id(updatedProtocol.getId())
 								.document(updatedProtocol)
 							)
 						);
@@ -604,7 +605,7 @@ public class ConstructParser {
 					protocol.settCdd(protocol.gettCdd() + protocolHist.getCdd());
 				}
 
-				protocol.setLastTxId(protocolHist.getTxId());
+				protocol.setLastTxId(protocolHist.getId());
 				protocol.setLastTime(protocolHist.getTime());
 				protocol.setLastHeight(protocolHist.getHeight());
 				Protocol protocol3 = protocol;
@@ -628,7 +629,7 @@ public class ConstructParser {
 				service = EsTools.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 				if(service==null) {
 					service = new Service();
-					service.setSid(serviceHist.getTxId());
+					service.setId(serviceHist.getId());
 					service.setStdName(serviceHist.getStdName());
 					service.setLocalNames(serviceHist.getLocalNames());
 					service.setDesc(serviceHist.getDesc());
@@ -643,7 +644,7 @@ public class ConstructParser {
 					service.setOwner(serviceHist.getSigner());
 
 
-					service.setLastTxId(serviceHist.getTxId());
+					service.setLastTxId(serviceHist.getId());
 					service.setLastTime(serviceHist.getTime());
 					service.setLastHeight(serviceHist.getHeight());
 
@@ -695,7 +696,7 @@ public class ConstructParser {
 								break;
 						}
 				
-						serviceItem.setLastTxId(serviceHist.getTxId());
+						serviceItem.setLastTxId(serviceHist.getId());
 						serviceItem.setLastTime(serviceHist.getTime());
 						serviceItem.setLastHeight(serviceHist.getHeight());
 				
@@ -708,7 +709,7 @@ public class ConstructParser {
 							br.operations(op -> op
 								.index(idx -> idx
 									.index(IndicesNames.SERVICE)
-									.id(updatedService.getSid())
+									.id(updatedService.getId())
 									.document(updatedService)
 								)
 							);
@@ -748,7 +749,7 @@ public class ConstructParser {
 				service.setServices(serviceHist.getServices());
 				service.setParams(serviceHist.getParams());
 
-				service.setLastTxId(serviceHist.getTxId());
+				service.setLastTxId(serviceHist.getId());
 				service.setLastTime(serviceHist.getTime());
 				service.setLastHeight(serviceHist.getHeight());
 
@@ -787,7 +788,7 @@ public class ConstructParser {
 					service.settCdd(service.gettCdd() + serviceHist.getCdd());
 				}
 
-				service.setLastTxId(serviceHist.getTxId());
+				service.setLastTxId(serviceHist.getId());
 				service.setLastTime(serviceHist.getTime());
 				service.setLastHeight(serviceHist.getHeight());
 
@@ -810,7 +811,7 @@ public class ConstructParser {
 				app = EsTools.getById(esClient, IndicesNames.APP, appHist.getAid(), App.class);
 				if(app==null) {
 					app = new App();
-					app.setAid(appHist.getTxId());
+					app.setId(appHist.getId());
 					app.setStdName(appHist.getStdName());
 					app.setLocalNames(appHist.getLocalNames());
 					app.setDesc(appHist.getDesc());
@@ -827,7 +828,7 @@ public class ConstructParser {
 					app.setBirthTime(appHist.getTime());
 					app.setBirthHeight(appHist.getHeight());
 
-					app.setLastTxId(appHist.getTxId());
+					app.setLastTxId(appHist.getId());
 					app.setLastTime(appHist.getTime());
 					app.setLastHeight(appHist.getHeight());
 
@@ -876,7 +877,7 @@ public class ConstructParser {
 							break;
 					}
 			
-					appItem.setLastTxId(appHist.getTxId());
+					appItem.setLastTxId(appHist.getId());
 					appItem.setLastTime(appHist.getTime());
 					appItem.setLastHeight(appHist.getHeight());
 			
@@ -889,7 +890,7 @@ public class ConstructParser {
 						br.operations(op -> op
 							.index(idx -> idx
 								.index(IndicesNames.APP)
-								.id(updatedApp.getAid())
+								.id(updatedApp.getId())
 								.document(updatedApp)
 							)
 						);
@@ -934,7 +935,7 @@ public class ConstructParser {
 				app.setServices(appHist.getServices());
 				app.setCodes(appHist.getCodes());
 
-				app.setLastTxId(appHist.getTxId());
+				app.setLastTxId(appHist.getId());
 				app.setLastTime(appHist.getTime());
 				app.setLastHeight(appHist.getHeight());
 
@@ -973,7 +974,7 @@ public class ConstructParser {
 					app.settCdd(app.gettCdd() + appHist.getCdd());
 				}
 
-				app.setLastTxId(appHist.getTxId());
+				app.setLastTxId(appHist.getId());
 				app.setLastTime(appHist.getTime());
 				app.setLastHeight(appHist.getHeight());
 
@@ -995,7 +996,7 @@ public class ConstructParser {
 				code = EsTools.getById(esClient, IndicesNames.CODE, codeHist.getCodeId(), Code.class);
 				if(code==null) {
 					code = new Code();
-					code.setCodeId(codeHist.getTxId());
+					code.setId(codeHist.getId());
 					code.setName(codeHist.getName());
 					code.setVer(codeHist.getVer());
 					code.setDid(codeHist.getDid());
@@ -1009,7 +1010,7 @@ public class ConstructParser {
 					code.setBirthTime(codeHist.getTime());
 					code.setBirthHeight(codeHist.getHeight());
 
-					code.setLastTxId(codeHist.getTxId());
+					code.setLastTxId(codeHist.getId());
 					code.setLastTime(codeHist.getTime());
 					code.setLastHeight(codeHist.getHeight());
 
@@ -1058,7 +1059,7 @@ public class ConstructParser {
 							break;
 					}
 			
-					codeItem.setLastTxId(codeHist.getTxId());
+					codeItem.setLastTxId(codeHist.getId());
 					codeItem.setLastTime(codeHist.getTime());
 					codeItem.setLastHeight(codeHist.getHeight());
 			
@@ -1071,7 +1072,7 @@ public class ConstructParser {
 						br.operations(op -> op
 							.index(idx -> idx
 								.index(IndicesNames.CODE)
-								.id(updatedCode.getCodeId())
+								.id(updatedCode.getId())
 								.document(updatedCode)
 							)
 						);
@@ -1113,7 +1114,7 @@ public class ConstructParser {
 				code.setProtocols(codeHist.getProtocols());
 				code.setWaiters(codeHist.getWaiters());
 
-				code.setLastTxId(codeHist.getTxId());
+				code.setLastTxId(codeHist.getId());
 				code.setLastTime(codeHist.getTime());
 				code.setLastHeight(codeHist.getHeight());
 
@@ -1153,7 +1154,7 @@ public class ConstructParser {
 				}
 
 				code.settCdd(code.gettCdd()+codeHist.getCdd());
-				code.setLastTxId(codeHist.getTxId());
+				code.setLastTxId(codeHist.getId());
 				code.setLastTime(codeHist.getTime());
 				code.setLastHeight(codeHist.getHeight());
 

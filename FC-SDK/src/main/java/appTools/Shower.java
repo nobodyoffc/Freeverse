@@ -6,12 +6,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import tools.DateTools;
 import tools.StringTools;
+import constants.Constants;
 
 public class Shower {
     public static final int DEFAULT_SIZE = 2;
 
-    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom, List<String> hideFields) {
+    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom, List<String> hideFields, boolean isShortTimestamp) {
         if (dataList == null || dataList.isEmpty()) {
             return;
         }
@@ -68,21 +70,21 @@ public class Shower {
         }
 
         // Call existing showDataTable method
-        showDataTable(title, fields, widths, valueListList, beginFrom);
+        showDataTable(title, fields, widths, valueListList, beginFrom, isShortTimestamp);
     }
 
     // Add overloaded method for backward compatibility
-    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom) {
-        showDataTable(title, dataList, beginFrom, null);
+    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom, boolean isShortTimestamp) {
+        showDataTable(title, dataList, beginFrom, null, isShortTimestamp);
     }
 
     public static void showDataTable(String title, Map<String, Integer> fieldWidthMap, List<List<Object>> valueListList, int beginFrom) {
         String[] fields = fieldWidthMap.keySet().toArray(new String[0]);
         int[] widths = fieldWidthMap.values().stream().mapToInt(Integer::intValue).toArray();
-        showDataTable(title, fields, widths, valueListList, beginFrom); 
+        showDataTable(title, fields, widths, valueListList, beginFrom, true);
     }
 
-    public static void showDataTable(String title, String[] fields, int[] widths, List<List<Object>> valueListList, int beginFrom) {
+    public static void showDataTable(String title, String[] fields, int[] widths, List<List<Object>> valueListList, int beginFrom, boolean isShortTimestamp) {
         if(valueListList==null || valueListList.isEmpty()){
             System.out.println("Nothing to show.");
             return;
@@ -131,10 +133,20 @@ public class Shower {
                 }
 
                 // Check if value is a timestamp (Long value greater than year 2000 in milliseconds)
-                if (value instanceof Long && (Long)value > 946684800000L) {  // 2000-01-01 00:00:00
+                if (value instanceof Long) {  // 2000-01-01 00:00:00
                     try {
-                        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd");
-                        str = sdf.format(new java.util.Date((Long)value));
+                        long timestamp;
+                        if(isShortTimestamp && (Long)value > Constants.TIMESTAMP_2000_SECONDS && (Long)value < Constants.TIMESTAMP_2100_SECONDS){
+                            timestamp = ((Long) value)*1000;
+                            str = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
+                        }
+                        else if((Long)value > Constants.TIMESTAMP_2000 && (Long)value < Constants.TIMESTAMP_2100){ //From 2000-01-01 00:00:00 to 2100-01-01 00:00:00
+                            timestamp = (Long) value;
+                            str = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
+                        }
+                        else{
+                            str = String.valueOf(value);
+                        }
                     } catch (Exception e) {
                         // Keep original string if date conversion fails
                     }

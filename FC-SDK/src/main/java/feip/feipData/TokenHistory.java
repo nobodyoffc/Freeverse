@@ -1,12 +1,12 @@
 package feip.feipData;
 
+import fcData.FcObject;
 import fch.fchData.SendTo;
 
 import java.util.List;
 
-public class TokenHistory {
-	
-	private String txId;
+public class TokenHistory extends FcObject {
+
 	private List<String> tokenIds;
 	private Long height;
 	private Integer index;
@@ -30,15 +30,6 @@ public class TokenHistory {
 	private String maxIssuesPerAddr;
 	private List<SendTo> issueTo;
 	private List<SendTo> transferTo;
-
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
 
 	public Long getHeight() {
 		return height;

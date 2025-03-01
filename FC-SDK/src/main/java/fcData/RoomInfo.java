@@ -2,8 +2,7 @@ package fcData;
 
 import tools.JsonTools;
 
-public class RoomInfo {
-    private String roomId;
+public class RoomInfo extends FcObject{
     private String name;
     private String owner;
     private String[] members;
@@ -18,7 +17,7 @@ public class RoomInfo {
 
     public static RoomInfo fromRoom(Room room) {
         RoomInfo roomInfo = new RoomInfo();
-        roomInfo.setRoomId(room.getRoomId());
+        roomInfo.setId(room.getId());
         roomInfo.setName(room.getName());
         roomInfo.setOwner(room.getOwner());
         return roomInfo;
@@ -32,12 +31,12 @@ public class RoomInfo {
         this.owner = owner;
     }
 
-    public String getRoomId() {
-        return roomId;
+    public String getId() {
+        return id;
     }
 
-    public void setRoomId(String roomId) {
-        this.roomId = roomId;
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getName() {

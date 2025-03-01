@@ -32,13 +32,13 @@ public class CodeSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,CODE_ID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CODE, Code.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,CODE_ID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CODE, Code.class, defaultSort, request,response,authType);
     }
 }

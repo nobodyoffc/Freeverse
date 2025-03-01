@@ -1,9 +1,9 @@
 package feip.feipData;
 
+import fcData.FcObject;
 import tools.JsonTools;
 
-public class Group {
-	private String gid;
+public class Group extends FcObject {
 	private String name;
 	private String desc;
 	
@@ -36,12 +36,6 @@ public class Group {
 
 	public void setMemberNum(Long memberNum) {
 		this.memberNum = memberNum;
-	}
-	public String getGid() {
-		return gid;
-	}
-	public void setGid(String gid) {
-		this.gid = gid;
 	}
 	public String getName() {
 		return name;

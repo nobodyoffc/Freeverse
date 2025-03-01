@@ -260,10 +260,10 @@ class ServerUdpThread extends Thread {
         newBalance = oldBalance - charge;
         if (newBalance < 0) {
             charge = oldBalance;
-            jedis.hdel(addSidBriefToName(service.getSid(), FieldNames.BALANCE), userFid);
+            jedis.hdel(addSidBriefToName(service.getId(), FieldNames.BALANCE), userFid);
             newBalance = 0;
         } else
-            jedis.hset(addSidBriefToName(service.getSid(), FieldNames.BALANCE), userFid, String.valueOf(newBalance));
+            jedis.hset(addSidBriefToName(service.getId(), FieldNames.BALANCE), userFid, String.valueOf(newBalance));
 
         viaConsume += charge;
         balance= newBalance;
@@ -304,14 +304,14 @@ class ServerUdpThread extends Thread {
                 replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The pubKey is not of the user FID.", nonce, false);
             } else {
                 if (requestBody.getVia() != null) via = requestBody.getVia();
-                if (isBadBalanceTcp(jedis, service.getSid(), userFid)) {
-                    String otherError = "Send at lest " + talkParams.getMinPayment() + " F to " + talkParams.getMinPayment() + " to buy the service #" + service.getSid() + ".";
+                if (isBadBalanceTcp(jedis, service.getId(), userFid)) {
+                    String otherError = "Send at lest " + talkParams.getMinPayment() + " F to " + talkParams.getMinPayment() + " to buy the service #" + service.getId() + ".";
                     String data = null;
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, data, otherError, nonce, false);
-                } else if (!service.getSid().equals(requestBody.getSid())) {
+                } else if (!service.getId().equals(requestBody.getSid())) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("Signed SID:", requestBody.getSid());
-                    dataMap.put("Requested SID:", service.getSid());
+                    dataMap.put("Requested SID:", service.getId());
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
                 } else if (isBadNonce(requestBody.getNonce(), windowTime, jedis)) {
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1007UsedNonce, null, null, nonce, false);

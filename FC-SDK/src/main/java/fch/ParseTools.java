@@ -1,7 +1,15 @@
 package fch;
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.google.gson.Gson;
 import constants.Constants;
+import constants.FieldNames;
+import constants.IndicesNames;
+import fch.fchData.Cid;
 import org.junit.jupiter.api.Test;
 import crypto.Hash;
 import tools.BytesTools;
@@ -19,14 +27,28 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static tx.NumberTools.roundDouble2;
 
 public class ParseTools {
+    public static final String UTXO_SUM = "utxoSum";
+    public static final String STXO_SUM = "stxoSum";
+    public static final String TXO_SUM_MAP = "txoSumMap";
+    public static final String CDD_MAP = "cddMap";
+    public static final String UTXO_COUNT_MAP = "utxoCountMap";
+    public static final String ADDR_FILTER_AGGS = "addrFilterAggs";
+    public static final String UTXO_FILTER_AGGS = "utxoFilterAggs";
+    public static final String UTXO_AGGS = "utxoAggs";
+    public static final String STXO_FILTER_AGGS = "stxoFilterAggs";
+    public static final String STXO_AGGS = "stxoAggs";
+    public static final String CDD_SUM = "cddSum";
+    public static final String TXO_AGGS = "txoAggs";
+    public static final String TXO_SUM = "txoSum";
+    public static final String CDD = "cdd";
+    public static final String UTXO_COUNT = "utxoCount";
+
     public static double bitsToDifficulty(long bits) {
         // Decode the "bits" field
         int exponent = (int) ((bits >> 24) & 0xff);
@@ -304,6 +326,142 @@ public class ParseTools {
         LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         return dateTime.format(formatter);
+    }
+
+    public static void makeAddress (List<Cid> cidList, ElasticsearchClient esClient) throws Exception {
+
+        List<String> fidList = cidList.stream().map(Cid::getId).toList();
+        Map<String, Map<String, Long>> result = aggsTxoByAddrs(esClient, fidList);
+
+        for(Cid cid : cidList){
+            String addr = cid.getId();
+            Long cashValue = result.get(UTXO_SUM).get(addr);
+            if(cashValue!=null) cid.setBalance(cashValue);
+            Long spentValue = result.get(STXO_SUM).get(addr);
+            if(spentValue!=null) cid.setExpend(spentValue);
+            Long totalValue = result.get(TXO_SUM_MAP).get(addr);
+            if(totalValue!=null) cid.setIncome(totalValue);
+            Long cdd = result.get(CDD_MAP).get(addr);
+            if(cdd!=null) cid.setCdd(cdd);
+            Long count = result.get(UTXO_COUNT_MAP).get(addr);
+            if(count!=null) cid.setCash(count);
+        }
+    }
+
+    public static Map<String, Map<String, Long>> aggsTxoByAddrs(ElasticsearchClient esClient, List<String> addrAllList) throws ElasticsearchException, IOException {
+
+        List<FieldValue> fieldValueList = new ArrayList<>();
+
+        for (String value : addrAllList) fieldValueList.add(FieldValue.of(value));
+
+        SearchResponse<Void> response = esClient.search(s->s
+                        .index(IndicesNames.CASH)
+                        .size(0)
+                        .aggregations(ADDR_FILTER_AGGS, a->a
+                                .filter(f->f.terms(t->t
+                                        .field(FieldNames.OWNER)
+                                        .terms(t1->t1
+                                                .value(fieldValueList))))
+                                .aggregations(UTXO_FILTER_AGGS, a0->a0
+                                        .filter(f1->f1.match(m->m.field("valid").query(true)))
+                                        .aggregations(UTXO_AGGS, a3->a3
+                                                .terms(t2->t2
+                                                        .field(FieldNames.OWNER)
+                                                        .size(200000))
+                                                .aggregations(UTXO_SUM, t5->t5
+                                                        .sum(s1->s1
+                                                                .field("value"))))
+                                )
+                                .aggregations(STXO_FILTER_AGGS, a0->a0
+                                        .filter(f1->f1.match(m->m.field("valid").query(false)))
+                                        .aggregations(STXO_AGGS, a1->a1
+                                                .terms(t2->t2
+                                                        .field(FieldNames.OWNER)
+                                                        .size(200000))
+                                                .aggregations(STXO_SUM, t3->t3
+                                                        .sum(s1->s1
+                                                                .field("value")))
+                                                .aggregations(CDD_SUM, t4->t4
+                                                        .sum(s1->s1
+                                                                .field(CDD)))
+                                        )
+                                )
+                                .aggregations(TXO_AGGS, a1->a1
+                                        .terms(t2->t2
+                                                .field(FieldNames.OWNER)
+                                                .size(200000))
+                                        .aggregations(TXO_SUM, t3->t3
+                                                .sum(s1->s1
+                                                        .field("value")))
+                                )
+
+                        )
+                , void.class);
+
+        Map<String, Long> utxoSumMap = new HashMap<>();
+        Map<String, Long> stxoSumMap = new HashMap<>();
+        Map<String, Long> txoSumMap = new HashMap<>();
+        Map<String, Long> cddMap = new HashMap<>();
+        Map<String, Long> utxoCountMap = new HashMap<>();
+
+        List<StringTermsBucket> utxoBuckets = response.aggregations()
+                .get(ADDR_FILTER_AGGS)
+                .filter()
+                .aggregations()
+                .get(UTXO_FILTER_AGGS)
+                .filter()
+                .aggregations()
+                .get(UTXO_AGGS)
+                .sterms()
+                .buckets().array();
+
+        for (StringTermsBucket bucket: utxoBuckets) {
+            String addr = bucket.key();
+            long value1 = (long)bucket.aggregations().get(UTXO_SUM).sum().value();
+            utxoCountMap.put(addr, bucket.docCount());
+            utxoSumMap.put(addr, value1);
+        }
+
+        List<StringTermsBucket> stxoBuckets = response.aggregations()
+                .get(ADDR_FILTER_AGGS)
+                .filter()
+                .aggregations()
+                .get(STXO_FILTER_AGGS)
+                .filter()
+                .aggregations()
+                .get(STXO_AGGS)
+                .sterms()
+                .buckets().array();
+
+        for (StringTermsBucket bucket: stxoBuckets) {
+            String addr = bucket.key();
+            long value1 = (long)bucket.aggregations().get(STXO_SUM).sum().value();
+            stxoSumMap.put(addr, value1);
+            long cddSum = (long)bucket.aggregations().get(CDD_SUM).sum().value();
+            cddMap.put(addr, cddSum);
+        }
+
+        List<StringTermsBucket> txoBuckets = response.aggregations()
+                .get(ADDR_FILTER_AGGS)
+                .filter()
+                .aggregations()
+                .get(TXO_AGGS)
+                .sterms()
+                .buckets().array();
+
+        for (StringTermsBucket bucket: txoBuckets) {
+            String addr = bucket.key();
+            long value1 = (long)bucket.aggregations().get(TXO_SUM).sum().value();
+            txoSumMap.put(addr, value1);
+        }
+
+        Map<String,Map<String, Long>> resultMapMap = new HashMap<>();
+        resultMapMap.put(UTXO_SUM,utxoSumMap);
+        resultMapMap.put(STXO_SUM,stxoSumMap);
+        resultMapMap.put(TXO_SUM,txoSumMap);
+        resultMapMap.put(CDD,cddMap);
+        resultMapMap.put(UTXO_COUNT,utxoCountMap);
+        return resultMapMap;
     }
 
     @Test

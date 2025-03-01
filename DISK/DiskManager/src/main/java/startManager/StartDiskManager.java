@@ -92,7 +92,7 @@ public class StartDiskManager {
         byte[] symKey = settings.getSymKey();
         Configure configure = settings.getConfig();
         service =settings.getService();
-        sid = service.getSid();
+        sid = service.getId();
         params = (DiskParams) service.getParams();
 
         //Prepare API clients

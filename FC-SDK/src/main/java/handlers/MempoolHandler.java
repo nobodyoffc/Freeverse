@@ -87,11 +87,11 @@ public class MempoolHandler extends Handler<Object>{
 
             removingIdList = unconfirmedCashList.stream()
                     .filter(cash -> !cash.isValid())
-                    .map(Cash::getCashId)
+                    .map(Cash::getId)
                     .toList();
         }else {
             removingIdList = inCashList.stream()
-                    .map(Cash::getCashId)
+                    .map(Cash::getId)
                     .toList();
         }
 
@@ -99,7 +99,7 @@ public class MempoolHandler extends Handler<Object>{
         
         if(removingIdList!=null){
             for(String id : removingIdList){
-                cashList.removeIf(cash -> cash.getCashId().equals(id));
+                cashList.removeIf(cash -> cash.getId().equals(id));
             }
         }  
     }
@@ -174,7 +174,7 @@ public class MempoolHandler extends Handler<Object>{
         }
         for(String txId : mempoolTxIds){
             txIdList.remove(txId);
-            txList.removeIf(tx -> tx.getTxId().equals(txId));
+            txList.removeIf(tx -> tx.getId().equals(txId));
             inCashList.removeIf(cash -> cash.getSpendTxId().equals(txId));
             outCashList.removeIf(cash -> cash.getBirthTxId().equals(txId));
         }
@@ -254,7 +254,7 @@ public class MempoolHandler extends Handler<Object>{
             
             // Check inCashList
             for (Cash cash : inCashList) {
-                if (cash.getSpendTxId().equals(tx.getTxId()) && cash.getOwner().equals(fid)) {
+                if (cash.getSpendTxId().equals(tx.getId()) && cash.getOwner().equals(fid)) {
                     relevantInCash.add(cash);
                     isRelevant = true;
                 }
@@ -262,7 +262,7 @@ public class MempoolHandler extends Handler<Object>{
             
             // Check outCashList
             for (Cash cash : outCashList) {
-                if (cash.getBirthTxId().equals(tx.getTxId()) && cash.getOwner().equals(fid)) {
+                if (cash.getBirthTxId().equals(tx.getId()) && cash.getOwner().equals(fid)) {
                     relevantOutCash.add(cash);
                     isRelevant = true;
                 }

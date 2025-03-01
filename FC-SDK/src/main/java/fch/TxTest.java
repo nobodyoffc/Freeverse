@@ -78,7 +78,7 @@ public class TxTest {
 
         P2SH p2SH = genMultiP2sh(pubKeyList, 2);
         if(p2SH==null)return;
-        String mFid = p2SH.getFid();
+        String mFid = p2SH.getId();
 
         System.out.println("Multisig address:" + mFid);
         //Get multisig address information

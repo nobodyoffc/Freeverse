@@ -24,7 +24,7 @@ import java.util.Base64;
 import java.util.List;
 
 
-public class MailDetail {
+public class MailDetail extends FcObject{
     private transient String id;
 //    private transient byte[] idBytes;
     private String mailId;
@@ -178,7 +178,7 @@ public class MailDetail {
         MailDetail mailDetail = new MailDetail();
         // Transfer relevant data from Mail to MailDetail
 
-        mailDetail.setMailId(mail.getMailId());
+        mailDetail.setMailId(mail.getId());
         mailDetail.setTime(mail.getBirthTime() * 1000);
         mailDetail.setFrom(mail.getSender());
         mailDetail.setTo(mail.getRecipient());
@@ -190,7 +190,7 @@ public class MailDetail {
         if (cryptoDataByte.getCode() == 0) {
             mailDetail.setContent(new String(cryptoDataByte.getData()));
         } else {
-            mailDetail.setContent("Failed to decrypt mail "+mail.getMailId());
+            mailDetail.setContent("Failed to decrypt mail "+mail.getId());
         }
 
         return mailDetail;

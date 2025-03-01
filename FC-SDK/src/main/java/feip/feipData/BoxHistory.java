@@ -1,8 +1,10 @@
 package feip.feipData;
 
-public class BoxHistory {
+import fcData.FcObject;
+
+public class BoxHistory extends FcObject {
 	
-	private String txId;
+	private String id;
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -30,14 +32,6 @@ public class BoxHistory {
 
 	public void setCipher(String cipher) {
 		this.cipher = cipher;
-	}
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
 	}
 
 	public Long getHeight() {

@@ -1,6 +1,6 @@
 package app;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
@@ -15,7 +15,6 @@ import fcData.AlgorithmId;
 import fcData.FidTxMask;
 import fcData.Signature;
 import fch.*;
-import fch.fchData.Address;
 import fch.fchData.Cash;
 import fch.fchData.P2SH;
 import fch.fchData.SendTo;
@@ -1176,7 +1175,7 @@ public class HomeApp extends App{
            String msg = (String) result.get(Strings.OPRETURN);
 
            Map<String, Cash> spendCashMap = new HashMap<>();
-           for (Cash cash : multiSigData.getCashList()) spendCashMap.put(cash.getCashId(), cash);
+           for (Cash cash : multiSigData.getCashList()) spendCashMap.put(cash.getId(), cash);
 
            System.out.println("You are spending:");
            Shower.printUnderline(60);
@@ -1185,12 +1184,12 @@ public class HomeApp extends App{
            System.out.println(Shower.formatString("fch", 20));
            Shower.printUnderline(60);
            for (Cash cash : spendCashList) {
-               Cash niceCash = spendCashMap.get(cash.getCashId());
+               Cash niceCash = spendCashMap.get(cash.getId());
                if (niceCash == null) {
-                   System.out.println("Warning： The cash " + cash.getCashId() + "in the rawTx is unfounded.");
+                   System.out.println("Warning： The cash " + cash.getId() + "in the rawTx is unfounded.");
                    return;
                }
-               System.out.print(Shower.formatString(niceCash.getCashId(), 68));
+               System.out.print(Shower.formatString(niceCash.getId(), 68));
                System.out.print(Shower.formatString(niceCash.getOwner(), 38));
                System.out.println(Shower.formatString(String.valueOf(ParseTools.satoshiToCoin(niceCash.getValue())), 20));
            }
@@ -1272,7 +1271,7 @@ public class HomeApp extends App{
            }
            int m = Inputer.inputInt(br, "How many signatures is required? ", 16);
 
-           Map<String, Address> fidMap = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fids);
+           Map<String, fch.fchData.Cid> fidMap = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fids);
            if(fidMap==null) return;
 
            List<byte[]> pubKeyList = new ArrayList<>();
@@ -1293,7 +1292,7 @@ public class HomeApp extends App{
            }
            Shower.printUnderline(10);
            if(p2SH==null)return;
-        String fid = p2SH.getFid();
+        String fid = p2SH.getId();
         System.out.println("Your multisig FID: \n" + fid);
            Shower.printUnderline(10);
            Menu.anyKeyToContinue(br);
@@ -1320,7 +1319,7 @@ public class HomeApp extends App{
            Shower.printUnderline(10);
            System.out.println("The members:");
 
-           Map<String, CidInfo> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, p2sh.getFids());
+           Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, p2sh.getFids());
            if (cidInfoMap == null) {
                return;
            }

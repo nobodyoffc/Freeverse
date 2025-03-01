@@ -7,6 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import constants.FieldNames;
 import constants.IndicesNames;
+import fcData.FcObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,9 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class Address {
+public class Address extends FcObject {
 	
-	private String fid;	//fch address
 	private String pubKey;		//public key
 	private Long balance;		//value of fch in satoshi
 	private Long income;		//total amount of fch received in satoshi
@@ -33,10 +33,11 @@ public class Address {
 	private String ltcAddr;	//the ltc address
 	private String dogeAddr;	//the doge address
 	private String trxAddr;	//the doge address
+	private String bchAddr;
 
 	public static void makeAddress (List<Address> addressList, ElasticsearchClient esClient) throws Exception {
 
-		List<String> fidList = addressList.stream().map(Address::getFid).toList();
+		List<String> fidList = addressList.stream().map(Address::getId).toList();
 
 		List<FieldValue> fieldValueList = new ArrayList<FieldValue>();
 		for (String value : fidList) fieldValueList.add(FieldValue.of(value));
@@ -142,7 +143,7 @@ public class Address {
 			txoSumMap.put(addr, value1);
 		}
 		for(Address address :addressList){
-			String addr = address.getFid();
+			String addr = address.getId();
 			Long cashValue = utxoSumMap.get(addr);
 			if(cashValue!=null)address.setBalance(cashValue);
 			Long spentValue = stxoSumMap.get(addr);
@@ -156,9 +157,6 @@ public class Address {
 		}
 	}
 
-	public String getFid() {
-		return fid;
-	}
 
 	public String getTrxAddr() {
 		return trxAddr;
@@ -166,10 +164,6 @@ public class Address {
 
 	public void setTrxAddr(String trxAddr) {
 		this.trxAddr = trxAddr;
-	}
-
-	public void setFid(String addr) {
-		this.fid = addr;
 	}
 
 	public String getPubKey() {
@@ -291,5 +285,12 @@ public class Address {
 	public void setWeight(Long weight) {
 		this.weight = weight;
 	}
-	
+
+	public String getBchAddr() {
+		return bchAddr;
+	}
+
+	public void setBchAddr(String bchAddr) {
+		this.bchAddr = bchAddr;
+	}
 }

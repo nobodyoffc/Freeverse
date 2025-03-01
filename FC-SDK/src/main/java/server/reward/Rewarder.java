@@ -90,7 +90,7 @@ public class Rewarder {
 
         ArrayList<Sort> sortList = new ArrayList<>();
         Sort sort1 = new Sort(VALUE, ASC);
-        Sort sort2 = new Sort(CASH_ID, ASC);
+        Sort sort2 = new Sort(ID, ASC);
         sortList.add(sort1);
         sortList.add(sort2);
         List<Cash> cashList;

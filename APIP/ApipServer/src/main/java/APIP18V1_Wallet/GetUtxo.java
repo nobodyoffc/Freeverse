@@ -24,7 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static constants.FieldNames.AMOUNT;
-import static constants.IndicesNames.ADDRESS;
+import static constants.FieldNames.ADDRESS;
 
 
 @WebServlet(name = ApipApiNames.GET_UTXO, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_UTXO)

@@ -14,7 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import appTools.Settings;
-import static constants.FieldNames.CODE_ID;
+import static constants.FieldNames.ID;
 import server.FcdslRequestHandler;
 
 
@@ -29,11 +29,11 @@ public class CodeByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, CODE_ID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, CODE_ID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, ID, request,response,authType);
     }
 }

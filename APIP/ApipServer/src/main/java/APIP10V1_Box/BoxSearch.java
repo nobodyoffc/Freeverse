@@ -17,8 +17,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 import appTools.Settings;
-import static constants.FieldNames.BID;
-import static constants.FieldNames.LAST_HEIGHT;
+
+import static constants.FieldNames.*;
 
 @WebServlet(name = ApipApiNames.BOX_SEARCH, value = "/"+ ApipApiNames.SN_10+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BOX_SEARCH)
 public class BoxSearch extends HttpServlet {
@@ -31,13 +31,13 @@ public class BoxSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,BID,true, null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.BOX, Box.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,BID,true, null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.BOX, Box.class, defaultSort, request,response,authType);
     }
 }

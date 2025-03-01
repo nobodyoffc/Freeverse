@@ -42,7 +42,7 @@ public class RawTxParser {
 
     private static Tx makeTx(String txid, ArrayList<Cash> inCashList, ArrayList<Cash> outCashList) {
         Tx tx = new Tx();
-        tx.setTxId(txid);
+        tx.setId(txid);
         tx.setInCount(inCashList.size());
         long inValueT = 0;
         for (Cash cash : inCashList) {
@@ -113,7 +113,7 @@ public class RawTxParser {
             byte[] b36PreTxIdAndIndex = new byte[32 + 4];
             txInputStream.read(b36PreTxIdAndIndex);
             String cashId = ParseTools.calcTxoIdFromBytes(b36PreTxIdAndIndex);
-            spentCash.setCashId(cashId);
+            spentCash.setId(cashId);
 
 
             // Read the length of script./读脚本长度。
@@ -287,7 +287,7 @@ public class RawTxParser {
             byte[] b36PreTxIdAndIndex = new byte[32 + 4];
             rawTxInputStream.read(b36PreTxIdAndIndex);
             String cashId = ParseTools.calcTxoIdFromBytes(b36PreTxIdAndIndex);
-            spentCash.setCashId(cashId);
+            spentCash.setId(cashId);
 
             // Read the length of script./读脚本长度。
             varintParseResult = parseVarint(rawTxInputStream);
@@ -359,7 +359,7 @@ public class RawTxParser {
             newCash.setBirthTxId(txid);
             newCash.setBirthIndex(j);
             String cashId = ParseTools.calcTxoId(txid, j);
-            newCash.setCashId(cashId);
+            newCash.setId(cashId);
 
             // Read the value of this output in satoshi.
             // 读取该输出的金额，以聪为单位。
@@ -430,7 +430,7 @@ public class RawTxParser {
         List<Cash> cashList = result.getResultList();
         List<String> missList = result.getMissList();
         Map<String, Cash> cashMap = new HashMap<>();
-        for (Cash cash : cashList) cashMap.put(cash.getCashId(), cash);
+        for (Cash cash : cashList) cashMap.put(cash.getId(), cash);
         for (String cashId : missList) {
             cashMap.put(cashId, null);
         }

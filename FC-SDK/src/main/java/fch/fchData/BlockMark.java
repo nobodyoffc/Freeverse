@@ -1,25 +1,32 @@
 package fch.fchData;
 
-public class BlockMark {
-	private String blockId;
+import fcData.FcObject;
+
+public class BlockMark extends FcObject {
+
+	private String id;
 	private String preBlockId;
 	private Long height;
+	private Long time;
+
 	private Long size;		//block size
 	private String status;
-	
+
 	//parsing info
 	private Integer _fileOrder;		//The order number of the file that the block is located in.
 	private Long _pointer;		//The position of the beginning of the block in the file.
 	private Long orphanHeight;		//The number of orphan when writing this block to es. Only the point with _pend being 0 can be rollback to.
-	
+
+
+	public Long getTime() {
+		return time;
+	}
+
+	public void setTime(Long time) {
+		this.time = time;
+	}
 	//orphanHeight<=rollHeight  && height>rollHeight 的blockMark恢复为orphan
-	
-	public String getBlockId() {
-		return blockId;
-	}
-	public void setBlockId(String blockId) {
-		this.blockId = blockId;
-	}
+
 	public String getPreBlockId() {
 		return preBlockId;
 	}

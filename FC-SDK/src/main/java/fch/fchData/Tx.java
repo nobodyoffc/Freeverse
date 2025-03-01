@@ -1,9 +1,11 @@
 package fch.fchData;
 
-public class Tx {
+import fcData.FcObject;
+
+public class Tx extends FcObject {
 	
 	//from block;
-	private String txId;		//txid,hash of tx
+	private String id;		//txid,hash of tx
 	private Integer version;		//version
 	private Long lockTime;	//lockTime
 	private Long blockTime;		//blockTime
@@ -46,14 +48,6 @@ public class Tx {
 
 	public void setLockTime(Long lockTime) {
 		this.lockTime = lockTime;
-	}
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
 	}
 
 	public Long getBlockTime() {

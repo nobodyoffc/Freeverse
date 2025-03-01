@@ -1,10 +1,10 @@
 package feip.feipData;
 
+import fcData.FcObject;
+
 import java.util.List;
 
-public class TeamHistory {
-
-	private String txId;
+public class TeamHistory extends FcObject {
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -23,13 +23,7 @@ public class TeamHistory {
 	private String transferee;
 	private String[] list;
 	private Integer rate;
-	
-	public String getTxId() {
-		return txId;
-	}
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
+
 	public Long getHeight() {
 		return height;
 	}

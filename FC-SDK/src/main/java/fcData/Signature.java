@@ -20,7 +20,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
-public class Signature {
+public class Signature extends FcObject{
     private String fid;
     private String msg;
     private String sign;

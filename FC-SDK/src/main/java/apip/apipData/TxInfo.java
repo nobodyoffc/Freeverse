@@ -42,15 +42,15 @@ public class TxInfo {
         Map<String, Tx> txMap = new HashMap<>();
 
         for (Tx tx : txList) {
-            txMap.put(tx.getTxId(), tx);
+            txMap.put(tx.getId(), tx);
         }
 
         for (TxHas txHas : txHasList) {
-            Tx tx = txMap.get(txHas.getTxId());
+            Tx tx = txMap.get(txHas.getId());
 
             if (tx != null) {
                 TxInfo txInfo = new TxInfo();
-                txInfo.setTxId(tx.getTxId());
+                txInfo.setTxId(tx.getId());
                 txInfo.setHeight(txHas.getHeight());
                 txInfo.setSpentCashes(txHas.getInMarks());
                 txInfo.setIssuedCashes(txHas.getOutMarks());
@@ -88,7 +88,7 @@ public class TxInfo {
             showList.add(String.valueOf(ParseTools.satoshiToCoin(txInfo.getOutValueT())));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed);
+        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
     }
 
     public String getTxId() {

@@ -85,7 +85,7 @@ public class StartTalkServer {
 //        Configure configure = settings.getConfig();
 
         service = settings.getService();
-        sid = service.getSid();
+        sid = service.getId();
         params = (TalkParams) service.getParams();
         try {
             price = Double.parseDouble(params.getPricePerKBytes());

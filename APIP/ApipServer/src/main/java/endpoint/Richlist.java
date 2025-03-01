@@ -4,12 +4,11 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import fch.fchData.Cid;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
-import fcData.ReplyBody;
 import fch.ParseTools;
-import fch.fchData.Address;
 import initial.Initiator;
 import tools.JsonTools;
 import tools.http.AuthType;
@@ -52,16 +51,16 @@ public class Richlist extends HttpServlet {
             httpRequestChecker.checkRequestHttp(request, response, authType);
             int finalNumber = number;
             ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-            SearchResponse<Address> result = esClient.search(s -> s.index(IndicesNames.ADDRESS).size(finalNumber).sort(so -> so.field(f -> f.field(FieldNames.BALANCE).order(SortOrder.Desc))), Address.class);
+            SearchResponse<Cid> result = esClient.search(s -> s.index(IndicesNames.CID).size(finalNumber).sort(so -> so.field(f -> f.field(FieldNames.BALANCE).order(SortOrder.Desc))), Cid.class);
             if(result==null||result.hits()==null||result.hits().hits()==null){
                 response.getWriter().write("Failed to get data.");
                 return;
             }
             Map<String,Double> richMap = new LinkedHashMap<>();
-            for(Hit<Address> hit : result.hits().hits()){
-                Address address = hit.source();
-                if(address==null)continue;
-                richMap.put(address.getFid(), ParseTools.satoshiToCoin(address.getBalance()));
+            for(Hit<Cid> hit : result.hits().hits()){
+                Cid cid = hit.source();
+                if(cid ==null)continue;
+                richMap.put(cid.getId(), ParseTools.satoshiToCoin(cid.getBalance()));
             }
             if(richMap.isEmpty()) {
                 response.getWriter().write("Failed to get data.");

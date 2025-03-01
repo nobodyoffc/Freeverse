@@ -14,7 +14,7 @@ import appTools.Settings;
 
 import java.io.IOException;
 
-import static constants.FieldNames.BLOCK_ID;
+import static constants.FieldNames.ID;
 
 @WebServlet(name = ApipApiNames.BLOCK_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BLOCK_SEARCH)
 public class BlockSearch extends HttpServlet {
@@ -28,12 +28,12 @@ public class BlockSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doBlockInfoRequest(false, BLOCK_ID, request, response, authType);
+        fcdslRequestHandler.doBlockInfoRequest(false, ID, request, response, authType);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doBlockInfoRequest(false,BLOCK_ID,request, response, authType);
+        fcdslRequestHandler.doBlockInfoRequest(false,ID,request, response, authType);
     }
 }

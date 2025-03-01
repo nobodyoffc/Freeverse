@@ -1,7 +1,8 @@
 package feip.feipData;
 
-public class App {
-	private String aid;
+import fcData.FcObject;
+
+public class App extends FcObject {
 	private String stdName;
 	private String[] localNames;
 	private String[] types;
@@ -25,13 +26,7 @@ public class App {
 	private Boolean active;
 	private Boolean closed;
 	private String closeStatement;
-	
-	public String getAid() {
-		return aid;
-	}
-	public void setAid(String aid) {
-		this.aid = aid;
-	}
+
 	public String getStdName() {
 		return stdName;
 	}

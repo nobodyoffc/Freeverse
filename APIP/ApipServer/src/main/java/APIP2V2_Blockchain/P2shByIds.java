@@ -14,7 +14,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import appTools.Settings;
-import static constants.FieldNames.FID;
+import static constants.FieldNames.ID;
+
 import server.FcdslRequestHandler;
 
 @WebServlet(name = ApipApiNames.P_2_SH_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.P_2_SH_BY_IDS)
@@ -28,11 +29,11 @@ public class P2shByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.P2SH, P2SH.class, FID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.P2SH, P2SH.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.P2SH, P2SH.class, FID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.P2SH, P2SH.class, ID, request,response,authType);
     }
 }

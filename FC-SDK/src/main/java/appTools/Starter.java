@@ -8,16 +8,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.*;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import clients.ApipClient;
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.Configure;
 import feip.feipData.Service;
 import handlers.Handler;
-import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.JedisPool;
 import tools.FileTools;
 import tools.JsonTools;
 
@@ -61,7 +58,7 @@ public class Starter {
         }
         long bestHeight = apipClient.bestHeight();//new Wallet(apipClient).getBestHeight();
 
-        CidInfo fidInfo = settings.checkFidInfo(apipClient, br);
+        Cid fidInfo = settings.checkFidInfo(apipClient, br);
         String userPriKeyCipher = configure.getFidCipherMap().get(fid);
 
         if (fidInfo != null && fidInfo.getCid() == null) {
@@ -75,6 +72,37 @@ public class Starter {
                 setMaster(fid, userPriKeyCipher, bestHeight, symKey, apipClient, br);
             }
         }
+        return settings;
+    }
+
+
+    public static Settings startTool(String toolName,
+                                       Map<String, Object> settingMap, BufferedReader br, Object[] modules) {
+        // Load config info from the file of config.json
+
+        Configure.loadConfig(br);
+        Configure configure = Configure.checkPassword(br);
+        if(configure == null) return null;
+        byte[] symKey = configure.getSymKey();
+
+        Settings settings;
+
+        try {
+            String fileName = FileTools.makeFileName(null, toolName, SETTINGS, DOT_JSON);
+            settings = JsonTools.readObjectFromJsonFile(Configure.getConfDir(), fileName, Settings.class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        if(settings == null) {
+            settings = new Settings(configure,toolName);
+            settings.setModules(modules);
+            if(settingMap != null) settings.setSettingMap(settingMap);
+        }
+
+        // Initialize clients and handlers
+        settings.initiateTool(toolName, symKey, configure, br);
+
         return settings;
     }
 

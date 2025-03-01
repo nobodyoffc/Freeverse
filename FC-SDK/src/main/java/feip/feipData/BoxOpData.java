@@ -7,7 +7,7 @@ import java.util.Map;
 import constants.FieldNames;
 import feip.FeipOp;
 
-public class BoxOpData {
+public class BoxOpData{
 
     private String bid;
     private String op;

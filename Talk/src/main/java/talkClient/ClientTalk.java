@@ -11,7 +11,7 @@
 //import handlers.CashHandler;
 //import configure.ApiAccount;
 //import configure.ApiProvider;
-//import configure.ServiceType;
+//import feip.feipData.Service.ServiceType;
 //import constants.FieldNames;
 //import constants.Values;
 //import crypto.*;

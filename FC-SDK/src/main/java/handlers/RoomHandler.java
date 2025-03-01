@@ -68,14 +68,14 @@ public class RoomHandler extends Handler {
         Room room = new Room();
         room.setName(name);
         room.setOwner(myFid);
-        room.setRoomId(generateRoomId());
+        room.setId(generateRoomId());
         room.setBirthTime(System.currentTimeMillis());
         room.setMembers(new ArrayList<>(List.of(myFid)));
         room.setMemberNum(1L);
 
-        roomDB.put(room.getRoomId().getBytes(), room.toJson().getBytes());
+        roomDB.put(room.getId().getBytes(), room.toJson().getBytes());
         addToCache(room); // Add new room to cache
-        System.out.println("Room created successfully: " + room.getRoomId());
+        System.out.println("Room created successfully: " + room.getId());
     }
 
     private void handleJoinRoom(BufferedReader br) {
@@ -96,7 +96,7 @@ public class RoomHandler extends Handler {
         room.setMembers(updatedMembers);
         room.setMemberNum(room.getMemberNum() + 1);
         
-        roomDB.put(room.getRoomId().getBytes(), room.toJson().getBytes());
+        roomDB.put(room.getId().getBytes(), room.toJson().getBytes());
         addToCache(room); // Update cache with modified room
         System.out.println("Successfully joined room: " + room.getName());
     }
@@ -116,7 +116,7 @@ public class RoomHandler extends Handler {
             room.setMembers(updatedMembers);
             room.setMemberNum(room.getMemberNum() - 1);
             
-            roomDB.put(room.getRoomId().getBytes(), room.toJson().getBytes());
+            roomDB.put(room.getId().getBytes(), room.toJson().getBytes());
             addToCache(room); // Update cache with modified room
             System.out.println("Left room: " + room.getName());
         }
@@ -217,7 +217,7 @@ public class RoomHandler extends Handler {
 
     // Add these new private helper methods for cache management
     private void addToCache(Room room) {
-        if (room != null && room.getRoomId() != null) {
+        if (room != null && room.getId() != null) {
             synchronized (roomCache) {
                 if (roomCache.size() >= CACHE_SIZE) {
                     // Remove oldest entry when cache is full
@@ -225,7 +225,7 @@ public class RoomHandler extends Handler {
                         .min(Comparator.comparingLong(e -> e.getValue().getBirthTime()));
                     oldest.ifPresent(entry -> roomCache.remove(entry.getKey()));
                 }
-                roomCache.put(room.getRoomId(), room);
+                roomCache.put(room.getId(), room);
             }
         }
     }
@@ -267,7 +267,7 @@ public class RoomHandler extends Handler {
     }
 
     private boolean matchesSearchCriteria(Room room, String searchStr) {
-        return (room.getRoomId() != null && room.getRoomId().contains(searchStr)) ||
+        return (room.getId() != null && room.getId().contains(searchStr)) ||
                (room.getName() != null && room.getName().contains(searchStr));
     }
 
@@ -283,7 +283,7 @@ public class RoomHandler extends Handler {
             Room room = rooms.get(i);
             System.out.printf("%d. [%s] %s (Members: %d)%n", 
                 i + 1, 
-                room.getRoomId(), 
+                room.getId(),
                 room.getName(), 
                 room.getMemberNum());
         }

@@ -1,16 +1,12 @@
 package APIP3V1_CidInfo;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import appTools.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.GetResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.*;
-import crypto.KeyTools;
 import fcData.ReplyBody;
-import fch.fchData.Address;
-import feip.feipData.Cid;
 import feip.feipData.Service;
 import initial.Initiator;
 import server.ApipApiNames;
@@ -24,7 +20,9 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.*;
 
-import static apip.apipData.CidInfo.mergeCidInfo;
+import static constants.FieldNames.ID;
+import static constants.FieldNames.USED_CIDS;
+
 
 @WebServlet(name = ApipApiNames.GET_FID_CID, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_FID_CID)
 public class GetFidCid extends HttpServlet {
@@ -54,48 +52,28 @@ public class GetFidCid extends HttpServlet {
             return;
         }
 
-        String idRequested = request.getParameter("id");
-        Cid cid = null;
-        if (idRequested.contains("_")) {
-            SearchResponse<Cid> result = esClient.search(s -> s.index(IndicesNames.CID)
-                            .query(q -> q
-                                    .term(t -> t.field("usedCids").value(idRequested)))
-                    , Cid.class);
+        String idRequested = request.getParameter(ID);
+        Cid cid;
 
-            List<Hit<Cid>> hitList = result.hits().hits();
-            if (hitList == null || hitList.size() == 0) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
-                return;
-            }
+        SearchResponse<Cid> result = esClient.search(s -> s.index(IndicesNames.CID)
+                        .query(q -> q
+                                .bool(b -> b
+                                        .should(sh -> sh
+                                                .term(t -> t.field(ID).value(idRequested)))
+                                        .should(sh -> sh
+                                                .term(t -> t.field(USED_CIDS).value(idRequested)))
+                                        .minimumShouldMatch("1")))
+                , Cid.class);
 
-            cid = hitList.get(0).source();
-        }
-        String fid;
-        if (cid != null) fid = cid.getFid();
-        else {
-            if (!KeyTools.isValidFchAddr(idRequested)) {
-                replier.replyOtherErrorHttp("It's not a valid CID or FID.", response);
-                return;
-            }
-            fid = idRequested;
-        }
-        GetResponse<Address> fidResult = esClient.get(g -> g.index(IndicesNames.ADDRESS).id(fid), Address.class);
-        if (!fidResult.found()) {
-            replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
+        List<Hit<Cid>> hitList = result.hits().hits();
+        if (hitList == null || hitList.size() == 0) {
+            replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+            return;
+        }else if(hitList.size() !=1){
+            replier.replyOtherErrorHttp("Got more than 1. Please search the full FID or CID.", response);
             return;
         }
-        Address address = fidResult.source();
-
-        if(cid==null){
-            SearchResponse<Cid> result1 = esClient.search(s -> s
-            .index(IndicesNames.CID)
-            .query(q -> q.term(t -> t.field(FieldNames.FID).value(fid))), Cid.class);
-            if(result1.hits().hits().size()>0){
-                cid = result1.hits().hits().get(0).source();
-            }
-        }
-
-        CidInfo cidInfo = mergeCidInfo(cid, address);
-        replier.replySingleDataSuccessHttp(cidInfo, response);
+        cid = hitList.get(0).source();
+        replier.replySingleDataSuccessHttp(cid, response);
     }
 }

@@ -1,11 +1,13 @@
 package fch.fchData;
 
-public class Block {
+import fcData.FcObject;
+
+public class Block extends FcObject {
 	//from block head
 	private Long size;		//block size
 	private Long height;		//block height
 	private String version;		//version
-	private String preBlockId;	//previous block hash
+	private String preId;	//previous block hash
 	private String merkleRoot;	//merkle tree root
 	private Long time;		//block timestamp
 	private Long bits;		//The current difficulty target
@@ -13,7 +15,6 @@ public class Block {
 	private Integer txCount;		//number of TXs included
 
 	//calculated
-	private String blockId;		//block hash
 	private Long inValueT;		//total amount of all inputs values in satoshi
 	private Long outValueT;		//total amount of all outputs values in satoshi
 	private Long fee;		//total amount of tx fee in satoshi
@@ -37,11 +38,11 @@ public class Block {
 	public void setVersion(String version) {
 		this.version = version;
 	}
-	public String getPreBlockId() {
-		return preBlockId;
+	public String getPreId() {
+		return preId;
 	}
-	public void setPreBlockId(String preBlockId) {
-		this.preBlockId = preBlockId;
+	public void setPreId(String preId) {
+		this.preId = preId;
 	}
 	public String getMerkleRoot() {
 		return merkleRoot;
@@ -72,12 +73,6 @@ public class Block {
 	}
 	public void setTxCount(Integer txCount) {
 		this.txCount = txCount;
-	}
-	public String getBlockId() {
-		return blockId;
-	}
-	public void setBlockId(String blockId) {
-		this.blockId = blockId;
 	}
 	public Long getInValueT() {
 		return inValueT;

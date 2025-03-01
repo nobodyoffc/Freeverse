@@ -1,17 +1,13 @@
 package fch.fchData;
 
-public class TxMark {
-	private String txId;
+import fcData.FcObject;
+
+public class TxMark extends FcObject {
 	private Long outValue;
 	private Long fee;
 	private Long cdd;
 	
-	public String getTxId() {
-		return txId;
-	}
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
+
 	public Long getOutValue() {
 		return outValue;
 	}

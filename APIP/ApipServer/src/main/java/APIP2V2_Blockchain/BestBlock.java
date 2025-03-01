@@ -58,7 +58,7 @@ public class BestBlock extends HttpServlet {
         Block bestBlock = EsTools.getBestBlock(esClient);
         
         replier.setBestHeight(bestBlock.getHeight());
-        replier.setBestBlockId(bestBlock.getBlockId());
+        replier.setBestBlockId(bestBlock.getId());
         replier.replySingleDataSuccessHttp(bestBlock,response);
     }
 } 

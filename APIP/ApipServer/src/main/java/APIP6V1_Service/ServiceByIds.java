@@ -14,7 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import appTools.Settings;
-import static constants.Strings.SID;
+import static constants.FieldNames.ID;
 import server.FcdslRequestHandler;
 
 
@@ -29,11 +29,11 @@ public class ServiceByIds extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, SID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, SID, request,response,authType);
+        fcdslRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, ID, request,response,authType);
     }
 }

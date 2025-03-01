@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import appTools.Settings;
 import static constants.OpNames.RATE;
 import static constants.Strings.OP;
+import static constants.FieldNames.HEIGHT;
+import static constants.FieldNames.INDEX;
 
 @WebServlet(name = ApipApiNames.CODE_OP_HISTORY, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CODE_OP_HISTORY)
 public class CodeOpHistory extends HttpServlet {
@@ -26,14 +28,14 @@ public class CodeOpHistory extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList("height",false,"index",false,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(settings);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CODE_HISTORY, CodeHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList("height",false,"index",false,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(settings);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CODE_HISTORY, CodeHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }

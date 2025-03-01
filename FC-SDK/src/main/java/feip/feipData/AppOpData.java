@@ -8,7 +8,7 @@ import constants.FieldNames;
 import java.util.List;
 import java.util.HashMap;
 
-public class AppOpData {
+public class AppOpData{
 
 	private String aid;
 	private List<String> aids;

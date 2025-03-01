@@ -17,8 +17,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 import appTools.Settings;
-import static constants.FieldNames.BIRTH_HEIGHT;
-import static constants.FieldNames.FID;
+
+import static constants.FieldNames.*;
 
 
 @WebServlet(name = ApipApiNames.P_2_SH_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.P_2_SH_SEARCH)
@@ -32,13 +32,13 @@ public class P2shSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(BIRTH_HEIGHT,false,FID,true,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(BIRTH_HEIGHT,false,ID,true,null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.P2SH, P2SH.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(BIRTH_HEIGHT,false,FID,true,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(BIRTH_HEIGHT,false,ID,true,null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.P2SH, P2SH.class, defaultSort, request,response,authType);
     }
 }

@@ -18,7 +18,7 @@ import initial.Initiator;
 import tools.http.AuthType;
 import server.FcdslRequestHandler;
 import appTools.Settings;
-import static constants.FieldNames.Contact_Id;
+import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
@@ -35,13 +35,13 @@ public class ContactSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Contact_Id,true, null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,Contact_Id,true, null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
 }

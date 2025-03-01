@@ -15,5 +15,4 @@ public class TokenTo {
     public void setAmount(String amount) {
         this.amount = amount;
     }
-    
 }

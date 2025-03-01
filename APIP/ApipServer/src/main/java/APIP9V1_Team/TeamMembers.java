@@ -47,7 +47,7 @@ public class TeamMembers extends HttpServlet {
         //Make data
         Map<String,String[]> dataMap = new HashMap<>();
         for(Team team:meetList){
-            dataMap.put(team.getTid(),team.getMembers());
+            dataMap.put(team.getId(),team.getMembers());
         }
         replier.reply0SuccessHttp(dataMap,response);
     }

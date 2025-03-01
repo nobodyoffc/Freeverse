@@ -19,8 +19,10 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
 
-import static constants.Strings.BEST_HEIGHT;
 import static fch.fchData.FchChainInfo.MAX_REQUEST_COUNT;
+import static constants.FieldNames.END_TIME;
+import static constants.FieldNames.START_TIME;
+import static constants.FieldNames.COUNT;
 
 @WebServlet(name = ApipApiNames.HASH_RATE_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.HASH_RATE_HISTORY)
 public class HashRateHistory extends HttpServlet {
@@ -57,9 +59,9 @@ public class HashRateHistory extends HttpServlet {
         if(httpRequestChecker.getRequestBody()!=null && httpRequestChecker.getRequestBody().getFcdsl()!=null && httpRequestChecker.getRequestBody().getFcdsl().getOther()!=null) {
             Object other =  httpRequestChecker.getRequestBody().getFcdsl().getOther();
             Map<String, String> paramMap = ObjectTools.objectToMap(other,String.class,String.class);//DataGetter.getStringMap(other);
-            String endTimeStr = paramMap.get("endTime");
-            String startTimeStr = paramMap.get("startTime");
-            String countStr = paramMap.get("count");
+            String endTimeStr = paramMap.get(END_TIME);
+            String startTimeStr = paramMap.get(START_TIME);
+            String countStr = paramMap.get(COUNT);
             if (startTimeStr != null) startTime = Long.parseLong(startTimeStr);
             if (endTimeStr != null) endTime = Long.parseLong(endTimeStr);
             if (countStr != null) count = Integer.parseInt(countStr);

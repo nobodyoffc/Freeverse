@@ -14,6 +14,7 @@ import constants.CodeMessage;
 import constants.UpStrings;
 import crypto.Hash;
 import tools.Hex;
+import tools.IdNameTools;
 import tools.JsonTools;
 import tools.StringTools;
 import tools.http.AuthType;

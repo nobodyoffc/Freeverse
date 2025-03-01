@@ -1,6 +1,6 @@
 package clients;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import appTools.Menu;
 import appTools.Shower;
 import constants.Constants;
@@ -131,7 +131,7 @@ public class FeipClient {
                 master = KeyTools.pubKeyToFchAddr(master);
             }else {
                 if (KeyTools.isValidFchAddr(master)){
-                    CidInfo masterInfo = apipClient.cidInfoById(master);
+                    Cid masterInfo = apipClient.cidInfoById(master);
                     if(masterInfo==null){
                         System.out.println("Failed to get CID info.");
                         return;

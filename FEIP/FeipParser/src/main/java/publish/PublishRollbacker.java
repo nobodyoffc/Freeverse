@@ -75,7 +75,7 @@ public class PublishRollbacker {
 
 			ProofHistory item = hit.source();
 			if(item.getOp().equals("create")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getProofId());
 			}
@@ -143,7 +143,7 @@ public class PublishRollbacker {
 
 			TokenHistory item = hit.source();
 			if(item.getOp().equals("deploy")) {
-				tokenIdSet.add(item.getTxId());
+				tokenIdSet.add(item.getId());
 			}else {
 				tokenIdSet.add(item.getTokenId());
 			}

@@ -4,11 +4,10 @@ import appTools.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import fch.fchData.Cid;
 import feip.feipData.Service;
 import server.ApipApiNames;
 import fcData.ReplyBody;
-import fch.fchData.Address;
-import feip.feipData.Cid;
 import initial.Initiator;
 import tools.http.AuthType;
 import server.HttpRequestChecker;
@@ -23,7 +22,6 @@ import java.util.Map;
 
 import static apip.apipData.FcQuery.PART;
 import static constants.FieldNames.*;
-import static constants.IndicesNames.ADDRESS;
 
 @WebServlet(name = ApipApiNames.FID_CID_SEEK, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.FID_CID_SEEK)
 public class FidCidSeek extends HttpServlet {
@@ -63,15 +61,15 @@ public class FidCidSeek extends HttpServlet {
         }
 
         String finalValue = value;
-        SearchResponse<Address> result = esClient.search(s -> s.index(ADDRESS).query(q -> q.wildcard(w -> w.field(FID)
+        SearchResponse<Cid> result = esClient.search(s -> s.index(CID).query(q -> q.wildcard(w -> w.field(ID)
                 .caseInsensitive(true)
-                .value("*" + finalValue + "*"))), Address.class);
+                .value("*" + finalValue + "*"))), Cid.class);
 
         if (result.hits().hits().size() > 0) {
-            for (Hit<Address> hit : result.hits().hits()) {
-                Address addr = hit.source();
+            for (Hit<Cid> hit : result.hits().hits()) {
+                Cid addr = hit.source();
                 if(addr==null) continue;
-                addrCidsMap.put(addr.getFid(),new String[0]);
+                addrCidsMap.put(addr.getId(),new String[0]);
             }
         }
 
@@ -86,7 +84,7 @@ public class FidCidSeek extends HttpServlet {
                             .value("*" + finalValue + "*")))
                     .should(sh -> sh
                         .wildcard(w -> w
-                            .field(FID)
+                            .field(ID)
                             .caseInsensitive(true)
                             .value("*" + finalValue + "*")))
                 )
@@ -95,7 +93,7 @@ public class FidCidSeek extends HttpServlet {
             for (Hit<Cid> hit : result1.hits().hits()) {
                 Cid cid = hit.source();
                 if(cid==null) continue;
-                addrCidsMap.put(cid.getFid(), cid.getUsedCids());
+                addrCidsMap.put(cid.getId(), cid.getUsedCids());
             }
         }
         replier.setGot((long) addrCidsMap.size());

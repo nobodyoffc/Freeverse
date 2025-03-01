@@ -81,7 +81,7 @@ public class CashValid extends HttpServlet {
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
         if (requestBody != null && requestBody.getFcdsl() != null) {
             if (requestBody.getFcdsl().getOther() == null) {
-                ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME, false, CASH_ID, true, null, null);
+                ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME, false, ID, true, null, null);
                 Fcdsl fcdsl;
                 fcdsl = requestBody.getFcdsl();
                 if (fcdsl.getFilter() == null)

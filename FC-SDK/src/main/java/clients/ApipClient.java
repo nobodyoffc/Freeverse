@@ -1,6 +1,7 @@
 package clients;
 
 import apip.apipData.*;
+import fch.fchData.Cid;
 import appTools.Menu;
 import constants.*;
 import crypto.Decryptor;
@@ -61,14 +62,14 @@ public class ApipClient extends Client {
         }
 
         String fid = priKeyToFid(priKey);
-        CidInfo cidInfo = cidInfoById(fid);
-        if (cidInfo == null) {
+        Cid cid = cidInfoById(fid);
+        if (cid == null) {
             System.out.println("This fid was never seen on chain. Send some fch to it.");
             Menu.anyKeyToContinue(br);
             return;
         }
-        if (cidInfo.getMaster() != null) {
-            System.out.println("The master of " + fid + " is " + cidInfo.getMaster());
+        if (cid.getMaster() != null) {
+            System.out.println("The master of " + fid + " is " + cid.getMaster());
             return;
         }
         if (Inputer.askIfYes(br, "Assign the master for " + fid + "?"))
@@ -111,7 +112,7 @@ public class ApipClient extends Client {
         Map<String, String> otherMap = new HashMap<>() ;
         otherMap.put(RAW_TX,txHex);
         Object data = requestByFcdslOther(SN_18, VERSION_1, BROADCAST_TX, otherMap, authType, requestMethod);
-        return data==null ? null:(String)data;
+        return (String)data;
     }
 
     public String decodeTx(String txHex, RequestMethod requestMethod, AuthType authType){
@@ -125,7 +126,7 @@ public class ApipClient extends Client {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(fid);
         fcdsl.addNewFilter().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
-        fcdsl.addSort(CD,ASC).addSort(CASH_ID,ASC);
+        fcdsl.addSort(CD,ASC).addSort(ID,ASC);
         if(size>0)fcdsl.addSize(size);
         if(after!=null)fcdsl.addAfter(after);
         Object data = requestJsonByFcdsl(SN_2, VERSION_1, CASH_SEARCH, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, RequestMethod.POST);
@@ -144,7 +145,7 @@ public class ApipClient extends Client {
     public String getPubKey(String fid, RequestMethod requestMethod, AuthType authType) {
         Object data = requestByIds(requestMethod,SN_2, VERSION_1, FID_BY_IDS, authType, fid);
         try {
-            return data == null ? null : objectToMap(data, String.class, Address.class).get(fid).getPubKey();
+            return data == null ? null : objectToMap(data, String.class, fch.fchData.Cid.class).get(fid).getPubKey();
         }catch (Exception e){
             return null;
         }
@@ -213,13 +214,13 @@ public class ApipClient extends Client {
         Object data = requestJsonByFcdsl(SN_18, VERSION_1, GET_UTXO, fcdsl,authType, sessionKey, requestMethod);
         return objectToList(data,Utxo.class);
     }
-    public Map<String, Address> fidByIds(RequestMethod requestMethod, AuthType authType, String... ids){
+    public Map<String, fch.fchData.Cid> fidByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod, SN_2, VERSION_1, FID_BY_IDS, authType, ids);
-        return objectToMap(data,String.class,Address.class);
+        return objectToMap(data,String.class, fch.fchData.Cid.class);
     }
-    public List<Address> fidSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+    public List<fch.fchData.Cid> fidSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_2, VERSION_1, FID_SEARCH,fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,Address.class);
+        return objectToList(data, fch.fchData.Cid.class);
     }
     public Map<String, OpReturn> opReturnByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod, SN_2, VERSION_1, OP_RETURN_BY_IDS, authType, ids);
@@ -336,40 +337,40 @@ public class ApipClient extends Client {
     }
 
     //Identity APIs
-    public Map<String,CidInfo> cidInfoByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+    public Map<String, Cid> cidInfoByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
         Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_INFO_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,CidInfo.class);
+        return ObjectTools.objectToMap(data,String.class, Cid.class);
     }
-    public CidInfo cidInfoById(String id) {
-        Map<String,CidInfo> map = cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
+    public Cid cidInfoById(String id) {
+        Map<String, Cid> map = cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
         try {
             return map.get(id);
         }catch (Exception ignore){
             return null;
         }
     }
-    public CidInfo getFidCid(String id) {
+    public Cid getFidCid(String id) {
         Map<String,String> paramMap = new HashMap<>();
         paramMap.put(ID,id);
         Object data = requestJsonByUrlParams(SN_3, VERSION_1, GET_FID_CID,paramMap,AuthType.FREE);
-        return objectToClass(data,CidInfo.class);
+        return objectToClass(data, Cid.class);
     }
 
     public Map<String, String> getFidCidMap(List<String> fidList) {
         fidList.remove(null);
-        Map<String, CidInfo> cidInfoMap = this.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fidList.toArray(new String[0]));
+        Map<String, Cid> cidInfoMap = this.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fidList.toArray(new String[0]));
         if (cidInfoMap == null) return null;
         Map<String, String> fidCidMap = new HashMap<>();
         for (String fid:cidInfoMap.keySet()) {
-            CidInfo cidInfo = cidInfoMap.get(fid);
-            if(cidInfo!=null)fidCidMap.put(fid,cidInfo.getCid());
+            Cid cid = cidInfoMap.get(fid);
+            if(cid !=null)fidCidMap.put(fid, cid.getCid());
         }
         return fidCidMap;
     }
 
-    public List<CidInfo> cidInfoSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+    public List<Cid> cidInfoSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_3, VERSION_1, CID_INFO_SEARCH,fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,CidInfo.class);
+        return objectToList(data, Cid.class);
     }
     public List<CidHist> cidHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         fcdsl = Fcdsl.makeTermsFilter(fcdsl, SN, "3");
@@ -381,14 +382,14 @@ public class ApipClient extends Client {
 
     public Map<String, String[]> fidCidSeek(String searchStr, RequestMethod requestMethod, AuthType authType){
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewPart().addNewFields(FID,CID).addNewValue(searchStr);
+        fcdsl.addNewQuery().addNewPart().addNewFields(ID,CID).addNewValue(searchStr);
         Object data = requestJsonByFcdsl(SN_3, VERSION_1, FID_CID_SEEK,fcdsl, authType,sessionKey, requestMethod);
         return objectToMap(data,String.class,String[].class);
     }
 
     public Map<String, String[]> fidCidSeek(String fid_or_cid){
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewPart().addNewFields(FID,CID).addNewValue(fid_or_cid);
+        fcdsl.addNewQuery().addNewPart().addNewFields(ID,CID).addNewValue(fid_or_cid);
         Map<String,String> map = new HashMap<>();
         map.put(PART,fid_or_cid);
         Object data = requestJsonByUrlParams(SN_3, VERSION_1, FID_CID_SEEK,map, AuthType.FREE);
@@ -742,7 +743,7 @@ public class ApipClient extends Client {
         }
         fcdsl.addSize(size);
 
-        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(Contact_Id,ASC);
+        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(ID,ASC);
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 
@@ -855,7 +856,7 @@ public class ApipClient extends Client {
         }
         fcdsl.addSize(defaultRequestSize);
 
-        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(Mail_Id,ASC);
+        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(ID,ASC);
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 //        return this.mailSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
@@ -1198,7 +1199,7 @@ public class ApipClient extends Client {
         if(data==null)return null;
         return objectToMap(data,String.class,String.class);
     }
-    public CidInfo searchCidOrFid(BufferedReader br) {
+    public Cid searchCidOrFid(BufferedReader br) {
         String choose = chooseFid(br);
         if (choose == null) return null;
         return cidInfoById(choose);
@@ -1247,7 +1248,7 @@ public class ApipClient extends Client {
                     if(cash.isValid() && fid!=null){
                         addingList.add(cash);
                     }else{
-                        removingIdList.add(cash.getCashId());
+                        removingIdList.add(cash.getId());
                     }
                 }
             }
@@ -1256,14 +1257,14 @@ public class ApipClient extends Client {
             }
             if(!removingIdList.isEmpty()){
                 for(String id : removingIdList){
-                    meetList.removeIf(cash -> cash.getCashId().equals(id));
+                    meetList.removeIf(cash -> cash.getId().equals(id));
                 }
             }
         }
     }
     
     @Nullable
-    public <T> Map<String,T> loadOnChainItemByIds(String index, Class<T> tClass, String idFieldName, List<String> ids) {
+    public <T> Map<String,T> loadOnChainItemByIds(String index, Class<T> tClass, List<String> ids) {
         if (ids == null || ids.isEmpty()) return null;
         
         // Create Fcdsl object
@@ -1279,12 +1280,12 @@ public class ApipClient extends Client {
         Map<String,T> resultMap = new HashMap<>();
         for(T data : dataList){
             try {
-                java.lang.reflect.Field field = data.getClass().getDeclaredField(idFieldName);
+                java.lang.reflect.Field field = data.getClass().getDeclaredField(ID);
                 field.setAccessible(true);
                 String id = field.get(data).toString();
                 resultMap.put(id, data);
             } catch (NoSuchFieldException | IllegalAccessException e) {
-                System.out.println("Error accessing " + idFieldName + " field: " + e.getMessage());
+                System.out.println("Error accessing the ID field: " + e.getMessage());
             }
         }
         return resultMap;

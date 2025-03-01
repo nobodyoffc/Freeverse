@@ -6,6 +6,8 @@ import appTools.Starter;
 import appTools.Inputer;
 import appTools.Menu;
 import constants.FieldNames;
+import fch.ParseTools;
+import fch.fchData.Cid;
 import handlers.AccountHandler;
 import handlers.Handler;
 import tools.EsTools;
@@ -13,7 +15,6 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import configure.Configure;
 import server.ApipApiNames;
-import fch.fchData.Address;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.ApipParams;
 import nasa.NaSaRpcClient;
@@ -95,7 +96,7 @@ public class StartApipManager {
 
 		byte[] symKey = settings.getSymKey();
 		service =settings.getService();
-		sid = service.getSid();
+		sid = service.getId();
 		params = ObjectTools.objectToClass(service.getParams(),ApipParams.class);
 
 		//Prepare API clients
@@ -159,12 +160,12 @@ public class StartApipManager {
 	private static void repairAddress() {
 		List<String> addrList = Inputer.inputStringList(br, "Input address list:", 0);
 		try {
-			EsTools.MgetResult<Address> result = EsTools.getMultiByIdList(esClient, ADDRESS, addrList, Address.class);
-			List<Address> addressList = result.getResultList();
+			EsTools.MgetResult<Cid> result = EsTools.getMultiByIdList(esClient, CID, addrList, Cid.class);
+			List<Cid> cidList = result.getResultList();
 
-			addrList = addressList.stream().map(Address::getFid).collect(Collectors.toList());
-			Address.makeAddress(addressList,esClient);
-			BulkResponse bulkResponse = EsTools.bulkWriteList(esClient, ADDRESS, addressList, addrList, Address.class);
+			addrList = cidList.stream().map(Cid::getId).collect(Collectors.toList());
+			ParseTools.makeAddress(cidList,esClient);
+			BulkResponse bulkResponse = EsTools.bulkWriteList(esClient, CID, cidList, addrList, Cid.class);
 			boolean result1;
 			if(bulkResponse!= null)result1 = !bulkResponse.errors();
 			else result1 =  false;

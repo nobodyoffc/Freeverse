@@ -101,13 +101,13 @@ public class MempoolScanner implements Runnable {
     }
 
     private void addTxToRedis(Tx tx,Jedis jedis) {
-        jedis.hset("tx",tx.getTxId(), JsonTools.toNiceJson(tx));
+        jedis.hset("tx",tx.getId(), JsonTools.toNiceJson(tx));
     }
 
     private void addSpendCashesToRedis(List<Cash> inList, Jedis jedis) {
         for(Cash cash:inList){
-            if(jedis.hget(SPEND_CASHES,cash.getCashId())==null) {
-                jedis.hset(SPEND_CASHES, cash.getCashId(), JsonTools.toNiceJson(cash));
+            if(jedis.hget(SPEND_CASHES,cash.getId())==null) {
+                jedis.hset(SPEND_CASHES, cash.getId(), JsonTools.toNiceJson(cash));
             }
             else{
                 log.debug("Double spend : "+ JsonTools.toNiceJson(cash));
@@ -117,7 +117,7 @@ public class MempoolScanner implements Runnable {
 
     private void addNewCashesToRedis(List<Cash> outList, Jedis jedis) {
         for(Cash cash:outList){
-            jedis.hset(NEW_CASHES,cash.getCashId(), JsonTools.toNiceJson(cash));
+            jedis.hset(NEW_CASHES,cash.getId(), JsonTools.toNiceJson(cash));
         }
     }
 
@@ -154,7 +154,7 @@ public class MempoolScanner implements Runnable {
             spendCount++;
             String[] newSpendCashes = new String[spendCashes.length+1];
             System.arraycopy(spendCashes,0,newSpendCashes,0,spendCashes.length);
-            newSpendCashes[newSpendCashes.length-1]=cash.getCashId();
+            newSpendCashes[newSpendCashes.length-1]=cash.getId();
 
             if(txValueMapStr!=null){
                 Type mapType = new TypeToken<Map<String, Long>>(){}.getType();
@@ -204,7 +204,7 @@ public class MempoolScanner implements Runnable {
 
             String[] newIncomeCashes = new String[newCashes.length+1];
             System.arraycopy(newCashes,0,newIncomeCashes,0,newCashes.length);
-            newIncomeCashes[newIncomeCashes.length-1]=cash.getCashId();
+            newIncomeCashes[newIncomeCashes.length-1]=cash.getId();
 
             String txValueMapStr = jedis.hget(fid, TX_VALUE_MAP);
             if(txValueMapStr!=null){

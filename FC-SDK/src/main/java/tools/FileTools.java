@@ -1,7 +1,6 @@
 package tools;
 
 import crypto.Hash;
-import fcData.IdNameTools;
 
 import feip.feipData.Service;
 import org.jetbrains.annotations.NotNull;

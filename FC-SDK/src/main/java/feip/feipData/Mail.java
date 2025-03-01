@@ -1,7 +1,8 @@
 package feip.feipData;
 
-public class Mail {
-	private String mailId;
+import fcData.FcObject;
+
+public class Mail extends FcObject {
     private String alg;
 	private String cipher;
 	private String cipherSend;
@@ -58,12 +59,6 @@ public class Mail {
 	}
 	public void setActive(Boolean active) {
 		this.active = active;
-	}
-	public String getMailId() {
-		return mailId;
-	}
-	public void setMailId(String mailId) {
-		this.mailId = mailId;
 	}
 	public String getSender() {
 		return sender;

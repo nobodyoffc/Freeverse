@@ -449,7 +449,7 @@ public class HttpRequestChecker {
             data = """
                     A signature are requested:
                     \tRequest header:
-                    \t\tFid = <Freecash address of the requester>
+                    \t\tFid = <Freecash cid of the requester>
                     \t\tSign = <The signature of request body signed by the private key of the FID.>
                     \tRequest body:{"url":"%s","nonce":"%d","time":"%d"}"""
                     .formatted(urlHead+ ApipApiNames.VERSION_1 + ApipApiNames.SIGN_IN,nonce,timestamp);

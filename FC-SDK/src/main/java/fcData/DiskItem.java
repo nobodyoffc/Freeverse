@@ -1,6 +1,6 @@
 package fcData;
 
-public class DiskItem {
+public class DiskItem extends FcObject{
     private String did;
     private Long since;
     private Long expire;

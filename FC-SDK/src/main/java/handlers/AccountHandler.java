@@ -19,7 +19,7 @@ import co.elastic.clients.json.JsonData;
 import constants.*;
 import crypto.KeyTools;
 import fcData.ReplyBody;
-import fcData.IdNameTools;
+import tools.IdNameTools;
 import fch.BlockFileTools;
 import fch.ParseTools;
 import fch.fchData.Block;
@@ -54,10 +54,8 @@ import java.util.stream.Collectors;
 import static appTools.Settings.DEALER_MIN_BALANCE;
 import static appTools.Settings.LISTEN_PATH;
 import static constants.Constants.DEFAULT_CASH_LIST_SIZE;
-import static constants.FieldNames.BIRTH_HEIGHT;
-import static constants.FieldNames.CASH_ID;
+import static constants.FieldNames.*;
 import static constants.Strings.VIA;
-import static constants.FieldNames.BALANCE;
 
 public class AccountHandler extends Handler {
     final static Logger log = LoggerFactory.getLogger(AccountHandler.class);
@@ -143,7 +141,7 @@ public class AccountHandler extends Handler {
         this.br = talkServer.getBr();
         this.mainFid = talkServer.getDealer();
         this.priKey = talkServer.getDealerPriKey();
-        this.sid = talkServer.getService().getSid();
+        this.sid = talkServer.getService().getId();
         this.apipClient = talkServer.getApipClient();
         this.cashHandler = talkServer.getCashHandler();
         this.jedisPool = talkServer.getJedisPool();
@@ -222,7 +220,7 @@ public class AccountHandler extends Handler {
         this.br = settings.getBr();
         this.mainFid = settings.getMainFid();
         this.priKey = Client.decryptPriKey(settings.getMyPriKeyCipher(),settings.getSymKey());
-        this.sid = settings.getService().getSid();
+        this.sid = settings.getService().getId();
         this.dbPath = settings.getDbDir();
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
@@ -349,7 +347,7 @@ public class AccountHandler extends Handler {
         this.br = br;
         this.mainFid = mainFid;
         this.priKey = Client.decryptPriKey(mainFidPriKeyCipher,symKey);
-        this.sid = service.getSid();
+        this.sid = service.getId();
         this.apipClient = apipClient;
         this.cashHandler = cashHandler;
         this.jedisPool = jedisPool;
@@ -379,7 +377,7 @@ public class AccountHandler extends Handler {
         consumeViaShare = Double.parseDouble( consumeViaShareStr);
 
         // Initialize storage and save balance settings
-        this.accountDB = useRedis ? new AccountDB(null, service.getSid(), dbPath) : new AccountDB(mainFid, service.getSid(), dbPath);
+        this.accountDB = useRedis ? new AccountDB(null, service.getId(), dbPath) : new AccountDB(mainFid, service.getId(), dbPath);
         // Add dealer min balance input logic
         if(this.accountDB.getDealerMinBalance()!=null) {
             this.dealerMinBalance = this.accountDB.getDealerMinBalance();
@@ -777,7 +775,7 @@ public class AccountHandler extends Handler {
                 accountDB.setLastHeight(newHeight);
                 Block block = BlockFileTools.getBlockByHeight(esClient, newHeight);
                 if (block != null) {
-                    accountDB.setLastBlockId(block.getBlockId());
+                    accountDB.setLastBlockId(block.getId());
                 }
                 
                 // Clear last income and expense to force rescan from new height
@@ -1127,7 +1125,7 @@ public class AccountHandler extends Handler {
                     if((lastIncome==null|| lastIncome.isEmpty()) && startHeight!=null) {
                         fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
                     }
-                    fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(FieldNames.CASH_ID, Values.ASC);
+                    fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(ID, Values.ASC);
                     fcdsl.addSize(DEFAULT_CASH_LIST_SIZE);
                     if (lastIncome!=null && !lastIncome.isEmpty()) {
                         fcdsl.addAfter(lastIncome);
@@ -1159,7 +1157,7 @@ public class AccountHandler extends Handler {
                     soList.add(so1);
 
                     FieldSort fs2 = FieldSort.of(f -> f
-                        .field(CASH_ID)
+                        .field(ID)
                         .order(SortOrder.Asc));
                     SortOptions so2 = SortOptions.of(s -> s.field(fs2));
                     soList.add(so2);
@@ -1238,7 +1236,7 @@ public class AccountHandler extends Handler {
                     accountDB.setLastBlockId(lastBlockId);
                 }
                 // Display using map values instead of list
-                Shower.showDataTable("New Incomes", new ArrayList<>(newIncomeMap.values()), 0);
+                Shower.showDataTable("New Incomes", new ArrayList<>(newIncomeMap.values()), 0, true);
             }
 
             if(!userFidValueMap.isEmpty()){
@@ -1263,14 +1261,14 @@ public class AccountHandler extends Handler {
             newOrderCasheList.add(cash);
             // Create new income record
             Income income = new Income(
-                cash.getCashId(),
+                cash.getId(),
                 cash.getIssuer(),
                 cash.getValue(),
                 cash.getBirthTime(),
                 cash.getBirthHeight()
             );
 
-            newIncomeMap.put(cash.getCashId(), income);
+            newIncomeMap.put(cash.getId(), income);
 
             // Update user balance
             userFidValueMap.merge(cash.getIssuer(), cash.getValue(), Long::sum);
@@ -1281,7 +1279,7 @@ public class AccountHandler extends Handler {
         if(newCashes==null || newCashes.isEmpty()) return;
         Map<String,String> txIdCashIdMap = new HashMap<>();
         for(Cash cash:newCashes){
-            txIdCashIdMap.put(cash.getBirthTxId(), cash.getCashId());
+            txIdCashIdMap.put(cash.getBirthTxId(), cash.getId());
         }
         Map<String, OpReturn> opReturnMap;
         if (apipClient != null) {
@@ -1348,7 +1346,7 @@ public class AccountHandler extends Handler {
                 if((lastExpense==null || lastExpense.isEmpty()) && startHeight!=null) {
                     fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
                 }
-                fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(FieldNames.CASH_ID, Values.ASC);
+                fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(FieldNames.ID, Values.ASC);
                 fcdsl.addSize(DEFAULT_CASH_LIST_SIZE);
                 if (lastExpense!=null && !lastExpense.isEmpty()) {
                     fcdsl.addAfter(lastExpense);
@@ -1363,14 +1361,14 @@ public class AccountHandler extends Handler {
                 for (Cash cash : newCashes) {
                     // Create new expense record
                     Expense expense = new Expense(
-                        cash.getCashId(),
+                        cash.getId(),
                         cash.getOwner(),
                         cash.getValue(),
                         cash.getBirthTime(),
                         cash.getBirthHeight()
                     );
                     
-                    newExpenseMap.put(cash.getCashId(), expense);
+                    newExpenseMap.put(cash.getId(), expense);
                 }
             }else if (esClient!=null){
                 try {
@@ -1384,7 +1382,7 @@ public class AccountHandler extends Handler {
                     soList.add(so1);
 
                     FieldSort fs2 = FieldSort.of(f -> f
-                        .field(CASH_ID)
+                        .field(ID)
                         .order(SortOrder.Asc));
                     SortOptions so2 = SortOptions.of(s -> s.field(fs2));
                     soList.add(so2);
@@ -1442,14 +1440,14 @@ public class AccountHandler extends Handler {
                     for (Cash cash : newCashes) {
                         // Create new expense record
                         Expense expense = new Expense(
-                            cash.getCashId(),
+                            cash.getId(),
                             cash.getOwner(),
                             cash.getValue(),
                             cash.getBirthTime(),
                             cash.getBirthHeight()
                         );
                         
-                        newExpenseMap.put(cash.getCashId(), expense);
+                        newExpenseMap.put(cash.getId(), expense);
                     }
                 } catch (IOException e) {
                     log.error("Error searching ES for cashes", e);
@@ -1474,7 +1472,7 @@ public class AccountHandler extends Handler {
                 accountDB.setLastBlockId(lastBlockId);
             }
             // Display using map values instead of list
-            Shower.showDataTable("New Expenses", new ArrayList<>(newExpenseMap.values()), 0);
+            Shower.showDataTable("New Expenses", new ArrayList<>(newExpenseMap.values()), 0, true);
         }
 
         // Update lastExpense in persistent storage
@@ -1913,7 +1911,7 @@ public class AccountHandler extends Handler {
             
             // Only show the table if we have incomes to display
             if (!pageIncomes.isEmpty()) {
-                Shower.showDataTable("Income List (Page " + (currentPage + 1) + "/" + totalPages + ")", pageIncomes, count);
+                Shower.showDataTable("Income List (Page " + (currentPage + 1) + "/" + totalPages + ")", pageIncomes, count, true);
             } else {
                 System.out.println("No income records found on page " + (currentPage + 1));
             }
@@ -1959,7 +1957,7 @@ public class AccountHandler extends Handler {
             
             // Only show the table if we have expenses to display
             if (!pageExpenses.isEmpty()) {
-                Shower.showDataTable("Expense List (Page " + (currentPage + 1) + "/" + totalPages + ")", pageExpenses, count);
+                Shower.showDataTable("Expense List (Page " + (currentPage + 1) + "/" + totalPages + ")", pageExpenses, count, true);
             } else {
                 System.out.println("No expense records found on page " + (currentPage + 1));
             }

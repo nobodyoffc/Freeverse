@@ -44,7 +44,7 @@ public class TeamOtherPersons extends HttpServlet {
         Map<String, Team> dataMap = new HashMap<>();
         for(Team team:meetList) {
             team.setMembers(null);
-            dataMap.put(team.getTid(),team);
+            dataMap.put(team.getId(),team);
         }
         fcdslRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
     }

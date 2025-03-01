@@ -1,7 +1,9 @@
 package feip.feipData;
 
-public class Nid {
-	private String nid;
+import fcData.FcObject;
+
+public class Nid extends FcObject {
+	//nid
     private String name;
 	private String desc;
 	private String oid;
@@ -12,14 +14,6 @@ public class Nid {
 	private Long lastTime;
 	private Long lastHeight;
 	private Boolean active;
-
-	public String getNid() {
-		return nid;
-	}
-
-	public void setNid(String nid) {
-		this.nid = nid;
-	}
 
 	public String getName() {
 		return name;

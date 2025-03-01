@@ -50,7 +50,7 @@ public class ApiProvider {
     public ApiProvider() {}
     public boolean fromFcService(Service service, Class<?extends Params> tClass) {
         if(service==null)return false;
-        this.id =service.getSid();
+        this.id =service.getId();
         this.name = service.getStdName();
         Params params = Params.getParamsFromService(service, tClass);
         if(params==null) return false;
@@ -78,7 +78,7 @@ public class ApiProvider {
     public static ApiProvider apiProviderFromFcService(Service service, Service.ServiceType type) {
         if(service==null)return null;
         ApiProvider apiProvider = new ApiProvider();
-        apiProvider.setId(service.getSid());
+        apiProvider.setId(service.getId());
         Params params = null;
         switch (type){
             case APIP -> params = Params.getParamsFromService(service, ApipParams.class);
@@ -144,7 +144,7 @@ public class ApiProvider {
         apiParams = (Params) service.getParams();
         System.out.println("Got the service:");
         JsonTools.printJson(service);
-        id = service.getSid();
+        id = service.getId();
         name = service.getStdName();
         owner = service.getOwner();
         protocols = service.getProtocols();
@@ -293,7 +293,7 @@ public class ApiProvider {
 
                     if(replier==null||replier.getData()==null)return;
                     service = (Service) replier.getData();
-                    this.id=service.getSid();
+                    this.id=service.getId();
                     if(service.getParams()!=null)
                         apiParams = (ApipParams) service.getParams();
                     if(service.getUrls().length>0)

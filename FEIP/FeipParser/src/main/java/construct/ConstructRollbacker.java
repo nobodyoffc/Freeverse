@@ -69,7 +69,7 @@ public class ConstructRollbacker {
 			
 			ProtocolHistory item = hit.source();
 			if(item.getOp().equals("publish")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getPid());
 			}
@@ -142,7 +142,7 @@ public class ConstructRollbacker {
 			
 			ServiceHistory item = hit.source();
 			if(item.getOp().equals("publish")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getSid());
 			}
@@ -203,7 +203,7 @@ public class ConstructRollbacker {
 			
 			AppHistory item = hit.source();
 			if(item.getOp().equals("publish")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getAid());
 			}
@@ -264,7 +264,7 @@ public class ConstructRollbacker {
 			
 			CodeHistory item = hit.source();
 			if(item.getOp().equals("publish")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getCodeId());
 			}

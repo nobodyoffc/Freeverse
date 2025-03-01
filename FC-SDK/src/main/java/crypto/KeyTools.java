@@ -1212,4 +1212,9 @@ public class KeyTools {
 //            return getPubKey(fid, sessionHandler, talkIdHandler,contactHandler, apipClient);
 //        }
 //    }
+
+//    public static String pubKeyToBchAddr(String a) {
+//        byte[] pubKey = Hex.decode(a);
+//        return CashAddress.createCashAddr(pubKey);
+//    }
 }

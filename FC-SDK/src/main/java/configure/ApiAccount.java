@@ -9,7 +9,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import crypto.*;
 import fcData.ReplyBody;
-import fcData.IdNameTools;
+import tools.IdNameTools;
 import fch.ParseTools;
 import fch.TxCreator;
 import fch.fchData.Cash;
@@ -429,7 +429,7 @@ public class ApiAccount {
             apiAccount.inputApiUrl(br);
             System.out.println("Request the service information...");
             Service service = getService(apiAccount.apiUrl);
-            apiAccount.setProviderId(service.getSid());
+            apiAccount.setProviderId(service.getId());
 
             revised = true;
         }
@@ -470,7 +470,7 @@ public class ApiAccount {
             System.out.println("Get APIP service wrong.");
             return null;
         }
-        apiAccount.setProviderId(service.getSid());
+        apiAccount.setProviderId(service.getId());
         apiAccount.setService(service);
         ApipParams serviceParams1 = ApipParams.fromObject(service.getParams());
         apiAccount.setApipParams(serviceParams1);
@@ -824,7 +824,7 @@ public class ApiAccount {
         log.debug("TxId: " + result);
         System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getDealer() + ". \nWait for the confirmation for a few minutes...");
 
-        waitConfirmation(cashList.get(0).getCashId(), apipClient);
+        waitConfirmation(cashList.get(0).getId(), apipClient);
         BytesTools.clearByteArray(priKey);
         if(payments==null)payments=new HashMap<>();
         payments.put(result,payValue);
@@ -894,7 +894,7 @@ public class ApiAccount {
             }
         }catch (Exception ignore){}
 
-        providerId = service.getSid();
+        providerId = service.getId();
         if(service.getUrls()!=null && service.getUrls().length>0)
             apiProvider.setOrgUrl(service.getUrls()[0]);
         ApipParams apipParams = (ApipParams) service.getParams();
@@ -920,7 +920,7 @@ public class ApiAccount {
         try{
             this.minPayment = Double.valueOf(this.serviceParams.getMinPayment());
         }catch (Exception ignore){}
-        this.providerId = service.getSid();
+        this.providerId = service.getId();
         this.apiUrl = apiProvider.getApiUrl();
         if(client!=null){
             Client client1 = (Client) client;
@@ -938,7 +938,7 @@ public class ApiAccount {
         }
         if (this.sessionKey==null) {
             log.debug("Failed decrypt sessionKey for "+type+" service.");
-            System.out.println("Failed decrypt sessionKey for API account"+this.getId()+" of API provider "+service.getSid()+".");
+            System.out.println("Failed decrypt sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
             System.out.println("Check the API account"+this.getId()+". It might to be reset.");
             return null;
         }

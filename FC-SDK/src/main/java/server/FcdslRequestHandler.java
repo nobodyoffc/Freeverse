@@ -1,6 +1,7 @@
 package server;
 
 import apip.apipData.*;
+import fch.fchData.Cid;
 import appTools.Settings;
 import feip.feipData.Service;
 import tools.EsTools;
@@ -22,7 +23,6 @@ import constants.CodeMessage;
 import fcData.FidTxMask;
 import fcData.ReplyBody;
 import fch.fchData.*;
-import feip.feipData.Cid;
 import tools.ObjectTools;
 import tools.http.AuthType;
 
@@ -34,8 +34,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static constants.FieldNames.*;
-import static constants.IndicesNames.ADDRESS;
 import static constants.IndicesNames.CASH;
+import static constants.IndicesNames.CID;
 import static constants.Strings.HEIGHT;
 
 public class FcdslRequestHandler {
@@ -303,7 +303,7 @@ public class FcdslRequestHandler {
             }
 
             //Set default sort.
-            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, BLOCK_ID, true, null, null);
+            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, ID, true, null, null);
 
             //Request
             String index = IndicesNames.BLOCK_HAS;
@@ -315,7 +315,7 @@ public class FcdslRequestHandler {
 
             List<String> idList = new ArrayList<>();
             for (BlockHas blockHas : blockHasList) {
-                idList.add(blockHas.getBlockId());
+                idList.add(blockHas.getId());
             }
 
             List<Block> blockList;
@@ -358,7 +358,6 @@ public class FcdslRequestHandler {
 
     public void doCidInfoByIdsRequestHttp(ArrayList<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
         //Check authorization
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
 
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
         boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
@@ -373,38 +372,38 @@ public class FcdslRequestHandler {
             return;
         }
 
-        List<Address> meetAddrList;
-        List<Cid> meetCidList;
+        List<fch.fchData.Cid> meetAddrList;
+//        List<Cid> meetCidList;
 
         FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replyBody, settings);
-        meetAddrList = fcdslRequestHandler.doRequest(ADDRESS, sort, Address.class);
+        meetAddrList = fcdslRequestHandler.doRequest(CID, sort, fch.fchData.Cid.class);
 
         if (meetAddrList == null) return;
 
-        EsTools.MgetResult<Cid> multiResult;
-        try {
-            multiResult = EsTools.getMultiByIdList(esClient, CID, idList, Cid.class);
-        } catch (Exception e) {
-            replyBody.replyOtherErrorHttp("Reading ES wrong.",null);
-            return;
+//        EsTools.MgetResult<Cid> multiResult;
+//        try {
+//            multiResult = EsTools.getMultiByIdList(esClient, CID, idList, Cid.class);
+//        } catch (Exception e) {
+//            replyBody.replyOtherErrorHttp("Reading ES wrong.",null);
+//            return;
+//        }
+//        meetCidList = multiResult.getResultList();
+//
+//        List<Cid> cidList = Cid.mergeCidInfoList(meetAddrList, meetCidList);
+//
+//        if (cidList.size() == 0) {
+//            replyBody.replyHttp(CodeMessage.Code1011DataNotFound, null);
+//            return;
+//        }
+
+        for (Cid cid : meetAddrList) {
+            cid.reCalcWeight();
         }
-        meetCidList = multiResult.getResultList();
 
-        List<CidInfo> cidInfoList = CidInfo.mergeCidInfoList(meetAddrList, meetCidList);
-
-        if (cidInfoList.size() == 0) {
-            replyBody.replyHttp(CodeMessage.Code1011DataNotFound, null);
-            return;
-        }
-
-        for (CidInfo cidInfo : cidInfoList) {
-            cidInfo.reCalcWeight();
-        }
-
-        Map<String, CidInfo> meetMap;
-        meetMap= ObjectTools.listToMap(cidInfoList,FID);
-        replyBody.setGot((long) cidInfoList.size());
-        replyBody.setTotal((long) cidInfoList.size());
+        Map<String, Cid> meetMap;
+        meetMap= ObjectTools.listToMap(meetAddrList,ID);
+        replyBody.setGot((long) meetAddrList.size());
+        replyBody.setTotal((long) meetAddrList.size());
         replyBody.replySingleDataSuccessHttp(meetMap, response);
     }
 
@@ -470,7 +469,6 @@ public class FcdslRequestHandler {
     public void doCidInfoSearchRequest(ArrayList<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
         ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
         try {
             HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
             boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
@@ -480,51 +478,25 @@ public class FcdslRequestHandler {
             replyBody = httpRequestChecker.getReplyBody();
             requestBody = httpRequestChecker.getRequestBody();
             List<Cid> meetCidList=null;
-            List<Address> meetAddrList=null;
-            List<CidInfo> cidInfoList = new ArrayList<>();
-            List<String> idList;
 
             try{
                 FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
-                meetAddrList = fcdslRequestHandler.doRequest(ADDRESS, sort, Address.class);
+                meetCidList = fcdslRequestHandler.doRequest(CID, sort, fch.fchData.Cid.class);
             }catch(Exception ignored){
             }
 
-            if(meetAddrList==null)
-                try{
-                    FcdslRequestHandler fcdslRequestHandlerCid = new FcdslRequestHandler(replier, settings);
-                    meetCidList = fcdslRequestHandlerCid.doRequest(CID, sort, Cid.class);
-                }catch(Exception ignored){
-                }
 
-            if(meetAddrList!=null){
-                idList = meetAddrList.stream().map(Address::getFid).collect(Collectors.toList());
-                EsTools.MgetResult<Cid> result = EsTools.getMultiByIdList(esClient, CID, idList, Cid.class);
-                meetCidList = result.getResultList();
-                cidInfoList = CidInfo.mergeCidInfoList(meetAddrList, meetCidList);
-            }else if(meetCidList!=null){
-                idList = meetCidList.stream().map(Cid::getFid).collect(Collectors.toList());
-                EsTools.MgetResult<Address> result = EsTools.getMultiByIdList(esClient, ADDRESS, idList, Address.class);
-                meetAddrList = result.getResultList();
-                cidInfoList = CidInfo.mergeCidInfoList(meetAddrList, meetCidList);
-            }else {
+            if (meetCidList==null || meetCidList.size() == 0) {
                 replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
                 return;
             }
 
-
-            if (cidInfoList.size() == 0) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
-                return;
+            for (Cid cid : meetCidList) {
+                cid.reCalcWeight();
             }
 
-            for (CidInfo cidInfo : cidInfoList) {
-                cidInfo.reCalcWeight();
-            }
-
-            replier.setGot((long) cidInfoList.size());
-            replier.setTotal((long) cidInfoList.size());
-            replier.replySingleDataSuccessHttp(cidInfoList, response);
+            replier.setGot((long) meetCidList.size());
+            replier.reply0SuccessHttp(meetCidList, response);
         } catch (Exception ignore) {
         }
     }
@@ -560,7 +532,7 @@ public class FcdslRequestHandler {
             }
 
             //Set default sort.
-            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, TX_ID, true, null, null);
+            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, ID, true, null, null);
 
             //Request
             String index = IndicesNames.TX_HAS;
@@ -574,7 +546,7 @@ public class FcdslRequestHandler {
 
             List<String> idList = new ArrayList<>();
             for (TxHas txHas : txHasList) {
-                idList.add(txHas.getTxId());
+                idList.add(txHas.getId());
             }
 
             List<Tx> txList;
@@ -621,7 +593,7 @@ public class FcdslRequestHandler {
             requestBody = httpRequestChecker.getRequestBody();
             if (ifForMapWithoutIds(isForMap, replier, response, httpRequestChecker)) return;
             //Set default sort.
-            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, TX_ID, true, null, null);
+            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, ID, true, null, null);
 
             //Request
             String index = IndicesNames.TX_HAS;
@@ -634,7 +606,7 @@ public class FcdslRequestHandler {
 
             List<String> idList = new ArrayList<>();
             for (TxHas txHas : txHasList) {
-                idList.add(txHas.getTxId());
+                idList.add(txHas.getId());
             }
 
             List<Tx> txList;
@@ -948,30 +920,30 @@ public class FcdslRequestHandler {
         try {
             // First get the current address documents
             List<String> fids = new ArrayList<>(fidBalanceMap.keySet());
-            MgetResponse<Address> response = esClient.mget(m -> m
-                .index(ADDRESS)
+            MgetResponse<fch.fchData.Cid> response = esClient.mget(m -> m
+                .index(CID)
                 .ids(fids), 
-                Address.class
+                fch.fchData.Cid.class
             );
 
             // Prepare bulk update
             List<BulkOperation> operations = new ArrayList<>();
             
-            for (MultiGetResponseItem<Address> item : response.docs()) {
+            for (MultiGetResponseItem<fch.fchData.Cid> item : response.docs()) {
                 if (!item.result().found()) {
                     continue;
                 }
                 
-                Address address = item.result().source();
-                if(address==null)continue;
-                String fid = address.getFid();
+                fch.fchData.Cid cid = item.result().source();
+                if(cid ==null)continue;
+                String fid = cid.getId();
                 Long newBalance = fidBalanceMap.get(fid);
                 
                 if (newBalance != null) {
                     // Create update operation
                     operations.add(new BulkOperation.Builder()
                         .update(u -> u
-                            .index(ADDRESS)
+                            .index(CID)
                             .id(fid)
                             .action(a -> a
                                 .doc(JsonData.of(Map.of("balance", newBalance)))

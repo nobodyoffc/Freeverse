@@ -43,7 +43,7 @@ public class TalkUdpServer {
     public TalkUdpServer(Settings settings, Service service, byte[] accountPriKey, ApipClient apipClient, JedisPool jedisPool) {
         this.settings = settings;
         this.service = service;
-        sid = service.getSid();
+        sid = service.getId();
         talkParams = (TalkParams)service.getParams();
         this.accountPriKey = accountPriKey;
         this.apipClient = apipClient;

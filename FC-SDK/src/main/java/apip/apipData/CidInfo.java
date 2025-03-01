@@ -49,13 +49,13 @@ public class CidInfo {
 
         if (meetCidList != null && !meetCidList.isEmpty()) {
             for (Cid cid : meetCidList) {
-                cidMap.put(cid.getFid(), cid);
+                cidMap.put(cid.getId(), cid);
             }
         }
 
         for (Address addr : meetAddrList) {
             CidInfo cidInfo = new CidInfo();
-            String id = addr.getFid();
+            String id = addr.getId();
             setAddrToCidInfo(addr, cidInfo);
             Cid cid = cidMap.get(id);
             if (cid != null) {
@@ -89,7 +89,7 @@ public class CidInfo {
     }
 
     private static void setAddrToCidInfo(Address addr, CidInfo cidInfo) {
-        cidInfo.setFid(addr.getFid());
+        cidInfo.setFid(addr.getId());
         cidInfo.setBalance(addr.getBalance());
         cidInfo.setBirthHeight(addr.getBirthHeight());
         cidInfo.setBtcAddr(addr.getBtcAddr());
@@ -110,7 +110,7 @@ public class CidInfo {
     }
 
     private static void setCidToCidInfo(Cid cid, CidInfo cidInfo) {
-        cidInfo.setFid(cid.getFid());
+        cidInfo.setFid(cid.getId());
         cidInfo.setCid(cid.getCid());
         cidInfo.setHomepages(cid.getHomepages());
         cidInfo.setHot(cid.getHot());

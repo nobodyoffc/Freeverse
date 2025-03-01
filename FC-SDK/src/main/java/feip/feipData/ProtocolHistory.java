@@ -1,6 +1,8 @@
 package feip.feipData;
 
-public class ProtocolHistory {
+import fcData.FcObject;
+
+public class ProtocolHistory extends FcObject {
 	
 	private String txId;
 	private Long height;
@@ -26,14 +28,6 @@ public class ProtocolHistory {
 	private String closeStatement;
 
 	private String[] waiters;
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
 
 	public Long getHeight() {
 		return height;

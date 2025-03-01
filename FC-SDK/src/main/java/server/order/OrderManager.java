@@ -50,7 +50,7 @@ public class OrderManager {
         this.jedisPool = jedisPool;
         this.counter = counter;
         this.service = service;
-        OrderManager.sid =service.getSid();
+        OrderManager.sid =service.getId();
     }
 
     public void menu(){

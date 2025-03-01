@@ -27,8 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static constants.FieldNames.LAST;
-import static constants.FieldNames.LAST_HEIGHT;
+import static constants.FieldNames.*;
 
 /**
  * This class is a generic handler for all types of FC handlers.
@@ -260,17 +259,21 @@ public class Handler<T>{
             this.isRunning = isRunning;
         }
     
-        protected <T2> List<T2> loadAllOnChainItems(String index, String idField, String sortField, String termField, Long lastHeight, Boolean active, ApipClient apipClient, Class<T2> tClass, BufferedReader br) {
+        protected <T2> List<T2> loadAllOnChainItems(String index, String sortField, String termField, Long lastHeight, Boolean active, ApipClient apipClient, Class<T2> tClass, BufferedReader br, boolean freshLast) {
             if(apipClient==null){
                 System.out.println("No ApipClient is available.");
                 return null;
             }
             List<T2> itemList = new ArrayList<>();
-            Object obj = getMeta(LAST);
-            List<String> last = ObjectTools.objectToList(obj,String.class);
-    
+
+            List<String> last = null;
+            if(freshLast) {
+                Object obj = getMeta(LAST);
+                last = ObjectTools.objectToList(obj, String.class);
+            }
+
             while (true) {
-                List<T2> subSecretList = apipClient.loadSinceHeight(index,idField,sortField,termField,mainFid, lastHeight, ApipClient.DEFAULT_SIZE, last, active,tClass);
+                List<T2> subSecretList = apipClient.loadSinceHeight(index,ID,sortField,termField,mainFid, lastHeight, ApipClient.DEFAULT_SIZE, last, active,tClass);
                 if (subSecretList == null || subSecretList.isEmpty()) break;
                 List<T2> batchChosenList;
                 if(br!=null) {
@@ -283,8 +286,10 @@ public class Handler<T>{
             }
             Long bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
             if(bestHeight==null)bestHeight = apipClient.bestHeight();
-            if(last!=null && !last.isEmpty())putMeta(LAST, last);
-            putMeta(LAST_HEIGHT, bestHeight);
+            if(freshLast) {
+                if (last != null && !last.isEmpty()) putMeta(LAST, last);
+                putMeta(LAST_HEIGHT, bestHeight);
+            }
             return itemList;
         }
     
@@ -590,7 +595,7 @@ public class Handler<T>{
         }
     
         protected void showItemList(String title, List<T> itemList, int beginFrom) {
-            Shower.showDataTable(title, itemList,beginFrom,hideFieldsInListing);
+            Shower.showDataTable(title, itemList,beginFrom,hideFieldsInListing, true);
     }
     protected void opItems(List<T> items, String ask, BufferedReader br){
         System.out.println("To override this method, implement it in the subclass.");
@@ -736,7 +741,7 @@ public class Handler<T>{
     private List<T> chooseItemList(List<T> currentList, int totalDisplayed, BufferedReader br) {
         String title = "Choose Items";
         List<T> chosenItems = new ArrayList<>();
-        Shower.showDataTable(title, currentList, totalDisplayed);
+        Shower.showDataTable(title, currentList, totalDisplayed, true);
 
         System.out.println("Enter item numbers to select (comma-separated), 'a' for all. 'q' to quit, or press Enter for more:");
         String input;
@@ -1017,7 +1022,7 @@ public class Handler<T>{
         }
     }
 
-    public Map<String, Long> getAllOnChainDeleted() {
+    public Map<String, Long> getAllOnChainDeletedRecords() {
         if (localDB == null) return new HashMap<>();
         lock.readLock().lock();
         try {

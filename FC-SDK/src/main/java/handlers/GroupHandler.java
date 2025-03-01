@@ -88,7 +88,7 @@ public class GroupHandler extends Handler {
             return;
         }
         for(Group group : groupList){
-            groupDB.put(Hex.fromHex(group.getGid()), group.toJson().getBytes());
+            groupDB.put(Hex.fromHex(group.getId()), group.toJson().getBytes());
         }
 
         if (!groupList.isEmpty()) {
@@ -215,7 +215,7 @@ public class GroupHandler extends Handler {
         List<Group> chosenGroupList = pullLocalGroupList(true, br);
         if(chosenGroupList==null || chosenGroupList.isEmpty()) return;
         List<String> idList = new ArrayList<>();
-        for(Group group : chosenGroupList) idList.add(group.getGid());
+        for(Group group : chosenGroupList) idList.add(group.getId());
         showGroupList(chosenGroupList,br);
         if(Inputer.askIfYes(br,"Leave all groups?")) {
             String leaveResult = leaveGroups(priKey, myFid, null, idList, apipClient, null);
@@ -226,7 +226,7 @@ public class GroupHandler extends Handler {
     private void handleJoinGroup(byte[] priKey, BufferedReader br) {
         Group chosenGroup = searchAndChooseGroup(apipClient, br);
         if(chosenGroup==null) return;
-        String gid = chosenGroup.getGid();
+        String gid = chosenGroup.getId();
         String joinResult = joinGroup(priKey, myFid, null, gid, apipClient, null);
         if(!Hex.isHexString(joinResult))System.out.println(joinResult);
         else System.out.println("Work done. Check groups a few minutes later.");
@@ -262,18 +262,18 @@ public class GroupHandler extends Handler {
             byte[] priKey, String offLineFid, ApipClient apipClient, BufferedReader br) {
         for(Group group : chosenGroupList) {
             if(isMyGroupList) {
-                System.out.println("You have already joined this group: ["+group.getGid()+"]");
+                System.out.println("You have already joined this group: ["+group.getId()+"]");
                 continue;
             } else {
-                System.out.println("Group: "+ StringTools.omitMiddle(group.getGid(), 15)+" - "+group.getName());
+                System.out.println("Group: "+ StringTools.omitMiddle(group.getId(), 15)+" - "+group.getName());
                 if(!Inputer.askIfYes(br,"Join this group?")) continue;
-                List<String> members = getGroupMembers(group.getGid(),apipClient);
+                List<String> members = getGroupMembers(group.getId(),apipClient);
                 if(members!=null && members.contains(myFid)) {
-                    System.out.println("You are already a member of ["+group.getGid()+"]. ");
+                    System.out.println("You are already a member of ["+group.getId()+"]. ");
                     continue;
                 }
             }
-            String joinResult = joinGroup(priKey,offLineFid,null,group.getGid(),apipClient,null);
+            String joinResult = joinGroup(priKey,offLineFid,null,group.getId(),apipClient,null);
             if(!Hex.isHexString(joinResult))System.out.println(joinResult);
             else System.out.println("Joined ["+group.getName()+"].");
             if(!Inputer.askIfYes(br,"Join next group?")) break;
@@ -288,12 +288,12 @@ public class GroupHandler extends Handler {
         List<String> leaveIdList = new ArrayList<>();
         if (!isMyGroupList) {
             for (Group group : chosenGroupList) {
-                List<String> members = getGroupMembers(group.getGid(), apipClient);
+                List<String> members = getGroupMembers(group.getId(), apipClient);
                 if (members != null && !members.contains(myFid)) {
-                    System.out.println("You are not a member of [" + group.getGid() + "].");
+                    System.out.println("You are not a member of [" + group.getId() + "].");
                     continue;
                 }
-                leaveIdList.add(group.getGid());
+                leaveIdList.add(group.getId());
             }
         }
 
@@ -303,20 +303,20 @@ public class GroupHandler extends Handler {
     public void updateGroups(List<Group> chosenGroupList, boolean isMyGroupList,
             byte[] priKey, String offLineFid, ApipClient apipClient, BufferedReader br) {
         for(Group group : chosenGroupList) {
-            System.out.println("Group: "+ StringTools.omitMiddle(group.getGid(), 15)+" - "+group.getName());
+            System.out.println("Group: "+ StringTools.omitMiddle(group.getId(), 15)+" - "+group.getName());
             if(!Inputer.askIfYes(br,"Update this group?")) continue;
             if(!isMyGroupList) {
-                List<String> members = getGroupMembers(group.getGid(), apipClient);
+                List<String> members = getGroupMembers(group.getId(), apipClient);
                 if(members != null && !members.contains(myFid)) {
-                    System.out.println("You are not a member of [" + group.getGid() + "]. Join it first.");
+                    System.out.println("You are not a member of [" + group.getId() + "]. Join it first.");
                     continue;
                 }
             }
-            if(Inputer.askIfYes(br, "Update " + group.getGid() + "?")) {
+            if(Inputer.askIfYes(br, "Update " + group.getId() + "?")) {
                 long updateCd = group.getCddToUpdate() + 1;
-                System.out.println("Updating [" + group.getGid() + "], " + updateCd + " CD to required.");
+                System.out.println("Updating [" + group.getId() + "], " + updateCd + " CD to required.");
                 if(!Inputer.askIfYes(br, "Update it?")) continue;
-                String updateResult = updateGroup(priKey, offLineFid, null, updateCd, null, group.getGid(), null, null, apipClient);
+                String updateResult = updateGroup(priKey, offLineFid, null, updateCd, null, group.getId(), null, null, apipClient);
                 if(!Hex.isHexString(updateResult))System.out.println(updateResult);
                 else System.out.println("Updated [" + group.getName() + "].");
             }
@@ -387,8 +387,8 @@ public class GroupHandler extends Handler {
         for(Group group : groupList){
             List<Object> valueList = new ArrayList<>();
             valueList.add(
-                group.getGid()!=null && group.getGid().length()>15?
-                StringTools.omitMiddle(group.getGid(), 15):group.getGid()
+                group.getId()!=null && group.getId().length()>15?
+                StringTools.omitMiddle(group.getId(), 15):group.getId()
             );
             valueList.add(group.getMemberNum());
             valueList.add(group.gettCdd());
@@ -398,7 +398,7 @@ public class GroupHandler extends Handler {
             );
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, 0);
+        Shower.showDataTable(title, fields, widths, valueListList, 0, true);
     }
     public void viewGroups(List<Group> chosenGroupMaskList, BufferedReader br) {
         while (true) {
@@ -410,7 +410,7 @@ public class GroupHandler extends Handler {
     }
     public void viewGroupMembers(List<Group> chosenGroupMaskList, ApipClient apipClient, @Nullable BufferedReader br) {
         for(Group group : chosenGroupMaskList){
-            List<String> members = getGroupMembers(group.getGid(),apipClient);
+            List<String> members = getGroupMembers(group.getId(),apipClient);
             System.out.println("Members of ["+group.getName()+"]:");
             System.out.println(members);
             System.out.println();

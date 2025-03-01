@@ -12,6 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
 import tools.BytesTools;
 import tools.Hex;
+import tools.IdNameTools;
 import tools.JsonTools;
 
 import java.security.SecureRandom;
@@ -24,7 +25,7 @@ import static constants.FieldNames.PUB_KEY;
 import static constants.FieldNames.SESSION_KEY;
 import static constants.Values.TRUE;
 
-public class FcSession extends FcEntity {
+public class FcSession extends FcObject {
     private String name;
     private String key;
     private String pubKey;

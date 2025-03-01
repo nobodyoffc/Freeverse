@@ -1,8 +1,10 @@
 package feip.feipData;
 
-public class Proof {
+import fcData.FcObject;
 
-	private String proofId;
+public class Proof extends FcObject {
+
+	private String id;
 	private String title;
 	private String content;
 	private String[] cosignersInvited;
@@ -42,14 +44,6 @@ public class Proof {
 
 	public void setLastTime(Long lastTime) {
 		this.lastTime = lastTime;
-	}
-
-	public String getProofId() {
-		return proofId;
-	}
-
-	public void setProofId(String proofId) {
-		this.proofId = proofId;
 	}
 
 	public String getTitle() {

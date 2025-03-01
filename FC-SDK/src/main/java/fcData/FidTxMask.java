@@ -136,6 +136,6 @@ public class FidTxMask {
             showList.add(String.format("%.2f", mask.getFee()*1000000));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed);
+        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
     }
 }

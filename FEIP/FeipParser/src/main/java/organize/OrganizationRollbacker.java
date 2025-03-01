@@ -64,7 +64,7 @@ public class OrganizationRollbacker {
 			
 			GroupHistory item = hit.source();
 			if(item.getOp().equals("create")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getGid());
 			}
@@ -128,7 +128,7 @@ public class OrganizationRollbacker {
 			
 			TeamHistory item = hit.source();
 			if(item.getOp().equals("create")) {
-				itemSet.add(item.getTxId());
+				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getTid());
 			}

@@ -460,7 +460,7 @@ public class WebhookHandler extends Handler {
             }
             
             // Use the Shower class to display the data
-            Shower.showDataTable(title, webhookRequestBodyList, 0);
+            Shower.showDataTable(title, webhookRequestBodyList, 0, true);
         }
     }
 }

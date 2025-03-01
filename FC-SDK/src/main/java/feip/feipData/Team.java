@@ -1,10 +1,10 @@
 package feip.feipData;
 
+import fcData.FcObject;
 import tools.JsonTools;
 
-public class Team {
+public class Team extends FcObject {
 
-	private String tid;
 	private String owner;
 	private String stdName;
 	private String[] localNames;
@@ -37,12 +37,6 @@ public class Team {
 	}
 	public static Team fromJson(String json){
 		return JsonTools.fromJson(json, Team.class);
-	}
-	public String getTid() {
-		return tid;
-	}
-	public void setTid(String tid) {
-		this.tid = tid;
 	}
 	public String getOwner() {
 		return owner;

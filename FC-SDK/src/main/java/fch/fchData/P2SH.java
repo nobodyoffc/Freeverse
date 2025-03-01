@@ -5,6 +5,7 @@ import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import constants.IndicesNames;
 import crypto.KeyTools;
+import fcData.FcObject;
 import tools.BytesTools;
 
 import java.io.ByteArrayInputStream;
@@ -13,8 +14,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
-public class P2SH {
-	private String fid;
+public class P2SH extends FcObject {
 	private String redeemScript;
 	private Integer m;
 	private Integer n;
@@ -119,18 +119,18 @@ public class P2SH {
 		String[] addrs = addrList.toArray(new String[]{});
 		this.setFids(addrs);
 
-		this.setFid(input.getOwner());
+		this.setId(input.getOwner());
 		this.setBirthHeight(input.getSpendHeight());
 		this.setBirthTime(input.getSpendTime());
 		this.setBirthTxId(input.getBirthTxId());
 
-		esClient.index(i->i.index(IndicesNames.P2SH).id(this.getFid()).document(this));
+		esClient.index(i->i.index(IndicesNames.P2SH).id(this.getId()).document(this));
 	}
 
 	public static P2SH parseP2shRedeemScript(String script) throws IOException {
 		P2SH p2sh = new P2SH();
 
-		p2sh.setFid(KeyTools.scriptToMultiAddr(script));
+		p2sh.setId(KeyTools.scriptToMultiAddr(script));
 		InputStream scriptIs = new ByteArrayInputStream(BytesTools.hexToByteArray(script));
 
 		byte[] b = new byte[1];
@@ -176,14 +176,6 @@ public class P2SH {
 		String[] fids = addrList.toArray(new String[]{});
 		p2sh.setFids(fids);
 		return p2sh;
-	}
-
-	public String getFid() {
-		return fid;
-	}
-
-	public void setFid(String fid) {
-		this.fid = fid;
 	}
 
 	public String getRedeemScript() {

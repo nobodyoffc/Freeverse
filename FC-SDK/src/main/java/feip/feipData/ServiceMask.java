@@ -1,8 +1,9 @@
 package feip.feipData;
 
-public class ServiceMask {
+import fcData.FcObject;
 
-	protected String sid;
+public class ServiceMask extends FcObject {
+
 	protected String stdName;
 	protected String[] types;
 	protected String ver;
@@ -15,7 +16,7 @@ public class ServiceMask {
 
 	public static ServiceMask ServiceToMask(Service service,String dealer){
 		ServiceMask serviceMask = new ServiceMask();
-		serviceMask.setSid(service.getSid());
+		serviceMask.setId(service.getId());
 		serviceMask.setStdName(service.getStdName());
 		serviceMask.setTypes(service.getTypes());
 		serviceMask.setVer(service.getVer());
@@ -25,14 +26,6 @@ public class ServiceMask {
 		serviceMask.settRate(service.gettRate());
 		serviceMask.setDealer(dealer);
 		return serviceMask;
-	}
-
-	public String getSid() {
-		return sid;
-	}
-
-	public void setSid(String sid) {
-		this.sid = sid;
 	}
 
 	public String getStdName() {

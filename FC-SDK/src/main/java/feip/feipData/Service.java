@@ -3,6 +3,7 @@ package feip.feipData;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import constants.FieldNames;
+import fcData.FcObject;
 import feip.feipData.serviceParams.Params;
 import tools.StringTools;
 
@@ -15,9 +16,8 @@ import static constants.FieldNames.SID;
 import static constants.FieldNames.TYPES;
 import static constants.Strings.*;
 
-public class Service {
-
-	protected String sid;
+public class Service extends FcObject {
+//sid
 	protected String stdName;
 	protected String[] localNames;
 	protected String desc;
@@ -54,7 +54,7 @@ public class Service {
 	public static Service fromMap(Map<String, String> map, Class<? extends Params> paramsClass) {
 		Service service = new Service();
 
-		service.sid = map.get(SID);
+		service.id = map.get(ID);
 		service.stdName = map.get(STD_NAME);
 		service.localNames = StringTools.splitString(map.get(LOCAL_NAMES));
 		service.desc = map.get(DESC);
@@ -92,13 +92,7 @@ public class Service {
 	public void setServices(String[] services) {
 		this.services = services;
 	}
-	
-	public String getSid() {
-		return sid;
-	}
-	public void setSid(String sid) {
-		this.sid = sid;
-	}
+
 	public String getStdName() {
 		return stdName;
 	}

@@ -8,18 +8,19 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.google.gson.Gson;
 import crypto.KeyTools;
 import fch.WeightMethod;
-import fch.fchData.Address;
+import fch.fchData.Cid;
 import fch.fchData.OpReturn;
 import feip.feipData.*;
 import startFEIP.StartFEIP;
 import java.io.IOException;
 import java.util.*;
 
+import static constants.FieldNames.LAST_HEIGHT;
 import static constants.IndicesNames.*;
 
 public class IdentityParser {
 
-	public CidHist makeCid(OpReturn opre, Feip feip) throws ElasticsearchException, IOException {
+	public CidHist makeCid(OpReturn opre, Feip feip) throws ElasticsearchException {
 
 		Gson gson = new Gson();
 		CidOpData cidRaw;
@@ -38,7 +39,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setTxId(opre.getTxId());
+		cidHist.setId(opre.getTxId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		if(cidRaw.getOp().equals("register")||cidRaw.getOp().equals("unregister")) {
@@ -75,7 +76,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setTxId(opre.getTxId());
+		cidHist.setId(opre.getTxId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		cidHist.setPriKey(nobodyRaw.getPriKey());
@@ -85,8 +86,7 @@ public class IdentityParser {
 
 	private String addrFromPriKey(String priKey) {
 
-		String addr = KeyTools.pubKeyToFchAddr(KeyTools.priKeyToPubKey(priKey)) ;
-		return addr;
+		return KeyTools.pubKeyToFchAddr(KeyTools.priKeyToPubKey(priKey));
 	}
 
 	public CidHist makeMaster(OpReturn opre, Feip feip) {
@@ -110,7 +110,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setTxId(opre.getTxId());
+		cidHist.setId(opre.getTxId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		cidHist.setMaster(masterRaw.getMaster());
@@ -143,7 +143,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setTxId(opre.getTxId());
+		cidHist.setId(opre.getTxId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 
@@ -170,7 +170,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setTxId(opre.getTxId());
+		cidHist.setId(opre.getTxId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 
@@ -195,7 +195,7 @@ public class IdentityParser {
 		RepuHist repuHist = new RepuHist();
 
 		repuHist.setHeight(opre.getHeight());
-		repuHist.setTxId(opre.getTxId());
+		repuHist.setId(opre.getTxId());
 		repuHist.setIndex(opre.getTxIndex());
 		repuHist.setTime(opre.getTime());
 
@@ -241,11 +241,11 @@ public class IdentityParser {
 				esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
 
 				Nobody nobody = new Nobody();
-				nobody.setFid(cidHist.getSigner());
+				nobody.setId(cidHist.getSigner());
 				nobody.setDeathTime(cidHist.getTime());
 				nobody.setDeathHeight(cidHist.getHeight());
 				nobody.setPriKey(cidHist.getPriKey());
-				nobody.setDeathTxId(cidHist.getTxId());
+				nobody.setDeathTxId(cidHist.getId());
 				nobody.setDeathTxIndex(cidHist.getIndex());
 				esClient.index(i->i.index(NOBODY).id(cidHist.getSigner()).document(nobody));
 				isValid = true;
@@ -281,7 +281,7 @@ public class IdentityParser {
 					//rule 7
 
 					cid.setCid(cidStr1);
-					cid.setFid(cidHist.getSigner());
+					cid.setId(cidHist.getSigner());
 
 					int nameCount = 0;
 					if(cid.getUsedCids()!=null) {
@@ -316,7 +316,7 @@ public class IdentityParser {
 
 					break;
 				}else if(resultCidSearch.hits().hits().size()==1 &&
-						resultCidSearch.hits().hits().get(0).source().getFid().equals(cidHist.getSigner())) {
+						resultCidSearch.hits().hits().get(0).source().getId().equals(cidHist.getSigner())) {
 
 					//rule 4,5
 					Cid cid = resultCidSearch.hits().hits().get(0).source();
@@ -324,7 +324,7 @@ public class IdentityParser {
 					cid.setLastHeight(cidHist.getHeight());
 
 					//rule 3
-					esClient.index(i->i.index(CID).id(cid.getFid()).document(cid));
+					esClient.index(i->i.index(CID).id(cid.getId()).document(cid));
 					isValid = true;
 
 					break;
@@ -340,12 +340,12 @@ public class IdentityParser {
 
 			GetResponse<Cid> result = esClient.get(g -> g.index(CID).id(cidHist.getSigner()), Cid.class);
 
-			if(result.found()==true){
+			if(result.found()){
 				Cid cid = result.source();
 				if(!"".equals(cid.getCid())){
 					Map<String,Object> updata = new HashMap<String,Object>();
-					updata.put("cid", "");
-					updata.put("lastHeight",cidHist.getHeight());
+					updata.put(CID, "");
+					updata.put(LAST_HEIGHT,cidHist.getHeight());
 
 					//rule 6
 					esClient.update(u->u.index(CID).id(cidHist.getSigner()).doc(updata), Cid.class);
@@ -375,7 +375,7 @@ public class IdentityParser {
 			}
 		}else {
 			Cid cid = new Cid();
-			cid.setFid(cidHist.getSigner());
+			cid.setId(cidHist.getSigner());
 			cid.setMaster(cidHist.getMaster());
 			cid.setLastHeight(cidHist.getHeight());
 			esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
@@ -401,7 +401,7 @@ public class IdentityParser {
 
 			}else {
 				Cid cid = new Cid();
-				cid.setFid(cidHist.getSigner());
+				cid.setId(cidHist.getSigner());
 				cid.setHomepages(cidHist.getHomepages());
 				cid.setLastHeight(cidHist.getHeight());
 				esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
@@ -427,7 +427,7 @@ public class IdentityParser {
 
 	private boolean parseNoticeFee(ElasticsearchClient esClient, CidHist cidHist) throws ElasticsearchException, IOException {
 		if(cidHist==null)return false;
-		boolean isValid = false;
+		boolean isValid;
 		GetResponse<Cid> resultGetCid = esClient.get(g->g.index(CID).id(cidHist.getSigner()), Cid.class);
 
 		if(resultGetCid.found()) {
@@ -440,7 +440,7 @@ public class IdentityParser {
 
 		}else {
 			Cid cid = new Cid();
-			cid.setFid(cidHist.getSigner());
+			cid.setId(cidHist.getSigner());
 			cid.setNoticeFee(cidHist.getNoticeFee());
 			cid.setLastHeight(cidHist.getHeight());
 			esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
@@ -468,18 +468,18 @@ public class IdentityParser {
 			isValid = true;
 		}else{
 			cid = new Cid();
-			cid.setFid(repuHist.getRatee());
+			cid.setId(repuHist.getRatee());
 			cid.setReputation(repuHist.getReputation());
 			cid.setHot(repuHist.getHot());
 			cid.setLastHeight(repuHist.getHeight());
 			isValid = true;
 		}
-		GetResponse<Address> resultAddr = esClient.get(g -> g.index(ADDRESS).id(repuHist.getRatee()), Address.class);
-		Address addr;
+		GetResponse<Cid> resultAddr = esClient.get(g -> g.index(CID).id(repuHist.getRatee()), Cid.class);
+		Cid addr;
 		if(resultAddr!=null && resultAddr.source()!=null) {
 			addr = resultAddr.source();
-			addr.setWeight((long) (addr.getWeight()+(repuHist.getReputation()* WeightMethod.repuPercentInWeight)/100));
-			esClient.index(i -> i.index(ADDRESS).id(repuHist.getRatee()).document(addr));
+			addr.setWeight(addr.getWeight()+(repuHist.getReputation()* WeightMethod.repuPercentInWeight)/100);
+			esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(addr));
 		}
 		esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(cid));
 		return isValid;

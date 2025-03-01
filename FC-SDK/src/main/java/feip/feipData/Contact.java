@@ -1,10 +1,11 @@
 package feip.feipData;
 
+import fcData.FcObject;
+
 import java.util.List;
 
-public class Contact {
+public class Contact extends FcObject {
 
-	private String contactId;
 	private List<String> contactIds;
     private String alg;
 	private String cipher;
@@ -14,13 +15,7 @@ public class Contact {
 	private Long birthHeight;
 	private Long lastHeight;
 	private Boolean active;
-	
-	public String getContactId() {
-		return contactId;
-	}
-	public void setContactId(String contactId) {
-		this.contactId = contactId;
-	}
+
 	public List<String> getContactIds() {
 		return contactIds;
 	}

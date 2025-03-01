@@ -1,10 +1,11 @@
 package feip.feipData;
 
+import fcData.FcObject;
+
 import java.util.List;
 
-public class ServiceHistory {
+public class ServiceHistory extends FcObject {
 
-	private String txId;
 	private Long height;
 	private Integer index;
 	private Long time;
@@ -28,14 +29,6 @@ public class ServiceHistory {
 	private String op;
 	private Integer rate;
 	private Long cdd;
-
-	public String getTxId() {
-		return txId;
-	}
-
-	public void setTxId(String txId) {
-		this.txId = txId;
-	}
 
 	public Long getHeight() {
 		return height;

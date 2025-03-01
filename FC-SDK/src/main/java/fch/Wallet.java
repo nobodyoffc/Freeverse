@@ -256,7 +256,7 @@ public class Wallet {
             List<FieldValue> valueList = recipientList.stream().map(FieldValue::of).collect(Collectors.toList());
             SearchResponse<Nobody> result = null;
             try {
-                result = esClient.search(s -> s.index(IndicesNames.NOBODY).query(q -> q.terms(t -> t.field(FieldNames.FID).terms(t1 -> t1.value(valueList)))), Nobody.class);
+                result = esClient.search(s -> s.index(IndicesNames.NOBODY).query(q -> q.terms(t -> t.field(FieldNames.ID).terms(t1 -> t1.value(valueList)))), Nobody.class);
             } catch (IOException e) {
                 log.error("ElasticSearch Client wrong when checking recipients.");
             }
@@ -270,7 +270,7 @@ public class Wallet {
         if (!nobodyList.isEmpty()) {
             System.out.println("The following recipients has lost their private keys:");
             for (Nobody nobody : nobodyList)
-                System.out.println(nobody.getFid());
+                System.out.println(nobody.getId());
         }
         return nobodyList;
     }

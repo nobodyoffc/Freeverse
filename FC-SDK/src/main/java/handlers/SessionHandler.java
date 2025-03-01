@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.ArrayList;
 
-import fcData.IdNameTools;
+import tools.IdNameTools;
 /**
  * FcSessionClient is a client for managing sessions.
  * There are two ways to store sessions: 1) MapQueue in memory and MapDB for persistence; 2) JedisPool in Redis.

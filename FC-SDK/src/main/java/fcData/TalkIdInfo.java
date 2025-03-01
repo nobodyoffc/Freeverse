@@ -1,12 +1,12 @@
 package fcData;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import feip.feipData.Group;
 import feip.feipData.Team;
 import org.jetbrains.annotations.NotNull;
 import tools.StringTools;
 
-public class TalkIdInfo extends FcEntity {
+public class TalkIdInfo extends FcObject {
     private TalkUnit.IdType type;
     private String stdName;
     private String showName;
@@ -105,7 +105,7 @@ public class TalkIdInfo extends FcEntity {
     @NotNull
     public static TalkIdInfo fromTeam(Team team) {
         TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(team.getTid());
+        talkIdInfo.setId(team.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.GROUP);
         talkIdInfo.setStdName(team.getStdName());
         talkIdInfo.setOwner(team.getOwner());
@@ -115,20 +115,20 @@ public class TalkIdInfo extends FcEntity {
     @NotNull
     public static TalkIdInfo fromGroup(Group group) {
         TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(group.getGid());
+        talkIdInfo.setId(group.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.GROUP);
         talkIdInfo.setStdName(group.getName());
-        talkIdInfo.setShowName(group.getName()+StringTools.omitMiddle(group.getGid(),13));
+        talkIdInfo.setShowName(group.getName()+StringTools.omitMiddle(group.getId(),13));
         return talkIdInfo;
     }
 
-    public static TalkIdInfo fromCidInfo(CidInfo cidInfo) {
+    public static TalkIdInfo fromCidInfo(Cid cid) {
         TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(cidInfo.getFid());
+        talkIdInfo.setId(cid.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.FID);
-        talkIdInfo.setStdName(cidInfo.getCid());
-        talkIdInfo.setShowName(cidInfo.getCid()==null?StringTools.omitMiddle(cidInfo.getFid(),13):StringTools.omitMiddle(cidInfo.getCid(),13));
-        talkIdInfo.setPubKey(cidInfo.getPubKey());
+        talkIdInfo.setStdName(cid.getCid());
+        talkIdInfo.setShowName(cid.getCid()==null?StringTools.omitMiddle(cid.getId(),13):StringTools.omitMiddle(cid.getCid(),13));
+        talkIdInfo.setPubKey(cid.getPubKey());
         return talkIdInfo;
     }
 }

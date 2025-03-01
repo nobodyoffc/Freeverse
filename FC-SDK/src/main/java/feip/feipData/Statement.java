@@ -1,21 +1,16 @@
 package feip.feipData;
 
-public class Statement {
+import fcData.FcObject;
 
-	private String statementId;
+public class Statement extends FcObject {
+
 	private String title;
 	private String content;
 	
 	private String owner;
 	private Long birthTime;
 	private Long birthHeight;
-	
-	public String getStatementId() {
-		return statementId;
-	}
-	public void setStatementId(String statementId) {
-		this.statementId = statementId;
-	}
+
 	public String getTitle() {
 		return title;
 	}

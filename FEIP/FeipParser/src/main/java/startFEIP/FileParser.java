@@ -171,7 +171,7 @@ public class FileParser {
 					if (identityHist == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist.getTxId()).document(identityHist));
+						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist.getId()).document(identityHist));
 					System.out.println(isValid);
 				}
 				case NOBODY -> {
@@ -180,7 +180,7 @@ public class FileParser {
 					if (identityHist4 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist4);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist4.getTxId()).document(identityHist4));
+						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist4.getId()).document(identityHist4));
 					System.out.println(isValid);
 				}
 				case MASTER -> {
@@ -189,7 +189,7 @@ public class FileParser {
 					if (identityHist1 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist1);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist1.getTxId()).document(identityHist1));
+						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist1.getId()).document(identityHist1));
 					System.out.println(isValid);
 				}
 				case HOMEPAGE -> {
@@ -198,7 +198,7 @@ public class FileParser {
 					if (identityHist2 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist2);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist2.getTxId()).document(identityHist2));
+						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist2.getId()).document(identityHist2));
 					System.out.println(isValid);
 				}
 				case NOTICE_FEE -> {
@@ -207,7 +207,7 @@ public class FileParser {
 					if (identityHist3 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist3);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist3.getTxId()).document(identityHist3));
+						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist3.getId()).document(identityHist3));
 					System.out.println(isValid);
 				}
 				case REPUTATION -> {
@@ -216,7 +216,7 @@ public class FileParser {
 					if (repuHist == null) break;
 					isValid = cidParser.parseReputation(esClient, repuHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.REPUTATION_HISTORY).id(repuHist.getTxId()).document(repuHist));
+						esClient.index(i -> i.index(IndicesNames.REPUTATION_HISTORY).id(repuHist.getId()).document(repuHist));
 					System.out.println(isValid);
 				}
 				case PROTOCOL -> {
@@ -225,7 +225,7 @@ public class FileParser {
 					if (freeProtocolHist == null) break;
 					isValid = constructParser.parseProtocol(esClient, freeProtocolHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.PROTOCOL_HISTORY).id(freeProtocolHist.getTxId()).document(freeProtocolHist));
+						esClient.index(i -> i.index(IndicesNames.PROTOCOL_HISTORY).id(freeProtocolHist.getId()).document(freeProtocolHist));
 					System.out.println(isValid);
 				}
 				case SERVICE -> {
@@ -234,7 +234,7 @@ public class FileParser {
 					if (serviceHist == null) break;
 					isValid = constructParser.parseService(esClient, serviceHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.SERVICE_HISTORY).id(serviceHist.getTxId()).document(serviceHist));
+						esClient.index(i -> i.index(IndicesNames.SERVICE_HISTORY).id(serviceHist.getId()).document(serviceHist));
 					System.out.println(isValid);
 				}
 				case APP -> {
@@ -243,7 +243,7 @@ public class FileParser {
 					if (appHist == null) break;
 					isValid = constructParser.parseApp(esClient, appHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.APP_HISTORY).id(appHist.getTxId()).document(appHist));
+						esClient.index(i -> i.index(IndicesNames.APP_HISTORY).id(appHist.getId()).document(appHist));
 					System.out.println(isValid);
 				}
 				case CODE -> {
@@ -252,7 +252,7 @@ public class FileParser {
 					if (codeHist == null) break;
 					isValid = constructParser.parseCode(esClient, codeHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CODE_HISTORY).id(codeHist.getTxId()).document(codeHist));
+						esClient.index(i -> i.index(IndicesNames.CODE_HISTORY).id(codeHist.getId()).document(codeHist));
 					System.out.println(isValid);
 				}
 				case NID -> {
@@ -286,7 +286,7 @@ public class FileParser {
 					if (groupHist == null) break;
 					isValid = organizationParser.parseGroup(esClient, groupHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.GROUP_HISTORY).id(groupHist.getTxId()).document(groupHist));
+						esClient.index(i -> i.index(IndicesNames.GROUP_HISTORY).id(groupHist.getId()).document(groupHist));
 					System.out.println(isValid);
 				}
 				case TEAM -> {
@@ -295,7 +295,7 @@ public class FileParser {
 					if (teamHist == null) break;
 					isValid = organizationParser.parseTeam(esClient, teamHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.TEAM_HISTORY).id(teamHist.getTxId()).document(teamHist));
+						esClient.index(i -> i.index(IndicesNames.TEAM_HISTORY).id(teamHist.getId()).document(teamHist));
 					System.out.println(isValid);
 				}
 				case BOX -> {
@@ -304,7 +304,7 @@ public class FileParser {
 					if (boxHist == null) break;
 					isValid = personalParser.parseBox(esClient, boxHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.BOX_HISTORY).id(boxHist.getTxId()).document(boxHist));
+						esClient.index(i -> i.index(IndicesNames.BOX_HISTORY).id(boxHist.getId()).document(boxHist));
 					System.out.println(isValid);
 				}
 				case PROOF -> {
@@ -313,7 +313,7 @@ public class FileParser {
 					if (proofHist == null) break;
 					isValid = publishParser.parseProof(esClient, proofHist);
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.PROOF_HISTORY).id(proofHist.getTxId()).document(proofHist));
+						esClient.index(i -> i.index(IndicesNames.PROOF_HISTORY).id(proofHist.getId()).document(proofHist));
 					System.out.println(isValid);
 				}
 				case TOKEN -> {
@@ -324,7 +324,7 @@ public class FileParser {
 						isValid = publishParser.parseToken(esClient, tokenHist);
 					}catch (NumberFormatException ignore) {}
 					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.TOKEN_HISTORY).id(tokenHist.getTxId()).document(tokenHist));
+						esClient.index(i -> i.index(IndicesNames.TOKEN_HISTORY).id(tokenHist.getId()).document(tokenHist));
 					System.out.println(isValid);
 				}
 				default -> {

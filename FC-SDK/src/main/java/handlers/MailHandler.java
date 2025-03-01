@@ -1,6 +1,6 @@
 package handlers;
 
-import apip.apipData.CidInfo;
+import fch.fchData.Cid;
 import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
@@ -12,7 +12,7 @@ import crypto.CryptoDataByte;
 import crypto.Encryptor;
 import crypto.KeyTools;
 import fcData.AlgorithmId;
-import fcData.IdNameTools;
+import tools.IdNameTools;
 import fcData.MailDetail;
 import fcData.Op;
 import fch.Wallet;
@@ -279,18 +279,18 @@ public class MailHandler extends Handler {
             System.out.println("Failed to get the priKey of " + myFid);
             return null;
         }
-        CidInfo cidInfo;
+        Cid cid;
 
         Map<String, Mail> recoverMailMap = null;
         List<SendTo> sendToList = null;
         if (op.equals(MailOp.SEND)) {
             sendToList = new ArrayList<>();
-            cidInfo = apipClient.searchCidOrFid(br);
-            if (cidInfo == null) return null;
-            String to = cidInfo.getFid();
+            cid = apipClient.searchCidOrFid(br);
+            if (cid == null) return null;
+            String to = cid.getId();
             Double amount;
-            if (cidInfo.getNoticeFee() != null) {
-                amount = Double.parseDouble(cidInfo.getNoticeFee());
+            if (cid.getNoticeFee() != null) {
+                amount = Double.parseDouble(cid.getNoticeFee());
                 if (askIfYes(br,"He set a notice fee of " + amount + " on chain. Refuse to pay?")) {
                     return null;
                 }
@@ -305,9 +305,9 @@ public class MailHandler extends Handler {
             mailOpData.setTextId(IdNameTools.makeDid(msg));
 //            mailData.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7.getDisplayName());
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-            String pubKey = cidInfo.getPubKey();
+            String pubKey = cid.getPubKey();
             if (pubKey == null) {
-                System.out.println("Failed to get the pubKey of " + cidInfo.getFid());
+                System.out.println("Failed to get the pubKey of " + cid.getId());
                 return null;
             }
             CryptoDataByte cryptoDataByte = encryptor.encryptByAsyTwoWay(msg.getBytes(), priKey, Hex.fromHex(pubKey));
@@ -332,7 +332,7 @@ public class MailHandler extends Handler {
                 }
                 mailIds = new ArrayList<>();
                 for(Mail mail:recoverMailMap.values()) {
-                    mailIds.add(mail.getMailId());
+                    mailIds.add(mail.getId());
                 }
             }
             if (mailIds.isEmpty()) return null;
@@ -421,7 +421,7 @@ public class MailHandler extends Handler {
                 Mail mail = mailList.get(i);
                 MailDetail mailDetail = MailDetail.fromMail(myFid,mail, priKey,apipClient);
                 if(mailDetail==null){
-                    failedDecryptMailIdList.add(mail.getMailId());
+                    failedDecryptMailIdList.add(mail.getId());
                     continue;
                 }
                 String senderCid = fidCidMap.get(mail.getSender());
@@ -521,7 +521,7 @@ public class MailHandler extends Handler {
             showList.add(mailDetail.getContent());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed);
+        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
     }
 
     private static void showMailDetail(MailDetail mail) {
