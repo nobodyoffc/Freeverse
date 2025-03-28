@@ -5,14 +5,13 @@ import com.google.gson.GsonBuilder;
 import constants.FieldNames;
 import fcData.FcObject;
 import feip.feipData.serviceParams.Params;
-import tools.StringTools;
+import utils.StringUtils;
 
 import java.util.Map;
 
 import static constants.FieldNames.*;
 import static constants.FieldNames.BIRTH_HEIGHT;
 import static constants.Values.DESC;
-import static constants.FieldNames.SID;
 import static constants.FieldNames.TYPES;
 import static constants.Strings.*;
 
@@ -48,7 +47,7 @@ public class Service extends FcObject {
 		return gson.toJson(this);
 	}
 	public String toNiceJson() {
-		Gson gson = new GsonBuilder().setPrettyPrinting().create();
+		Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 		return gson.toJson(this);
 	}
 	public static Service fromMap(Map<String, String> map, Class<? extends Params> paramsClass) {
@@ -56,27 +55,27 @@ public class Service extends FcObject {
 
 		service.id = map.get(ID);
 		service.stdName = map.get(STD_NAME);
-		service.localNames = StringTools.splitString(map.get(LOCAL_NAMES));
+		service.localNames = StringUtils.splitString(map.get(LOCAL_NAMES));
 		service.desc = map.get(DESC);
 		service.ver = map.get(VER);
-		service.types = StringTools.splitString(map.get(TYPES));
-		service.urls = StringTools.splitString(map.get(URLS));
-		service.waiters = StringTools.splitString(map.get(WAITERS));
-		service.protocols = StringTools.splitString(map.get(PROTOCOLS));
-		service.services = StringTools.splitString(map.get(SERVICES));
-		service.codes = StringTools.splitString(map.get(CODES));
+		service.types = StringUtils.splitString(map.get(TYPES));
+		service.urls = StringUtils.splitString(map.get(URLS));
+		service.waiters = StringUtils.splitString(map.get(WAITERS));
+		service.protocols = StringUtils.splitString(map.get(PROTOCOLS));
+		service.services = StringUtils.splitString(map.get(SERVICES));
+		service.codes = StringUtils.splitString(map.get(CODES));
 
 		service.owner = map.get(OWNER);
 
-		if(map.get(BIRTH_TIME)!=null)service.birthTime = StringTools.parseLong(map.get(BIRTH_TIME));
-		if(map.get(BIRTH_HEIGHT)!=null)service.birthHeight = StringTools.parseLong(map.get(BIRTH_HEIGHT));
+		if(map.get(BIRTH_TIME)!=null)service.birthTime = StringUtils.parseLong(map.get(BIRTH_TIME));
+		if(map.get(BIRTH_HEIGHT)!=null)service.birthHeight = StringUtils.parseLong(map.get(BIRTH_HEIGHT));
 		service.lastTxId = map.get(LAST_TX_ID);
-		if(map.get(LAST_TIME)!=null)service.lastTime = StringTools.parseLong(map.get(LAST_TIME));
-		if(map.get(LAST_HEIGHT)!=null)service.lastHeight = StringTools.parseLong(map.get(LAST_HEIGHT));
-		if(map.get(T_CDD)!=null)service.tCdd = StringTools.parseLong(map.get(T_CDD));
-		if(map.get(T_RATE)!=null)service.tRate = StringTools.parseFloat(map.get(T_RATE));
-		service.active = StringTools.parseBoolean(map.get(ACTIVE));
-		service.closed = StringTools.parseBoolean(map.get(CLOSED));
+		if(map.get(LAST_TIME)!=null)service.lastTime = StringUtils.parseLong(map.get(LAST_TIME));
+		if(map.get(LAST_HEIGHT)!=null)service.lastHeight = StringUtils.parseLong(map.get(LAST_HEIGHT));
+		if(map.get(T_CDD)!=null)service.tCdd = StringUtils.parseLong(map.get(T_CDD));
+		if(map.get(T_RATE)!=null)service.tRate = StringUtils.parseFloat(map.get(T_RATE));
+		service.active = StringUtils.parseBoolean(map.get(ACTIVE));
+		service.closed = StringUtils.parseBoolean(map.get(CLOSED));
 		if(map.get(CLOSE_STATEMENT)!=null)service.closeStatement = map.get(CLOSE_STATEMENT);
 
 		service.params = new Gson().fromJson(map.get(FieldNames.PARAMS),paramsClass);

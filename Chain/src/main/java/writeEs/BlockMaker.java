@@ -2,11 +2,11 @@ package writeEs;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import crypto.KeyTools;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.WeightMethod;
 import fch.fchData.*;
 import parser.ReadyBlock;
-import tools.EsTools;
+import utils.EsUtils;
 
 import java.util.*;
 
@@ -51,7 +51,7 @@ public class BlockMaker {
 			outMap.put(out.getId(), out);
 		}
 
-		EsTools.MgetResult<Cash> inMgetResult = EsTools.getMultiByIdList(esClient, CASH, inStrList, Cash.class);
+		EsUtils.MgetResult<Cash> inMgetResult = EsUtils.getMultiByIdList(esClient, CASH, inStrList, Cash.class);
 		ArrayList<Cash> inOldList = (ArrayList<Cash>) inMgetResult.getResultList();
 		List<String> inNewIdList = inMgetResult.getMissList();
 
@@ -107,7 +107,7 @@ public class BlockMaker {
 		in.setBirthTxIndex(out.getBirthTxIndex());
 		in.setBirthTime(out.getBirthTime());
 		in.setBirthHeight(out.getBirthHeight());
-		in.setCdd(ParseTools.cdd(in.getValue(), in.getBirthTime(), in.getSpendTime()));
+		in.setCdd(FchUtils.cdd(in.getValue(), in.getBirthTime(), in.getSpendTime()));
 	}
 
 	private ReadyBlock makeTxTxHasOpReturn(ReadyBlock blockForMaking) {
@@ -199,7 +199,7 @@ public class BlockMaker {
 			}
 
 			for (OpReturn opReturn : opList) {
-				String txId = opReturn.getTxId();
+				String txId = opReturn.getId();
 
 				Tx tx = txMap.get(txId);
 				opReturn.setCdd(tx.getCdd());
@@ -401,7 +401,7 @@ public class BlockMaker {
 
 	private ArrayList<Cid> readAddrListFromEs(ElasticsearchClient esClient, List<String> addrStrList)
 			throws Exception {
-		EsTools.MgetResult<Cid> addrMgetResult = EsTools.getMultiByIdList(esClient, CID, addrStrList,
+		EsUtils.MgetResult<Cid> addrMgetResult = EsUtils.getMultiByIdList(esClient, CID, addrStrList,
 				Cid.class);
 
 		ArrayList<Cid> addrOldList = (ArrayList<Cid>) addrMgetResult.getResultList();

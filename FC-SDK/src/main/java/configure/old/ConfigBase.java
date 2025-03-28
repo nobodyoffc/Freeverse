@@ -2,7 +2,7 @@ package configure.old;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,19 +64,19 @@ public class ConfigBase {
         File configFile = new File(configFilePath, configFileName);
         System.out.println("Path of config file: " + configFile.getAbsolutePath());
         if (configFile.exists()) {
-            t = JsonTools.readObjectFromJsonFile(configFilePath, configFileName, tClass);
+            t = JsonUtils.readObjectFromJsonFile(configFilePath, configFileName, tClass);
             if (t == null) {
                 System.out.println("Can't get parameters from " + configFileName + ". Config again...\n");
                 config(br);
-                t = JsonTools.readObjectFromJsonFile(configFilePath, configFileName, tClass);
+                t = JsonUtils.readObjectFromJsonFile(configFilePath, configFileName, tClass);
             } else {
-                System.out.println("Config json: " + JsonTools.toNiceJson(t));
+                System.out.println("Config json: " + JsonUtils.toNiceJson(t));
             }
         } else {
             createConfigFile(configFilePath, configFileName);
             System.out.println("The file of " + configFileName + " was not found. Config it now...\n");
             config(br);
-            t = JsonTools.readObjectFromJsonFile(configFilePath, configFileName, tClass);
+            t = JsonUtils.readObjectFromJsonFile(configFilePath, configFileName, tClass);
         }
         return t;
     }
@@ -87,17 +87,17 @@ public class ConfigBase {
         File configFile = new File(configFilePath, configFileName);
         System.out.println("Path of config file: " + configFile.getAbsolutePath());
         if (configFile.exists()) {
-            t = JsonTools.readObjectFromJsonFile(configFilePath, configFileName, tClass);
+            t = JsonUtils.readObjectFromJsonFile(configFilePath, configFileName, tClass);
             if (t == null) {
                 System.out.println("Can't get parameters from config file. Config again...\n");
-                t = JsonTools.readObjectFromJsonFile(configFilePath, configFileName, tClass);
+                t = JsonUtils.readObjectFromJsonFile(configFilePath, configFileName, tClass);
             } else {
-                System.out.println("Config json: " + JsonTools.toNiceJson(t));
+                System.out.println("Config json: " + JsonUtils.toNiceJson(t));
             }
         } else {
             createConfigFile(configFilePath, configFileName);
             System.out.println("The file of " + configFileName + " was not found. Config it now...\n");
-            t = JsonTools.readObjectFromJsonFile(configFilePath, configFileName, tClass);
+            t = JsonUtils.readObjectFromJsonFile(configFilePath, configFileName, tClass);
         }
         return t;
     }

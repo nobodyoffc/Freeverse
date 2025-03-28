@@ -2,7 +2,7 @@ package fcData;
 
 import appTools.Settings;
 import constants.CodeMessage;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.Block;
 import handlers.AccountHandler;
 import handlers.Handler;
@@ -109,7 +109,7 @@ public class ReplyBody extends FcObject {
         // Check if user is account owner
         if(fid.equals(accountHandler.getMainFid())){
             double minPay = accountHandler.getMinPay();
-            balance = ParseTools.coinToSatoshi(minPay);
+            balance = FchUtils.coinToSatoshi(minPay);
             return balance;
         }
 

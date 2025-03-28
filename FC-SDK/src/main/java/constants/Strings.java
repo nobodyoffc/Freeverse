@@ -27,8 +27,6 @@ public class Strings {
     public static final String ORDER_LAST_BLOCK_ID = "orderLastBlockId";
     public static final String BEST_HEIGHT = "bestHeight";
     public static final String HEIGHT = "height";
-    public static final String DESC = "desc";
-    public static final String ASC = "asc";
     public static final String N_PRICE = "nPrice";
     public static final String PRICE = "price";
     public static final String IS_PRICE_PER_REQUEST = "isPricePerRequest";
@@ -58,10 +56,6 @@ public class Strings {
     public static final String REWARD_ID = "rewardId";
 
     public static final String ANY_KEY = "Any key to continue...";
-    public static final String BUILDER_SHARE_MAP = "builderShareMap";
-    public static final String CONSUME_VIA_SHARE = "consumeViaShare";
-    public static final String ORDER_VIA_SHARE = "orderViaShare";
-    public static final String COST_MAP = "costMap";
     public static final String STATE = "state";
     public static final String UNPAID = "unpaid";
     public static final String TIME = "time";

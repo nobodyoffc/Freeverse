@@ -1,7 +1,7 @@
 package NasaRcpTest;
 
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import nasa.RpcRequest;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +14,7 @@ public class GetBlockchainInfo {
     @Test
     public void test() {
         BlockchainInfo blockchainInfo = getBlockchainInfo("http://127.0.0.1:8332", "username", "password");
-        JsonTools.printJson(blockchainInfo);
+        JsonUtils.printJson(blockchainInfo);
     }
 
     public BlockchainInfo getBlockchainInfo(String url, String username, String password) {

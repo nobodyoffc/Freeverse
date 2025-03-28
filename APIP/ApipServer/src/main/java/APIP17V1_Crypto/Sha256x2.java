@@ -6,7 +6,7 @@ import crypto.Hash;
 import fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
-import tools.http.AuthType;
+import utils.http.AuthType;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;

@@ -3,6 +3,7 @@ package clients;
 import apip.apipData.Fcdsl;
 import configure.ApiAccount;
 import configure.ApiProvider;
+import crypto.Encryptor;
 import server.ApipApiNames;
 import constants.Constants;
 import constants.CodeMessage;
@@ -12,9 +13,9 @@ import fcData.Hat;
 import handlers.DiskHandler;
 import handlers.HatHandler;
 import server.DiskApiNames;
-import tools.ObjectTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.ObjectUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.*;
@@ -27,10 +28,15 @@ import java.util.Map;
 
 import static server.ApipApiNames.*;
 import static constants.FieldNames.*;
-import static tools.ObjectTools.objectToList;
+import static utils.ObjectUtils.objectToList;
 
 public class DiskClient extends Client {
-
+    public static final String[] freeAPIs = new String[]{
+            "https://apip.cash/DISK",
+            "https://help.cash/DISK",
+            "http://127.0.0.1:8080/DISK",
+            "http://127.0.0.1:8081/DISK"
+    };
     public DiskClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symKey, ApipClient apipClient) {
         super(apiProvider, apiAccount, symKey, apipClient);
     }
@@ -97,7 +103,7 @@ public class DiskClient extends Client {
     private String replyPut(String fileName, Object data) {
         if(sessionFreshen) data = checkResult();
         if(data ==null) return null;
-        Map<String, String> stringStringMap = ObjectTools.objectToMap(data, String.class, String.class);
+        Map<String, String> stringStringMap = ObjectUtils.objectToMap(data, String.class, String.class);
         if(stringStringMap==null || stringStringMap.size()==0){
             apipClientEvent.setCode(CodeMessage.Code1020OtherError);
             apipClientEvent.setMessage("Failed to get the DID.");
@@ -125,7 +131,7 @@ public class DiskClient extends Client {
         
         // 1. Try getting data from diskHandler first
         try {
-            byte[] data = diskHandler.get(did);
+            byte[] data = diskHandler.getBytes(did);
             if (data != null) {
                 log.debug("Got data from diskHandler with DID: {}", did);
                 return data;
@@ -153,7 +159,7 @@ public class DiskClient extends Client {
             if (rawDid != null) {
                 // Try diskHandler with rawDid
                 try {
-                    byte[] data = diskHandler.get(rawDid);
+                    byte[] data = diskHandler.getBytes(rawDid);
                     if (data != null) {
                         log.debug("Got data from diskHandler using rawDid: {}", rawDid);
                         return data;
@@ -184,7 +190,7 @@ public class DiskClient extends Client {
     public static String encryptAndSaveData(String dataFilePath, DiskClient diskClient, byte[] dataBytes, HatHandler hatHandler) {
         try {
             // 1. Encrypt the data
-            String encryptedFilePath = Client.encryptFile(dataFilePath, diskClient.getApiAccount().getUserPubKey());
+            String encryptedFilePath = Encryptor.encryptFile(dataFilePath, diskClient.getApiAccount().getUserPubKey());
             if (encryptedFilePath == null) {
                 throw new Exception("Failed to encrypt data");
             }

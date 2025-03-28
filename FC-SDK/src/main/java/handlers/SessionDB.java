@@ -6,8 +6,8 @@ import org.mapdb.DBMaker;
 import org.mapdb.Serializer;
 
 import fcData.FcSession;
-import tools.FileTools;
-import tools.JsonTools;
+import utils.FileUtils;
+import utils.JsonUtils;
 
 import org.mapdb.HTreeMap;
 import org.mapdb.DataInput2;
@@ -31,18 +31,18 @@ public class SessionDB {
     public SessionDB(String mainFid, String sid, String dbPath) {
         this.mainFid = mainFid;
         this.sid = sid;
-        if(dbPath==null)dbPath = FileTools.getUserDir()+"/db/";
+        if(dbPath==null)dbPath = FileUtils.getUserDir()+"/db/";
         if(!dbPath.endsWith("/"))dbPath += "/";
         this.dbPath = dbPath;
         initializeDb();
     }
 
     private void initializeDb() {
-        if (!FileTools.checkDirOrMakeIt(dbPath)) return;
+        if (!FileUtils.checkDirOrMakeIt(dbPath)) return;
         if (db == null || db.isClosed()) {
             synchronized (lock) {
                 if (db == null || db.isClosed()) {
-                    String dbName = FileTools.makeFileName(mainFid, sid, SESSION_DB, constants.Strings.DOT_DB);
+                    String dbName = FileUtils.makeFileName(mainFid, sid, SESSION_DB, constants.Strings.DOT_DB);
                     db = DBMaker.fileDB(dbPath+dbName)
                             .fileMmapEnable()
                             .checksumHeaderBypass()
@@ -81,7 +81,7 @@ public class SessionDB {
                             .valueSerializer(new Serializer<List<String>>() {
                                 @Override
                                 public void serialize(DataOutput2 out, List<String> value) throws IOException {
-                                    String json = JsonTools.toJson(value);
+                                    String json = JsonUtils.toJson(value);
                                     byte[] bytes = json.getBytes();
                                     out.packInt(bytes.length);
                                     out.write(bytes);
@@ -93,7 +93,7 @@ public class SessionDB {
                                     byte[] bytes = new byte[length];
                                     input.readFully(bytes);
                                     String json = new String(bytes);
-                                    return JsonTools.listFromJson(json, String.class);
+                                    return JsonUtils.listFromJson(json, String.class);
                                 }
                             })
                             .createOrOpen();

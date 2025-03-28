@@ -17,6 +17,7 @@ public class ContactOpData {
 
 	public enum Op {
 		ADD(FeipOp.ADD),
+		UPDATE(FeipOp.UPDATE),
 		DELETE(FeipOp.DELETE),
 		RECOVER(FeipOp.RECOVER);
 
@@ -48,6 +49,7 @@ public class ContactOpData {
 	
 	static {
 		OP_FIELDS.put(Op.ADD.toLowerCase(), new String[]{FieldNames.ALG, FieldNames.CIPHER});
+		OP_FIELDS.put(Op.ADD.toLowerCase(), new String[]{FieldNames.CONTACT_ID,FieldNames.ALG, FieldNames.CIPHER});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.CONTACT_IDS});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.CONTACT_IDS});
 	}

@@ -1,6 +1,6 @@
 package fch;
 
-import tools.BytesTools;
+import utils.BytesUtils;
 import crypto.KeyTools;
 
 
@@ -49,11 +49,11 @@ public class TxParserFch {
         NaSaRpcClient naSaRpcClient = new NaSaRpcClient(apiUrl, userName, apiPassword);
         String rawTxHex = naSaRpcClient.getRawTx(txId);
         byte[] rawTxBytes = HexFormat.of().parseHex(rawTxHex);
-        byte[] firstTxIdBytes = BytesTools.invertArray(Arrays.copyOfRange(rawTxBytes, 5, 37));
+        byte[] firstTxIdBytes = BytesUtils.invertArray(Arrays.copyOfRange(rawTxBytes, 5, 37));
 
         String firstTxId = HexFormat.of().formatHex(firstTxIdBytes);
         byte[] indexBytes = Arrays.copyOfRange(rawTxBytes, 37, 41);
-        long index = BytesTools.bytes4ToLongLE(indexBytes);
+        long index = BytesUtils.bytes4ToLongLE(indexBytes);
 
         String rawFirstTx = naSaRpcClient.getRawTx(firstTxId);
         Transaction tx = TxParserFch.parseRawTransaction(rawFirstTx);

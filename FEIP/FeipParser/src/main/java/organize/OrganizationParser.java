@@ -1,8 +1,8 @@
 package organize;
 
 import fch.fchData.Cid;
-import tools.EsTools;
-import tools.EsTools.MgetResult;
+import utils.EsUtils;
+import utils.EsUtils.MgetResult;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 
@@ -40,8 +40,8 @@ public class OrganizationParser {
 				if(groupRaw.getName()==null)return null;
 				if(groupRaw.getGid()!=null)return null;
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				groupHist.setId(opre.getTxId());
-				groupHist.setGid(opre.getTxId());
+				groupHist.setId(opre.getId());
+				groupHist.setGid(opre.getId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -57,7 +57,7 @@ public class OrganizationParser {
 				if(groupRaw.getGid()==null) return null;
 				if(groupRaw.getName()==null) return null;
 				groupHist.setGid(groupRaw.getGid());
-				groupHist.setId(opre.getTxId());
+				groupHist.setId(opre.getId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -74,7 +74,7 @@ public class OrganizationParser {
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) return null;
 				groupHist.setGid(groupRaw.getGid());
 
-				groupHist.setId(opre.getTxId());
+				groupHist.setId(opre.getId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -85,7 +85,7 @@ public class OrganizationParser {
 				if(groupRaw.getGids()==null || groupRaw.getGids().isEmpty())return null;
 				groupHist.setGids(groupRaw.getGids());
 
-				groupHist.setId(opre.getTxId());
+				groupHist.setId(opre.getId());
 				groupHist.setHeight(opre.getHeight());
 				groupHist.setIndex(opre.getTxIndex());
 				groupHist.setTime(opre.getTime());
@@ -105,7 +105,7 @@ public class OrganizationParser {
 
 		switch(groupHist.getOp()) {
 			case "create":
-				group = EsTools.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
+				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 				if(group==null) {
 					group = new Group();
 					group.setId(groupHist.getId());
@@ -149,7 +149,7 @@ public class OrganizationParser {
 
 			case "join":
 
-				group = EsTools.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
+				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 
 				if(group==null) {
 					isValid = false;
@@ -186,7 +186,7 @@ public class OrganizationParser {
 
 			case "update":
 
-				group = EsTools.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
+				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 
 				if(group==null) {
 					isValid = false;
@@ -235,7 +235,7 @@ public class OrganizationParser {
 
 				if(groupHist.getGids()==null || groupHist.getGids().isEmpty())return isValid;
 
-				EsTools.MgetResult<Group> result = EsTools.getMultiByIdList(esClient, IndicesNames.GROUP, groupHist.getGids(), Group.class);
+				EsUtils.MgetResult<Group> result = EsUtils.getMultiByIdList(esClient, IndicesNames.GROUP, groupHist.getGids(), Group.class);
 				if(result==null||result.getResultList()==null||result.getResultList().isEmpty())return isValid;	
 
 				BulkRequest.Builder br = new BulkRequest.Builder();
@@ -323,8 +323,8 @@ public class OrganizationParser {
 				if(teamRaw.getTid()!=null) return null;
 				if(teamRaw.getConsensusId()==null) return null;
             	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				teamHist.setId(opre.getTxId());
-				teamHist.setTid(opre.getTxId());
+				teamHist.setId(opre.getId());
+				teamHist.setTid(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -343,7 +343,7 @@ public class OrganizationParser {
 				if(teamRaw.getTids()==null)return null;
 				teamHist.setTids(teamRaw.getTids());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -356,7 +356,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setTransferee(teamRaw.getTransferee());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -368,7 +368,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -381,7 +381,7 @@ public class OrganizationParser {
 				if(teamRaw.getConsensusId()==null) return null;
 
 				teamHist.setTid(teamRaw.getTid());
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -402,7 +402,7 @@ public class OrganizationParser {
 				if(teamRaw.getConsensusId()!=null)
 					teamHist.setConsensusId(teamRaw.getConsensusId());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -415,7 +415,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setList(teamRaw.getList());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -428,7 +428,7 @@ public class OrganizationParser {
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -443,7 +443,7 @@ public class OrganizationParser {
 				teamHist.setRate(teamRaw.getRate());
 				teamHist.setCdd(opre.getCdd());
 
-				teamHist.setId(opre.getTxId());
+				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
 				teamHist.setIndex(opre.getTxIndex());
 				teamHist.setTime(opre.getTime());
@@ -462,7 +462,7 @@ public class OrganizationParser {
 		boolean found = false;
 		switch(teamHist.getOp()) {
 			case "create":
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 				if(team==null) {
 					team = new Team();
 					team.setId(teamHist.getId());
@@ -506,7 +506,7 @@ public class OrganizationParser {
 					break;
 				}
 
-				EsTools.MgetResult<Team> result = EsTools.getMultiByIdList(esClient, IndicesNames.TEAM, teamHist.getTids(), Team.class);
+				EsUtils.MgetResult<Team> result = EsUtils.getMultiByIdList(esClient, IndicesNames.TEAM, teamHist.getTids(), Team.class);
 				if(result==null||result.getResultList()==null||result.getResultList().isEmpty()) {
 					isValid = false;
 					break;
@@ -544,7 +544,7 @@ public class OrganizationParser {
 
 			case "transfer":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -557,7 +557,7 @@ public class OrganizationParser {
 				}
 
 				if(! team.getOwner().equals(teamHist.getSigner())) {
-					Cid resultCid = EsTools.getById(esClient, IndicesNames.CID, teamHist.getSigner(), Cid.class);
+					Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, teamHist.getSigner(), Cid.class);
 					if(resultCid.getMaster()!=null) {
 						if(! resultCid.getMaster().equals(teamHist.getSigner())) {
 							isValid = false;
@@ -586,7 +586,7 @@ public class OrganizationParser {
 
 			case "take over":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -635,7 +635,7 @@ public class OrganizationParser {
 				break;
 
 			case "update":
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -701,7 +701,7 @@ public class OrganizationParser {
 
 			case "agree consensus":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -754,7 +754,7 @@ public class OrganizationParser {
 
 			case "invite":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -800,7 +800,7 @@ public class OrganizationParser {
 
 			case "withdraw invitation":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -841,7 +841,7 @@ public class OrganizationParser {
 
 			case "join":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -917,7 +917,7 @@ public class OrganizationParser {
 					isValid = false;
 					break;
 				}	
-				MgetResult<Team> result1 = EsTools.getMultiByIdList(esClient,IndicesNames.TEAM, teamHist.getTids(), Team.class);
+				MgetResult<Team> result1 = EsUtils.getMultiByIdList(esClient,IndicesNames.TEAM, teamHist.getTids(), Team.class);
 				if(result1==null||result1.getResultList()==null||result1.getResultList().isEmpty()) {
 					isValid = false;
 					break;
@@ -1000,7 +1000,7 @@ public class OrganizationParser {
 					break;
 				}
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -1077,7 +1077,7 @@ public class OrganizationParser {
 
 			case "appoint":
 
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -1127,7 +1127,7 @@ public class OrganizationParser {
 				break;
 
 			case "cancel appointment":
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;
@@ -1174,7 +1174,7 @@ public class OrganizationParser {
 				break;
 
 			case "rate":
-				team = EsTools.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
+				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
 					isValid = false;

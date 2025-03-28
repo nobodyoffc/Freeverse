@@ -1,6 +1,6 @@
 package appTools;
 
-import tools.NumberTools;
+import utils.NumberUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -28,12 +28,6 @@ public class Menu {
         this.exitAction = close;
     }
 
-//    public Menu(String title, Runnable exitAction) {
-//        this.title = title;
-//        this.items = new ArrayList<>();
-//        this.exitAction = exitAction;
-//    }
-
     public static void anyKeyToContinue(BufferedReader br) {
         System.out.println(ANY_KEY);
         try {
@@ -57,7 +51,7 @@ public class Menu {
             Double valueDb;
             try {
                 valueDb = Double.parseDouble(valueStr);
-                valueDb = NumberTools.roundDouble8(valueDb);
+                valueDb = NumberUtils.roundDouble8(valueDb);
                 sum += ((long) (valueDb * 10000));
             } catch (Exception ignore) {
             }
@@ -151,6 +145,7 @@ public class Menu {
     }
 
     public void add(String name, Runnable action) {
+        if(items==null)items = new ArrayList<>();
         items.add(new MenuItem(name, action));
     }
 
@@ -184,7 +179,6 @@ public class Menu {
             } catch (NumberFormatException e) {
                 System.out.println("Invalid input. Please enter a number.");
             }
-            Menu.anyKeyToContinue(br);
         }
     }
 

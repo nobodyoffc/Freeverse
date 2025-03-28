@@ -1,9 +1,9 @@
 package parser;
 import crypto.Hash;
 import crypto.KeyTools;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.*;
-import tools.BytesTools;
+import utils.BytesUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -48,37 +48,37 @@ public class BlockParser {
 		// 读取4字节版本号
 		byte[] b4Ver = Arrays.copyOfRange(blockHeadBytes, offset, offset + 4);
 		offset += 4;
-		block1.setVersion(BytesTools.bytesToHexStringLE(b4Ver));
+		block1.setVersion(BytesUtils.bytesToHexStringLE(b4Ver));
 
 		// Read 32 bytes of the father block hash
 		// 读取32字节前区块哈希
 		byte[] b32PreId = Arrays.copyOfRange(blockHeadBytes, offset, offset + 32);
 		offset += 32;
-		String preId = BytesTools.bytesToHexStringLE(b32PreId);
+		String preId = BytesUtils.bytesToHexStringLE(b32PreId);
 		block1.setPreId(preId);
 
 		// Read 32 bytes of the merkle root
 		// 读取32字节默克尔根
 		byte[] b32MklR = Arrays.copyOfRange(blockHeadBytes, offset, offset + 32);
 		offset += 32;
-		block1.setMerkleRoot(BytesTools.bytesToHexStringLE(b32MklR));
+		block1.setMerkleRoot(BytesUtils.bytesToHexStringLE(b32MklR));
 
 		// Read 4 bytes of the time stamp.
 		// 读取4字节时间戳：
 		byte[] b4Time = Arrays.copyOfRange(blockHeadBytes, offset, offset + 4);
 		offset += 4;
-		block1.setTime(BytesTools.bytes4ToLongLE(b4Time));
+		block1.setTime(BytesUtils.bytes4ToLongLE(b4Time));
 
 		// Read 4 bytes of difficulty.
 		// 读取4字节挖矿难度：
 		byte[] b4Bits = Arrays.copyOfRange(blockHeadBytes, offset, offset + 4);
 		offset += 4;
-		block1.setBits(BytesTools.bytes4ToLongLE(b4Bits));
+		block1.setBits(BytesUtils.bytes4ToLongLE(b4Bits));
 
 		// Read 4 bytes of nonce
 		// 读取4字节挖矿随机数：
 		byte[] b4Nonce = Arrays.copyOfRange(blockHeadBytes, offset, offset + 4);
-		block1.setNonce(BytesTools.bytes4ToLongLE(b4Nonce));
+		block1.setNonce(BytesUtils.bytes4ToLongLE(b4Nonce));
 
 	}
 
@@ -87,7 +87,7 @@ public class BlockParser {
 		ReadyBlock readyBlock = new ReadyBlock();
 		ByteArrayInputStream blockInputStream = new ByteArrayInputStream(blockBodyBytes);
 
-		long txCount = ParseTools.parseVarint(blockInputStream).number;
+		long txCount = FchUtils.parseVarint(blockInputStream).number;
 		block1.setTxCount((int) txCount);
 
 		ArrayList<Tx> txList = new ArrayList<>();
@@ -132,7 +132,7 @@ public class BlockParser {
 		bytesList.add(b4Version);
 
 		tx.setTxIndex(0);
-		tx.setVersion(BytesTools.bytesToIntLE(b4Version));
+		tx.setVersion(BytesUtils.bytesToIntLE(b4Version));
 		tx.setBlockTime(block.getTime());
 		tx.setBlockId(block.getId());
 		tx.setHeight(block.getHeight());
@@ -168,10 +168,10 @@ public class BlockParser {
 		byte[] b4LockTime = new byte[4];
 		blockInputStream.read(b4LockTime);
 		bytesList.add(b4LockTime);
-		tx.setLockTime(BytesTools.bytes4ToLongLE(b4LockTime));
+		tx.setLockTime(BytesUtils.bytes4ToLongLE(b4LockTime));
 
-		byte[] rawTxBytes = BytesTools.bytesMerger(bytesList);
-		tx.setId(BytesTools.bytesToHexStringLE(Hash.sha256x2(rawTxBytes)));
+		byte[] rawTxBytes = BytesUtils.bytesMerger(bytesList);
+		tx.setId(BytesUtils.bytesToHexStringLE(Hash.sha256x2(rawTxBytes)));
 		ArrayList<Cash> outList = makeOutList(tx.getId(), rawOutList);
 
 		tx.setRawTx(HexFormat.of().formatHex(rawTxBytes));
@@ -196,8 +196,8 @@ public class BlockParser {
 
 		// Parse output count.
 		// 解析输出数量。
-		ParseTools.VarintResult varintParseResult;
-		varintParseResult = ParseTools.parseVarint(blockInputStream);
+		FchUtils.VarintResult varintParseResult;
+		varintParseResult = FchUtils.parseVarint(blockInputStream);
 		long outputCount = varintParseResult.number;
 		byte[] b0 = varintParseResult.rawBytes;
 		rawBytesList.add(b0);
@@ -228,11 +228,11 @@ public class BlockParser {
 			byte[] b8Value = new byte[8];
 			blockInputStream.read(b8Value);
 			rawBytesList.add(b8Value);
-			out.setValue(BytesTools.bytes8ToLong(b8Value,true));
+			out.setValue(BytesUtils.bytes8ToLong(b8Value,true));
 
 			// Parse the length of script.
 			// 解析脚本长度。
-			varintParseResult = ParseTools.parseVarint(blockInputStream);
+			varintParseResult = FchUtils.parseVarint(blockInputStream);
 			long scriptSize = varintParseResult.number;
 			byte[] b2 = varintParseResult.rawBytes;
 			rawBytesList.add(b2);
@@ -246,7 +246,7 @@ public class BlockParser {
 			switch (b1Script) {
 				case OP_DUP -> {
 					out.setType("P2PKH");
-					out.setLockScript(BytesTools.bytesToHexStringBE(bScript));
+					out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
 					byte[] hash160Bytes = Arrays.copyOfRange(bScript, 3, 23);
 					out.setOwner(KeyTools.hash160ToFchAddr(hash160Bytes));
 				}
@@ -265,13 +265,13 @@ public class BlockParser {
 				}
 				case OP_HASH160 -> {
 					out.setType("P2SH");
-					out.setLockScript(BytesTools.bytesToHexStringBE(bScript));
+					out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
 					byte[] hash160Bytes1 = Arrays.copyOfRange(bScript, 2, 22);
 					out.setOwner(KeyTools.hash160ToMultiAddr(hash160Bytes1));
 				}
 				default -> {
 					out.setType("Unknown");
-					out.setLockScript(BytesTools.bytesToHexStringBE(bScript));
+					out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
 					out.setOwner("Unknown");
 				}
 			}
@@ -288,7 +288,7 @@ public class BlockParser {
 			// 添加输出到列表。
 			rawOutList.add(out);
 		}
-		byte[] rawBytes = BytesTools.bytesMerger(rawBytesList);
+		byte[] rawBytes = BytesUtils.bytesMerger(rawBytesList);
 
 		ParseTxOutResult parseTxOutResult = new ParseTxOutResult();
 		parseTxOutResult.rawBytes = rawBytes;
@@ -310,7 +310,7 @@ public class BlockParser {
 	private ArrayList<Cash> makeOutList(String txId, ArrayList<Cash> rawOutList1) {
 		for (int j = 0; j < rawOutList1.size(); j++) {
 			rawOutList1.get(j).setBirthTxId(txId);
-			rawOutList1.get(j).setId(ParseTools.calcTxoId(txId, j));
+			rawOutList1.get(j).setId(Cash.makeCashId(txId, j));
 		}
 		return rawOutList1;
 	}
@@ -325,7 +325,7 @@ public class BlockParser {
 		blockInputStream.read(b4Version);
 		bytesList.add(b4Version);
 
-		tx.setVersion(BytesTools.bytesToIntLE(b4Version));
+		tx.setVersion(BytesUtils.bytesToIntLE(b4Version));
 		tx.setTxIndex(i);
 		tx.setBlockTime(block.getTime());
 		tx.setBlockId(block.getId());
@@ -351,10 +351,10 @@ public class BlockParser {
 		byte[] b4LockTime = new byte[4];
 		blockInputStream.read(b4LockTime);
 		bytesList.add(b4LockTime);
-		tx.setLockTime((long) BytesTools.bytesToIntLE(b4LockTime));
+		tx.setLockTime((long) BytesUtils.bytesToIntLE(b4LockTime));
 
-		byte[] rawTxBytes = BytesTools.bytesMerger(bytesList);
-		tx.setId(BytesTools.bytesToHexStringLE(Hash.sha256x2(rawTxBytes)));
+		byte[] rawTxBytes = BytesUtils.bytesMerger(bytesList);
+		tx.setId(BytesUtils.bytesToHexStringLE(Hash.sha256x2(rawTxBytes)));
 		tx.setRawTx(HexFormat.of().formatHex(rawTxBytes));
 
 		ArrayList<Cash> inList = makeInList(tx.getId(), rawInList);
@@ -382,8 +382,8 @@ public class BlockParser {
 		ArrayList<Cash> rawInList = new ArrayList<>();// For returning inputs without
 
 		// Get input count./获得输入数量
-		ParseTools.VarintResult varintParseResult;
-		varintParseResult = ParseTools.parseVarint(blockInputStream);
+		FchUtils.VarintResult varintParseResult;
+		varintParseResult = FchUtils.parseVarint(blockInputStream);
 		long inputCount = varintParseResult.number;
 		tx1.setInCount((int) inputCount);
 
@@ -409,10 +409,10 @@ public class BlockParser {
 			blockInputStream.read(b36PreTxIdAndIndex);
 			rawBytesList.add(b36PreTxIdAndIndex);
 
-			input.setId(ParseTools.calcTxoIdFromBytes(b36PreTxIdAndIndex));
+			input.setId(Cash.makeCashId(b36PreTxIdAndIndex));
 
 			// Read the length of script./读脚本长度。
-			varintParseResult = ParseTools.parseVarint(blockInputStream);
+			varintParseResult = FchUtils.parseVarint(blockInputStream);
 			long scriptLength = varintParseResult.number;
 			byte[] bvVarint1 = varintParseResult.rawBytes;
 			rawBytesList.add(bvVarint1);
@@ -421,7 +421,7 @@ public class BlockParser {
 			byte[] bvScript = new byte[(int) scriptLength];
 			blockInputStream.read(bvScript);
 			rawBytesList.add(bvScript);
-			input.setUnlockScript(BytesTools.bytesToHexStringBE(bvScript));
+			input.setUnlockScript(BytesUtils.bytesToHexStringBE(bvScript));
 
 			// Parse sigHash.
 			// 解析sigHash。
@@ -437,11 +437,11 @@ public class BlockParser {
 			byte[] b4Sequence = new byte[4];
 			blockInputStream.read(b4Sequence);
 			rawBytesList.add(b4Sequence);
-			input.setSequence(BytesTools.bytesToHexStringBE(b4Sequence));
+			input.setSequence(BytesUtils.bytesToHexStringBE(b4Sequence));
 
 			rawInList.add(input);
 		}
-		byte[] rawBytes = BytesTools.bytesMerger(rawBytesList);
+		byte[] rawBytes = BytesUtils.bytesMerger(rawBytesList);
 
 		ParseTxInResult parseTxInResult = new ParseTxInResult();
 

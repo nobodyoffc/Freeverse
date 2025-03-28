@@ -3,6 +3,7 @@ package feip.feipData;
 import java.util.Map;
 
 import constants.FieldNames;
+import constants.Values;
 import feip.FeipOp;
 
 import java.util.List;
@@ -43,8 +44,8 @@ public class NidOpData {
 	}
 
 	public static final Map<String, String[]> OP_FIELDS = Map.ofEntries(
-		entry(Op.REGISTER.name(), new String[]{FieldNames.NAME, FieldNames.DESC}),
-		entry(Op.UPDATE.name(), new String[]{FieldNames.OID, FieldNames.NAME, FieldNames.DESC}),
+		entry(Op.REGISTER.name(), new String[]{FieldNames.NAME, Values.DESC}),
+		entry(Op.UPDATE.name(), new String[]{FieldNames.OID, FieldNames.NAME, Values.DESC}),
 		entry(Op.CLOSE.name(), new String[]{FieldNames.NAMES}),
 		entry(Op.RATE.name(), new String[]{FieldNames.OID})
 	);

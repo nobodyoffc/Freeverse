@@ -7,7 +7,7 @@ import nasa.NaSaRpcClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -101,23 +101,23 @@ public class MempoolScanner implements Runnable {
     }
 
     private void addTxToRedis(Tx tx,Jedis jedis) {
-        jedis.hset("tx",tx.getId(), JsonTools.toNiceJson(tx));
+        jedis.hset("tx",tx.getId(), JsonUtils.toNiceJson(tx));
     }
 
     private void addSpendCashesToRedis(List<Cash> inList, Jedis jedis) {
         for(Cash cash:inList){
             if(jedis.hget(SPEND_CASHES,cash.getId())==null) {
-                jedis.hset(SPEND_CASHES, cash.getId(), JsonTools.toNiceJson(cash));
+                jedis.hset(SPEND_CASHES, cash.getId(), JsonUtils.toNiceJson(cash));
             }
             else{
-                log.debug("Double spend : "+ JsonTools.toNiceJson(cash));
+                log.debug("Double spend : "+ JsonUtils.toNiceJson(cash));
             }
         }
     }
 
     private void addNewCashesToRedis(List<Cash> outList, Jedis jedis) {
         for(Cash cash:outList){
-            jedis.hset(NEW_CASHES,cash.getId(), JsonTools.toNiceJson(cash));
+            jedis.hset(NEW_CASHES,cash.getId(), JsonUtils.toNiceJson(cash));
         }
     }
 
@@ -171,9 +171,9 @@ public class MempoolScanner implements Runnable {
 
             jedis.hset(fid, SPEND_VALUE, String.valueOf(spendValue));
             jedis.hset(fid, SPEND_COUNT, String.valueOf(spendCount));
-            jedis.hset(fid,SPEND_CASHES, JsonTools.toNiceJson(newSpendCashes));
+            jedis.hset(fid,SPEND_CASHES, JsonUtils.toNiceJson(newSpendCashes));
             jedis.hset(fid, NET, String.valueOf(net));
-            jedis.hset(fid, TX_VALUE_MAP, JsonTools.toNiceJson(txValueMap));
+            jedis.hset(fid, TX_VALUE_MAP, JsonUtils.toNiceJson(txValueMap));
         }
 
         for (Cash cash : outList) {
@@ -218,9 +218,9 @@ public class MempoolScanner implements Runnable {
 
             jedis.hset(fid, INCOME_VALUE, String.valueOf(incomeValue));
             jedis.hset(fid, INCOME_COUNT, String.valueOf(incomeCount));
-            jedis.hset(fid,NEW_CASHES, JsonTools.toNiceJson(newIncomeCashes));
+            jedis.hset(fid,NEW_CASHES, JsonUtils.toNiceJson(newIncomeCashes));
             jedis.hset(fid, NET, String.valueOf(net));
-            jedis.hset(fid, TX_VALUE_MAP, JsonTools.toNiceJson(txValueMap));
+            jedis.hset(fid, TX_VALUE_MAP, JsonUtils.toNiceJson(txValueMap));
         }
 
     }

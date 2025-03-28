@@ -7,8 +7,8 @@ import constants.CodeMessage;
 import com.google.gson.Gson;
 import crypto.old.EccAes256K1P7;
 import fcData.AlgorithmId;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 
 
 import javax.annotation.Nullable;
@@ -19,9 +19,9 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
-import static tools.BytesTools.byteArrayToUtf8CharArray;
-import static tools.Hex.byteArrayToHexCharArray;
-import static tools.JsonTools.readOneJsonFromFile;
+import static utils.BytesUtils.byteArrayToUtf8CharArray;
+import static utils.Hex.byteArrayToHexCharArray;
+import static utils.JsonUtils.readOneJsonFromFile;
 
 public class CryptoDataStr {
     private EncryptType type;
@@ -151,7 +151,7 @@ public class CryptoDataStr {
         if (asyOneWayOrAsyTwoWayType == EncryptType.AsyOneWay || asyOneWayOrAsyTwoWayType == EncryptType.AsyTwoWay) {
             byte[] pubKeyBytesA = HexFormat.of().parseHex(pubKeyA);
             byte[] pubKeyBytesB = HexFormat.of().parseHex(pubKeyB);
-            byte[] priKeyBytes = BytesTools.hexCharArrayToByteArray(priKey);
+            byte[] priKeyBytes = BytesUtils.hexCharArrayToByteArray(priKey);
             this.alg = AlgorithmId.EccAes256K1P7_No1_NrC7;
             this.type = asyOneWayOrAsyTwoWayType;
             this.iv = iv;
@@ -172,7 +172,7 @@ public class CryptoDataStr {
         if (asyOneWayOrAsyTwoWayType == EncryptType.AsyOneWay || asyOneWayOrAsyTwoWayType == EncryptType.AsyTwoWay) {
             byte[] pubKeyBytesA = HexFormat.of().parseHex(pubKeyA);
             byte[] pubKeyBytesB = HexFormat.of().parseHex(pubKeyB);
-            byte[] priKeyBytes = BytesTools.hexCharArrayToByteArray(priKey);
+            byte[] priKeyBytes = BytesUtils.hexCharArrayToByteArray(priKey);
             if(alg!=null)this.alg=alg;
             else this.alg = AlgorithmId.EccAes256K1P7_No1_NrC7;
             this.type = asyOneWayOrAsyTwoWayType;
@@ -281,7 +281,7 @@ public class CryptoDataStr {
     }
 
     private void checkKeyPairAndSetPriKey(CryptoDataStr cryptoDataStr, char[] key) {
-        byte[] keyBytes = BytesTools.hexCharArrayToByteArray(key);
+        byte[] keyBytes = BytesUtils.hexCharArrayToByteArray(key);
         if (cryptoDataStr.getPubKeyA() != null) {
             byte[] pubKey = HexFormat.of().parseHex(cryptoDataStr.getPubKeyA());
             if (EccAes256K1P7.isTheKeyPair(pubKey, keyBytes)) {
@@ -330,6 +330,7 @@ public class CryptoDataStr {
         Gson gson = new GsonBuilder()
                 .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeSerializer())
                 .setPrettyPrinting()
+                .disableHtmlEscaping()
                 .create();
         return gson.toJson(this);
     }

@@ -15,8 +15,8 @@ import configure.Configure;
 import handlers.AccountHandler;
 import handlers.Handler;
 import server.DiskApiNames;
-import tools.EsTools;
-import tools.JsonTools;
+import utils.EsUtils;
+import utils.JsonUtils;
 import redis.clients.jedis.JedisPool;
 import server.balance.BalanceInfo;
 import server.order.Order;
@@ -162,10 +162,10 @@ public class StartDiskManager {
             int choice = menu.choose(br);
             switch (choice) {
                 case 1 -> listAllIndices(esClient,br);
-                case 2 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient,br);
-                case 3 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
-                case 4 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
-                case 5 -> EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
+                case 2 -> EsUtils.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient,br);
+                case 3 -> EsUtils.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
+                case 4 -> EsUtils.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
+                case 5 -> EsUtils.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
                 case 6 -> recreateAllIndices(esClient,br);
                 case 0 -> {
                     return;
@@ -187,7 +187,7 @@ public class StartDiskManager {
         for (IndicesRecord record : indicesRecordList) {
             allSumMap.put(record.index(), record.docsCount());
         }
-        System.out.println(JsonTools.toNiceJson(allSumMap));
+        System.out.println(JsonUtils.toNiceJson(allSumMap));
     }
 
 //    private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
@@ -202,10 +202,10 @@ public class StartDiskManager {
 
     private static void recreateAllIndices(ElasticsearchClient esClient,BufferedReader br) {
         if(!Inputer.askIfYes(br,"Recreate the disk data, order, balance, reward indices?"))return;
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient, br);
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid,DATA), DiskItem.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
     }
 
     private static void checkEsIndices(ElasticsearchClient esClient) {
@@ -214,7 +214,7 @@ public class StartDiskManager {
         nameMappingList.put(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS);
         nameMappingList.put(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
-        EsTools.checkEsIndices(esClient,nameMappingList);
+        EsUtils.checkEsIndices(esClient,nameMappingList);
     }
 
 }

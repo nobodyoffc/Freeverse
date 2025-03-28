@@ -2,7 +2,7 @@ package test;
 
 import crypto.Encryptor;
 import fcData.AlgorithmId;
-import tools.BytesTools;
+import utils.BytesUtils;
 import org.bitcoinj.core.ECKey;
 
 import java.util.ArrayList;
@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 public class CryptoTest {
 
     public static void main(String[] args) throws InterruptedException {
-        byte[] key = BytesTools.getRandomBytes(32);
+        byte[] key = BytesUtils.getRandomBytes(32);
         byte[] msg = "hello world!".getBytes();
         ECKey ecKey = new ECKey();
         byte[] pubKey = ecKey.getPubKey();

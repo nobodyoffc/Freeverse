@@ -6,8 +6,8 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.*;
 import feip.feipData.Service;
 import handlers.*;
-import tools.FileTools;
-import tools.JsonTools;
+import utils.FileUtils;
+import utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPool;
@@ -15,7 +15,6 @@ import redis.clients.jedis.JedisPool;
 
 import javax.servlet.ServletConfig;
 import javax.servlet.http.HttpServlet;
-import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 
@@ -23,7 +22,7 @@ import static configure.Configure.makeConfigFileName;
 import static feip.feipData.Service.ServiceType.APIP;
 import static feip.feipData.Service.ServiceType.ES;
 import static handlers.Handler.HandlerType.*;
-import static tools.FileTools.makeServerDataDir;
+import static utils.FileUtils.makeServerDataDir;
 
 public class Initiator extends HttpServlet {
     public static final String SERVICE_TYPE = Service.ServiceType.DISK.name();
@@ -54,14 +53,14 @@ public class Initiator extends HttpServlet {
         Configure configure;
         Map<String,Configure> configureMap;
         try {
-            webServerConfig = JsonTools.readJsonFromFile(configFileName,WebServerConfig.class);
-            configureMap = JsonTools.readMapFromJsonFile(null,webServerConfig.getConfigPath(),String.class,Configure.class);
+            webServerConfig = JsonUtils.readJsonFromFile(configFileName,WebServerConfig.class);
+            configureMap = JsonUtils.readMapFromJsonFile(null,webServerConfig.getConfigPath(),String.class,Configure.class);
             if(configureMap==null){
                 log.error("Failed to read the config file of "+configFileName+".");
                 return;
             }
             configure = configureMap.get(webServerConfig.getPasswordName());
-            settings = JsonTools.readJsonFromFile(webServerConfig.getSettingPath(), Settings.class);
+            settings = JsonUtils.readJsonFromFile(webServerConfig.getSettingPath(), Settings.class);
             settings.setConfig(configure);
 
             listenPath = (String)settings.getSettingMap().get(appTools.Settings.LISTEN_PATH);
@@ -85,7 +84,7 @@ public class Initiator extends HttpServlet {
         accountHandler.start();
 
         String storageDir = makeServerDataDir(sid, Service.ServiceType.DISK);
-        FileTools.checkDirOrMakeIt(storageDir);
+        FileUtils.checkDirOrMakeIt(storageDir);
 
         System.out.println("DISK server is initiated.");
     }

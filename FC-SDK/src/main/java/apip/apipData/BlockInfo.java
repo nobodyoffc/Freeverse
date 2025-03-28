@@ -1,5 +1,6 @@
 package apip.apipData;
 
+import fcData.FcObject;
 import fch.fchData.Block;
 import fch.fchData.BlockHas;
 import fch.fchData.TxMark;
@@ -9,7 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class BlockInfo {
+public class BlockInfo extends FcObject {
     // Block properties
     private long size;
     private long height;
@@ -26,7 +27,6 @@ public class BlockInfo {
     private long cdd;
 
     // BlockHas properties
-    private String blockId;
     private ArrayList<TxMark> txList;
 
     // Getters and setters for all properties
@@ -37,6 +37,7 @@ public class BlockInfo {
 
         for (Block block : blockList) {
             BlockInfo blockInfo = new BlockInfo();
+            blockInfo.setId(block.getId());
             blockInfo.setSize(block.getSize());
             blockInfo.setHeight(block.getHeight());
             blockInfo.setVersion(block.getVersion());
@@ -50,7 +51,6 @@ public class BlockInfo {
             blockInfo.setOutValueT(block.getOutValueT());
             blockInfo.setFee(block.getFee());
             blockInfo.setCdd(block.getCdd());
-            blockInfo.setBlockId(block.getId());
 
             blockInfoMap.put(block.getId(), blockInfo);
         }
@@ -167,14 +167,6 @@ public class BlockInfo {
 
     public void setCdd(long cdd) {
         this.cdd = cdd;
-    }
-
-    public String getBlockId() {
-        return blockId;
-    }
-
-    public void setBlockId(String blockId) {
-        this.blockId = blockId;
     }
 
     public ArrayList<TxMark> getTxList() {

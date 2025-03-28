@@ -5,7 +5,7 @@ import feip.feipData.Service;
 import appTools.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Strings;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Set;
 
-import static tools.EsTools.recreateIndex;
+import static utils.EsUtils.recreateIndex;
 import static constants.Strings.*;
 import static appTools.Settings.addSidBriefToName;
 
@@ -96,20 +96,20 @@ public class BalanceManager {
                 Set<String> addrSet = jedis.hkeys(Settings.addSidBriefToName(sid, FieldNames.BALANCE));
                 for (String addr : addrSet) {
                     User user = getUser(addr, jedis);
-                    System.out.println(JsonTools.toNiceJson(user));
+                    System.out.println(JsonUtils.toNiceJson(user));
                 }
             } else {
                 if (jedis.hget(Settings.addSidBriefToName(sid, FieldNames.BALANCE), str) != null) {
                     //For FID
                     jedis.select(0);
                     User user = getUser(str, jedis);
-                    System.out.println(JsonTools.toNiceJson(user));
+                    System.out.println(JsonUtils.toNiceJson(user));
                 } else {
                     //For sessionName
                     jedis.select(1);
                     if(jedis.exists(str)) {
                         User user = getUser(jedis.hget(str, FID), jedis);
-                        System.out.println(JsonTools.toNiceJson(user));
+                        System.out.println(JsonUtils.toNiceJson(user));
                     }else {
                         System.out.println("Failed to find "+str);
                         return;

@@ -1,47 +1,67 @@
 package fch.fchData;
 
-import fcData.FcObject;
+import appTools.Shower;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import fcData.FcSubject;
 import fch.WeightMethod;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.io.BufferedReader;
 import java.util.List;
-import java.util.Map;
 
-public class Cid extends FcObject {
-    private String cid;
-    private String[] usedCids;
-    private String pubKey;        //public key
+import static constants.FieldNames.*;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class Cid extends FcSubject {
     private String priKey;
 
-    private Long balance;        //value of fch in satoshi
-    private Long cash;        //Count of UTXO
-    private Long income;        //total amount of fch received in satoshi
-    private Long expend;        //total amount of fch pay in satoshi
+    protected Long balance;        //value of fch in satoshi
+    protected Long cash;        //Count of UTXO
+    protected Long income;        //total amount of fch received in satoshi
+    protected Long expend;        //total amount of fch pay in satoshi
 
-    private Long cd;        //CoinDays
-    private Long cdd;        //the total amount of coindays destroyed
-    private Long reputation;
-    private Long hot;
-    private Long weight;
+    protected Long cd;        //CoinDays
+    protected Long cdd;        //the total amount of coindays destroyed
+    protected Long reputation;
+    protected Long hot;
+    protected Long weight;
 
-    private String master;
-    private String guide;    //the address of the address which sent the first fch to this address
-    private String noticeFee;
-    private String[] homepages;
+    protected String master;
+    protected String guide;    //the address of the address which sent the first fch to this address
+    protected String noticeFee;
+    protected List<String> homepages;
 
-    private String btcAddr;    //the btc address
-    private String ethAddr;    //the eth address
-    private String ltcAddr;    //the ltc address
-    private String dogeAddr;    //the doge address
-    private String trxAddr;    //the trx address
-    private String bchAddr;    //the bch address
+    protected String btcAddr;    //the btc address
+    protected String ethAddr;    //the eth address
+    protected String ltcAddr;    //the ltc address
+    protected String dogeAddr;    //the doge address
+    protected String trxAddr;    //the trx address
+    protected String bchAddr;    //the bch address
 
-    private Long birthHeight;    //the height where this address got its first fch
-    private Long nameTime;
-    private Long lastHeight;     //the height where this address info changed latest. If roll back happened, lastHei point to the lastHeight before fork.
+    protected Long birthHeight;    //the height where this address got its first fch
+    protected Long nameTime;
+    protected Long lastHeight;     //the height where this address info changed latest. If roll back happened, lastHei point to the lastHeight before fork.
 
-    public void reCalcWeight() {
+    public static String[] DefaultShowField = {
+        ID,
+        CID,
+        CASH,
+        BALANCE,
+        CD,
+        LAST_HEIGHT
+    };
+    public static Integer[] DefaultShowWidth = {
+        ID_DEFAULT_SHOW_SIZE,
+        TEXT_SHORT_DEFAULT_SHOW_SIZE,
+        AMOUNT_DEFAULT_SHOW_SIZE,
+        AMOUNT_DEFAULT_SHOW_SIZE,
+        CD_DEFAULT_SHOW_SIZE,
+        TIME_DEFAULT_SHOW_SIZE
+    };
+
+    public static List<Cid> showCidList(String title, List<Cid> list, Integer maxFieldWidth, boolean choose, BufferedReader br) {
+        return Shower.showOrChooseListInPages("FID Info", list, br,choose, Cid.class);
+    }
+        public void reCalcWeight() {
         if(reputation==null)reputation=0L;
         if(cdd == null)cdd =0L;
         if(cd == null)cd = 0L;
@@ -54,30 +74,6 @@ public class Cid extends FcObject {
 
     public void setWeight(Long weight) {
         this.weight = weight;
-    }
-
-    public String getCid() {
-        return cid;
-    }
-
-    public void setCid(String cid) {
-        this.cid = cid;
-    }
-
-    public String[] getUsedCids() {
-        return usedCids;
-    }
-
-    public void setUsedCids(String[] usedCids) {
-        this.usedCids = usedCids;
-    }
-
-    public String getPubKey() {
-        return pubKey;
-    }
-
-    public void setPubKey(String pubKey) {
-        this.pubKey = pubKey;
     }
 
     public String getPriKey() {
@@ -176,11 +172,11 @@ public class Cid extends FcObject {
         this.noticeFee = noticeFee;
     }
 
-    public String[] getHomepages() {
+    public List<String> getHomepages() {
         return homepages;
     }
 
-    public void setHomepages(String[] homepages) {
+    public void setHomepages(List<String> homepages) {
         this.homepages = homepages;
     }
 

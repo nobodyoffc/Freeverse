@@ -13,14 +13,14 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.FieldNames;
 import constants.Strings;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.WeightMethod;
 import fch.fchData.Cid;
 import fch.fchData.Block;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.EsTools;
-import tools.JsonTools;
+import utils.EsUtils;
+import utils.JsonUtils;
 
 import java.io.IOException;
 import java.util.*;
@@ -82,7 +82,7 @@ public class CdMaker {
 		long count = 0;
 
 		SearchResponse<Cid> response = esClient.search(
-				s -> s.index(CID).size(EsTools.READ_MAX).sort(sort -> sort.field(f -> f.field(Strings.FID))),
+				s -> s.index(CID).size(EsUtils.READ_MAX).sort(sort -> sort.field(f -> f.field(Strings.FID))),
 				Cid.class);
 
 		ArrayList<Cid> addrOldList = getResultAddrList(response);
@@ -97,11 +97,11 @@ public class CdMaker {
 		updateAddrMap(esClient, addrNewCdMap, addrNewWeightMap);
 		count+=response.hits().hits().size();
 
-		while (response.hits().hits().size() >= EsTools.READ_MAX) {
+		while (response.hits().hits().size() >= EsUtils.READ_MAX) {
 
 			Hit<Cid> last = response.hits().hits().get(response.hits().hits().size() - 1);
 			String lastId = last.id();
-			response = esClient.search(s -> s.index(CID).size(EsTools.READ_MAX)
+			response = esClient.search(s -> s.index(CID).size(EsUtils.READ_MAX)
 					.sort(sort -> sort.field(f -> f.field(Strings.FID))).searchAfter(lastId), Cid.class);
 
 			addrOldList = getResultAddrList(response);
@@ -115,10 +115,10 @@ public class CdMaker {
 			updateAddrMap(esClient, addrNewCdMap, addrNewWeightMap);
 			count+=response.hits().hits().size();
 		}
-		String time = ParseTools.convertTimestampToDate(System.currentTimeMillis());
+		String time = FchUtils.convertTimestampToDate(System.currentTimeMillis());
 		Map<String,Long> dataMap =new HashMap<>();
 		dataMap.put("circulating",sum);
-		JsonTools.writeObjectToJsonFile(dataMap,"state.json",false);
+		JsonUtils.writeObjectToJsonFile(dataMap,"state.json",false);
 		log.debug(time+": Made cd values of all "+count+" address.");
 		System.out.println(time+": Made cd values of all "+count+" address.");
 	}
@@ -195,7 +195,7 @@ public class CdMaker {
 		}
 
 		if(addrNewCdMap.size()>0)
-			EsTools.bulkWithBuilder(esClient, br);
+			EsUtils.bulkWithBuilder(esClient, br);
 	}
 
 

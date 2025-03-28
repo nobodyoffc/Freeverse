@@ -3,7 +3,6 @@ package server;
 import appTools.Settings;
 import ch.qos.logback.classic.Logger;
 import handlers.AccountHandler;
-import clients.Client;
 
 import constants.IndicesNames;
 import constants.CodeMessage;
@@ -19,10 +18,10 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.LoggerFactory;
 
 import io.netty.buffer.ByteBuf;
-import tools.JsonTools;
-import tools.TalkUnitExecutor;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.JsonUtils;
+import utils.TalkUnitExecutor;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 
 import java.io.IOException;
 import java.util.*;
@@ -41,7 +40,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     private void sendServiceInfo(ChannelHandlerContext ctx) {
         Signature signature = new Signature();
-        byte[] priKey = Client.decryptPriKey(talkServer.getSettings().getMyPriKeyCipher(),talkServer.getSettings().getSymKey());
+        byte[] priKey = Decryptor.decryptPriKey(talkServer.getSettings().getMyPriKeyCipher(),talkServer.getSettings().getSymKey());
         signature.sign(talkServer.getService().toJson(), priKey, AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
         TalkUnitSender.sendBytesByNettyCtx(signature.toJson().getBytes(), ctx);
     }
@@ -161,7 +160,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
         indexTalkUnit.setDataType(finalTalkUnit.getDataType());
         // Convert complex data object to string representation
         if (finalTalkUnit.getData() != null) {
-            indexTalkUnit.setData(JsonTools.toJson(finalTalkUnit.getData()));
+            indexTalkUnit.setData(JsonUtils.toJson(finalTalkUnit.getData()));
         }
 
         talkServer.getEsClient().index(i -> i

@@ -6,10 +6,10 @@ import constants.FieldNames;
 import fch.fchData.Block;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Strings;
-import tools.EsTools;
-import tools.RedisTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.EsUtils;
+import utils.RedisUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.order.Order;
@@ -18,7 +18,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Map;
 
-import static fch.BlockFileTools.getBlockByHeight;
+import static fch.BlockFileUtils.getBlockByHeight;
 import static constants.IndicesNames.BLOCK;
 import static constants.IndicesNames.ORDER;
 import static constants.Strings.ORDER_LAST_HEIGHT;
@@ -39,7 +39,7 @@ public class Rollbacker {
         if(heightBlockInfoMap==null)throw new RuntimeException("Failed to get last block info. Check APIP service.");
 
         BlockInfo blockInfo = heightBlockInfoMap.get(String.valueOf(lastHeight));
-        return !blockInfo.getBlockId().equals(lastBlockId);
+        return !blockInfo.getId().equals(lastBlockId);
     }
 
     public static boolean isRolledBack(ElasticsearchClient esClient,long lastHeight,String lastBlockId) throws IOException {
@@ -51,7 +51,7 @@ public class Rollbacker {
         if (lastHeight==0 || lastBlockId ==null)return false;
         Block block =null;
         try {
-            block = EsTools.getById(esClient, BLOCK, lastBlockId, Block.class);
+            block = EsUtils.getById(esClient, BLOCK, lastBlockId, Block.class);
         }catch (Exception e){
             e.printStackTrace();
         }
@@ -62,7 +62,7 @@ public class Rollbacker {
         ArrayList<Order> orderList = null;
         try (Jedis jedis0Common = jedisPool.getResource()){
             String index = addSidBriefToName(sid,ORDER);
-            orderList= EsTools.getListSinceHeight(esClient, index,"height",height,Order.class);
+            orderList= EsUtils.getListSinceHeight(esClient, index,"height",height,Order.class);
 
             if(orderList==null || orderList.size()==0)return;
             minusFromBalance(sid,orderList, esClient, jedisPool);
@@ -80,13 +80,13 @@ public class Rollbacker {
         try(Jedis jedis = jedisPool.getResource()) {
             for (Order order : orderList) {
                 String addr = order.getFromFid();
-                long balance = RedisTools.readHashLong(jedis, addSidBriefToName(sid, FieldNames.BALANCE), addr);
+                long balance = RedisUtils.readHashLong(jedis, addSidBriefToName(sid, FieldNames.BALANCE), addr);
                 jedis.hset(addSidBriefToName(sid, FieldNames.BALANCE), addr, String.valueOf(balance - order.getAmount()));
 
                 idList.add(order.getOrderId());
             }
         }
         String index = addSidBriefToName(sid,ORDER);
-        EsTools.bulkDeleteList(esClient, index, idList);
+        EsUtils.bulkDeleteList(esClient, index, idList);
     }
 }

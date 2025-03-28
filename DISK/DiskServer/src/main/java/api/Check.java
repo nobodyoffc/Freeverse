@@ -3,9 +3,9 @@ package api;
 import server.ApipApiNames;
 import initial.Initiator;
 import server.DiskApiNames;
-import tools.FileTools;
-import tools.Hex;
-import tools.http.AuthType;
+import utils.FileUtils;
+import utils.Hex;
+import utils.http.AuthType;
 import fcData.ReplyBody;
 import redis.clients.jedis.Jedis;
 import server.HttpRequestChecker;
@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import static constants.FieldNames.DID;
-import static tools.FileTools.getSubPathForDisk;
+import static utils.FileUtils.getSubPathForDisk;
 import static startManager.StartDiskManager.STORAGE_DIR;
 
 @WebServlet(name = DiskApiNames.CHECK, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.CHECK)
@@ -72,7 +72,7 @@ public class Check extends HttpServlet {
         }
         String subDir = getSubPathForDisk(did);
         String path = STORAGE_DIR + subDir;
-        Boolean isFileExists = Boolean.TRUE.equals(FileTools.checkFileOfFreeDisk(path, did));
+        Boolean isFileExists = Boolean.TRUE.equals(FileUtils.checkFileOfFreeDisk(path, did));
         replier.reply0SuccessHttp(isFileExists,response);
     }
 

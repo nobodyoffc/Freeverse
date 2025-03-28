@@ -6,7 +6,6 @@ import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
-import clients.Client;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldSort;
 import co.elastic.clients.elasticsearch._types.SortOptions;
@@ -17,11 +16,14 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.*;
+import crypto.Decryptor;
 import crypto.KeyTools;
+import fcData.FcEntity;
 import fcData.ReplyBody;
-import tools.IdNameTools;
-import fch.BlockFileTools;
-import fch.ParseTools;
+import fch.FchMainNetwork;
+import utils.IdNameUtils;
+import fch.BlockFileUtils;
+import fch.FchUtils;
 import fch.fchData.Block;
 import fch.fchData.Cash;
 import fch.fchData.OpReturn;
@@ -34,14 +36,14 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.TalkServer;
 import server.rollback.Rollbacker;
-import tools.BytesTools;
-import tools.Hex;
-import tools.MapQueue;
-import tools.NumberTools;
-import tools.ObjectTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
-import tools.EsTools;
+import utils.BytesUtils;
+import utils.Hex;
+import utils.MapQueue;
+import utils.NumberUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
+import utils.EsUtils;
 
 import javax.annotation.Nullable;
 import java.io.BufferedReader;
@@ -53,11 +55,12 @@ import java.util.stream.Collectors;
 
 import static appTools.Settings.DEALER_MIN_BALANCE;
 import static appTools.Settings.LISTEN_PATH;
-import static constants.Constants.DEFAULT_CASH_LIST_SIZE;
+import static constants.Constants.DEFAULT_DISPLAY_LIST_SIZE;
 import static constants.FieldNames.*;
+import static constants.Strings.TIME;
 import static constants.Strings.VIA;
 
-public class AccountHandler extends Handler {
+public class AccountHandler extends Handler<FcEntity> {
     final static Logger log = LoggerFactory.getLogger(AccountHandler.class);
     public static final Long DEFAULT_DEALER_MIN_BALANCE = 100000000L;
     public static final Long DEFAULT_DISTRIBUTE_BALANCE = 100 * 100000000L;
@@ -85,8 +88,8 @@ public class AccountHandler extends Handler {
     private final ApipClient apipClient;
     private ElasticsearchClient esClient;
     private final CashHandler cashHandler;
-    private final Long dealerMinBalance;
-    private final Long minDistributeBalance;
+    private Long dealerMinBalance;
+    private Long minDistributeBalance;
     private final AccountDB accountDB;
     private final byte[] priKey;
     private String startHeight;
@@ -150,13 +153,14 @@ public class AccountHandler extends Handler {
         this.useRedis = (jedisPool != null);
         
         // Add dealer min balance input logic
-        Long inputDealerMinBalance = Inputer.inputLong(br, "Input dealer minimum balance (press Enter for default " + DEFAULT_DEALER_MIN_BALANCE/100000000.0 + " FCH):", null);
-        this.dealerMinBalance = inputDealerMinBalance != null ? inputDealerMinBalance : DEFAULT_DEALER_MIN_BALANCE;
-        
-        // Add min distribute balance input logic  
-        Long inputMinDistributeBalance = Inputer.inputLong(br, "Input minimum distribute balance (press Enter for default " + DEFAULT_DISTRIBUTE_BALANCE/100000000.0 + " FCH):", null);
-        this.minDistributeBalance = inputMinDistributeBalance != null ? inputMinDistributeBalance : DEFAULT_DISTRIBUTE_BALANCE;
+        if(br!=null) {
+            Long inputDealerMinBalance = Inputer.inputLong(br, "Input dealer minimum balance (press Enter for default " + DEFAULT_DEALER_MIN_BALANCE / 100000000.0 + " FCH):", null);
+            this.dealerMinBalance = inputDealerMinBalance != null ? inputDealerMinBalance : DEFAULT_DEALER_MIN_BALANCE;
 
+            // Add min distribute balance input logic
+            Long inputMinDistributeBalance = Inputer.inputLong(br, "Input minimum distribute balance (press Enter for default " + DEFAULT_DISTRIBUTE_BALANCE / 100000000.0 + " FCH):", null);
+            this.minDistributeBalance = inputMinDistributeBalance != null ? inputMinDistributeBalance : DEFAULT_DISTRIBUTE_BALANCE;
+        }
         // Initialize collections
         if(useRedis){
             this.userBalance = null;
@@ -171,23 +175,24 @@ public class AccountHandler extends Handler {
 
         // Initialize storage (Redis or AccountDB)
         this.accountDB = useRedis ? new AccountDB(null, sid, dbPath) : new AccountDB(mainFid, sid, dbPath);
-        accountDB.setDealerMinBalance(this.dealerMinBalance);
-        accountDB.setMinDistributeBalance(this.minDistributeBalance);
-
+        if(br!=null) {
+            accountDB.setDealerMinBalance(this.dealerMinBalance);
+            accountDB.setMinDistributeBalance(this.minDistributeBalance);
+        }
         // Get start height
         if (useRedis) {
-            REDIS_KEY_USER_BALANCE = IdNameTools.makeKeyName(null,sid, USER_BALANCE,null);
-            REDIS_KEY_FID_CONSUME_VIA = IdNameTools.makeKeyName(null,sid, FID_CONSUME_VIA,null);
-            REDIS_KEY_VIA_BALANCE = IdNameTools.makeKeyName(null,sid, VIA_BALANCE,null);
+            REDIS_KEY_USER_BALANCE = IdNameUtils.makeKeyName(null,sid, USER_BALANCE,null);
+            REDIS_KEY_FID_CONSUME_VIA = IdNameUtils.makeKeyName(null,sid, FID_CONSUME_VIA,null);
+            REDIS_KEY_VIA_BALANCE = IdNameUtils.makeKeyName(null,sid, VIA_BALANCE,null);
         } else {
             REDIS_KEY_USER_BALANCE = null;
             REDIS_KEY_FID_CONSUME_VIA = null;
             REDIS_KEY_VIA_BALANCE = null;
         }
 
-        setNPrices(Arrays.stream(talkServer.getChargeType()).toList(),br,false);
+        if (br != null) setNPrices(Arrays.stream(talkServer.getChargeType()).toList(),br,false);
 
-        if(accountDB.getLastIncome().isEmpty()) {
+        if(accountDB.getLastIncome().isEmpty() && br!=null) {
             this.startHeight = Inputer.inputLongStr(br, "Input the start height by which the order scanning starts. Enter to start from 0:");
         }else this.startHeight=null;
 
@@ -219,18 +224,18 @@ public class AccountHandler extends Handler {
 
         this.br = settings.getBr();
         this.mainFid = settings.getMainFid();
-        this.priKey = Client.decryptPriKey(settings.getMyPriKeyCipher(),settings.getSymKey());
+        this.priKey = Decryptor.decryptPriKey(settings.getMyPriKeyCipher(),settings.getSymKey());
         this.sid = settings.getService().getId();
         this.dbPath = settings.getDbDir();
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-        this.cashHandler = (CashHandler) settings.getHandler(Handler.HandlerType.CASH);
+        this.cashHandler = settings.getHandler(Handler.HandlerType.CASH)!=null ?(CashHandler) settings.getHandler(Handler.HandlerType.CASH): new CashHandler(settings);
         this.jedisPool =(JedisPool) settings.getClient(Service.ServiceType.REDIS);
-        Params params = ObjectTools.objectToClass(settings.getService().getParams(), Params.class);
+        Params params = ObjectUtils.objectToClass(settings.getService().getParams(), Params.class);
         String priceStr = params.getPricePerKBytes();
         if(priceStr!=null) {
             double price = Double.parseDouble(priceStr);
-            this.priceBase = ParseTools.coinToSatoshi(price);
+            this.priceBase = FchUtils.coinToSatoshi(price);
         }else this.priceBase = 0L;
         String orderViaShareStr = params.getOrderViaShare();
         orderViaShare = Double.parseDouble(orderViaShareStr);
@@ -262,10 +267,10 @@ public class AccountHandler extends Handler {
             this.dealerMinBalance = (long)settings.getSettingMap().get(DEALER_MIN_BALANCE);
             accountDB.setDealerMinBalance(this.dealerMinBalance);
         }else if(br!=null){
-            Double inputDealerMinBalance = Inputer.inputDouble(br, "dealer minimum balance(FCH)", ParseTools.satoshiToCoin(DEFAULT_DEALER_MIN_BALANCE));
+            Double inputDealerMinBalance = Inputer.inputDouble(br, "dealer minimum balance(FCH)", FchUtils.satoshiToCoin(DEFAULT_DEALER_MIN_BALANCE));
             // Add default value if input is null
             this.dealerMinBalance = inputDealerMinBalance != null ? 
-                ParseTools.coinToSatoshi(inputDealerMinBalance) : 
+                FchUtils.coinToSatoshi(inputDealerMinBalance) :
                 DEFAULT_DEALER_MIN_BALANCE;
             accountDB.setDealerMinBalance(this.dealerMinBalance);
         }else{
@@ -280,10 +285,10 @@ public class AccountHandler extends Handler {
             this.minDistributeBalance = (long)settings.getSettingMap().get(Settings.MIN_DISTRIBUTE_BALANCE);
             accountDB.setMinDistributeBalance(this.minDistributeBalance);
         }else if(br!=null){
-            Double inputMinDistributeBalance = Inputer.inputDouble(br, "minimum distribute balance(FCH)" ,ParseTools.satoshiToCoin(DEFAULT_DISTRIBUTE_BALANCE));
+            Double inputMinDistributeBalance = Inputer.inputDouble(br, "minimum distribute balance(FCH)" , FchUtils.satoshiToCoin(DEFAULT_DISTRIBUTE_BALANCE));
             // Add default value if input is null
             this.minDistributeBalance = inputMinDistributeBalance != null ?
-                ParseTools.coinToSatoshi(inputMinDistributeBalance) : 
+                FchUtils.coinToSatoshi(inputMinDistributeBalance) :
                 DEFAULT_DISTRIBUTE_BALANCE;
             accountDB.setMinDistributeBalance(this.minDistributeBalance);
         }else{
@@ -293,9 +298,9 @@ public class AccountHandler extends Handler {
 
         // Get start height
         if (useRedis) {
-            REDIS_KEY_USER_BALANCE = IdNameTools.makeKeyName(null,sid, USER_BALANCE,true);
-            REDIS_KEY_FID_CONSUME_VIA = IdNameTools.makeKeyName(null,sid, FID_CONSUME_VIA,true);
-            REDIS_KEY_VIA_BALANCE = IdNameTools.makeKeyName(null,sid, VIA_BALANCE,true);
+            REDIS_KEY_USER_BALANCE = IdNameUtils.makeKeyName(null,sid, USER_BALANCE,true);
+            REDIS_KEY_FID_CONSUME_VIA = IdNameUtils.makeKeyName(null,sid, FID_CONSUME_VIA,true);
+            REDIS_KEY_VIA_BALANCE = IdNameUtils.makeKeyName(null,sid, VIA_BALANCE,true);
         } else {
             REDIS_KEY_USER_BALANCE = null;
             REDIS_KEY_FID_CONSUME_VIA = null;
@@ -346,7 +351,7 @@ public class AccountHandler extends Handler {
 
         this.br = br;
         this.mainFid = mainFid;
-        this.priKey = Client.decryptPriKey(mainFidPriKeyCipher,symKey);
+        this.priKey = Decryptor.decryptPriKey(mainFidPriKeyCipher,symKey);
         this.sid = service.getId();
         this.apipClient = apipClient;
         this.cashHandler = cashHandler;
@@ -369,7 +374,7 @@ public class AccountHandler extends Handler {
         String priceStr = params.getPricePerKBytes();
         if(priceStr!=null) {
             double price = Double.parseDouble(priceStr);
-            this.priceBase = ParseTools.coinToSatoshi(price);
+            this.priceBase = FchUtils.coinToSatoshi(price);
         }else this.priceBase = 0L;
         String orderViaShareStr = params.getOrderViaShare();
         orderViaShare = Double.parseDouble(orderViaShareStr);
@@ -382,8 +387,8 @@ public class AccountHandler extends Handler {
         if(this.accountDB.getDealerMinBalance()!=null) {
             this.dealerMinBalance = this.accountDB.getDealerMinBalance();
         }else{
-            Double inputDealerMinBalance = Inputer.inputDouble(br, "dealer minimum balance(FCH)", ParseTools.satoshiToCoin(DEFAULT_DEALER_MIN_BALANCE));
-            this.dealerMinBalance = ParseTools.coinToSatoshi(inputDealerMinBalance);
+            Double inputDealerMinBalance = Inputer.inputDouble(br, "dealer minimum balance(FCH)", FchUtils.satoshiToCoin(DEFAULT_DEALER_MIN_BALANCE));
+            this.dealerMinBalance = FchUtils.coinToSatoshi(inputDealerMinBalance);
             accountDB.setDealerMinBalance(this.dealerMinBalance);
         }
 
@@ -391,16 +396,16 @@ public class AccountHandler extends Handler {
         if(this.accountDB.getMinDistributeBalance()!=null) {
             this.minDistributeBalance = this.accountDB.getMinDistributeBalance();
         }else{
-            Double inputMinDistributeBalance = Inputer.inputDouble(br, "minimum distribute balance(FCH)" ,ParseTools.satoshiToCoin(DEFAULT_DISTRIBUTE_BALANCE));
-            this.minDistributeBalance = ParseTools.coinToSatoshi(inputMinDistributeBalance);
+            Double inputMinDistributeBalance = Inputer.inputDouble(br, "minimum distribute balance(FCH)" , FchUtils.satoshiToCoin(DEFAULT_DISTRIBUTE_BALANCE));
+            this.minDistributeBalance = FchUtils.coinToSatoshi(inputMinDistributeBalance);
             accountDB.setMinDistributeBalance(this.minDistributeBalance);
         }
 
         // Get start height
         if (useRedis) {
-            REDIS_KEY_USER_BALANCE = IdNameTools.makeKeyName(null,sid, USER_BALANCE,true);
-            REDIS_KEY_FID_CONSUME_VIA = IdNameTools.makeKeyName(null,sid, FID_CONSUME_VIA,true);
-            REDIS_KEY_VIA_BALANCE = IdNameTools.makeKeyName(null,sid, VIA_BALANCE,true);
+            REDIS_KEY_USER_BALANCE = IdNameUtils.makeKeyName(null,sid, USER_BALANCE,true);
+            REDIS_KEY_FID_CONSUME_VIA = IdNameUtils.makeKeyName(null,sid, FID_CONSUME_VIA,true);
+            REDIS_KEY_VIA_BALANCE = IdNameUtils.makeKeyName(null,sid, VIA_BALANCE,true);
         } else {
             REDIS_KEY_USER_BALANCE = null;
             REDIS_KEY_FID_CONSUME_VIA = null;
@@ -457,13 +462,13 @@ public class AccountHandler extends Handler {
         });
         
         menu.add("Show Income List", () -> {
-            Integer incomeSize = Inputer.inputInteger(br, "Enter number of records to show: ", 1, DEFAULT_CASH_LIST_SIZE);
+            Integer incomeSize = Inputer.inputInteger(br, "Enter number of records to show: ", 1, DEFAULT_DISPLAY_LIST_SIZE);
             if(incomeSize==null)return;
             showIncomeList(incomeSize, br);
         });
         
         menu.add("Show Expense List", () -> {
-            Integer expenseSize = Inputer.inputInteger(br, "Enter number of records to show: ", 1, DEFAULT_CASH_LIST_SIZE);
+            Integer expenseSize = Inputer.inputInteger(br, "Enter number of records to show: ", 1, DEFAULT_DISPLAY_LIST_SIZE);
             if(expenseSize==null)return;
             showExpenseList(expenseSize, br);
         });
@@ -527,14 +532,14 @@ public class AccountHandler extends Handler {
                                     break;
                                 case WEBHOOK:
                                     if (listenPath != null) {
-                                        ParseTools.waitForNewItemInFile(listenPath);
+                                        FchUtils.waitForNewItemInFile(listenPath);
                                         TimeUnit.SECONDS.sleep(2);
                                         updateAll();
                                     }
                                     break;
                                 case FILE_MONITOR:
                                     if (listenPath != null) {
-                                        ParseTools.waitForChangeInDirectory(listenPath, getIsRunning());
+                                        FchUtils.waitForChangeInDirectory(listenPath, getIsRunning());
                                         TimeUnit.SECONDS.sleep(2);
                                         updateAll();
                                     }
@@ -581,20 +586,31 @@ public class AccountHandler extends Handler {
     // Inner classes for Income and Expense
     public static class Income implements Serializable {
         private String cashId;
-        private String userFid; 
+        private String from;
         private Long value;
         private Long time;
         private Long birthHeight;
 
+
+
         // Constructor and getters/setters
-        public Income(String cashId, String userFid, Long value, Long time, Long birthHeight) {
+        public Income(String cashId, String from, Long value, Long time, Long birthHeight) {
             this.cashId = cashId;
-            this.userFid = userFid;
+            this.from = from;
             this.value = value;
             this.time = time;
             this.birthHeight = birthHeight;
-        }
 
+        }
+        public static LinkedHashMap<String,Integer>getFieldWidthMap(){
+            LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+            map.put(CASH_ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
+            map.put(FROM,FcEntity.ID_DEFAULT_SHOW_SIZE);
+            map.put(VALUE,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            map.put(TIME,FcEntity.TIME_DEFAULT_SHOW_SIZE);
+            map.put(BIRTH_HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            return map;
+        }
         public String getCashId() {
             return cashId;
         }
@@ -603,12 +619,12 @@ public class AccountHandler extends Handler {
             this.cashId = cashId;
         }
 
-        public String getUserFid() {
-            return userFid;
+        public String getFrom() {
+            return from;
         }
 
-        public void setUserFid(String userFid) {
-            this.userFid = userFid;
+        public void setFrom(String from) {
+            this.from = from;
         }
 
         public Long getValue() {
@@ -638,19 +654,27 @@ public class AccountHandler extends Handler {
 
     public static class Expense implements Serializable {
         private String cashId;
-        private String toFid;
+        private String to;
         private Long value;
         private Long time;
         private Long birthHeight;
         // Constructor and getters/setters
-        public Expense(String cashId, String toFid, Long value, Long time, Long birthHeight) {
+        public Expense(String cashId, String to, Long value, Long time, Long birthHeight) {
             this.cashId = cashId;
-            this.toFid = toFid;
+            this.to = to;
             this.value = value;
             this.time = time;
             this.birthHeight = birthHeight;
         }
-
+        public static LinkedHashMap<String,Integer>getFieldWidthMap(){
+            LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+            map.put(CASH_ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
+            map.put(TO,FcEntity.ID_DEFAULT_SHOW_SIZE);
+            map.put(VALUE,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            map.put(TIME,FcEntity.TIME_DEFAULT_SHOW_SIZE);
+            map.put(BIRTH_HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            return map;
+        }
         // Getters and setters
 
         public String getCashId() {
@@ -661,12 +685,12 @@ public class AccountHandler extends Handler {
             this.cashId = cashId;
         }
 
-        public String getToFid() {
-            return toFid;
+        public String getTo() {
+            return to;
         }
 
-        public void setToFid(String toFid) {
-            this.toFid = toFid;
+        public void setTo(String to) {
+            this.to = to;
         }
 
         public Long getValue() {
@@ -773,14 +797,14 @@ public class AccountHandler extends Handler {
                 
                 // Update height and block ID
                 accountDB.setLastHeight(newHeight);
-                Block block = BlockFileTools.getBlockByHeight(esClient, newHeight);
+                Block block = BlockFileUtils.getBlockByHeight(esClient, newHeight);
                 if (block != null) {
                     accountDB.setLastBlockId(block.getId());
                 }
                 
                 // Clear last income and expense to force rescan from new height
-                accountDB.setLastIncome(null);
-                accountDB.setLastExpense(null);
+                accountDB.setLastIncome(new ArrayList<>());
+                accountDB.setLastExpense(new ArrayList<>());
                 this.startHeight=String.valueOf(newHeight);
                 return true;
             }
@@ -810,7 +834,7 @@ public class AccountHandler extends Handler {
          * @return The new balance
          */
         public Long addUserBalance(String userFid, Long value) {
-            if(!KeyTools.isValidFchAddr(userFid) || value==null)return null;
+            if(!KeyTools.isGoodFid(userFid) || value==null)return null;
             if (useRedis) {
                 try (var jedis = jedisPool.getResource()) {
                     String currentBalanceStr = jedis.hget(REDIS_KEY_USER_BALANCE, userFid);
@@ -997,7 +1021,7 @@ public class AccountHandler extends Handler {
          * @param viaFid The via FID to map to
          */
         public void updateFidConsumeVia(String userFid, String viaFid) {
-            if (userFid == null || viaFid == null || !KeyTools.isValidFchAddr(userFid) || !KeyTools.isValidFchAddr(viaFid)) {
+            if (userFid == null || viaFid == null || !KeyTools.isGoodFid(userFid) || !KeyTools.isGoodFid(viaFid)) {
                 return;
             }
     
@@ -1028,8 +1052,8 @@ public class AccountHandler extends Handler {
          * @param orderVia the via fid if this is an order, null if consumption
          */
         public void addViaBalance(String userFid, Long value, @Nullable String orderVia) {
-            if(!KeyTools.isValidFchAddr(userFid))return;
-            if(orderVia!=null && !KeyTools.isValidFchAddr(orderVia))return;
+            if(!KeyTools.isGoodFid(userFid))return;
+            if(orderVia!=null && !KeyTools.isGoodFid(orderVia))return;
             String viaFid;
             if(orderVia==null) {
                 if (useRedis) {
@@ -1126,7 +1150,7 @@ public class AccountHandler extends Handler {
                         fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
                     }
                     fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(ID, Values.ASC);
-                    fcdsl.addSize(DEFAULT_CASH_LIST_SIZE);
+                    fcdsl.addSize(DEFAULT_DISPLAY_LIST_SIZE);
                     if (lastIncome!=null && !lastIncome.isEmpty()) {
                         fcdsl.addAfter(lastIncome);
                     }
@@ -1186,7 +1210,7 @@ public class AccountHandler extends Handler {
                         .index(IndicesNames.CASH)
                         .query(q -> q.bool(boolQueryBuilder.build()))
                         .sort(soList)
-                        .size(DEFAULT_CASH_LIST_SIZE);
+                        .size(DEFAULT_DISPLAY_LIST_SIZE);
 
                     if (lastIncome!=null && !lastIncome.isEmpty()) {
                         searchBuilder.searchAfter(lastIncome);
@@ -1220,7 +1244,7 @@ public class AccountHandler extends Handler {
                     log.error("No client available to fetch cash data");
                     break;
                 }
-                if(newCashes.size() < DEFAULT_CASH_LIST_SIZE){
+                if(newCashes.size() < DEFAULT_DISPLAY_LIST_SIZE){
                     break;
                 }
             }
@@ -1236,7 +1260,8 @@ public class AccountHandler extends Handler {
                     accountDB.setLastBlockId(lastBlockId);
                 }
                 // Display using map values instead of list
-                Shower.showDataTable("New Incomes", new ArrayList<>(newIncomeMap.values()), 0, true);
+                Shower.showDataTable("New Incomes", Income.getFieldWidthMap(),new ArrayList<>(newIncomeMap.values()), Arrays.stream(new String[]{TIME}).toList(), Arrays.stream(new String[]{VALUE}).toList(),null, null, false, br);
+
             }
 
             if(!userFidValueMap.isEmpty()){
@@ -1286,7 +1311,7 @@ public class AccountHandler extends Handler {
             opReturnMap = apipClient.opReturnByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, txIdCashIdMap.keySet().toArray(new String[0]));
         } else if (esClient != null) {
             try {
-                opReturnMap = EsTools.getOpReturnsByIds(esClient, txIdCashIdMap.keySet());
+                opReturnMap = EsUtils.getOpReturnsByIds(esClient, txIdCashIdMap.keySet());
             } catch (Exception e) {
                 log.error("Error getting op returns from ES", e);
                 return;
@@ -1298,11 +1323,11 @@ public class AccountHandler extends Handler {
         if(opReturnMap==null || opReturnMap.isEmpty()) return;
         for(Map.Entry<String, OpReturn> entry:opReturnMap.entrySet()){
             OpReturn opReturn = entry.getValue();
-            Map<String, String> opReturnData = ObjectTools.objectToMap(opReturn.getOpReturn(), String.class, String.class);
+            Map<String, String> opReturnData = ObjectUtils.objectToMap(opReturn.getOpReturn(), String.class, String.class);
             if(opReturnData==null)continue;
             if(opReturnData.containsKey(VIA)){
                 List<Cash> matchingCashes = newCashes.stream()
-                    .filter(cash -> cash.getBirthTxId().equals(opReturn.getTxId()))
+                    .filter(cash -> cash.getBirthTxId().equals(opReturn.getId()))
                     .toList();
                 if(matchingCashes.isEmpty())continue;
                 for(Cash cash:matchingCashes){
@@ -1347,7 +1372,7 @@ public class AccountHandler extends Handler {
                     fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
                 }
                 fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(FieldNames.ID, Values.ASC);
-                fcdsl.addSize(DEFAULT_CASH_LIST_SIZE);
+                fcdsl.addSize(DEFAULT_DISPLAY_LIST_SIZE);
                 if (lastExpense!=null && !lastExpense.isEmpty()) {
                     fcdsl.addAfter(lastExpense);
                 }
@@ -1411,7 +1436,7 @@ public class AccountHandler extends Handler {
                         .index("cash")
                         .query(q -> q.bool(boolQueryBuilder.build()))
                         .sort(soList)
-                        .size(DEFAULT_CASH_LIST_SIZE);
+                        .size(DEFAULT_DISPLAY_LIST_SIZE);
 
                     if (lastExpense!=null && !lastExpense.isEmpty()) {
                         searchBuilder.searchAfter(lastExpense);
@@ -1458,7 +1483,7 @@ public class AccountHandler extends Handler {
                 break;
             }
                 
-            if(newCashes.size() < DEFAULT_CASH_LIST_SIZE){
+            if(newCashes.size() < DEFAULT_DISPLAY_LIST_SIZE){
                 break;
             }
         }
@@ -1472,7 +1497,7 @@ public class AccountHandler extends Handler {
                 accountDB.setLastBlockId(lastBlockId);
             }
             // Display using map values instead of list
-            Shower.showDataTable("New Expenses", new ArrayList<>(newExpenseMap.values()), 0, true);
+            Shower.showDataTable("New Expenses", Income.getFieldWidthMap(),new ArrayList<>(newExpenseMap.values()), Arrays.stream(new String[]{TIME}).toList(), Arrays.stream(new String[]{VALUE}).toList(),null, null, false, br);
         }
 
         // Update lastExpense in persistent storage
@@ -1693,7 +1718,7 @@ public class AccountHandler extends Handler {
                 // Store in Redis if available
                 if (useRedis && jedisPool != null) {
                     try (Jedis jedis = jedisPool.getResource()) {
-                        String redisKey = IdNameTools.makeKeyName(null, sid, N_PRICE, null);
+                        String redisKey = IdNameUtils.makeKeyName(null, sid, N_PRICE, null);
                         jedis.hset(redisKey, apiName, String.valueOf(n));
                     }
                 }
@@ -1783,12 +1808,12 @@ public class AccountHandler extends Handler {
         System.out.println("Settle all payments...");
         // Convert payoffMap to SendTo list
         List<SendTo> sendToList = payoffMap.entrySet().stream()
-            .map(entry -> new SendTo(entry.getKey(), ParseTools.satoshiToCoin(entry.getValue())))
+            .map(entry -> new SendTo(entry.getKey(), FchUtils.satoshiToCoin(entry.getValue())))
             .collect(Collectors.toList());
 
         // Send payments using CashClient
         String txId;
-        if(cashHandler!=null) txId = cashHandler.send(null, null, null, sendToList, null, null);
+        if(cashHandler!=null) txId = cashHandler.send(null, null, null, sendToList, null, null, null, null, FchMainNetwork.MAINNETWORK, null);
         else txId = CashHandler.send(priKey,sendToList,apipClient,esClient);
         // Update last settlement height
         Long bestHeight = Settings.getBestHeight(apipClient,null,esClient,jedisPool);
@@ -1836,7 +1861,7 @@ public class AccountHandler extends Handler {
         else{
             Double inputShare = Inputer.inputDouble(br, "Input the order via share percentage:");
             if(inputShare==null)return;
-            accountDB.setOrderViaShare(NumberTools.roundDouble8(inputShare/100.0));
+            accountDB.setOrderViaShare(NumberUtils.roundDouble8(inputShare/100.0));
         }
 
         if (consumeViaShare != null){
@@ -1844,7 +1869,7 @@ public class AccountHandler extends Handler {
         }else{
             Double inputShare = Inputer.inputDouble(br, "Input the consume via share percentage:");
             if(inputShare==null)return;
-            accountDB.setConsumeViaShare(NumberTools.roundDouble8(inputShare/100));
+            accountDB.setConsumeViaShare(NumberUtils.roundDouble8(inputShare/100));
         }
     }
 
@@ -1870,10 +1895,10 @@ public class AccountHandler extends Handler {
         }
 
         if (useRedis) {
-            BytesTools.clearByteArray(priKey);
+            BytesUtils.clearByteArray(priKey);
         } else {
             saveMapsToAccountDB();
-            BytesTools.clearByteArray(priKey);
+            BytesUtils.clearByteArray(priKey);
             accountDB.close();
         }
     }
@@ -1883,45 +1908,61 @@ public class AccountHandler extends Handler {
      * @param size Number of records to show per page
      */
     public void showIncomeList(int size, BufferedReader br) {
-        // Check if income order map exists and has entries
-        if (accountDB.getIncomeOrderMap() == null || accountDB.getIncomeOrderMap().isEmpty()) {
+        Map<String, Income> incomeMap = accountDB.getIncomeMap();
+        if (incomeMap == null || incomeMap.isEmpty()) {
             System.out.println("No income records found.");
             return;
         }
         
-        int totalIncomes = accountDB.getIncomeOrderMap().size();
+        // Get income entries from the end (most recent first)
+        List<Income> incomes = accountDB.getIncome(size, true);
+        if (incomes.isEmpty()) {
+            System.out.println("No income records found.");
+            return;
+        }
+        
+        int totalIncomes = incomes.size();
         int totalPages = (int) Math.ceil((double) totalIncomes / size);
-        int count = 0;
         int currentPage = 0;
         
-        do {
-            List<Income> pageIncomes = new ArrayList<>();
-            // Ensure we don't exceed the total number of incomes
-            int endIndex = Math.min(count + size, totalIncomes);
+        while (true) {
+            System.out.println("\n======= Income Records (Page " + (currentPage + 1) + "/" + totalPages + ") =======");
+            System.out.printf("%-20s %-15s %-15s %-20s %-15s\n", "ID", "User FID", "Value (FCH)", "Time", "Block Height");
             
-            for (int i = count; i < endIndex; i++) {
-                String incomeId = accountDB.getIncomeOrderMap().get((long) i);
-                if (incomeId != null) {
-                    Income income = accountDB.getIncomeById(incomeId);
-                    if (income != null) {
-                        pageIncomes.add(income);
-                    }
+            int startIdx = currentPage * size;
+            int endIdx = Math.min(startIdx + size, totalIncomes);
+            
+            for (int i = startIdx; i < endIdx; i++) {
+                if (i >= incomes.size()) break;
+                
+                Income income = incomes.get(i);
+                if (income != null) {
+                    System.out.printf("%-20s %-15s %-15s %-20s %-15d\n",
+                            income.getCashId(),
+                            income.getFrom(),
+                            FchUtils.satoshiToCoin(income.getValue()),
+                            new Date(income.getTime()),
+                            income.getBirthHeight());
                 }
             }
             
-            // Only show the table if we have incomes to display
-            if (!pageIncomes.isEmpty()) {
-                Shower.showDataTable("Income List (Page " + (currentPage + 1) + "/" + totalPages + ")", pageIncomes, count, true);
-            } else {
-                System.out.println("No income records found on page " + (currentPage + 1));
-            }
+            if (totalPages <= 1) break;
             
-            currentPage++;
-            if (currentPage >= totalPages) {
+            System.out.println("\nN: Next page, P: Previous page, Q: Quit");
+            try {
+                String input = br.readLine();
+                if (input == null || input.equalsIgnoreCase("Q")) {
+                    break;
+                } else if (input.equalsIgnoreCase("N")) {
+                    currentPage = (currentPage + 1) % totalPages;
+                } else if (input.equalsIgnoreCase("P")) {
+                    currentPage = (currentPage - 1 + totalPages) % totalPages;
+                }
+            } catch (IOException e) {
+                log.error("Error reading input: {}", e.getMessage());
                 break;
             }
-            count += size;
-        } while (Inputer.askIfYes(br, "Show more? (y/n):"));
+        }
     }
 
     /**
@@ -1929,49 +1970,65 @@ public class AccountHandler extends Handler {
      * @param size Number of records to show per page
      */
     public void showExpenseList(int size, BufferedReader br) {
-        // Check if expense order map exists and has entries
-        if (accountDB.getExpenseOrderMap() == null || accountDB.getExpenseOrderMap().isEmpty()) {
+        Map<String, Expense> expenseMap = accountDB.getExpenseMap();
+        if (expenseMap == null || expenseMap.isEmpty()) {
             System.out.println("No expense records found.");
             return;
         }
-
-        int totalExpenses = accountDB.getExpenseOrderMap().size();
+        
+        // Get expense entries from the end (most recent first)
+        List<Expense> expenses = accountDB.getExpense(size, true);
+        if (expenses.isEmpty()) {
+            System.out.println("No expense records found.");
+            return;
+        }
+        
+        int totalExpenses = expenses.size();
         int totalPages = (int) Math.ceil((double) totalExpenses / size);
-        int count = 0;
         int currentPage = 0;
         
-        do {
-            List<Expense> pageExpenses = new ArrayList<>();
-            // Ensure we don't exceed the total number of expenses
-            int endIndex = Math.min(count + size, totalExpenses);
+        while (true) {
+            System.out.println("\n======= Expense Records (Page " + (currentPage + 1) + "/" + totalPages + ") =======");
+            System.out.printf("%-20s %-15s %-15s %-20s %-15s\n", "ID", "To FID", "Value (FCH)", "Time", "Block Height");
             
-            for (int i = count; i < endIndex; i++) {
-                String expenseId = accountDB.getExpenseOrderMap().get((long) i);
-                if (expenseId != null) {
-                    Expense expense = accountDB.getExpenseById(expenseId);
-                    if (expense != null) {
-                        pageExpenses.add(expense);
-                    }
+            int startIdx = currentPage * size;
+            int endIdx = Math.min(startIdx + size, totalExpenses);
+            
+            for (int i = startIdx; i < endIdx; i++) {
+                if (i >= expenses.size()) break;
+                
+                Expense expense = expenses.get(i);
+                if (expense != null) {
+                    System.out.printf("%-20s %-15s %-15s %-20s %-15d\n",
+                            expense.getCashId(),
+                            expense.getTo(),
+                            FchUtils.satoshiToCoin(expense.getValue()),
+                            new Date(expense.getTime()),
+                            expense.getBirthHeight());
                 }
             }
             
-            // Only show the table if we have expenses to display
-            if (!pageExpenses.isEmpty()) {
-                Shower.showDataTable("Expense List (Page " + (currentPage + 1) + "/" + totalPages + ")", pageExpenses, count, true);
-            } else {
-                System.out.println("No expense records found on page " + (currentPage + 1));
-            }
+            if (totalPages <= 1) break;
             
-            currentPage++;
-            if (currentPage >= totalPages) {
+            System.out.println("\nN: Next page, P: Previous page, Q: Quit");
+            try {
+                String input = br.readLine();
+                if (input == null || input.equalsIgnoreCase("Q")) {
+                    break;
+                } else if (input.equalsIgnoreCase("N")) {
+                    currentPage = (currentPage + 1) % totalPages;
+                } else if (input.equalsIgnoreCase("P")) {
+                    currentPage = (currentPage - 1 + totalPages) % totalPages;
+                }
+            } catch (IOException e) {
+                log.error("Error reading input: {}", e.getMessage());
                 break;
             }
-            count += size;
-        } while (Inputer.askIfYes(br, "Show more? (y/n):"));
+        }
     }
 
     public Map<String, Long> getPayoffMap() {
-        return payoffMap;
+        return accountDB.getPayoffMap();
     }
 
     /**
@@ -1987,7 +2044,7 @@ public class AccountHandler extends Handler {
         }
         
         try (var jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, VIA_BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
             String balanceStr = jedis.hget(key, viaFid);
             if (balanceStr == null) {
                 return null;
@@ -2012,7 +2069,7 @@ public class AccountHandler extends Handler {
         }
 
         try (var jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, VIA_BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
             List<String> balances = jedis.hmget(key, viaFids.toArray(new String[0]));
             
             Map<String, Long> result = new HashMap<>();
@@ -2041,7 +2098,7 @@ public class AccountHandler extends Handler {
         }
 
         try (var jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, VIA_BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
             Map<String, String> allBalances = jedis.hgetAll(key);
             
             Map<String, Long> result = new HashMap<>();
@@ -2071,7 +2128,7 @@ public class AccountHandler extends Handler {
         }
 
         try (var jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, VIA_BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
             Map<String, String> allBalances = jedis.hgetAll(key);
             
             return allBalances.values().stream()
@@ -2113,7 +2170,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String redisKey = IdNameTools.makeKeyName(null, sid, N_PRICE, null);
+            String redisKey = IdNameUtils.makeKeyName(null, sid, N_PRICE, null);
             String value = jedis.hget(redisKey, apiName);
             return value != null ? Long.parseLong(value) : null;
         } catch (Exception e) {
@@ -2128,7 +2185,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String redisKey = IdNameTools.makeKeyName(null, sid, N_PRICE, null);
+            String redisKey = IdNameUtils.makeKeyName(null, sid, N_PRICE, null);
             Map<String, String> redisMap = jedis.hgetAll(redisKey);
             
             if (redisMap.isEmpty()) {
@@ -2162,7 +2219,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             jedis.hset(key, uid, String.valueOf(value));
             return value;
         } catch (Exception e) {
@@ -2181,7 +2238,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             String currentBalanceStr = jedis.hget(key, uid);
             long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
             long newBalance = currentBalance + value;
@@ -2209,7 +2266,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             Map<String, String> stringBalanceMap = balanceMap.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
@@ -2233,7 +2290,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             
             // Get current balances for all users
             Set<String> userIds = valueMap.keySet();
@@ -2284,7 +2341,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             Map<String, String> existingBalances = jedis.hgetAll(key);
             Map<String, String> updatedBalances = new HashMap<>();
             
@@ -2321,7 +2378,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             String balanceStr = jedis.hget(key, uid);
             return balanceStr != null ? Long.parseLong(balanceStr) : null;
         } catch (Exception e) {
@@ -2340,7 +2397,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             List<String> balances = jedis.hmget(key, uids.toArray(new String[0]));
             
             Map<String, Long> result = new HashMap<>();
@@ -2367,7 +2424,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             Map<String, String> allBalances = jedis.hgetAll(key);
             
             Map<String, Long> result = new HashMap<>();
@@ -2395,7 +2452,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             String balanceStr = jedis.hget(key, uid);
             if (balanceStr == null) {
                 return false;
@@ -2443,7 +2500,7 @@ public class AccountHandler extends Handler {
         }
 
         try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameTools.makeKeyName(null, sid, BALANCE, null);
+            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
             Map<String, String> allBalances = jedis.hgetAll(key);
             
             return allBalances.values().stream()
@@ -2468,7 +2525,7 @@ public class AccountHandler extends Handler {
      * @return The via's balance if found, null otherwise
      */
     public Long getViaBalance(String viaFid) {
-        if (!KeyTools.isValidFchAddr(viaFid)) {
+        if (!KeyTools.isGoodFid(viaFid)) {
             return null;
         }
 

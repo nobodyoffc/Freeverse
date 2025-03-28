@@ -1,7 +1,7 @@
 package clients;
 
-import tools.BytesTools;
-import tools.http.HttpTools;
+import utils.BytesUtils;
+import utils.http.HttpUtils;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -25,7 +25,7 @@ public class ApiUrl{
     public ApiUrl(){}
     public ApiUrl(String url){
         this.url = url;
-        this.api = HttpTools.getApiNameFromUrl(url);
+        this.api = HttpUtils.getApiNameFromUrl(url);
     }
     public ApiUrl(String urlHead,String urlTail){
         this.urlHead = formatUrlPath(urlHead);
@@ -129,7 +129,7 @@ public class ApiUrl{
         StringBuilder stringBuilder;
         if(urlTailPath==null)stringBuilder= new StringBuilder(urlHead + apiName);
         else stringBuilder= new StringBuilder(urlHead + urlTailPath + apiName);
-        String paramsString = HttpTools.makeUrlParamsString(paramMap);
+        String paramsString = HttpUtils.makeUrlParamsString(paramMap);
         stringBuilder.append(paramsString);
         return stringBuilder.toString();
     }
@@ -183,7 +183,7 @@ public class ApiUrl{
             stringBuilder.append(urlTail);
 
         if(paramMap!=null&&paramStr==null)
-            HttpTools.makeUrlParamsString(paramMap);
+            HttpUtils.makeUrlParamsString(paramMap);
         if(paramStr !=null)
             stringBuilder.append(paramStr);
         url = stringBuilder.toString();
@@ -237,7 +237,7 @@ public class ApiUrl{
         else if(url!=null)rawStr =url;
         else if(urlTail!=null)rawStr =urlTail;
         else return;
-        paramMap = HttpTools.parseParamsMapFromUrl(rawStr);
+        paramMap = HttpUtils.parseParamsMapFromUrl(rawStr);
     }
 
     public void makeParamStr(Map<String, String> paramMap, @Nullable String via, Boolean ifSignUrl) {
@@ -247,12 +247,12 @@ public class ApiUrl{
             if(this.paramMap ==null)
                 this.paramMap = new HashMap<>();
             long time = System.currentTimeMillis();
-            long nonce = BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4));
+            long nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
             this.paramMap.put(TIME, String.valueOf(time));
             this.paramMap.put(NONCE, String.valueOf(nonce));
             if(via !=null) this.paramMap.put(VIA, via);
         }
-        if(this.paramMap !=null) this.paramStr = HttpTools.makeUrlParamsString(this.paramMap);
+        if(this.paramMap !=null) this.paramStr = HttpUtils.makeUrlParamsString(this.paramMap);
     }
 
     public void makeUrlTail(){
@@ -301,7 +301,7 @@ public class ApiUrl{
     public static Map<String, String> makeUrlCheckParamMap(String via) {
         Map<String,String> urlParamMap = new HashMap<>();
         long time = System.currentTimeMillis();
-        long nonce = BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4));
+        long nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
 
         urlParamMap.put(TIME, String.valueOf(time));
         urlParamMap.put(NONCE, String.valueOf(nonce));

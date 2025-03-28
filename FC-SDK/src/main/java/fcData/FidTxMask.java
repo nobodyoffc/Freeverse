@@ -2,10 +2,10 @@ package fcData;
 
 import apip.apipData.TxInfo;
 import constants.Constants;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.CashMark;
 import org.jetbrains.annotations.NotNull;
-import tools.DateTools;
+import utils.DateUtils;
 import appTools.Shower;
 import java.util.List;
 import java.util.ArrayList;
@@ -35,11 +35,11 @@ public class FidTxMask {
                 sum -= spentCash.getValue();
         }
 
-        fidTxMask.setBalance(ParseTools.satoshiToCoin(sum));
-        if(txInfo.getFee()!=null)fidTxMask.setFee(ParseTools.satoshiToCoin(txInfo.getFee()));
+        fidTxMask.setBalance(FchUtils.satoshiToCoin(sum));
+        if(txInfo.getFee()!=null)fidTxMask.setFee(FchUtils.satoshiToCoin(txInfo.getFee()));
         fidTxMask.setHeight(txInfo.getHeight());
         fidTxMask.setTime(txInfo.getBlockTime());
-        fidTxMask.setTxId(txInfo.getTxId());
+        fidTxMask.setTxId(txInfo.getId());
         fidTxMask.setFid(fid);
         if(sum>0){
             fidTxMask.setTo(fid);
@@ -129,13 +129,13 @@ public class FidTxMask {
 
         for (FidTxMask mask : fidTxMaskList) {
             List<Object> showList = new ArrayList<>();
-            showList.add(DateTools.longToTime(mask.getTime()*1000, "yyyy-MM-dd"));
+            showList.add(DateUtils.longToTime(mask.getTime()*1000, "yyyy-MM-dd"));
             showList.add(mask.getFrom());
             showList.add(mask.getTo());
             showList.add(String.format("%.8f", mask.getBalance()));
             showList.add(String.format("%.2f", mask.getFee()*1000000));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
 }

@@ -2,7 +2,7 @@ package NasaRcpTest;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import tools.JsonTools;
+import utils.JsonUtils;
 import nasa.RpcRequest;
 import org.junit.jupiter.api.Test;
 
@@ -23,11 +23,11 @@ public class GetRawMempool {
 //        String url = "http://127.0.0.1:22555";
 
         getRawMempool(url, false,"username", "password");
-        JsonTools.printJson(txIds);
+        JsonUtils.printJson(txIds);
 
 
         getRawMempool(url, true,"username", "password");
-        JsonTools.printJson(transactions);
+        JsonUtils.printJson(transactions);
     }
 
 

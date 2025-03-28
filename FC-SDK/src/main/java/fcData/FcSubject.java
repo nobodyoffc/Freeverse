@@ -6,7 +6,7 @@ import java.util.List;
 import org.bitcoinj.core.ECKey;
 
 import crypto.KeyTools;
-import tools.Hex;
+import utils.Hex;
 import exception.TooManyUserCidsException;
 import exception.IllegalPubKeyException;
 import exception.IllegalPriKeyException;
@@ -15,9 +15,9 @@ public class FcSubject extends FcEntity {
     protected String cid;
     protected List<String> usedCids;
     protected String pubKey;
+    protected Boolean isNobody;
     protected transient byte[] pubKeyBytes;
-    protected transient byte[] priKey;
-    protected boolean isNobody;
+    protected transient byte[] priKeyBytes;
 
     public FcSubject() {
     }
@@ -26,19 +26,21 @@ public class FcSubject extends FcEntity {
         if(priKey == null || priKey.length != 32) {
             throw new IllegalPriKeyException();
         }
-        this.priKey = priKey;
+        this.priKeyBytes = priKey;
         this.pubKeyBytes = KeyTools.priKeyToPubKey(priKey);
         this.pubKey = Hex.toHex(pubKeyBytes);
         this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
     }
 
     public FcSubject(String pubKey) {
-        if(pubKey == null || pubKey.isEmpty() || !Hex.isHex32(pubKey)) {
-            throw new IllegalPubKeyException();
-        }
         this.pubKey = pubKey;
-        this.pubKeyBytes = Hex.fromHex(pubKey);
-        this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
+        if(pubKey!=null && !pubKey.isEmpty() && Hex.isHex32(pubKey)){
+            this.pubKeyBytes = Hex.fromHex(pubKey);
+            this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
+        }else{
+            this.pubKeyBytes = null;
+            this.id = null;
+        }
     }
 
     public static FcSubject createNew() {
@@ -51,8 +53,15 @@ public class FcSubject extends FcEntity {
         return new FcSubject(pubKey);
     }
 
+    public ECKey makeECKey(){
+        if(priKeyBytes!=null)return ECKey.fromPrivate(priKeyBytes);
+        if(pubKeyBytes!=null)return ECKey.fromPublicOnly(pubKeyBytes);
+        if(pubKey!=null)return ECKey.fromPublicOnly(Hex.fromHex(pubKey));
+        return null;
+    }
+
     public byte[] priKeyToPubKey() {
-        this.pubKeyBytes = KeyTools.priKeyToPubKey(priKey);
+        this.pubKeyBytes = KeyTools.priKeyToPubKey(priKeyBytes);
         this.pubKey = Hex.toHex(pubKeyBytes);
         return pubKeyBytes;
     }
@@ -92,12 +101,11 @@ public class FcSubject extends FcEntity {
     }
 
     public void setPubKey(String pubKey) {
-        if(pubKey == null || pubKey.isEmpty() || !Hex.isHex32(pubKey)) {
-            throw new IllegalPubKeyException();
-        }
         this.pubKey = pubKey;
-        this.pubKeyBytes = Hex.fromHex(pubKey);
-        this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
+        if(pubKey!=null) {
+            this.pubKeyBytes = Hex.fromHex(pubKey);
+            this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
+        }
     }
 
     public void setUsedCids(List<String> usedCids) {
@@ -116,30 +124,31 @@ public class FcSubject extends FcEntity {
         this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
     }
 
-    public void setPriKey(byte[] priKey) {
+    public void setPriKeyBytes(byte[] priKey) {
         if(priKey == null || priKey.length != 32) {
-            throw new IllegalPriKeyException();
+            this.priKeyBytes=null;
+            return;
         }
-        this.priKey = priKey;
+        this.priKeyBytes = priKey;
         this.pubKeyBytes = KeyTools.priKeyToPubKey(priKey);
         this.pubKey = Hex.toHex(pubKeyBytes);
         this.id = KeyTools.pubKeyToFchAddr(pubKeyBytes);
     }
 
     public byte[] getPubKeyBytes() {
+        if(pubKeyBytes==null && pubKey!=null)pubKeyBytes=Hex.fromHex(pubKey);
         return pubKeyBytes;
     }
 
-    public byte[] getPriKey() {
-        return priKey;
+    public byte[] getPriKeyBytes() {
+        return priKeyBytes;
     }
 
-    public boolean isNobody() {
+    public Boolean getNobody() {
         return isNobody;
     }
 
-    public void setNobody(boolean isNobody) {
-        this.isNobody = isNobody;
+    public void setNobody(Boolean nobody) {
+        isNobody = nobody;
     }
-
 }

@@ -2,7 +2,7 @@ package fcData;
 
 import java.util.List;
 
-import tools.JsonTools;
+import utils.JsonUtils;
 
 public class Room extends FcObject{
 	private String owner;
@@ -12,15 +12,15 @@ public class Room extends FcObject{
 	private Long birthTime;
 
 	public String toJson(){
-		return JsonTools.toJson(this);
+		return JsonUtils.toJson(this);
 	}
 
 	public String toNiceJson(){
-		return JsonTools.toNiceJson(this);
+		return JsonUtils.toNiceJson(this);
 	}
 
 	public static Room fromJson(String json){
-		return JsonTools.fromJson(json, Room.class);
+		return JsonUtils.fromJson(json, Room.class);
 	}
 
 	public String getId() {

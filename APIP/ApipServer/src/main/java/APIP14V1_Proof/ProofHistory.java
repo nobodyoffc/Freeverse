@@ -5,7 +5,7 @@ import apip.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 
 import javax.servlet.ServletException;

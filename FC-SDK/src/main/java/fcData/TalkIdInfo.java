@@ -4,7 +4,7 @@ import fch.fchData.Cid;
 import feip.feipData.Group;
 import feip.feipData.Team;
 import org.jetbrains.annotations.NotNull;
-import tools.StringTools;
+import utils.StringUtils;
 
 public class TalkIdInfo extends FcObject {
     private TalkUnit.IdType type;
@@ -26,9 +26,9 @@ public class TalkIdInfo extends FcObject {
         talkIdInfo.setId(contactDetail.getFid());
         talkIdInfo.setStdName(contactDetail.getCid());
         String showName;
-        String memoStr = contactDetail.getMemo()==null ? "":"("+contactDetail.getMemo()+")";
-        if(contactDetail.getCid()==null)showName=StringTools.omitMiddle(contactDetail.getFid(),13)+memoStr;
-        else showName = contactDetail.getCid()+memoStr;
+        String titleStr = contactDetail.getTitles()==null ? "":"("+contactDetail.getTitles()+")";
+        if(contactDetail.getCid()==null)showName= StringUtils.omitMiddle(contactDetail.getFid(),13)+titleStr;
+        else showName = contactDetail.getCid()+titleStr;
         talkIdInfo.setShowName(showName);
         talkIdInfo.setIdType(TalkUnit.IdType.FID);
         talkIdInfo.setPubKey(contactDetail.getPubKey());
@@ -83,7 +83,7 @@ public class TalkIdInfo extends FcObject {
     }
 
     public void makeName() {
-        this.showName = this.stdName + "(" + StringTools.omitMiddle(this.id, 11) + ")";
+        this.showName = this.stdName + "(" + StringUtils.omitMiddle(this.id, 11) + ")";
     }
 
     public TalkUnit.IdType getType() {
@@ -118,7 +118,7 @@ public class TalkIdInfo extends FcObject {
         talkIdInfo.setId(group.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.GROUP);
         talkIdInfo.setStdName(group.getName());
-        talkIdInfo.setShowName(group.getName()+StringTools.omitMiddle(group.getId(),13));
+        talkIdInfo.setShowName(group.getName()+ StringUtils.omitMiddle(group.getId(),13));
         return talkIdInfo;
     }
 
@@ -127,7 +127,7 @@ public class TalkIdInfo extends FcObject {
         talkIdInfo.setId(cid.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.FID);
         talkIdInfo.setStdName(cid.getCid());
-        talkIdInfo.setShowName(cid.getCid()==null?StringTools.omitMiddle(cid.getId(),13):StringTools.omitMiddle(cid.getCid(),13));
+        talkIdInfo.setShowName(cid.getCid()==null? StringUtils.omitMiddle(cid.getId(),13): StringUtils.omitMiddle(cid.getCid(),13));
         talkIdInfo.setPubKey(cid.getPubKey());
         return talkIdInfo;
     }

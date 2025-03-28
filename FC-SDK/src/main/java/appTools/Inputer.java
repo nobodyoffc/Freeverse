@@ -1,13 +1,14 @@
 package appTools;
 
 import crypto.KeyTools;
+import fcData.FcEntity;
 import feip.feipData.AppOpData;
-import tools.BytesTools;
-import tools.DateTools;
-import tools.Hex;
-import tools.NumberTools;
-import tools.ObjectTools;
-import tools.StringTools;
+import utils.BytesUtils;
+import utils.DateUtils;
+import utils.Hex;
+import utils.NumberUtils;
+import utils.ObjectUtils;
+import utils.StringUtils;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -21,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -31,7 +34,7 @@ import static constants.Values.FALSE;
 public class Inputer {
 
     @SuppressWarnings("unused")
-    private static char[] inputPassword(String ask) {
+    public static char[] inputPassword(String ask) {
         Console console = System.console();
         if (console == null) {
             System.out.println("Couldn't get Console instance. Maybe you're running this from within an IDE, which doesn't support Console.");
@@ -115,7 +118,7 @@ public class Inputer {
                 System.out.println("A share should less than 1. ");
                 continue;
             }
-            return NumberTools.roundDouble4(share);
+            return NumberUtils.roundDouble4(share);
         }
     }
 
@@ -231,6 +234,25 @@ public class Inputer {
         return itemList.toArray(new String[itemList.size()]);
     }
 
+    public static String[] inputMultiLineStringArray(BufferedReader br, String ask) {
+        ArrayList<String> itemList = inputMultiLineStringList(br, ask);
+        if (itemList.isEmpty()) return new String[0];
+        return itemList.toArray(new String[0]);
+    }
+
+    @NotNull
+    public static ArrayList<String> inputMultiLineStringList(BufferedReader br, String ask) {
+        ArrayList<String> itemList = new ArrayList<>();
+        System.out.println(ask);
+        while (true) {
+            String item = Inputer.inputStringMultiLine(br);
+            if ("".equals(item)) break;
+            itemList.add(item);
+            System.out.println("Input next item if you want or enter to end:");
+        }
+        return itemList;
+    }
+
     @NotNull
     public static ArrayList<String> inputStringList(BufferedReader br, String ask, int len) {
         ArrayList<String> itemList = new ArrayList<String>();
@@ -277,7 +299,7 @@ public class Inputer {
                     System.out.println("A share should less than 1. Input again:");
                     continue;
                 }
-                flo = (float) NumberTools.roundDouble4(flo);
+                flo = (float) NumberUtils.roundDouble4(flo);
                 return String.valueOf(flo);
             } catch (Exception e) {
                 System.out.println("It isn't a number. Input again:");
@@ -430,7 +452,7 @@ public class Inputer {
     public static byte[] inputSymKey32(BufferedReader br, String ask) {
         char[] symKey = input32BytesKey(br,ask);
         if(symKey==null)return null;
-        return BytesTools.hexCharArrayToByteArray(symKey);
+        return BytesUtils.hexCharArrayToByteArray(symKey);
     }
 
 
@@ -449,8 +471,8 @@ public class Inputer {
     public static byte[] getPasswordBytes(BufferedReader br) {
         String ask = "Input the password:";
         char[] password = inputPassword(br, ask);
-        byte[] passwordBytes = BytesTools.utf8CharArrayToByteArray(password);
-        BytesTools.clearCharArray(password);
+        byte[] passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
+        BytesUtils.clearCharArray(password);
         return passwordBytes;
     }
 
@@ -463,8 +485,8 @@ public class Inputer {
             char[] passwordAgain = inputPassword(br, ask);
             if (passwordAgain == null) return null;
             if (Arrays.equals(password, passwordAgain)) {
-                byte[] passwordBytes = BytesTools.utf8CharArrayToByteArray(password);
-                BytesTools.clearCharArray(password);
+                byte[] passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
+                BytesUtils.clearCharArray(password);
                 return passwordBytes;
             }
             if (!Inputer.askIfYes(br, "Different inputs. Try again?")) return null;
@@ -626,6 +648,18 @@ public class Inputer {
         }
     }
 
+    public static Boolean promptAndUpdate(BufferedReader reader, String fieldName, Boolean currentValue) throws IOException {
+        System.out.println("The " + fieldName + " is :" + currentValue);
+        System.out.print("Do you want to update it? Input a boolean to update it. Enter to ignore: ");
+        String input = reader.readLine();
+        if("".equals(input))return currentValue;
+        try{
+            return Boolean.parseBoolean(input);
+        }catch (Exception ignore){
+            return currentValue;
+        }
+    }
+
     public static byte[] getPasswordStrFromEnvironment() {
         String password = System.getenv("PASSWORD");
         if (password != null) {
@@ -643,7 +677,15 @@ public class Inputer {
         String[] fids = inputFidArray(br, ask, 1);
         if(fids.length==0)return "";
         return fids[0];
-    }   
+    }
+
+    public static String inputPubKey(BufferedReader br, String ask) {
+        while(true) {
+            String input = inputString(br, ask);
+            if(KeyTools.isPubKey(input))return input;
+            if(!askIfYes(br,"Illegal pubKey. Try again?"))return null;
+        }
+    }
 
     public static String[] inputFidArray(BufferedReader br, String ask, int len) {
         ArrayList<String> itemList = new ArrayList<String>();
@@ -651,7 +693,7 @@ public class Inputer {
         while(true) {
             String item =Inputer.inputString(br);
             if(item.equals(""))break;
-            if(!KeyTools.isValidFchAddr(item)){
+            if(!KeyTools.isGoodFid(item)){
                 System.out.println("Invalid FID. Try again.");
                 continue;
             }
@@ -685,7 +727,7 @@ public class Inputer {
         return path;
     }
 
-    @SuppressWarnings("null")
+
     public static <T> T chooseOne(T[] values, @Nullable String showStringFieldName, String ask, BufferedReader br) {
         if(values==null || values.length==0)return null;
         Field keyField = null;
@@ -693,7 +735,11 @@ public class Inputer {
         Shower.printUnderline(10);
         try {
             if (showStringFieldName != null) {
-                keyField = values[0].getClass().getDeclaredField(showStringFieldName);
+                keyField = findField(values[0].getClass(), showStringFieldName);
+                if (keyField == null) {
+                    System.out.println("Field '" + showStringFieldName + "' not found in class hierarchy");
+                    return null;
+                }
                 keyField.setAccessible(true);
             }
             String showing;
@@ -709,7 +755,7 @@ public class Inputer {
 
                 System.out.println((i + 1) + " " + showing);
             }
-        }catch (NoSuchFieldException | IllegalAccessException e) {
+        }catch (IllegalAccessException e) {
             System.out.println(e.getMessage());
             return null;
         }
@@ -719,7 +765,7 @@ public class Inputer {
         return values[choice-1];
     }
 
-    @SuppressWarnings("null")
+
     public static <T> T chooseOneFromList(List<T> values, @Nullable String showStringFieldName, String ask, BufferedReader br) {
         if(values==null || values.isEmpty())return null;
 
@@ -727,7 +773,11 @@ public class Inputer {
         String showing;
         try {
             if(showStringFieldName!=null) {
-                keyField = values.get(0).getClass().getDeclaredField(showStringFieldName);
+                keyField = findField(values.get(0).getClass(), showStringFieldName);
+                if (keyField == null) {
+                    System.out.println("Field '" + showStringFieldName + "' not found in class hierarchy");
+                    return null;
+                }
                 keyField.setAccessible(true);
             }
             System.out.println(ask);
@@ -743,7 +793,7 @@ public class Inputer {
                 }
                 System.out.println((i+1)+" "+ showing);
             }
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+        } catch ( IllegalAccessException e) {
             System.out.println(e.getMessage());
             return null;
         }
@@ -773,7 +823,11 @@ public class Inputer {
         try {
             if (showStringFieldName != null) {
                 String key = (String) stringTMap.keySet().toArray()[0];
-                keyField = stringTMap.get(key).getClass().getDeclaredField(showStringFieldName);
+                keyField = findField(stringTMap.get(key).getClass(), showStringFieldName);
+                if (keyField == null) {
+                    System.out.println("Field '" + showStringFieldName + "' not found in class hierarchy");
+                    return null;
+                }
                 keyField.setAccessible(true);
             }
 
@@ -792,7 +846,7 @@ public class Inputer {
                 }
                 System.out.println((i + 1) + " " + showing);
             }
-        } catch (IllegalAccessException | NoSuchFieldException e) {
+        } catch ( IllegalAccessException e) {
             System.out.println("Failed to get value from Class T when choosing one from stringMap.");
             return null;
         }
@@ -835,7 +889,7 @@ private static String formatTimestamp(Object value) {
     
     long timestamp = (Long) value;
     if (timestamp > Constants.TIMESTAMP_2000 && timestamp < Constants.TIMESTAMP_2100) { // Valid range: Jan 1, 2000 to ~2100
-        return DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
+        return DateUtils.longToTime(timestamp, DateUtils.SHORT_FORMAT);
     }
     return String.valueOf(timestamp);
 }
@@ -877,21 +931,34 @@ private static String formatTimestamp(Object value) {
         return date.getTime();
     }
 
-    public static <T, E extends Enum<E>> T createFromInput(
+    public static <T> T createFromInput(
         BufferedReader reader,
         Class<T> tClass) throws IOException, ReflectiveOperationException {
-    
         return createFromUserInput(reader, tClass, null, null);
+    }
+
+    private static List<Field> getAllFields(Class<?> clazz) {
+        List<Field> fields = new ArrayList<>();
+        Class<?> currentClass = clazz;
+        
+        while (currentClass != null) {
+            fields.addAll(Arrays.asList(currentClass.getDeclaredFields()));
+            currentClass = currentClass.getSuperclass();
+        }
+        
+        return fields;
     }
 
     public static <T> T createFromUserInput(BufferedReader reader, Class<T> tClass, String opName, Map<String, String[]> opFieldsMap) throws IOException, ReflectiveOperationException {
         if(tClass.equals(Object.class))return null;
-        if (ObjectTools.isComplexType(tClass)) {
-            System.out.print("Input " + tClass.getSimpleName() + "? (y/other to skip): ");
-            String response = reader.readLine().trim().toLowerCase();
-            if (!response.equals("y")) {
-                return null;  // Skip this complex type
-            }
+
+        // Check for static getInputFieldDefaultValueMap method
+        Map<String, Object> inputFieldDefaultValueMap = null;
+        try {
+            Method getDefaultValueMapMethod = tClass.getDeclaredMethod(FcEntity.METHOD_GET_INPUT_FIELD_DEFAULT_VALUE_MAP);
+            inputFieldDefaultValueMap = (Map<String, Object>) getDefaultValueMapMethod.invoke(null);
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+            // Method not found or not static, continue without default values
         }
 
         System.out.println("Enter " + tClass.getSimpleName() + " Data:");
@@ -905,11 +972,15 @@ private static String formatTimestamp(Object value) {
         // Only use optionValueMap if opName is not null
         if (opName != null && opFieldsMap != null && !opFieldsMap.isEmpty()) {
             // Handle classes with operation-specific fields
-            Field opField = tClass.getDeclaredField(opName);
+            Field opField = findField(tClass, opName);
+            if (opField == null) {
+                System.out.println("Field '" + opName + "' not found in class hierarchy");
+                return null;
+            }
             opField.setAccessible(true);
 
             // Get the Op enum from the correct class
-            Class<?> enumClass = Class.forName(tClass.getName() + "$Op");
+            Class<?> enumClass = Class.forName(tClass.getName() + "");
             Object[] operations = enumClass.getEnumConstants();
             
             // Use Inputer.chooseOne with the correct enum type
@@ -923,42 +994,178 @@ private static String formatTimestamp(Object value) {
             }
 
             for (String fieldName : fieldsToPrompt) {
-                Field field = tClass.getDeclaredField(fieldName);
+                Field field = findField(tClass, fieldName);
+                if (field == null) {
+                    System.out.println("Field '" + fieldName + "' not found in class hierarchy");
+                    return null;
+                }
                 field.setAccessible(true);
                 Class<?> fieldType = field.getType();
 
-                Object value;
+                Object value = null;
                 if (fieldType.isArray()) {
                     value = createArrayFromUserInput(reader, fieldType.getComponentType(), fieldName, null);
-                } else if (ObjectTools.isComplexType(fieldType)) {
+                } else if (fieldType.equals(List.class)) {
+                    // Handle List type by reusing array logic
+                    Class<?> genericType = getGenericType(field);
+                    if (genericType != null) {
+                        System.out.print("Input " + fieldName + " (comma-separated values): ");
+                        String input = reader.readLine().trim();
+                        if (!input.isEmpty()) {
+                            String[] values = input.split(",");
+                            List<Object> list = new ArrayList<>();
+                            for (String value1 : values) {
+                                try {
+                                    Object convertedValue = ObjectUtils.convertToType(value1.trim(), genericType);
+                                    if (convertedValue != null) {
+                                        list.add(convertedValue);
+                                    }
+                                } catch (Exception e) {
+                                    System.out.println("Error converting value: " + value1);
+                                }
+                            }
+                            if (!list.isEmpty()) {
+                                field.set(instance, list);
+                            }
+                        }
+                    } else {
+                        // If generic type is unknown, treat as String list
+                        System.out.print("Input " + fieldName + " (comma-separated strings): ");
+                        String input = reader.readLine().trim();
+                        if (!input.isEmpty()) {
+                            String[] values = input.split(",");
+                            List<String> list = new ArrayList<>();
+                            for (String value1 : values) {
+                                String trimmedValue = value1.trim();
+                                if (!trimmedValue.isEmpty()) {
+                                    list.add(trimmedValue);
+                                }
+                            }
+                            if (!list.isEmpty()) {
+                                field.set(instance, list);
+                            }
+                        }
+                    }
+                } else if (fieldType.equals(Map.class)) {
+                    // Handle Map type by reusing array logic for keys and values
+                    Class<?>[] genericTypes = getMapGenericTypes(field);
+                    Class<?> keyType = genericTypes[0] != null ? genericTypes[0] : String.class;
+                    Class<?> valueType = genericTypes[1] != null ? genericTypes[1] : String.class;
+                    
+                    System.out.println("Enter keys for " + fieldName + ":");
+                    Object keyArray = createArrayFromUserInput(reader, keyType, "keys", null);
+                    if (keyArray != null) {
+                        System.out.println("Enter values for " + fieldName + ":");
+                        Object valueArray = createArrayFromUserInput(reader, valueType, "values", null);
+                        if (valueArray != null) {
+                            Map<Object, Object> map = new HashMap<>();
+                            Object[] keys = (Object[]) keyArray;
+                            Object[] values = (Object[]) valueArray;
+                            int length = Math.min(keys.length, values.length);
+                            for (int i = 0; i < length; i++) {
+                                map.put(keys[i], values[i]);
+                            }
+                            field.set(instance, map);
+                        }
+                    }
+                } else if (ObjectUtils.isComplexType(fieldType)) {
                     value = createFromUserInput(reader, fieldType, opName, opFieldsMap);
                 } else {
-                    value = promptInput(reader, fieldName, fieldType);
+                    // Use default value from map if available
+                    Object defaultValue = inputFieldDefaultValueMap != null ? inputFieldDefaultValueMap.get(fieldName) : null;
+                    value = promptInput(reader, fieldName, fieldType, defaultValue);
                 }
                 if (value != null) field.set(instance, value);
             }
         } else {
             // For classes without operation-specific fields or when opName is null, prompt for all fields
-            for (Field field : tClass.getDeclaredFields()) {
+            List<Field> allFields = getAllFields(tClass);
+            for (Field field : allFields) {
                 // Skip static and transient fields
                 int modifiers = field.getModifiers();
                 if (java.lang.reflect.Modifier.isStatic(modifiers) || 
-                    java.lang.reflect.Modifier.isTransient(modifiers)||
+                    java.lang.reflect.Modifier.isTransient(modifiers) ||
                     java.lang.reflect.Modifier.isFinal(modifiers)) {
                     continue;
                 }
 
                 field.setAccessible(true);
                 String fieldName = field.getName();
+                if(inputFieldDefaultValueMap != null && !inputFieldDefaultValueMap.containsKey(fieldName)) continue;
                 Class<?> fieldType = field.getType();
 
-                Object value;
+                Object value = null;
                 if (fieldType.isArray()) {
                     value = createArrayFromUserInput(reader, fieldType.getComponentType(), fieldName, null);
-                } else if (ObjectTools.isComplexType(fieldType)) {
+                } else if (fieldType.equals(List.class)) {
+                    // Handle List type by reusing array logic
+                    Class<?> genericType = getGenericType(field);
+                    if (genericType != null) {
+                        System.out.print("Input " + fieldName + " (comma-separated values): ");
+                        String input = reader.readLine().trim();
+                        if (!input.isEmpty()) {
+                            String[] values = input.split(",");
+                            List<Object> list = new ArrayList<>();
+                            for (String value1 : values) {
+                                try {
+                                    Object convertedValue = ObjectUtils.convertToType(value1.trim(), genericType);
+                                    if (convertedValue != null) {
+                                        list.add(convertedValue);
+                                    }
+                                } catch (Exception e) {
+                                    System.out.println("Error converting value: " + value1);
+                                }
+                            }
+                            if (!list.isEmpty()) {
+                                field.set(instance, list);
+                            }
+                        }
+                    } else {
+                        // If generic type is unknown, treat as String list
+                        System.out.print("Input " + fieldName + " (comma-separated strings): ");
+                        String input = reader.readLine().trim();
+                        if (!input.isEmpty()) {
+                            String[] values = input.split(",");
+                            List<String> list = new ArrayList<>();
+                            for (String value1 : values) {
+                                String trimmedValue = value1.trim();
+                                if (!trimmedValue.isEmpty()) {
+                                    list.add(trimmedValue);
+                                }
+                            }
+                            if (!list.isEmpty()) {
+                                field.set(instance, list);
+                            }
+                        }
+                    }
+                } else if (fieldType.equals(Map.class)) {
+                    // Handle Map type by reusing array logic for keys and values
+                    Class<?>[] genericTypes = getMapGenericTypes(field);
+                    Class<?> keyType = genericTypes[0] != null ? genericTypes[0] : String.class;
+                    Class<?> valueType = genericTypes[1] != null ? genericTypes[1] : String.class;
+                    
+                    System.out.println("Enter keys for " + fieldName + ":");
+                    Object keyArray = createArrayFromUserInput(reader, keyType, "keys", null);
+                    if (keyArray != null) {
+                        System.out.println("Enter values for " + fieldName + ":");
+                        Object valueArray = createArrayFromUserInput(reader, valueType, "values", null);
+                        if (valueArray != null) {
+                            Map<Object, Object> map = new HashMap<>();
+                            Object[] keys = (Object[]) keyArray;
+                            Object[] values = (Object[]) valueArray;
+                            int length = Math.min(keys.length, values.length);
+                            for (int i = 0; i < length; i++) {
+                                map.put(keys[i], values[i]);
+                            }
+                            field.set(instance, map);
+                        }
+                    }
+                } else if (ObjectUtils.isComplexType(fieldType)) {
                     value = createFromUserInput(reader, fieldType, opName, opFieldsMap);
                 } else {
-                    value = promptInput(reader, fieldName, fieldType);
+                    // Use default value from map if available
+                    Object defaultValue = inputFieldDefaultValueMap != null ? inputFieldDefaultValueMap.get(fieldName) : null;
+                    value = promptInput(reader, fieldName, fieldType, defaultValue);
                 }
                 if (value != null) field.set(instance, value);
             }
@@ -971,7 +1178,7 @@ private static String formatTimestamp(Object value) {
         if(componentType.equals(Object.class))return null;
         while (true) {
             try {
-                if (ObjectTools.isComplexType(componentType) ) {
+                if (ObjectUtils.isComplexType(componentType) ) {
                     System.out.print(fieldName + " (" + componentType.getSimpleName() + "[]. Enter 'y' to input, or any other key to skip): ");
                     String response = reader.readLine().trim().toLowerCase();
                     if (!response.equals("y")) {
@@ -1002,7 +1209,7 @@ private static String formatTimestamp(Object value) {
 
                     for (int i = 0; i < elements.length; i++) {
                         String element = elements[i].trim();
-                        Object value = ObjectTools.convertToType(element, componentType);
+                        Object value = ObjectUtils.convertToType(element, componentType);
                         Array.set(array, i, value);
                     }
 
@@ -1014,42 +1221,55 @@ private static String formatTimestamp(Object value) {
         }
     }
 
-    private static <T> T promptInput(BufferedReader reader, String prompt, Class<T> tClass) throws IOException {
+    private static <T> T promptInput(BufferedReader reader, String prompt, Class<T> tClass, Object defaultValue) throws IOException {
         // Skip if the type is Object.class since we can't determine its structure
         if (tClass == Object.class) {
             return null;
         }
 
-        System.out.print("Input " + prompt + " (" + tClass.getSimpleName() + ") or press Enter to skip: ");
-        String input = reader.readLine().trim();
-
-        if (input.isEmpty()) {
-            return null;  // Skip if empty input
+        String promptText = "Input " + prompt + " (" + tClass.getSimpleName() + ")";
+        if (defaultValue != null&& !"".equals(defaultValue)) {
+            promptText += " [default: " + defaultValue + "]";
         }
+        promptText += " or press Enter to skip: ";
+        while(true){
+            
+            System.out.print(promptText);
+            String input = reader.readLine().trim();
 
-        try {
-            if (tClass == Integer.class || tClass == int.class) {
-                return (T) Integer.valueOf(input);
-            } else if (tClass == Long.class || tClass == long.class) {
-                return (T) Long.valueOf(input);
-            } else if (tClass == Double.class || tClass == double.class) {
-                return (T) Double.valueOf(input);
-            } else if (tClass == Float.class || tClass == float.class) {
-                return (T) Float.valueOf(input);
-            } else if (tClass == Boolean.class || tClass == boolean.class) {
-                return (T) Boolean.valueOf(input);
-            } else if (tClass == String.class) {
-                return (T) input;
-            } else if (tClass.isEnum()) {
-                return (T) Enum.valueOf((Class<Enum>) tClass, input.toUpperCase());
-            } else {
-                System.out.println("Unsupported type: " + tClass.getSimpleName());
-                return null;
+            if (input.isEmpty()) {
+                return defaultValue != null ? (T) defaultValue : null;  // Return default value if available, otherwise skip
             }
-        } catch (IllegalArgumentException e) {
-            System.out.println("Invalid input. Skipping field.");
-            return null;
+            try {
+                if (tClass == Integer.class || tClass == int.class) {
+                    return (T) Integer.valueOf(input);
+                } else if (tClass == Long.class || tClass == long.class) {
+                    return (T) Long.valueOf(input);
+                } else if (tClass == Double.class || tClass == double.class) {
+                    return (T) Double.valueOf(input);
+                } else if (tClass == Float.class || tClass == float.class) {
+                    return (T) Float.valueOf(input);
+                } else if (tClass == Boolean.class || tClass == boolean.class) {
+                    if(!input.toLowerCase().equals("true")&&!input.equals("false"))throw new IllegalArgumentException();
+                    return (T) Boolean.valueOf(input);
+                } else if (tClass == String.class) {
+                    return (T) input;
+                } else if (tClass.isEnum()) {
+                    return (T) Enum.valueOf((Class<Enum>) tClass, input.toUpperCase());
+                } else {
+                    System.out.println("Unsupported type: " + tClass.getSimpleName());
+                    return null;
+                }
+            } catch (IllegalArgumentException e) {
+                System.out.println("Invalid input for " + tClass.getSimpleName() + ". try again.");
+                continue;
+            }
         }
+    }
+
+    // Keep the original promptInput method for backward compatibility
+    private static <T> T promptInput(BufferedReader reader, String prompt, Class<T> tClass) throws IOException {
+        return promptInput(reader, prompt, tClass, null);
     }
 
     public static <T, E extends Enum<E>> T updateFromUserInput(
@@ -1062,7 +1282,11 @@ private static String formatTimestamp(Object value) {
         Class<?> tClass = instance.getClass();
 
         if (opFieldsMap != null && !opFieldsMap.isEmpty()) {
-            Field opField = tClass.getDeclaredField(opName);
+            Field opField = findField(tClass, opName);
+            if (opField == null) {
+                System.out.println("Field '" + opName + "' not found in class hierarchy");
+                return null;
+            }
             opField.setAccessible(true);
             String currentOp = (String) opField.get(instance);
 
@@ -1152,7 +1376,11 @@ private static String formatTimestamp(Object value) {
     }
 
     public static <T> void updateField(BufferedReader reader, T instance, Class<?> tClass, String fieldName, Map<String, String[]> opFieldsMap) throws IOException, ReflectiveOperationException {
-        Field field = tClass.getDeclaredField(fieldName);
+        Field field = findField(tClass, fieldName);
+        if (field == null) {
+            System.out.println("Field '" + fieldName + "' not found in class hierarchy");
+            return;
+        }
         field.setAccessible(true);
         
         // Skip if the type is Object.class since we can't determine its structure
@@ -1172,7 +1400,46 @@ private static String formatTimestamp(Object value) {
                 newValue = createArrayFromUserInput(reader, fieldType.getComponentType(), fieldName, null);
                 if (newValue != null) field.set(instance, newValue);
             }
-        } else if (ObjectTools.isComplexType(fieldType)) {
+        } else if (fieldType.equals(List.class)) {
+            // Handle List type by reusing array logic
+            System.out.println("Current " + fieldName + ": " + formatValue(currentValue));
+            Class<?> genericType = getGenericType(field);
+            if (genericType != null) {
+                Object array = createArrayFromUserInput(reader, genericType, fieldName, null);
+                if (array != null) {
+                    field.set(instance, Arrays.asList((Object[]) array));
+                }
+            } else {
+                // If generic type is unknown, treat as String array
+                Object array = createArrayFromUserInput(reader, String.class, fieldName, null);
+                if (array != null) {
+                    field.set(instance, Arrays.asList((String[]) array));
+                }
+            }
+        } else if (fieldType.equals(Map.class)) {
+            // Handle Map type by reusing array logic for keys and values
+            System.out.println("Current " + fieldName + ": " + formatValue(currentValue));
+            Class<?>[] genericTypes = getMapGenericTypes(field);
+            Class<?> keyType = genericTypes[0] != null ? genericTypes[0] : String.class;
+            Class<?> valueType = genericTypes[1] != null ? genericTypes[1] : String.class;
+            
+            System.out.println("Enter keys for " + fieldName + ":");
+            Object keyArray = createArrayFromUserInput(reader, keyType, "keys", null);
+            if (keyArray != null) {
+                System.out.println("Enter values for " + fieldName + ":");
+                Object valueArray = createArrayFromUserInput(reader, valueType, "values", null);
+                if (valueArray != null) {
+                    Map<Object, Object> map = new HashMap<>();
+                    Object[] keys = (Object[]) keyArray;
+                    Object[] values = (Object[]) valueArray;
+                    int length = Math.min(keys.length, values.length);
+                    for (int i = 0; i < length; i++) {
+                        map.put(keys[i], values[i]);
+                    }
+                    field.set(instance, map);
+                }
+            }
+        } else if (ObjectUtils.isComplexType(fieldType)) {
             System.out.println("Current " + fieldName + ": " + formatValue(currentValue));
             System.out.print("Update this complex object? (y/Enter to skip): ");
             String input = reader.readLine().trim();
@@ -1186,7 +1453,7 @@ private static String formatTimestamp(Object value) {
             }
         } else {
             System.out.println("Current " + fieldName + ": " + formatValue(currentValue));
-            newValue = promptInput(reader, fieldName, fieldType);
+            newValue = promptInput(reader, fieldName, fieldType, null);
             if (newValue != null) field.set(instance, newValue);
         }
     }
@@ -1202,6 +1469,29 @@ private static String formatTimestamp(Object value) {
             return Arrays.deepToString((Object[]) value);
         }
         return value.toString();
+    }
+
+    private static Class<?> getGenericType(Field field) {
+        try {
+            java.lang.reflect.ParameterizedType paramType = 
+                (java.lang.reflect.ParameterizedType) field.getGenericType();
+            return (Class<?>) paramType.getActualTypeArguments()[0];
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Class<?>[] getMapGenericTypes(Field field) {
+        try {
+            java.lang.reflect.ParameterizedType paramType = 
+                (java.lang.reflect.ParameterizedType) field.getGenericType();
+            return new Class<?>[] {
+                (Class<?>) paramType.getActualTypeArguments()[0],
+                (Class<?>) paramType.getActualTypeArguments()[1]
+            };
+        } catch (Exception e) {
+            return new Class<?>[] { null, null };
+        }
     }
 
     public static <T, E extends Enum<E>> T createOrUpdateFromUserInput(
@@ -1222,7 +1512,24 @@ private static String formatTimestamp(Object value) {
         }
     }
 
-
+    private static Field findField(Class<?> clazz, String fieldName) {
+        Class<?> currentClass = clazz;
+        while (currentClass != null) {
+            try {
+                Field field = currentClass.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException e) {
+                currentClass = currentClass.getSuperclass();
+            }
+        }
+        // If field not found in class hierarchy, try public fields as last resort
+        try {
+            return clazz.getField(fieldName);
+        } catch (NoSuchFieldException e) {
+            return null;
+        }
+    }
 
     public static <T> T chooseOneFromListShowingMultiField(
         List<T> values, 
@@ -1243,8 +1550,11 @@ private static String formatTimestamp(Object value) {
             // Get all required fields
             if (showStringFieldNameList != null) {
                 for (String fieldName : showStringFieldNameList) {
-                    Field field = values.get(0).getClass().getDeclaredField(fieldName);
-                    field.setAccessible(true);
+                    Field field = findField(values.get(0).getClass(), fieldName);
+                    if (field == null) {
+                        System.out.println("Field '" + fieldName + "' not found in class hierarchy");
+                        return null;
+                    }
                     fields.add(field);
                 }
             }
@@ -1258,7 +1568,7 @@ private static String formatTimestamp(Object value) {
                 for (int i = 0; i < fields.size(); i++) {
                     String fieldValue = String.valueOf(fields.get(i).get(values.get(0)));
                     showing.append(String.format("%-" + widthList.get(i) + "s", 
-                        fieldValue.length() <= widthList.get(i) ? fieldValue : StringTools.omitMiddle(fieldValue, widthList.get(i))));
+                        fieldValue.length() <= widthList.get(i) ? fieldValue : StringUtils.omitMiddle(fieldValue, widthList.get(i))));
                 }
                 if (confirmDefault(br, showing.toString())) return values.get(0);
                 else return null;
@@ -1272,12 +1582,12 @@ private static String formatTimestamp(Object value) {
                 for (int j = 0; j < fields.size(); j++) {
                     String fieldValue = String.valueOf(fields.get(j).get(values.get(i)));
                     line.append(String.format("%-" + widthList.get(j) + "s", 
-                        fieldValue.length() <= widthList.get(j) ? fieldValue : StringTools.omitMiddle(fieldValue, widthList.get(j))));
+                        fieldValue.length() <= widthList.get(j) ? fieldValue : StringUtils.omitMiddle(fieldValue, widthList.get(j))));
                 }
                 System.out.println(line);
             }
 
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+        } catch (IllegalAccessException e) {
             System.out.println(e.getMessage());
             return null;
         }
@@ -1329,8 +1639,11 @@ private static String formatTimestamp(Object value) {
             // Get all required fields
             if (showStringFieldNameList != null) {
                 for (String fieldName : showStringFieldNameList) {
-                    Field field = values.get(0).getClass().getDeclaredField(fieldName);
-                    field.setAccessible(true);
+                    Field field = findField(values.get(0).getClass(), fieldName);
+                    if (field == null) {
+                        System.out.println("Field '" + fieldName + "' not found in class hierarchy");
+                        return new ArrayList<>();
+                    }
                     fields.add(field);
                 }
             }
@@ -1355,7 +1668,7 @@ private static String formatTimestamp(Object value) {
                 for (int i = 0; i < fields.size(); i++) {
                     String fieldValue = String.valueOf(fields.get(i).get(values.get(0)));
                     showing.append(String.format("%-" + widthList.get(i) + "s", 
-                        fieldValue.length() <= widthList.get(i) ? fieldValue : StringTools.omitMiddle(fieldValue, widthList.get(i))));
+                        fieldValue.length() <= widthList.get(i) ? fieldValue : StringUtils.omitMiddle(fieldValue, widthList.get(i))));
                 }
                 if (confirmDefault(br, showing.toString())) return List.of(values.get(0));
                 else return new ArrayList<>();
@@ -1369,7 +1682,7 @@ private static String formatTimestamp(Object value) {
                 for (int j = 0; j < fields.size(); j++) {
                     String fieldValue = String.valueOf(fields.get(j).get(values.get(i)));
                     line.append(String.format("%-" + widthList.get(j) + "s", 
-                        fieldValue.length() <= widthList.get(j) ? fieldValue : StringTools.omitMiddle(fieldValue, widthList.get(j))));
+                        fieldValue.length() <= widthList.get(j) ? fieldValue : StringUtils.omitMiddle(fieldValue, widthList.get(j))));
                     line.append("  ");
                 }
                 System.out.println(line);
@@ -1403,7 +1716,7 @@ private static String formatTimestamp(Object value) {
 
             return selectedItems;
 
-        } catch (NoSuchFieldException | IllegalAccessException e) {
+        } catch (IllegalAccessException e) {
             System.out.println(e.getMessage());
             return new ArrayList<>();
         }
@@ -1454,7 +1767,7 @@ private static String formatTimestamp(Object value) {
                     break;
                 }
                 // Clean up the input by removing spaces
-                String[] inputs = input.replaceAll("\\s+", "").split(",");
+                String[] inputs = input.replaceAll("\s+", "").split(",");
                 boolean validInput = true;
                 for (String input1 : inputs) {
                     try {
@@ -1551,7 +1864,7 @@ private static String formatTimestamp(Object value) {
                         displayValue = formatTimestamp(value);
                     } else {
                         displayValue = value != null ? value.toString() : "N/A";
-                        displayValue = displayValue.length() > fieldWidth ? StringTools.omitMiddle(displayValue, fieldWidth) : displayValue;
+                        displayValue = displayValue.length() > fieldWidth ? StringUtils.omitMiddle(displayValue, fieldWidth) : displayValue;
                     }
                 } else {
                     // Handle non-native type by getting all field values
@@ -1600,7 +1913,7 @@ private static String formatTimestamp(Object value) {
                     
                     // Only apply omitMiddle if fieldWidth is not null
                     if (fieldWidth != null && fieldStr.length() > fieldWidth) {
-                        fieldStr = StringTools.omitMiddle(fieldStr, fieldWidth);
+                        fieldStr = StringUtils.omitMiddle(fieldStr, fieldWidth);
                     }
                     
                     fieldValues.append(fieldStr).append(" ");
@@ -1644,11 +1957,11 @@ private static String formatTimestamp(Object value) {
         
         Field valueField = null;
         if (!isNativeType && shownValueField != null) {
-            try {
-                valueField = firstValue.getClass().getDeclaredField(shownValueField);
-                valueField.setAccessible(true);
-            } catch (NoSuchFieldException e) {
+            valueField = findField(firstValue.getClass(), shownValueField);
+            if (valueField == null) {
                 System.out.println("Warning: Field '" + shownValueField + "' not found in value class. Using toString() instead.");
+            } else {
+                valueField.setAccessible(true);
             }
         }
 
@@ -1689,8 +2002,8 @@ private static String formatTimestamp(Object value) {
                 }
                 
                 // Truncate both key and value if too long
-                String displayKey = key.length() > fieldWidth ? StringTools.omitMiddle(key, fieldWidth) : key;
-                valueDisplay = valueDisplay.length() > fieldWidth ? StringTools.omitMiddle(valueDisplay, fieldWidth) : valueDisplay;
+                String displayKey = key.length() > fieldWidth ? StringUtils.omitMiddle(key, fieldWidth) : key;
+                valueDisplay = valueDisplay.length() > fieldWidth ? StringUtils.omitMiddle(valueDisplay, fieldWidth) : valueDisplay;
                 System.out.printf("%d %s %s%n", (startWith + j + 1), displayKey, valueDisplay);
             }
             
@@ -1745,9 +2058,9 @@ private static String formatTimestamp(Object value) {
         // Test with Long timestamps
         Map<String, Long> timestampMap = new HashMap<>();
         timestampMap.put("Today", System.currentTimeMillis());
-        timestampMap.put("Yesterday", System.currentTimeMillis() - DateTools.dayToLong(1));
-        timestampMap.put("Last Week", System.currentTimeMillis() - DateTools.dayToLong(7));
-        timestampMap.put("Next Week", System.currentTimeMillis() + DateTools.dayToLong(7));
+        timestampMap.put("Yesterday", System.currentTimeMillis() - DateUtils.dayToLong(1));
+        timestampMap.put("Last Week", System.currentTimeMillis() - DateUtils.dayToLong(7));
+        timestampMap.put("Next Week", System.currentTimeMillis() + DateUtils.dayToLong(7));
         System.out.println("\nSelecting from Timestamp Map:");
         Map<String, Long> selectedTimestamps = chooseMultiFromMapGeneric(
             timestampMap, null, 0, 2, "Choose dates:", br);
@@ -1780,4 +2093,5 @@ private static String formatTimestamp(Object value) {
         }
     }
 }
+
 

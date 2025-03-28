@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import constants.FieldNames;
+import constants.Values;
 import feip.FeipOp;
 
 public class BoxOpData{
@@ -119,9 +120,9 @@ public class BoxOpData{
     public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
     static {
         // For create: name is required, bid must be null
-        OP_FIELDS.put(Op.CREATE.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.DESC, FieldNames.CONTAIN, FieldNames.CIPHER, FieldNames.ALG});
+        OP_FIELDS.put(Op.CREATE.toLowerCase(), new String[]{FieldNames.NAME, Values.DESC, FieldNames.CONTAIN, FieldNames.CIPHER, FieldNames.ALG});
         // For update: both bid and name are required
-        OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.BID, FieldNames.NAME, FieldNames.DESC, FieldNames.CONTAIN, FieldNames.CIPHER, FieldNames.ALG});
+        OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.BID, FieldNames.NAME, Values.DESC, FieldNames.CONTAIN, FieldNames.CIPHER, FieldNames.ALG});
         // For drop and recover: bids is required
         OP_FIELDS.put(Op.DROP.toLowerCase(), new String[]{FieldNames.BIDS});
         OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.BIDS});

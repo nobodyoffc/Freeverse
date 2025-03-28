@@ -3,13 +3,14 @@ package fcData;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import crypto.Hash;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 import crypto.KeyTools;
 import fch.SchnorrSignature;
 
 import org.bitcoinj.core.ECKey;
 import org.junit.jupiter.api.Test;
+import utils.JsonUtils;
 
 import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
@@ -45,9 +46,11 @@ public class Signature extends FcObject{
     public Signature() {
     }
 
-    public Signature(String msg, byte[] symKey) {
+    public Signature(String msg, byte[] key, AlgorithmId alg) {
         this.msg = msg;
-        this.key = symKey;
+        this.key = key;
+        this.alg = alg;
+        makeKeyName(key, alg);
     }
 
     public Signature(String symSign, String symKeyName) {
@@ -171,7 +174,7 @@ public class Signature extends FcObject{
             //Write sign length
             if(signBytes==null)return null;
             int signLength = signBytes.length;
-            byte[] signLengthBytes = BytesTools.intTo2ByteArray(signLength);
+            byte[] signLengthBytes = BytesUtils.intTo2ByteArray(signLength);
 
             outputStream.write(signLengthBytes);
             outputStream.write(signBytes);
@@ -229,7 +232,7 @@ public class Signature extends FcObject{
         System.arraycopy(bundle, offset, signLengthBytes, 0, 2);
         offset+=2;
 
-        int signBytesLength = BytesTools.bytes2ToIntBE(signLengthBytes);
+        int signBytesLength = BytesUtils.bytes2ToIntBE(signLengthBytes);
         byte[] signBytes = new byte[signBytesLength];
         System.arraycopy(bundle, offset, signBytes, 0, signBytesLength);
         offset+=signBytesLength;
@@ -251,14 +254,14 @@ public class Signature extends FcObject{
         if(msg==null || symKey==null)return null;
         byte[] replyJsonBytes = msg.getBytes();
         byte[] keyBytes = Hex.fromHex(symKey);
-        byte[] bytes = BytesTools.bytesMerger(replyJsonBytes,keyBytes);
+        byte[] bytes = BytesUtils.bytesMerger(replyJsonBytes,keyBytes);
         byte[] signBytes = Hash.sha256x2(bytes);
         return Hex.toHex(signBytes);
     }
 
     public static byte[] symSign(byte[] msg, byte[] symKey) {
         if(msg==null || symKey==null)return null;
-        byte[] bytes = BytesTools.bytesMerger(msg, symKey);
+        byte[] bytes = BytesUtils.bytesMerger(msg, symKey);
         return Hash.sha256x2(bytes);
     }
     public byte[] sign(byte[] msgBytes,byte[] key,AlgorithmId alg){
@@ -287,7 +290,7 @@ public class Signature extends FcObject{
             }
             case FC_Sha256SymSignMsg_No1_NrC7 -> {
                 String keyHex = Hex.toHex(key);
-                makeKeyName(key);
+                makeKeyName(key, AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7);
                 this.sign = symSign(msg, keyHex);
             }
             case FC_SchnorrSignMsg_No1_NrC7 -> {
@@ -301,16 +304,27 @@ public class Signature extends FcObject{
         }
         return this;
     }
-    public void makeKeyName(byte[] key) {
+    public void makeKeyName(byte[] key, AlgorithmId algorithmId) {
         if(key==null)return;
-        byte[] keyNameBytes = new byte[6];
-        byte[] hash = Hash.sha256(key);
-        System.arraycopy(hash,0,keyNameBytes,0,6);
-        this.keyName = Hex.toHex(keyNameBytes);
+        switch (algorithmId){
+            case FC_Sha256SymSignMsg_No1_NrC7 -> {
+                byte[] keyNameBytes = new byte[6];
+                byte[] hash = Hash.sha256(key);
+                System.arraycopy(hash,0,keyNameBytes,0,6);
+                this.keyName = Hex.toHex(keyNameBytes);
+            }
+            case FC_SchnorrSignMsg_No1_NrC7, BTC_EcdsaSignMsg_No1_NrC7 -> {
+                this.keyName = KeyTools.priKeyToFid(key);
+            }
+            default -> {
+                return;
+            }
+        }
     }
 
     @Nullable
     public static Signature parseSignature(String rawSignJson) {
+        if(rawSignJson==null|| "".equals(rawSignJson))return null;
         Signature signature;
         try {
             if (rawSignJson.contains("----")) {
@@ -387,7 +401,7 @@ public class Signature extends FcObject{
 
     public static boolean verifySha256SymSign(byte[] msgBytes,byte[] key, String sign){
         if(sign==null)return false;
-        byte[] signBytes = BytesTools.bytesMerger(msgBytes, key);
+        byte[] signBytes = BytesUtils.bytesMerger(msgBytes, key);
         String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
         return sign.equals(doubleSha256Hash);
     }
@@ -558,7 +572,7 @@ public class Signature extends FcObject{
         byte[] pubKey = ecKey.getPubKey();
         byte[] msgHash = Hash.sha256x2(msg.getBytes());
         byte[] sign = SchnorrSignature.schnorr_sign(msgHash, priKeyBigInteger);
-        byte[] pkSign = BytesTools.bytesMerger(pubKey, sign);
+        byte[] pkSign = BytesUtils.bytesMerger(pubKey, sign);
         return Base64.getEncoder().encodeToString(pkSign);
     }
 

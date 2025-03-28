@@ -7,8 +7,8 @@ import fcData.ReplyBody;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.DiskParams;
 import initial.Initiator;
-import tools.JsonTools;
-import tools.http.AuthType;
+import utils.JsonUtils;
+import utils.http.AuthType;
 import redis.clients.jedis.Jedis;
 import server.HttpRequestChecker;
 import appTools.Settings;
@@ -41,7 +41,7 @@ public class GetService extends HttpServlet {
             replier.setTotal(1L);
             replier.setGot(1L);
             replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-            String data = JsonTools.toJson(service);
+            String data = JsonUtils.toJson(service);
             replier.reply0SuccessHttp(data, response);
         }catch (Exception e){
             replier.replyOtherErrorHttp(e.getMessage(),e.getStackTrace(), response);
@@ -50,7 +50,7 @@ public class GetService extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier =new ReplyBody(Initiator.settings);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,response);
     }
 
     private Service doRequest()  {

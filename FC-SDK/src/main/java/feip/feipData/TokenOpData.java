@@ -1,6 +1,7 @@
 package feip.feipData;
 
 
+import constants.Values;
 import fch.fchData.SendTo;
 import feip.FeipOp;
 
@@ -61,7 +62,7 @@ public class TokenOpData {
 
     public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
     static {
-        OP_FIELDS.put(Op.REGISTER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.NAME, FieldNames.DESC, FieldNames.CONSENSUS_ID, FieldNames.CAPACITY, 
+        OP_FIELDS.put(Op.REGISTER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.NAME, Values.DESC, FieldNames.CONSENSUS_ID, FieldNames.CAPACITY,
             FieldNames.DECIMAL, FieldNames.TRANSFERABLE, FieldNames.CLOSABLE, FieldNames.OPEN_ISSUE, FieldNames.MAX_AMT_PER_ISSUE, FieldNames.MIN_CDD_PER_ISSUE, FieldNames.MAX_ISSUES_PER_ADDR});
         OP_FIELDS.put(Op.ISSUE.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.ISSUE_TO});
         OP_FIELDS.put(Op.TRANSFER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.TRANSFER_TO});

@@ -11,7 +11,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import configure.ApiAccount;
 import constants.OpNames;
-import tools.JsonTools;
+import utils.JsonUtils;
 import configure.Configure;
 
 import java.io.BufferedReader;
@@ -80,7 +80,7 @@ public abstract class ServiceManager {
     }
 
     private void showService() {
-        System.out.println(JsonTools.toNiceJson(service));
+        System.out.println(JsonUtils.toNiceJson(service));
     }
 
     public void publishService() {
@@ -215,7 +215,7 @@ public abstract class ServiceManager {
         dataOnChain.setData(data);
 
         System.out.println("The owner can send a TX with below json in OpReturn to "+op+" the service: "+service.getId());
-        System.out.println(JsonTools.toNiceJson(dataOnChain));
+        System.out.println(JsonUtils.toNiceJson(dataOnChain));
 
         System.out.println("you can replace the value of 'data.sid' to "+op+" other your own service services.");
         Menu.anyKeyToContinue(br);

@@ -1,6 +1,6 @@
 package startFEIP;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -12,8 +12,8 @@ import constants.Constants;
 import constants.IndicesNames;
 import construct.*;
 
-import fch.OpReFileTools;
-import fch.ParseTools;
+import fch.OpReFileUtils;
+import fch.FchUtils;
 import fch.fchData.OpReturn;
 import fch.opReReadResult;
 import feip.feipData.*;
@@ -60,7 +60,7 @@ public class FileParser {
 //			String json = JsonTools.strToJson(opre.getOpReturn());
 			feip = new Gson().fromJson(opre.getOpReturn(), Feip.class);
 		}catch(JsonSyntaxException e) {
-			log.debug("Bad json on {}. ",opre.getTxId());
+			log.debug("Bad json on {}. ",opre.getId());
 		}
 		return  feip;
 	}
@@ -110,7 +110,7 @@ public class FileParser {
 		while(!error) {
 			fis = openFile();
 			fis.skip(pointer);
-			opReReadResult readOpResult = OpReFileTools.readOpReFromFile(fis);
+			opReReadResult readOpResult = OpReFileUtils.readOpReFromFile(fis);
 			fis.close();
 			length = readOpResult.getLength();
 			pointer += length;
@@ -119,7 +119,7 @@ public class FileParser {
 
 			if(readOpResult.isFileEnd()) {
 				if(pointer> Constants.MaxOpFileSize) {
-					fileName = OpReFileTools.getNextFile(fileName);
+					fileName = OpReFileUtils.getNextFile(fileName);
 					while(!new File(fileName).exists()) {
 						System.out.print(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(System.currentTimeMillis())));
 						System.out.println(" Waiting 30 seconds for new file ...");
@@ -134,7 +134,7 @@ public class FileParser {
 					fis.close();
 					AtomicBoolean running = new AtomicBoolean();
 					running.set(true);
-					ParseTools.waitForChangeInDirectory(path,running);
+					FchUtils.waitForChangeInDirectory(path,running);
 					fis = openFile();
 					long result = fis.skip(pointer);
 					continue;
@@ -152,7 +152,7 @@ public class FileParser {
 
 			lastHeight = opre.getHeight();
 			lastIndex = opre.getTxIndex();
-			lastId = opre.getTxId();
+			lastId = opre.getId();
 
             if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) continue;
 
@@ -166,7 +166,7 @@ public class FileParser {
 			System.out.println();
 			switch (feipName) {
 				case CID -> {
-					System.out.println("Cid @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Cid @"+opre.getHeight()+"."+opre.getId());
 					CidHist identityHist = cidParser.makeCid(opre, feip);
 					if (identityHist == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist);
@@ -175,7 +175,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case NOBODY -> {
-					System.out.println("Nobody @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Nobody @"+opre.getHeight()+"."+opre.getId());
 					CidHist identityHist4 = cidParser.makeNobody(opre, feip);
 					if (identityHist4 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist4);
@@ -184,7 +184,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case MASTER -> {
-					System.out.println("Master @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Master @"+opre.getHeight()+"."+opre.getId());
 					CidHist identityHist1 = cidParser.makeMaster(opre, feip);
 					if (identityHist1 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist1);
@@ -193,7 +193,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case HOMEPAGE -> {
-					System.out.println("Homepage @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Homepage @"+opre.getHeight()+"."+opre.getId());
 					CidHist identityHist2 = cidParser.makeHomepage(opre, feip);
 					if (identityHist2 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist2);
@@ -202,7 +202,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case NOTICE_FEE -> {
-					System.out.println("Notice fee @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Notice fee @"+opre.getHeight()+"."+opre.getId());
 					CidHist identityHist3 = cidParser.makeNoticeFee(opre, feip);
 					if (identityHist3 == null) break;
 					isValid = cidParser.parseCidInfo(esClient, identityHist3);
@@ -211,7 +211,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case REPUTATION -> {
-					System.out.println("Reputation @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Reputation @"+opre.getHeight()+"."+opre.getId());
 					RepuHist repuHist = cidParser.makeReputation(opre, feip);
 					if (repuHist == null) break;
 					isValid = cidParser.parseReputation(esClient, repuHist);
@@ -220,7 +220,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case PROTOCOL -> {
-					System.out.println("Protocol @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Protocol @"+opre.getHeight()+"."+opre.getId());
 					ProtocolHistory freeProtocolHist = constructParser.makeProtocol(opre, feip);
 					if (freeProtocolHist == null) break;
 					isValid = constructParser.parseProtocol(esClient, freeProtocolHist);
@@ -229,7 +229,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case SERVICE -> {
-					System.out.println("Service @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Service @"+opre.getHeight()+"."+opre.getId());
 					ServiceHistory serviceHist = constructParser.makeService(opre, feip);
 					if (serviceHist == null) break;
 					isValid = constructParser.parseService(esClient, serviceHist);
@@ -238,7 +238,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case APP -> {
-					System.out.println("APP @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("APP @"+opre.getHeight()+"."+opre.getId());
 					AppHistory appHist = constructParser.makeApp(opre, feip);
 					if (appHist == null) break;
 					isValid = constructParser.parseApp(esClient, appHist);
@@ -247,7 +247,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case CODE -> {
-					System.out.println("Code @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Code @"+opre.getHeight()+"."+opre.getId());
 					CodeHistory codeHist = constructParser.makeCode(opre, feip);
 					if (codeHist == null) break;
 					isValid = constructParser.parseCode(esClient, codeHist);
@@ -256,32 +256,32 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case NID -> {
-					System.out.println("Nid @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Nid @"+opre.getHeight()+"."+opre.getId());
 					isValid = publishParser.parseNid(esClient, opre, feip);
 					System.out.println(isValid);
 				}
 				case CONTACT -> {
-					System.out.println("Contact @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Contact @"+opre.getHeight()+"."+opre.getId());
 					isValid = personalParser.parseContact(esClient, opre, feip);
 					System.out.println(isValid);
 				}
 				case MAIL -> {
-					System.out.println("Mail @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Mail @"+opre.getHeight()+"."+opre.getId());
 					isValid = personalParser.parseMail(esClient, opre, feip);
 					System.out.println(isValid);
 				}
 				case SECRET -> {
-					System.out.println("Secret @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Secret @"+opre.getHeight()+"."+opre.getId());
 					isValid = personalParser.parseSecret(esClient, opre, feip);
 					System.out.println(isValid);
 				}
 				case STATEMENT -> {
-					System.out.println("Statement @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Statement @"+opre.getHeight()+"."+opre.getId());
 					isValid = publishParser.parseStatement(esClient, opre, feip);
 					System.out.println(isValid);
 				}
 				case GROUP -> {
-					System.out.println("Group @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Group @"+opre.getHeight()+"."+opre.getId());
 					GroupHistory groupHist = organizationParser.makeGroup(opre, feip);
 					if (groupHist == null) break;
 					isValid = organizationParser.parseGroup(esClient, groupHist);
@@ -290,7 +290,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case TEAM -> {
-					System.out.println("Team @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Team @"+opre.getHeight()+"."+opre.getId());
 					TeamHistory teamHist = organizationParser.makeTeam(opre, feip);
 					if (teamHist == null) break;
 					isValid = organizationParser.parseTeam(esClient, teamHist);
@@ -299,7 +299,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case BOX -> {
-					System.out.println("Box @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Box @"+opre.getHeight()+"."+opre.getId());
 					BoxHistory boxHist = personalParser.makeBox(opre, feip);
 					if (boxHist == null) break;
 					isValid = personalParser.parseBox(esClient, boxHist);
@@ -308,7 +308,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case PROOF -> {
-					System.out.println("Proof @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Proof @"+opre.getHeight()+"."+opre.getId());
 					ProofHistory proofHist = publishParser.makeProof(opre, feip);
 					if (proofHist == null) break;
 					isValid = publishParser.parseProof(esClient, proofHist);
@@ -317,7 +317,7 @@ public class FileParser {
 					System.out.println(isValid);
 				}
 				case TOKEN -> {
-					System.out.println("Token @"+opre.getHeight()+"."+opre.getTxId());
+					System.out.println("Token @"+opre.getHeight()+"."+opre.getId());
 					TokenHistory tokenHist = publishParser.makeToken(opre, feip);
 					if (tokenHist == null) break;
 					try {
@@ -446,7 +446,7 @@ public class FileParser {
 		if(idList==null || idList.isEmpty())return;
 		switch (index) {
 			case IndicesNames.CID:
-				EsTools.bulkDeleteList(esClient, IndicesNames.CID, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.CID, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
 				ArrayList<CidHist> reparseCidList = getReparseHistList(esClient, IndicesNames.CID_HISTORY,idList,"signer", CidHist.class);
@@ -457,7 +457,7 @@ public class FileParser {
 				new IdentityRollbacker().reviseCidRepuAndHot(esClient, (ArrayList<String>) idList);
 				break;
 			case IndicesNames.PROTOCOL:
-				EsTools.bulkDeleteList(esClient, IndicesNames.PROTOCOL, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.PROTOCOL, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
 				ArrayList<ProtocolHistory> reparseFreeProtocolList = getReparseHistList(esClient, IndicesNames.PROTOCOL_HISTORY,idList,"pid", ProtocolHistory.class);
@@ -467,7 +467,7 @@ public class FileParser {
 				}
 				break;
 			case IndicesNames.CODE:
-				EsTools.bulkDeleteList(esClient, IndicesNames.CODE, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.CODE, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
 				ArrayList<CodeHistory> reparseCodeList = getReparseHistList(esClient, IndicesNames.CODE_HISTORY,idList,"coid",CodeHistory.class);
@@ -477,7 +477,7 @@ public class FileParser {
 				}
 				break;
 			case IndicesNames.APP:
-				EsTools.bulkDeleteList(esClient, IndicesNames.APP, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.APP, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
 				ArrayList<AppHistory> reparseAppList = getReparseHistList(esClient, IndicesNames.APP_HISTORY,idList,"aid",AppHistory.class);
@@ -487,7 +487,7 @@ public class FileParser {
 				}
 				break;
 			case IndicesNames.SERVICE:
-				EsTools.bulkDeleteList(esClient, IndicesNames.SERVICE, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.SERVICE, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 				ArrayList<ServiceHistory> reparseServiceList = getReparseHistList(esClient, IndicesNames.SERVICE_HISTORY,idList,"sid",ServiceHistory.class);
 
@@ -496,7 +496,7 @@ public class FileParser {
 				}
 				break;
 			case IndicesNames.GROUP:
-				EsTools.bulkDeleteList(esClient, IndicesNames.GROUP, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.GROUP, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 				ArrayList<GroupHistory> reparseGroupList = getReparseHistList(esClient, IndicesNames.GROUP_HISTORY,idList,"gid",GroupHistory.class);
 
@@ -505,7 +505,7 @@ public class FileParser {
 				}
 				break;
 			case IndicesNames.TEAM:
-				EsTools.bulkDeleteList(esClient, IndicesNames.TEAM, (ArrayList<String>) idList);
+				EsUtils.bulkDeleteList(esClient, IndicesNames.TEAM, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 				ArrayList<TeamHistory> reparseTeamList = getReparseHistList(esClient, IndicesNames.TEAM_HISTORY,idList,"tid",TeamHistory.class);
 

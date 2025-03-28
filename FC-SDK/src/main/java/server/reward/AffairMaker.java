@@ -1,7 +1,7 @@
 package server.reward;
 
 import handlers.CashHandler;
-import fch.ParseTools;
+import fch.FchUtils;
 import fcData.Affair;
 import fcData.DataSignTx;
 import fcData.Op;
@@ -12,8 +12,8 @@ import fch.fchData.SendTo;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
 import feip.feipData.Feip;
-import tools.JsonTools;
-import tools.NumberTools;
+import utils.JsonUtils;
+import utils.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -30,7 +30,7 @@ public class AffairMaker {
 
     private RewardInfo rewardInfo;
     private String account;
-    private DataForOffLineTx dataForOffLineTx;
+    private TxCreator.OffLineTxRequestData offLineTxRequestData;
     private List<Cash> meetCashList;
     private String msg;
     private final String sid;
@@ -100,12 +100,12 @@ public class AffairMaker {
 
         addQualifiedPendingToPay(sendToMap);
 
-        DataForOffLineTx dataForOffLineTx = new DataForOffLineTx();
-        dataForOffLineTx.setFromFid(account);
-        dataForOffLineTx.setSendToList(new ArrayList<>(sendToMap.values()));
-        dataForOffLineTx.setMsg(msg);
+        TxCreator.OffLineTxRequestData offLineTxRequestData = new TxCreator.OffLineTxRequestData();
+        offLineTxRequestData.setFromFid(account);
+        offLineTxRequestData.setSendToList(new ArrayList<>(sendToMap.values()));
+        offLineTxRequestData.setMsg(msg);
 
-        String rawTxStr = CryptoSign.makeRawTxForCs(dataForOffLineTx,cashList);
+        String rawTxStr = TxCreator.makeOldCsTxRequiredJson(offLineTxRequestData,cashList);
 
         dataSignTx.setUnsignedTxCs(rawTxStr);
         dataSignTx.setAlg(ALG_SIGN_TX_BY_CRYPTO_SIGN);
@@ -114,12 +114,12 @@ public class AffairMaker {
         affairReward.setOp(Op.SIGN);
         affairReward.setData(dataSignTx);
 
-        return JsonTools.toNiceJson(affairReward);
+        return JsonUtils.toNiceJson(affairReward);
     }
 
     private void addQualifiedPendingToPay(HashMap<String, SendTo> sendToMap) {
         for(String key: pendingMap.keySet()){
-            double amount = ParseTools.satoshiToCoin(pendingMap.get(key));
+            double amount = FchUtils.satoshiToCoin(pendingMap.get(key));
             SendTo sendTo = new SendTo();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
@@ -144,7 +144,7 @@ public class AffairMaker {
             String fid = sendTo.getFid();
             double amount = sendTo.getAmount();
             if (amount < MinPayValue) {
-                addToPending(fid, ParseTools.coinToSatoshi(amount),jedisPool);
+                addToPending(fid, FchUtils.coinToSatoshi(amount),jedisPool);
                 iterator.remove();
             }
         }
@@ -172,12 +172,12 @@ public class AffairMaker {
             SendTo sendTo = new SendTo();
             String fid = payDetail.getFid();
             sendTo.setFid(fid);
-            double amount = ParseTools.satoshiToCoin(payDetail.getAmount());
+            double amount = FchUtils.satoshiToCoin(payDetail.getAmount());
             if(sendToMap.get(fid)!=null){
                 amount = amount+ sendToMap.get(fid).getAmount();
-                sendTo.setAmount(NumberTools.roundDouble8(amount));
+                sendTo.setAmount(NumberUtils.roundDouble8(amount));
             }else{
-                sendTo.setAmount(NumberTools.roundDouble8(amount));
+                sendTo.setAmount(NumberUtils.roundDouble8(amount));
             }
             sendToMap.put(sendTo.getFid(),sendTo);
         }
@@ -224,12 +224,12 @@ public class AffairMaker {
         this.account = account;
     }
 
-    public DataForOffLineTx getDataForOffLineTx() {
-        return dataForOffLineTx;
+    public TxCreator.OffLineTxRequestData getDataForOffLineTx() {
+        return offLineTxRequestData;
     }
 
-    public void setDataForOffLineTx(DataForOffLineTx dataForOffLineTx) {
-        this.dataForOffLineTx = dataForOffLineTx;
+    public void setDataForOffLineTx(TxCreator.OffLineTxRequestData offLineTxRequestData) {
+        this.offLineTxRequestData = offLineTxRequestData;
     }
 
     public List<Cash> getMeetCashList() {

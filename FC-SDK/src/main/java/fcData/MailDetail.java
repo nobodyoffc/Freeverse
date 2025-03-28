@@ -9,9 +9,9 @@ import crypto.CryptoDataByte;
 import crypto.Decryptor;
 import crypto.KeyTools;
 import feip.feipData.Mail;
-import tools.*;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.*;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import org.bitcoinj.core.ECKey;
 import org.jetbrains.annotations.Nullable;
 
@@ -50,13 +50,13 @@ public class MailDetail extends FcObject{
         for (int i = 0; i < currentList.size(); i++) {
             MailDetail mail = currentList.get(i);
             String from;
-            if(mail.getFromCid()!=null)from = StringTools.omitMiddle(mail.getFromCid(), 13);
-            else from = StringTools.omitMiddle(mail.getFrom(), 13);
+            if(mail.getFromCid()!=null)from = StringUtils.omitMiddle(mail.getFromCid(), 13);
+            else from = StringUtils.omitMiddle(mail.getFrom(), 13);
             String to;
-            if(mail.getToCid()!=null)to = StringTools.omitMiddle(mail.getToCid(), 13);
-            else to = StringTools.omitMiddle(mail.getTo(), 13);
-            String date = DateTools.longToTime(mail.getTime(),"yy-mm-dd");
-            System.out.printf("%d. %s %s To %s Subject: %s%n", totalDisplayed + i + 1,date, from,to, StringTools.omitMiddle(mail.getContent(), 30));
+            if(mail.getToCid()!=null)to = StringUtils.omitMiddle(mail.getToCid(), 13);
+            else to = StringUtils.omitMiddle(mail.getTo(), 13);
+            String date = DateUtils.longToTime(mail.getTime(),"yy-mm-dd");
+            System.out.printf("%d. %s %s To %s Subject: %s%n", totalDisplayed + i + 1,date, from,to, StringUtils.omitMiddle(mail.getContent(), 30));
         }
 
         System.out.println("Enter mail numbers to select (comma-separated), 'q' to quit, or press Enter for more:");
@@ -93,23 +93,23 @@ public class MailDetail extends FcObject{
         MailDetail mailDetail = MailDetail.newSample();
         mailDetail.getIdBytes();
 
-        JsonTools.printJson(mailDetail);
+        JsonUtils.printJson(mailDetail);
 
 
         byte[] bytes = mailDetail.toBytes();
         MailDetail newMail = MailDetail.fromBytes(bytes);
-        JsonTools.printJson(newMail);
+        JsonUtils.printJson(newMail);
 
         TalkUnit talkUnit = TalkUnit.newSample();
-        JsonTools.printJson(talkUnit);
+        JsonUtils.printJson(talkUnit);
 
-        JsonTools.printJson(TalkUnit.fromBytes(talkUnit.toBytes()));
+        JsonUtils.printJson(TalkUnit.fromBytes(talkUnit.toBytes()));
     }
 
 
     public static MailDetail newSample(){
         MailDetail mailDetail = new MailDetail();
-        mailDetail.setMailId(Hex.toHex(BytesTools.getRandomBytes(32)));
+        mailDetail.setMailId(Hex.toHex(BytesUtils.getRandomBytes(32)));
         mailDetail.setTime(System.currentTimeMillis());
         mailDetail.setFrom(KeyTools.pubKeyToFchAddr(new ECKey().getPubKey()));
         mailDetail.setTo(KeyTools.pubKeyToFchAddr(new ECKey().getPubKey()));
@@ -119,7 +119,7 @@ public class MailDetail extends FcObject{
 
     public byte[] toBytes(){
         try(ByteArrayBuilder bab = new ByteArrayBuilder()) {
-            bab.write(BytesTools.longToBytes(time));
+            bab.write(BytesUtils.longToBytes(time));
             bab.write(Hex.fromHex(mailId));
             byte[] fromBytes = KeyTools.addrToHash160(from);
             bab.write(fromBytes);
@@ -147,7 +147,7 @@ public class MailDetail extends FcObject{
     public static MailDetail fromBytes(byte[] bundle){
         MailDetail mailDetail = new MailDetail();
         try(ByteArrayInputStream bis = new ByteArrayInputStream(bundle)) {
-            mailDetail.setTime(BytesTools.bytes8ToLong(bis.readNBytes(8),false));
+            mailDetail.setTime(BytesUtils.bytes8ToLong(bis.readNBytes(8),false));
             mailDetail.setMailId(Hex.toHex(bis.readNBytes(32)));
             mailDetail.setFrom(KeyTools.hash160ToFchAddr(bis.readNBytes(20)));
             mailDetail.setTo(KeyTools.hash160ToFchAddr(bis.readNBytes(20)));

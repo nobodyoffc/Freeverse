@@ -1,7 +1,7 @@
 package NasaRcpTest;
 
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import nasa.NasaRpcNames;
 import nasa.RpcRequest;
 import org.junit.jupiter.api.Test;
@@ -14,21 +14,21 @@ public class EstimateFee {
     @Test
     public void test() {
         estimatefee("http://127.0.0.1:8332", "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
 
         estimatefee(6, "http://127.0.0.1:22555", "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
 
 
         estimatesmartfee(3, "http://127.0.0.1:22555", "username", "password");
-        JsonTools.printJson(resultSmart);
+        JsonUtils.printJson(resultSmart);
     }
 
     public double estimatefee(String url, String username, String password) {
 
         RpcRequest jsonRPC2Request = new RpcRequest(NasaRpcNames.ESTIMATE_FEE, null);
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         result = (double) RpcRequest.requestRpc(url, username, password, NasaRpcNames.ESTIMATE_FEE, jsonRPC2Request);
         return result;
@@ -38,7 +38,7 @@ public class EstimateFee {
         params = new Object[]{nBlocks};
         RpcRequest jsonRPC2Request = new RpcRequest(NasaRpcNames.ESTIMATE_FEE, params);
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         result = (double) RpcRequest.requestRpc(url, username, password, NasaRpcNames.ESTIMATE_FEE, jsonRPC2Request);
         return result;
@@ -48,7 +48,7 @@ public class EstimateFee {
         params = new Object[]{nBlocks};
         RpcRequest jsonRPC2Request = new RpcRequest(NasaRpcNames.ESTIMATE_SMART_FEE, params);
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result1 = RpcRequest.requestRpc(url, username, password, NasaRpcNames.ESTIMATE_SMART_FEE, jsonRPC2Request);
         Gson gson = new Gson();

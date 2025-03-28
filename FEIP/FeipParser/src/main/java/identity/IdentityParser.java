@@ -9,6 +9,7 @@ import com.google.gson.Gson;
 import crypto.KeyTools;
 import fch.WeightMethod;
 import fch.fchData.Cid;
+import fch.fchData.Nobody;
 import fch.fchData.OpReturn;
 import feip.feipData.*;
 import startFEIP.StartFEIP;
@@ -39,7 +40,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setId(opre.getTxId());
+		cidHist.setId(opre.getId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		if(cidRaw.getOp().equals("register")||cidRaw.getOp().equals("unregister")) {
@@ -76,7 +77,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setId(opre.getTxId());
+		cidHist.setId(opre.getId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		cidHist.setPriKey(nobodyRaw.getPriKey());
@@ -102,7 +103,7 @@ public class IdentityParser {
 		if(masterRaw.getPromise()==null)return null;
 		if(!masterRaw.getPromise().equals("The master owns all my rights."))return null;
 
-		if(!KeyTools.isValidFchAddr(masterRaw.getMaster()))return null;
+		if(!KeyTools.isGoodFid(masterRaw.getMaster()))return null;
 
 		CidHist cidHist = new CidHist();
 
@@ -110,7 +111,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setId(opre.getTxId());
+		cidHist.setId(opre.getId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		cidHist.setMaster(masterRaw.getMaster());
@@ -131,7 +132,7 @@ public class IdentityParser {
 		}
 		if(homepageRaw ==null)return null;
 
-		if(homepageRaw.getHomepages()== null || homepageRaw.getHomepages()[0] == null || homepageRaw.getHomepages()[0].isBlank())return null;
+		if(homepageRaw.getHomepages()== null || homepageRaw.getHomepages().get(0) == null || homepageRaw.getHomepages().get(0).isBlank())return null;
 
 		if(homepageRaw.getOp()==null)return null;
 
@@ -143,7 +144,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setId(opre.getTxId());
+		cidHist.setId(opre.getId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 
@@ -170,7 +171,7 @@ public class IdentityParser {
 		cidHist.setSn(feip.getSn());
 		cidHist.setVer(feip.getVer());
 		cidHist.setHeight(opre.getHeight());
-		cidHist.setId(opre.getTxId());
+		cidHist.setId(opre.getId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 
@@ -195,7 +196,7 @@ public class IdentityParser {
 		RepuHist repuHist = new RepuHist();
 
 		repuHist.setHeight(opre.getHeight());
-		repuHist.setId(opre.getTxId());
+		repuHist.setId(opre.getId());
 		repuHist.setIndex(opre.getTxIndex());
 		repuHist.setTime(opre.getTime());
 
@@ -285,28 +286,24 @@ public class IdentityParser {
 
 					int nameCount = 0;
 					if(cid.getUsedCids()!=null) {
-						nameCount = cid.getUsedCids().length;
+						nameCount = cid.getUsedCids().size();
 					}
 					if(nameCount>=4)return isValid;
 
 					Set<String> usedCidSet = new HashSet<String>();
 
-					if(cid.getUsedCids()==null || cid.getUsedCids().length==0)
+					if(cid.getUsedCids()==null || cid.getUsedCids().size()==0)
 						cid.setNameTime(cidHist.getTime());
 
 					for(int i=0; i<nameCount;i++) {
-						usedCidSet.add(cid.getUsedCids()[i]);
+						usedCidSet.add(cid.getUsedCids().get(i));
 					}
 					usedCidSet.add(cidStr1);
 
-					String [] usedCids = new String[usedCidSet.size()];
-					usedCidSet.toArray(usedCids);
-
-					if(usedCids.length>4)return isValid;
-					cid.setUsedCids(usedCids);
+					if(usedCidSet.size()>4)return isValid;
+					cid.setUsedCids(usedCidSet.stream().toList());
 
 					cid.setLastHeight(cidHist.getHeight());
-
 
 					Cid cid1 = cid;
 					//rule 3
@@ -410,7 +407,7 @@ public class IdentityParser {
 		}else if(cidHist.getOp().equals("unregister")) {
 			if(resultGetCid.found()) {
 				Cid cid  = resultGetCid.source();
-				if(cid.getHomepages() ==null || cid.getHomepages()[0].isBlank()) {
+				if(cid.getHomepages() ==null || cid.getHomepages().get(0).isBlank()) {
 					isValid = false;
 				}else {
 					cid.setHomepages(null);

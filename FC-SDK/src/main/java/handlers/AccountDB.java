@@ -1,53 +1,39 @@
+// ... existing code ...
 package handlers;
 
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
-import org.mapdb.Serializer;
+import constants.FieldNames;
+import db.LocalDB;
+import db.LevelDB;
+import fcData.FcEntity;
 
 import appTools.Inputer;
 
-import org.mapdb.HTreeMap;
-
 import handlers.AccountHandler.Expense;
 import handlers.AccountHandler.Income;
-import fch.ParseTools;
-import tools.FileTools;
-import tools.NumberTools;
+import fch.FchUtils;
+import org.jetbrains.annotations.NotNull;
+import utils.NumberUtils;
 
-import java.util.concurrent.ConcurrentMap;
-import java.util.Map;
-import java.util.HashMap;
 import java.io.BufferedReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.io.File;
-import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.Map;
+
+import static constants.FieldNames.LAST_HEIGHT;
 
 public class AccountDB {
-    private static final String ACCOUNT_DB = "account";
     private final String myFid;
     private final String sid;
     private final String dbPath;
     
-    private volatile DB db;
-    private volatile ConcurrentMap<String, Long> userBalanceMap;
-    private volatile ConcurrentMap<String, String> fidConsumeViaMap; 
-    private volatile ConcurrentMap<String, Long> viaBalanceMap;
-    private volatile ConcurrentMap<String, Long> unpaidViaBalanceMap;
-    private volatile ConcurrentMap<String, Long> unpaidFixedCostMap;
-    private volatile ConcurrentMap<String, Long> fixedCostMap;
-    private volatile ConcurrentMap<String, Double> contributorShareMap; 
-    private volatile ConcurrentMap<String, String> metaMap;
-    private volatile HTreeMap<String, Income> incomeMap;
-    private volatile HTreeMap<Long, String> incomeOrderMap;
-    private volatile long currentIncomeIndex;
-    private volatile HTreeMap<String, Expense> expenseMap;
-    private volatile HTreeMap<Long, String> expenseOrderMap;
-    private volatile long currentExpenseIndex;
+    private volatile LocalDB<FcEntity> db;
     private final Object lock = new Object();
-    private volatile ConcurrentMap<String, Long> payoffMap;
+
+    private volatile long currentIncomeIndex;
+    private volatile long currentExpenseIndex;
+// ... existing code ...
 
     public AccountDB(String myFid, String sid, String dbPath) {
         this.myFid = myFid;
@@ -60,97 +46,134 @@ public class AccountDB {
         if (db == null || db.isClosed()) {
             synchronized (lock) {
                 if (db == null || db.isClosed()) {
-                    String fileName = FileTools.makeFileName(myFid, sid, ACCOUNT_DB, constants.Strings.DOT_DB);
-                    String dbName = dbPath+fileName;
+
+                    db = new LevelDB<>(LocalDB.SortType.NO_SORT, FcEntity.class);
+                    db.initialize(myFid, sid, dbPath, FieldNames.ACCOUNT_DB);
                     
-                    db = DBMaker.fileDB(dbName)
-                            .fileMmapEnable()
-                            .checksumHeaderBypass()
-                            .transactionEnable()
-                            .make();
-                    
-                    userBalanceMap = db.hashMap("userBalance")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen();
-                            
-                    fidConsumeViaMap = db.hashMap("fidVia")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.STRING)
-                            .createOrOpen();
-                            
-                    viaBalanceMap = db.hashMap("viaBalance")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen();
-                            
-                    unpaidViaBalanceMap = db.hashMap("unpaidViaBalance")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen();
-                            
-                    fixedCostMap = db.hashMap("fixedCost")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen();
-                            
-                    unpaidFixedCostMap = db.hashMap("unpaidFixedCost")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen();
-                            
-                    contributorShareMap = db.hashMap("contributorShare")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.DOUBLE)
-                            .createOrOpen();
-                            
-                    metaMap = db.hashMap("meta")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.STRING)
-                            .createOrOpen();
-                            
-                    incomeMap = db.hashMap("income")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.JAVA)
-                            .createOrOpen();
-                            
-                    incomeOrderMap = db.hashMap("income_order")
-                            .keySerializer(Serializer.LONG)
-                            .valueSerializer(Serializer.STRING)
-                            .createOrOpen();
+                    // Initialize maps with proper type registration
+                    initializeMap(FieldNames.USER_BALANCE_MAP,Long.class);
+                    initializeMap(FieldNames.FID_VIA_MAP,String.class);
+                    initializeMap(FieldNames.VIA_BALANCE_MAP,Long.class);
+                    initializeMap(FieldNames.UNPAID_VIA_BALANCE_MAP,Long.class);
+                    initializeMap(FieldNames.FIXED_COST_MAP,Long.class);
+                    initializeMap(FieldNames.UNPAID_FIXED_COST_MAP,Long.class);
+                    initializeMap(FieldNames.CONTRIBUTOR_SHARE_MAP,Double.class);
+                    initializeMap(FieldNames.META_MAP,String.class);
+                    initializeMap(FieldNames.INCOME_MAP,Income.class);
+                    initializeMap(FieldNames.INCOME_ORDER_MAP,String.class);
+                    initializeMap(FieldNames.EXPENSE_MAP,Expense.class);
+                    initializeMap(FieldNames.EXPENSE_ORDER_MAP,String.class);
+                    initializeMap(FieldNames.PAYOFF_MAP,Long.class);
+
+                    // Initialize indices
+                    Map<String, String> incomeOrderMap = db.getAllFromMap(FieldNames.INCOME_ORDER_MAP);
                     currentIncomeIndex = incomeOrderMap.size();
-                            
-                    expenseMap = db.hashMap("expense")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.JAVA)
-                            .createOrOpen();
-                            
-                    expenseOrderMap = db.hashMap("expense_order")
-                            .keySerializer(Serializer.LONG)
-                            .valueSerializer(Serializer.STRING)
-                            .createOrOpen();
+                    
+                    Map<String, String> expenseOrderMap = db.getAllFromMap(FieldNames.EXPENSE_ORDER_MAP);
                     currentExpenseIndex = expenseOrderMap.size();
-                            
-                    payoffMap = db.hashMap("payoff")
-                            .keySerializer(Serializer.STRING)
-                            .valueSerializer(Serializer.LONG)
-                            .createOrOpen();
                 }
             }
         }
+    }
+    
+    private <T> void initializeMap(String mapName, Class<T> typeClass) {
+        // Check if map exists first
+        if (!db.getMapNames().contains(mapName)) {
+            try {
+                // Just register the type first
+                db.registerMapType(mapName, typeClass);
+                
+                // Create a default value based on the class type directly
+                T dummyValue = createDefaultValueFromClass(typeClass);
+                
+                if (dummyValue != null) {
+                    // Create a unique dummy key
+                    String dummyKey = "init_key_" + System.currentTimeMillis();
+                    
+                    // Add the entry
+                    db.putInMap(mapName, dummyKey, dummyValue);
+                    
+                    // Remove the dummy entry
+                    db.removeFromMap(mapName, dummyKey);
+                } else {
+                    // Use the direct method to create the map in LevelDB
+                    if (db instanceof LevelDB) {
+                        db.createMap(mapName, typeClass);
+                    } else {
+                        System.out.println("Warning: Could not create map: " + mapName + " - non-LevelDB implementation");
+                    }
+                }
+            } catch (Exception e) {
+                System.err.println("Error initializing map " + mapName + ": " + e.getMessage());
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T createDefaultValueFromClass(Class<T> typeClass) {
+        // Handle primitive wrapper classes directly
+        if (typeClass == Long.class) {
+            return (T) Long.valueOf(0L);
+        } else if (typeClass == String.class) {
+            return (T) "";
+        } else if (typeClass == Double.class) {
+            return (T) Double.valueOf(0.0);
+        } else if (typeClass == Boolean.class) {
+            return (T) Boolean.FALSE;
+        } else if (typeClass == Integer.class) {
+            return (T) Integer.valueOf(0);
+        } else if (typeClass == Float.class) {
+            return (T) Float.valueOf(0.0f);
+        } else if (typeClass == Short.class) {
+            return (T) Short.valueOf((short) 0);
+        } else if (typeClass == Byte.class) {
+            return (T) Byte.valueOf((byte) 0);
+        } else if (typeClass == Character.class) {
+            return (T) Character.valueOf('\0');
+        }
+        
+        // Handle specific known classes
+        if (typeClass.getName().endsWith("Income")) {
+            try {
+                // Assuming Income has a constructor that takes strings and longs
+                return typeClass.getConstructor(String.class, String.class, Long.class, Long.class, Long.class)
+                       .newInstance("", "", 0L, 0L, 0L);
+            } catch (Exception e) {
+                // Fall through to generic approach
+            }
+        } else if (typeClass.getName().endsWith("Expense")) {
+            try {
+                // Assuming Expense has a constructor that takes strings and longs
+                return typeClass.getConstructor(String.class, String.class, Long.class, Long.class, Long.class)
+                       .newInstance("", "", 0L, 0L, 0L);
+            } catch (Exception e) {
+                // Fall through to generic approach
+            }
+        }
+        
+        // Try to use a no-args constructor as a fallback
+        try {
+            return typeClass.getDeclaredConstructor().newInstance();
+        } catch (Exception e) {
+            // This will fail for classes without no-arg constructors and primitive wrappers
+        }
+        
+        // If all else fails
+        return null;
     }
 
     public void inputContributorShare(BufferedReader br) {
         try {
             // Clear existing contributor shares
-            if(contributorShareMap.size()>0){
-                for(String fid:contributorShareMap.keySet()){
-                    System.out.println(fid+" -> "+contributorShareMap.get(fid));
+            Map<String, Double> contributorShareMap = db.getAllFromMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
+            if(contributorShareMap.size() > 0){
+                for(String fid : contributorShareMap.keySet()){
+                    System.out.println(fid + " -> " + contributorShareMap.get(fid));
                 }
                 if(Inputer.askIfYes(br,"There are already "+contributorShareMap.size()+" contributors. Reset all contributors? ")){
-                    contributorShareMap.clear();
+                    db.clearMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
                     db.commit();
-                }else return;
+                } else return;
             }
             
             double totalShare = 0.0;
@@ -160,8 +183,8 @@ public class AccountDB {
                 
                 Double share;
                 if (Inputer.askIfYes(br, "Set the rest of the share percentage ("+(100-totalShare)+"%) for " + fid + "? \n")) {
-                    share = NumberTools.roundDouble4((100 - totalShare)/100);
-                    contributorShareMap.put(fid, share);
+                    share = NumberUtils.roundDouble4((100 - totalShare)/100);
+                    db.putInMap(FieldNames.CONTRIBUTOR_SHARE_MAP, fid, share);
                     db.commit();
                     break;
                 } else {
@@ -173,15 +196,15 @@ public class AccountDB {
                 if (totalShare > 100) {
                     System.out.println("Total share exceeds 100%. Please try again.");
                     if(Inputer.askIfYes(br,"Reset the share for "+fid+"?")){
-                        totalShare =0;
-                        contributorShareMap.clear();
+                        totalShare = 0;
+                        db.clearMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
                         continue;
                     }
                     totalShare -= share;
                     continue;
                 }
-                share = NumberTools.roundDouble4(share/100);
-                contributorShareMap.put(fid, share);
+                share = NumberUtils.roundDouble4(share/100);
+                db.putInMap(FieldNames.CONTRIBUTOR_SHARE_MAP, fid, share);
                 db.commit();
                 
                 if (totalShare == 100) break;
@@ -193,14 +216,15 @@ public class AccountDB {
     }
 
     public void inputFixedCost(BufferedReader br) {
-        if(fixedCostMap.size()>0){
-            for(String fid:fixedCostMap.keySet()){
-                System.out.println(fid+" -> "+ParseTools.satoshiToCoin(fixedCostMap.get(fid)));
+        Map<String, Long> fixedCostMap = db.getAllFromMap(FieldNames.FIXED_COST_MAP);
+        if(fixedCostMap.size() > 0){
+            for(String fid : fixedCostMap.keySet()){
+                System.out.println(fid + " -> " + FchUtils.satoshiToCoin(fixedCostMap.get(fid)));
             }
             if(Inputer.askIfYes(br,"There are already "+fixedCostMap.size()+" fixed costs. Reset all fixed costs? ")){
-                fixedCostMap.clear();
+                db.clearMap(FieldNames.FIXED_COST_MAP);
                 db.commit();
-            }else return;
+            } else return;
         }
         try {
             while (true) {
@@ -217,7 +241,7 @@ public class AccountDB {
                 }
 
                 String fid = parts[0];
-                Double cost;
+                double cost;
                 try {
                     cost = Double.parseDouble(parts[1]);
                 } catch (NumberFormatException e) {
@@ -229,8 +253,8 @@ public class AccountDB {
                     System.out.println("Cost must be greater than 0.");
                     continue;
                 }
-                long costLong = ParseTools.coinToSatoshi(cost);
-                fixedCostMap.put(fid, costLong);
+                long costLong = FchUtils.coinToSatoshi(cost);
+                db.putInMap(FieldNames.FIXED_COST_MAP, fid, costLong);
                 db.commit();
                 System.out.println("Added fixed cost: " + fid + " -> " + cost);
             }
@@ -239,93 +263,94 @@ public class AccountDB {
         }
     }
 
-
     public void removeUserBalance(String fid) {
-        userBalanceMap.remove(fid);
+        db.removeFromMap(FieldNames.USER_BALANCE_MAP, fid);
         db.commit();
     }
 
     // User Balance methods
     public Long getUserBalance(String fid) {
-        return userBalanceMap.getOrDefault(fid, 0L);
+        return db.getFromMap(FieldNames.USER_BALANCE_MAP, fid);
     }
 
     public void setUserBalance(String fid, Long balance) {
-        userBalanceMap.put(fid, balance);
+        db.putInMap(FieldNames.USER_BALANCE_MAP, fid, balance);
         db.commit();
     }
 
     // FID Via methods
     public String getFidVia(String fid) {
-        return fidConsumeViaMap.get(fid);
+        return db.getFromMap(FieldNames.FID_VIA_MAP, fid);
     }
 
     public void setFidVia(String fid, String viaFid) {
-        fidConsumeViaMap.put(fid, viaFid);
+        db.putInMap(FieldNames.FID_VIA_MAP, fid, viaFid);
         db.commit();
     }
 
-    public ConcurrentMap<String, Long> getViaBalanceMap() {
-        return viaBalanceMap;
+    public Map<String, Long> getViaBalanceMap() {
+        return db.getAllFromMap(FieldNames.VIA_BALANCE_MAP);
     }
 
     public void clearViaBalanceMap() {
-        viaBalanceMap.clear();
+        db.clearMap(FieldNames.VIA_BALANCE_MAP);
         db.commit();
     }   
 
     // Via Balance methods
     public Long getViaBalance(String viaFid) {
-        return viaBalanceMap.getOrDefault(viaFid, 0L);
+        Long balance = db.getFromMap(FieldNames.VIA_BALANCE_MAP, viaFid);
+        return balance != null ? balance : 0L;
     }
 
     public void setViaBalance(String viaFid, Long balance) {
-        viaBalanceMap.put(viaFid, balance);
+        db.putInMap(FieldNames.VIA_BALANCE_MAP, viaFid, balance);
         db.commit();
     }
 
     // Unpaid Via Balance methods
     public Long getUnpaidViaBalance(String viaFid) {
-        return unpaidViaBalanceMap.getOrDefault(viaFid, 0L);
+        Long balance = db.getFromMap(FieldNames.UNPAID_VIA_BALANCE_MAP, viaFid);
+        return balance != null ? balance : 0L;
     }
 
     public void setUnpaidViaBalance(String viaFid, Long balance) {
-        unpaidViaBalanceMap.put(viaFid, balance);
+        db.putInMap(FieldNames.UNPAID_VIA_BALANCE_MAP, viaFid, balance);
         db.commit();
     }
 
     // Fixed Cost methods
     public Long getFixedCost(String fid) {
-        return fixedCostMap.getOrDefault(fid, 0L);
+        Long cost = db.getFromMap(FieldNames.FIXED_COST_MAP, fid);
+        return cost != null ? cost : 0L;
     }
 
     public void setFixedCost(String fid, Long cost) {
-        fixedCostMap.put(fid, cost);
+        db.putInMap(FieldNames.FIXED_COST_MAP, fid, cost);
         db.commit();
     }
 
     // Unpaid Fixed Cost methods
     public Long getUnpaidFixedCost(String fid) {
-        return unpaidFixedCostMap.getOrDefault(fid, 0L);
+        Long cost = db.getFromMap(FieldNames.UNPAID_FIXED_COST_MAP, fid);
+        return cost != null ? cost : 0L;
     }
 
     public void setUnpaidFixedCost(String fid, Long cost) {
-        unpaidFixedCostMap.put(fid, cost);
+        db.putInMap(FieldNames.UNPAID_FIXED_COST_MAP, fid, cost);
         db.commit();
     }
 
     // Contributor Share methods
     public Double getContributorShare(String fid) {
-        return contributorShareMap.getOrDefault(fid, 0.0);
+        Double share = db.getFromMap(FieldNames.CONTRIBUTOR_SHARE_MAP, fid);
+        return share != null ? share : 0.0;
     }
 
     public void setContributorShare(String fid, Double share) {
-        contributorShareMap.put(fid, share);
+        db.putInMap(FieldNames.CONTRIBUTOR_SHARE_MAP, fid, share);
         db.commit();
     }
-
-    // Meta data methods remain the same
-    // ... rest of the meta methods ...
 
     public void close() {
         synchronized (lock) {
@@ -335,322 +360,319 @@ public class AccountDB {
             }
         }
     }
+
     // Bulk update methods for maps
     public void updateUserBalance(Map<String, Long> balances) {
-        userBalanceMap.putAll(balances);
+        for (Map.Entry<String, Long> entry : balances.entrySet()) {
+            db.putInMap(FieldNames.USER_BALANCE_MAP, entry.getKey(), entry.getValue());
+        }
         db.commit();
     }   
 
     // Bulk add methods for maps
-    public Map<String, Long>  addUserBalance(Map<String, Long> balances) {
+    public Map<String, Long> addUserBalance(Map<String, Long> balances) {
         Map<String, Long> outCacheMap = new HashMap<>();
         balances.forEach((fid, balance) -> {
-            Long existingBalance = userBalanceMap.getOrDefault(fid, 0L);
-            userBalanceMap.put(fid, existingBalance + balance);
-            outCacheMap.put(fid, existingBalance + balance);
+            Long existingBalance = getUserBalance(fid);
+            existingBalance = existingBalance != null ? existingBalance : 0L;
+            Long newBalance = existingBalance + balance;
+            db.putInMap(FieldNames.USER_BALANCE_MAP, fid, newBalance);
+            outCacheMap.put(fid, newBalance);
         });
         db.commit();
         return outCacheMap;
     }
 
     public void updateUserBalance(Map.Entry<String, Long> balance) {
-        if(balance==null)return;
-        userBalanceMap.put(balance.getKey(), balance.getValue());
+        if(balance == null) return;
+        db.putInMap(FieldNames.USER_BALANCE_MAP, balance.getKey(), balance.getValue());
         db.commit();
     }
     
     public void addUserBalance(Map.Entry<String, Long> balance) {
-        if(balance==null)return;
-        Long existingBalance = userBalanceMap.getOrDefault(balance.getKey(), 0L);
-        userBalanceMap.put(balance.getKey(), existingBalance + balance.getValue());
+        if(balance == null) return;
+        Long existingBalance = getUserBalance(balance.getKey());
+        existingBalance = existingBalance != null ? existingBalance : 0L;
+        db.putInMap(FieldNames.USER_BALANCE_MAP, balance.getKey(), existingBalance + balance.getValue());
         db.commit();
     }
 
     public void updateViaBalance(Map<String, Long> balances) {
-        viaBalanceMap.putAll(balances);
+        for (Map.Entry<String, Long> entry : balances.entrySet()) {
+            db.putInMap(FieldNames.VIA_BALANCE_MAP, entry.getKey(), entry.getValue());
+        }
         db.commit();
     }
 
     public void addViaBalance(Map<String, Long> balances) {
         balances.forEach((viaFid, balance) -> {
-            Long existingBalance = viaBalanceMap.getOrDefault(viaFid, 0L);
-            viaBalanceMap.put(viaFid, existingBalance + balance);
+            Long existingBalance = getViaBalance(viaFid);
+            db.putInMap(FieldNames.VIA_BALANCE_MAP, viaFid, existingBalance + balance);
         });
         db.commit();
     }
 
     public void updateViaBalance(Map.Entry<String, Long> balance) {
-        if(balance==null)return;
-        viaBalanceMap.put(balance.getKey(), balance.getValue());
+        if(balance == null) return;
+        db.putInMap(FieldNames.VIA_BALANCE_MAP, balance.getKey(), balance.getValue());
         db.commit();
     }
 
     public void addViaBalance(Map.Entry<String, Long> balance) {
-        if(balance==null)return;
-        Long existingBalance = viaBalanceMap.getOrDefault(balance.getKey(), 0L);
-        viaBalanceMap.put(balance.getKey(), existingBalance + balance.getValue());
+        if(balance == null) return;
+        Long existingBalance = getViaBalance(balance.getKey());
+        db.putInMap(FieldNames.VIA_BALANCE_MAP, balance.getKey(), existingBalance + balance.getValue());
         db.commit();
     }
 
     public void updateUnpaidViaBalance(Map<String, Long> balances) {
-        unpaidViaBalanceMap.putAll(balances);
+        for (Map.Entry<String, Long> entry : balances.entrySet()) {
+            db.putInMap(FieldNames.UNPAID_VIA_BALANCE_MAP, entry.getKey(), entry.getValue());
+        }
         db.commit();
     }
 
     public void addUnpaidViaBalance(Map<String, Long> balances) {
         balances.forEach((viaFid, balance) -> {
-            Long existingBalance = unpaidViaBalanceMap.getOrDefault(viaFid, 0L);
-            unpaidViaBalanceMap.put(viaFid, existingBalance + balance);
+            Long existingBalance = getUnpaidViaBalance(viaFid);
+            db.putInMap(FieldNames.UNPAID_VIA_BALANCE_MAP, viaFid, existingBalance + balance);
         });
         db.commit();
     }
 
     public void updateUnpaidViaBalance(Map.Entry<String, Long> balance) {
-        if(balance==null)return;
-        unpaidViaBalanceMap.put(balance.getKey(), balance.getValue());
+        if(balance == null) return;
+        db.putInMap(FieldNames.UNPAID_VIA_BALANCE_MAP, balance.getKey(), balance.getValue());
         db.commit();
     }
 
     public void clearUnpaidViaBalanceMap() {
-        unpaidViaBalanceMap.clear();
+        db.clearMap(FieldNames.UNPAID_VIA_BALANCE_MAP);
         db.commit();
     } 
 
     public void addUnpaidViaBalance(Map.Entry<String, Long> balance) {
-        if(balance==null)return;
-        Long existingBalance = unpaidViaBalanceMap.getOrDefault(balance.getKey(), 0L);
-        unpaidViaBalanceMap.put(balance.getKey(), existingBalance + balance.getValue());
+        if(balance == null) return;
+        Long existingBalance = getUnpaidViaBalance(balance.getKey());
+        db.putInMap(FieldNames.UNPAID_VIA_BALANCE_MAP, balance.getKey(), existingBalance + balance.getValue());
         db.commit();
     }
 
     public void clearUnpaidFixedCostMap() {
-        unpaidFixedCostMap.clear();
+        db.clearMap(FieldNames.UNPAID_FIXED_COST_MAP);
         db.commit();
     }
 
-
     public void updateUnpaidFixedCostMap(Map<String, Long> costs) {
-        unpaidFixedCostMap.putAll(costs);
+        for (Map.Entry<String, Long> entry : costs.entrySet()) {
+            db.putInMap(FieldNames.UNPAID_FIXED_COST_MAP, entry.getKey(), entry.getValue());
+        }
         db.commit();
     }
 
     public void updateFidVia(Map<String, String> fidViaMap) {
-        this.fidConsumeViaMap.putAll(fidViaMap);
+        for (Map.Entry<String, String> entry : fidViaMap.entrySet()) {
+            db.putInMap(FieldNames.FID_VIA_MAP, entry.getKey(), entry.getValue());
+        }
         db.commit();
     }   
 
     public void updateFidConsumeVia(Map.Entry<String, String> fidVia) {
-        if(fidVia==null)return;
-        fidConsumeViaMap.put(fidVia.getKey(), fidVia.getValue());
+        if(fidVia == null) return;
+        db.putInMap(FieldNames.FID_VIA_MAP, fidVia.getKey(), fidVia.getValue());
         db.commit();
     }   
 
     // Getter methods for entire maps
     public Map<String, Long> getUnpaidViaBalance() {
-        return new HashMap<>(unpaidViaBalanceMap);
+        return db.getAllFromMap(FieldNames.UNPAID_VIA_BALANCE_MAP);
     }
 
     public Map<String, Long> getFixedCostMap() {
-        return new HashMap<>(fixedCostMap);
+        return db.getAllFromMap(FieldNames.FIXED_COST_MAP);
     }
 
     public Map<String, Long> getUnpaidFixedCostMap() {
-        return new HashMap<>(unpaidFixedCostMap);
+        return db.getAllFromMap(FieldNames.UNPAID_FIXED_COST_MAP);
     }
 
     public Map<String, Double> getContributorShareMap() {
-        return new HashMap<>(contributorShareMap);
+        return db.getAllFromMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
     }
 
     // Via share getters
     public Double getOrderViaShare() {
-        String share = metaMap.getOrDefault("orderViaShare", "0.0");
-        if(share.isEmpty())
+        String share = (String) db.getSettings(FieldNames.ORDER_VIA_SHARE);
+        if(share == null || share.isEmpty())
             return null;
         return Double.parseDouble(share);
     }
 
     public Double getConsumeViaShare() {
-        String share = metaMap.getOrDefault("consumeViaShare", "0.0");
-        if(share.isEmpty())
+        String share = (String) db.getSettings(FieldNames.CONSUME_VIA_SHARE);
+        if(share == null || share.isEmpty())
             return null;
         return Double.parseDouble(share);
     }
 
     // Income/Expense tracking methods
     public List<String> getLastIncome() {
-        String lastIncome = metaMap.getOrDefault("lastIncome", "");
-        return lastIncome.isEmpty() ? new ArrayList<>() : Arrays.asList(lastIncome.split(","));
+        String lastIncome = (String) db.getSettings(FieldNames.LAST_INCOME);
+        return lastIncome == null || lastIncome.isEmpty() ? new ArrayList<>() : Arrays.asList(lastIncome.split(","));
     }
 
     public void setLastIncome(List<String> lastIncome) {
-        if(lastIncome==null || lastIncome.isEmpty())return;
-        metaMap.put("lastIncome", String.join(",", lastIncome));
+        if(lastIncome == null || lastIncome.isEmpty()) return;
+        db.putSettings(FieldNames.LAST_INCOME, String.join(",", lastIncome));
         db.commit();
     }
 
     public List<String> getLastExpense() {
-        String lastExpense = metaMap.getOrDefault("lastExpense", "");
-        return lastExpense.isEmpty() ? new ArrayList<>() : Arrays.asList(lastExpense.split(","));
+        String lastExpense = (String) db.getSettings(FieldNames.LAST_EXPENSE);
+        return lastExpense == null || lastExpense.isEmpty() ? new ArrayList<>() : Arrays.asList(lastExpense.split(","));
     }
 
     public void setLastExpense(List<String> lastExpense) {
-        metaMap.put("lastExpense", String.join(",", lastExpense));
+        db.putSettings(FieldNames.LAST_EXPENSE, String.join(",", lastExpense));
         db.commit();
     }
 
     public void setLastSettleHeight(Long height) {
-        metaMap.put("lastSettleHeight", height.toString());
+        db.putSettings(FieldNames.LAST_SETTLE_HEIGHT, height.toString());
         db.commit();
     }
 
-    // Add new methods for income/expense management
-    public void addIncome(String cashId, Income income) {
-        incomeMap.put(cashId, income);
-        incomeOrderMap.put(currentIncomeIndex++, cashId);
-        db.commit();
-    }
-
-    public void addExpense(String cashId, Expense expense) {
-        expenseMap.put(cashId, expense);
-        expenseOrderMap.put(currentExpenseIndex++, cashId);
-        db.commit();
-    }
-
-    public List<Income> getIncomeFromBeginning(int size) {
+    public List<Income> getIncome(int size, boolean fromEnd) {
         List<Income> result = new ArrayList<>(size);
-        for (long i = 0; i < Math.min(currentIncomeIndex, size); i++) {
-            String cashId = incomeOrderMap.get(i);
-            if (cashId != null) {
-                Income income = incomeMap.get(cashId);
-                if (income != null) {
-                    result.add(income);
-                }
+        Map<String, String> map = db.getAllFromMap(FieldNames.INCOME_ORDER_MAP);
+        
+        // Sort by index in reverse order
+        List<Map.Entry<String, String>> sortedMap = sort(map, fromEnd);
+
+        int count = 0;
+        for (Map.Entry<String, String> entry : sortedMap) {
+            if (count >= size) break;
+            
+            String cashId = entry.getValue();
+            Income income = db.getFromMap(FieldNames.INCOME_MAP, cashId);
+            if (income != null) {
+                result.add(income);
+                count++;
             }
         }
+        
         return result;
     }
-
-    public List<Income> getIncomeFromEnd(int size) {
-        List<Income> result = new ArrayList<>(size);
-        for (long i = currentIncomeIndex - 1; i >= Math.max(0, currentIncomeIndex - size); i--) {
-            String cashId = incomeOrderMap.get(i);
-            if (cashId != null) {
-                Income income = incomeMap.get(cashId);
-                if (income != null) {
-                    result.add(income);
-                }
-            }
-        }
-        return result;
-    }
-
-    
 
     public Map<String, Income> getIncomeMap() {
-        return new HashMap<>(incomeMap);
+        return db.getAllFromMap(FieldNames.INCOME_MAP);
     }
 
     public Map<String, Expense> getExpenseMap() {
-        return new HashMap<>(expenseMap);
+        return db.getAllFromMap(FieldNames.EXPENSE_MAP);
     }
 
     // Add new method for batch income updates
     public void updateIncomes(Map<String, Income> incomes) {
         // Add all incomes to the incomeMap
-        incomeMap.putAll(incomes);
-        
-        // Update the order mapping for each new income
-        for (String cashId : incomes.keySet()) {
-            incomeOrderMap.put(currentIncomeIndex++, cashId);
+        for (Map.Entry<String, Income> entry : incomes.entrySet()) {
+            db.putInMap(FieldNames.INCOME_MAP, entry.getKey(), entry.getValue());
+            db.putInMap(FieldNames.INCOME_ORDER_MAP, String.valueOf(currentIncomeIndex++), entry.getKey());
         }
         
         db.commit();
     }
 
     public String getLastExpenseHeight() {
-        return metaMap.getOrDefault("lastExpenseHeight", "");
+        return (String) db.getSettings(FieldNames.LAST_EXPENSE_HEIGHT);
     }
 
     public void setLastExpenseHeight(String height) {
-        metaMap.put("lastExpenseHeight", height);
+        db.putSettings(FieldNames.LAST_EXPENSE_HEIGHT, height);
         db.commit();
     }
 
     // Add this method for batch expense updates
     public void updateExpenses(Map<String, Expense> expenses) {
         // Add all expenses to the expenseMap
-        expenseMap.putAll(expenses);
-        
-        // Update the order mapping for each new expense
-        for (String cashId : expenses.keySet()) {
-            expenseOrderMap.put(currentExpenseIndex++, cashId);
+        for (Map.Entry<String, Expense> entry : expenses.entrySet()) {
+            db.putInMap(FieldNames.EXPENSE_MAP, entry.getKey(), entry.getValue());
+            db.putInMap(FieldNames.EXPENSE_ORDER_MAP, String.valueOf(currentExpenseIndex++), entry.getKey());
         }
         
         db.commit();
     }
 
-    public List<Expense> getExpenseFromBeginning(int size) {
+    public List<Expense> getExpense(int size, boolean fromEnd) {
         List<Expense> result = new ArrayList<>(size);
-        for (long i = 0; i < Math.min(currentExpenseIndex, size); i++) {
-            String cashId = expenseOrderMap.get(i);
-            if (cashId != null) {
-                Expense expense = expenseMap.get(cashId);
-                if (expense != null) {
-                    result.add(expense);
-                }
+        Map<String, String> map = db.getAllFromMap(FieldNames.EXPENSE_ORDER_MAP);
+        
+        // Sort by index in reverse order
+        List<Map.Entry<String, String>> sortedMap = sort(map, fromEnd);
+
+        int count = 0;
+        for (Map.Entry<String, String> entry : sortedMap) {
+            if (count >= size) break;
+            
+            String cashId = entry.getValue();
+            Expense expense = db.getFromMap(FieldNames.EXPENSE_MAP, cashId);
+            if (expense != null) {
+                result.add(expense);
+                count++;
             }
         }
         return result;
     }
 
-    public List<Expense> getExpenseFromEnd(int size) {
-        List<Expense> result = new ArrayList<>(size);
-        for (long i = currentExpenseIndex - 1; i >= Math.max(0, currentExpenseIndex - size); i--) {
-            String cashId = expenseOrderMap.get(i);
-            if (cashId != null) {
-                Expense expense = expenseMap.get(cashId);
-                if (expense != null) {
-                    result.add(expense);
-                }
-            }
-        }
-        return result;
+    @NotNull
+    private static List<Map.Entry<String, String>> sort(Map<String, String> orderMap, boolean fromEnd) {
+        List<Map.Entry<String, String>> entries = new ArrayList<>(orderMap.entrySet());
+        entries.sort((e1, e2) -> {
+            long idx1 = Long.parseLong(e1.getKey());
+            long idx2 = Long.parseLong(e2.getKey());
+            if(fromEnd)return Long.compare(idx2, idx1); // Reverse order
+            else return Long.compare(idx1, idx2);
+        });
+        return entries;
     }
 
     // Add these methods for payoff management
     public void updatePayoffMap(Map<String, Long> payoffs) {
-        payoffMap.putAll(payoffs);
+        for (Map.Entry<String, Long> entry : payoffs.entrySet()) {
+            db.putInMap(FieldNames.PAYOFF_MAP, entry.getKey(), entry.getValue());
+        }
         db.commit();
     }
 
     public Map<String, Long> getPayoffMap() {
-        return new HashMap<>(payoffMap);
+        return db.getAllFromMap(FieldNames.PAYOFF_MAP);
     }
 
     public void clearPayoffMap() {
-        payoffMap.clear();
+        db.clearMap(FieldNames.PAYOFF_MAP);
         db.commit();
     }
 
     public void setOrderViaShare(double orderViaShare) {
-        metaMap.put("orderViaShare", String.valueOf(orderViaShare));
+        db.putSettings(FieldNames.ORDER_VIA_SHARE, String.valueOf(orderViaShare));
         db.commit();
     }
 
     public void setConsumeViaShare(double consumeViaShare) {
-        metaMap.put("consumeViaShare", String.valueOf(consumeViaShare));
+        db.putSettings(FieldNames.CONSUME_VIA_SHARE, String.valueOf(consumeViaShare));
         db.commit();
     }
 
     public boolean hasNPrices() {
-        // Check if any keys in metaMap start with "nPrice_"
+        // Get all metadata entries and check if any keys start with "nPrice_"
+        Map<String, String> metaMap = db.getAllFromMap(FieldNames.META_MAP);
         return metaMap.keySet().stream()
             .anyMatch(key -> key.startsWith("nPrice_"));
     }
 
     public Map<String, Long> getNPriceMap() {
         Map<String, Long> nPriceMap = new HashMap<>();
+        Map<String, String> metaMap = db.getAllFromMap(FieldNames.META_MAP);
         
         // Iterate through metaMap and collect all nPrice entries
         metaMap.forEach((key, value) -> {
@@ -671,41 +693,61 @@ public class AccountDB {
     public void setNPrice(String apiName, Long value) {
         if (apiName == null || value == null) return;
         
-        metaMap.put("nPrice_" + apiName, value.toString());
+        db.putInMap(FieldNames.META_MAP, "nPrice_" + apiName, value.toString());
         db.commit();
     }
 
     public void setDealerMinBalance(Long balance) {
         if(balance == null) return;
-        metaMap.put("dealerMinBalance", balance.toString());
+        // Convert Long to String before storing
+        db.putSettings(FieldNames.DEALER_MIN_BALANCE, balance.toString());
         db.commit();
     }
 
     public Long getDealerMinBalance() {
-        String balance = metaMap.getOrDefault("dealerMinBalance", "");
-        return balance.isEmpty() ? null : Long.parseLong(balance);
+        String balanceStr = (String) db.getSettings(FieldNames.DEALER_MIN_BALANCE);
+        if (balanceStr == null || balanceStr.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            return Long.parseLong(balanceStr);
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid dealer min balance format: " + balanceStr);
+            return null;
+        }
     }
 
     public void setMinDistributeBalance(Long balance) {
         if(balance == null) return;
-        metaMap.put("minDistributeBalance", balance.toString());
+        // Convert Long to String before storing
+        db.putSettings(FieldNames.MIN_DISTRIBUTE_BALANCE, balance.toString());
         db.commit();
     }
 
     public Long getMinDistributeBalance() {
-        String balance = metaMap.getOrDefault("minDistributeBalance", "");
-        return balance.isEmpty() ? null : Long.parseLong(balance);
+        String balanceStr = (String) db.getSettings(FieldNames.MIN_DISTRIBUTE_BALANCE);
+        if (balanceStr == null || balanceStr.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            return Long.parseLong(balanceStr);
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid min distribute balance format: " + balanceStr);
+            return null;
+        }
     }
 
     public void setAutoScanStrategy(AccountHandler.AutoScanStrategy strategy) {
         if (strategy == null) return;
-        metaMap.put("autoScanStrategy", strategy.name());
+        db.putSettings(FieldNames.AUTO_SCAN_STRATEGY, strategy.name());
         db.commit();
     }
 
     public AccountHandler.AutoScanStrategy getAutoScanStrategy() {
-        String strategyName = metaMap.getOrDefault("autoScanStrategy", "");
-        if (strategyName.isEmpty()) {
+        String strategyName = (String) db.getSettings(FieldNames.AUTO_SCAN_STRATEGY);
+        if (strategyName == null || strategyName.isEmpty()) {
             return null;
         }
         try {
@@ -731,114 +773,116 @@ public class AccountDB {
         return strategy != null && strategy != AccountHandler.AutoScanStrategy.NO_AUTO_SCAN;
     }
 
-    // Update these methods to use Long for lastHeight
     public void setLastHeight(Long height) {
         if(height == null) return;
-        metaMap.put("lastHeight", height.toString());
+        // Convert Long to String before storing
+        db.putSettings(LAST_HEIGHT, height.toString());
         db.commit();
     }
 
     public Long getLastHeight() {
-        String height = metaMap.getOrDefault("lastHeight", "");
-        return height.isEmpty() ? null : Long.parseLong(height);
+        String heightStr = (String) db.getSettings(LAST_HEIGHT);
+        if (heightStr == null || heightStr.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            return Long.parseLong(heightStr);
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid last height format: " + heightStr);
+            return null;
+        }
     }
 
     public void setLastBlockId(String blockId) {
         if(blockId == null) return;
-        metaMap.put("lastBlockId", blockId);
+        db.putSettings(FieldNames.LAST_BLOCK_ID, blockId);
         db.commit();
     }
 
     public String getLastBlockId() {
-        return metaMap.getOrDefault("lastBlockId", "");
+        return (String) db.getSettings(FieldNames.LAST_BLOCK_ID);
     }
 
     public void setListenPath(String path) {
         if (path == null) return;
-        metaMap.put("listenPath", path);
+        db.putSettings(FieldNames.LISTEN_PATH, path);
         db.commit();
     }
 
     public String getListenPath() {
-        return metaMap.getOrDefault("listenPath", "");
+        return (String) db.getSettings(FieldNames.LISTEN_PATH);
     }
 
     public void removeIncomeSinceHeight(long height) {
-        // Create a list to store cashIds to remove
+        // Get all income entries
+        Map<String, Income> incomeMap = db.getAllFromMap(FieldNames.INCOME_MAP);
+        Map<String, String> orderMap = db.getAllFromMap(FieldNames.INCOME_ORDER_MAP);
+        
+        // Create lists to store cashIds to remove
         List<String> cashIdsToRemove = new ArrayList<>();
+        List<String> orderKeysToRemove = new ArrayList<>();
         
-        // Scan through incomeMap to find entries to remove
-        incomeMap.forEach((cashId, income) -> {
-            if (income.getBirthHeight() > height) {
-                cashIdsToRemove.add(cashId);
+        // Find entries to remove
+        for (Map.Entry<String, Income> entry : incomeMap.entrySet()) {
+            if (entry.getValue().getBirthHeight() > height) {
+                cashIdsToRemove.add(entry.getKey());
             }
-        });
-        
-        // Remove the entries and their order mappings
-        for (String cashId : cashIdsToRemove) {
-            incomeMap.remove(cashId);
-            // Remove from order map by finding and removing the corresponding entry
-            incomeOrderMap.entrySet().removeIf(entry -> cashId.equals(entry.getValue()));
         }
         
+        // Find order entries to remove
+        for (Map.Entry<String, String> entry : orderMap.entrySet()) {
+            if (cashIdsToRemove.contains(entry.getValue())) {
+                orderKeysToRemove.add(entry.getKey());
+            }
+        }
+        
+        // Remove entries
+        db.removeFromMap(FieldNames.INCOME_MAP, cashIdsToRemove);
+        db.removeFromMap(FieldNames.INCOME_ORDER_MAP, orderKeysToRemove);
+        
         // Update currentIncomeIndex
-        currentIncomeIndex = incomeOrderMap.size();
+        currentIncomeIndex = db.getAllFromMap(FieldNames.INCOME_ORDER_MAP).size();
         db.commit();
     }
 
     public void removeExpenseSinceHeight(long height) {
-        // Create a list to store cashIds to remove
+        // Get all expense entries
+        Map<String, Expense> expenseMap = db.getAllFromMap(FieldNames.EXPENSE_MAP);
+        Map<String, String> orderMap = db.getAllFromMap(FieldNames.EXPENSE_ORDER_MAP);
+        
+        // Create lists to store cashIds to remove
         List<String> cashIdsToRemove = new ArrayList<>();
+        List<String> orderKeysToRemove = new ArrayList<>();
         
-        // Scan through expenseMap to find entries to remove
-        expenseMap.forEach((cashId, expense) -> {
-            if (expense.getBirthHeight() > height) {
-                cashIdsToRemove.add(cashId);
+        // Find entries to remove
+        for (Map.Entry<String, Expense> entry : expenseMap.entrySet()) {
+            if (entry.getValue().getBirthHeight() > height) {
+                cashIdsToRemove.add(entry.getKey());
             }
-        });
-        
-        // Remove the entries and their order mappings
-        for (String cashId : cashIdsToRemove) {
-            expenseMap.remove(cashId);
-            // Remove from order map by finding and removing the corresponding entry
-            expenseOrderMap.entrySet().removeIf(entry -> cashId.equals(entry.getValue()));
         }
         
+        // Find order entries to remove
+        for (Map.Entry<String, String> entry : orderMap.entrySet()) {
+            if (cashIdsToRemove.contains(entry.getValue())) {
+                orderKeysToRemove.add(entry.getKey());
+            }
+        }
+        
+        // Remove entries
+        db.removeFromMap(FieldNames.EXPENSE_MAP, cashIdsToRemove);
+        db.removeFromMap(FieldNames.EXPENSE_ORDER_MAP, orderKeysToRemove);
+        
         // Update currentExpenseIndex
-        currentExpenseIndex = expenseOrderMap.size();
+        currentExpenseIndex = db.getAllFromMap(FieldNames.EXPENSE_ORDER_MAP).size();
         db.commit();
     }
 
-    public void setIncomeMap(HTreeMap<String, Income> incomeMap) {
-        this.incomeMap = incomeMap;
-    }
-
-    public HTreeMap<Long, String> getIncomeOrderMap() {
-        return incomeOrderMap;
-    }
-
-    public void setIncomeOrderMap(HTreeMap<Long, String> incomeOrderMap) {
-        this.incomeOrderMap = incomeOrderMap;
-    }
-
-    public void setExpenseMap(HTreeMap<String, Expense> expenseMap) {
-        this.expenseMap = expenseMap;
-    }
-
-    public HTreeMap<Long, String> getExpenseOrderMap() {
-        return expenseOrderMap;
-    }
-
-    public void setExpenseOrderMap(HTreeMap<Long, String> expenseOrderMap) {
-        this.expenseOrderMap = expenseOrderMap;
-    }
-
     public Income getIncomeById(String cashId) {
-        return incomeMap.get(cashId);
+        return db.getFromMap(FieldNames.INCOME_MAP, cashId);
     }
 
     public Expense getExpenseById(String cashId) {
-        return expenseMap.get(cashId);
+        return db.getFromMap(FieldNames.EXPENSE_MAP, cashId);
     }
-
 } 

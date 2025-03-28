@@ -106,8 +106,8 @@ public class ApipApiNames {
     public static final String NEW_OP_RETURN_BY_FIDS ="newOpReturnByFids";
 
     public static final String GET_FID_CID = "getFidCid";
-    public static final String CID_INFO_BY_IDS = "cidInfoByIds";
-    public static final String CID_INFO_SEARCH = "cidInfoSearch";
+    public static final String CID_BY_IDS = "cidByIds";
+    public static final String CID_SEARCH = "cidSearch";
     public static final String CID_HISTORY = "cidHistory";
     public static final String HOMEPAGE_HISTORY = "homepageHistory";
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
@@ -238,7 +238,7 @@ public class ApipApiNames {
         };
 
         identityAPIs = new String[]{
-                CID_INFO_SEARCH, CID_INFO_BY_IDS, CID_HISTORY,
+                CID_SEARCH, CID_BY_IDS, CID_HISTORY,
                 FID_CID_SEEK, GET_FID_CID,
                 NOBODY_SEARCH, NOBODY_BY_IDS,
                 HOMEPAGE_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
@@ -332,140 +332,4 @@ public class ApipApiNames {
         };
 
     }
-//
-//    public static ArrayList<String> apiList = new ArrayList<String>();
-//
-//    static {
-//
-//        ApiNames.apiList.add(ApiNames.SignIn);
-//        ApiNames.apiList.add(ApiNames.SignInEcc);
-//        ApiNames.apiList.add(ApiNames.General);
-//        ApiNames.apiList.add(ApiNames.Totals);
-//
-//        ApiNames.apiList.add(ApiNames.BlockByIds);
-//        ApiNames.apiList.add(ApiNames.BlockSearch);
-//        ApiNames.apiList.add(ApiNames.BlockByHeights);
-//        ApiNames.apiList.add(ApiNames.CashByIds);
-//        ApiNames.apiList.add(ApiNames.CashSearch);
-//        ApiNames.apiList.add(ApiNames.TxHasByIds);
-//        ApiNames.apiList.add(ApiNames.CashValid);
-//        ApiNames.apiList.add(ApiNames.TxByIds);
-//        ApiNames.apiList.add(ApiNames.TxSearch);
-//        ApiNames.apiList.add(ApiNames.BlockHasByIds);
-//        ApiNames.apiList.add(ApiNames.OpReturnByIds);
-//        ApiNames.apiList.add(ApiNames.OpReturnSearch);
-//        ApiNames.apiList.add(ApiNames.FidByIds);
-//        ApiNames.apiList.add(ApiNames.FidSearch);
-//        ApiNames.apiList.add(ApiNames.P2shByIds);
-//        ApiNames.apiList.add(ApiNames.P2shSearch);
-//
-//        ApiNames.apiList.add(ApiNames.CidInfoByIds);
-//        ApiNames.apiList.add(ApiNames.FidCidSeek);
-//        ApiNames.apiList.add(ApiNames.CidInfoSearch);
-//        ApiNames.apiList.add(ApiNames.CidHistory);
-//        ApiNames.apiList.add(ApiNames.HomepageHistory);
-//        ApiNames.apiList.add(ApiNames.NoticeFeeHistory);
-//        ApiNames.apiList.add(ApiNames.ReputationHistory);
-//        ApiNames.apiList.add(ApiNames.NobodySearch);
-//        ApiNames.apiList.add(ApiNames.NobodyByIds);
-//
-//        ApiNames.apiList.add(ApiNames.ProtocolByIds);
-//        ApiNames.apiList.add(ApiNames.ProtocolSearch);
-//        ApiNames.apiList.add(ApiNames.ProtocolOpHistory);
-//        ApiNames.apiList.add(ApiNames.ProtocolRateHistory);
-//
-//        ApiNames.apiList.add(ApiNames.CodeByIds);
-//        ApiNames.apiList.add(ApiNames.CodeSearch);
-//        ApiNames.apiList.add(ApiNames.CodeOpHistory);
-//        ApiNames.apiList.add(ApiNames.CodeRateHistory);
-//
-//        ApiNames.apiList.add(ApiNames.ServiceByIds);
-//        ApiNames.apiList.add(ApiNames.ServiceSearch);
-//        ApiNames.apiList.add(ApiNames.ServiceOpHistory);
-//        ApiNames.apiList.add(ApiNames.ServiceRateHistory);
-//
-//        ApiNames.apiList.add(ApiNames.AppByIds);
-//        ApiNames.apiList.add(ApiNames.AppSearch);
-//        ApiNames.apiList.add(ApiNames.AppOpHistory);
-//        ApiNames.apiList.add(ApiNames.AppRateHistory);
-//
-//        ApiNames.apiList.add(ApiNames.GroupByIds);
-//        ApiNames.apiList.add(ApiNames.GroupSearch);
-//        ApiNames.apiList.add(ApiNames.GroupOpHistory);
-//        ApiNames.apiList.add(ApiNames.GroupMembers);
-//        ApiNames.apiList.add(ApiNames.GroupExMembers);
-//        ApiNames.apiList.add(ApiNames.MyGroups);
-//
-//        ApiNames.apiList.add(ApiNames.TeamByIds);
-//        ApiNames.apiList.add(ApiNames.TeamSearch);
-//        ApiNames.apiList.add(ApiNames.TeamOpHistory);
-//        ApiNames.apiList.add(ApiNames.TeamMembers);
-//        ApiNames.apiList.add(ApiNames.TeamExMembers);
-//        ApiNames.apiList.add(ApiNames.TeamOtherPersons);
-//        ApiNames.apiList.add(ApiNames.MyTeams);
-//        ApiNames.apiList.add(ApiNames.TeamRateHistory);
-//
-//        ApiNames.apiList.add(ApiNames.BoxByIds);
-//        ApiNames.apiList.add(ApiNames.BoxSearch);
-//        ApiNames.apiList.add(ApiNames.BoxHistory);
-//
-//        ApiNames.apiList.add(ApiNames.ContactByIds);
-//        ApiNames.apiList.add(ApiNames.ContactSearch);
-//        ApiNames.apiList.add(ApiNames.ContactsDeleted);
-//
-//        ApiNames.apiList.add(ApiNames.SecretByIds);
-//        ApiNames.apiList.add(ApiNames.SecretSearch);
-//        ApiNames.apiList.add(ApiNames.SecretsDeleted);
-//
-//        ApiNames.apiList.add(ApiNames.MailByIds);
-//        ApiNames.apiList.add(ApiNames.MailSearch);
-//        ApiNames.apiList.add(ApiNames.MailsDeleted);
-//        ApiNames.apiList.add(ApiNames.MailThread);
-//
-//        ApiNames.apiList.add(ApiNames.ProofByIds);
-//        ApiNames.apiList.add(ApiNames.ProofSearch);
-//        ApiNames.apiList.add(ApiNames.ProofHistory);
-//
-//        ApiNames.apiList.add(ApiNames.StatementByIds);
-//        ApiNames.apiList.add(ApiNames.StatementSearch);
-//        ApiNames.apiList.add(ApiNames.NidSearch);
-//
-//        ApiNames.apiList.add(ApiNames.Avatars);
-//
-//        ApiNames.apiList.add(ApiNames.Unconfirmed);
-//        ApiNames.apiList.add(ApiNames.UnconfirmedCashes);
-//        ApiNames.apiList.add(ApiNames.DecodeTx);
-//        ApiNames.apiList.add(ApiNames.BroadcastTx);
-//        ApiNames.apiList.add(ApiNames.FeeRate);
-//
-//        ApiNames.apiList.add(ApiNames.OffLineTx);
-////        ApiNames.apiList.add(ApiNames.OffLineTxByCd);
-//        ApiNames.apiList.add(ApiNames.Encrypt);
-//        ApiNames.apiList.add(ApiNames.Verify);
-//        ApiNames.apiList.add(ApiNames.Addresses);
-//        ApiNames.apiList.add(ApiNames.Sha256);
-//        ApiNames.apiList.add(ApiNames.Sha256x2);
-//        ApiNames.apiList.add(ApiNames.Sha256Hex);
-//        ApiNames.apiList.add(ApiNames.Sha256x2Hex);
-//
-//        ApiNames.apiList.add(ApiNames.NewCashByFids);
-//
-//        ApiNames.apiList.add(ApiNames.SwapRegister);
-//        ApiNames.apiList.add(ApiNames.SwapUpdate);
-//        ApiNames.apiList.add(ApiNames.SwapState);
-//        ApiNames.apiList.add(ApiNames.SwapLp);
-//        ApiNames.apiList.add(ApiNames.SwapPending);
-//        ApiNames.apiList.add(ApiNames.SwapFinished);
-//        ApiNames.apiList.add(ApiNames.SwapPrice);
-//        ApiNames.apiList.add(ApiNames.SwapInfo);
-//        ApiNames.apiList.add(ApiNames.SwapInfo);
-//
-//
-//        ApiNames.apiList.add(TokenByIds);
-//        ApiNames.apiList.add(TokenSearch);
-//        ApiNames.apiList.add(TokenHistory);
-//        ApiNames.apiList.add(TokenHoldersByIds);
-//        ApiNames.apiList.add(MyTokens);
-//        ApiNames.apiList.add(TokenHolderSearch);
-//    }
 }

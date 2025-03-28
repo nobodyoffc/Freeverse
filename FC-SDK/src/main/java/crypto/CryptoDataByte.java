@@ -2,8 +2,8 @@ package crypto;
 
 import crypto.old.EccAes256K1P7;
 import fcData.AlgorithmId;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 import org.jetbrains.annotations.NotNull;
 
 import constants.CodeMessage;
@@ -14,7 +14,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
-import static tools.JsonTools.readOneJsonFromFile;
+import static utils.JsonUtils.readOneJsonFromFile;
 
 public class CryptoDataByte {
 
@@ -93,17 +93,17 @@ public class CryptoDataByte {
         if (cryptoDataStr.getData() != null)
             cryptoDataByte.setData(cryptoDataStr.getData().getBytes(StandardCharsets.UTF_8));
         if (cryptoDataStr.getPassword() != null)
-            cryptoDataByte.setPassword(BytesTools.utf8CharArrayToByteArray(cryptoDataStr.getPassword()));
+            cryptoDataByte.setPassword(BytesUtils.utf8CharArrayToByteArray(cryptoDataStr.getPassword()));
         if (cryptoDataStr.getPubKeyA() != null)
             cryptoDataByte.setPubKeyA(HexFormat.of().parseHex(cryptoDataStr.getPubKeyA()));
         if (cryptoDataStr.getPubKeyB() != null)
             cryptoDataByte.setPubKeyB(HexFormat.of().parseHex(cryptoDataStr.getPubKeyB()));
         if (cryptoDataStr.getPriKeyA() != null)
-            cryptoDataByte.setPriKeyA(BytesTools.hexCharArrayToByteArray(cryptoDataStr.getPriKeyA()));
+            cryptoDataByte.setPriKeyA(BytesUtils.hexCharArrayToByteArray(cryptoDataStr.getPriKeyA()));
         if (cryptoDataStr.getPriKeyB() != null)
-            cryptoDataByte.setPriKeyB(BytesTools.hexCharArrayToByteArray(cryptoDataStr.getPriKeyB()));
+            cryptoDataByte.setPriKeyB(BytesUtils.hexCharArrayToByteArray(cryptoDataStr.getPriKeyB()));
         if (cryptoDataStr.getSymKey() != null)
-            cryptoDataByte.setSymKey(BytesTools.hexCharArrayToByteArray(cryptoDataStr.getSymKey()));
+            cryptoDataByte.setSymKey(BytesUtils.hexCharArrayToByteArray(cryptoDataStr.getSymKey()));
         if (cryptoDataStr.getSum() != null)
             cryptoDataByte.setSum(HexFormat.of().parseHex(cryptoDataStr.getSum()));
         if (cryptoDataStr.getMessage() != null)
@@ -306,22 +306,22 @@ public class CryptoDataByte {
     }
 
     public void clearSymKey() {
-        BytesTools.clearByteArray(this.symKey);
+        BytesUtils.clearByteArray(this.symKey);
         this.symKey = null;
     }
 
     public void clearPassword() {
-        BytesTools.clearByteArray(this.password);
+        BytesUtils.clearByteArray(this.password);
         this.password = null;
     }
 
     public void clearPriKeyA() {
-        BytesTools.clearByteArray(this.priKeyA);
+        BytesUtils.clearByteArray(this.priKeyA);
         this.priKeyA = null;
     }
 
     public void clearPriKeyB() {
-        BytesTools.clearByteArray(this.priKeyB);
+        BytesUtils.clearByteArray(this.priKeyB);
         this.priKeyB = null;
     }
 
@@ -487,8 +487,8 @@ public class CryptoDataByte {
 
     public static byte[] makeSum4(byte[] symKey, byte[] iv, byte[] did) {
         if(symKey!=null && iv!=null && did!=null) {
-            byte[] sum32 = Hash.sha256(BytesTools.addByteArray(symKey, BytesTools.addByteArray(iv, did)));
-            return BytesTools.getPartOfBytes(sum32, 0, 4);
+            byte[] sum32 = Hash.sha256(BytesUtils.addByteArray(symKey, BytesUtils.addByteArray(iv, did)));
+            return BytesUtils.getPartOfBytes(sum32, 0, 4);
         }
         return null;
     }
@@ -506,8 +506,8 @@ public class CryptoDataByte {
             setCodeMessage(CodeMessage.Code3009DidMissed);
             return;
         }
-        byte[] sum32 = Hash.sha256(BytesTools.addByteArray(symKey, BytesTools.addByteArray(iv, did)));
-        sum = BytesTools.getPartOfBytes(sum32, 0, 4);
+        byte[] sum32 = Hash.sha256(BytesUtils.addByteArray(symKey, BytesUtils.addByteArray(iv, did)));
+        sum = BytesUtils.getPartOfBytes(sum32, 0, 4);
     }
 
     public void makeDid() {

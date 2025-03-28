@@ -4,12 +4,12 @@ import appTools.Settings;
 import clients.ApipClient;
 import clients.DiskClient;
 import constants.CodeMessage;
+import crypto.Decryptor;
 import crypto.KeyTools;
 import fcData.TalkUnit;
 import handlers.TalkUnitHandler;
-import fch.ParseTools;
+import fch.FchUtils;
 import handlers.*;
-import clients.Client;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
@@ -20,7 +20,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
 import nasa.NaSaRpcClient;
-import tools.BytesTools;
+import utils.BytesUtils;
 import redis.clients.jedis.JedisPool;
 
 import java.io.BufferedReader;
@@ -75,7 +75,7 @@ public class TalkServer {
     public TalkServer(Settings settings, double price) {
         this.br = settings.getBr();
         this.settings = settings;
-        this.price = ParseTools.coinToSatoshi(price);
+        this.price = FchUtils.coinToSatoshi(price);
         this.service = settings.getService();
         this.talkParams = (TalkParams)this.service.getParams();
         this.dealer = talkParams.getDealer();
@@ -106,7 +106,7 @@ public class TalkServer {
             System.out.println("Failed to get the URL from:" + talkParams.getUrlHead());
         }
 
-        dealerPriKey = Client.decryptPriKey(settings.getMyPriKeyCipher(), settings.getSymKey());
+        dealerPriKey = Decryptor.decryptPriKey(settings.getMyPriKeyCipher(), settings.getSymKey());
     }
 
     public enum ApiName {
@@ -178,7 +178,7 @@ public class TalkServer {
             Long amount = entry.getValue();
 
             // Validate FIDs and amount
-            if (!KeyTools.isValidFchAddr(recipientFid) || amount <= 0) {
+            if (!KeyTools.isGoodFid(recipientFid) || amount <= 0) {
                 continue;
             }
 
@@ -211,7 +211,7 @@ public class TalkServer {
     }
 
     public void close(){
-        BytesTools.clearByteArray(dealerPriKey);
+        BytesUtils.clearByteArray(dealerPriKey);
     }
 
     public int getPort() {

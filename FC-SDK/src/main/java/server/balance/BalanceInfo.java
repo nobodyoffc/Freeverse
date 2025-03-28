@@ -8,7 +8,7 @@ import co.elastic.clients.json.JsonData;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import constants.FieldNames;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static constants.Strings.*;
-import static tools.RedisTools.readLong;
+import static utils.RedisUtils.readLong;
 import static appTools.Settings.addSidBriefToName;
 
 public class BalanceInfo {
@@ -38,7 +38,7 @@ public class BalanceInfo {
     public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"userBalanceMapStr\":{\"type\":\"keyword\",\"ignore_above\":256},\"bestHeight\":{\"type\":\"long\"},\"consumeViaMapStr\":{\"type\":\"keyword\",\"ignore_above\":256},\"orderViaMapStr\":{\"type\":\"keyword\",\"ignore_above\":256},\"rewardPendingMapStr\":{\"type\":\"keyword\",\"ignore_above\":256}}}}";
     public static void recoverUserBalanceFromFile(String sid, String fileName, JedisPool jedisPool) {
         try(Jedis jedis = jedisPool.getResource()) {
-            BalanceInfo balanceInfo = JsonTools.readObjectFromJsonFile(null,fileName, BalanceInfo.class);
+            BalanceInfo balanceInfo = JsonUtils.readObjectFromJsonFile(null,fileName, BalanceInfo.class);
             if(balanceInfo==null)return;
             recoverBalanceToRedis(sid,balanceInfo, jedis);
         } catch (IOException e) {
@@ -212,7 +212,7 @@ public class BalanceInfo {
             }
 
             // Write the new balance info to balance0.json
-            JsonTools.writeObjectToJsonFile(balanceInfo, fileName + 0 + DOT_JSON, false);
+            JsonUtils.writeObjectToJsonFile(balanceInfo, fileName + 0 + DOT_JSON, false);
             finalFileName = fileName + 0 + DOT_JSON;
 
         } catch (Exception e) {

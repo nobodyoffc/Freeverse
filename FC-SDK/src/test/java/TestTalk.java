@@ -2,7 +2,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-import tools.ASCII;
+import utils.ASCII;
 
 public class TestTalk {
     public static void main(String[] args) throws IOException {

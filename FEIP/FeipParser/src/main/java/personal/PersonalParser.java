@@ -1,7 +1,7 @@
 package personal;
 
-import tools.EsTools;
-import tools.EsTools.MgetResult;
+import utils.EsUtils;
+import utils.EsUtils.MgetResult;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import constants.IndicesNames;
@@ -82,10 +82,11 @@ public class PersonalParser {
 
 		long height;
 		if(contactRaw.getOp()==null)return isValid;
+
 		switch(contactRaw.getOp()) {
 
 			case "add":
-				contact.setId(opre.getTxId());
+				contact.setId(opre.getId());
 
 				if (contactRaw.getAlg() != null)contact.setAlg(contactRaw.getAlg());
 				if (contactRaw.getCipher()==null)return false;
@@ -105,7 +106,7 @@ public class PersonalParser {
 				if(contactRaw.getContactIds() ==null)return isValid;
 				height = opre.getHeight();
 
-				MgetResult<Contact> result = EsTools.getMultiByIdList(esClient, IndicesNames.CONTACT, contactRaw.getContactIds(), Contact.class);
+				MgetResult<Contact> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CONTACT, contactRaw.getContactIds(), Contact.class);
 
 				if(result.getResultList() == null || result.getResultList().isEmpty())return isValid;
 
@@ -121,6 +122,27 @@ public class PersonalParser {
 
 				isValid = true;
 				break;
+			case "update":
+				if(contactRaw.getContactId() ==null)return isValid;
+				height = opre.getHeight();
+
+				contact = EsUtils.getById(esClient, IndicesNames.CONTACT, contactRaw.getContactId(), Contact.class);
+
+				if(contact == null)return isValid;
+
+				if(!contact.getOwner().equals(opre.getSigner()))return isValid;
+				if(!contact.isActive())return isValid;
+
+				if (contactRaw.getCipher()==null)return false;
+				if (contactRaw.getAlg() != null)contact.setAlg(contactRaw.getAlg());
+				contact.setCipher(contactRaw.getCipher());
+
+				contact.setLastHeight(opre.getHeight());
+
+				Contact contact5 = contact;
+				esClient.index(i->i.index(IndicesNames.CONTACT).id(contact5.getId()).document(contact5));
+				isValid = true;
+				break;
 			case "recover":
 				if(contactRaw.getContactId() ==null)return isValid;
 				height = opre.getHeight();
@@ -133,7 +155,7 @@ public class PersonalParser {
 
 				contact = result1.source();
 
-				if(!contact.getOwner().equals(opre.getSigner()))return isValid;
+				if(contact == null || !contact.getOwner().equals(opre.getSigner()))return isValid;
 
 				contact.setActive(true);
 				contact.setLastHeight(height);
@@ -170,7 +192,7 @@ public class PersonalParser {
 
 		// For the old version mails.
 		if(mailRaw.getMsg()!=null) {
-			mail.setId(opre.getTxId());
+			mail.setId(opre.getId());
             mail.setAlg(mailRaw.getAlg());
 			mail.setCipherReci(mailRaw.getMsg());
 
@@ -190,7 +212,7 @@ public class PersonalParser {
 		if(mailRaw.getOp()!=null) {
 			switch(mailRaw.getOp()) {
 				case "send":
-					mail.setId(opre.getTxId());
+					mail.setId(opre.getId());
 
 					if(mailRaw.getCipher()==null
 							&&mailRaw.getCipherReci()==null
@@ -230,7 +252,7 @@ public class PersonalParser {
 
 					height = opre.getHeight();
 
-					MgetResult<Mail> result = EsTools.getMultiByIdList(esClient, IndicesNames.MAIL, mailRaw.getMailIds(), Mail.class);
+					MgetResult<Mail> result = EsUtils.getMultiByIdList(esClient, IndicesNames.MAIL, mailRaw.getMailIds(), Mail.class);
 					if(result.getResultList() == null || result.getResultList().isEmpty())return false;
 					List<Mail> mailList = result.getResultList();
 
@@ -293,7 +315,7 @@ public class PersonalParser {
 		switch(secretRaw.getOp()) {
 
 			case "add":
-				secret.setId(opre.getTxId());
+				secret.setId(opre.getId());
 
             if (secretRaw.getAlg() != null) {
                 secret.setAlg(secretRaw.getAlg());
@@ -316,13 +338,33 @@ public class PersonalParser {
 				esClient.index(i->i.index(IndicesNames.SECRET).id(safe0.getId()).document(safe0));
 				isValid = true;
 				break;
+			case "update":
+				if(secretRaw.getSecretId() ==null)return isValid;
+				height = opre.getHeight();
 
+				secret = EsUtils.getById(esClient, IndicesNames.SECRET, secretRaw.getSecretId(), Secret.class);
+
+				if(secret == null)return isValid;
+
+				if(!secret.getOwner().equals(opre.getSigner()))return isValid;
+				if(!secret.isActive())return isValid;
+
+				if (secretRaw.getCipher()==null)return false;
+				if (secretRaw.getAlg() != null)secret.setAlg(secretRaw.getAlg());
+				secret.setCipher(secretRaw.getCipher());
+
+				secret.setLastHeight(opre.getHeight());
+				Secret safe1 = secret;
+
+				esClient.index(i->i.index(IndicesNames.SECRET).id(safe1.getId()).document(safe1));
+				isValid = true;
+				break;
 			case "delete":
 				if(secretRaw.getSecretIds() ==null)return false;
 				height = opre.getHeight();
 				SecretOpData secretRaw1 = secretRaw;
 
-				MgetResult<Secret> result = EsTools.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw1.getSecretIds(), Secret.class);
+				MgetResult<Secret> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw1.getSecretIds(), Secret.class);
 				if(result==null || result.getResultList()==null || result.getResultList().isEmpty())return false;
 				List<Secret> secretList = result.getResultList();
 
@@ -356,7 +398,7 @@ public class PersonalParser {
 				height = opre.getHeight();
 				SecretOpData secretRaw2 = secretRaw;
 
-				MgetResult<Secret> result1 = EsTools.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw2.getSecretIds(), Secret.class);
+				MgetResult<Secret> result1 = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw2.getSecretIds(), Secret.class);
 				if(result1.getResultList() == null || result1.getResultList().isEmpty())return false;
 				List<Secret> secretList1 = result1.getResultList();
 
@@ -415,8 +457,8 @@ public class PersonalParser {
 				if(boxRaw.getBid()!=null) return null;
                 if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100)
                     return null;
-				boxHist.setId(opre.getTxId());
-				boxHist.setBid(opre.getTxId());
+				boxHist.setId(opre.getId());
+				boxHist.setBid(opre.getId());
 				boxHist.setHeight(opre.getHeight());
 				boxHist.setIndex(opre.getTxIndex());
 				boxHist.setTime(opre.getTime());
@@ -433,7 +475,7 @@ public class PersonalParser {
 				if(boxRaw.getBid()==null) return null;
 				if(boxRaw.getName()==null) return null;
 
-				boxHist.setId(opre.getTxId());
+				boxHist.setId(opre.getId());
 				boxHist.setBid(boxRaw.getBid());
 				boxHist.setHeight(opre.getHeight());
 				boxHist.setIndex(opre.getTxIndex());
@@ -451,7 +493,7 @@ public class PersonalParser {
 			case "recover":
 				if(boxRaw.getBid()==null)return null;
 				boxHist.setBid(boxRaw.getBid());
-				boxHist.setId(opre.getTxId());
+				boxHist.setId(opre.getId());
 				boxHist.setHeight(opre.getHeight());
 				boxHist.setIndex(opre.getTxIndex());
 				boxHist.setTime(opre.getTime());
@@ -470,7 +512,7 @@ public class PersonalParser {
 		Box box;
 		switch(boxHist.getOp()) {
 			case "create":
-				box = EsTools.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
+				box = EsUtils.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
 				if(box==null) {
 					box = new Box();
 					box.setId(boxHist.getId());
@@ -500,7 +542,7 @@ public class PersonalParser {
 
 			case "drop":
 
-				box = EsTools.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
+				box = EsUtils.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
 
 				if(box==null) {
 					isValid = false;
@@ -526,7 +568,7 @@ public class PersonalParser {
 
 			case "recover":
 
-				box = EsTools.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
+				box = EsUtils.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
 
 				if(box==null) {
 					isValid = false;
@@ -551,7 +593,7 @@ public class PersonalParser {
 				break;
 
 			case "update":
-				box = EsTools.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
+				box = EsUtils.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
 
 				if(box==null) {
 					isValid = false;

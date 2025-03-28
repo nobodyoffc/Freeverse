@@ -1,6 +1,5 @@
 package feip.feipData;
 
-import fcData.FcObject;
 import feip.FeipOp;
 import java.util.HashMap;
 import java.util.Map;

@@ -6,15 +6,15 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import constants.Constants;
 
 import crypto.Hash;
-import fch.BlockFileTools;
-import fch.OpReFileTools;
-import fch.ParseTools;
+import fch.BlockFileUtils;
+import fch.OpReFileUtils;
+import fch.FchUtils;
 import fch.fchData.Block;
 import fch.fchData.BlockMark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tools.BytesTools;
-import tools.EsTools;
+import utils.BytesUtils;
+import utils.EsUtils;
 import writeEs.*;
 
 import java.io.ByteArrayInputStream;
@@ -38,7 +38,7 @@ public class ChainParser {
 	public static final int WAIT_MORE = 0;
 	private static final Logger log = LoggerFactory.getLogger(ChainParser.class);
 
-	private final OpReFileTools opReFile = new OpReFileTools();
+	private final OpReFileUtils opReFile = new OpReFileUtils();
 
 	public int startParse(ElasticsearchClient esClient) throws Exception {
 
@@ -62,7 +62,7 @@ public class ChainParser {
 			blockLength = checkResult.getBlockLength();
 
 			if(blockLength == FILE_END) {
-				String nextFile = BlockFileTools.getNextFile(Preparer.CurrentFile);
+				String nextFile = BlockFileUtils.getNextFile(Preparer.CurrentFile);
 				if(new File(Preparer.Path, nextFile).exists()) {
 					System.out.println("file "+Preparer.CurrentFile+" finished.");
 					log.info("Parsing file {} finished.",Preparer.CurrentFile);
@@ -100,7 +100,7 @@ public class ChainParser {
 				System.out.println(" Waiting for new block...");
 				AtomicBoolean running = new AtomicBoolean();
 				running.set(true);
-				ParseTools.waitForChangeInDirectory(Preparer.Path, running);
+				FchUtils.waitForChangeInDirectory(Preparer.Path, running);
 				fis.close();
 				fis = new FileInputStream(file);
 				fis.skip(Preparer.Pointer);
@@ -123,7 +123,7 @@ public class ChainParser {
 	private static long makeCd(ElasticsearchClient esClient, long cdMakeTime) throws Exception {
 		long now = System.currentTimeMillis();
 		if( now - cdMakeTime > (1000*60*60*12)) {
-			Block bestBlock = EsTools.getBestBlock(esClient);
+			Block bestBlock = EsUtils.getBestBlock(esClient);
 
 			CdMaker cdMaker = new CdMaker();
 
@@ -159,7 +159,7 @@ public class ChainParser {
 		}
 
 		if(b8[0]==0) {
-			if(!BlockFileTools.getLastBlockFileName(Preparer.Path).equals(Preparer.CurrentFile)) {
+			if(!BlockFileUtils.getLastBlockFileName(Preparer.Path).equals(Preparer.CurrentFile)) {
 				FileInputStream fisTemp = new FileInputStream(new File(Preparer.Path,Preparer.CurrentFile));
 				long newPointer = Pointer + 8;
 				fisTemp.skip(newPointer);
@@ -184,7 +184,7 @@ public class ChainParser {
 		}
 
 		b4 = Arrays.copyOfRange(b8, 4, 8);
-		long blockSize = BytesTools.bytes4ToLongLE(b4);
+		long blockSize = BytesUtils.bytes4ToLongLE(b4);
 		blockMark.setSize(blockSize);
 
 		if(blockSize==0) {
@@ -219,13 +219,13 @@ public class ChainParser {
 			return checkResult;
 		}
 
-		String blockId = BytesTools.bytesToHexStringLE(Hash.sha256x2(blockHeadBytes));
+		String blockId = BytesUtils.bytesToHexStringLE(Hash.sha256x2(blockHeadBytes));
 		blockMark.setId(blockId);
 
-		String preId =  BytesTools.bytesToHexStringLE(Arrays.copyOfRange(blockHeadBytes, 4, 4+32));
+		String preId =  BytesUtils.bytesToHexStringLE(Arrays.copyOfRange(blockHeadBytes, 4, 4+32));
 		blockMark.setPreBlockId(preId);
 
-		Long time = BytesTools.bytes4ToLongLE(Arrays.copyOfRange(blockHeadBytes, 4+32+32, 4+32+32+4));
+		Long time = BytesUtils.bytes4ToLongLE(Arrays.copyOfRange(blockHeadBytes, 4+32+32, 4+32+32+4));
 		blockMark.setTime(time);
 
 		byte[] blockBodyBytes = new byte[(int) (blockSize-80)];
@@ -254,7 +254,7 @@ public class ChainParser {
 	}
 
 	private int getFileOrder() {
-		return BlockFileTools.getFileOrder(Preparer.CurrentFile);
+		return BlockFileUtils.getFileOrder(Preparer.CurrentFile);
 	}
 
 	private static class CheckResult{
@@ -507,7 +507,7 @@ public class ChainParser {
 
 	private byte[] getBlockBytes(BlockMark bm) throws IOException {
 
-		File file = new File(Preparer.Path, BlockFileTools.getFileNameWithOrder(bm.get_fileOrder()));
+		File file = new File(Preparer.Path, BlockFileUtils.getFileNameWithOrder(bm.get_fileOrder()));
 		FileInputStream fis = new FileInputStream(file);
 		fis.skip(bm.get_pointer()+8);
 		byte[] blockBytes = new byte[Math.toIntExact(bm.getSize())];

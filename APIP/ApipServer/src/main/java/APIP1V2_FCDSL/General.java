@@ -5,7 +5,7 @@ import appTools.Settings;
 import server.ApipApiNames;
 import fcData.ReplyBody;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 import server.HttpRequestChecker;
 

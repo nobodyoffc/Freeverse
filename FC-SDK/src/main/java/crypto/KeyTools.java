@@ -12,13 +12,12 @@ import fcData.TalkIdInfo;
 import handlers.ContactHandler;
 import handlers.SessionHandler;
 import handlers.TalkIdHandler;
-import tools.BytesTools;
+import org.bitcoinj.core.*;
+import org.bitcoinj.core.Base58;
+import utils.BytesUtils;
+import utils.Hex;
 import fch.FchMainNetwork;
 import fch.Inputer;
-import org.bitcoinj.core.Address;
-import org.bitcoinj.core.Base58;
-import org.bitcoinj.core.ECKey;
-import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.params.MainNetParams;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.params.ECDomainParameters;
@@ -26,12 +25,12 @@ import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
 import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECPoint;
-import org.bouncycastle.util.encoders.Hex;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.junit.Test;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.QRCodeUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -43,6 +42,18 @@ import java.util.HexFormat;
 import java.util.Map;
 
 public class KeyTools {
+
+    public static void main(String[] args) {
+        String secret = "春花秋月何时了";
+        ECKey ecKey = secretWordsToPriKey(secret);
+        System.out.println("PriKey:"+ecKey.getPrivateKeyAsWiF(new MainNetParams()));
+        System.out.println("PriKey hex:"+ecKey.getPublicKeyAsHex());
+    }
+    public static ECKey secretWordsToPriKey(String secretWords){
+        byte[] secretBytes = secretWords.getBytes();
+        byte[] hash = Hash.sha256(secretBytes);
+        return ECKey.fromPrivate(hash);
+    }
 
     public static String getPubKey(String fid, SessionHandler sessionHandler, TalkIdHandler talkIdHandler, ContactHandler contactHandler, ApipClient apipClient) {
         String pubKey = null;
@@ -67,10 +78,23 @@ public class KeyTools {
         return pubKey;
     }
 
+    public static String inputPubKey(BufferedReader br) {
+
+        String pubKeyB;
+        pubKeyB = appTools.Inputer.inputString(br,"Input the recipient public key in hex or Base58:");
+        if(pubKeyB==null)return null;
+        try{
+            return getPubKey33(pubKeyB);
+        }catch (Exception e){
+            System.out.println("Failed to get pubKey: "+e.getMessage());
+            return null;
+        }
+    }
+
     @Test
     public void test(){
         String pubKeyStr = "030be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a";
-        byte[] pubKey = Hex.decode(pubKeyStr);
+        byte[] pubKey = Hex.fromHex(pubKeyStr);
         String addr = BchCashAddr.createCashAddr(pubKey);
         System.out.println(addr);
     }
@@ -166,7 +190,7 @@ public class KeyTools {
 
 
     @Nullable
-    public static byte[] inputCipherGetPriKey(BufferedReader br) {
+    public static byte[] importOrCreatePriKey(BufferedReader br) {
         System.out.println("""
                 Input the private key...
                 'b' for Base58 code.
@@ -183,7 +207,7 @@ public class KeyTools {
                 do {
                     System.out.println("Input the private key in Base58:");
                     char[] priKeyBase58 = Inputer.inputPriKeyWif(br);
-                    priKey32 = getPriKey32(BytesTools.utf8CharArrayToByteArray(priKeyBase58));
+                    priKey32 = getPriKey32(BytesUtils.utf8CharArrayToByteArray(priKeyBase58));
                     String buyer = priKeyToFid(priKey32);
                     System.out.println(buyer);
                     System.out.println("Is this your FID? y/n:");
@@ -203,7 +227,7 @@ public class KeyTools {
 
                     CryptoDataByte cryptoDataByte = decryptor.decryptJsonByPassword(cipher,userPassword);
 
-                    BytesTools.clearCharArray(userPassword);
+                    BytesUtils.clearCharArray(userPassword);
 
                     if (cryptoDataByte.getCode()!=null && cryptoDataByte.getCode() != 0) {
                         System.out.println("Decrypt priKey cipher from input wrong." + cryptoDataByte.getMessage());
@@ -220,7 +244,7 @@ public class KeyTools {
                 do {
                     char[] priKeyHex = Inputer.input32BytesKey(br, "Input the private key in Hex:");
                     if (priKeyHex == null) break;
-                    priKey32 = BytesTools.hexCharArrayToByteArray(priKeyHex);
+                    priKey32 = BytesUtils.hexCharArrayToByteArray(priKeyHex);
                     String buyer = priKeyToFid(priKey32);
                     System.out.println(buyer);
                     System.out.println("Is this your FID? y/n:");
@@ -254,7 +278,7 @@ public class KeyTools {
         String cipher = EccAes256K1P7.encryptKeyWithPassword(priKey32, password);
         password = Inputer.inputPassword(br, "Check the password:");
         try {
-            priKey32 = EccAes256K1P7.decryptJsonBytes(cipher, BytesTools.utf8CharArrayToByteArray(password));
+            priKey32 = EccAes256K1P7.decryptJsonBytes(cipher, BytesUtils.utf8CharArrayToByteArray(password));
             if (priKey32 == null) {
                 System.out.println("Failed to generate new priKey.");
                 return null;
@@ -290,8 +314,11 @@ public class KeyTools {
         Shower.printUnderline(60);
         Address fid = Address.fromKey(netParams, ecKey);
         System.out.println(fid);
-        System.out.println("PriKey WIF:" + ecKey.getPrivateKeyAsWiF(netParams));
+        String privateKeyAsWiF = ecKey.getPrivateKeyAsWiF(netParams);
+        System.out.println("PriKey WIF:" + privateKeyAsWiF);
+        QRCodeUtils.generateQRCode(privateKeyAsWiF);
         System.out.println("PriKey hex:" + HexFormat.of().formatHex(priKey32));
+        
         Shower.printUnderline(60);
         System.out.println("* Warning: To copy and paste priKey is dangerous with an online device!\n");
         char[] password = Inputer.inputPassword(br, "Input a password to encrypt your new private key:");
@@ -335,7 +362,7 @@ public class KeyTools {
                 if (key == null) return null;
                 if ("q".equals(key)) break;
 
-                if (!isValidFchAddr(key)) {
+                if (!isGoodFid(key)) {
                     System.out.println("It's not a valid FID. Try again.");
                     continue;
                 }
@@ -358,7 +385,7 @@ public class KeyTools {
         }
     }
 
-    public static boolean isValidFchAddr(String addr) {
+    public static boolean isGoodFid(String addr) {
         try {
             byte[] addrBytes = Base58.decode(addr);
 
@@ -415,7 +442,7 @@ public class KeyTools {
         }
 
         String fchAddr = pubKeyToFchAddr(pubKey33);
-        String btcAddr = pubKeyToBtcBech32Addr(pubKey33);
+        String btcAddr = pubKeyToBtcAddr(pubKey33);
         String ethAddr = pubKeyToEthAddr(pubKey);
         String ltcAddr = pubKeyToLtcAddr(pubKey33);
         String dogeAddr = pubKeyToDogeAddr(pubKey33);
@@ -434,10 +461,10 @@ public class KeyTools {
         return map;
     }
 
-   public static String pubKeyToBtcBech32Addr(String pubKeyHex) {
-       byte[] hash160 = pubKeyToHash160(pubKeyHex);
-       return BtcAddrConverter.hash160ToBech32(hash160);
-   }
+//   public static String pubKeyToBtcBech32Addr(String pubKeyHex) {
+//       byte[] hash160 = pubKeyToHash160(pubKeyHex);
+//       return BtcAddrConverter.hash160ToBech32(hash160);
+//   }
 
     public static String pubKeyToBchBesh32Addr(String pubKey33) {
         byte[] pubKeyBytes = HexFormat.of().parseHex(pubKey33);
@@ -523,14 +550,14 @@ public class KeyTools {
         else return null;
     }
 
-    public static String compressPk65To33(String pk64_65) throws Exception {
+    public static String compressPk65To33(String pk64_65) {
         String publicKey;
         if (pk64_65.length() == 130 && pk64_65.startsWith("04")) {
             publicKey = pk64_65.substring(2);
         } else if (pk64_65.length() == 128) {
             publicKey = pk64_65;
         } else {
-            throw new Exception("public key is invalid");
+            return null;
         }
         String keyX = publicKey.substring(0, publicKey.length() / 2);
         String keyY = publicKey.substring(publicKey.length() / 2);
@@ -557,7 +584,7 @@ public class KeyTools {
         } else {
             pk33[0] = 0x03;
         }
-        return BytesTools.bytesToHexStringLE(BytesTools.invertArray(pk33));
+        return BytesUtils.bytesToHexStringLE(BytesUtils.invertArray(pk33));
     }
 
     public static String hash160ToFchAddr(String hash160Hex) {
@@ -572,7 +599,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
 
         return Base58.encode(addrRaw);
     }
@@ -588,7 +615,7 @@ public class KeyTools {
         byte[] hashWithPrefix = Hash.sha256x2(hash160WithPrefix);
         byte[] checkHash = new byte[4];
         System.arraycopy(hashWithPrefix, 0, checkHash, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(hash160WithPrefix, checkHash);
+        byte[] addrRaw = BytesUtils.bytesMerger(hash160WithPrefix, checkHash);
 
         return Base58.encode(addrRaw);
     }
@@ -616,7 +643,7 @@ public class KeyTools {
         byte[] b = HexFormat.of().parseHex(hash160Hex);
         byte[] d = {0x00};
         byte[] addrRaw = hash160ToAddrBytes(b,d);
-        return Bech32.encode("bitcoincash", addrRaw);
+        return Bech32Address.encode("bitcoincash", addrRaw);
     }
 
     public static String hash160ToBchBech32Addr(byte[] hash160Bytes) {
@@ -631,7 +658,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
         return addrRaw;
     }
 
@@ -647,7 +674,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
 
         return Base58.encode(addrRaw);
     }
@@ -661,7 +688,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
 
         return Base58.encode(addrRaw);
     }
@@ -678,7 +705,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
 
         return Base58.encode(addrRaw);
     }
@@ -693,7 +720,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
 
         return Base58.encode(addrRaw);
     }
@@ -707,7 +734,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(e);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(e, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(e, f);
 
         return Base58.encode(addrRaw);
     }
@@ -774,12 +801,12 @@ public class KeyTools {
         if(bech32Address.lastIndexOf(":")<1) {
             bech32Address = "bitcoincash:"+bech32Address;
         }
-        Bech32 bech32Data = Bech32.decode(bech32Address);
-        if (bech32Data == null) {
+        Bech32Address bech32AddressData = Bech32Address.decode(bech32Address);
+        if (bech32AddressData == null) {
             throw new IllegalArgumentException("Invalid Bech32 Bitcoin address");
         }
         
-        byte[] data = bech32Data.words;
+        byte[] data = bech32AddressData.words;
         if (data.length < 2 || data[0] != 0x00) {
             throw new IllegalArgumentException("Invalid witness version or program length");
         }
@@ -816,7 +843,7 @@ public class KeyTools {
         byte[] c = Hash.sha256x2(pukHashWithPrefix);
         byte[] f = new byte[4];
         System.arraycopy(c, 0, f, 0, 4);
-        byte[] addrRaw = BytesTools.bytesMerger(pukHashWithPrefix, f);
+        byte[] addrRaw = BytesUtils.bytesMerger(pukHashWithPrefix, f);
 
         return Base58.encode(addrRaw);
     }
@@ -886,8 +913,8 @@ public class KeyTools {
         int len = priKey.length;
 
         if (len == 52) {
-            char[] priKeyUtf8Chars = BytesTools.byteArrayToUtf8CharArray(priKey);
-            BytesTools.clearByteArray(priKey);
+            char[] priKeyUtf8Chars = BytesUtils.byteArrayToUtf8CharArray(priKey);
+            BytesUtils.clearByteArray(priKey);
             priKey = crypto.Base58.base58CharArrayToByteArray(priKeyUtf8Chars);
             len = priKey.length;
         }
@@ -986,12 +1013,14 @@ public class KeyTools {
             return null;
         }
         // Keys that have compressed public components have an extra 1 byte on the end in dumped form.
-        byte[] bytes32 = BytesTools.hexToByteArray(priKey32);
+        byte[] bytes32 = BytesUtils.hexToByteArray(priKey32);
         byte[] bytes38 = priKey32To38Compressed(bytes32);
 
         priKey26 = Base58.encode(bytes38);
         return priKey26;
     }
+
+    
 
     public static byte[] priKey32To38Compressed(byte[] bytes32) {
         byte[] bytes34 = new byte[34];
@@ -1025,7 +1054,7 @@ public class KeyTools {
         }
         // Keys that have compressed public components have an extra 1 byte on the end in dumped form.
         byte[] bytes33 = new byte[33];
-        byte[] bytes32 = BytesTools.hexToByteArray(priKey32);
+        byte[] bytes32 = BytesUtils.hexToByteArray(priKey32);
         bytes33[0] = (byte) 0x80;
         System.arraycopy(bytes32, 0, bytes33, 1, 32);
 
@@ -1053,7 +1082,7 @@ public class KeyTools {
     }
 
     @NotNull
-    public static String getPubKey33(String pubKey) throws Exception {
+    public static String getPubKey33(String pubKey) {
         switch (pubKey.length()) {
             case 66 -> {
                 if (pubKey.startsWith("02") || pubKey.startsWith("03")) return pubKey;
@@ -1165,7 +1194,7 @@ public class KeyTools {
     }
 
     public static String pubKeyToHex(ECPublicKeyParameters publicKey) {
-        return Hex.toHexString(pubKeyToBytes(publicKey));
+        return Hex.toHex(pubKeyToBytes(publicKey));
     }
 
     public static String priKeyToHex(ECPrivateKeyParameters privateKey) {
@@ -1212,6 +1241,13 @@ public class KeyTools {
 //            return getPubKey(fid, sessionHandler, talkIdHandler,contactHandler, apipClient);
 //        }
 //    }
+    public static boolean isPubKey(String owner) {
+        return Hex.isHexString(owner) 
+        && (
+            (owner.length() == 66 && (owner.startsWith("02") || owner.startsWith("03")))
+            || (owner.length() == 130 && owner.startsWith("04"))
+        ) ;
+    }
 
 //    public static String pubKeyToBchAddr(String a) {
 //        byte[] pubKey = Hex.decode(a);

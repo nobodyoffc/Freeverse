@@ -1,6 +1,7 @@
 package clients;
 
 import apip.apipData.*;
+import fch.TxCreator;
 import fch.fchData.Cid;
 import appTools.Menu;
 import constants.*;
@@ -9,21 +10,20 @@ import crypto.EncryptType;
 import fcData.AlgorithmId;
 import fcData.ReplyBody;
 import fcData.FidTxMask;
-import fch.DataForOffLineTx;
 import fch.Inputer;
 import fch.fchData.*;
 import feip.feipData.*;
 import configure.ApiAccount;
 import configure.ApiProvider;
-import feip.feipData.Nobody;
 import handlers.WebhookHandler;
 import server.ApipApiNames;
-import tools.Hex;
-import tools.JsonTools;
-import tools.ObjectTools;
-import tools.StringTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import server.FreeApi;
+import utils.Hex;
+import utils.JsonUtils;
+import utils.ObjectUtils;
+import utils.StringUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,18 +43,32 @@ import static constants.Strings.*;
 import static constants.Values.*;
 import static constants.Values.ASC;
 import static crypto.KeyTools.priKeyToFid;
-import static tools.ObjectTools.objectToList;
-import static tools.ObjectTools.objectToMap;
-import static tools.ObjectTools.objectToClass;
+import static utils.ObjectUtils.objectToList;
+import static utils.ObjectUtils.objectToMap;
+import static utils.ObjectUtils.objectToClass;
 
 public class ApipClient extends Client {
 
     public static final Integer DEFAULT_SIZE = 200;
+
+    public static final String[] freeAPIs = new String[]{
+            "https://apip.cash/APIP",
+            "https://help.cash/APIP",
+            "http://127.0.0.1:8080/APIP",
+            "http://127.0.0.1:8081/APIP"
+    };
     public ApipClient() {
     }
     public ApipClient(ApiProvider apiProvider,ApiAccount apiAccount,byte[] symKey){
         super(apiProvider,apiAccount,symKey);
     }
+
+    public List<P2SH> myP2SHs(String fid) {
+        Fcdsl fcdsl = new Fcdsl();
+        fcdsl.addNewQuery().addNewTerms().addNewFields(FIDS).addNewValues(fid);
+        return p2shSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+    }
+
     public void checkMaster(String priKeyCipher,byte[] symKey,BufferedReader br) {
         byte[] priKey = new Decryptor().decryptJsonBySymKey(priKeyCipher,symKey).getData();
         if (priKey == null) {
@@ -81,7 +95,7 @@ public class ApipClient extends Client {
     public Map<String, String> totals(RequestMethod requestMethod, AuthType authType) {
         //Request
         Object data =requestJsonByFcdsl(null, VERSION_1, TOTALS,null,authType,sessionKey, requestMethod);
-        return ObjectTools.objectToMap(data,String.class,String.class);
+        return ObjectUtils.objectToMap(data,String.class,String.class);
     }
     public Long bestHeight() {
         //Request
@@ -107,7 +121,7 @@ public class ApipClient extends Client {
 
     public String broadcastTx(String txHex, RequestMethod requestMethod, AuthType authType){
         if(txHex==null)return null;
-        if(!Hex.isHexString(txHex))txHex = StringTools.base64ToHex(txHex);
+        if(!Hex.isHexString(txHex))txHex = StringUtils.base64ToHex(txHex);
         if(txHex==null)return null;
         Map<String, String> otherMap = new HashMap<>() ;
         otherMap.put(RAW_TX,txHex);
@@ -119,7 +133,7 @@ public class ApipClient extends Client {
         Map<String, String> otherMap = new HashMap<>() ;
         otherMap.put(RAW_TX,txHex);
         Object data = requestByFcdslOther(SN_18, VERSION_1, DECODE_TX, otherMap, authType, requestMethod);
-        return data==null ? null: JsonTools.toNiceJson(data);
+        return data==null ? null: JsonUtils.toNiceJson(data);
     }
 
     public List<Cash> getCashesFree(String fid, int size, List<String> after) {
@@ -130,7 +144,7 @@ public class ApipClient extends Client {
         if(size>0)fcdsl.addSize(size);
         if(after!=null)fcdsl.addAfter(after);
         Object data = requestJsonByFcdsl(SN_2, VERSION_1, CASH_SEARCH, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, RequestMethod.POST);
-        return ObjectTools.objectToList(data,Cash.class);
+        return ObjectUtils.objectToList(data,Cash.class);
     }
 
     public Map<String, BlockInfo>blockByHeights(RequestMethod requestMethod, AuthType authType, String... heights){
@@ -299,7 +313,7 @@ public class ApipClient extends Client {
             data =requestJsonByUrlParams(SN_2, VERSION_1, BLOCK_TIME_HISTORY,params,AuthType.FREE);
         }
 
-        return ObjectTools.objectToMap(data,Long.class,Long.class);
+        return ObjectUtils.objectToMap(data,Long.class,Long.class);
     }
 
     public Map<Long,String> difficultyHistory(Long startTime, Long endTime, Integer count, RequestMethod requestMethod, AuthType authType) {
@@ -311,7 +325,7 @@ public class ApipClient extends Client {
             data =requestJsonByUrlParams(SN_2, VERSION_1, DIFFICULTY_HISTORY,params,AuthType.FREE);
         }
 
-        return ObjectTools.objectToMap(data,Long.class,String.class);
+        return ObjectUtils.objectToMap(data,Long.class,String.class);
     }
 
     @NotNull
@@ -333,19 +347,20 @@ public class ApipClient extends Client {
         }else {
             data = requestJsonByUrlParams(SN_2, VERSION_1, HASH_RATE_HISTORY,params,AuthType.FREE);
         }
-        return ObjectTools.objectToMap(data,Long.class,String.class);
+        return ObjectUtils.objectToMap(data,Long.class,String.class);
     }
 
     //Identity APIs
-    public Map<String, Cid> cidInfoByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
-        Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_INFO_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class, Cid.class);
+    public Map<String, Cid> cidByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class, Cid.class);
     }
     public Cid cidInfoById(String id) {
-        Map<String, Cid> map = cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
+        Map<String, Cid> map = cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
         try {
             return map.get(id);
-        }catch (Exception ignore){
+        }catch (Exception e){
+            log.error("Failed to get Cid info: {}",e.getMessage());
             return null;
         }
     }
@@ -358,7 +373,7 @@ public class ApipClient extends Client {
 
     public Map<String, String> getFidCidMap(List<String> fidList) {
         fidList.remove(null);
-        Map<String, Cid> cidInfoMap = this.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fidList.toArray(new String[0]));
+        Map<String, Cid> cidInfoMap = this.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fidList.toArray(new String[0]));
         if (cidInfoMap == null) return null;
         Map<String, String> fidCidMap = new HashMap<>();
         for (String fid:cidInfoMap.keySet()) {
@@ -368,8 +383,18 @@ public class ApipClient extends Client {
         return fidCidMap;
     }
 
-    public List<Cid> cidInfoSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(SN_3, VERSION_1, CID_INFO_SEARCH,fcdsl, authType,sessionKey, requestMethod);
+    //TODO untested
+    public List <Cid> searchCid (BufferedReader br){
+        String part = Inputer.inputString(br,"Input the FID, CID, used CIDs or a part of any one of them:");
+        Fcdsl fcdsl = new Fcdsl();
+        fcdsl.addNewQuery().addNewPart().addNewFields(ID,FieldNames.USED_CIDS).addNewValue(part);
+        List<Cid> result = cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null || result.isEmpty())return null;
+        return Cid.showCidList("Chose CIDs",result,20,true,br);
+    }
+
+    public List<Cid> cidSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_3, VERSION_1, CID_SEARCH,fcdsl, authType,sessionKey, requestMethod);
         return objectToList(data, Cid.class);
     }
     public List<CidHist> cidHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
@@ -445,7 +470,7 @@ public class ApipClient extends Client {
     // Construct
     public Map<String, Protocol> protocolByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
         Object data = requestByIds(requestMethod,SN_4, VERSION_1, PROTOCOL_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Protocol.class);
+        return ObjectUtils.objectToMap(data,String.class,Protocol.class);
     }
 
     public Protocol protocolById(String id){
@@ -484,7 +509,7 @@ public class ApipClient extends Client {
 
     public Map<String, Code> codeByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
         Object data = requestByIds(requestMethod,SN_5, VERSION_1, CODE_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Code.class);
+        return ObjectUtils.objectToMap(data,String.class,Code.class);
     }
 
     public Code codeById(String id){
@@ -521,7 +546,7 @@ public class ApipClient extends Client {
 
     public Map<String, Service> serviceByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
         Object data = requestByIds(requestMethod,SN_6, VERSION_1, SERVICE_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Service.class);
+        return ObjectUtils.objectToMap(data,String.class,Service.class);
     }
 
     public List<Service> serviceSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
@@ -577,7 +602,7 @@ public class ApipClient extends Client {
 
     public Map<String, App> appByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
         Object data = requestByIds(requestMethod,SN_7, VERSION_1, APP_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,App.class);
+        return ObjectUtils.objectToMap(data,String.class,App.class);
     }
 
     public App appById(String id){
@@ -616,7 +641,7 @@ public class ApipClient extends Client {
 //Organize
     public Map<String, feip.feipData.Group> groupByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_8, VERSION_1, GROUP_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class, feip.feipData.Group.class);
+        return ObjectUtils.objectToMap(data,String.class, feip.feipData.Group.class);
     }
     public List<feip.feipData.Group> groupSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_8, VERSION_1, GROUP_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -631,7 +656,7 @@ public class ApipClient extends Client {
     }
     public Map<String, String[]> groupMembers(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_8, VERSION_1, GROUP_MEMBERS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,String[].class);
+        return ObjectUtils.objectToMap(data,String.class,String[].class);
     }
 
     public List<Group> myGroups(String fid, Long sinceHeight, Integer size, @NotNull final List<String> last, RequestMethod requestMethod, AuthType authType){
@@ -651,7 +676,7 @@ public class ApipClient extends Client {
 
     public Map<String, Team> teamByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_9, VERSION_1, TEAM_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Team.class);
+        return ObjectUtils.objectToMap(data,String.class,Team.class);
     }
     public List<Team> teamSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_9, VERSION_1, TEAM_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -672,16 +697,16 @@ public class ApipClient extends Client {
     }
     public Map<String, String[]> teamMembers(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_9, VERSION_1, TEAM_MEMBERS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,String[].class);
+        return ObjectUtils.objectToMap(data,String.class,String[].class);
     }
 
     public Map<String, String[]> teamExMembers(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_9, VERSION_1, TEAM_EX_MEMBERS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,String[].class);
+        return ObjectUtils.objectToMap(data,String.class,String[].class);
     }
     public Map<String,Team> teamOtherPersons(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_9, VERSION_1, TEAM_OTHER_PERSONS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Team.class);
+        return ObjectUtils.objectToMap(data,String.class,Team.class);
     }
     public List<Team> myTeams(String fid, Long sinceHeight, Integer size, @NotNull final List<String> last, RequestMethod requestMethod, AuthType authType){
         Fcdsl fcdsl = new Fcdsl();
@@ -701,7 +726,7 @@ public class ApipClient extends Client {
 
     public Map<String, Box> boxByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_10, VERSION_1, BOX_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Box.class);
+        return ObjectUtils.objectToMap(data,String.class,Box.class);
     }
     public List<Box> boxSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_10, VERSION_1, BOX_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -717,7 +742,7 @@ public class ApipClient extends Client {
 
     public Map<String, Contact> contactByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_11, VERSION_1, CONTACT_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Contact.class);
+        return ObjectUtils.objectToMap(data,String.class,Contact.class);
     }
     public List<Contact> contactSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_11, VERSION_1, CONTACT_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -743,7 +768,7 @@ public class ApipClient extends Client {
         }
         fcdsl.addSize(size);
 
-        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(ID,ASC);
+        fcdsl.addSort(LAST_HEIGHT, DESC).addSort(ID,ASC);
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 
@@ -755,7 +780,7 @@ public class ApipClient extends Client {
 
     public Map<String, Secret> secretByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_12, VERSION_1, SECRET_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Secret.class);
+        return ObjectUtils.objectToMap(data,String.class,Secret.class);
     }
     public List<Secret> secretSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_12, VERSION_1, SECRET_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -804,7 +829,7 @@ public class ApipClient extends Client {
         }
         fcdsl.addSize(size);
 
-        fcdsl.addSort(sortField,Strings.ASC).addSort(idField,ASC);
+        fcdsl.addSort(sortField, ASC).addSort(idField,ASC);
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 
@@ -816,7 +841,7 @@ public class ApipClient extends Client {
 
     public Map<String, Mail> mailByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_13, VERSION_1, MAIL_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Mail.class);
+        return ObjectUtils.objectToMap(data,String.class,Mail.class);
     }
     public List<Mail> mailSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_13, VERSION_1, MAIL_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -856,7 +881,7 @@ public class ApipClient extends Client {
         }
         fcdsl.addSize(defaultRequestSize);
 
-        fcdsl.addSort(LAST_HEIGHT,Strings.DESC).addSort(ID,ASC);
+        fcdsl.addSort(LAST_HEIGHT, DESC).addSort(ID,ASC);
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 //        return this.mailSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
@@ -870,7 +895,7 @@ public class ApipClient extends Client {
 
     public Map<String, Proof> proofByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_14, VERSION_1, PROOF_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Proof.class);
+        return ObjectUtils.objectToMap(data,String.class,Proof.class);
     }
     public List<Proof> proofSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_14, VERSION_1, PROOF_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -887,7 +912,7 @@ public class ApipClient extends Client {
 
     public Map<String, Statement> statementByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_15, VERSION_1, STATEMENT_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Statement.class);
+        return ObjectUtils.objectToMap(data,String.class,Statement.class);
     }
     public List<Statement> statementSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_15, VERSION_1, STATEMENT_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -902,7 +927,7 @@ public class ApipClient extends Client {
 
     public Map<String, Token> tokenByIds(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_16, VERSION_1, TOKEN_BY_IDS, authType, ids);
-        return ObjectTools.objectToMap(data,String.class,Token.class);
+        return ObjectUtils.objectToMap(data,String.class,Token.class);
     }
     public List<Token> tokenSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_16, VERSION_1, TOKEN_SEARCH, fcdsl, authType, sessionKey, requestMethod);
@@ -928,23 +953,23 @@ public class ApipClient extends Client {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(Token_Id).addNewValues(tokenIds);
         Object data = requestJsonByFcdsl(SN_16, VERSION_1, TOKEN_HOLDERS_BY_IDS,fcdsl, authType,sessionKey, requestMethod);
-        return ObjectTools.objectToMap(data,String.class,TokenHolder.class);
+        return ObjectUtils.objectToMap(data,String.class,TokenHolder.class);
     }
 
     public List<TokenHolder> tokenHolderSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(SN_16, VERSION_1, TOKEN_HOLDER_SEARCH,fcdsl,authType,sessionKey, requestMethod);
-        return ObjectTools.objectToList(data,TokenHolder.class);
+        return ObjectUtils.objectToList(data,TokenHolder.class);
     }
     public List<UnconfirmedInfo> unconfirmed(RequestMethod requestMethod, AuthType authType, String... ids){
         Object data = requestByIds(requestMethod,SN_18, VERSION_1, ApipApiNames.UNCONFIRMED, authType, ids);
-        return ObjectTools.objectToList(data,UnconfirmedInfo.class);
+        return ObjectUtils.objectToList(data,UnconfirmedInfo.class);
     }
 
     public Map<String, List<Cash>> unconfirmedCaches(RequestMethod requestMethod, AuthType authType,String... ids){
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addIds(ids);
         Object data = requestJsonByFcdsl(SN_18, VERSION_1, UNCONFIRMED_CASHES,fcdsl, authType,sessionKey, requestMethod);
-        return ObjectTools.objectToMapWithListValues(data, String.class, Cash.class);
+        return ObjectUtils.objectToMapWithListValues(data, String.class, Cash.class);
     }
 
     public Double feeRate(RequestMethod requestMethod, AuthType authType){
@@ -958,7 +983,7 @@ public class ApipClient extends Client {
         Fcdsl fcdsl = new Fcdsl();
         Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.ADDR_OR_PUB_KEY, addrOrPubKey);
         Object data = requestJsonByFcdsl(SN_17, VERSION_1, ADDRESSES,fcdsl, authType,sessionKey, requestMethod);
-        return ObjectTools.objectToMap(data,String.class,String.class);
+        return ObjectUtils.objectToMap(data,String.class,String.class);
     }
     public String encrypt(EncryptType encryptType, String message, String key, String fid, RequestMethod requestMethod, AuthType authType){
         Fcdsl fcdsl = new Fcdsl();
@@ -986,7 +1011,7 @@ public class ApipClient extends Client {
                 return null;
             }
         }
-        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.ENCRYPT_INPUT, JsonTools.toJson(encryptIn));
+        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.ENCRYPT_INPUT, JsonUtils.toJson(encryptIn));
         Object data = requestJsonByFcdsl(SN_17, VERSION_1, ENCRYPT,fcdsl, authType,sessionKey, requestMethod);
         return objectToClass(data,String.class);
     }
@@ -1053,14 +1078,36 @@ public class ApipClient extends Client {
     }
 
     public String offLineTx(String fromFid, List<SendTo> sendToList, String msg, Long cd, RequestMethod requestMethod, AuthType authType){
-        Fcdsl fcdsl = new Fcdsl();
-        DataForOffLineTx dataForOffLineTx = new DataForOffLineTx();
-        dataForOffLineTx.setFromFid(fromFid);
-        dataForOffLineTx.setMsg(msg);
-        dataForOffLineTx.setSendToList(sendToList);
-        dataForOffLineTx.setCd(cd);
-        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.DATA_FOR_OFF_LINE_TX, JsonTools.toJson(dataForOffLineTx));
-        Object data = requestJsonByFcdsl(SN_18, VERSION_1, OFF_LINE_TX,fcdsl, authType,sessionKey, requestMethod);
+        if(requestMethod.equals(RequestMethod.POST)) {
+            Fcdsl fcdsl = new Fcdsl();
+            TxCreator.OffLineTxRequestData offLineTxRequestData = new TxCreator.OffLineTxRequestData();
+            offLineTxRequestData.setFromFid(fromFid);
+            offLineTxRequestData.setMsg(msg);
+            offLineTxRequestData.setSendToList(sendToList);
+            offLineTxRequestData.setCd(cd);
+            Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.DATA_FOR_OFF_LINE_TX, JsonUtils.toJson(offLineTxRequestData));
+            Object data = requestJsonByFcdsl(SN_18, VERSION_1, OFF_LINE_TX, fcdsl, authType, sessionKey, requestMethod);
+            return (String) data;
+        }
+
+        Map<String,String> paramMap = new HashMap<>();
+        paramMap.put("fromFid",fromFid);
+        List<String> toList = new ArrayList<>();
+        List<String> amountList = new ArrayList<>();
+
+        if(sendToList!=null && !sendToList.isEmpty()) {
+            for (SendTo sendTo : sendToList) {
+                toList.add(sendTo.getFid());
+                amountList.add(String.valueOf(sendTo.getAmount()));
+            }
+
+            paramMap.put("toFids", String.join(",", toList));
+            paramMap.put("amounts", String.join(",", amountList));
+        }
+        if(msg!=null)paramMap.put(MESSAGE,msg);
+        if(cd!=0)paramMap.put(CD,String.valueOf(cd));
+
+        Object data = requestJsonByUrlParams(SN_18, VERSION_1, OFF_LINE_TX, paramMap, authType);
         return (String) data;
     }
 
@@ -1186,7 +1233,7 @@ public class ApipClient extends Client {
 
     public Map<String, String> newCashListByIds(WebhookHandler.WebhookRequestBody webhookRequestBody){
         Fcdsl fcdsl = new Fcdsl();
-        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonTools.toJson(webhookRequestBody));
+        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonUtils.toJson(webhookRequestBody));
         Object data = requestJsonByFcdsl(SN_20, VERSION_1, ApipApiNames.NEW_CASH_BY_FIDS, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, RequestMethod.POST);
         if(data==null)return null;
         return objectToMap(data,String.class,String.class);
@@ -1194,7 +1241,7 @@ public class ApipClient extends Client {
 
     public Map<String, String> newOpReturnListByIds(WebhookHandler.WebhookRequestBody webhookRequestBody){
         Fcdsl fcdsl = new Fcdsl();
-        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonTools.toJson(webhookRequestBody));
+        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonUtils.toJson(webhookRequestBody));
         Object data = requestJsonByFcdsl(SN_20, VERSION_1, NEW_OP_RETURN_BY_FIDS, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, RequestMethod.POST);
         if(data==null)return null;
         return objectToMap(data,String.class,String.class);
@@ -1234,7 +1281,7 @@ public class ApipClient extends Client {
             last.clear();
             last.addAll(result.getLast());
         }
-        return ObjectTools.objectToList(result.getData(), dataClass);
+        return ObjectUtils.objectToList(result.getData(), dataClass);
     }
     public void updateUnconfirmedValidCash(List<Cash> meetList, String fid) {
         if(meetList==null || meetList.isEmpty())return;

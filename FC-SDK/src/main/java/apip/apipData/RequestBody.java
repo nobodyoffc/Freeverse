@@ -2,7 +2,7 @@ package apip.apipData;
 
 import fcData.FcEntity;
 import fcData.Op;
-import tools.BytesTools;
+import utils.BytesUtils;
 
 public class RequestBody extends FcEntity {
     private String sid;
@@ -16,7 +16,7 @@ public class RequestBody extends FcEntity {
     private SignInMode mode;
 
     public void renew() {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
     }
 
@@ -25,12 +25,12 @@ public class RequestBody extends FcEntity {
     }
 
     public RequestBody() {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
     }
 
     public RequestBody(Op op,Object data) {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
         this.op = op;
         this.data = data;
@@ -38,14 +38,14 @@ public class RequestBody extends FcEntity {
 
     public RequestBody(String url, String via) {
         setTime(System.currentTimeMillis());
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
     }
 
     public RequestBody(String url, String via, SignInMode mode) {
         setTime(System.currentTimeMillis());
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
         setMode(mode);
@@ -63,14 +63,14 @@ public class RequestBody extends FcEntity {
 
     public void makeRequestBody(String url, String via) {
         setTime(System.currentTimeMillis());
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
     }
 
     public void makeRequestBody(String url, String via, SignInMode mode) {
         setTime(System.currentTimeMillis());
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         setVia(via);
         setUrl(url);
         if (mode != null) setMode(mode);

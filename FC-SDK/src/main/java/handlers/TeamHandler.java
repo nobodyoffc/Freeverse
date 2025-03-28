@@ -6,19 +6,20 @@ import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
-import clients.Client;
 import clients.FeipClient;
 import constants.FieldNames;
+import constants.Values;
+import crypto.Decryptor;
 import fch.fchData.SendTo;
 import feip.feipData.Service;
 import feip.feipData.Team;
 import feip.feipData.TeamOpData;
-import tools.Hex;
-import tools.JsonTools;
-import tools.PersistentSequenceMap;
-import tools.StringTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.Hex;
+import utils.JsonUtils;
+import fcData.PersistentSequenceMap;
+import utils.StringUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import nasa.NaSaRpcClient;
 
 import javax.annotation.Nullable;
@@ -66,7 +67,7 @@ public class TeamHandler extends Handler {
 
     // 4. Public Methods - Main Interface
     public void menu() {
-        byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
+        byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         Menu menu = new Menu("Team", this::close);
         menu.add("List", () -> handleListTeams(priKey, br));
         menu.add("Check", () -> checkTeam(br));
@@ -105,7 +106,7 @@ public class TeamHandler extends Handler {
 
         if (!teamList.isEmpty()) {
             lastTimeMap.put(FieldNames.TEAM, teamList.get(0).getLastHeight());
-            JsonTools.saveToJsonFile(lastTimeMap, myFid, null, FieldNames.LAST_TIME, false);
+            JsonUtils.saveToJsonFile(lastTimeMap, myFid, null, FieldNames.LAST_TIME, false);
         }
 
         System.out.println("Found " + teamList.size() + " updated teams.");
@@ -141,7 +142,7 @@ public class TeamHandler extends Handler {
                 System.out.println("You have already joined this team: ["+team.getId()+"]");
                 continue;
             } else {
-                System.out.println("Team: "+ StringTools.omitMiddle(team.getId(), 15)+" - "+team.getStdName());
+                System.out.println("Team: "+ StringUtils.omitMiddle(team.getId(), 15)+" - "+team.getStdName());
                 if(!Inputer.askIfYes(br,"Join this team?")) continue;
                 List<String> members = getTeamMembers(team.getId(), apipClient);
                 if(members!=null && members.contains(myFid)) {
@@ -367,7 +368,7 @@ public class TeamHandler extends Handler {
         if(searchTerm != null && !"".equals(searchTerm))
             fcdsl.addNewQuery()
                  .addNewPart()
-                 .addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, FieldNames.ACCOUNTS, FieldNames.DESC, FieldNames.MEMBERS)
+                 .addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, FieldNames.ACCOUNTS, Values.DESC, FieldNames.MEMBERS)
                  .addNewValue(searchTerm);
         return apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
@@ -408,18 +409,18 @@ public class TeamHandler extends Handler {
     public void showTeamList(List<Team> teamList, BufferedReader br) {
         if(teamList == null || teamList.isEmpty()) return;
         String title = "Teams";
-        String[] fields = { FieldNames.TID, FieldNames.MEMBER_NUM, FieldNames.STD_NAME, FieldNames.DESC };
+        String[] fields = { FieldNames.TID, FieldNames.MEMBER_NUM, FieldNames.STD_NAME, Values.DESC };
         int[] widths = { 15, 10, 20, 25 };
         List<List<Object>> valueListList = new ArrayList<>();
         for(Team team : teamList) {
             List<Object> valueList = new ArrayList<>();
-            valueList.add(StringTools.omitMiddle(team.getId(), 15));
+            valueList.add(StringUtils.omitMiddle(team.getId(), 15));
             valueList.add(team.getMemberNum());
-            valueList.add(StringTools.omitMiddle(team.getStdName(), 20));
-            valueList.add(StringTools.omitMiddle(team.getDesc(), 25));
+            valueList.add(StringUtils.omitMiddle(team.getStdName(), 20));
+            valueList.add(StringUtils.omitMiddle(team.getDesc(), 25));
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, 0, true);
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
 
     public List<String> getTeamMembers(String tid, ApipClient apipClient) {
@@ -575,7 +576,7 @@ public class TeamHandler extends Handler {
     private void viewTeams(List<Team> chosenTeamList, BufferedReader br) {
         while (true) {
             List<Team> viewTeamList = chooseTeamList(chosenTeamList, br);
-            System.out.println(JsonTools.toNiceJson(viewTeamList));
+            System.out.println(JsonUtils.toNiceJson(viewTeamList));
             if(Inputer.askIfYes(br, "Continue?")) continue;
             else break;
         }

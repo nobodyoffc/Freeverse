@@ -6,7 +6,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.FieldNames;
-import tools.FileTools;
+import utils.FileUtils;
 import server.Counter;
 import appTools.Settings;
 
@@ -42,7 +42,7 @@ public class DiskCounter extends Counter {
             DiskItem source = hit.source();
             if(source==null)continue;
             String did = source.getDid();
-            String subDir = FileTools.getSubPathForDisk(did);
+            String subDir = FileUtils.getSubPathForDisk(did);
             File file = new File(StartDiskManager.STORAGE_DIR+subDir,did);
             if(file.exists())file.delete();
         }

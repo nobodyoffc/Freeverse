@@ -14,10 +14,10 @@ import crypto.Encryptor;
 import fcData.*;
 import fcData.TalkUnit;
 import feip.feipData.Service;
-import tools.Hex;
-import tools.UdpTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.Hex;
+import utils.UdpUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +73,7 @@ public class TalkUdpClient extends Client {
 
         String request = requestBody.toJson();
 
-        byte[] key  = decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey);
+        byte[] key  = Decryptor.decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey);
         if(key== null){
             System.out.println("Failed to decrypt priKey.");
             return null;
@@ -93,7 +93,7 @@ public class TalkUdpClient extends Client {
         talkUnitRequest.setData(cipher);
 
         try {
-            UdpTools.send(ip,port, talkUnitRequest.toBytes());
+            UdpUtils.send(ip,port, talkUnitRequest.toBytes());
         } catch (IOException e) {
             System.out.println("Failed to sign in.");
             e.printStackTrace();
@@ -109,7 +109,7 @@ public class TalkUdpClient extends Client {
         ReplyBody replier = null;
         TalkUnit talkUnitReply;
         while(!socket.isClosed()) {
-            byte[] bytes = UdpTools.receive(port);
+            byte[] bytes = UdpUtils.receive(port);
             if(bytes==null)continue;
             talkUnitReply = TalkUnit.fromBytes(bytes);
 
@@ -215,7 +215,7 @@ public class TalkUdpClient extends Client {
                     if (content == null || "exit".equalsIgnoreCase(content)) {
                         break;
                     }
-                    UdpTools.send(host,port,content.getBytes());
+                    UdpUtils.send(host,port,content.getBytes());
                 } catch (UnknownHostException e) {
                     log.error("Failed to send with UDP on {} : {}. Error:{}",host,port,e.getMessage());
                 } catch (IOException e) {
@@ -283,20 +283,20 @@ public class TalkUdpClient extends Client {
         public void run() {
             TalkUnit talkUnit;
             byte[] receivedBytes;
-            receivedBytes = UdpTools.receive(port);
+            receivedBytes = UdpUtils.receive(port);
             talkUnit = TalkUnit.fromBytes(receivedBytes);
             System.out.println(talkUnit.toNiceJson());
             ReplyBody replier = talkTcpClient.signInReply();
             System.out.println(replier.toJson());
 
-            while ((receivedBytes = UdpTools.receive(port))!= null) {
+            while ((receivedBytes = UdpUtils.receive(port))!= null) {
 
 
                 byte[] serverSessionKey;
                 serverSessionKey = getSessionKey(replier);
                 if (serverSessionKey == null) return;
 
-                receivedBytes = UdpTools.receive(port);
+                receivedBytes = UdpUtils.receive(port);
                 talkUnit = TalkUnit.fromBytes(receivedBytes);
                 System.out.println(talkUnit.toNiceJson());
             }

@@ -5,7 +5,7 @@ import constants.FieldNames;
 import constants.IndicesNames;
 import feip.feipData.Box;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;

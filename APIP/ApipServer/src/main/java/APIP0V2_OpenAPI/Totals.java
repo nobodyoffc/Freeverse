@@ -8,7 +8,7 @@ import feip.feipData.Service;
 import server.ApipApiNames;
 import fcData.ReplyBody;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;

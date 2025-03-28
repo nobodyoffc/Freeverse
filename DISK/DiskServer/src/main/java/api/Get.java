@@ -6,9 +6,9 @@ import server.ApipApiNames;
 import constants.CodeMessage;
 import initial.Initiator;
 import server.DiskApiNames;
-import tools.FileTools;
-import tools.ObjectTools;
-import tools.http.AuthType;
+import utils.FileUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 import fcData.ReplyBody;
 import redis.clients.jedis.Jedis;
 import server.HttpRequestChecker;
@@ -41,9 +41,6 @@ public class Get extends HttpServlet {
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
             HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
             httpRequestChecker.checkRequestHttp(request, response, authType);
-            if (httpRequestChecker ==null){
-                return;
-            }
             doGetRequest(request, response, replier, httpRequestChecker,jedis);
         }
     }
@@ -72,10 +69,10 @@ public class Get extends HttpServlet {
             }
             Fcdsl fcdsl = httpRequestChecker.getRequestBody().getFcdsl();
             try {
-                Map<String, String> paramMap = ObjectTools.objectToMap(fcdsl.getOther(), String.class, String.class);
+                Map<String, String> paramMap = ObjectUtils.objectToMap(fcdsl.getOther(), String.class, String.class);
                 did = paramMap.get(DID);
                 if (did == null) {
-                    replier.replyHttp(CodeMessage.Code3009DidMissed, null);
+                    replier.replyHttp(CodeMessage.Code3009DidMissed, response);
                     return;
                 }
             }catch (Exception e){
@@ -89,10 +86,10 @@ public class Get extends HttpServlet {
 
     private void doPostRequest(HttpServletResponse response, ReplyBody replier, String did, Jedis jedis) throws IOException {
         if (did == null) return;
-        String path = FileTools.getSubPathForDisk(did);
+        String path = FileUtils.getSubPathForDisk(did);
         File file = new File(STORAGE_DIR+path, did);
         if (!file.exists()) {
-            replier.replyHttp(CodeMessage.Code1020OtherError, null);
+            replier.replyHttp(CodeMessage.Code1020OtherError, response);
             return;
         }
         Long balance = replier.updateBalance(DiskApiNames.CHECK, file.length());

@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 
 import constants.IndicesNames;
-import tools.EsTools;
+import utils.EsUtils;
 
 import java.io.IOException;
 
@@ -26,17 +26,17 @@ public class IndicesFCH {
 		String cidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"wildcard\"},\"cid\":{\"type\":\"wildcard\"},\"usedCids\":{\"type\":\"wildcard\"},\"pubKey\":{\"type\":\"keyword\"},\"priKey\":{\"type\":\"keyword\"},\"balance\":{\"type\":\"long\"},\"cash\":{\"type\":\"long\"},\"income\":{\"type\":\"long\"},\"expend\":{\"type\":\"long\"},\"cd\":{\"type\":\"long\"},\"cdd\":{\"type\":\"long\"},\"reputation\":{\"type\":\"long\"},\"hot\":{\"type\":\"long\"},\"weight\":{\"type\":\"long\"},\"master\":{\"type\":\"wildcard\"},\"guide\":{\"type\":\"wildcard\"},\"noticeFee\":{\"type\":\"keyword\"},\"homepages\":{\"type\":\"text\"},\"btcAddr\":{\"type\":\"wildcard\"},\"ethAddr\":{\"type\":\"wildcard\"},\"ltcAddr\":{\"type\":\"wildcard\"},\"dogeAddr\":{\"type\":\"wildcard\"},\"trxAddr\":{\"type\":\"wildcard\"},\"bchAddr\":{\"type\":\"wildcard\"},\"birthHeight\":{\"type\":\"long\"},\"nameTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String opreturnJsonStr = "{\"mappings\":{\"properties\":{\"cdd\":{\"type\":\"long\"},\"height\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"opReturn\":{\"type\":\"text\"},\"recipient\":{\"type\":\"wildcard\"},\"signer\":{\"type\":\"wildcard\"},\"time\":{\"type\":\"long\"},\"txIndex\":{\"type\":\"long\"}}}}";
 
-		EsTools.createIndex(esClient, IndicesNames.BLOCK_MARK, blockMarkJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.BLOCK, blockJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.BLOCK_HAS, blockHasJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TX, txJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TX_HAS, txHasJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.CASH, cashJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.CID, cidJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.OPRETURN, opreturnJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BLOCK_MARK, blockMarkJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BLOCK, blockJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BLOCK_HAS, blockHasJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TX, txJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TX_HAS, txHasJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.CASH, cashJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.CID, cidJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.OPRETURN, opreturnJsonStr);
 
 		String p2shJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"wildcard\"},\"redeemScript\":{\"type\":\"keyword\"},\"m\":{\"type\":\"short\"},\"n\":{\"type\":\"short\"},\"pubKeys\":{\"type\":\"keyword\"},\"fids\":{\"type\":\"wildcard\"},\"birthHeight\":{\"type\":\"long\"},\"birthTime\":{\"type\":\"long\"},\"birthTxId\":{\"type\":\"keyword\"}}}}";
-		EsTools.createIndex(esClient, IndicesNames.P2SH, p2shJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.P2SH, p2shJsonStr);
 	}
 
 
@@ -47,14 +47,14 @@ public class IndicesFCH {
 			return;
 		}
 
-		EsTools.deleteIndex(esClient, IndicesNames.BLOCK_MARK);
-		EsTools.deleteIndex(esClient, IndicesNames.BLOCK);
-		EsTools.deleteIndex(esClient, IndicesNames.BLOCK_HAS);
-		EsTools.deleteIndex(esClient, IndicesNames.TX);
-		EsTools.deleteIndex(esClient, IndicesNames.TX_HAS);
-		EsTools.deleteIndex(esClient, IndicesNames.CASH);
-		EsTools.deleteIndex(esClient, IndicesNames.CID);
-		EsTools.deleteIndex(esClient, IndicesNames.OPRETURN);
-		EsTools.deleteIndex(esClient, IndicesNames.P2SH);
+		EsUtils.deleteIndex(esClient, IndicesNames.BLOCK_MARK);
+		EsUtils.deleteIndex(esClient, IndicesNames.BLOCK);
+		EsUtils.deleteIndex(esClient, IndicesNames.BLOCK_HAS);
+		EsUtils.deleteIndex(esClient, IndicesNames.TX);
+		EsUtils.deleteIndex(esClient, IndicesNames.TX_HAS);
+		EsUtils.deleteIndex(esClient, IndicesNames.CASH);
+		EsUtils.deleteIndex(esClient, IndicesNames.CID);
+		EsUtils.deleteIndex(esClient, IndicesNames.OPRETURN);
+		EsUtils.deleteIndex(esClient, IndicesNames.P2SH);
 	}	
 }

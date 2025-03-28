@@ -1,7 +1,7 @@
 package apip.apipData;
 
 import crypto.Hash;
-import tools.BytesTools;
+import utils.BytesUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -23,7 +23,7 @@ public class WebhookInfo {  //for webhook users to mark different webhook servic
     public static final String  MAPPINGS = "{\"mappings\":{\"properties\":{\"hookId\":{\"type\":\"keyword\"},\"userId\":{\"type\":\"wildcard\"},\"endpoint\":{\"type\":\"text\"},\"data\":{\"type\":\"object\"},\"method\":{\"type\":\"wildcard\"},\"op\":{\"type\":\"keyword\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 
     private static String makeWebhookId(String url, String method) {
-        return HexFormat.of().formatHex(Hash.sha256x2(BytesTools.bytesMerger(url.getBytes(), method.getBytes())));
+        return HexFormat.of().formatHex(Hash.sha256x2(BytesUtils.bytesMerger(url.getBytes(), method.getBytes())));
     }
 
     public static void updateFromUserInput(BufferedReader br, WebhookInfo info) {

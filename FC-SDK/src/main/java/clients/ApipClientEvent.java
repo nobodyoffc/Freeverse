@@ -13,11 +13,11 @@ import constants.Constants;
 import constants.CodeMessage;
 import constants.UpStrings;
 import crypto.Hash;
-import tools.Hex;
-import tools.IdNameTools;
-import tools.JsonTools;
-import tools.StringTools;
-import tools.http.AuthType;
+import utils.Hex;
+import utils.IdNameUtils;
+import utils.JsonUtils;
+import utils.StringUtils;
+import utils.http.AuthType;
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -47,7 +47,7 @@ import java.util.Map;
 import static apip.ApipTools.isGoodSign;
 import static clients.ApipClientEvent.RequestBodyType.*;
 import static constants.UpStrings.*;
-import static tools.http.HttpTools.CONTENT_TYPE;
+import static utils.http.HttpUtils.CONTENT_TYPE;
 
 public class ApipClientEvent {
 
@@ -143,18 +143,18 @@ public class ApipClientEvent {
                     requestBody = new RequestBody(apiUrl.getUrl(), via);
                     requestBody.setData(paramMap);
                     if(requestBody!=null)
-                        this.requestBodyBytes = JsonTools.toJson(requestBody).getBytes();
-                    requestHeaderMap.put(CONTENT_TYPE, tools.http.ContentType.APPLICATION_JSON.getType());
+                        this.requestBodyBytes = JsonUtils.toJson(requestBody).getBytes();
+                    requestHeaderMap.put(CONTENT_TYPE, utils.http.ContentType.APPLICATION_JSON.getType());
                 }
-                requestHeaderMap.put("Content-Type", tools.http.ContentType.TEXT_PLAIN.toString());
+                requestHeaderMap.put("Content-Type", utils.http.ContentType.TEXT_PLAIN.toString());
             }
             case BYTES -> {
                 this.requestBodyBytes = requestBodyBytes;
-                requestHeaderMap.put("Content-Type", tools.http.ContentType.APPLICATION_OCTET_STREAM.toString());
+                requestHeaderMap.put("Content-Type", utils.http.ContentType.APPLICATION_OCTET_STREAM.toString());
             }
             case FILE -> {
                 this.requestFileName = requestFileName;
-                requestHeaderMap.put("Content-Type", tools.http.ContentType.APPLICATION_OCTET_STREAM.toString());
+                requestHeaderMap.put("Content-Type", utils.http.ContentType.APPLICATION_OCTET_STREAM.toString());
             }
             default -> {}
         }
@@ -259,24 +259,6 @@ public class ApipClientEvent {
             message = "Failed to sign in.";
         }
     }
-
-//
-//    public boolean get(ResponseBodyType responseBodyType) {
-//        return get(null,responseBodyType,null, null);
-//    }
-//    public boolean get(String fileName, String responseFilePath){
-//        return get(null,ResponseBodyType.FILE,fileName, responseFilePath);
-//    }
-//
-//    public boolean get(byte[] sessionKey) {
-//        return get(sessionKey,null,null, null);
-//    }
-//    public boolean get(byte[] sessionKey, ResponseBodyType responseBodyType) {
-//        return get(sessionKey,responseBodyType,null,null );
-//    }
-//    public boolean get(byte[] sessionKey, String responseFileName, String responseFilePath) {
-//        return get(sessionKey,ResponseBodyType.FILE,responseFileName, responseFilePath);
-//    }
 
     public boolean get() {
         return get(null);
@@ -399,7 +381,7 @@ public class ApipClientEvent {
             return makeFcReply(sessionKey);
         }
         String fileName;
-        if(responseFileName==null)fileName= StringTools.getTempName();
+        if(responseFileName==null)fileName= StringUtils.getTempName();
         else fileName=responseFileName;
         String gotDid = downloadFileFromHttpResponse(fileName, responseFilePath);
         if(gotDid==null){
@@ -541,6 +523,14 @@ public class ApipClientEvent {
             message = CodeMessage.Msg3004RequestUrlIsAbsent;
             System.out.println(message);
             return false;
+        }
+
+
+        //TODO for test
+        if(fcdsl!=null) {
+            String params = Fcdsl.fcdslToUrlParams(fcdsl);
+            if(params!=null && !params.isBlank())System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl()+"?"+ params);
+            else System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl());
         }
 
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
@@ -695,7 +685,7 @@ public class ApipClientEvent {
         requestBodyBytes = requestBodyStr.getBytes(StandardCharsets.UTF_8);
 
         requestHeaderMap = new HashMap<>();
-        requestHeaderMap.put(CONTENT_TYPE, tools.http.ContentType.APPLICATION_JSON.getType());
+        requestHeaderMap.put(CONTENT_TYPE, utils.http.ContentType.APPLICATION_JSON.getType());
     }
 
 //    public boolean post(byte[] sessionKey, RequestBodyType requestBodyType, ResponseBodyType responseBodyType, String requestFileName,String responseFileName) {
@@ -755,10 +745,9 @@ public class ApipClientEvent {
         requestHeaderMap.put("Content-Type", "application/json");
     }
 
-    private void makeRequestBodyBytes() {
-        Gson gson = new Gson();
-        String requestBodyJson = gson.toJson(requestBody);
-        requestBodyBytes = requestBodyJson.getBytes(StandardCharsets.UTF_8);
+    public void makeRequestBodyBytes() {
+        this.requestBodyStr = JsonUtils.toJson(requestBody);
+        requestBodyBytes = this.requestBodyStr.getBytes(StandardCharsets.UTF_8);
     }
 
     protected void makeSignInRequest(@Nullable String via, @Nullable RequestBody.SignInMode mode) {
@@ -770,7 +759,7 @@ public class ApipClientEvent {
 
     public void makeHeaderSession(byte[] sessionKey,byte[] dataBytes) {
         String sign = FcSession.sign(sessionKey, dataBytes);
-        signatureOfRequest = new Signature(sign, IdNameTools.makeKeyName(sessionKey));
+        signatureOfRequest = new Signature(sign, IdNameUtils.makeKeyName(sessionKey));
         if(requestHeaderMap==null)requestHeaderMap=new HashMap<>();
         requestHeaderMap.put(UpStrings.SESSION_NAME, signatureOfRequest.getKeyName());
         requestHeaderMap.put(SIGN, signatureOfRequest.getSign());

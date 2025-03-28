@@ -3,7 +3,6 @@ package fch.fchData;
 import fcData.FcObject;
 
 public class CashMark extends FcObject {
-	private String id;		//input id, the hash of previous txid and index, e.g. the first 32+4 bytes of the input.
 	private String owner;
 	private Long value;
 	private Long cdd;
@@ -26,5 +25,4 @@ public class CashMark extends FcObject {
 	public void setCdd(Long cdd) {
 		this.cdd = cdd;
 	}
-	
 }

@@ -17,9 +17,11 @@ import crypto.Algorithm.Ecc256K1;
 import crypto.Algorithm.aesCbc256.CipherInputStreamWithHash;
 import crypto.old.EccAes256K1P7;
 import fcData.AlgorithmId;
-import tools.BytesTools;
-import tools.FileTools;
-import tools.Hex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import utils.BytesUtils;
+import utils.FileUtils;
+import utils.Hex;
 import org.bitcoinj.core.ECKey;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jetbrains.annotations.NotNull;
@@ -39,6 +41,7 @@ import static fcData.AlgorithmId.*;
 
 public class Encryptor {
     AlgorithmId algorithmId;
+    protected static final Logger log = LoggerFactory.getLogger(Encryptor.class);
 
     public Encryptor() {
         this.algorithmId = FC_AesCbc256_No1_NrC7;
@@ -48,8 +51,32 @@ public class Encryptor {
         this.algorithmId = algorithmId;
     }
 
+    public static String encryptFile(String fileName, String pubKeyHex) {
+
+        byte[] pubKey = Hex.fromHex(pubKeyHex);
+        Encryptor encryptor = new Encryptor(FC_EccK1AesCbc256_No1_NrC7);
+        String tempFileName = FileUtils.getTempFileName();
+        CryptoDataByte result1 = encryptor.encryptFileByAsyOneWay(fileName, tempFileName, pubKey);
+        if(result1.getCode()!=0)return null;
+        String cipherFileName;
+        try {
+            cipherFileName = Hash.sha256x2(new File(tempFileName));
+            Files.move(Paths.get(tempFileName),Paths.get(cipherFileName));
+        } catch (IOException e) {
+            return null;
+        }
+        return cipherFileName;
+    }
+
+    public static String encryptBySymKeyToJson(byte[] data, byte[]symKey) {
+        Encryptor encryptor = new Encryptor(FC_AesCbc256_No1_NrC7);
+        CryptoDataByte cryptoDataByte = encryptor.encryptBySymKey(data,symKey);
+        if(cryptoDataByte.getCode()!=0)return null;
+        return cryptoDataByte.toJson();
+    }
+
     public CryptoDataByte encryptByPassword(@NotNull byte[] msg, @NotNull char[] password){
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         byte[] symKey = passwordToSymKey(password, iv);
         CryptoDataByte cryptoDataByte = encryptBySymKey(msg,symKey,iv);
         cryptoDataByte.setType(EncryptType.Password);
@@ -73,13 +100,13 @@ public class Encryptor {
         return encryptToJsonBySymKey(msg,key);
     }
     public String encryptToJsonBySymKey(@NotNull byte[] msg, @NotNull byte[] key){
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         CryptoDataByte cryptoDataByte = encryptBySymKey(msg,key, iv);
         return cryptoDataByte.toNiceJson();
     }
     public CryptoDataByte encryptFileByPassword(@NotNull String dataFileName, @NotNull String cipherFileName, @NotNull char[]password){
-        FileTools.createFileWithDirectories(cipherFileName);
-        byte[] iv = BytesTools.getRandomBytes(16);
+        FileUtils.createFileWithDirectories(cipherFileName);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         byte[] key = passwordToSymKey(password, iv);
 
 
@@ -94,13 +121,13 @@ public class Encryptor {
     }
     public CryptoDataByte encryptFileBySymKey(@NotNull String dataFileName, @NotNull String cipherFileName, @NotNull byte[]key, byte[] iv){
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
-        if(iv==null)iv = BytesTools.getRandomBytes(16);
+        if(iv==null)iv = BytesUtils.getRandomBytes(16);
         cryptoDataByte.setType(EncryptType.SymKey);
         cryptoDataByte.setAlg(algorithmId);
         cryptoDataByte.setIv(iv);
         cryptoDataByte.setSymKey(key);
 
-        String tempFile = FileTools.getTempFileName();
+        String tempFile = FileUtils.getTempFileName();
         try (FileInputStream fis = new FileInputStream(dataFileName);
              FileOutputStream fos = new FileOutputStream(tempFile)) {
             switch (cryptoDataByte.getAlg()) {
@@ -150,13 +177,13 @@ public class Encryptor {
         return encryptToBundleBySymKey(msg,key);
     }
     public byte[] encryptToBundleBySymKey(@NotNull byte[] msg, @NotNull byte[] key){
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         CryptoDataByte cryptoDataByte = encryptBySymKey(msg,key, iv);
         if(cryptoDataByte.getCode()!=0)return null;
         return cryptoDataByte.toBundle();
     }
     public byte[] encryptToBundleByPassword(@NotNull byte[] msg, @NotNull char[] password){
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         byte[] symKey = Encryptor.passwordToSymKey(password,iv);
         CryptoDataByte cryptoDataByte = encryptBySymKey(msg,symKey, iv);
         if(cryptoDataByte.getCode()!=0)return null;
@@ -164,7 +191,7 @@ public class Encryptor {
     }
 
     public CryptoDataByte encryptBySymKey(@NotNull byte[] msg, @NotNull byte[] symKey){
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         return encryptBySymKey(msg,symKey,iv,null);
     }
     public CryptoDataByte encryptBySymKey(@NotNull byte[] msg, @NotNull byte[] symKey, byte[] iv){
@@ -343,17 +370,17 @@ public class Encryptor {
         return encryptFileByAsy(dataFileName, cipherFileName, pubKeyB, priKeyA);
     }
     private CryptoDataByte encryptFileByAsy(@NotNull String dataFileName, @NotNull String cipherFileName, @NotNull byte[] pubKeyB,byte[]priKeyA){
-        FileTools.createFileWithDirectories(cipherFileName);
+        FileUtils.createFileWithDirectories(cipherFileName);
 
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setAlg(algorithmId);
 
         checkKeysMakeType(pubKeyB, priKeyA, cryptoDataByte);
 
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         cryptoDataByte.setIv(iv);
 
-        String tempFile = FileTools.getTempFileName();
+        String tempFile = FileUtils.getTempFileName();
         try(FileInputStream fis = new FileInputStream(dataFileName);
             FileOutputStream fos = new FileOutputStream(tempFile)){
 
@@ -420,7 +447,7 @@ public class Encryptor {
         if(cryptoDataByte.getIv()!=null){
             iv = cryptoDataByte.getIv();
         }else {
-            iv = BytesTools.getRandomBytes(16);
+            iv = BytesUtils.getRandomBytes(16);
             cryptoDataByte.setIv(iv);
         }
 
@@ -474,8 +501,8 @@ public class Encryptor {
 
 
     public static byte[] passwordToSymKey(char[] password, byte[] iv) {
-        byte[] passwordBytes = BytesTools.charArrayToByteArray(password, StandardCharsets.UTF_8);
-        return Decryptor.sha256(BytesTools.addByteArray(Decryptor.sha256(passwordBytes), iv));
+        byte[] passwordBytes = BytesUtils.charArrayToByteArray(password, StandardCharsets.UTF_8);
+        return Decryptor.sha256(BytesUtils.addByteArray(Decryptor.sha256(passwordBytes), iv));
     }
     public static byte[] sha512(byte[] b) {
         return Hashing.sha512().hashBytes(b).asBytes();

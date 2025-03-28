@@ -4,7 +4,6 @@ import fcData.FcObject;
 
 public class BlockMark extends FcObject {
 
-	private String id;
 	private String preBlockId;
 	private Long height;
 	private Long time;

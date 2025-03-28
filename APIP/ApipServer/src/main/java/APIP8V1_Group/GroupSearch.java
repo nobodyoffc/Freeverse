@@ -6,7 +6,7 @@ import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.Group;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 
 import javax.servlet.ServletException;
@@ -34,16 +34,16 @@ public class GroupSearch extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(T_CDD,false,ID,true,null,null);
-        doGroupSearchRequest(null,null,null,null, defaultSort, request,response,authType, settings);
+        doGroupSearchRequest(null,null,null,null, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(T_CDD,false,ID,true,null,null);
-        doGroupSearchRequest(null,null,null,null, defaultSort, request,response,authType, settings);
+        doGroupSearchRequest(null,null,null,null, defaultSort, request,response,authType);
     }
 
-    public void doGroupSearchRequest(String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+    public void doGroupSearchRequest(String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
         List<Group> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.GROUP, Group.class, filterField, filterValue, exceptField, exceptValue, sort, request, response, authType);
         if (meetList == null) return;
         for(Group group :meetList){

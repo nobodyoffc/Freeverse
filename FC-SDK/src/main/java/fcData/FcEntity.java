@@ -1,27 +1,43 @@
 package fcData;
 
-import appTools.Shower;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
+import utils.JsonUtils;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.io.File;
+import java.util.*;
 
-import org.jetbrains.annotations.NotNull;
-import org.mapdb.DataInput2;
-import org.mapdb.DataOutput2;
-import org.mapdb.Serializer;
-import org.mapdb.serializer.GroupSerializer;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import static constants.Strings.DOT_JSON;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
+
 public abstract class FcEntity {
+    public static final String METHOD_GET_FIELD_WIDTH_MAP = "getFieldWidthMap";
+    public static final String METHOD_GET_TIMESTAMP_FIELD_LIST = "getTimestampFieldList";
+    public static final String METHOD_GET_SATOSHI_FIELD_LIST = "getSatoshiFieldList";
+    public static final String METHOD_GET_HEIGHT_TO_TIME_FIELD_MAP = "getHeightToTimeFieldMap";
+    public static final String METHOD_GET_SHOW_FIELD_NAME_AS_MAP = "getShowFieldNameAsMap";
+    public static final String METHOD_GET_INPUT_FIELD_DEFAULT_VALUE_MAP = "getInputFieldDefaultValueMap";
+    public static int ID_DEFAULT_SHOW_SIZE = 13;
+    public static int TEXT_DEFAULT_SHOW_SIZE = 33;
+    public static int TEXT_SHORT_DEFAULT_SHOW_SIZE = 9;
+    public static int TIME_DEFAULT_SHOW_SIZE = 15;
+    public static int AMOUNT_DEFAULT_SHOW_SIZE = 8;
+    public static int CD_DEFAULT_SHOW_SIZE = 5;
+    public static int BOOLEAN_DEFAULT_SHOW_SIZE = 15;
+
     protected String id;
+    public static  <T extends FcEntity> int updateIntoListById(T item, List<T> itemList) {
+        if(itemList==null)return -1;
+        for (int i = 0; i < itemList.size(); i++) {
+            if (itemList.get(i).getId().equals(item.getId())) {
+                itemList.set(i, item); // Replace old keyInfo with new one
+                return i;
+            }
+        }
+        itemList.add(item);
+        return itemList.size() - 1;
+    }
+
     public String getId() {
         return id;
     }
@@ -34,7 +50,7 @@ public abstract class FcEntity {
     }
 
     public String toNiceJson() {
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
         return gson.toJson(this);
     }
 
@@ -61,186 +77,84 @@ public abstract class FcEntity {
         }
     }
 
-    public static void showList(List<FcEntity> list, String title, List<String> fields, List<Integer> widths) {
-        if (fields == null || widths == null || fields.size() != widths.size()) {
-            System.out.println("Invalid fields or widths configuration");
-            return;
+    public static <T extends FcEntity> List<T> listFromFile(Class<T> clazz) {
+        return listFromFile(null,clazz);
+    }
+    public static <T extends FcEntity> List<T> listFromFile(String filePath, Class<T> clazz) {
+        if(filePath==null)filePath = clazz.getSimpleName()+".json";
+        try {
+            return JsonUtils.readJsonObjectListFromFile(filePath, clazz);
+        } catch (Exception e) {
+            System.out.println("Error reading "+clazz.getSimpleName()+" list from file: " + e.getMessage());
+            return null;
         }
+    }
 
-        String[] fieldArray = fields.toArray(new String[0]);
-        int[] widthArray = widths.stream().mapToInt(Integer::intValue).toArray();
-        List<List<Object>> valueListList = new ArrayList<>();
-
-        for (FcEntity obj : list) {
-            List<Object> showList = new ArrayList<>();
-            // Convert object to JSON to access fields dynamically
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = new Gson().fromJson(obj.toJson(), Map.class);
-
-            for (String field : fields) {
-                Object value = map.get(field);
-                showList.add(value != null ? value : "");
+    public static <T extends FcEntity> void listToFile(List<T> list, Class<T> clazz) {
+        listToFile(list, clazz.getSimpleName(), false);
+    }
+    public static <T extends FcEntity> void listToFile(List<T> list, String className, boolean isAppend) {
+        String filePath = className + DOT_JSON;
+        if(list==null || list.isEmpty()){
+            if(isAppend)return;
+            else {
+                File file = new File(filePath);
+                if(file.exists())file.delete();
+                return;
             }
-            valueListList.add(showList);
         }
-
-        Shower.showDataTable(title, fieldArray, widthArray, valueListList, 0, true);
+        try {
+            JsonUtils.writeListToJsonFile(list, filePath, isAppend);
+        } catch (Exception e) {
+            System.out.println("Error writing "+list.get(0).getClass().getSimpleName()+" list to file: " + e.getMessage());
+        }
+        
+    }
+    /**
+     * Get the field width map for displaying items
+     * @return Map of field names to their display widths
+     */
+    public static LinkedHashMap<String, Integer> getFieldWidthMap() {
+        return new LinkedHashMap<>();
     }
 
-
-    //MapDB Serializer
-    public static <T extends FcEntity> Serializer<T> getMapDBSerializer(Class<T> clazz) {
-        return new FcEntitySerializer<>(clazz);
+    /**
+     * Get list of fields that contain timestamp values
+     * @return List of timestamp field names
+     */
+    public static List<String> getTimestampFieldList() {
+        return new ArrayList<>();
     }
 
-    // Update the serializer class to extend GroupSerializer
-    public static class FcEntitySerializer<T extends FcEntity> implements GroupSerializer<T> {
-        private final Class<T> entityClass;
-        private final Gson gson = new Gson();
-
-        public FcEntitySerializer(Class<T> clazz) {
-            this.entityClass = clazz;
-        }
-
-        @Override
-        public void serialize(DataOutput2 out, T value) throws IOException {
-            byte[] bytes = value.toBytes();
-            out.packInt(bytes.length);
-            out.write(bytes);
-        }
-
-        @Override
-        public T deserialize(DataInput2 input, int available) throws IOException {
-            int length = input.unpackInt();
-            byte[] bytes = new byte[length];
-            input.readFully(bytes);
-            return fromBytes(bytes, entityClass);
-        }
-
-        @Override
-        public boolean equals(T a1, T a2) {
-            if (a1 == a2) return true;
-            if (a1 == null || a2 == null) return false;
-            return gson.toJson(a1).equals(gson.toJson(a2));
-        }
-
-        @Override
-        public int hashCode(T t, int seed) {
-            return t == null ? 0 : gson.toJson(t).hashCode() + seed;
-        }
-
-        @Override
-        public int compare(T o1, T o2) {
-            if (o1 == o2) return 0;
-            if (o1 == null) return -1;
-            if (o2 == null) return 1;
-            return gson.toJson(o1).compareTo(gson.toJson(o2));
-        }
-
-        @Override
-        public boolean isTrusted() {
-            return true;
-        }
-
-        public Class<T> getEntityClass() {
-            return entityClass;
-        }
-
-        @Override
-        public int valueArraySearch(Object keys, T key) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArraySearch'");
-        }
-
-        @Override
-        public int valueArraySearch(Object keys, T key, Comparator comparator) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArraySearch'");
-        }
-
-        @Override
-        public void valueArraySerialize(DataOutput2 out, Object vals) throws IOException {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArraySerialize'");
-        }
-
-        @Override
-        public Object valueArrayDeserialize(DataInput2 in, int size) throws IOException {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayDeserialize'");
-        }
-
-        @Override
-        public T valueArrayGet(Object vals, int pos) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayGet'");
-        }
-
-        @Override
-        public int valueArraySize(Object vals) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArraySize'");
-        }
-
-        @Override
-        public Object valueArrayEmpty() {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayEmpty'");
-        }
-
-        @Override
-        public Object valueArrayPut(Object vals, int pos, T newValue) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayPut'");
-        }
-
-        @Override
-        public Object valueArrayUpdateVal(Object vals, int pos, T newValue) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayUpdateVal'");
-        }
-
-        @Override
-        public Object valueArrayFromArray(Object[] objects) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayFromArray'");
-        }
-
-        @Override
-        public Object valueArrayCopyOfRange(Object vals, int from, int to) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayCopyOfRange'");
-        }
-
-        @Override
-        public Object valueArrayDeleteValue(Object vals, int pos) {
-            // TODO Auto-generated method stub
-            throw new UnsupportedOperationException("Unimplemented method 'valueArrayDeleteValue'");
-        }
+    /**
+     * Get list of fields that contain satoshi values
+     * @return List of satoshi field names
+     */
+    public static List<String> getSatoshiFieldList() {
+        return new ArrayList<>();
     }
 
-    public static class GsonSerializer implements Serializer<Object> {
-        private final Gson gson = new GsonBuilder()
-                // .serializeNulls()
-                .create();
-    
-        @Override
-        public void serialize(@NotNull DataOutput2 out, @NotNull Object value) throws IOException {
-            String json = gson.toJson(value);
-            out.writeUTF(json);
-        }
-    
-        @Override
-        public Object deserialize(@NotNull DataInput2 input, int available) throws IOException {
-            String json = input.readUTF();
-            // Try to determine the type from the JSON structure
-            if (json.startsWith("[")) {
-                return gson.fromJson(json, new TypeToken<Set<String>>(){}.getType());
-            } else if (json.startsWith("{")) {
-                return gson.fromJson(json, new TypeToken<Map<String, Object>>(){}.getType());
-            }
-            return gson.fromJson(json, Object.class);
-        }
+    /**
+     * Get map of height fields to their corresponding time fields
+     * @return Map of height field names to time field names
+     */
+    public static Map<String, String> getHeightToTimeFieldMap() {
+        return new HashMap<>();
     }
 
+    /**
+     * Get map of field names to their display names
+     * @return Map of field names to display names
+     */
+    public static Map<String, String> getShowFieldNameAsMap() {
+        return new HashMap<>();
+    }
+
+    /**
+     * Get map of input field names to their default values
+     * @return Map of input field names to default values
+     */
+    public static Map<String, Object> getInputFieldDefaultValueMap() {
+        return new HashMap<>();
+    }
 }

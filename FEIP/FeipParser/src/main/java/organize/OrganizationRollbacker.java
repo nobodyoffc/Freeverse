@@ -1,6 +1,6 @@
 package organize;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -9,7 +9,7 @@ import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
 import feip.feipData.GroupHistory;
 import feip.feipData.TeamHistory;
-import tools.JsonTools;
+import utils.JsonUtils;
 
 import java.io.IOException;
 import java.util.*;
@@ -35,14 +35,14 @@ public class OrganizationRollbacker {
 		
 		if(itemIdList==null||itemIdList.isEmpty())return error;
 		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'group': ");
-		JsonTools.printJson(itemIdList);
+		JsonUtils.printJson(itemIdList);
 		deleteEffectedItems(esClient, IndicesNames.GROUP, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.GROUP_HISTORY,histIdList);
 		
 		TimeUnit.SECONDS.sleep(3);
 		
-		List<GroupHistory>reparseHistList = EsTools.getHistsForReparse(esClient, IndicesNames.GROUP_HISTORY,"gid",itemIdList, GroupHistory.class);
+		List<GroupHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.GROUP_HISTORY,"gid",itemIdList, GroupHistory.class);
 		
 		reparseGroup(esClient,reparseHistList);
 		
@@ -96,7 +96,7 @@ public class OrganizationRollbacker {
 		
 		if(itemIdList==null||itemIdList.isEmpty())return error;
 		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'team': ");
-		JsonTools.printJson(itemIdList);
+		JsonUtils.printJson(itemIdList);
 		
 		TimeUnit.SECONDS.sleep(10);
 		
@@ -106,7 +106,7 @@ public class OrganizationRollbacker {
 
 		TimeUnit.SECONDS.sleep(3);
 		
-		List<TeamHistory>reparseHistList = EsTools.getHistsForReparse(esClient, IndicesNames.TEAM_HISTORY,"tid",itemIdList, TeamHistory.class);
+		List<TeamHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEAM_HISTORY,"tid",itemIdList, TeamHistory.class);
 		
 		reparseTeam(esClient,reparseHistList);
 		
@@ -153,10 +153,10 @@ public class OrganizationRollbacker {
 	}
 
 	private void deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, itemIdList);
+		EsUtils.bulkDeleteList(esClient, index, itemIdList);
 	}
 
 	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, histIdList);
+		EsUtils.bulkDeleteList(esClient, index, histIdList);
 	}
 }

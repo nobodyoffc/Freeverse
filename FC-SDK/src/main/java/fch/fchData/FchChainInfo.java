@@ -11,9 +11,10 @@ import constants.IndicesNames;
 import constants.Strings;
 
 import fcData.FcObject;
-import fch.ParseTools;
-import tools.JsonTools;
-import tools.NumberTools;
+import fch.FchUtils;
+import utils.DateUtils;
+import utils.JsonUtils;
+import utils.NumberUtils;
 import nasa.NaSaRpcClient;
 
 import java.io.IOException;
@@ -23,6 +24,7 @@ import java.util.*;
 public class FchChainInfo extends FcObject {
     public static final long MAX_REQUEST_COUNT = 1000;
     public static final long DEFAULT_COUNT = 100;
+    private String time;
     private String height;
     private String blockId;
     private String totalSupply;
@@ -78,7 +80,7 @@ public class FchChainInfo extends FcObject {
 //    }
 
     public String toNiceJson(){
-        return JsonTools.toNiceJson(this);
+        return JsonUtils.toNiceJson(this);
     }
 
     public static Map<Long,Long> blockTimeHistory(long startTime, long endTime, long count, ElasticsearchClient esClient){
@@ -115,7 +117,7 @@ public class FchChainInfo extends FcObject {
         for(Hit<Block> hit:result.hits().hits()){
             Block block = hit.source();
             if(block==null)continue;
-            String diff = NumberTools.numberToPlainString(String.valueOf(ParseTools.bitsToDifficulty(block.getBits())),"3");
+            String diff = NumberUtils.numberToPlainString(String.valueOf(FchUtils.bitsToDifficulty(block.getBits())),"3");
             timeDiffMap.put(block.getTime(),diff);
         }
         return timeDiffMap;
@@ -130,7 +132,7 @@ public class FchChainInfo extends FcObject {
         for(Hit<Block> hit:result.hits().hits()){
             Block block = hit.source();
             if(block==null)continue;
-            String hashRate = NumberTools.numberToPlainString(String.valueOf(ParseTools.bitsToHashRate(block.getBits())),"0");
+            String hashRate = NumberUtils.numberToPlainString(String.valueOf(FchUtils.bitsToHashRate(block.getBits())),"0");
             timeHashRateMap.put(block.getTime(),hashRate);
         }
         return timeHashRateMap;
@@ -181,11 +183,12 @@ public class FchChainInfo extends FcObject {
         NaSaRpcClient.BlockchainInfo blockchainInfo = naSaRpcClient.getBlockchainInfo();
         this.height= String.valueOf(blockchainInfo.getBlocks());
         this.blockId=blockchainInfo.getBestblockhash();
+        this.time = DateUtils.longToTime(((long)blockchainInfo.getMediantime())*1000,DateUtils.LONG_FORMAT);
 
-        this.difficulty=NumberTools.numberToPlainString(String.valueOf(blockchainInfo.getDifficulty()),"0");
-        double hashRate = ParseTools.difficultyToHashRate(blockchainInfo.getDifficulty());
-        this.hashRate=NumberTools.numberToPlainString(String.valueOf(hashRate),"0");
-        this.chainSize= NumberTools.numberToPlainString(String.valueOf(blockchainInfo.getSize_on_disk()),null);
+        this.difficulty= NumberUtils.numberToPlainString(String.valueOf(blockchainInfo.getDifficulty()),"0");
+        double hashRate = FchUtils.difficultyToHashRate(blockchainInfo.getDifficulty());
+        this.hashRate= NumberUtils.numberToPlainString(String.valueOf(hashRate),"0");
+        this.chainSize= NumberUtils.numberToPlainString(String.valueOf(blockchainInfo.getSize_on_disk()),null);
 
         infoByHeight(Long.parseLong(this.height));
 
@@ -201,11 +204,12 @@ public class FchChainInfo extends FcObject {
                     System.out.println("Failed to get block information from ES.");
                     return;
                 }
-                double difficulty = ParseTools.bitsToDifficulty(block.getBits());
-                double hashRate = ParseTools.difficultyToHashRate(difficulty);
-                this.difficulty=NumberTools.numberToPlainString(String.valueOf(difficulty),"0");
-                this.hashRate=NumberTools.numberToPlainString(String.valueOf(hashRate),"0");
+                double difficulty = FchUtils.bitsToDifficulty(block.getBits());
+                double hashRate = FchUtils.difficultyToHashRate(difficulty);
+                this.difficulty= NumberUtils.numberToPlainString(String.valueOf(difficulty),"0");
+                this.hashRate= NumberUtils.numberToPlainString(String.valueOf(hashRate),"0");
                 this.blockId=block.getId();
+                this.time =DateUtils.longToTime(((long)block.getTime()) *1000,DateUtils.LONG_FORMAT);
             }
         } catch (IOException e) {
             System.out.println("Failed to get block information from ES.");
@@ -231,10 +235,10 @@ public class FchChainInfo extends FcObject {
             }
         }
         totalSupply += height % blockPerYear * (coinbaseMine+coinbaseFund);
-        this.totalSupply =NumberTools.numberToPlainString(String.valueOf(totalSupply),"0");
+        this.totalSupply = NumberUtils.numberToPlainString(String.valueOf(totalSupply),"0");
         this.year= String.valueOf(years+1);
-        this.coinbaseMine=NumberTools.numberToPlainString(String.valueOf(coinbaseMine),"8");//String.valueOf(NumberTools.roundDouble8(coinbaseMine));
-        this.coinbaseFund=NumberTools.numberToPlainString(String.valueOf(coinbaseFund),"8");
+        this.coinbaseMine= NumberUtils.numberToPlainString(String.valueOf(coinbaseMine),"8");//String.valueOf(NumberTools.roundDouble8(coinbaseMine));
+        this.coinbaseFund= NumberUtils.numberToPlainString(String.valueOf(coinbaseFund),"8");
         long blocksRemainingThisYear = blockPerYear - height % blockPerYear;
         long daysToNextYear = blocksRemainingThisYear / (24 * 60);
         this.daysToNextYear=String.valueOf(daysToNextYear);
@@ -247,7 +251,7 @@ public class FchChainInfo extends FcObject {
         circulating = totalSupply
                 -(daysImmatureThisYear*1440*(coinbaseMine+coinbaseFund))
                 -(daysImmatureLastYear*1440*(coinbaseMine/0.8+coinbaseFund/0.5));
-        this.circulating =NumberTools.numberToPlainString(String.valueOf(circulating),"0");
+        this.circulating = NumberUtils.numberToPlainString(String.valueOf(circulating),"0");
     }
 
     public String getTotalSupply() {
@@ -407,5 +411,13 @@ public class FchChainInfo extends FcObject {
 
     public void setHeight(String height) {
         this.height = height;
+    }
+
+    public String getTime() {
+        return time;
+    }
+
+    public void setTime(String time) {
+        this.time = time;
     }
 }

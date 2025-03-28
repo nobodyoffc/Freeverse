@@ -5,13 +5,13 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest.Builder;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
-import fch.OpReFileTools;
+import fch.OpReFileUtils;
 import fch.fchData.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parser.Preparer;
 import parser.ReadyBlock;
-import tools.EsTools;
+import utils.EsUtils;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class BlockWriter {
 
 	private static final Logger log = LoggerFactory.getLogger(BlockWriter.class);
-	public void writeIntoEs(ElasticsearchClient esClient, ReadyBlock readyBlock, OpReFileTools opReFile) throws Exception {
+	public void writeIntoEs(ElasticsearchClient esClient, ReadyBlock readyBlock, OpReFileUtils opReFile) throws Exception {
 
 		Block block = readyBlock.getBlock();
 		BlockHas blockHas = readyBlock.getBlockHas();
@@ -45,7 +45,7 @@ public class BlockWriter {
 		putOpReturn(esClient, opReturnList, br);
 		putAddress(esClient, addrList, br);
 		putBlockMark(blockMark, br);
-		BulkResponse response = EsTools.bulkWithBuilder(esClient, br);
+		BulkResponse response = EsUtils.bulkWithBuilder(esClient, br);
 
 		System.out.println("Main chain linked. "
 				+"Orphan: "+Preparer.orphanList.size()
@@ -69,7 +69,7 @@ public class BlockWriter {
 		}
 
 		Preparer.mainList.add(blockMark);
-		if (Preparer.mainList.size() > EsTools.READ_MAX) {
+		if (Preparer.mainList.size() > EsUtils.READ_MAX) {
 			Preparer.mainList.remove(0);
 		}
 		Preparer.BestHash = blockMark.getId();
@@ -84,12 +84,12 @@ public class BlockWriter {
 
 	private void putAddress(ElasticsearchClient esClient, ArrayList<Cid> addrList, Builder br) throws Exception {
 
-		if (addrList.size() > EsTools.WRITE_MAX / 5) {
+		if (addrList.size() > EsUtils.WRITE_MAX / 5) {
 			Iterator<Cid> iter = addrList.iterator();
 			ArrayList<String> idList = new ArrayList<>();
 			while (iter.hasNext())
 				idList.add(iter.next().getId());
-			EsTools.bulkWriteList(esClient, IndicesNames.CID, addrList, idList, Cid.class);
+			EsUtils.bulkWriteList(esClient, IndicesNames.CID, addrList, idList, Cid.class);
 			TimeUnit.SECONDS.sleep(3);
 		} else {
 			for (Cid am : addrList) {
@@ -106,12 +106,12 @@ public class BlockWriter {
 				Iterator<OpReturn> iter = opReturnList.iterator();
 				ArrayList<String> idList = new ArrayList<>();
 				while (iter.hasNext())
-					idList.add(iter.next().getTxId());
-				EsTools.bulkWriteList(esClient, IndicesNames.OPRETURN, opReturnList, idList, OpReturn.class);
+					idList.add(iter.next().getId());
+				EsUtils.bulkWriteList(esClient, IndicesNames.OPRETURN, opReturnList, idList, OpReturn.class);
 				TimeUnit.SECONDS.sleep(3);
 			} else {
 				for (OpReturn or : opReturnList) {
-					br.operations(op -> op.index(i -> i.index(IndicesNames.OPRETURN).id(or.getTxId()).document(or)));
+					br.operations(op -> op.index(i -> i.index(IndicesNames.OPRETURN).id(or.getId()).document(or)));
 				}
 			}
 		}
@@ -119,12 +119,12 @@ public class BlockWriter {
 
 	private void putCash(ElasticsearchClient esClient, ArrayList<Cash> cashList, Builder br) throws Exception {
 		if (cashList != null) {
-			if (cashList.size() > EsTools.WRITE_MAX / 5) {
+			if (cashList.size() > EsUtils.WRITE_MAX / 5) {
 				Iterator<Cash> iter = cashList.iterator();
 				ArrayList<String> idList = new ArrayList<>();
 				while (iter.hasNext())
 					idList.add(iter.next().getId());
-				EsTools.bulkWriteList(esClient, IndicesNames.CASH, cashList, idList, Cash.class);
+				EsUtils.bulkWriteList(esClient, IndicesNames.CASH, cashList, idList, Cash.class);
 				TimeUnit.SECONDS.sleep(3);
 			} else {
 				for (Cash om : cashList) {
@@ -136,12 +136,12 @@ public class BlockWriter {
 
 	private void putTxHas(ElasticsearchClient esClient, ArrayList<TxHas> txHasList, Builder br) throws Exception {
 		if (txHasList != null) {
-			if (txHasList.size() > EsTools.WRITE_MAX / 5) {
+			if (txHasList.size() > EsUtils.WRITE_MAX / 5) {
 				Iterator<TxHas> iter = txHasList.iterator();
 				ArrayList<String> idList = new ArrayList<>();
 				while (iter.hasNext())
 					idList.add(iter.next().getId());
-				EsTools.bulkWriteList(esClient, IndicesNames.TX_HAS, txHasList, idList, TxHas.class);
+				EsUtils.bulkWriteList(esClient, IndicesNames.TX_HAS, txHasList, idList, TxHas.class);
 				TimeUnit.SECONDS.sleep(3);
 			} else {
 				for (TxHas ot : txHasList) {
@@ -152,12 +152,12 @@ public class BlockWriter {
 	}
 
 	private void putTx(ElasticsearchClient esClient, ArrayList<Tx> txList, Builder br) throws Exception {
-		if (txList.size() > EsTools.WRITE_MAX / 5) {
+		if (txList.size() > EsUtils.WRITE_MAX / 5) {
 			Iterator<Tx> iter = txList.iterator();
 			ArrayList<String> idList = new ArrayList<>();
 			while (iter.hasNext())
 				idList.add(iter.next().getId());
-			EsTools.bulkWriteList(esClient, IndicesNames.TX, txList, idList, Tx.class);
+			EsUtils.bulkWriteList(esClient, IndicesNames.TX, txList, idList, Tx.class);
 			TimeUnit.SECONDS.sleep(3);
 		} else {
 			for (Tx tm : txList) {

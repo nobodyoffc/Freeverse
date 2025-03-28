@@ -11,7 +11,7 @@ import handlers.ContactHandler;
 import handlers.SessionHandler;
 import handlers.TalkIdHandler;
 import org.slf4j.LoggerFactory;
-import tools.*;
+import utils.*;
 import org.bitcoinj.core.ECKey;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -31,7 +31,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
     private transient Integer code;
     private transient String message;
     private transient String id; //for database, time formatted + nonce
-    private transient BytesTools.ByteArrayAsKey idBytes;
+    private transient BytesUtils.ByteArrayAsKey idBytes;
     private transient EncryptType unitEncryptType;
     private transient EncryptType dataEncryptType;
     private transient FcSession bySession;
@@ -53,14 +53,14 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
 
 
     public TalkUnit() {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
         makeId();
         this.state = State.NEW;
     }
 
     public TalkUnit(String fromFid, Object data, @NotNull DataType dataType, @Nullable String to, @NotNull IdType toType) {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
         makeId();
         this.from = fromFid;
@@ -737,7 +737,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
     @Nullable
     public static TalkUnit readTalkUnitByTcp(DataInputStream dataInputStream) throws IOException {
         byte[] receivedBytes;
-        receivedBytes = TcpTools.readBytes(dataInputStream);
+        receivedBytes = TcpUtils.readBytes(dataInputStream);
         if(receivedBytes==null) return null;
 
         return fromBytes(receivedBytes);
@@ -764,7 +764,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
     public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"toType\":{\"type\":\"keyword\"},\"to\":{\"type\":\"wildcard\"},\"door\":{\"type\":\"wildcard\"},\"time\":{\"type\":\"long\"},\"nonce\":{\"type\":\"integer\"},\"from\":{\"type\":\"wildcard\"},\"size\":{\"type\":\"long\"},\"dataType\":{\"type\":\"keyword\"},\"data\":{\"type\":\"text\"}}}}";
 
     public void renew() {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
     }
 
@@ -887,8 +887,8 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
                 case GROUP,TEAM -> Hex.fromHex(this.to);
             }
 
-            byteArrayBuilder.write(BytesTools.longToBytes(this.time));
-            byteArrayBuilder.write(BytesTools.intToByteArray(this.nonce));
+            byteArrayBuilder.write(BytesUtils.longToBytes(this.time));
+            byteArrayBuilder.write(BytesUtils.intToByteArray(this.nonce));
 
             byteArrayBuilder.write(this.dataType.number);
             switch (this.dataType){
@@ -909,7 +909,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
                     byte[] cipher = ((CryptoDataByte) data).toBundle();
                     byteArrayBuilder.write(cipher);
                 }
-                default -> byteArrayBuilder.write(JsonTools.toJson(data).getBytes());
+                default -> byteArrayBuilder.write(JsonUtils.toJson(data).getBytes());
             }
             return byteArrayBuilder.toByteArray();
         }
@@ -1000,14 +1000,14 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         if(time==null)
             time = System.currentTimeMillis();
         if(nonce==null)
-            nonce= Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+            nonce= Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
 
-        String date = DateTools.longToTime(time,"yyyyMMdd_HHmmssSSS");
+        String date = DateUtils.longToTime(time,"yyyyMMdd_HHmmssSSS");
         return date + "_" + nonce;//Hex.toHex(BytesTools.intToByteArray(nonce));
     }
 
     public byte[] makeIdBytes() {
-        this.idBytes = new BytesTools.ByteArrayAsKey(BytesTools.bytesMerger(BytesTools.longToBytes(this.time), BytesTools.intToByteArray(this.nonce)));
+        this.idBytes = new BytesUtils.ByteArrayAsKey(BytesUtils.bytesMerger(BytesUtils.longToBytes(this.time), BytesUtils.intToByteArray(this.nonce)));
 
         return this.idBytes.getBytes();
     }
@@ -1086,11 +1086,11 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         this.data = data;
     }
 
-    public BytesTools.ByteArrayAsKey getIdBytes() {
+    public BytesUtils.ByteArrayAsKey getIdBytes() {
         return idBytes;
     }
 
-    public void setIdBytes(BytesTools.ByteArrayAsKey idBytes) {
+    public void setIdBytes(BytesUtils.ByteArrayAsKey idBytes) {
         this.idBytes = idBytes;
     }
     @Override

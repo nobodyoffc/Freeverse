@@ -9,7 +9,7 @@ import handlers.WebhookHandler;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.HttpRequestChecker;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import appTools.Settings;
 
 import javax.servlet.ServletException;

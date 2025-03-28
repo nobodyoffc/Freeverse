@@ -1,18 +1,19 @@
 package handlers;
 
+import crypto.Decryptor;
+import fcData.PersistentSequenceMap;
 import fch.fchData.Cid;
 import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
-import clients.Client;
 import constants.Constants;
 import crypto.CryptoDataByte;
 import crypto.Encryptor;
 import crypto.KeyTools;
 import fcData.AlgorithmId;
-import tools.IdNameTools;
+import utils.IdNameUtils;
 import fcData.MailDetail;
 import fcData.Op;
 import fch.Wallet;
@@ -22,9 +23,9 @@ import feip.feipData.Mail;
 import feip.feipData.MailOpData;
 import feip.feipData.Service;
 import org.jetbrains.annotations.Nullable;
-import tools.*;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.*;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -125,7 +126,7 @@ public class MailHandler extends Handler {
 
             System.out.println("You chosen " + chosenMailDetails.size() + " mails.");
 
-            if (askIfYes(br,"View them?")) chooseToShow(chosenMailDetails, br);
+            if (askIfYes(br,"View them?")) chooseToShowNiceJsonList(chosenMailDetails, br);
 
             List<String> currentChosenMailIds = chosenMailDetails.stream().map(MailDetail::getMailId).collect(Collectors.toList());
             chosenMailIds.addAll(currentChosenMailIds);
@@ -179,7 +180,7 @@ public class MailHandler extends Handler {
         }
 
         System.out.println("You have " + mailDetailList.size() + " unread mails.");
-        if (mailDetailList.size() > 0) chooseToShow(mailDetailList, br);
+        if (mailDetailList.size() > 0) chooseToShowNiceJsonList(mailDetailList, br);
     }
 
     private void deleteInvalidMails(BufferedReader br) {
@@ -199,7 +200,7 @@ public class MailHandler extends Handler {
     public void readRecentMails(BufferedReader br) {
         List<MailDetail> recentMails = chooseMailDetails(br);
         System.out.println("You chosen " + recentMails.size() + " mails. Read them...");
-        chooseToShow(recentMails, br);
+        chooseToShowNiceJsonList(recentMails, br);
     }
 
     public void readMails(BufferedReader br) {
@@ -227,7 +228,7 @@ public class MailHandler extends Handler {
 
             switch (op) {
                 case READ:
-                    chooseToShow(chosenMails, br);
+                    chooseToShowNiceJsonList(chosenMails, br);
                     break;
                 case DELETE:
                     delete(br, chosenMails);
@@ -253,7 +254,7 @@ public class MailHandler extends Handler {
         
     
         if (askIfYes(br, "View them before delete?")) {
-            chooseToShow(chosenMails, br);
+            chooseToShowNiceJsonList(chosenMails, br);
         }
         
         List<String> mailIds = chosenMails.stream().map(MailDetail::getMailId).collect(Collectors.toList());
@@ -274,7 +275,7 @@ public class MailHandler extends Handler {
 
         MailOpData mailOpData = new MailOpData();
         mailOpData.setOp(op.toLowerCase());
-        byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
+        byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         if (priKey == null) {
             System.out.println("Failed to get the priKey of " + myFid);
             return null;
@@ -302,7 +303,7 @@ public class MailHandler extends Handler {
             String msg = Inputer.inputString(br,"Input the message:");
             if (msg == null) return null;
 
-            mailOpData.setTextId(IdNameTools.makeDid(msg));
+            mailOpData.setTextId(IdNameUtils.makeDid(msg));
 //            mailData.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7.getDisplayName());
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
             String pubKey = cid.getPubKey();
@@ -369,7 +370,7 @@ public class MailHandler extends Handler {
                     deleteInvalidMails(br);
                 }
                 return result;
-            } else if(StringTools.isBase64(result)) {
+            } else if(StringUtils.isBase64(result)) {
                 System.out.println("Sign the TX and broadcast it:\n"+result);
             }else {
                 System.out.println("Failed to " + op.toLowerCase() + " mail:" + result);
@@ -406,7 +407,7 @@ public class MailHandler extends Handler {
     private List<MailDetail> mailToMailDetail(List<Mail> mailList) {
         if(failedDecryptMailIdList ==null) failedDecryptMailIdList = new ArrayList<>();
         List<MailDetail> mailDetailList = new ArrayList<>();
-        byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
+        byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         Set<String> fidSet = new HashSet<>();
 
         for (Mail mail : mailList) {
@@ -508,7 +509,7 @@ public class MailHandler extends Handler {
 
         for (MailDetail mailDetail : mailDetailList) {
             List<Object> showList = new ArrayList<>();
-            showList.add(DateTools.longToTime(mailDetail.getTime(), "yyyy-MM-dd"));
+            showList.add(DateUtils.longToTime(mailDetail.getTime(), "yyyy-MM-dd"));
             String from;
             if (mailDetail.getFromCid() != null) from = mailDetail.getFromCid();
             else from = mailDetail.getFrom();
@@ -521,13 +522,13 @@ public class MailHandler extends Handler {
             showList.add(mailDetail.getContent());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
 
     private static void showMailDetail(MailDetail mail) {
         Shower.printUnderline(20);
         System.out.println(" Mail ID: " + mail.getMailId());
-        System.out.println(" Time: " + tools.DateTools.longToTime(mail.getTime(), "yyyy-MM-dd HH:mm:ss"));
+        System.out.println(" Time: " + DateUtils.longToTime(mail.getTime(), "yyyy-MM-dd HH:mm:ss"));
         System.out.println(" From: " + (mail.getFromCid() != null ? mail.getFromCid() : mail.getFrom()));
         System.out.println(" To: " + (mail.getToCid() != null ? mail.getToCid() : mail.getTo()));
         System.out.println(" Content:\n  " + mail.getContent());
@@ -626,7 +627,7 @@ public class MailHandler extends Handler {
     private List<MailDetail> findMailDetails(String searchStr) {
         byte[] searchBytes;
         List<MailDetail> chosenMails;
-        if (KeyTools.isValidFchAddr(searchStr)) searchBytes = KeyTools.addrToHash160(searchStr);
+        if (KeyTools.isGoodFid(searchStr)) searchBytes = KeyTools.addrToHash160(searchStr);
         else searchBytes = searchStr.getBytes();
         chosenMails = findMailDetails(searchBytes);
         return chosenMails;
@@ -636,7 +637,7 @@ public class MailHandler extends Handler {
         List<MailDetail> foundMails = new ArrayList<>();
         
         for (Map.Entry<byte[], byte[]> entry : mailDB.entrySet()) {
-            if (BytesTools.contains(entry.getValue(), searchBytes)) {
+            if (BytesUtils.contains(entry.getValue(), searchBytes)) {
                 MailDetail mailDetail = MailDetail.fromBytes(entry.getValue());
                 if (mailDetail != null) {
                     foundMails.add(mailDetail);

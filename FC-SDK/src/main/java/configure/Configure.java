@@ -1,13 +1,15 @@
 package configure;
 
+import app.CidInfo;
 import appTools.Menu;
+import co.elastic.clients.elasticsearch.watcher.Input;
 import feip.feipData.ServiceMask;
 import feip.feipData.serviceParams.*;
 import appTools.Inputer;
 import clients.ApipClient;
 import feip.feipData.Service;
 import appTools.Shower;
-import tools.*;
+import utils.*;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.QueryBuilders;
@@ -36,6 +38,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.security.Key;
 import java.util.*;
 
 import static appTools.Inputer.askIfYes;
@@ -44,15 +47,16 @@ import static constants.FieldNames.*;
 import static constants.FieldNames.TYPES;
 import static constants.Strings.*;
 import static constants.Strings.SETTINGS;
-import static fch.Inputer.inputPriKey;
+import static fch.Inputer.importOrCreatePriKey;
 import static fch.Inputer.makePriKeyCipher;
 import static appTools.Settings.addSidBriefToName;
 
 public class Configure {
     protected String nonce;
     protected String passwordName;
+    protected String passwordHash;
     protected List<String> ownerList;  //Owners for servers.
-    protected Map<String,String> fidCipherMap; //Users for clients or accounts for servers.
+    protected Map<String, CidInfo> mainCidInfoMap; //Users for clients or accounts for servers.
     private String esAccountId;
 
     private Map<String, ServiceMask> myServiceMaskMap;
@@ -80,27 +84,33 @@ public class Configure {
 
     public static void checkWebConfig(Settings settings) {
         String fileName = makeConfigFileName(settings.getServerType().name());
-        if (!new File(fileName).exists()) {
-            if(askIfYes(br,"\nCreate config file for the web server?")) {
-                makeWebConfig(settings);
-                Menu.anyKeyToContinue(br);
-            }
-        }else {
-            WebServerConfig webServerConfig;
-            try {
-                webServerConfig = JsonTools.readJsonFromFile(fileName, WebServerConfig.class);
-            } catch (IOException e) {
-                System.out.println("Failed to read web config file.");
-                return;
-            }
-            JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
-            byte[] symKeyForWebServer = getSymKeyFromRedis(webServerConfig.getSid(),settings.getConfig(),jedisPool);
-            if(symKeyForWebServer== null||!Arrays.equals(symKeyForWebServer,settings.getSymKey())) {
-                log.debug("Remake web config file...");
-                makeWebConfig(settings);
-                Menu.anyKeyToContinue(br);
-            }
-        }
+        makeWebConfig(settings);
+        Menu.anyKeyToContinue(br);
+
+//        if (!new File(fileName).exists()) {
+//            if(askIfYes(br,"\nCreate config file for the web server?")) {
+//                makeWebConfig(settings);
+//                Menu.anyKeyToContinue(br);
+//            }
+//        }else if(askIfYes(br,"\nThe config file for the web server exists. Recreate it?")) {
+//            makeWebConfig(settings);
+//            Menu.anyKeyToContinue(br);
+//        }else{
+//            WebServerConfig webServerConfig;
+//            try {
+//                webServerConfig = JsonUtils.readJsonFromFile(fileName, WebServerConfig.class);
+//            } catch (IOException e) {
+//                System.out.println("Failed to read web config file.");
+//                return;
+//            }
+//            JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+//            byte[] symKeyForWebServer = getSymKeyFromRedis(webServerConfig.getSid(),settings.getConfig(),jedisPool);
+//            if(symKeyForWebServer== null||!Arrays.equals(symKeyForWebServer,settings.getSymKey())) {
+//                log.debug("Remake web config file...");
+//                makeWebConfig(settings);
+//                Menu.anyKeyToContinue(br);
+//            }
+//        }
     }
 
 
@@ -118,7 +128,8 @@ public class Configure {
         webServerConfig.setSid(sid);
         String confDir = getConfDir();
         webServerConfig.setConfigPath(Path.of(confDir,CONFIG+DOT_JSON).toString());
-        webServerConfig.setSettingPath(Path.of(confDir,addSidBriefToName(sid,SETTINGS+DOT_JSON)).toString());
+        String settingFileName = FileUtils.makeFileName(null, settings.getSid(), SETTINGS, DOT_JSON);
+        webServerConfig.setSettingPath(Path.of(confDir,settingFileName).toString());
         webServerConfig.setDataPath(Settings.getLocalDataDir(sid));
         webServerConfig.setDbPath(settings.getDbDir());
         CryptoDataByte result = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7).encryptByPassword(settings.getSymKey(), settings.getConfig().getNonce().toCharArray());
@@ -132,7 +143,7 @@ public class Configure {
             jedis.hset(addSidBriefToName(sid,WEB_PARAMS),SYM_KEY_CIPHER,symKeyCipher);
             jedis.hset(addSidBriefToName(sid,WEB_PARAMS),FORBID_FREE_API, String.valueOf(settings.getSettingMap().get(FORBID_FREE_API)));
         }
-        JsonTools.writeObjectToJsonFile(webServerConfig,fileName,false);
+        JsonUtils.writeObjectToJsonFile(webServerConfig,fileName,false);
 
         System.out.println("Copy the file of '"+fileName+"' to the bin directory of Tomcat.");
     }
@@ -159,29 +170,20 @@ public class Configure {
         }
         if(freeApiListMap.get(Service.ServiceType.APIP)==null){
             ArrayList<FreeApi> freeApipList = new ArrayList<>();
-            FreeApi freeApiHelp = new FreeApi("https://help.cash/APIP",true, Service.ServiceType.APIP);
-            FreeApi freeApiApip = new FreeApi("https://apip.cash/APIP",true, Service.ServiceType.APIP);
-            FreeApi freeApiLocal8080 = new FreeApi("http://127.0.0.1:8080/APIP",true, Service.ServiceType.APIP);
-            FreeApi freeApiLocal8081 = new FreeApi("http://127.0.0.1:8081/APIP",true, Service.ServiceType.APIP);
-            freeApipList.add(freeApiApip);
-            freeApipList.add(freeApiHelp);
-            freeApipList.add(freeApiLocal8080);
-            freeApipList.add(freeApiLocal8081);
+            for(String url:ApipClient.freeAPIs){
+                freeApipList.add(new FreeApi(url,true, Service.ServiceType.APIP));
+            }
             freeApiListMap.put(Service.ServiceType.APIP,freeApipList);
         }
 
         if(freeApiListMap.get(Service.ServiceType.DISK)==null){
             ArrayList<FreeApi> freeApipList = new ArrayList<>();
-            FreeApi freeApiHelp = new FreeApi("https://help.cash/FCSK",true, Service.ServiceType.TALK);
-            FreeApi freeApiApip = new FreeApi("https://apip.cash/FCSK",true, Service.ServiceType.TALK);
-            FreeApi freeApiLocal8080 = new FreeApi("http://127.0.0.1:8080/FCSK",true, Service.ServiceType.TALK);
-            FreeApi freeApiLocal8081 = new FreeApi("http://127.0.0.1:8081/FCSK",true, Service.ServiceType.TALK);
-            freeApipList.add(freeApiHelp);
-            freeApipList.add(freeApiApip);
-            freeApipList.add(freeApiLocal8080);
-            freeApipList.add(freeApiLocal8081);
-            freeApiListMap.put(Service.ServiceType.TALK,freeApipList);
+            for(String url:ApipClient.freeAPIs){
+                freeApipList.add(new FreeApi(url,true, Service.ServiceType.DISK));
+            }
+            freeApiListMap.put(Service.ServiceType.APIP,freeApipList);
         }
+
         if(freeApiListMap.get(Service.ServiceType.ES)==null){
             ArrayList<FreeApi> freeApipList = new ArrayList<>();
             FreeApi freeApiLocal9200 = new FreeApi("http://127.0.0.1:9200",true, Service.ServiceType.ES);
@@ -224,31 +226,52 @@ public class Configure {
     }
 
     public String addUser(String fid,byte[] symKey) {
-        if(fidCipherMap.get(fid)!=null){
-            if(!Inputer.askIfYes(br,fid +" exists. Replace it?"))return fid;
+        CidInfo cidInfo;
+        if(mainCidInfoMap.get(fid)!=null){
+            if(!Inputer.askIfYes(br,fid +" exists. Replace it?"))
+                return fid;
         }
 
         if(fid==null)System.out.println("Add new user...");
         else System.out.println("Add "+fid+" to users...");
         byte[] priKeyBytes;
+        String pubKey=null;
+
         while(true) {
-            String newFid;
             try {
-                priKeyBytes = inputPriKey(br);
-                newFid = KeyTools.priKeyToFid(priKeyBytes);
+                priKeyBytes = importOrCreatePriKey(br);
+                if(priKeyBytes==null){
+                    if(askIfYes(br, "Add a watch-only FID?")) {
+                        if(askIfYes(br,"Input the pubKey? ")){
+                            pubKey = KeyTools.inputPubKey(br);
+                            cidInfo = new CidInfo(null,pubKey);
+                        }else {
+                            cidInfo = new CidInfo();
+                            String newFid = Inputer.inputFid(br, "Input the watch-only FID:");
+                            if(newFid!=null){
+                                cidInfo.setId(newFid);
+                                cidInfo.setWatchOnly(true);
+                            }
+                            else return null;
+                        }
+                    } else continue;
+                }else{
+                    cidInfo = new CidInfo(priKeyBytes,symKey);
+                }
             }catch (Exception e){
                 System.out.println("Something wrong. Try again.");
                 continue;
             }
-            if(fid==null) {
-                    fid = newFid;
+            if(fid == null) {
+                    fid = cidInfo.getId();
                     break;
             }
-            if (newFid.equals(fid)) break;
-            System.out.println("The cipher is of "+newFid+" instead of "+fid+". \nTry again.");
+            if(!fid.equals(cidInfo.getId())) {
+                System.out.println("The cipher is of " + cidInfo.getId() + " instead of " + fid + ". \nTry again.");
+            }
         }
-        String cipher = makePriKeyCipher(priKeyBytes, symKey);
-        fidCipherMap.put(fid, cipher);
+
+        mainCidInfoMap.put(fid, cidInfo);
         saveConfig();
         return fid;
     }
@@ -274,7 +297,7 @@ public class Configure {
         if(type!=null)bb.must(m2->m2.match(m3->m3.field(TYPES).query(type.name())));
         BoolQuery boolQuery = bb.build();
         sb.query(q->q.bool(boolQuery));
-        sb.size(EsTools.READ_MAX);
+        sb.size(EsUtils.READ_MAX);
         SearchResponse<Service> result;
         try {
             result = esClient.search(sb.build(), Service.class);
@@ -375,7 +398,7 @@ public class Configure {
             valueList.add(service.getId());
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title,fields,widths,valueListList, 0, true);
+        Shower.showDataTable(title,fields,widths,valueListList, null);
     }
 //    private ApiAccount chooseApi(byte[] symKey, ServiceType type, ApipClient apipClient) {
 //        System.out.println("The " + type.name() + " is not ready. Set it...");
@@ -388,27 +411,22 @@ public class Configure {
 //        return apiAccount;
 //    }
     public ApiAccount addApiAccount(@NotNull ApiProvider apiProvider, String userFid, byte[] symKey, ApipClient initApipClient) {
-        System.out.println("Add API account for provider "+ apiProvider.getId()+"...");
+        System.out.println("Adding new account...");
+        if(askIfYes(br,"Stop adding API account for provider "+ apiProvider.getId()+"?"))return null;
         if(apiAccountMap==null)apiAccountMap = new HashMap<>();
         ApiAccount apiAccount;
         while(true) {
             apiAccount = new ApiAccount();
-            apiAccount.inputAll(symKey,apiProvider, userFid, fidCipherMap, br);
-//            if (apiAccountMap.get(apiAccount.getId()) != null) {
-//                ApiAccount apiAccount1 = apiAccountMap.get(apiAccount.getId());
-//                if (!Inputer.askIfYes(br, "There has an account for user " + apiAccount1.getUserName() + " on SID " + apiAccount1.getProviderId() + ".\n Cover it?")) {
-//                    System.out.println("Add again.");
-//                    continue;
-//                }
-//            }
+            apiAccount.inputAll(symKey,apiProvider, userFid, mainCidInfoMap, br);
             saveConfig();
             try {
-                Object client = apiAccount.connectApi(apiProvider, symKey, br, initApipClient,fidCipherMap);
+                Object client = apiAccount.connectApi(apiProvider, symKey, br, initApipClient, mainCidInfoMap);
                 if(client==null) {
-                    if(askIfYes(br,"This account can't connect withe the API. Reset again?")) continue;
+                    if(askIfYes(br,"Failed to connect "+apiAccount.getApiUrl()+". Reset?")) continue;
                     else return null;
                 }
             }catch (Exception e){
+                e.printStackTrace();
                 System.out.println("Can't connect the API provider of "+apiProvider.getId());
                 if(Inputer.askIfYes(br,"Do you want to revise the API provider?")){
                     apiProvider.updateAll(br);
@@ -436,7 +454,7 @@ public class Configure {
             valueList.add(Arrays.toString(apiProvider.getTicks()));
             valueListList.add(valueList);
         }
-        Shower.showDataTable("API providers", fields, widths, valueListList, 0, true);
+        Shower.showDataTable("API providers", fields, widths, valueListList, null);
     }
 
     public void showAccounts(Map<String, ApiAccount> apiAccountMap) {
@@ -453,7 +471,7 @@ public class Configure {
             valueList.add(apiAccount.getProviderId());
             valueListList.add(valueList);
         }
-        Shower.showDataTable("API accounts", fields, widths, valueListList, 0, true);
+        Shower.showDataTable("API accounts", fields, widths, valueListList, null);
     }
 
     public String getNonce() {
@@ -481,9 +499,8 @@ public class Configure {
     }
 
     public static void saveConfig() {
-        tools.JsonTools.writeObjectToJsonFile(configureMap, Configure.getConfDir()+ Configure.CONFIG_DOT_JSON,false);
+        JsonUtils.writeObjectToJsonFile(configureMap, Configure.getConfDir()+ Configure.CONFIG_DOT_JSON,false);
     }
-
 
     public List<String> getOwnerList() {
         return ownerList;
@@ -519,7 +536,7 @@ public class Configure {
         if(apiProvider!=null) {
             ApiAccount apiAccount = addApiAccount(apiProvider, null, symKey, initApipClient);
             if(apiAccount!=null) {
-                apiAccount.connectApi(apiProvider, symKey, br, null, fidCipherMap);
+                apiAccount.connectApi(apiProvider, symKey, br, null, mainCidInfoMap);
                 saveConfig();
             }else return;
         }
@@ -529,8 +546,13 @@ public class Configure {
     }
 
     public ApiProvider addApiProvider(Service.ServiceType serviceType, ApipClient apipClient) {
-        if(serviceType==null)System.out.println("Add new provider...");
-        else System.out.println("Add new "+ serviceType +" provider...");
+        String ask;
+        System.out.println("Adding a new API provider...");
+        if(serviceType==null)
+            ask = "Stop to add new provider?";
+        else ask = "Stop to add new "+ serviceType +" provider?";
+
+        if(askIfYes(br,ask))return null;
 
         ApiProvider apiProvider = new ApiProvider();
         if(!apiProvider.makeApiProvider(br, serviceType,apipClient))return null;
@@ -612,6 +634,7 @@ public class Configure {
         if (input == 0) {
             if(Inputer.askIfYes(br,"Add a new API account?")) {
                 ApiProvider apiProvider = chooseApiProviderOrAdd(apiProviderMap, initApipClient);
+                if(apiProvider==null)return null;
                 apiAccount = addApiAccount(apiProvider, null, symKey, initApipClient);
             }
         } else {
@@ -628,7 +651,9 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             serviceType = fch.Inputer.chooseOne(Service.ServiceType.values(), null, "Choose the API type:",br);
         ApiProvider apiProvider = chooseApiProvider(apiProviderMap, serviceType);
         if(apiProvider==null){
-            apiProvider = addApiProvider(serviceType,apipClient);
+            if(askIfYes(br,"Add new provider?"))
+                apiProvider = addApiProvider(serviceType,apipClient);
+            else return null;
         }
         return apiProvider;
     }
@@ -686,7 +711,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             for (ApiAccount apiAccount1 : getApiAccountMap().values()) {
                 if (apiAccount1.getProviderId().equals(apiProvider.getId())) {
                     String account1UserId = apiAccount1.getUserId();
-                    if (account1UserId != null && account1UserId.equals(userFid) && KeyTools.isValidFchAddr(account1UserId)) {
+                    if (account1UserId != null && account1UserId.equals(userFid) && KeyTools.isGoodFid(account1UserId)) {
                         apiAccount1.setApipClient(initApipClient);
                         if (apiAccount1.getClient() == null) apiAccount1.connectApi(apiProvider, symKey);
                         return apiAccount1;
@@ -711,7 +736,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             for (ApiAccount apiAccount1 : getApiAccountMap().values()) {
                 if (apiAccount1.getProviderId().equals(apiProvider.getId())) {
                     String account1UserId = apiAccount1.getUserId();
-                    if(account1UserId !=null && account1UserId.equals(userFid) && KeyTools.isValidFchAddr(account1UserId)) {
+                    if(account1UserId !=null && account1UserId.equals(userFid) && KeyTools.isGoodFid(account1UserId)) {
                         apiAccount1.setApipClient(initApipClient);
                         if (apiAccount1.getClient() == null) apiAccount1.connectApi(apiProvider, symKey);
                         return apiAccount1;
@@ -807,7 +832,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             if (apiAccount.getClient() == null) {
                 Object apiClient;
                 try {
-                    apiClient = apiAccount.connectApi(getApiProviderMap().get(apiAccount.getProviderId()), symKey, br, apipClient, fidCipherMap);
+                    apiClient = apiAccount.connectApi(getApiProviderMap().get(apiAccount.getProviderId()), symKey, br, apipClient, mainCidInfoMap);
                 }catch (Exception e){
                     System.out.println("Failed to connect " + apiAccount.getApiUrl() + ". Try again.");
                     continue;
@@ -834,7 +859,8 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         while(apiProvider==null) {
             apiProvider = addApiProvider(serviceType,apipClient);
             if(apiProvider!=null)break;
-            System.out.println("Failed to add API provider.");
+
+            if(!Inputer.askIfYes(br,"Failed to add API provider. Try again?"))return null;
         }
 
         if(apiProvider.getId()==null){
@@ -848,7 +874,6 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
 //        else
         apiAccount = getAccountForTheProvider(apiProvider, userFid, symKey,apipClient);
 
-        if(apiAccount==null) apiAccount = addApiAccount(apiProvider, userFid, symKey,apipClient );
         if(apiAccount!=null && apiAccount.getClient()!=null) saveConfig();
         return apiAccount;
     }
@@ -856,8 +881,8 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
 
 
     public static Configure checkPassword(BufferedReader br){
-        byte[] passwordBytes;
         Configure configure;
+        byte[] passwordBytes;
         if(configureMap.isEmpty()){
             while(true) {
                 passwordBytes = Inputer.resetNewPassword(br);
@@ -882,7 +907,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         char[] password = Inputer.inputPassword(br, "Input your password:");
         while (true) {
             if(password==null)continue;
-            passwordBytes = BytesTools.utf8CharArrayToByteArray(password);
+            passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
             passwordName = makePasswordHashName(passwordBytes);
             configure = configureMap.get(passwordName);
             if (configure != null) {
@@ -911,11 +936,49 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         while(true){    
             char[] password = Inputer.inputPassword(br, "Input your password:");
             if(password==null)return false;
-            byte[] passwordBytes = BytesTools.utf8CharArrayToByteArray(password);
+            byte[] passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
             byte[] nonceBytes = Hex.fromHex(configure.getNonce());
             byte[] symKey1 = getSymKeyFromPasswordAndNonce(passwordBytes, nonceBytes);
             if(Arrays.equals(symKey, symKey1))return true;
             System.out.println("Wrong password. Try again.");
+        }
+    }
+
+
+    public boolean checkSimplePassword(){
+        String passwordHash;
+        byte[] passwordBytes;
+
+        if(getPasswordHash()==null){
+            while(true) {
+                passwordBytes = Inputer.resetNewPassword(br);
+                if(passwordBytes!=null) {
+                    passwordHash = Hex.toHex(passwordBytes);
+                    setPasswordHash(passwordHash);
+                    saveConfig();
+                    this.symKey = Hash.sha256(passwordBytes);
+                    return true;
+                }
+                System.out.println("A password is required. Try again.");
+            }
+        }else return verifyPassword(getPasswordHash(), br);
+    }
+
+    public boolean verifyPassword(String passwordHash,BufferedReader br) {
+        byte[] passwordBytes;
+        char[] password = Inputer.inputPassword(br, "Input your password:");
+        while (true) {
+            if(password==null)continue;
+            passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
+            byte[] newHash = Hash.sha256x2(passwordBytes);
+            String newHashHex = Hex.toHex(newHash);
+            if(passwordHash.equals(newHashHex))return true;
+
+            String input = Inputer.inputString(br, "Password wrong. Try again. 'q' to quit:");
+            if (input.equals("q")) {
+                System.exit(0);
+                return false;
+            }
         }
     }
 
@@ -928,7 +991,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         Configure configure = new Configure();
         byte[] symKey;
         byte[] nonceBytes;
-        nonceBytes = BytesTools.getRandomBytes(16);
+        nonceBytes = BytesUtils.getRandomBytes(16);
         symKey = getSymKeyFromPasswordAndNonce(passwordBytes, nonceBytes);
         configure.nonce = Hex.toHex(nonceBytes);
         configure.setSymKey(symKey);
@@ -936,7 +999,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         configure.setPasswordName(name);
         configureMap.put(name,configure);
         saveConfig();
-        BytesTools.clearByteArray(passwordBytes);
+        BytesUtils.clearByteArray(passwordBytes);
         return configure;
     }
 
@@ -947,18 +1010,18 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
                 configure.setApiProviderMap(new HashMap<>());
         if(configure.getApiAccountMap() == null)
                 configure.setApiAccountMap(new HashMap<>());
-        if(configure.getFidCipherMap()==null)
-                configure.setFidCipherMap(new HashMap<>());
+        if(configure.getMainCidInfoMap()==null)
+                configure.setMainCidInfoMap(new HashMap<>());
         if(configure.getMyServiceMaskMap()==null)
                 configure.setMyServiceMaskMap(new HashMap<>());
         if(configure.getOwnerList()==null)
                 configure.setOwnerList(new ArrayList<>());
-        if(configure.fidCipherMap==null)
+        if(configure.mainCidInfoMap ==null)
             configure.initFreeApiListMap();
     }
 
     public static byte[] getSymKeyFromPasswordAndNonce(byte[] passwordBytes, byte[] nonce) {
-        return Hash.sha256x2(BytesTools.bytesMerger(passwordBytes, nonce));
+        return Hash.sha256x2(BytesUtils.bytesMerger(passwordBytes, nonce));
     }
 
     public static  <T> T parseMyServiceParams(Service myService, Class<T> tClass){
@@ -975,7 +1038,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
     public static void loadConfig(String path, BufferedReader br){
         if(path==null)path = getConfDir();
         try {
-            configureMap = JsonTools.readMapFromJsonFile(path, CONFIG_DOT_JSON, String.class,Configure.class);
+            configureMap = JsonUtils.readMapFromJsonFile(path, CONFIG_DOT_JSON, String.class,Configure.class);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -1022,31 +1085,43 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         this.esAccountId = esAccountId;
     }
 
-    public Map<String, String> getFidCipherMap() {
-        return fidCipherMap;
+    public Map<String, CidInfo> getMainCidInfoMap() {
+        return mainCidInfoMap;
     }
 
-    public void setFidCipherMap(Map<String, String> fidCipherMap) {
-        this.fidCipherMap = fidCipherMap;
+    public void setMainCidInfoMap(Map<String, CidInfo> mainCidInfoMap) {
+        this.mainCidInfoMap = mainCidInfoMap;
     }
 
     public String addOwner(BufferedReader br) {
-        String owner = fch.Inputer.inputGoodFid(br,"Input the owner FID:");
-        if(ownerList==null)ownerList = new ArrayList<>();
+        String owner = fch.Inputer.inputGoodFid(br,"Input the FID or pubKey of the owner:");
+
+        if(ownerList ==null) ownerList = new ArrayList<>();
+
         ownerList.add(owner);
+
         saveConfig();
+
         return owner;
     }
 
+
     public String chooseMainFid(byte[] symKey) {
         while(true) {
-            String fid = Inputer.chooseOne(fidCipherMap.keySet().toArray(new String[0]), null, "Choose the FID", br);
+            String fid = Inputer.chooseOne(mainCidInfoMap.keySet().toArray(new String[0]), null, "Choose the FID", br);
             if (fid == null) {
                 System.out.println("No FID chosen.");
                 if (askIfYes(br, "Add a new FID?"))
                     fid = addUser(symKey);
                 else continue;
             }
+            String fidCipher = mainCidInfoMap.get(fid).getPriKeyCipher();
+            if(fidCipher==null || fidCipher.equals("")){
+                System.out.println("This is a watch-only FID.");
+                if(askIfYes(br, "Choose this FID?"))
+                    return fid;
+                else continue;
+            }     
             return fid;
         }
     }
@@ -1066,7 +1141,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         if(serviceType!=null){
             for(String key: myServiceMaskMap.keySet()){
                 ServiceMask serviceSummary = myServiceMaskMap.get(key);
-                if(StringTools.isContainCaseInsensitive(serviceSummary.getTypes(),serviceType.name()))
+                if(StringUtils.isContainCaseInsensitive(serviceSummary.getTypes(),serviceType.name()))
                     map.put(key,serviceSummary);
             }
         }else map= myServiceMaskMap;
@@ -1132,5 +1207,13 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             }
         }
         return accountIds;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 }

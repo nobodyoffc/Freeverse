@@ -3,7 +3,7 @@ package NasaRcpTest;
 import nasa.RpcRequest;
 import nasa.data.TransactionBrief;
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,7 +19,7 @@ public class GetBalance {
 //        String url = "http://127.0.0.1:22555";
         String url = "http://127.0.0.1:8332";
         result = getBalance("1", true, url, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
     }
 
     public double getBalance(String minConf, boolean includeWatchOnly, String url, String username, String password) {
@@ -62,7 +62,7 @@ public class GetBalance {
             }
 
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 

@@ -5,16 +5,16 @@ import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
-import clients.Client;
 import constants.Constants;
 import constants.FieldNames;
 import crypto.CryptoDataByte;
+import crypto.Decryptor;
 import crypto.Encryptor;
 import crypto.KeyTools;
 import db.LocalDB;
 import fcData.AlgorithmId;
 import fcData.ContactDetail;
-import fcData.FcEntity;
+import fch.fchData.Cid;
 import feip.feipData.Contact;
 import feip.feipData.ContactOpData;
 import feip.feipData.Feip;
@@ -22,60 +22,56 @@ import feip.feipData.Service;
 import feip.feipData.Service.ServiceType;
 
 import org.jetbrains.annotations.NotNull;
-import org.mapdb.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import tools.DateTools;
-import tools.Hex;
-import tools.JsonTools;
-import tools.MapQueue;
-import tools.StringTools;
+import utils.DateUtils;
+import utils.Hex;
+import utils.JsonUtils;
+import utils.MapQueue;
+import utils.StringUtils;
 
 import java.io.BufferedReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
+import static constants.FieldNames.CIPHER;
+import static constants.FieldNames.ID;
 import static constants.IndicesNames.CONTACT;
+import static constants.Strings.TIME;
 
 public class ContactHandler extends Handler<ContactDetail> {
     private static final Logger log = LoggerFactory.getLogger(ContactHandler.class);
-    public static final String FAKE_CONTACT_DETAIL = "fakeContactDetail";
     public static String name = HandlerType.CONTACT.name();
     public static final Object[] modules = new Object[]{
             Service.ServiceType.APIP,
-            Handler.HandlerType.CASH
+            Handler.HandlerType.CASH,
+            HandlerType.CONTACT
     };
     private final ApipClient apipClient;
     private final byte[] symKey;
     private final String myPriKeyCipher;
-    private final byte[] myPubKey;
+    private final String myPubKey;
     private Map<String,String> fakeContactCipherMap;
     private final MapQueue<String, ContactDetail> recentContactDetailMapQueue;
 
-
     public ContactHandler(Settings settings) {
-        super(settings, HandlerType.CONTACT, LocalDB.SortType.UPDATE_ORDER, FcEntity.getMapDBSerializer(ContactDetail.class), ContactDetail.class, true);
+        super(settings, HandlerType.CONTACT, LocalDB.SortType.UPDATE_ORDER, ContactDetail.class, true, true);
+
         this.apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         this.symKey = settings.getSymKey();
         this.myPriKeyCipher = settings.getMyPriKeyCipher();
-        this.myPubKey = KeyTools.priKeyToPubKey(Client.decryptPriKey(myPriKeyCipher, symKey));
+        this.myPubKey = settings.getConfig().getMainCidInfoMap().get(mainFid).getPubKey();
         this.recentContactDetailMapQueue = new MapQueue<>(200);
     }
 
     @Override
     public void menu(BufferedReader br, boolean withSettings) {
+        this.cashHandler = (CashHandler)settings.getHandler(HandlerType.CASH);
+        if(this.cashHandler==null)this.cashHandler = new CashHandler(settings);
+
         Menu menu = new Menu("Contact Menu", this::close);
         addBasicMenuItems(br,menu);
         menu.add("List Locally Removed Contacts", () -> reloadRemovedItems(br));
@@ -92,9 +88,63 @@ public class ContactHandler extends Handler<ContactDetail> {
         menu.showAndSelect(br);
     }
 
+    public List<String> searchAndChooseFidList(BufferedReader br){
+        List<String> fidList = new ArrayList<>();
+        String op = Inputer.chooseOne(new String[]{"Input FIDs","Search in contacts","Search on chain"}, null, "Select an algorithm", br);
+        switch (op) {
+            case "Input FIDs" -> {
+                String[] fidArray = Inputer.inputFidArray(br, "Input the FIDs of the receivers. Enter to send to yourself:", 0);
+                if (fidArray.length > 0) {
+                    fidList.addAll(Arrays.asList(fidArray));
+                }
+            }
+            case "Search in contacts" -> {
+                List<ContactDetail> contactDetailList = searchFidInContact(br);
+                if (contactDetailList != null && !contactDetailList.isEmpty()) {
+                    List<ContactDetail> chosenContactDetailList = Inputer.chooseMultiFromListGeneric(contactDetailList, 0, 20, "Choose the contacts to add:", br);
+                    if (chosenContactDetailList != null && !chosenContactDetailList.isEmpty()) {
+                        fidList.addAll(chosenContactDetailList.stream().map(ContactDetail::getFid).collect(Collectors.toList()));
+                    }
+                }
+            }
+            case "Search on chain" -> {
+                List<Cid> cidList = searchCidOnChain(br);
+                if (cidList != null && !cidList.isEmpty()) {
+                    List<Cid> chosenCidList = Inputer.chooseMultiFromListGeneric(cidList, 0, 20, "Choose the contacts to add:", br);
+                    if (chosenCidList != null && !chosenCidList.isEmpty()) {
+                        fidList.addAll(chosenCidList.stream().map(Cid::getId).toList());
+                    }
+                }
+            }
+        }
+        return fidList;
+    }
+
+    public List<ContactDetail> searchFidInContact(BufferedReader br){
+        List<ContactDetail> contactDetailList = new ArrayList<>();
+        while(true){
+            List<ContactDetail> batchContactDetailList = searchContacts(br, true, false);
+            contactDetailList.addAll(batchContactDetailList);
+            if(Inputer.askIfYes(br, "Search more?"))continue;
+            else break;
+        }
+        return contactDetailList;
+    }
+
+    public List<Cid> searchCidOnChain(BufferedReader br){
+        List<Cid> cidList = new ArrayList<>();
+        while(true){
+            List<Cid> batchCidList = apipClient.searchCid(br);
+            cidList.addAll(batchCidList);
+            if(Inputer.askIfYes(br, "Search more?"))continue;
+            else break;
+        }
+        return cidList;
+    }
+
     protected void reloadRemovedItems(BufferedReader br) {
-        Map<String, Long> removedItems = getAllFromMap(LocalDB.LOCAL_REMOVED_MAP, Serializer.LONG);
-        List<String> chosenIds = listAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
+        Map<String, Long> removedItems = localDB.getAllFromMap(LocalDB.LOCAL_REMOVED_MAP);
+        List<String> chosenIds = Shower.listAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
         Map<String, Contact> items = reloadContactsFromChain(br, chosenIds);
         
         if(items.isEmpty()) System.out.println("No item reloaded.");
@@ -137,7 +187,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         putAllContactDetail(contactDetailList);
 
         List<String> reloadedIdList = reloadedList.stream().map(Contact::getId).collect(Collectors.toList());
-        removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
+        localDB.removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
 
         handleFakeContactData(br);
 
@@ -255,8 +305,8 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
     }
 
-    public String addContact(BufferedReader br) {
-        return opContact(null, null, ContactOpData.Op.ADD, br);
+    public void addContact(BufferedReader br) {
+        opContact(null, null, ContactOpData.Op.ADD, br);
     }
 
     public void addContacts(List<ContactDetail> itemList, @Nullable BufferedReader br) {
@@ -283,8 +333,10 @@ public class ContactHandler extends Handler<ContactDetail> {
     }
 
     public void deleteContacts(BufferedReader br) {
-        List<ContactDetail> chosenContacts = chooseItems(br);
-        deleteContacts(chosenContacts, br);
+        if (dbEmpty(br)) return;
+        List<ContactDetail> finalChosenList = chooseItemList(br);
+        if(finalChosenList!=null && finalChosenList.size()>0)
+            deleteContacts(finalChosenList, br);
     }
 
     public void deleteContacts(List<ContactDetail> chosenContacts, BufferedReader br) {
@@ -294,13 +346,13 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
 
         if (Inputer.askIfYes(br, "View them before delete?")) {
-            showItemList("Contacts", chosenContacts, 0);
+            Shower.showOrChooseListInPages("Chosen  Contacts", chosenContacts, br,true, ContactDetail.class);
         }
 
         if (Inputer.askIfYes(br, "Delete " + chosenContacts.size() + " contacts?")) {
             List<String> contactIds = new ArrayList<>();
             for (ContactDetail contact : chosenContacts) {
-                contactIds.add(contact.getContactId());
+                contactIds.add(contact.getId());
             }
 
             String result = deleteContact(contactIds, br);
@@ -318,7 +370,7 @@ public class ContactHandler extends Handler<ContactDetail> {
     public void putAllContactDetail(List<ContactDetail> items) {
         Map<String, ContactDetail> contactDetailMap = new HashMap<>();
         for (ContactDetail item : items) {
-            contactDetailMap.put(item.getContactId(), item);
+            contactDetailMap.put(item.getId(), item);
         }
         putAllContactDetail(contactDetailMap);
     }
@@ -336,7 +388,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         ContactOpData contactOpData = new ContactOpData();
         contactOpData.setOp(op.toLowerCase());
         ContactDetail contactDetail = new ContactDetail();
-        byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
+        byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         if (priKey == null) {
             System.out.println("Failed to get the priKey of " + mainFid);
             return null;
@@ -350,20 +402,12 @@ public class ContactHandler extends Handler<ContactDetail> {
                 if (fid == null) return null;
                 contactDetail.setFid(fid);
             }
+            contactDetail.setTitles(Inputer.inputStringList(br, "Input title:",0));
             contactDetail.setMemo(Inputer.inputString(br, "Input memo:"));
             contactDetail.setSeeStatement(Inputer.askIfYes(br, "See its statements?"));
             contactDetail.setSeeWritings(Inputer.askIfYes(br, "See its writings?"));
 
-            Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-            CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonTools.toJson(contactDetail).getBytes(), myPubKey);
-            if (cryptoDataByte.getCode() != 0) {
-                log.error("Failed to encrypt.");
-                return null;
-            }
-            contactOpData.setAlg(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7.getDisplayName());
-            byte[] b = cryptoDataByte.toBundle();
-            String cipher = Base64.getEncoder().encodeToString(b);
-            contactOpData.setCipher(cipher);
+            if (!encryptContactDetail(contactOpData, contactDetail)) return null;
         } else {
             if (contactIds == null) return null;
             contactOpData.setContactIds(contactIds);
@@ -380,7 +424,7 @@ public class ContactHandler extends Handler<ContactDetail> {
             if (Hex.isHex32(result)) {
                 System.out.println("The contact is " + op.toLowerCase() + "ed: " + result + ".\nWait a few minutes for confirmations before updating contacts...");
                 return result;
-            } else if (StringTools.isBase64(result)) {
+            } else if (StringUtils.isBase64(result)) {
                 System.out.println("Sign the TX and broadcast it:\n" + result);
             } else {
                 System.out.println("Failed to " + op.toLowerCase() + " contact:" + result);
@@ -389,12 +433,28 @@ public class ContactHandler extends Handler<ContactDetail> {
         return null;
     }
 
+    public boolean encryptContactDetail(ContactOpData contactOpData, ContactDetail contactDetail) {
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+        if(myPubKey==null)return false;
+        byte[] pubKey = Hex.fromHex(myPubKey);
+        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonUtils.toJson(contactDetail).getBytes(), pubKey);
+        if (cryptoDataByte.getCode() != 0) {
+            log.error("Failed to encrypt.");
+            return false;
+        }
+        contactOpData.setAlg(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7.getDisplayName());
+        byte[] b = cryptoDataByte.toBundle();
+        String cipher = Base64.getEncoder().encodeToString(b);
+        contactOpData.setCipher(cipher);
+        return true;
+    }
+
     public void freshOnChainContacts(BufferedReader br) {
         if(apipClient==null){
             System.out.println("Unable to update on chain data due to the absence of ApipClient.");
             return;
         }
-        Object lastHeightObj = getMeta(FieldNames.LAST_HEIGHT);
+        Object lastHeightObj = localDB.getMeta(FieldNames.LAST_HEIGHT);
         long lastHeight;
         if(lastHeightObj==null) lastHeight = 0;
         else lastHeight = ((Number)lastHeightObj).longValue();
@@ -408,7 +468,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
             System.out.println("You have " + contactDetailList.size() + " updated contacts.");
             if (contactDetailList.size() > 0)
-                chooseToShow(contactDetailList, br);
+                chooseToShowNiceJsonList(contactDetailList, br);
 
             handleFakeContactData(br);
 
@@ -421,9 +481,27 @@ public class ContactHandler extends Handler<ContactDetail> {
     private void handleFakeContactData(BufferedReader br) {
         if (!fakeContactCipherMap.isEmpty()) {
             if (Inputer.askIfYes(br, "Got " + fakeContactCipherMap.size() + " unreadable contacts. Check them?")) {
+
+                List<List<Object>> valueListList = new ArrayList<>();
+
+                String[] fields = new String[]{
+                        ID,
+                        TIME+" & " +CIPHER
+                };
+                int[] widths = new int[]{
+                        64,
+                        64
+                };
+
                 for (Map.Entry<String, String> entry : fakeContactCipherMap.entrySet()) {
-                    System.out.println(entry.getKey() + ": " + entry.getValue());
+                    List<Object> valueList = new ArrayList<>();
+                    valueList.add(entry.getKey());
+                    valueList.add(entry.getValue());
+
+                    valueListList.add(valueList);
                 }
+
+                Shower.showDataTable("Failed to decrypted",fields, widths, valueListList, null);
             }
             deleteUnreadableContacts(br);
             fakeContactCipherMap.clear();
@@ -445,31 +523,6 @@ public class ContactHandler extends Handler<ContactDetail> {
         return Feip.fromProtocolName(Feip.ProtocolName.CONTACT);
     }
 
-    @Nullable
-    private static List<String> listAndChooseFromStringLongMap(BufferedReader br, Map<String, Long> removedItems, String ask) {
-        if (removedItems == null || removedItems.isEmpty()) {
-            System.out.println("No locally removed items found.");
-            return null;
-        }
-
-        // Show items and let user choose
-        Map<String, Long> selectedDisplayItems = Inputer.chooseMultiFromMapGeneric(
-                removedItems,
-                null,
-                0,
-                Shower.DEFAULT_SIZE,
-                ask,
-                br
-        );
-
-        if (selectedDisplayItems == null || selectedDisplayItems.isEmpty()) {
-            return null;
-        }
-
-        // Extract IDs from selected display strings
-        return selectedDisplayItems.keySet().stream().toList();
-    }
-
     private void clearAllLocallyRemoved(BufferedReader br) {
         if(Inputer.askIfYes(br, "Are you sure you want to clear all locally removed records?")){
             clearAllLocallyRemoved();
@@ -484,7 +537,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         Map<String, Contact> localDeletedContacts = new HashMap<>();
         if(deletedIds!=null && !deletedIds.isEmpty()) {
             System.out.println("There are "+deletedIds.size()+" on chain deleted record in local DB.");
-            chosenIds = listAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
+            chosenIds = Shower.listAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
             if(chosenIds!=null && !chosenIds.isEmpty()) {
                 localDeletedContacts = reloadContactsFromChain(br, chosenIds);
                 count += localDeletedContacts.size();
@@ -499,15 +552,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 //            return;
         }
         Iterator<Contact> iterator = onChainDeleted.iterator();
-        Set<String> checkedRemovedIds = null;
-        if(deletedIds!=null && !deletedIds.isEmpty())
-            checkedRemovedIds = deletedIds.keySet();
-
-        while (iterator.hasNext()){
-            if(checkedRemovedIds != null && checkedRemovedIds.contains(iterator.next().getId()))
-                iterator.remove();
-            else iterator.next();
-        }
+        removeDeleted(deletedIds, iterator);
 
         List<Contact> finalChosenDeleted = new ArrayList<>();
         finalChosenDeleted.addAll(onChainDeleted);
@@ -515,7 +560,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
         List<ContactDetail> contactDetailList = contactToContactDetail(finalChosenDeleted);
 
-        List<ContactDetail> chosenContacts = chooseContactDetailList(contactDetailList,  0, br);
+        List<ContactDetail> chosenContacts = Shower.showOrChooseListInPages("Chosen  Contacts", contactDetailList, br,true, ContactDetail.class);
 
         recoverContacts(null,chosenContacts,br);
 
@@ -537,7 +582,7 @@ public class ContactHandler extends Handler<ContactDetail> {
             ContactDetail contactDetail = ContactDetail.fromContact(contact, priKey, apipClient);
             if (contactDetail == null) {
                 fakeContactCipherMap.put(contact.getId(),
-                    DateTools.longToTime(contact.getBirthTime(),DateTools.LONG_FORMAT)+" "+contact.getCipher());
+                    DateUtils.longToTime(contact.getBirthTime()*1000, DateUtils.LONG_FORMAT)+" "+contact.getCipher());
                 continue;
             }
             contactDetailList.add(contactDetail);
@@ -545,43 +590,43 @@ public class ContactHandler extends Handler<ContactDetail> {
 
         return contactDetailList;
     }
-
-    private List<ContactDetail> chooseContactDetailList(List<ContactDetail> currentList, int totalDisplayed, BufferedReader br) {
-
-        List<ContactDetail> chosenContacts = new ArrayList<>();
-        String title = "Choose Contacts";
-        ContactDetail.showContactDetailList(currentList, title, totalDisplayed,true);
-
-        System.out.println("Enter contact numbers to select (comma-separated), 'a' for all. 'q' to quit, or press Enter for more:");
-        String input = Inputer.inputString(br);
-
-        if ("".equals(input)) {
-            return null;  // Signal to continue to next page
-        }
-
-        if ("a".equals(input)) {
-            return currentList;  // Signal to continue to next page
-        }
-
-        if (input.equals("q")) {
-            chosenContacts.add(null);  // Signal to break the loop
-            return chosenContacts;
-        }
-
-        String[] inputs = input.split(",");
-        for (String input1 : inputs) {
-            try {
-                int index = Integer.parseInt(input1.trim()) - 1;
-                if (index >= 0 && index < currentList.size()) {
-                    chosenContacts.add(currentList.get(index)); 
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid input: " + input1);
-            }
-        }
-
-        return chosenContacts;
-    }
+//
+//    private List<ContactDetail> chooseContactDetailList(List<ContactDetail> currentList, int totalDisplayed, BufferedReader br) {
+//
+//        List<ContactDetail> chosenContacts = new ArrayList<>();
+//        String title = "Choose Contacts";
+//        ContactDetail.showContactDetailList(currentList, title, totalDisplayed,true);
+//
+//        System.out.println("Enter contact numbers to select (comma-separated), 'a' for all. 'q' to quit, or press Enter for more:");
+//        String input = Inputer.inputString(br);
+//
+//        if ("".equals(input)) {
+//            return null;  // Signal to continue to next page
+//        }
+//
+//        if ("a".equals(input)) {
+//            return currentList;  // Signal to continue to next page
+//        }
+//
+//        if (input.equals("q")) {
+//            chosenContacts.add(null);  // Signal to break the loop
+//            return chosenContacts;
+//        }
+//
+//        String[] inputs = input.split(",");
+//        for (String input1 : inputs) {
+//            try {
+//                int index = Integer.parseInt(input1.trim()) - 1;
+//                if (index >= 0 && index < currentList.size()) {
+//                    chosenContacts.add(currentList.get(index));
+//                }
+//            } catch (NumberFormatException e) {
+//                System.out.println("Invalid input: " + input1);
+//            }
+//        }
+//
+//        return chosenContacts;
+//    }
 
     private ContactOpData encryptContact(ContactDetail contactDetail) {
         if(contactDetail==null) return null;
@@ -589,22 +634,11 @@ public class ContactHandler extends Handler<ContactDetail> {
         // Clear fields that shouldn't be included in encryption
         contactDetail.setUpdateHeight(null);
         contactDetail.setId(null);
-        contactDetail.setContactId(null);
+
         
         ContactOpData contactOpData = new ContactOpData();
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonTools.toJson(contactDetail).getBytes(), myPubKey);
-        
-        if (cryptoDataByte.getCode() != 0) {
-            log.error("Failed to encrypt.");
-            return null;
-        }
-        
-        contactOpData.setAlg(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7.getDisplayName());
-        byte[] b = cryptoDataByte.toBundle();
-        String cipher = Base64.getEncoder().encodeToString(b);
-        contactOpData.setCipher(cipher);
-        
+        if (!encryptContactDetail(contactOpData, contactDetail)) return null;
+
         return contactOpData;
     }
 
@@ -637,7 +671,7 @@ public class ContactHandler extends Handler<ContactDetail> {
                 return false;
             }
             List<String> ids = chosenContacts.stream()
-                .map(ContactDetail::getContactId)
+                .map(ContactDetail::getId)
                 .collect(Collectors.toList());
             result = recoverContact(ids, br);
         } else {
@@ -646,20 +680,20 @@ public class ContactHandler extends Handler<ContactDetail> {
 
         if (Hex.isHex32(result)) {
             System.out.println("Recovered contacts: " + (contactIds != null ? contactIds : chosenContacts.stream()
-                .map(ContactDetail::getContactId)
-                .collect(Collectors.toList())) + " in TX " + result + ".");
+                .map(ContactDetail::getId)
+                .toList()) + " in TX " + result + ".");
             if (contactIds != null) {
-                removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, contactIds);
-            } else if (chosenContacts != null) {
+                localDB.removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, contactIds);
+            } else {
                 List<String> ids = chosenContacts.stream()
-                    .map(ContactDetail::getContactId)
+                    .map(ContactDetail::getId)
                     .collect(Collectors.toList());
-                removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, ids);
+                localDB.removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, ids);
             }
             return true;
         } else {
             System.out.println("Failed to recover contacts: " + (contactIds != null ? contactIds : chosenContacts.stream()
-                .map(ContactDetail::getContactId)
+                .map(ContactDetail::getId)
                 .collect(Collectors.toList())) + ": " + result);
             return false;
         }
@@ -673,7 +707,7 @@ public class ContactHandler extends Handler<ContactDetail> {
     public void opItems(List<ContactDetail> items, String ask, BufferedReader br) {
         Menu menu = new Menu("Contact Operations", () -> {});
         menu.add("Show details", () -> showItemDetails(items, br));
-        menu.add("Remove from local", () -> removeItems(items.stream().map(ContactDetail::getContactId).collect(Collectors.toList()), br));
+        menu.add("Remove from local", () -> removeItems(items.stream().map(ContactDetail::getId).collect(Collectors.toList()), br));
         menu.add("Delete on chain", () -> deleteContacts(items, br));
         menu.add("Recover on chain", () -> recoverContacts(null, items, br));
         menu.add("Add to chain", () -> addContacts(items, br));

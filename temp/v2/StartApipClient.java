@@ -17,10 +17,10 @@ import crypto.Decryptor;
 import crypto.Hash;
 import crypto.KeyTools;
 import crypto.old.EccAes256K1P7;
-import tools.BytesTools;
-import tools.Hex;
-import tools.ImageTools;
-import tools.JsonTools;
+import utils.BytesTools;
+import utils.Hex;
+import utils.ImageTools;
+import utils.JsonTools;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;

@@ -9,9 +9,11 @@ import crypto.Algorithm.Bitcore;
 import crypto.Algorithm.Ecc256K1;
 import crypto.old.EccAes256K1P7;
 import fcData.AlgorithmId;
-import tools.BytesTools;
-import tools.FileTools;
-import tools.Hex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import utils.BytesUtils;
+import utils.FileUtils;
+import utils.Hex;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.jetbrains.annotations.NotNull;
 
@@ -33,10 +35,36 @@ import java.util.HexFormat;
 
 public class Decryptor {
 
-//    AlgorithmId algorithmId;
-
+    protected static final Logger log = LoggerFactory.getLogger(Decryptor.class);
 
     public Decryptor() {}
+
+    public static byte[] decryptPriKey(String userPriKeyCipher, byte[] symKey) {
+        CryptoDataByte cryptoResult = new Decryptor().decryptJsonBySymKey(userPriKeyCipher, symKey);
+        if (cryptoResult.getCode() != 0) {
+            cryptoResult.printCodeMessage();
+            return null;
+        }
+        return cryptoResult.getData();
+    }
+
+    @org.jetbrains.annotations.Nullable
+    public static String decryptFile(String path, String gotFile,byte[]symKey,String priKeyCipher) {
+        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(priKeyCipher,symKey);
+        if(cryptoDataByte.getCode()!=0){
+            log.debug("Failed to decrypt the user priKey.");
+            log.debug(cryptoDataByte.getMessage());
+            return null;
+        }
+        byte[] priKey = cryptoDataByte.getData();
+        CryptoDataByte cryptoDataByte1 = new Decryptor().decryptFileToDidByAsyOneWay(path, gotFile, path, priKey);
+        if(cryptoDataByte1.getCode()!=0){
+            log.debug("Failed to decrypt file "+ Path.of(path, gotFile));
+            return null;
+        }
+        BytesUtils.clearByteArray(priKey);
+        return Hex.toHex(cryptoDataByte1.getDid());
+    }
 
     public CryptoDataByte decrypt(byte[] bundle, byte[] key){
         return decryptBundleBySymKey(bundle,key);
@@ -172,18 +200,18 @@ public class Decryptor {
     }
 
     public CryptoDataByte decryptFileByPassword(@NotNull String cipherFileName, @NotNull String dataFileName, @NotNull char[] password){
-        FileTools.createFileWithDirectories(dataFileName);
+        FileUtils.createFileWithDirectories(dataFileName);
 
 
         CryptoDataByte cryptoDataByte = decryptFileBySymKey(new File(cipherFileName), new File(dataFileName), null, password);
-        cryptoDataByte.setPassword(BytesTools.charArrayToByteArray(password, StandardCharsets.UTF_8));
+        cryptoDataByte.setPassword(BytesUtils.charArrayToByteArray(password, StandardCharsets.UTF_8));
         cryptoDataByte.setType(EncryptType.Password);
 
         return cryptoDataByte;
     }
 
     public CryptoDataByte decryptFileBySymKey(@NotNull String cipherFileName, @NotNull String dataFileName, @NotNull byte[]key){
-        FileTools.createFileWithDirectories(dataFileName);
+        FileUtils.createFileWithDirectories(dataFileName);
         return decryptFileBySymKey(new File(cipherFileName),new File(dataFileName),key, null);
     }
     public static String recoverEncryptedFileName(String encryptedFileName){
@@ -454,10 +482,10 @@ public class Decryptor {
         if(destFullName!=null)
             destFileForFos=destFullName;
         else {
-            tempDestFileName = FileTools.getTempFileName();
+            tempDestFileName = FileUtils.getTempFileName();
             destFileForFos = tempDestFileName;
         }
-        FileTools.createFileWithDirectories(destFileForFos);
+        FileUtils.createFileWithDirectories(destFileForFos);
 
         try(FileOutputStream fos = new FileOutputStream(destFileForFos);
             FileInputStream fis = new FileInputStream(srcFullName)){

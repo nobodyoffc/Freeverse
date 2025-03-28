@@ -10,10 +10,10 @@ import fcData.AlgorithmId;
 import fcData.ReplyBody;
 import fcData.Hat;
 import fcData.Signature;
-import tools.BytesTools;
-import tools.DateTools;
-import tools.Hex;
-import tools.JsonTools;
+import utils.BytesUtils;
+import utils.DateUtils;
+import utils.Hex;
+import utils.JsonUtils;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +26,7 @@ import java.util.List;
 public class MsgUnit implements Comparable<MsgUnit> {
 
     private transient String idStr; //for database, time+nonce
-    private transient BytesTools.ByteArrayAsKey idBytes;
+    private transient BytesUtils.ByteArrayAsKey idBytes;
 
     private final transient byte[] MAGIC = "FCTU".getBytes();  //for file
     private transient Integer size;  //for file
@@ -106,7 +106,7 @@ public class MsgUnit implements Comparable<MsgUnit> {
     }
 
     public MsgUnit() {
-        this.nonce = Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
     }
 //    public TransferUnit(String from, ToType toType, String to, DataType dataType) {
@@ -123,10 +123,10 @@ public class MsgUnit implements Comparable<MsgUnit> {
     }
 
     public String toJson() {
-        return JsonTools.toJson(this);
+        return JsonUtils.toJson(this);
     }
     public String toNiceJson() {
-        return JsonTools.toNiceJson(this);
+        return JsonUtils.toNiceJson(this);
     }
     @Override
     public String toString(){
@@ -230,13 +230,13 @@ public class MsgUnit implements Comparable<MsgUnit> {
                 case FID -> byteArrayBuilder.write(KeyTools.addrToHash160(to));
                 case GROUP,TEAM,ROOM -> Hex.fromHex(this.to);
                 case FID20_LIST -> {
-                    byteArrayBuilder.write(BytesTools.intToByteArray(this.toList.size()));
+                    byteArrayBuilder.write(BytesUtils.intToByteArray(this.toList.size()));
                     for(String fid:toList){
                         byteArrayBuilder.write(KeyTools.addrToHash160(fid));
                     }
                 }
                 case GROUP_LIST,TEAM_LIST,ROOM_LIST -> {
-                    byteArrayBuilder.write(BytesTools.intToByteArray(this.toList.size()));
+                    byteArrayBuilder.write(BytesUtils.intToByteArray(this.toList.size()));
                     for(String id:toList){
                         byteArrayBuilder.write(Hex.fromHex(id));
                     }
@@ -251,21 +251,21 @@ public class MsgUnit implements Comparable<MsgUnit> {
             }
 
             if(this.flag==null)this.flag = 0;
-            if(this.time!=null) this.flag  = BytesTools.setBit(flag,0,true);
-            if(this.nonce!=null) this.flag =BytesTools.setBit(flag,1,true);
-            if(this.did!=null) this.flag = BytesTools.setBit(flag,2,true);
+            if(this.time!=null) this.flag  = BytesUtils.setBit(flag,0,true);
+            if(this.nonce!=null) this.flag = BytesUtils.setBit(flag,1,true);
+            if(this.did!=null) this.flag = BytesUtils.setBit(flag,2,true);
 
             byteArrayBuilder.write(this.flag);
 
-            if(this.time!=null) byteArrayBuilder.write(BytesTools.longToBytes(this.time));
-            if(this.nonce!=null) byteArrayBuilder.write(BytesTools.intToByteArray(this.nonce));
+            if(this.time!=null) byteArrayBuilder.write(BytesUtils.longToBytes(this.time));
+            if(this.nonce!=null) byteArrayBuilder.write(BytesUtils.intToByteArray(this.nonce));
             if(this.did!=null) byteArrayBuilder.write(Hex.fromHex(this.did));
 
             byteArrayBuilder.write(this.dataType.number);
             switch (this.dataType){
                 case BYTES,RECEIPT -> byteArrayBuilder.write((byte[]) data);
                 case TEXT -> byteArrayBuilder.write(((String)data).getBytes());
-                default -> byteArrayBuilder.write(JsonTools.toJson(data).getBytes());
+                default -> byteArrayBuilder.write(JsonUtils.toJson(data).getBytes());
             }
 
             this.bytes = byteArrayBuilder.toByteArray();
@@ -310,7 +310,7 @@ public class MsgUnit implements Comparable<MsgUnit> {
                 int itemLength = 20;
                 byte[] sizeBytes = new byte[sizeLength];
                 buffer.get(sizeBytes);
-                int size = BytesTools.bytesToIntBE(sizeBytes);
+                int size = BytesUtils.bytesToIntBE(sizeBytes);
                 toBytes = new byte[itemLength];
                 msgUnit.toList = new ArrayList<>();
                 for(;size>0;size--) {
@@ -324,7 +324,7 @@ public class MsgUnit implements Comparable<MsgUnit> {
                 int itemLength = 32;
                 byte[] sizeBytes = new byte[sizeLength];
                 buffer.get(sizeBytes);
-                int size = BytesTools.bytesToIntBE(sizeBytes);
+                int size = BytesUtils.bytesToIntBE(sizeBytes);
                 toBytes = new byte[itemLength];
                 msgUnit.toList = new ArrayList<>();
                 for(;size>0;size--) {
@@ -345,15 +345,15 @@ public class MsgUnit implements Comparable<MsgUnit> {
 
         byte flag = buffer.get();
         // Extract time
-        if(Boolean.TRUE.equals(BytesTools.getBit(flag,0)))
+        if(Boolean.TRUE.equals(BytesUtils.getBit(flag,0)))
             msgUnit.time = buffer.getLong();
 
         // Extract nonce
-        if(Boolean.TRUE.equals(BytesTools.getBit(flag,1)))
+        if(Boolean.TRUE.equals(BytesUtils.getBit(flag,1)))
             msgUnit.nonce = buffer.getInt();
 
         // Extract did
-        if(Boolean.TRUE.equals(BytesTools.getBit(flag,2))) {
+        if(Boolean.TRUE.equals(BytesUtils.getBit(flag,2))) {
             byte[] didBytes = new byte[32];
             buffer.get(didBytes);
             msgUnit.did = new String(didBytes);
@@ -399,18 +399,18 @@ public class MsgUnit implements Comparable<MsgUnit> {
     public String makeIdStr() {
         int nonce;
         if(this.nonce!=null)nonce =this.nonce;
-        else nonce= Math.abs(BytesTools.bytesToIntBE(BytesTools.getRandomBytes(4)));
+        else nonce= Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
 
         long time;
         if(this.time!=null)time=this.time;
         else time = System.currentTimeMillis();
 
-        String date = DateTools.longToTime(time,"yyyyMMddHHmmssSSS");
+        String date = DateUtils.longToTime(time,"yyyyMMddHHmmssSSS");
         this.idStr = date+"_"+nonce;
         return this.idStr;
     }
     public byte[] makeIdBytes() {
-        this.idBytes = new BytesTools.ByteArrayAsKey(BytesTools.bytesMerger(BytesTools.longToBytes(this.time), BytesTools.intToByteArray(this.nonce)));
+        this.idBytes = new BytesUtils.ByteArrayAsKey(BytesUtils.bytesMerger(BytesUtils.longToBytes(this.time), BytesUtils.intToByteArray(this.nonce)));
         return bytes;
     }
 
@@ -546,11 +546,11 @@ public class MsgUnit implements Comparable<MsgUnit> {
         this.flag = flag;
     }
 
-    public BytesTools.ByteArrayAsKey getIdBytes() {
+    public BytesUtils.ByteArrayAsKey getIdBytes() {
         return idBytes;
     }
 
-    public void setIdBytes(BytesTools.ByteArrayAsKey idBytes) {
+    public void setIdBytes(BytesUtils.ByteArrayAsKey idBytes) {
         this.idBytes = idBytes;
     }
 }

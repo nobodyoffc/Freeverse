@@ -43,7 +43,7 @@ public class FidInfo {
         byte[] priKey32;
 
         while (true) {
-            priKey32 = Inputer.inputPriKey(br);
+            priKey32 = Inputer.importOrCreatePriKey(br);
             if (priKey32 == null) return null;
 
             FidInfo fidInfo = new FidInfo(priKey32, initSymKey);

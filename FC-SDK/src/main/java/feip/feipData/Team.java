@@ -1,7 +1,7 @@
 package feip.feipData;
 
 import fcData.FcObject;
-import tools.JsonTools;
+import utils.JsonUtils;
 
 public class Team extends FcObject {
 
@@ -30,13 +30,13 @@ public class Team extends FcObject {
 	private Boolean active;
 
 	public String toJson(){
-		return JsonTools.toJson(this);
+		return JsonUtils.toJson(this);
 	}
 	public String toNiceJson(){
-		return JsonTools.toNiceJson(this);
+		return JsonUtils.toNiceJson(this);
 	}
 	public static Team fromJson(String json){
-		return JsonTools.fromJson(json, Team.class);
+		return JsonUtils.fromJson(json, Team.class);
 	}
 	public String getOwner() {
 		return owner;

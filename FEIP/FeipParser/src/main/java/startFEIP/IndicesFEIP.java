@@ -1,6 +1,6 @@
 package startFEIP;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import constants.IndicesNames;
@@ -27,9 +27,9 @@ public class IndicesFEIP {
 		String parseMarkJsonStr = "{\"mappings\":{\"properties\":{\"fileName\":{\"type\":\"wildcard\"},\"lastHeight\":{\"type\":\"long\"},\"lastId\":{\"type\":\"keyword\"},\"lastIndex\":{\"type\":\"long\"},\"length\":{\"type\":\"short\"},\"pointer\":{\"type\":\"long\"}}}}";
 
 		// EsTools.createIndex(esClient, IndicesNames.CID, cidJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.CID_HISTORY, cidHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.REPUTATION_HISTORY, repuHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.FEIP_MARK, parseMarkJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.CID_HISTORY, cidHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.REPUTATION_HISTORY, repuHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.FEIP_MARK, parseMarkJsonStr);
 
 		String protocolJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"type\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"wildcard\"},\"name\":{\"type\":\"wildcard\"},\"did\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"waiters\":{\"type\":\"keyword\"},\"preDid\":{\"type\":\"keyword\"},\"fileUrls\":{\"type\":\"text\"},\"title\":{\"type\":\"wildcard\"},\"owner\":{\"type\":\"wildcard\"},\"birthTxId\":{\"type\":\"keyword\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"},\"closed\":{\"type\":\"boolean\"},\"closeStatement\":{\"type\":\"text\"}}}}";
 		String protocolHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"type\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"wildcard\"},\"name\":{\"type\":\"wildcard\"},\"did\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"lang\":{\"type\":\"wildcard\"},\"preDid\":{\"type\":\"keyword\"},\"fileUrls\":{\"type\":\"text\"},\"signer\":{\"type\":\"wildcard\"},\"pid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"waiters\":{\"type\":\"keyword\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
@@ -39,24 +39,24 @@ public class IndicesFEIP {
 		String serviceHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"wildcard\"},\"localNames\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"types\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"keyword\"},\"urls\":{\"type\":\"text\"},\"waiters\":{\"type\":\"keyword\"},\"protocols\":{\"type\":\"keyword\"},\"codes\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"params\":{\"type\":\"object\"},\"sid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
 		String appJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"stdName\":{\"type\":\"wildcard\"},\"localNames\":{\"type\":\"wildcard\"},\"types\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"urls\":{\"type\":\"text\"},\"downloads\":{\"properties\":{\"os\":{\"type\":\"text\"},\"link\":{\"type\":\"text\"},\"did\":{\"type\":\"keyword\"}}},\"waiters\":{\"type\":\"keyword\"},\"protocols\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"},\"closed\":{\"type\":\"boolean\"},\"closeStatement\":{\"type\":\"text\"}}}}";
 		String appHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"wildcard\"},\"localNames\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"types\":{\"type\":\"wildcard\"},\"urls\":{\"type\":\"text\"},\"downloads\":{\"properties\":{\"os\":{\"type\":\"text\"},\"link\":{\"type\":\"text\"},\"did\":{\"type\":\"keyword\"}}},\"waiters\":{\"type\":\"keyword\"},\"protocols\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"aid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		EsTools.createIndex(esClient, IndicesNames.PROTOCOL, protocolJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.PROTOCOL_HISTORY, protocolHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.CODE, codeJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.CODE_HISTORY, codeHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.SERVICE, serviceJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.SERVICE_HISTORY, serviceHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.APP, appJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.APP_HISTORY, appHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.PROTOCOL, protocolJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.PROTOCOL_HISTORY, protocolHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.CODE, codeJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.CODE_HISTORY, codeHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.SERVICE, serviceJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.SERVICE_HISTORY, serviceHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.APP, appJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.APP_HISTORY, appHistJsonStr);
 
 		String groupJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"namers\":{\"type\":\"wildcard\"},\"members\":{\"type\":\"wildcard\"},\"memberNum\":{\"type\":\"long\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"cddToUpdate\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"}}}}";
 		String groupHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"gid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"cdd\":{\"type\":\"long\"}}}}";
 		String teamJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"text\"},\"localNames\":{\"type\":\"text\"},\"waiters\":{\"type\":\"text\"},\"accounts\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"members\":{\"type\":\"wildcard\"},\"exMembers\":{\"type\":\"wildcard\"},\"managers\":{\"type\":\"wildcard\"},\"transferee\":{\"type\":\"wildcard\"},\"invitees\":{\"type\":\"wildcard\"},\"leavers\":{\"type\":\"wildcard\"},\"notAgreeMembers\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"}}}}";
 		String teamHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"},\"tid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"list\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"text\"},\"localNames\":{\"type\":\"text\"},\"waiters\":{\"type\":\"text\"},\"accounts\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"rate\":{\"type\":\"short\"},\"transferee\":{\"type\":\"wildcard\"}}}}";
 
-		EsTools.createIndex(esClient, IndicesNames.GROUP, groupJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.GROUP_HISTORY, groupHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TEAM, teamJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TEAM_HISTORY, teamHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.GROUP, groupJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.GROUP_HISTORY, groupHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TEAM, teamJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TEAM_HISTORY, teamHistJsonStr);
 
 		String contactJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"cipher\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
 		String mailJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"sender\":{\"type\":\"wildcard\"},\"recipient\":{\"type\":\"wildcard\"},\"alg\":{\"type\":\"wildcard\"},\"cipher\":{\"type\":\"keyword\"},\"cipherSend\":{\"type\":\"keyword\"},\"cipherReci\":{\"type\":\"keyword\"},\"textId\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
@@ -64,11 +64,11 @@ public class IndicesFEIP {
 		String boxJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"contain\":{\"type\":\"text\"},\"active\":{\"type\":\"boolean\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String boxHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"bid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"contain\":{\"type\":\"text\"}}}}";
 
-		EsTools.createIndex(esClient, IndicesNames.CONTACT, contactJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.MAIL, mailJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.SECRET, secretJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.BOX, boxJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.BOX_HISTORY, boxHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.CONTACT, contactJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.MAIL, mailJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.SECRET, secretJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BOX, boxJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BOX_HISTORY, boxHistJsonStr);
 
 		String statementJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
 		String proofJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"cosignersInvited\":{\"type\":\"wildcard\"},\"cosignersSigned\":{\"type\":\"wildcard\"},\"isTransferable\":{\"type\":\"boolean\"},\"active\":{\"type\":\"boolean\"},\"issuer\":{\"type\":\"wildcard\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
@@ -76,18 +76,18 @@ public class IndicesFEIP {
 		String tokenJsonStr ="{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"capacity\":{\"type\":\"keyword\"},\"decimal\":{\"type\":\"keyword\"},\"transferable\":{\"type\":\"keyword\"},\"closable\":{\"type\":\"keyword\"},\"openIssue\":{\"type\":\"keyword\"},\"maxAmtPerIssue\":{\"type\":\"keyword\"},\"minCddPerIssue\":{\"type\":\"keyword\"},\"maxIssuesPerAddr\":{\"type\":\"keyword\"},\"closed\":{\"type\":\"keyword\"},\"deployer\":{\"type\":\"keyword\"},\"circulating\":{\"type\":\"double\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String tokenHolderJsonStr ="{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"fid\":{\"type\":\"keyword\"},\"tokenId\":{\"type\":\"keyword\"},\"balance\":{\"type\":\"double\"},\"firstHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String tokenHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"integer\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"keyword\"},\"recipient\":{\"type\":\"keyword\"},\"cdd\":{\"type\":\"long\"},\"tokenId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"capacity\":{\"type\":\"keyword\"},\"decimal\":{\"type\":\"keyword\"},\"transferable\":{\"type\":\"keyword\"},\"closable\":{\"type\":\"keyword\"},\"openIssue\":{\"type\":\"keyword\"},\"maxAmtPerIssue\":{\"type\":\"keyword\"},\"minCddPerIssue\":{\"type\":\"keyword\"},\"maxIssuesPerAddr\":{\"type\":\"keyword\"},\"issueTo\":{\"type\":\"nested\",\"properties\":{\"fid\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"double\"}}},\"transferTo\":{\"type\":\"nested\",\"properties\":{\"fid\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"double\"}}}}}}";
-		EsTools.createIndex(esClient, IndicesNames.STATEMENT, statementJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.PROOF, proofJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.PROOF_HISTORY, proofHistJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TOKEN, tokenJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderJsonStr);
-		EsTools.createIndex(esClient, IndicesNames.TOKEN_HISTORY, tokenHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.STATEMENT, statementJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.PROOF, proofJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.PROOF_HISTORY, proofHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TOKEN, tokenJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.TOKEN_HISTORY, tokenHistJsonStr);
 
 		String nidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"oid\":{\"type\":\"wildcard\"},\"active\":{\"type\":\"boolean\"},\"namer\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		EsTools.createIndex(esClient, IndicesNames.NID, nidJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.NID, nidJsonStr);
 
 		String nobodyJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"priKey\":{\"type\":\"keyword\"},\"deathTime\":{\"type\":\"long\"},\"deathTxIndex\":{\"type\":\"integer\"},\"deathTxId\":{\"type\":\"keyword\"}}}}";
-		EsTools.createIndex(esClient, IndicesNames.NOBODY, nobodyJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.NOBODY, nobodyJsonStr);
 	}
 
 	public static void deleteAllIndices(ElasticsearchClient esClient) throws IOException {
@@ -98,37 +98,37 @@ public class IndicesFEIP {
 		}
 
 		// EsTools.deleteIndex(esClient, IndicesNames.CID);
-		EsTools.deleteIndex(esClient, IndicesNames.CID_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.REPUTATION_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.FEIP_MARK);
+		EsUtils.deleteIndex(esClient, IndicesNames.CID_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.REPUTATION_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.FEIP_MARK);
 
-		EsTools.deleteIndex(esClient, IndicesNames.PROTOCOL);
-		EsTools.deleteIndex(esClient, IndicesNames.PROTOCOL_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.CODE);
-		EsTools.deleteIndex(esClient, IndicesNames.CODE_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.SERVICE);
-		EsTools.deleteIndex(esClient, IndicesNames.SERVICE_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.APP);
-		EsTools.deleteIndex(esClient, IndicesNames.APP_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.PROTOCOL);
+		EsUtils.deleteIndex(esClient, IndicesNames.PROTOCOL_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.CODE);
+		EsUtils.deleteIndex(esClient, IndicesNames.CODE_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.SERVICE);
+		EsUtils.deleteIndex(esClient, IndicesNames.SERVICE_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.APP);
+		EsUtils.deleteIndex(esClient, IndicesNames.APP_HISTORY);
 
-		EsTools.deleteIndex(esClient, IndicesNames.GROUP);
-		EsTools.deleteIndex(esClient, IndicesNames.GROUP_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.TEAM);
-		EsTools.deleteIndex(esClient, IndicesNames.TEAM_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.GROUP);
+		EsUtils.deleteIndex(esClient, IndicesNames.GROUP_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.TEAM);
+		EsUtils.deleteIndex(esClient, IndicesNames.TEAM_HISTORY);
 
-		EsTools.deleteIndex(esClient, IndicesNames.CONTACT);
-		EsTools.deleteIndex(esClient, IndicesNames.MAIL);
-		EsTools.deleteIndex(esClient, IndicesNames.SECRET);
-		EsTools.deleteIndex(esClient, IndicesNames.BOX);
-		EsTools.deleteIndex(esClient, IndicesNames.BOX_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.CONTACT);
+		EsUtils.deleteIndex(esClient, IndicesNames.MAIL);
+		EsUtils.deleteIndex(esClient, IndicesNames.SECRET);
+		EsUtils.deleteIndex(esClient, IndicesNames.BOX);
+		EsUtils.deleteIndex(esClient, IndicesNames.BOX_HISTORY);
 
-		EsTools.deleteIndex(esClient, IndicesNames.STATEMENT);
-		EsTools.deleteIndex(esClient, IndicesNames.PROOF);
-		EsTools.deleteIndex(esClient, IndicesNames.PROOF_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.NID);
-		EsTools.deleteIndex(esClient, IndicesNames.TOKEN);
-		EsTools.deleteIndex(esClient, IndicesNames.TOKEN_HOLDER);
-		EsTools.deleteIndex(esClient, IndicesNames.TOKEN_HISTORY);
-		EsTools.deleteIndex(esClient, IndicesNames.NOBODY);
+		EsUtils.deleteIndex(esClient, IndicesNames.STATEMENT);
+		EsUtils.deleteIndex(esClient, IndicesNames.PROOF);
+		EsUtils.deleteIndex(esClient, IndicesNames.PROOF_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.NID);
+		EsUtils.deleteIndex(esClient, IndicesNames.TOKEN);
+		EsUtils.deleteIndex(esClient, IndicesNames.TOKEN_HOLDER);
+		EsUtils.deleteIndex(esClient, IndicesNames.TOKEN_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.NOBODY);
 	}
 }

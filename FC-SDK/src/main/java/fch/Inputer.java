@@ -27,7 +27,7 @@ public class Inputer extends appTools.Inputer {
             if ("".equals(fid)) return "";
             if ("d".equals(fid)) return "d";
             if ("c".equals(fid)) return "c";
-            if (!KeyTools.isValidFchAddr(fid)) {
+            if (!KeyTools.isGoodFid(fid)) {
                 System.out.println("It's not a valid FID. Try again.");
                 continue;
             }
@@ -38,7 +38,7 @@ public class Inputer extends appTools.Inputer {
         String ask = "Input the private Key in Hex or Base58:";
         String priKey = appTools.Inputer.inputString(br, ask);
         if(crypto.Base58.isBase58Encoded(priKey) && priKey.length()==52)return crypto.Base58.decode(priKey);
-        else if(tools.Hex.isHexString(priKey) && priKey.length()==64)return tools.Hex.fromHex(priKey);
+        else if(utils.Hex.isHexString(priKey) && priKey.length()==64)return utils.Hex.fromHex(priKey);
         return null;
     }
 
@@ -59,7 +59,7 @@ public class Inputer extends appTools.Inputer {
                 }
                 return fid;
             }
-            if (!KeyTools.isValidFchAddr(fid)) {
+            if (!KeyTools.isGoodFid(fid)) {
                 System.out.println("It's not a valid FID. Try again.");
                 continue;
             }
@@ -104,7 +104,7 @@ public class Inputer extends appTools.Inputer {
                 if(key == null)return null;
                 if ("q".equals(key)) break;
 
-                if (!KeyTools.isValidFchAddr(key)) {
+                if (!KeyTools.isGoodFid(key)) {
                     System.out.println("It's not a valid FID. Try again.");
                     continue;
                 }
@@ -132,7 +132,7 @@ public class Inputer extends appTools.Inputer {
         while (true) {
             String item = appTools.Inputer.inputString(br);
             if (item.equals("")) break;
-            if (!KeyTools.isValidFchAddr(item)) {
+            if (!KeyTools.isGoodFid(item)) {
                 System.out.println("Invalid FID. Try again.");
                 continue;
             }
@@ -175,12 +175,12 @@ public class Inputer extends appTools.Inputer {
 
 
     public static String inputPriKeyCipher(BufferedReader br, byte[] initSymKey) {
-        byte[] priKeyBytes =  inputPriKey(br);
+        byte[] priKeyBytes =  importOrCreatePriKey(br);
         return makePriKeyCipher(priKeyBytes, initSymKey);
     }
     @Nullable
-    public static byte[] inputPriKey(BufferedReader br) {
-        return KeyTools.inputCipherGetPriKey(br);
+    public static byte[] importOrCreatePriKey(BufferedReader br) {
+        return KeyTools.importOrCreatePriKey(br);
     }
     @Nullable
     public static String makePriKeyCipher(byte[] priKeyBytes, byte[] initSymKey) {

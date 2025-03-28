@@ -6,7 +6,7 @@ import org.mapdb.HTreeMap;
 import org.mapdb.Serializer;
 
 import fcData.Hat;
-import tools.FileTools;
+import utils.FileUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,19 +28,19 @@ public class HatDB {
     public HatDB(String myFid, String sid, String dbPath) {
         this.myFid = myFid;
         this.sid = sid;
-        if(dbPath == null) dbPath = FileTools.getUserDir() + "/db/";
+        if(dbPath == null) dbPath = FileUtils.getUserDir() + "/db/";
         if(!dbPath.endsWith("/")) dbPath += "/";
         this.dbPath = dbPath;
         initializeDb();
     }
 
     private void initializeDb() {
-        if (!FileTools.checkDirOrMakeIt(dbPath)) return;
+        if (!FileUtils.checkDirOrMakeIt(dbPath)) return;
         if (db == null || db.isClosed()) {
             rwLock.writeLock().lock();
             try {
                 if (db == null || db.isClosed()) {
-                    String dbName = FileTools.makeFileName(myFid, sid, HAT_DB, constants.Strings.DOT_DB);
+                    String dbName = FileUtils.makeFileName(myFid, sid, HAT_DB, constants.Strings.DOT_DB);
                     db = DBMaker.fileDB(dbPath + dbName)
                             .fileMmapEnable()
                             .transactionEnable()

@@ -13,8 +13,8 @@ import crypto.Hash;
 import fcData.Affair;
 import fcData.AlgorithmId;
 import fcData.Op;
-import tools.BytesTools;
-import tools.JsonTools;
+import utils.BytesUtils;
+import utils.JsonUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -59,12 +59,12 @@ public class Aes256CbcP7 {
         BufferedReader br =new BufferedReader(new InputStreamReader(System.in));
         String sourcePath = Inputer.inputString(br,"Input source file path");
         String destPath = Inputer.inputString(br,"Input destination file path");
-        byte[] key = BytesTools.getRandomBytes(32);
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] key = BytesUtils.getRandomBytes(32);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         System.out.println("Key:"+Hex.toHexString(key));
         System.out.println("Iv:"+Hex.toHexString(iv));
         Affair affair = encryptFile(sourcePath, destPath, key);
-        JsonTools.printJson(affair);
+        JsonUtils.printJson(affair);
         decryptFile(destPath,sourcePath+"_1",key,iv);
         System.out.println(Hash.sha256x2(new File(destPath)));
     }
@@ -76,7 +76,7 @@ public class Aes256CbcP7 {
      */
     public static String encrypt(String plaintextUtf8, char[] keyHex) throws NoSuchAlgorithmException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
         byte[] plaintextBytes = plaintextUtf8.getBytes(StandardCharsets.UTF_8);
-        byte[] key = BytesTools.hexCharArrayToByteArray(keyHex);
+        byte[] key = BytesUtils.hexCharArrayToByteArray(keyHex);
         byte[] cipherWithIvBytes = encrypt(plaintextBytes, key);
 
         return Base64.getEncoder().encodeToString(cipherWithIvBytes);
@@ -161,7 +161,7 @@ public class Aes256CbcP7 {
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setType(EncryptType.SymKey);
         cryptoDataByte.setAlg(AlgorithmId.EccAes256K1P7_No1_NrC7);
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         cryptoDataByte.setIv(iv);
         CryptoDataStr cryptoDataStr = CryptoDataStr.fromCryptoDataByte(cryptoDataByte);
 
@@ -176,7 +176,7 @@ public class Aes256CbcP7 {
             HashFunction hashFunction = Hashing.sha256();
             Hasher hasherWholeFile = hashFunction.newHasher();
 
-            byte[] headBytes = JsonTools.toJson(cryptoDataStr).getBytes();
+            byte[] headBytes = JsonUtils.toJson(cryptoDataStr).getBytes();
             fos.write(headBytes);
             hasherWholeFile.putBytes(headBytes,0,headBytes.length);
 
@@ -189,8 +189,8 @@ public class Aes256CbcP7 {
                     hasher.putBytes(buffer, 0, bytesRead);
                     hasherWholeFile.putBytes(buffer,0,bytesRead);
                 }
-                String cipherId = tools.Hex.toHex(Hash.sha256(hasher.hash().asBytes()));
-                String did = tools.Hex.toHex(Hash.sha256(hasherWholeFile.hash().asBytes()));
+                String cipherId = utils.Hex.toHex(Hash.sha256(hasher.hash().asBytes()));
+                String did = utils.Hex.toHex(Hash.sha256(hasherWholeFile.hash().asBytes()));
                 System.out.println("Did:"+did);
                 cryptoDataStr.setCipherId(cipherId);
                 affair.setOidB(did);
@@ -206,7 +206,7 @@ public class Aes256CbcP7 {
             throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IOException, NoSuchProviderException {
         Affair affair = new Affair();
 
-        byte[] iv = BytesTools.getRandomBytes(16);
+        byte[] iv = BytesUtils.getRandomBytes(16);
         Security.addProvider(new BouncyCastleProvider());
 
         SecretKeySpec keySpec = new SecretKeySpec(key, "AES");
@@ -227,8 +227,8 @@ public class Aes256CbcP7 {
             }
         }
 
-        String cipherId = tools.Hex.toHex(Hash.sha256(hasherDest.hash().asBytes()));
-        String msgId = tools.Hex.toHex(Hash.sha256(hasherSrc.hash().asBytes()));
+        String cipherId = utils.Hex.toHex(Hash.sha256(hasherDest.hash().asBytes()));
+        String msgId = utils.Hex.toHex(Hash.sha256(hasherSrc.hash().asBytes()));
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setType(EncryptType.SymKey);
         cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);

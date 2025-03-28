@@ -1,7 +1,7 @@
 package NasaRcpTest;
 
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import nasa.RpcRequest;
 import org.junit.jupiter.api.Test;
 
@@ -19,9 +19,9 @@ public class FundRawTransaction {
         String urlFch = "http://127.0.0.1:8332";
 
         result = fundRawTransaction("FSpN4acDqFD9jYM6DoTVRjvTKU4DPXgQHx", "02000000000280969800000000001976a9148b6ebb34f066bc0ec4f2d3e5d021a56ffc1ef71d88ac0000000000000000046a02686900000000", true, true, urlFch, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
         result = fundRawTransaction("DS8M937nHLtmeNef6hnu17ZXAwmVpM6TXY", "01000000000280969800000000001976a9148b6ebb34f066bc0ec4f2d3e5d021a56ffc1ef71d88ac0000000000000000046a02037800000000", true, true, urlDoge, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
     }
 
     public FundRawTransactionResult fundRawTransaction(String changeAddr, String rawTxHex, boolean includeWatchOnly, boolean receiverPayFee, String url, String username, String password) {
@@ -34,7 +34,7 @@ public class FundRawTransaction {
         FundRawTransactionParams fundRawTransactionParams = new FundRawTransactionParams(changeAddr, rawTxHex, includeWatchOnly, feePayBy);
         RpcRequest jsonRPC2Request = new RpcRequest(FUNDRAWTRANSACTION, fundRawTransactionParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, FUNDRAWTRANSACTION, jsonRPC2Request);
         return getResult(result);
@@ -44,7 +44,7 @@ public class FundRawTransaction {
         FundRawTransactionParams fundRawTransactionParams = new FundRawTransactionParams(rawTxHex);
         RpcRequest jsonRPC2Request = new RpcRequest(FUNDRAWTRANSACTION, fundRawTransactionParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, FUNDRAWTRANSACTION, jsonRPC2Request);
         Gson gson = new Gson();
@@ -97,7 +97,7 @@ public class FundRawTransaction {
             }
 
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 

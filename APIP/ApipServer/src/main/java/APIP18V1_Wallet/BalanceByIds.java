@@ -7,7 +7,7 @@ import server.ApipApiNames;
 import constants.CodeMessage;
 import fcData.ReplyBody;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 import server.HttpRequestChecker;
 
@@ -39,12 +39,12 @@ public class BalanceByIds extends HttpServlet {
         httpRequestChecker.checkRequestHttp(request, response, authType);
 
         if(httpRequestChecker.getRequestBody()==null || httpRequestChecker.getRequestBody().getFcdsl()==null){
-            replier.replyHttp(CodeMessage.Code1003BodyMissed,null);
+            replier.replyHttp(CodeMessage.Code1003BodyMissed,response);
             return;
         }
 
         if (httpRequestChecker.getRequestBody().getFcdsl().getIds()==null) {
-            replier.replyHttp(CodeMessage.Code1015FidMissed,null);
+            replier.replyHttp(CodeMessage.Code1015FidMissed,response);
             return;
         }
 

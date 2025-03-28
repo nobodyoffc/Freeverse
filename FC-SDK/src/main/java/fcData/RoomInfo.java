@@ -1,6 +1,6 @@
 package fcData;
 
-import tools.JsonTools;
+import utils.JsonUtils;
 
 public class RoomInfo extends FcObject{
     private String name;
@@ -8,11 +8,11 @@ public class RoomInfo extends FcObject{
     private String[] members;
 
     public byte[] toBytes() {
-        return tools.JsonTools.toJson(this).getBytes();
+        return JsonUtils.toJson(this).getBytes();
     }
 
     public static RoomInfo fromBytes(byte[] bytes) {
-        return JsonTools.fromJson(new String(bytes), RoomInfo.class);
+        return JsonUtils.fromJson(new String(bytes), RoomInfo.class);
     }
 
     public static RoomInfo fromRoom(Room room) {

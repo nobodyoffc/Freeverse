@@ -5,7 +5,7 @@ import appTools.Settings;
 import clients.ApipClient;
 import constants.FieldNames;
 import handlers.NonceHandler;
-import tools.RedisTools;
+import utils.RedisUtils;
 import constants.CodeMessage;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
@@ -15,12 +15,12 @@ import fcData.AlgorithmId;
 import fcData.ReplyBody;
 import fcData.Signature;
 import fcData.TalkUnit;
-import fch.ParseTools;
+import fch.FchUtils;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
-import tools.BytesTools;
-import tools.Hex;
-import tools.JsonTools;
+import utils.BytesUtils;
+import utils.Hex;
+import utils.JsonUtils;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -241,7 +241,7 @@ class ServerUdpThread extends Thread {
 
         if(userFid.equals(talkParams.getDealer())){
             String minPay = talkParams.getMinPayment();
-            balance= ParseTools.coinToSatoshi(Double.parseDouble(minPay));
+            balance= FchUtils.coinToSatoshi(Double.parseDouble(minPay));
             return balance;
         }
 
@@ -277,7 +277,7 @@ class ServerUdpThread extends Thread {
             RequestBody requestBody = checkRequest(talkUnitRequest, osw, jedis);
             if (requestBody==null) return false;
 
-            sessionKey = BytesTools.getRandomBytes(32);
+            sessionKey = BytesUtils.getRandomBytes(32);
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
             CryptoDataByte result = encryptor.encryptByAsyTwoWay(sessionKey, waiterPriKey,Hex.fromHex(userPubKey));
             if(result==null || result.getCode()!=0)return false;
@@ -301,7 +301,7 @@ class ServerUdpThread extends Thread {
                 Map<String, String> dataMap = new HashMap<>();
                 dataMap.put("userFid", userFid);
                 dataMap.put("pubKey", Hex.toHex(cryptoDataByte.getPubKeyA()));
-                replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The pubKey is not of the user FID.", nonce, false);
+                replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The pubKey is not of the user FID.", nonce, false);
             } else {
                 if (requestBody.getVia() != null) via = requestBody.getVia();
                 if (isBadBalanceTcp(jedis, service.getId(), userFid)) {
@@ -312,13 +312,13 @@ class ServerUdpThread extends Thread {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("Signed SID:", requestBody.getSid());
                     dataMap.put("Requested SID:", service.getId());
-                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonTools.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
+                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
                 } else if (isBadNonce(requestBody.getNonce(), windowTime, jedis)) {
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1007UsedNonce, null, null, nonce, false);
                 } else if (NonceHandler.isBadTime(requestBody.getTime(), windowTime)) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("windowTime", String.valueOf(windowTime));
-                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1006RequestTimeExpired, JsonTools.toJson(dataMap), null, nonce, false);
+                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1006RequestTimeExpired, JsonUtils.toJson(dataMap), null, nonce, false);
                 } else {
                     return requestBody;
                 }
@@ -328,9 +328,9 @@ class ServerUdpThread extends Thread {
     }
 
     public boolean isBadBalanceTcp(Jedis jedis, String sid, String fid) {
-        long balance = RedisTools.readHashLong(jedis, addSidBriefToName(sid, BALANCE), fid);
+        long balance = RedisUtils.readHashLong(jedis, addSidBriefToName(sid, BALANCE), fid);
         String priceStr = talkParams.getPricePerKBytes();
-        long price = ParseTools.coinStrToSatoshi(priceStr);
+        long price = FchUtils.coinStrToSatoshi(priceStr);
         return balance<price;
     }
     @Nullable
@@ -365,7 +365,7 @@ class ServerUdpThread extends Thread {
         toTalkUnit.setNonce(fromTalkUnit.getNonce());
         String json = toTalkUnit.toJson();
         Signature sign = new Signature().sign(Hex.toHex(key), json.getBytes(),AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
-        toTalkUnit.setData(JsonTools.toJson(sign));
+        toTalkUnit.setData(JsonUtils.toJson(sign));
         OutputStreamWriter osw = new OutputStreamWriter(socket.getOutputStream());
         osw.write(toTalkUnit.getData()+ "\n");
         osw.flush();

@@ -13,7 +13,7 @@ import java.io.IOException;
 
 import feip.feipData.Secret;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import appTools.Settings;
 import static constants.FieldNames.ID;
 import server.FcdslRequestHandler;

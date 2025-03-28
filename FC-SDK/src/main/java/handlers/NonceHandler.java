@@ -8,8 +8,9 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import appTools.Settings;
+import fcData.FcEntity;
 
-public class NonceHandler extends Handler<Object>{
+public class NonceHandler extends Handler<FcEntity>{
     private final Map<Integer, Long> nonceMap;
     private final Long windowTime;
     private final ReadWriteLock lock;

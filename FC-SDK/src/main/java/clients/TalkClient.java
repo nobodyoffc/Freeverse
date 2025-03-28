@@ -30,9 +30,9 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.jetbrains.annotations.Nullable;
-import tools.*;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.*;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -105,7 +105,7 @@ public class TalkClient extends Client{
         super(apiProvider,apiAccount,symKey,apipClient);
         this.br = br;
         this.myFid = apiAccount.getUserId();
-        this.myPriKey = decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey);
+        this.myPriKey = Decryptor.decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey);
         this.displayer = new Displayer(this);
         this.dealer = ((TalkParams)apiProvider.getService().getParams()).getDealer();
         this.dealerPubKey = apiProvider.getDealerPubKey();
@@ -651,7 +651,7 @@ public class TalkClient extends Client{
 
         TalkUnit talkUnit;
         try {
-            receivedBytes = TcpTools.readBytes(dis);
+            receivedBytes = TcpUtils.readBytes(dis);
             if(receivedBytes==null)return null;
 
             CryptoDataByte cryptoDataByte = CryptoDataByte.fromBundle(receivedBytes);
@@ -659,7 +659,7 @@ public class TalkClient extends Client{
                 if (cryptoDataByte.getType().equals(EncryptType.SymKey))
                     cryptoDataByte.setSymKey(sessionKey);
                 else if (cryptoDataByte.getType().equals(EncryptType.AsyTwoWay))
-                    cryptoDataByte.setPriKeyB(decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey));
+                    cryptoDataByte.setPriKeyB(Decryptor.decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey));
 
                 new Decryptor().decrypt(cryptoDataByte);
                 if (cryptoDataByte.getCode() != 0) return null;
@@ -697,7 +697,7 @@ public class TalkClient extends Client{
         int[] widths = {10,20};
         List<List<Object>> valueListList = new ArrayList<>();
         for(TalkIdInfo talkIdInfo:talkIdInfoList)valueListList.add(Arrays.asList(talkIdInfo.getIdType(),talkIdInfo.getShowName()));
-        Shower.showDataTable(title, fields, widths, valueListList, 1, true);
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
 
 
@@ -745,8 +745,8 @@ public class TalkClient extends Client{
             showInstruction();
             return null;
         }
-        String idType = StringTools.getWordAtPosition(input, 1);
-        String part = StringTools.getWordAtPosition(input, 2);
+        String idType = StringUtils.getWordAtPosition(input, 1);
+        String part = StringUtils.getWordAtPosition(input, 2);
         if(idType==null || part==null){
             System.out.println("""
                     To search, the type and the content are required.
@@ -826,7 +826,7 @@ public class TalkClient extends Client{
     public TalkIdInfo searchCid(String part, BufferedReader br) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.USED_CIDS).addNewValue(part);
-        List<Cid> result = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cid> result = apipClient.cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         Cid cid = Inputer.chooseOneFromList(result, FieldNames.CID, "Choose the CID:", br);
         if (cid == null) return null;
 
@@ -849,7 +849,7 @@ public class TalkClient extends Client{
 
     public TalkIdInfo searchTeam(String part) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, DESC).addNewValue(part);
+        fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC).addNewValue(part);
         List<Team> result = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         Team team = Inputer.chooseOneFromList(result, NAME, "Choose the team:", br);
         if (team == null) return null;
@@ -869,7 +869,7 @@ public class TalkClient extends Client{
 
     public TalkIdInfo searchGroup(String part, TalkIdInfo result) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.GID, NAME, DESC).addNewValue(part);
+        fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.GID, NAME, Values.DESC).addNewValue(part);
 
         List<Group> groupList = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if (!groupList.isEmpty()) {
@@ -890,7 +890,7 @@ public class TalkClient extends Client{
     public TalkIdInfo searchTeam(String part, TalkIdInfo result) {
         Fcdsl fcdsl;
         fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, DESC).addNewValue(part);
+        fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC).addNewValue(part);
         Team team;
         List<Team> teamList = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if (!teamList.isEmpty()) {
@@ -969,7 +969,7 @@ public class TalkClient extends Client{
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.USED_CIDS).addNewValue(searchString);
-            List<Cid> apiResults = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Cid> apiResults = apipClient.cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
             for (Cid cid : apiResults) {
                 results.add(TalkIdInfo.fromCidInfo(cid));
@@ -1005,7 +1005,7 @@ public class TalkClient extends Client{
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.FID).addNewValue(searchString);
-            List<Cid> apiResults = apipClient.cidInfoSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Cid> apiResults = apipClient.cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
             for (Cid cid : apiResults) {
                 results.add(TalkIdInfo.fromCidInfo(cid));
@@ -1109,7 +1109,7 @@ public class TalkClient extends Client{
         }
 
         // 6. Check apipClient.cidInfoByIds as last resort
-        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
+        Map<String, Cid> cidInfoMap = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
             Cid cid = cidInfoMap.get(talkId);
             if (cid != null) {
@@ -1425,7 +1425,7 @@ public class TalkClient extends Client{
 
     private void askKey(String whoSKey, String askWhom, TalkUnit.IdType type, ApipClient apipClient, BufferedReader br) {
         if (askWhom != null) {
-            if (!KeyTools.isValidFchAddr(askWhom)) {
+            if (!KeyTools.isGoodFid(askWhom)) {
                 System.out.println("Invalid FID: " + askWhom);
                 return;
             }
@@ -1442,7 +1442,7 @@ public class TalkClient extends Client{
                 type = TalkUnit.IdType.valueOf(choice);
                 switch (type) {
                     case FID -> {
-                        if (KeyTools.isValidFchAddr(whoSKey)) break;
+                        if (KeyTools.isGoodFid(whoSKey)) break;
                         System.out.println("It is not a FID. Try again.");
                     }
                     case TEAM, GROUP -> {

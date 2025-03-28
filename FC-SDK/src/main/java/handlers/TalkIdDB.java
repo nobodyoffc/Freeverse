@@ -1,73 +1,66 @@
 package handlers;
 
 import fcData.FcEntity;
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
-import org.mapdb.HTreeMap;
-import org.mapdb.Serializer;
-
+import db.LocalDB;
+import db.LevelDB;
 import fcData.TalkIdInfo;
-import tools.FileTools;
+import utils.FileUtils;
 
 import java.io.File;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class TalkIdDB {
     private static final String TALK_ID_DB = "talkId";
-    private final DB db;
-    private final HTreeMap<String, TalkIdInfo> talkIdInfoMap;
-    private final HTreeMap<String, String> metaMap;
+    private final LocalDB<FcEntity> db;
 
     public TalkIdDB(String myFid, String sid, String dbPath) {
-        String fileName = FileTools.makeFileName(myFid, sid, TALK_ID_DB, constants.Strings.DOT_DB);
-        File file = new File(dbPath,fileName);
-        this.db = DBMaker.fileDB(file)
-                .fileMmapEnable()
-                .checksumHeaderBypass()
-                .transactionEnable()
-                .make();
-
-        this.talkIdInfoMap = db.hashMap("talkIdInfoMap")
-                .keySerializer(Serializer.STRING)
-                .valueSerializer(FcEntity.getMapDBSerializer(TalkIdInfo.class))//(Serializer<TalkIdInfo>)TalkIdInfo.mapDbSerializer(TalkIdInfo.class))
-                .createOrOpen();
-
-        this.metaMap = db.hashMap("metaMap")
-                .keySerializer(Serializer.STRING)
-                .valueSerializer(Serializer.STRING)
-                .createOrOpen();
+        String fileName = FileUtils.makeFileName(myFid, sid, TALK_ID_DB, constants.Strings.DOT_DB);
+        FileUtils.createFileDirectories(dbPath);
+        
+        this.db = new LevelDB<>(LocalDB.SortType.NO_SORT, FcEntity.class);
+        db.initialize(myFid, sid, dbPath, fileName);
+        
+        // Register TalkIdInfo type for the map
+        db.registerMapType("talkIdInfoMap", TalkIdInfo.class);
+        
+        // Create metadata map
+        db.registerMapType("metaMap", String.class);
     }
 
     public synchronized void put(String id, TalkIdInfo info) {
-        talkIdInfoMap.put(id, info);
+        db.putInMap("talkIdInfoMap", id, info);
         db.commit();
     }
 
     public TalkIdInfo get(String id) {
-        return (TalkIdInfo) talkIdInfoMap.get(id);
+        return db.getFromMap("talkIdInfoMap", id);
     }
 
     public synchronized void delete(String id) {
-        talkIdInfoMap.remove(id);
+        db.removeFromMap("talkIdInfoMap", id);
         db.commit();
     }
 
     public synchronized void setLastTalkId(String id) {
-        metaMap.put("lastTalkId", id);
+        db.putInMap("metaMap", "lastTalkId", id);
         db.commit();
     }
 
     public String getLastTalkId() {
-        return metaMap.get("lastTalkId");
+        return db.getFromMap("metaMap", "lastTalkId");
     }
 
     public void close() {
         db.close();
     }
 
+    @SuppressWarnings("unchecked")
     public List<TalkIdInfo> search(String searchTerm) {
-        return talkIdInfoMap.values().stream()
+        Map<String, Object> allObjects = db.getAllFromMap("talkIdInfoMap");
+        return allObjects.values().stream()
+                .map(obj -> (TalkIdInfo) obj)
                 .filter(info -> TalkIdInfo.matchesTalkIdInfo(info, searchTerm))
                 .collect(Collectors.toList());
     } 

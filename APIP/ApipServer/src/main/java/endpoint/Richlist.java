@@ -8,10 +8,10 @@ import fch.fchData.Cid;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
-import fch.ParseTools;
+import fch.FchUtils;
 import initial.Initiator;
-import tools.JsonTools;
-import tools.http.AuthType;
+import utils.JsonUtils;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -60,13 +60,13 @@ public class Richlist extends HttpServlet {
             for(Hit<Cid> hit : result.hits().hits()){
                 Cid cid = hit.source();
                 if(cid ==null)continue;
-                richMap.put(cid.getId(), ParseTools.satoshiToCoin(cid.getBalance()));
+                richMap.put(cid.getId(), FchUtils.satoshiToCoin(cid.getBalance()));
             }
             if(richMap.isEmpty()) {
                 response.getWriter().write("Failed to get data.");
                 return;
             }
-            response.getWriter().write(JsonTools.toNiceJson(richMap));
+            response.getWriter().write(JsonUtils.toNiceJson(richMap));
         }catch (Exception e){
             e.printStackTrace();
             response.getWriter().write("Failed to get data.");

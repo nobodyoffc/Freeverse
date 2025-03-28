@@ -1,6 +1,6 @@
 package mempool;
 
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.Block;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Constants;
@@ -30,7 +30,7 @@ public class MempoolCleaner implements Runnable {
         System.out.println("MempoolCleaner running...");
         try {
             while (running.get()) {
-                ParseTools.waitForChangeInDirectory(blockFilePath,running);
+                FchUtils.waitForChangeInDirectory(blockFilePath,running);
                 try(Jedis jedis1 = jedisPool.getResource()) {
                     jedis1.select(Constants.RedisDb3Mempool);
                     jedis1.flushDB();

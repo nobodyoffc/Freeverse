@@ -5,8 +5,6 @@ import fcData.FcObject;
 import java.util.List;
 
 public class Contact extends FcObject {
-
-	private List<String> contactIds;
     private String alg;
 	private String cipher;
 	
@@ -15,13 +13,6 @@ public class Contact extends FcObject {
 	private Long birthHeight;
 	private Long lastHeight;
 	private Boolean active;
-
-	public List<String> getContactIds() {
-		return contactIds;
-	}
-	public void setContactIds(List<String> contactIds) {
-		this.contactIds = contactIds;
-	}	
     public String getAlg() {
         return alg;
     }

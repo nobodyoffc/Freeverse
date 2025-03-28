@@ -1,9 +1,10 @@
 package handlers;
 
 import crypto.Hash;
-import tools.IdNameTools;
-import tools.FileTools;
-import tools.Hex;
+import fcData.FcObject;
+import utils.IdNameUtils;
+import utils.FileUtils;
+import utils.Hex;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,15 +15,15 @@ import java.util.logging.Logger;
 
 import appTools.Settings;
 
-public class DiskHandler extends Handler {
+public class DiskHandler extends Handler<FcObject> {
     private static final Logger log = Logger.getLogger(DiskHandler.class.getName());
     private final String storageDir;
 
     public DiskHandler(String fid,String oid) {
-        this.storageDir = IdNameTools.makeKeyName(fid, oid, "DISK", true);
+        this.storageDir = IdNameUtils.makeKeyName(fid, oid, "DISK", true);
     }
     public DiskHandler(Settings settings){
-        this.storageDir = IdNameTools.makeKeyName(settings.getMainFid(), settings.getSid(), "DISK", true);
+        this.storageDir = IdNameUtils.makeKeyName(settings.getMainFid(), settings.getSid(), "DISK", true);
     }
 
     /**
@@ -34,17 +35,17 @@ public class DiskHandler extends Handler {
         if (bytes == null) return null;
         String fullPath =null;
         String did = Hex.toHex(Hash.sha256x2(bytes));
-        String subDir = FileTools.getSubPathForDisk(did);
+        String subDir = FileUtils.getSubPathForDisk(did);
         fullPath = storageDir + subDir;
         
         File file = new File(fullPath, did);
         if (file.exists()) {
-            if (Boolean.TRUE.equals(FileTools.checkFileOfFreeDisk(fullPath, did))) {
+            if (Boolean.TRUE.equals(FileUtils.checkFileOfFreeDisk(fullPath, did))) {
                 return fullPath;
             }
         }
 
-        if (FileTools.createFileDirectories(fullPath)) {
+        if (FileUtils.createFileDirectories(fullPath)) {
             try {
                 Files.write(file.toPath(), bytes);
                 return fullPath;
@@ -61,10 +62,10 @@ public class DiskHandler extends Handler {
      * @param did SHA256x2 hash of the file to read
      * @return byte array of file content, or null if file doesn't exist or operation fails
      */
-    public byte[] get(String did) {
+    public byte[] getBytes(String did) {
         if (did == null) return null;
 
-        String subDir = FileTools.getSubPathForDisk(did);
+        String subDir = FileUtils.getSubPathForDisk(did);
         Path filePath = Paths.get(storageDir + subDir, did);
         
         if (!Files.exists(filePath)) {
@@ -94,7 +95,7 @@ public class DiskHandler extends Handler {
     public boolean delete(String did) {
         if (did == null) return false;
 
-        String subDir = FileTools.getSubPathForDisk(did);
+        String subDir = FileUtils.getSubPathForDisk(did);
         Path filePath = Paths.get(storageDir + subDir, did);
         
         try {

@@ -9,11 +9,11 @@ import fcData.Op;
 import constants.Constants;
 import crypto.Hash;
 import crypto.KeyTools;
-import tools.BytesTools;
-import tools.JsonTools;
+import utils.BytesUtils;
+import utils.JsonUtils;
 
 import com.google.gson.Gson;
-import tools.FileTools;
+import utils.FileUtils;
 
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
@@ -448,7 +448,7 @@ public class EccAes256K1P7 {
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setType(EncryptType.Password);
         cryptoDataByte.setData(keyBytes);
-        cryptoDataByte.setPassword(BytesTools.utf8CharArrayToByteArray(password));
+        cryptoDataByte.setPassword(BytesUtils.utf8CharArrayToByteArray(password));
         ecc.encrypt(cryptoDataByte);
         if (cryptoDataByte.getMessage() != null) {
             return "Error:" + cryptoDataByte.getMessage();
@@ -548,8 +548,8 @@ public class EccAes256K1P7 {
     public String encrypt(char[] msg, String pubKeyB) {
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setType(EncryptType.AsyOneWay);
-        cryptoDataByte.setData(BytesTools.charArrayToByteArray(msg, StandardCharsets.UTF_8));
-        cryptoDataByte.setPubKeyB(BytesTools.hexToByteArray(pubKeyB));
+        cryptoDataByte.setData(BytesUtils.charArrayToByteArray(msg, StandardCharsets.UTF_8));
+        cryptoDataByte.setPubKeyB(BytesUtils.hexToByteArray(pubKeyB));
         encrypt(cryptoDataByte);
         //eccAesDataByte.clearAllSensitiveData();
         return CryptoDataStr.fromCryptoDataByte(cryptoDataByte).toJson();
@@ -558,9 +558,9 @@ public class EccAes256K1P7 {
     public String encrypt(char[] msg, String pubKeyB, char[] priKeyA) {
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
         cryptoDataByte.setType(EncryptType.AsyTwoWay);
-        cryptoDataByte.setData(BytesTools.charArrayToByteArray(msg, StandardCharsets.UTF_8));
-        cryptoDataByte.setPubKeyB(BytesTools.hexToByteArray(pubKeyB));
-        cryptoDataByte.setPriKeyA(BytesTools.hexCharArrayToByteArray(priKeyA));
+        cryptoDataByte.setData(BytesUtils.charArrayToByteArray(msg, StandardCharsets.UTF_8));
+        cryptoDataByte.setPubKeyB(BytesUtils.hexToByteArray(pubKeyB));
+        cryptoDataByte.setPriKeyA(BytesUtils.hexCharArrayToByteArray(priKeyA));
         encrypt(cryptoDataByte);
         //eccAesDataByte.clearAllSensitiveData();
         return CryptoDataStr.fromCryptoDataByte(cryptoDataByte).toJson();
@@ -572,17 +572,17 @@ public class EccAes256K1P7 {
             boolean isHex = isCharArrayHex(symKey32OrPassword);
             if (isHex) {
                 cryptoDataByte.setType(EncryptType.SymKey);
-                cryptoDataByte.setSymKey(BytesTools.hexCharArrayToByteArray(symKey32OrPassword));
+                cryptoDataByte.setSymKey(BytesUtils.hexCharArrayToByteArray(symKey32OrPassword));
             } else {
                 cryptoDataByte.setType(EncryptType.Password);
-                cryptoDataByte.setPassword(BytesTools.charArrayToByteArray(symKey32OrPassword, StandardCharsets.UTF_8));
+                cryptoDataByte.setPassword(BytesUtils.charArrayToByteArray(symKey32OrPassword, StandardCharsets.UTF_8));
             }
         } else {
             cryptoDataByte.setType(EncryptType.Password);
-            cryptoDataByte.setPassword(BytesTools.charArrayToByteArray(symKey32OrPassword, StandardCharsets.UTF_8));
+            cryptoDataByte.setPassword(BytesUtils.charArrayToByteArray(symKey32OrPassword, StandardCharsets.UTF_8));
         }
 
-        cryptoDataByte.setData(BytesTools.charArrayToByteArray(msg, StandardCharsets.UTF_8));
+        cryptoDataByte.setData(BytesUtils.charArrayToByteArray(msg, StandardCharsets.UTF_8));
         encrypt(cryptoDataByte);
         //eccAesDataByte.clearAllSensitiveData();
         return CryptoDataStr.fromCryptoDataByte(cryptoDataByte).toJson();
@@ -667,7 +667,7 @@ public class EccAes256K1P7 {
         CryptoDataByte cryptoDataBytes = ecc.decrypt(cipher, priKey);
         if (cryptoDataBytes.getMessage() != null) {
             System.out.println("Decrypt sessionKey wrong: " + cryptoDataBytes.getMessage());
-            BytesTools.clearByteArray(priKey);
+            BytesUtils.clearByteArray(priKey);
             return null;
         }
         return cryptoDataBytes.getData();
@@ -692,7 +692,7 @@ public class EccAes256K1P7 {
         cryptoDataStr.setSymKey(symKey);
 
         CryptoDataByte cryptoDataByte = CryptoDataByte.fromCryptoData(cryptoDataStr);
-        byte[] symKeyBytes = BytesTools.hexCharArrayToByteArray(symKey);
+        byte[] symKeyBytes = BytesUtils.hexCharArrayToByteArray(symKey);
         cryptoDataByte.setSymKey(symKeyBytes);
         return encrypt(originalFile, cryptoDataByte);
     }
@@ -741,7 +741,7 @@ public class EccAes256K1P7 {
             int endIndex = originalFileName.lastIndexOf('.');
             String suffix = "_" + originalFileName.substring(endIndex + 1);
             String encryptedFileName = originalFileName.substring(0, endIndex) + suffix + Constants.DOT_FV;
-            File encryptedFile = FileTools.getNewFile(parentPath, encryptedFileName, FileTools.CreateNewFileMode.REWRITE);
+            File encryptedFile = FileUtils.getNewFile(parentPath, encryptedFileName, FileUtils.CreateNewFileMode.REWRITE);
             if (encryptedFile == null) return "Error:Creating encrypted file wrong.";
 
             try (FileOutputStream fos = new FileOutputStream(encryptedFile)) {
@@ -850,7 +850,7 @@ public class EccAes256K1P7 {
                 originalFileName = encryptedFileName.substring(0, endIndex1) + "." + oldSuffix;
             }else originalFileName = encryptedFileName+ Constants.DOT_DECRYPTED;
 
-            File originalFile = FileTools.getNewFile(parentPath, originalFileName, FileTools.CreateNewFileMode.REWRITE);
+            File originalFile = FileUtils.getNewFile(parentPath, originalFileName, FileUtils.CreateNewFileMode.REWRITE);
             if (originalFile == null) return "Create recovered file failed.";
             try (FileOutputStream fos = new FileOutputStream(originalFile)) {
                 fos.write(cryptoDataByte.getData());
@@ -916,7 +916,7 @@ public class EccAes256K1P7 {
         CryptoDataStr cryptoDataStr;
         CryptoDataByte cryptoDataByte;
         try (FileInputStream fis = new FileInputStream(encryptedFile)) {
-            affair = JsonTools.readObjectFromJsonFile(fis, Affair.class);
+            affair = JsonUtils.readObjectFromJsonFile(fis, Affair.class);
             cipherBytes = fis.readAllBytes();
             if (affair == null) return "Affair is null.";
             if (affair.getData() == null) return "Affair.data is null.";
@@ -938,7 +938,7 @@ public class EccAes256K1P7 {
         CryptoDataStr cryptoDataStr;
         CryptoDataByte cryptoDataByte;
         try (FileInputStream fis = new FileInputStream(encryptedFile)) {
-            affair = JsonTools.readObjectFromJsonFile(fis, Affair.class);
+            affair = JsonUtils.readObjectFromJsonFile(fis, Affair.class);
             cipherBytes = fis.readAllBytes();
             if (affair == null) return "Error:affair is null.";
             if (affair.getData() == null) return "Error:affair.data is null.";
@@ -948,7 +948,7 @@ public class EccAes256K1P7 {
             return "Read file wrong.";
         }
         cryptoDataByte = CryptoDataByte.fromCryptoData(cryptoDataStr);
-        cryptoDataByte.setSymKey(BytesTools.hexCharArrayToByteArray(symKey));
+        cryptoDataByte.setSymKey(BytesUtils.hexCharArrayToByteArray(symKey));
         if (cryptoDataByte.getMessage() != null) return "Error:" + cryptoDataByte.getMessage();
         cryptoDataByte.setCipher(cipherBytes);
         return decrypt(encryptedFile, cryptoDataByte);
@@ -1004,14 +1004,14 @@ public class EccAes256K1P7 {
     private static Result checkPriKeyAndPubKey(CryptoDataByte cryptoDataByte, byte[] priKeyBytes, byte[] pubKeyBytes) {
         if (cryptoDataByte.getType() == EncryptType.AsyOneWay) {
             priKeyBytes = cryptoDataByte.getPriKeyB();
-            if (priKeyBytes == null || BytesTools.isFilledKey(priKeyBytes)) {
+            if (priKeyBytes == null || BytesUtils.isFilledKey(priKeyBytes)) {
                 cryptoDataByte.setMessage("The private key is null or filled with 0.");
                 return null;
             }
             pubKeyBytes = cryptoDataByte.getPubKeyA();
         } else if (cryptoDataByte.getType() == EncryptType.AsyTwoWay) {
             boolean found = false;
-            if (cryptoDataByte.getPriKeyB() != null && !BytesTools.isFilledKey(cryptoDataByte.getPriKeyB())) {
+            if (cryptoDataByte.getPriKeyB() != null && !BytesUtils.isFilledKey(cryptoDataByte.getPriKeyB())) {
                 if (cryptoDataByte.getPubKeyA() != null) {
                     if (isTheKeyPair(cryptoDataByte.getPubKeyA(), cryptoDataByte.getPriKeyB())) {
                         if (isTheKeyPair(cryptoDataByte.getPubKeyB(), cryptoDataByte.getPriKeyB())) {
@@ -1027,7 +1027,7 @@ public class EccAes256K1P7 {
                         pubKeyBytes = cryptoDataByte.getPubKeyA();
                     }
                 }
-            } else if (cryptoDataByte.getPubKeyA() != null && !BytesTools.isFilledKey(cryptoDataByte.getPriKeyA())) {
+            } else if (cryptoDataByte.getPubKeyA() != null && !BytesUtils.isFilledKey(cryptoDataByte.getPriKeyA())) {
                 if (isTheKeyPair(cryptoDataByte.getPubKeyA(), cryptoDataByte.getPriKeyA())) {
                     if (isTheKeyPair(cryptoDataByte.getPubKeyB(), cryptoDataByte.getPriKeyA())) {
                         found = false;
@@ -1071,7 +1071,7 @@ public class EccAes256K1P7 {
         byte[] sharedSecretHash;
 
         sharedSecretHash = sha256.digest(sharedSecret);
-        byte[] secretHashWithIv = BytesTools.addByteArray(sharedSecretHash, iv);
+        byte[] secretHashWithIv = BytesUtils.addByteArray(sharedSecretHash, iv);
         symKey = sha256.digest(sha256.digest(secretHashWithIv));
 
         clearByteArray(sharedSecret);
@@ -1108,7 +1108,7 @@ public class EccAes256K1P7 {
         encrypt(cryptoDataByte);
         cryptoDataByte.clearSymKey();
 
-        byte[] bundleBytes = BytesTools.addByteArray(BytesTools.addByteArray(cryptoDataByte.getPubKeyA(), cryptoDataByte.getIv()), cryptoDataByte.getCipher());
+        byte[] bundleBytes = BytesUtils.addByteArray(BytesUtils.addByteArray(cryptoDataByte.getPubKeyA(), cryptoDataByte.getIv()), cryptoDataByte.getCipher());
         if (cryptoDataByte.getMessage() != null) return "Error:" + cryptoDataByte.getMessage();
         return Base64.getEncoder().encodeToString(bundleBytes);
     }
@@ -1118,7 +1118,7 @@ public class EccAes256K1P7 {
         byte[] pubKeyABytes = new byte[33];
         byte[] ivBytes = new byte[16];
         byte[] cipherBytes = new byte[bundleBytes.length - pubKeyABytes.length - ivBytes.length];
-        byte[] priKeyBBytes = BytesTools.hexCharArrayToByteArray(priKeyB);
+        byte[] priKeyBBytes = BytesUtils.hexCharArrayToByteArray(priKeyB);
 
         pubKeyABytes = Arrays.copyOfRange(bundleBytes, 0, 33);
         ivBytes = Arrays.copyOfRange(bundleBytes, 33, 49);
@@ -1147,13 +1147,13 @@ public class EccAes256K1P7 {
         encrypt(cryptoDataByte);
         cryptoDataByte.clearSymKey();
 
-        byte[] bundleBytes = BytesTools.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
+        byte[] bundleBytes = BytesUtils.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
         if (cryptoDataByte.getMessage() != null) return "Error:" + cryptoDataByte.getMessage();
         return Base64.getEncoder().encodeToString(bundleBytes);
     }
 
     public String decryptAsyTwoWayBundle(String bundle, String pubKeyA, char[] priKeyB) {
-        byte[] priKeyBBytes = BytesTools.hexCharArrayToByteArray(priKeyB);
+        byte[] priKeyBBytes = BytesUtils.hexCharArrayToByteArray(priKeyB);
         byte[] pubKeyABytes = HexFormat.of().parseHex(pubKeyA);
 
         byte[] bundleBytes = Base64.getDecoder().decode(bundle);
@@ -1185,7 +1185,7 @@ public class EccAes256K1P7 {
         byte[] ivBytes = HexFormat.of().parseHex(iv);
         byte[] cipherBytes = Base64.getDecoder().decode(cipher);
 
-        byte[] ivCipherBytes = BytesTools.addByteArray(ivBytes, cipherBytes);
+        byte[] ivCipherBytes = BytesUtils.addByteArray(ivBytes, cipherBytes);
         String bundle = Base64.getEncoder().encodeToString(ivCipherBytes);
         //eccAesData.clearAllSensitiveData();
         if (cryptoDataStr.getMessage() != null) return "Error:" + cryptoDataStr.getMessage();
@@ -1201,7 +1201,7 @@ public class EccAes256K1P7 {
         byte[] ivBytes = HexFormat.of().parseHex(iv);
         byte[] cipherBytes = Base64.getDecoder().decode(cipher);
 
-        byte[] ivCipherBytes = BytesTools.addByteArray(ivBytes, cipherBytes);
+        byte[] ivCipherBytes = BytesUtils.addByteArray(ivBytes, cipherBytes);
         String bundle = Base64.getEncoder().encodeToString(ivCipherBytes);
         //eccAesData.clearAllSensitiveData();
         if (cryptoDataStr.getMessage() != null) return "Error:" + cryptoDataStr.getMessage();
@@ -1210,7 +1210,7 @@ public class EccAes256K1P7 {
 
     public String decryptSymKeyBundle(String bundle, char[] symKey) {
         CryptoDataByte cryptoDataByte = makeIvCipherToCryptoDataByte(Base64.getDecoder().decode(bundle));
-        cryptoDataByte.setSymKey(BytesTools.hexCharArrayToByteArray(symKey));
+        cryptoDataByte.setSymKey(BytesUtils.hexCharArrayToByteArray(symKey));
         decrypt(cryptoDataByte);
 
         if (cryptoDataByte.getMessage() != null) return "Error:" + cryptoDataByte.getMessage();
@@ -1229,7 +1229,7 @@ public class EccAes256K1P7 {
         cryptoDataByte.clearSymKey();
 
         if (cryptoDataByte.getMessage() != null) return null;
-        return BytesTools.addByteArray(BytesTools.addByteArray(cryptoDataByte.getPubKeyA(), cryptoDataByte.getIv()), cryptoDataByte.getCipher());
+        return BytesUtils.addByteArray(BytesUtils.addByteArray(cryptoDataByte.getPubKeyA(), cryptoDataByte.getIv()), cryptoDataByte.getCipher());
     }
 
     public byte[] decryptAsyOneWayBundle(byte[] bundle, byte[] priKeyB) {
@@ -1263,7 +1263,7 @@ public class EccAes256K1P7 {
         cryptoDataByte.clearSymKey();
 
         if (cryptoDataByte.getMessage() != null) return null;
-        return BytesTools.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
+        return BytesUtils.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
     }
 
     public byte[] decryptAsyTwoWayBundle(byte[] bundle, byte[] pubKeyA, byte[] priKeyB) {
@@ -1294,7 +1294,7 @@ public class EccAes256K1P7 {
 
         encrypt(cryptoDataByte);
         //eccAesDataByte.clearAllSensitiveData();
-        return BytesTools.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
+        return BytesUtils.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
     }
 
     public byte[] decryptSymKeyBundle(byte[] bundle, byte[] symKey) {
@@ -1320,7 +1320,7 @@ public class EccAes256K1P7 {
 
         encrypt(cryptoDataByte);
         //eccAesDataByte.clearAllSensitiveData();
-        return BytesTools.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
+        return BytesUtils.addByteArray(cryptoDataByte.getIv(), cryptoDataByte.getCipher());
     }
 
     public byte[] decryptPasswordBundle(byte[] bundle, byte[] password) {
@@ -1530,7 +1530,7 @@ public class EccAes256K1P7 {
 //    }
 
     private byte[] makeSymKeyFromPassword(CryptoDataByte cryptoDataByte, MessageDigest sha256, byte[] iv) {
-        byte[] symKeyBytes = sha256.digest(BytesTools.addByteArray(sha256.digest(cryptoDataByte.getPassword()), iv));
+        byte[] symKeyBytes = sha256.digest(BytesUtils.addByteArray(sha256.digest(cryptoDataByte.getPassword()), iv));
         return symKeyBytes;
     }
 
@@ -1990,12 +1990,12 @@ public class EccAes256K1P7 {
     }
 
     private byte[] getSum4(MessageDigest sha256, byte[] symKey, byte[] iv, byte[] cipher) {
-        byte[] sum32 = sha256.digest(BytesTools.addByteArray(symKey, BytesTools.addByteArray(iv, cipher)));
+        byte[] sum32 = sha256.digest(BytesUtils.addByteArray(symKey, BytesUtils.addByteArray(iv, cipher)));
         return getPartOfBytes(sum32, 0, 4);
     }
 
     public static byte[] getSum4(byte[] symKey, byte[] iv, byte[] cipher) {
-        byte[] sum32 = Hash.sha256(BytesTools.addByteArray(symKey, BytesTools.addByteArray(iv, cipher)));
+        byte[] sum32 = Hash.sha256(BytesUtils.addByteArray(symKey, BytesUtils.addByteArray(iv, cipher)));
         return getPartOfBytes(sum32, 0, 4);
     }
 

@@ -1,5 +1,6 @@
 package configure;
 
+import app.CidInfo;
 import clients.*;
 import fcData.FcSession;
 import apip.apipData.RequestBody;
@@ -9,17 +10,19 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import crypto.*;
 import fcData.ReplyBody;
-import tools.IdNameTools;
-import fch.ParseTools;
+import org.bitcoinj.core.Transaction;
+import org.bitcoinj.fch.FchMainNetwork;
+import utils.IdNameUtils;
+import fch.FchUtils;
 import fch.TxCreator;
 import fch.fchData.Cash;
 import fch.fchData.SendTo;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.ApipParams;
 import feip.feipData.serviceParams.Params;
-import tools.*;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.*;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,7 +79,7 @@ public class ApiAccount {
         if(newSessionKeyCipher.contains("Error"))return;
         fcSession.setKeyCipher(newSessionKeyCipher);
         apipAccount.fcSession.setKeyCipher(newSessionKeyCipher);
-        String newSessionName = IdNameTools.makeKeyName(newSessionKey);
+        String newSessionName = IdNameUtils.makeKeyName(newSessionKey);
         apipAccount.fcSession.setName(newSessionName);
         System.out.println("SessionName:" + newSessionName);
         System.out.println("SessionKeyCipher: " + fcSession.getKeyCipher());
@@ -85,13 +88,13 @@ public class ApiAccount {
     public boolean isBalanceSufficient(){
         long price;
         if(serviceParams.getPricePerKBytes()!=null){
-            price= (long) (NumberTools.roundDouble8(Double.parseDouble(serviceParams.getPricePerKBytes()))*COIN_TO_SATOSHI);
-        }else price= (long) (NumberTools.roundDouble8(Double.parseDouble(serviceParams.getPricePerRequest()))*COIN_TO_SATOSHI);
+            price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerKBytes()))*COIN_TO_SATOSHI);
+        }else price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerRequest()))*COIN_TO_SATOSHI);
 
         return balance < price * minRequestTimes;
     }
 
-    public Object connectApi(ApiProvider apiProvider, byte[] symKey, BufferedReader br, @Nullable ApipClient apipClient, Map<String, String> fidCipherMap) {
+    public Object connectApi(ApiProvider apiProvider, byte[] symKey, BufferedReader br, @Nullable ApipClient apipClient, Map<String, CidInfo> fidCipherMap) {
 
         if (!checkApiGeneralParams(apiProvider, br)) return null;
 
@@ -255,7 +258,7 @@ public class ApiAccount {
         return esClientMaker.esClient;
     }
 
-    private DiskClient connectDisk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, String> fidCipherMap) {
+    private DiskClient connectDisk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, CidInfo> cidInfoMap) {
         if(apipClient==null){
             System.out.println("APIP client is required for the DISK service.");
             System.exit(-1);
@@ -286,12 +289,12 @@ public class ApiAccount {
 
         if (userPriKeyCipher == null) {
             System.out.println("Set requester priKey...");
-            if(br!=null)inputPriKeyCipher(symKey,br,fidCipherMap);
+            if(br!=null)inputPriKeyCipher(symKey,br,cidInfoMap);
             else return null;
         }
 
         byte[] sessionKey1 =
-                checkSessionKey(symKey, apiProvider.getType());
+                checkSessionKey(symKey, apiProvider.getType(), br);
 
         if(sessionKey1==null) {
             System.out.println("Failed to connect Disk server.");
@@ -307,7 +310,7 @@ public class ApiAccount {
         return diskClient;
     }
 
-    private TalkClient connectTalk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, String> fidCipherMap) {
+    private TalkClient connectTalk(ApiProvider apiProvider, byte[] symKey, ApipClient apipClient, BufferedReader br, Map<String, CidInfo> fidCipherMap) {
         if(apipClient==null){
             System.out.println("APIP client is required for the TALK service.");
             System.exit(-1);
@@ -391,7 +394,7 @@ public class ApiAccount {
             if ("y".equals(input)) {
                 priKey32 = KeyTools.genNewFid(br).getPrivKeyBytes();
             } else {
-                priKey32 = KeyTools.inputCipherGetPriKey(br);
+                priKey32 = KeyTools.importOrCreatePriKey(br);
             }
             if (priKey32 == null) return null;
             this.userPubKey = Hex.toHex(KeyTools.priKeyToPubKey(priKey32));
@@ -407,7 +410,7 @@ public class ApiAccount {
             String buyerPriKeyCipher = cryptoDataByte.toJson();
             if (buyerPriKeyCipher.contains("Error")) continue;
             userPriKeyCipher = buyerPriKeyCipher;
-            BytesTools.clearByteArray(priKey32);
+            BytesUtils.clearByteArray(priKey32);
             return priKey32;
         }
     }
@@ -440,7 +443,7 @@ public class ApiAccount {
         }
 
         if (apiAccount.fcSession.getKeyCipher() == null) {
-            sessionKey = apiAccount.freshSessionKey(symKey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL);
+            sessionKey = apiAccount.freshSessionKey(symKey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL, null);
             if (sessionKey == null) return null;
             revised = true;
         }
@@ -483,7 +486,7 @@ public class ApiAccount {
         System.out.println();
         System.out.println("Set the APIP service buyer(requester)...");
         apiAccount.inputPriKeyCipher(br, symKey);
-        sessionKey = apiAccount.freshSessionKey(symKey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL);
+        sessionKey = apiAccount.freshSessionKey(symKey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL, null);
         if (sessionKey == null) return null;
 
         writeApipParamsToFile(apiAccount, APIP_Account_JSON);
@@ -496,7 +499,7 @@ public class ApiAccount {
         Service service = (Service) replier.getData();
         if(service!=null) {
             System.out.println("Got the service:");
-            System.out.println(JsonTools.toNiceJson(service));
+            System.out.println(JsonUtils.toNiceJson(service));
         }
         return service;
     }
@@ -506,7 +509,7 @@ public class ApiAccount {
         CryptoDataByte cryptoDataBytes = new Decryptor().decryptJsonByAsyOneWay(cipher, priKey);
         if (cryptoDataBytes.getCode() != 0) {
             System.out.println("Failed to decrypt: " + cryptoDataBytes.getMessage());
-            BytesTools.clearByteArray(priKey);
+            BytesUtils.clearByteArray(priKey);
             return null;
         }
         String sessionKeyHex = new String(cryptoDataBytes.getData(), StandardCharsets.UTF_8);
@@ -514,7 +517,7 @@ public class ApiAccount {
     }
 
     public static void writeApipParamsToFile(ApiAccount apipParamsForClient, String fileName) {
-        JsonTools.writeObjectToJsonFile(apipParamsForClient, fileName, false);
+        JsonUtils.writeObjectToJsonFile(apipParamsForClient, fileName, false);
     }
 
     public static ApiAccount readApipAccountFromFile() {
@@ -529,7 +532,7 @@ public class ApiAccount {
                 }
             }
             FileInputStream fis = new FileInputStream(file);
-            apipParamsForClient = JsonTools.readObjectFromJsonFile(fis, ApiAccount.class);
+            apipParamsForClient = JsonUtils.readObjectFromJsonFile(fis, ApiAccount.class);
             if (apipParamsForClient != null) return apipParamsForClient;
         } catch (IOException e) {
             e.printStackTrace();
@@ -541,12 +544,12 @@ public class ApiAccount {
     public String makeApiAccountId(String sid, String userName) {
         byte[] bundleBytes;
         if(userName!=null) {
-            bundleBytes = BytesTools.bytesMerger(sid.getBytes(), userName.getBytes());
+            bundleBytes = BytesUtils.bytesMerger(sid.getBytes(), userName.getBytes());
         }else bundleBytes = sid.getBytes();
         return HexFormat.of().formatHex(Hash.sha256x2(bundleBytes));
     }
 
-    public void inputAll(byte[] symKey, ApiProvider apiProvider, String userFid, Map<String, String> fidPriKeyCipherMap, BufferedReader br) {
+    public void inputAll(byte[] symKey, ApiProvider apiProvider, String userFid, Map<String, CidInfo> fidInfoMap, BufferedReader br) {
         try  {
             this.providerId =apiProvider.getId();
             this.apiUrl = apiProvider.getApiUrl();
@@ -572,14 +575,15 @@ public class ApiAccount {
                 case APIP, DISK,TALK -> {
                     if(providerId ==null)inputSid(br);
 
-                    checkUserCipher(symKey, userFid, fidPriKeyCipherMap, br);
+//                    checkUserCipher(symKey, userFid, fidInfoMap, br);
 
                     while(userName==null) {
+                        if(userPriKeyCipher==null)userPriKeyCipher = fidInfoMap.get(userFid).getPriKeyCipher();
                         if(userPriKeyCipher==null)return;
                         byte[] userPriKey = new Decryptor().decryptJsonBySymKey(userPriKeyCipher, symKey).getData();
                         userName = KeyTools.priKeyToFid(userPriKey);
                         userId = userName;
-                        BytesTools.clearByteArray(userPriKey);
+                        BytesUtils.clearByteArray(userPriKey);
                     }
                     inputVia(br);
                 }
@@ -602,30 +606,30 @@ public class ApiAccount {
         }
     }
 
-    private void checkUserCipher(byte[] symKey, String userFid, Map<String, String> fidPriKeyCipher, BufferedReader br) {
-        String cipher = null;
-        if(fidPriKeyCipher !=null) {
-            if (userFid != null) cipher = fidPriKeyCipher.get(userFid);
-            if(cipher==null)
-                cipher = chooseUserCipher(symKey, fidPriKeyCipher, br, cipher);
-            if(cipher!=null){
-                this.userPriKeyCipher = cipher;
-                this.userPubKey=makePubKey(this.userPriKeyCipher, symKey);
-            }
-        }
+//    private void checkUserCipher(byte[] symKey, String userFid, Map<String, CidInfo> fidInfoMap, BufferedReader br) {
+//        String cipher = null;
+//        CidInfo cidInfo;
+//        if(fidInfoMap !=null) {
+//            cidInfo = fidInfoMap.get(userFid);
+//            if (userFid != null) {
+//                cipher = cidInfo.getPriKeyCipher();
+//            }
+//            if(cipher==null)
+//                cipher = chooseUserCipher(symKey, fidInfoMap, br, cipher);
+//        }
+//
+//        if(cipher==null) inputPriKeyCipher(symKey, br,fidInfoMap);
+//    }
 
-        if(cipher==null) inputPriKeyCipher(symKey, br,fidPriKeyCipher);
-    }
-
-    public String chooseUserCipher(byte[] symKey, Map<String, String> fidPriKeyCipher, BufferedReader br, String cipher) {
-        String choice = chooseOneKeyFromMap(fidPriKeyCipher, false, null, "Choose the account FID for this service:", br);
-        if(choice!=null) {
-            cipher = fidPriKeyCipher.get(choice);
-            this.userPriKeyCipher = cipher;
-            this.userPubKey = makePubKey(this.userPriKeyCipher, symKey);
-        }
-        return cipher;
-    }
+//    public String chooseUserCipher(byte[] symKey, Map<String, CidInfo> fidInfoMap, BufferedReader br, String cipher) {
+//        String choice = chooseOneKeyFromMap(fidInfoMap, false, null, "Choose the account FID for this service:", br);
+//        if(choice!=null) {
+//            cipher = fidInfoMap.get(choice).getPriKeyCipher();
+//            this.userPriKeyCipher = cipher;
+//            this.userPubKey = makePubKey(this.userPriKeyCipher, symKey);
+//        }
+//        return cipher;
+//    }
 
     private void inputSid(BufferedReader br) throws IOException {
         this.providerId = Inputer.promptAndSet(br, "sid", this.providerId);
@@ -666,6 +670,14 @@ public class ApiAccount {
         return Hex.toHex(pubKey);
     }
 
+    public static CidInfo makeFidInfoByPriKeyCipher(String userPriKeyCipher, byte[] symKey) {
+        Decryptor decryptor = new Decryptor();
+        CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymKey(userPriKeyCipher,symKey);
+        if(cryptoDataByte.getCode()!=0)return null;
+        byte[] priKey = cryptoDataByte.getData();
+        return new CidInfo(priKey,symKey);
+    }
+
     private String updateKeyCipher(BufferedReader reader, String fieldName, String currentValue, byte[] symKey) throws IOException {
         System.out.println(fieldName + " current value: " + currentValue);
         System.out.print("Do you want to update it? (y/n): ");
@@ -679,7 +691,7 @@ public class ApiAccount {
     private void inputPasswordCipher(byte[] symKey, BufferedReader br) throws IOException {
         char[] password = Inputer.inputPassword(br, "Input the password. Enter to ignore:");
         if(password!=null)
-            this.passwordCipher = new Encryptor(FC_AesCbc256_No1_NrC7).encryptToJsonBySymKey(BytesTools.utf8CharArrayToByteArray(password), symKey);
+            this.passwordCipher = new Encryptor(FC_AesCbc256_No1_NrC7).encryptToJsonBySymKey(BytesUtils.utf8CharArrayToByteArray(password), symKey);
         if(this.passwordCipher==null) {
            String input = inputKeyCipher(br, "user's passwordCipher", symKey);
            if (input == null) return;
@@ -687,7 +699,7 @@ public class ApiAccount {
        }
     }
 
-    public void inputPriKeyCipher(byte[] symKey, BufferedReader br, Map<String, String> fidPriKeyCipherMap) {
+    public void inputPriKeyCipher(byte[] symKey, BufferedReader br, Map<String, CidInfo> cidInfoMap) {
         System.out.println();
         if(Inputer.askIfYes(br,"Set the API buyer priKey?"))
             while(true) {
@@ -698,9 +710,16 @@ public class ApiAccount {
                         continue;
                     }
                     this.userPriKeyCipher = cipherJson;
-                    this.userPubKey=makePubKey(this.userPriKeyCipher,symKey);
+
+                    CidInfo cidInfo = makeFidInfoByPriKeyCipher(cipherJson,symKey);
+                    if(cidInfo==null){
+                        System.out.println("Failed to make CID info");
+                        System.out.println("Try again.");
+                        continue;
+                    }
+                    this.userPubKey = cidInfo.getPubKey();
                     String fid = KeyTools.pubKeyToFchAddr(Hex.fromHex(this.userPubKey));
-                    fidPriKeyCipherMap.put(fid,this.userPriKeyCipher);
+                    cidInfoMap.put(fid,cidInfo);
                     break;
                 }catch (Exception e){
                     System.out.println("Wrong input. Try again.");
@@ -725,7 +744,7 @@ public class ApiAccount {
                 return null;
             }
             try {
-                CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonByPassword(str, BytesTools.byteArrayToUtf8CharArray(Inputer.getPasswordBytes(br)));
+                CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonByPassword(str, BytesUtils.byteArrayToUtf8CharArray(Inputer.getPasswordBytes(br)));
                 if(cryptoDataByte.getCode()!=0){
                     System.out.println("Something wrong. Try again.");
                     continue;
@@ -769,11 +788,11 @@ public class ApiAccount {
         if(apipClient==null) apipClient = Settings.getFreeApipClient();
 
         byte[] priKey = decryptUserPriKey(userPriKeyCipher, symKey);
-        long minPay = ParseTools.coinStrToSatoshi(serviceParams.getMinPayment());
+        long minPay = FchUtils.coinStrToSatoshi(serviceParams.getMinPayment());
 
         long price;
         try {
-            price = ParseTools.coinStrToSatoshi(serviceParams.getPricePerKBytes());
+            price = FchUtils.coinStrToSatoshi(serviceParams.getPricePerKBytes());
         } catch (Exception ignore) {
             System.out.println("The price of APIP service is 0.");
             price = 0;
@@ -794,8 +813,8 @@ public class ApiAccount {
         String signedTx;
 
         if(priKey==null){
-            String unsignedTx = TxCreator.createUnsignedTxFch(cashList, sendToList, APIP_Account_JSON, null, payValue);
-            System.out.println("Unsigned TX: \n--------" + unsignedTx + "\n--------");
+            Transaction transaction = TxCreator.createUnsignedTx(cashList, sendToList, APIP_Account_JSON, null, payValue, null, FchMainNetwork.MAINNETWORK);
+            System.out.println("Unsigned TX: \n--------" + Hex.toHex(transaction.bitcoinSerialize()) + "\n--------");
 
             if(br==null){
                 System.out.println("Please sign the TX and broadcast it.");
@@ -806,14 +825,14 @@ public class ApiAccount {
                 signedTx = Inputer.inputString(br);
                 if("q".equals(signedTx))System.exit(0);
                 if(Hex.isHexString(signedTx))break;
-                if(StringTools.isBase64(signedTx)){
-                    signedTx = StringTools.base64ToHex(signedTx);
+                if(StringUtils.isBase64(signedTx)){
+                    signedTx = StringUtils.base64ToHex(signedTx);
                     break;
                 }
                 System.out.println("Failed to get signed Tx. Try again.");
             }
         }else {
-            signedTx = TxCreator.createTxFch(cashList, priKey, sendToList, null);
+            signedTx = TxCreator.createTxFch(cashList, priKey, sendToList, null, FchMainNetwork.MAINNETWORK);
         }
 
         String result = apipClient.broadcastTx(signedTx, RequestMethod.GET, AuthType.FREE);
@@ -825,14 +844,14 @@ public class ApiAccount {
         System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getDealer() + ". \nWait for the confirmation for a few minutes...");
 
         waitConfirmation(cashList.get(0).getId(), apipClient);
-        BytesTools.clearByteArray(priKey);
+        BytesUtils.clearByteArray(priKey);
         if(payments==null)payments=new HashMap<>();
         payments.put(result,payValue);
         return payValue;
     }
 
 
-    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br, Map<String, String> fidCipherMap){
+    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br, Map<String, CidInfo> fidCipherMap){
 
         if(!apiProvider.getType().equals(Service.ServiceType.APIP)){
             System.out.println("It's not APIP provider.");
@@ -848,15 +867,6 @@ public class ApiAccount {
             return null;
         }
 
-        if (userPriKeyCipher == null) {
-            log.error("The requester priKey is null.");
-            if(br!=null)inputPriKeyCipher(symKey,br, fidCipherMap);
-            else {
-                System.out.println("Set APIP requester priKey...");
-                return null;
-            }
-        }
-
         ApipClient apipClient;
 
         if(client==null){
@@ -864,7 +874,7 @@ public class ApiAccount {
             client = apipClient;
         }else apipClient=(ApipClient) client;
 
-        byte[] sessionKey1 = checkSessionKey(symKey, apiProvider.getType());
+        byte[] sessionKey1 = checkSessionKey(symKey, apiProvider.getType(), br);
 
         if(sessionKey1==null) {
             System.out.println("Failed to get the sessionKey of APIP service from "+apiUrl+". Only free APIs are available.");
@@ -929,17 +939,16 @@ public class ApiAccount {
         return apiProvider;
     }
 
-    private byte[] checkSessionKey(byte[] symKey, Service.ServiceType type) {
+    private byte[] checkSessionKey(byte[] symKey, Service.ServiceType type, BufferedReader br) {
         if(this.fcSession ==null)this.fcSession = new FcSession();
         if (this.fcSession.getKeyCipher()== null) {
-            this.sessionKey=freshSessionKey(symKey, type, RequestBody.SignInMode.NORMAL);
+            this.sessionKey=freshSessionKey(symKey, type, RequestBody.SignInMode.NORMAL, br);
         } else {
             this.sessionKey =decryptSessionKey(fcSession.getKeyCipher(),symKey);
         }
         if (this.sessionKey==null) {
-            log.debug("Failed decrypt sessionKey for "+type+" service.");
-            System.out.println("Failed decrypt sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
-            System.out.println("Check the API account"+this.getId()+". It might to be reset.");
+            log.debug("Failed to get sessionKey for "+type+" service.");
+            System.out.println("Failed to get sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
             return null;
         }
         //test the client
@@ -956,18 +965,18 @@ public class ApiAccount {
         else return null;
     }
 
-    public byte[] freshSessionKey(byte[] symKey, Service.ServiceType type, RequestBody.SignInMode mode) {
+    public byte[] freshSessionKey(byte[] symKey, Service.ServiceType type, RequestBody.SignInMode mode, BufferedReader br) {
         System.out.println("Fresh the sessionKey of the "+type+" service...");
 
         FcSession fcSession;
         switch (type){
             case APIP -> {
                 ApipClient apipClient = (ApipClient) client;
-                fcSession = apipClient.signInEcc(this, mode,symKey);
+                fcSession = apipClient.signInEcc(this, mode,symKey, br);
             }
             case DISK -> {
                 DiskClient diskClient = (DiskClient) client;
-                fcSession = diskClient.signInEcc(this, mode,symKey);
+                fcSession = diskClient.signInEcc(this, mode,symKey, br);
             }
 //            case TALK -> {
 //                ClientTalk clientTalk = (ClientTalk) client;
@@ -977,8 +986,8 @@ public class ApiAccount {
                 byte[] priKey = decryptUserPriKey(userPriKeyCipher,symKey);
                 if(priKey==null)return null;
                 Client client1 = (Client)client;
-                fcSession = client1.signInEcc(this, mode,symKey);
-                BytesTools.clearByteArray(priKey);
+                fcSession = client1.signInEcc(this, mode,symKey, null);
+                BytesUtils.clearByteArray(priKey);
             }
         }
 
@@ -1007,7 +1016,7 @@ public class ApiAccount {
                 this.via = "FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7";
                 break;
             } else {
-                if (KeyTools.isValidFchAddr(input)) {
+                if (KeyTools.isGoodFid(input)) {
                     this.via = input;
                     break;
                 }else System.out.println("It's not a valid FID. Try again.");

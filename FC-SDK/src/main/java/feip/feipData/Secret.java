@@ -2,10 +2,8 @@ package feip.feipData;
 
 import fcData.FcObject;
 
-import java.util.List;
 
 public class Secret extends FcObject {
-	private List<String> secretIds;
     private String alg;
 	private String cipher;
 	
@@ -57,12 +55,6 @@ public class Secret extends FcObject {
 	}
 	public void setActive(Boolean active) {
 		this.active = active;
-	}
-	public List<String> getSecretIds() {
-		return secretIds;
-	}
-	public void setSecretIds(List<String> secretIds) {
-		this.secretIds = secretIds;
 	}
 	public Boolean getActive() {
 		return active;

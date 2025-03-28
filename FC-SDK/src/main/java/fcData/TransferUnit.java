@@ -5,11 +5,9 @@ import crypto.CryptoDataByte;
 import crypto.Decryptor;
 import crypto.Encryptor;
 import crypto.KeyTools;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
 
 public class TransferUnit extends FcObject{
     private boolean isEncrypted;
@@ -102,8 +100,8 @@ public class TransferUnit extends FcObject{
         offset += 1;
 
         // Check if the first bit of the flag is 0 (meaning keyName is included)
-        transferUnit.setEncrypted(Boolean.TRUE.equals(BytesTools.getBit(transferUnit.flag, 0)));
-        transferUnit.setSymEncrypted(Boolean.TRUE.equals(BytesTools.getBit(transferUnit.flag, 1)));
+        transferUnit.setEncrypted(Boolean.TRUE.equals(BytesUtils.getBit(transferUnit.flag, 0)));
+        transferUnit.setSymEncrypted(Boolean.TRUE.equals(BytesUtils.getBit(transferUnit.flag, 1)));
         if (transferUnit.isEncrypted && transferUnit.isSymEncrypted) {
             int keyNameLength = 6;
             transferUnit.keyName = new byte[keyNameLength];
@@ -151,7 +149,7 @@ public class TransferUnit extends FcObject{
 
     public void setEncrypted(boolean encrypted) {
         isEncrypted = encrypted;
-        flag = BytesTools.setBit(flag,0,isEncrypted);
+        flag = BytesUtils.setBit(flag,0,isEncrypted);
     }
 
     public boolean isSymEncrypted() {
@@ -160,6 +158,6 @@ public class TransferUnit extends FcObject{
 
     public void setSymEncrypted(boolean symEncrypted) {
         isSymEncrypted = symEncrypted;
-        flag = BytesTools.setBit(flag,1,isSymEncrypted);
+        flag = BytesUtils.setBit(flag,1,isSymEncrypted);
     }
 }

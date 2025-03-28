@@ -5,7 +5,7 @@ import org.mapdb.DB;
 import org.mapdb.DBMaker;
 
 import appTools.Settings;
-import tools.FileTools;
+import utils.FileUtils;
 
 import java.io.File;
 import java.nio.file.Paths;
@@ -27,7 +27,7 @@ public class TalkUnitHandler extends Handler {
 
     public TalkUnitHandler(String myFid, String sid) {
         String userHome = System.getProperty("user.home");
-        this.dbName = FileTools.makeName(myFid, sid, "talkUnit", true);
+        this.dbName = FileUtils.makeName(myFid, sid, "talkUnit", true);
         String dbPath = Paths.get(userHome, dbName + ".db").toString();
         
         // Initialize DB with a single file
@@ -46,7 +46,7 @@ public class TalkUnitHandler extends Handler {
 
     public TalkUnitHandler(Settings settings){
         String userHome = System.getProperty("user.home");
-        this.dbName = FileTools.makeName(settings.getMainFid(), settings.getSid(), "talkUnit", true);
+        this.dbName = FileUtils.makeName(settings.getMainFid(), settings.getSid(), "talkUnit", true);
         String dbPath = Paths.get(userHome, dbName + ".db").toString();
 
         this.db = DBMaker.fileDB(new File(dbPath))

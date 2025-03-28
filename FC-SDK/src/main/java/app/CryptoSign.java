@@ -1,0 +1,1292 @@
+package app;
+
+import appTools.*;
+import configure.Configure;
+import constants.Constants;
+import crypto.Algorithm.Bitcore;
+import crypto.*;
+import fcData.AlgorithmId;
+import fcData.FcEntity;
+import fcData.SecretDetail;
+import fcData.Signature;
+import fch.MultiSigData;
+import fch.OffLineTxInfo;
+import fch.TxCreator;
+import fch.fchData.P2SH;
+import fch.fchData.RawTxForCs;
+
+import org.bitcoinj.core.ECKey;
+import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.core.Transaction;
+import org.bitcoinj.fch.FchMainNetwork;
+import org.jetbrains.annotations.Nullable;
+import utils.*;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static app.HomeApp.*;
+import static appTools.Inputer.askIfYes;
+import static appTools.Inputer.inputStringMultiLine;
+import static constants.Strings.DOT_JSON;
+import static constants.Tickers.BCH;
+import static constants.Tickers.FCH;
+import static utils.FileUtils.getAvailableFile;
+
+public class CryptoSign extends FcApp {
+
+    private final BufferedReader br;
+
+    private static final String APP_NAME = "CryptoSign";
+    private final Settings settings;
+    private final byte[] symKey;
+    private QRCodeScanner scanner = null;
+
+    
+    public CryptoSign(Settings settings, BufferedReader br) {
+        this.settings = settings;
+        this.symKey = settings.getSymKey();
+        this.br = br;
+
+        try {
+            System.out.println("Initializing QR code scanner...");
+
+        } catch (Exception e) {
+            System.out.println("Failed to initialize QR code scanner: " + e.getMessage());
+            scanner = null;
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Menu.welcome(APP_NAME);
+
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        Map<String,Object> settingMap = new HashMap<>();
+        Settings settings = Starter.startTool(APP_NAME, settingMap, br, null);
+        if (settings == null) return;
+
+        CryptoSign cryptoSign = new CryptoSign(settings, br);
+        cryptoSign.menu();
+
+    }
+
+    public void menu() throws Exception {
+        Menu menu = new Menu("Home", this::close);
+
+        menu.add("My Keys", () -> keyManagement(br));
+        menu.add("Secret", () -> secret(br));
+        menu.add("Key Tools",()-> keyTools(br));
+        menu.add("Sign TX", () -> signTx( br));
+        menu.add("Sign Multisig TX", () -> multiSign(br));
+        menu.add("Sign Message", () -> signMsg(br));
+        menu.add("Verify Signature", () -> HomeApp.verify(br));
+        menu.add("Encrypt", () -> encrypt(br));
+        menu.add("Decrypt", () -> decrypt(br));
+        menu.add("Hash", () -> hash(br));
+        menu.add("Decode", () -> decode(br));
+        menu.add("QR code", () -> qrCode(br));
+        menu.add("Settings", () -> setting(br));
+
+        menu.showAndSelect(br);
+    }
+
+    private void keyManagement(BufferedReader br) {
+        Menu keyManagementMenu = new Menu("My keys");
+        keyManagementMenu.add("List Keys", () -> listKeys(br));
+        keyManagementMenu.add("New Key", () -> newKey(br));
+        keyManagementMenu.add("Import Key", () -> importKey(br));
+        keyManagementMenu.add("Edit key info", () -> editKeyInfo(br));
+        keyManagementMenu.add("Add watch only key", () -> addWatchOnlyKey(br));
+        keyManagementMenu.showAndSelect(br);
+    }
+
+    private void editKeyInfo(BufferedReader br) {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null || cidInfoList.isEmpty()) {
+            System.out.println("No keys found.");
+            return;
+        }
+        List<CidInfo> chosen = CidInfo.showList(cidInfoList, br);
+        if(chosen==null || chosen.isEmpty())return;
+        for(CidInfo cidInfo : chosen){
+            System.out.println(cidInfo.getId()+":");
+            try{
+                cidInfo.setLabel(Inputer.promptAndUpdate(br, "Label", cidInfo.getLabel()));
+                cidInfo.setWatchOnly(Inputer.promptAndUpdate(br, "Watch only", cidInfo.getWatchOnly()));
+                if(Boolean.TRUE.equals(cidInfo.getWatchOnly())){
+                    cidInfo.setPriKeyCipher(null);
+                    cidInfo.setPriKeyBytes(null);
+                }
+                cidInfo.setNobody(Inputer.promptAndUpdate(br, "Nobody", cidInfo.getNobody()));
+            }catch(IOException e){
+                System.out.println("Failed to update key info.");
+            }
+        }
+        CidInfo.listToFile(cidInfoList, CidInfo.class);
+        System.out.println("Key information updated.");
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void addWatchOnlyKey(BufferedReader br) {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList == null) cidInfoList = new ArrayList<>();
+        String pubKey = Inputer.inputString(br, "Input the public key:");
+        String label = Inputer.inputString(br, "Input a label for the key:");
+        CidInfo cidInfo = CidInfo.newKeyInfo(label, pubKey);
+        cidInfo.setWatchOnly(true);
+        cidInfoList.add(cidInfo);
+        CidInfo.listToFile(cidInfoList, CidInfo.class);
+    }
+    private void listKeys(BufferedReader br) {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null || cidInfoList.isEmpty()) {
+            System.out.println("No keys found.");
+            return;
+        }
+        List<CidInfo> chosen = CidInfo.showList(cidInfoList, br);
+        if(chosen==null || chosen.isEmpty())return;
+        String chosenOp = Inputer.chooseOne(new String[]{"Show Key Info", "Delete","Show PriKey"}, null,"Select an operation", br);
+        if(chosenOp==null || chosenOp.isEmpty())return;
+        switch (chosenOp) {
+            case "Show Key Info" -> showKeyInfoList(chosen,br);
+            case "Show PriKey" -> {
+                System.out.println("To show priKey, you have to ensure the security of your environment.");
+                if(!askIfYes(br, "Show priKey?")) break;
+
+                for (CidInfo cidInfo : chosen) {
+                    if(Boolean.TRUE.equals(cidInfo.getWatchOnly())){
+                        System.out.println(cidInfo.getId() +" is a watching FID.");
+                        break;
+                    }
+                    byte[] priKey = Decryptor.decryptPriKey(cidInfo.getPriKeyCipher(), settings.getSymKey());
+                    if (priKey != null) {
+                        String priKeyHex = Hex.toHex(priKey);
+
+                        System.out.println("FID:"+ cidInfo.getId());
+
+                        System.out.println("PriKey in hex:" + Hex.toHex(priKey));
+                        QRCodeUtils.generateQRCode(priKeyHex);
+
+                        String priKeyBase58 = Base58.encode(priKey);
+                        System.out.println("priKey in Base58:" + priKeyBase58);
+                        QRCodeUtils.generateQRCode(priKeyBase58);
+                    }
+                }
+                System.out.println();
+            }
+            case "Delete" -> {
+                if (askIfYes(br, "Are you sure you want to delete these keys?")) {
+                    for (CidInfo cidInfo : chosen) {
+                        cidInfoList.remove(cidInfo);
+                    }
+                    CidInfo.listToFile(cidInfoList, CidInfo.class);
+                }
+            }
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void showKeyInfoList(List<CidInfo> cidInfoList, BufferedReader br){
+        for(CidInfo cidInfo : cidInfoList){
+            CidInfo cidInfoWithoutCipher = new CidInfo();
+            cidInfoWithoutCipher.setLabel(cidInfo.getLabel());
+            cidInfoWithoutCipher.setWatchOnly(cidInfo.getWatchOnly());
+            cidInfoWithoutCipher.setNobody(cidInfo.getNobody());
+            if(cidInfo.getPubKey()!=null) cidInfoWithoutCipher.setPubKey(cidInfo.getPubKey());
+            cidInfoWithoutCipher.setId(cidInfo.getId());
+            if(cidInfo.getBtcAddr()!=null) cidInfoWithoutCipher.setBtcAddr(cidInfo.getBtcAddr());
+            if(cidInfo.getEthAddr()!=null) cidInfoWithoutCipher.setEthAddr(cidInfo.getEthAddr());
+            if(cidInfo.getBchAddr()!=null) cidInfoWithoutCipher.setBchAddr(cidInfo.getBchAddr());
+            if(cidInfo.getLtcAddr()!=null) cidInfoWithoutCipher.setLtcAddr(cidInfo.getLtcAddr());
+            if(cidInfo.getDogeAddr()!=null) cidInfoWithoutCipher.setDogeAddr(cidInfo.getDogeAddr());
+            if(cidInfo.getTrxAddr()!=null) cidInfoWithoutCipher.setTrxAddr(cidInfo.getTrxAddr());
+            
+            System.out.println(cidInfoWithoutCipher.toNiceJson());
+            if(!askIfYes(br, "Stop?"))continue;
+            break;
+        }
+    }
+
+    private void newKey(BufferedReader br) {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null) cidInfoList = new ArrayList<>();
+        String op = Inputer.chooseOne(new String[]{"Random New","Import PriKey","Secret Words"}, null, "Select an algorithm", br);
+        String label;
+        byte[] priKey = null;
+        ECKey ecKey;
+        switch (op) {
+            case "Random New" -> {
+                ecKey = KeyTools.genNewFid(br);
+                priKey = ecKey.getPrivKeyBytes();
+            }
+            case "Secret Words" -> {
+                String secretWords;
+                while (true) {
+                    secretWords = Inputer.inputString(br, "Input the secret words:");
+                    if (secretWords == null) return;
+                    if (checkSecretWords(secretWords, br)) break;
+                    System.out.println("Invalid secret words.");
+                }
+                ecKey = KeyTools.secretWordsToPriKey(secretWords);
+                priKey = ecKey.getPrivKeyBytes();
+            }
+            case "Import PriKey" -> {
+                if(scanner!=null && askIfYes(br,"Scan priKey QR code?"))
+                    priKey = scanPriKeyQR();
+                else priKey = KeyTools.importOrCreatePriKey(br);
+            }
+        }
+        if(priKey==null)return;
+
+        label = Inputer.inputString(br, "Input a label for the key:");
+
+        CidInfo cidInfo = CidInfo.newKeyInfo(label,priKey,settings.getSymKey());
+        if(askIfYes(br,"Is it a nobody(priKey leaked)?")){
+            cidInfo.setNobody(true);
+        }
+        cidInfoList.add(cidInfo);
+        CidInfo.listToFile(cidInfoList, CidInfo.class);
+        System.out.println("New key "+ cidInfo.getId()+" created successfully.");
+    }
+
+    @Nullable
+    private byte[] scanPriKeyQR() {
+        byte[] priKey;
+        System.out.println("Point your QR code to the camera. Scanning for private key...");
+        final byte[][] scannedPriKey = new byte[1][]; // Using array to hold result from lambda
+        final boolean[] scanComplete = new boolean[1]; // Flag to track scan completion
+
+        // Start scanning for QR codes
+        scanner.startScanning(new QRCodeScanner.QRCodeCallback() {
+            @Override
+            public void onQRCodeDetected(String text) {
+                if (scanComplete[0]) return; // Avoid processing multiple times
+
+                try {
+                    // Attempt to process the scanned text as a private key
+                    if (text.length() == 64 && Hex.isHexString(text)) {
+                        // It's likely a hex private key
+                        scannedPriKey[0] = Hex.fromHex(text);
+                        System.out.println("Private key in hex format detected.");
+                    } else if (text.length() >= 50 && text.length() <= 52) {
+                        // It's likely a WIF or base58 private key
+                        try {
+                            byte[] priKey32 = KeyTools.getPriKey32(text);
+                            if (priKey32 != null) {
+                                scannedPriKey[0] = priKey32;
+                                System.out.println("Private key in Base58/WIF format detected.");
+                            } else {
+                                System.out.println("Invalid Base58/WIF private key format.");
+                                return;
+                            }
+                        } catch (Exception e) {
+                            System.out.println("Invalid Base58/WIF private key format: " + e.getMessage());
+                            return;
+                        }
+                    } else {
+                        // Try to decode as JSON or other formats if needed
+                        System.out.println("Unsupported private key format. Please use hex or WIF format.");
+                        return;
+                    }
+
+                    scanComplete[0] = true;
+                    System.out.println("Private key successfully scanned!");
+                } catch (Exception e) {
+                    System.out.println("Error processing QR code: " + e.getMessage());
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                System.out.println("QR code scanning error: " + e.getMessage());
+            }
+        }, 200); // Scan every 200 milliseconds
+
+        // Wait for scan to complete or user to cancel
+        try {
+            System.out.println("Scanning... Press Enter to cancel.");
+            while (!scanComplete[0]) {
+                if (System.in.available() > 0) {
+                    System.in.read();
+                    break;
+                }
+                Thread.sleep(100);
+            }
+        } catch (Exception e) {
+            System.out.println("Scanning interrupted: " + e.getMessage());
+        } finally {
+            scanner.stopScanning();
+        }
+
+        if (scannedPriKey[0] == null) {
+            System.out.println("No valid private key was scanned.");
+            return null;
+        }
+
+        priKey = scannedPriKey[0];
+        return priKey;
+    }
+
+    public static boolean checkSecretWords(String secretWords, BufferedReader br) {
+        if (secretWords == null || secretWords.trim().isEmpty()) {
+            return false;
+        }
+
+        // Check minimum length
+        if(secretWords.length()<40){
+            System.out.println("The number of characters is less than 40.");
+            if(!askIfYes(br, "Ignore?"))return false;
+        }
+
+        // Check if it's just repeating characters
+        if (secretWords.matches("(.)\\1+")) {
+            System.out.println("The secret words are too easy to guess due to repeating characters.");
+            if(!askIfYes(br, "Ignore?"))return false;
+        }
+
+        // Check if it's a simple sequence
+        if (secretWords.matches("123456.*") ||
+            secretWords.matches("abcdef.*")) {
+            System.out.println("The secret words are too easy to guess due to being a simple sequence.");
+            if(!askIfYes(br, "Ignore?"))return false;
+        }
+
+        // Check if all words are the same
+        boolean allSame = true;
+        String firstWord = secretWords.split(" ")[0];
+        for (String word : secretWords.split(" ")) {
+            if (!word.equals(firstWord)) {
+                allSame = false;
+                break;
+            }
+        }
+        if (allSame) {
+            System.out.println("The secret words are too easy to guess due to being all the same.");
+            return askIfYes(br, "Ignore?");
+        }
+        return true;
+    }
+
+    private void importKey(BufferedReader br) {
+        byte[] priKey = KeyTools.importOrCreatePriKey(br);
+        if(priKey==null)return;
+
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null) cidInfoList = new ArrayList<>();
+        String label = Inputer.inputString(br, "Input a label for the key:");
+        CidInfo cidInfo = CidInfo.newKeyInfo(label,priKey,settings.getSymKey());
+        if(askIfYes(br,"Is it nobody(priKey leaked)?")){
+            cidInfo.setNobody(true);
+        }
+        int index = FcEntity.updateIntoListById(cidInfo, cidInfoList);
+        CidInfo.listToFile(cidInfoList, CidInfo.class);
+        if(index == cidInfoList.size() - 1)
+            System.out.println("Key added successfully.");
+        else if(index!= -1)
+            System.out.println("Key updated successfully.");
+        else System.out.println("Failed to add keyInfo.");
+    }
+
+    private void signTx(BufferedReader br) {
+        MainNetParams mainnetwork;
+
+        mainnetwork = chooseMainNetWork(br);
+
+        String rawTx;
+        CidInfo cidInfo = chooseKeyInfo();
+        if (cidInfo == null) return;
+        byte[] priKey = cidInfo.decryptPriKey(settings.getSymKey());
+        Transaction transaction;
+        OffLineTxInfo offLineTxInfo = null;
+        System.out.println("Input the json of off line TX information. Enter to ignore:");
+        rawTx = Inputer.inputStringMultiLine(br);
+        if(rawTx!=null && !"".equals(rawTx)) {
+            try {
+                rawTx = rawTx.trim();
+                offLineTxInfo = JsonUtils.fromJson(rawTx, OffLineTxInfo.class);
+            } catch (Exception e) {
+                try{
+                    List<RawTxForCs> rawTxForCsList = JsonUtils.listFromJson(rawTx, RawTxForCs.class);
+                    offLineTxInfo = OffLineTxInfo.fromRawTxForCs(rawTxForCsList);
+                }catch(Exception e2){
+                    System.out.println("Invalid off line TX information.");
+                    return;
+                }
+            }
+        }
+        if(offLineTxInfo == null) {
+            if(!askIfYes(br, "Input TX items one by one?"))return;
+            offLineTxInfo = OffLineTxInfo.fromUserInput(br, cidInfo.getId());
+            System.out.println("Off line Tx data:\n"+ offLineTxInfo.toNiceJson());
+        }
+
+        transaction = TxCreator.createUnsignedTx(offLineTxInfo, mainnetwork);
+        if(transaction==null)return;
+        String signedTxHex = TxCreator.signTx(priKey,transaction);
+
+        System.out.println("Signed by "+ cidInfo.getId()+".");
+        String txBase64 = Base64.getEncoder().encodeToString(Hex.fromHex(signedTxHex));
+        System.out.println("Base64:\n\t"+ txBase64);
+        QRCodeUtils.generateQRCode(txBase64);
+        System.out.println("Hex:\n\t"+ signedTxHex);
+        QRCodeUtils.generateQRCode(signedTxHex);
+        Menu.anyKeyToContinue(br);
+    }
+
+    private static MainNetParams chooseMainNetWork(BufferedReader br) {
+        String ticker = Inputer.chooseOne(new String[]{FCH, BCH}, null, "Select the network:", br);
+        MainNetParams mainnetwork;
+        switch(ticker){
+            case FCH -> mainnetwork = FchMainNetwork.MAINNETWORK;
+            case BCH -> mainnetwork = MainNetParams.get();
+            default -> {
+                System.out.println("Invalid network.");
+                return null;
+            }
+        }
+        return mainnetwork;
+    }
+
+    @Nullable
+    private CidInfo chooseKeyInfo() {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null || cidInfoList.isEmpty()){
+            System.out.println("No keys found.");
+            return null;
+        }
+        CidInfo cidInfo = Inputer.chooseOneFromList(cidInfoList, "id", "Select a key to get priKey", br);
+        if(cidInfo ==null)return null;
+        String priKeyCipher = cidInfo.getPriKeyCipher();
+        if(priKeyCipher!=null){
+            byte[] priKey = Decryptor.decryptPriKey(priKeyCipher,symKey);
+            if(priKey!=null) {
+                cidInfo.setPriKeyBytes(priKey);
+            }
+        }
+        return cidInfo;
+    }
+
+    private void multiSignTx(BufferedReader br) {
+        System.out.println("Input the unsigned data json string ");
+        String multiSignDataJson = Inputer.inputStringMultiLine(br);
+        do {
+            CidInfo cidInfo = getKeyInfoWithPriKey();
+            if (cidInfo == null || cidInfo.getPriKeyBytes()==null) {
+                System.out.println("Failed to get priKey. Sign below message with the priKey:");
+                if(cidInfo !=null && cidInfo.getWatchOnly())
+                    System.out.println("It's a FID only for watched");
+                System.out.println(multiSignDataJson);
+                QRCodeUtils.generateQRCode(multiSignDataJson);
+                return;
+            }
+
+            showRawTxInfo(multiSignDataJson, br);
+
+            Shower.printUnderline(60);
+            String signedSchnorrMultiSignTx = TxCreator.signSchnorrMultiSignTx(multiSignDataJson, cidInfo.getPriKeyBytes(), FchMainNetwork.MAINNETWORK);
+            System.out.println(signedSchnorrMultiSignTx);
+            Shower.printUnderline(60);
+            multiSignDataJson = signedSchnorrMultiSignTx;
+            System.out.println("Multisig data signed by " + cidInfo.getId() + ":");
+        } while (askIfYes(br, "Sign with another priKey?"));
+        Menu.anyKeyToContinue(br);
+    }
+
+    @Nullable
+    private CidInfo getKeyInfoWithPriKey() {
+        CidInfo cidInfo = chooseKeyInfo();
+        if (cidInfo == null) return null;
+
+        byte[] priKey = cidInfo.getPriKeyBytes();
+        if (priKey == null) {
+            System.out.println("Get priKey wrong");
+            return null;
+        }
+        return cidInfo;
+    }
+
+    private void signMsg(BufferedReader br) {
+        System.out.println("Input the msg:");
+        String msg = Inputer.inputStringMultiLine(br);
+        if(msg==null)return;
+
+        String choose = Inputer.chooseOne(new String[]{
+                        AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7.getDisplayName(),
+                        AlgorithmId.FC_SchnorrSignMsg_No1_NrC7.getDisplayName(),
+                        AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7.getDisplayName()},
+                null, "Select an algorithm", br);
+
+        byte[] key;
+        switch (choose) {
+            case AlgorithmId.Constants.BTC_ECDSA_SIGNMSG_NO1_NRC7, AlgorithmId.Constants.FC_SCHNORR_SIGNMSG_NO1_NRC7 -> {
+                CidInfo cidInfo = chooseKeyInfo();
+                if (cidInfo == null) return;
+                key = Decryptor.decryptPriKey(cidInfo.getPriKeyCipher(), settings.getSymKey());
+            }
+            case AlgorithmId.Constants.FC_SHA256SYM_SIGNMSG_NO1_NRC7 ->
+                    key = Inputer.inputSymKey32(br, "Input the 32 bytes symKey:");
+            default -> {
+                return;
+            }
+        }
+
+        if(key==null){
+            System.out.println("Get priKey wrong");
+            return;
+        }
+
+        Signature signature = new Signature(msg,key,AlgorithmId.fromDisplayName(choose));
+        String result = signature.sign().toNiceJson();
+
+        System.out.println("Signed by "+ signature.getKeyName()+":");
+        System.out.println("Signature json:\n"+result);
+        if(askIfYes(br, "Show QR Code?")) {
+            System.out.println("Generating QR Code...");
+            QRCodeUtils.generateQRCode(result);
+        }
+    }
+
+    public void encrypt(BufferedReader br) {
+        Menu menu = new Menu("Encrypt");
+        menu.add("Encrypt with symKey to json",()->encryptWithSymKeyToJson(br));
+        menu.add("Encrypt with symKey to bundle",()->encryptWithSymKeyToBundle(br));
+        menu.add("Encrypt with password to json",()->encryptWithPasswordToJson(br));
+        menu.add("Encrypt with password to bundle",()->encryptWithPasswordBundle(br));
+        menu.add("Encrypt with public key EccAes256K1P7 to json",()->encryptAsyToJson(br));
+        menu.add("Encrypt with public key EccAes256K1P7 to bundle one way",()->encryptAsyOneWayBundle(br));
+        menu.add("Encrypt with public key EccAes256K1P7 to bundle two way",()->encryptAsyTwoWayBundle(br));
+        menu.add("Encrypt file with symKey EccAes256K1P7 to json",()->encryptFileWithSymKey(br));
+        menu.add("Encrypt file with public key EccAes256K1P7 to json",()->encryptFileAsy(br));
+        menu.add("Encrypt with public key Bitcore-ECEIS to bundle one way",()->encryptBitcoreToBundle(br));
+
+        menu.showAndSelect(br);
+    }
+
+    public void decrypt(BufferedReader br) {
+        Menu menu = new Menu("Decrypt");
+        menu.add("Decrypt with symKey from json",()->decryptWithSymKeyFromJson(br));
+        menu.add("Decrypt with symKey from bundle",()->decryptWithSymKeyFromBundle(br));
+        menu.add("Decrypt with password from json",()->decryptWithPasswordFromJson(br));
+        menu.add("Decrypt with password from bundle",()->decryptWithPasswordFromBundle(br));
+        menu.add("Decrypt with private key EccAes256K1P7 from json",()->decryptAsyFromJson(br));
+        menu.add("Decrypt with private key EccAes256K1P7 from bundle one way",()->decryptAsyOneWayFromBundle(br));
+        menu.add("Decrypt with private key EccAes256K1P7 from bundle two way",()->decryptAsyTwoWayFromBundle(br));
+        menu.add("Decrypt file with symKey EccAes256K1P7 from json",()->decryptFileSymKey(br));
+        menu.add("Decrypt file with private key EccAes256K1P7 from json",()->decryptFileAsy(br));
+        menu.add("Decrypt Bitcore-ECEIS from bundle",()->decryptBitcoreFromBundle(br));
+
+        menu.showAndSelect(br);
+    }
+
+    private void decode(BufferedReader br) {
+        String text = Inputer.inputString(br, "Input the text:");
+        if(text==null)return;
+        byte[] bytes;
+        StringUtils.EncodeType type = Inputer.chooseOne(StringUtils.EncodeType.values(), null, "Select the type of the text. Enter to use UTF-8:", br);
+        if(type==null)type = StringUtils.EncodeType.UTF8;
+        switch (type) {
+            case HEX -> bytes = Hex.fromHex(text);
+            case BASE58 -> bytes = Base58.decode(text);
+            case BASE64 -> bytes = Base64.getDecoder().decode(text);
+            default -> bytes = text.getBytes();
+        }
+
+        System.out.println("Source text type:" + type.getDisplayName());
+        System.out.println("Hex:" + Hex.toHex(bytes));
+        System.out.println("Base58:" + Base58.encode(bytes));
+        System.out.println("Base64:" + Base64.getEncoder().encodeToString(bytes));
+        System.out.println("UTF-8:" + new String(bytes));
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void secret(BufferedReader br) {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null || cidInfoList.isEmpty()){
+            System.out.println("No key info found. Add a key info first.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        List<SecretDetail> secretDetailList = SecretDetail.listFromFile(SecretDetail.class);
+        if(secretDetailList==null)secretDetailList = new ArrayList<>();
+        List<SecretDetail> finalSecretDetailList = secretDetailList;
+
+        Menu menu = new Menu("Secret");
+        menu.add("Find secret details",()->findSecretDetail(br, cidInfoList, finalSecretDetailList));
+        menu.add("List secret details",()->listSecretDetail(br, cidInfoList, finalSecretDetailList));
+        menu.add("Add new secret details",()->addSecrets(br, finalSecretDetailList));
+        menu.add("Import secret details",()->importSecretDetail(br, finalSecretDetailList));
+        menu.add("Update Secret Details",()->updateSecretDetail(br, finalSecretDetailList));
+        menu.showAndSelect(br);
+    }
+
+    private void updateSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList) {
+        List<SecretDetail> chosenSecretDetailList =  Shower.showOrChooseListInPages("FID Info", finalSecretDetailList, br,true,SecretDetail.class);
+        if(chosenSecretDetailList==null || chosenSecretDetailList.isEmpty()){
+            System.out.println("No secret details selected.");
+            return;
+        }
+
+        updateSecretDetail(br, finalSecretDetailList, chosenSecretDetailList);
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void updateSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList, List<SecretDetail> chosenSecretDetailList) {
+        try{
+            for(SecretDetail secretDetail : chosenSecretDetailList){
+                secretDetail.setTitle(Inputer.promptAndUpdate(br, "Title", secretDetail.getTitle()));
+                decryptContent(secretDetail);
+                String content = Inputer.promptAndUpdate(br, "Content", secretDetail.getContent());
+                if(content!=null && !content.isEmpty()){
+                    String cipher = Encryptor.encryptBySymKeyToJson(content.getBytes(), symKey);
+                    secretDetail.setContentCipher(cipher);
+                }
+                secretDetail.setType(Inputer.promptAndUpdate(br, "Type", secretDetail.getType()));
+                secretDetail.setMemo(Inputer.promptAndUpdate(br, "Memo", secretDetail.getMemo()));
+            }
+            SecretDetail.listToFile(finalSecretDetailList, SecretDetail.class);
+            System.out.println("Secret details updated.");
+        }catch(IOException e){
+            System.out.println("Failed to update secret details.");
+        }
+    }
+
+    //TODO untested
+    private void importSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList) {
+        String choice = Inputer.chooseOne(new String[]{"From plain JSON","From cipher JSON","From cipher bundle"}, null, "Select the source of the secret details:", br);
+        if(choice==null|| choice.equals("0"))return;
+       
+        CidInfo cidInfo = null;
+        if(choice.equals("From cipher JSON")||choice.equals("From cipher bundle")){
+            cidInfo = chooseKeyInfo();
+            if(cidInfo ==null)return;
+        }
+        CryptoDataByte cryptoDataByte = null;
+        do{
+            SecretDetail secretDetail = new SecretDetail();
+            String input;
+            if(scanner!=null && askIfYes(br,"Scan secretDetail QR code?")){
+                try {
+                    input = scanner.scanQRCodeList(br);
+                } catch (IOException | InterruptedException e) {
+                    System.out.println("Error scanning QR code: " + e.getMessage());
+                    return;
+                }
+            }else{
+                input = Inputer.inputString(br, "Input:");
+            }
+            if(input==null|| input.isEmpty())return;
+            switch(choice){
+                case "From plain JSON":
+                    secretDetail = JsonUtils.fromJson(input, SecretDetail.class);
+                    break;
+                case "From cipher bundle":
+                    cryptoDataByte = CryptoDataByte.fromBundle(Base64.getDecoder().decode(input));
+                case "From cipher JSON":
+                    if(cryptoDataByte==null)cryptoDataByte = JsonUtils.fromJson(input, CryptoDataByte.class);
+                    if(cryptoDataByte==null)break;
+                    cryptoDataByte.setPriKeyB(cidInfo.getPriKeyBytes());
+                    CryptoDataByte result = new Decryptor().decrypt(cryptoDataByte);
+                    if(result==null)break;
+                    if(result.getCode()!=0){
+                        System.out.println("Decrypt failed");
+                        break;
+                    }
+                    secretDetail = JsonUtils.fromJson(new String(result.getData()), SecretDetail.class);
+                    break;
+            }
+            if(secretDetail!=null)
+                finalSecretDetailList.add(secretDetail);
+        }while(!Inputer.askIfYes(br, "Finished?"));
+        SecretDetail.listToFile(finalSecretDetailList, SecretDetail.class);
+    }
+
+    private void findSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> finalSecretDetailList) {
+        String keyword = Inputer.inputString(br, "Input the keyword:");
+        if(keyword==null)return;
+        List<SecretDetail> chosenSecretDetailList = finalSecretDetailList.stream()
+                .filter(secretDetail -> secretDetail.getTitle().contains(keyword) || secretDetail.getType().contains(keyword) || secretDetail.getMemo().contains(keyword))
+                .collect(Collectors.toList());
+        listSecretDetail(br, cidInfoList, chosenSecretDetailList);
+    }
+
+    private void listSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> secretDetailList) {
+        List<SecretDetail> chosenSecretDetailList = Shower.showOrChooseListInPages("FID Info", secretDetailList, br,true,SecretDetail.class);
+        if(chosenSecretDetailList==null || chosenSecretDetailList.isEmpty()){
+            System.out.println("No secret details selected.");
+            return;
+        }
+
+        while(true){
+            String op = Inputer.chooseOne(new String[]{"Show","Delete","Encrypt","Update"}, null, "Select an operation:", br);
+            if(op==null) return;
+
+            switch (op) {
+                case "Show" -> showSecretDetail(chosenSecretDetailList);
+                case "Delete" -> deleteSecretDetail(br, secretDetailList, chosenSecretDetailList);
+                case "Encrypt" -> encryptSecretDetail(br, cidInfoList, chosenSecretDetailList);
+                case "Update" -> updateSecretDetail(br, secretDetailList,chosenSecretDetailList);
+            }
+            Menu.anyKeyToContinue(br);
+        }
+    }
+
+    private void encryptSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> chosenSecretDetailList) {
+        CidInfo cidInfo = Inputer.chooseOneFromList(cidInfoList, "id", "Select a key:", br);
+        if(cidInfo ==null) return;
+        for (SecretDetail secretDetail : chosenSecretDetailList) {
+            decryptContent(secretDetail);
+            SecretDetail secretDetail1 = new SecretDetail();
+            secretDetail1.setTitle(secretDetail.getTitle());
+            secretDetail1.setContent(secretDetail.getContent());
+            secretDetail1.setType(secretDetail.getType());
+            secretDetail1.setMemo(secretDetail.getMemo());
+            CryptoDataByte cryptoDataByte = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7).encryptByAsyOneWay(secretDetail1.toBytes(), cidInfo.getPubKeyBytes());
+            System.out.println("Encrypted by "+ cidInfo.getId());
+            String cipher = Base64.getEncoder().encodeToString(cryptoDataByte.toBundle());
+
+            System.out.println(secretDetail.getTitle() + ":\n" + cipher);
+            QRCodeUtils.generateQRCode(cipher);
+        }
+        System.out.println("Encrypted " + chosenSecretDetailList.size() + " secret details.");
+    }
+
+    private static void deleteSecretDetail(BufferedReader br, List<SecretDetail> secretDetailList, List<SecretDetail> chosenSecretDetailList) {
+        if (askIfYes(br, "Are you sure you want to delete these secret details?")) {
+            int count = chosenSecretDetailList.size();
+            secretDetailList.removeAll(chosenSecretDetailList);
+            SecretDetail.listToFile(secretDetailList,SecretDetail.class);
+            System.out.println("Deleted " + count + " secret details.");
+        }
+    }
+
+    private void showSecretDetail(List<SecretDetail> chosenSecretDetailList) {
+        for (SecretDetail secretDetail : chosenSecretDetailList) {
+            decryptContent(secretDetail);
+            SecretDetail secretDetail1 = new SecretDetail();
+            secretDetail1.setTitle(secretDetail.getTitle());
+            secretDetail1.setContent(secretDetail.getContent());
+            secretDetail1.setType(secretDetail.getType());
+            secretDetail1.setMemo(secretDetail.getMemo());
+            System.out.println(secretDetail1.toNiceJson());
+        }
+    }
+    private void decryptContent(SecretDetail secretDetail) {
+        String contentCipher = secretDetail.getContentCipher();
+        CryptoDataByte result = new Decryptor().decryptJsonBySymKey(contentCipher, settings.getSymKey());
+        if(result==null||result.getData()==null)return;
+        secretDetail.setContent(new String(result.getData()));
+    }
+
+    private void addSecrets(BufferedReader br, List<SecretDetail> secretDetailList) {
+        do{
+            SecretDetail secretDetail = SecretDetail.inputSecret(br, settings.getSymKey());
+
+            secretDetailList.add(secretDetail);
+            secretDetail.setId(Hex.toHex(Hash.sha256x2(secretDetail.toBytes())));
+        }while(Inputer.askIfYes(br, "Add another secret details?"));
+        SecretDetail.listToFile(secretDetailList,SecretDetail.class);
+    }
+
+    private void qrCode(BufferedReader br) {
+        String text = Inputer.inputString(br, "Input the text:");
+        if(text==null)return;
+        System.out.println("Generating QR Code...");
+        QRCodeUtils.generateQRCode(text);
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void setting(BufferedReader br) {
+        Menu menu = new Menu("Settings");
+        menu.add("Backup", CryptoSign::backUpData);
+        menu.add("Reset password",()-> resetPassword(br));
+        menu.add("Clear all data",()->clearAllData(br));
+        menu.add("Remove Me",()->removeMe(br));
+        menu.add("Show Introduction",()->showIntroduction(br));
+        menu.showAndSelect(br);
+        Menu.anyKeyToContinue(br);
+    }
+
+    private static void backUpData() {
+        FileUtils.backup(SecretDetail.class.getSimpleName()+DOT_JSON,null,5);
+    }
+
+    private void showIntroduction(BufferedReader br) {
+        try {
+            // Read security guidelines from the markdown file
+            InputStream inputStream = getClass().getResourceAsStream("/security_guidelines.md");
+            if (inputStream != null) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        System.out.println(line);
+                    }
+                }
+            } else {
+                System.out.println("Security guidelines file not found. Please check your installation.");
+            }
+        } catch (IOException e) {
+            System.out.println("Error reading security guidelines: " + e.getMessage());
+        }
+
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void removeMe(BufferedReader br) {
+        if(askIfYes(br,"Are you sure you want to remove me and clear all data?")){
+            settings.removeMe(br);
+            clearAllData(br);
+            System.out.println("Removed successfully.");
+        }
+    }
+
+    private void clearAllData(BufferedReader br) {
+        if(askIfYes(br,"Are you sure you want to clear all data?")){
+            String keyInfoFilePath = CidInfo.KEY_INFO_FILE_PATH;
+            String secretDetailFilePath = "secretDetail.json";
+            File keyInfoFile = new File(keyInfoFilePath);
+            File secretDetailFile = new File(secretDetailFilePath);
+            if(keyInfoFile.exists()){
+                boolean done = keyInfoFile.delete();
+                if(!done) System.out.println("Failed to delete "+ keyInfoFilePath);
+            }
+            if(secretDetailFile.exists()){
+                boolean done = secretDetailFile.delete();
+                if(!done) System.out.println("Failed to delete "+ secretDetailFilePath);
+            }
+            if(askIfYes(br,"Would you like to remove all backups?")){
+                FileUtils.removeAllBackUps(SecretDetail.class.getSimpleName()+DOT_JSON,null);
+            }
+            System.out.println("All data cleared successfully.");
+        }
+    }
+
+    private void resetPassword(BufferedReader br) {
+        try{
+            byte[] oldSymKey = settings.getSymKey().clone();
+            settings.resetPassword(null, br);
+
+            if(Arrays.equals(oldSymKey, settings.getSymKey()))return;
+
+            reEncryptAllPriKeys(oldSymKey,settings.getSymKey());
+            reEncryptAllSecretDetails(oldSymKey,settings.getSymKey());
+
+            String newPasswordHash = Hex.toHex(Hash.sha256(settings.getSymKey()));
+            Configure config = settings.getConfig();
+            if(config==null)return;
+            config.setPasswordHash(newPasswordHash);
+            Configure.saveConfig();
+            settings.saveSimpleSettings(APP_NAME);
+            System.out.println("Password reset successfully.");
+        }catch(Exception e){
+            System.out.println("Error resetting password: "+e.getMessage());
+        }
+    }
+
+    private void reEncryptAllPriKeys(byte[] oldSymKey, byte[] newSymKey){
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        for(CidInfo cidInfo : cidInfoList){
+            CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(cidInfo.getPriKeyCipher(), oldSymKey);
+            if(cryptoDataByte.getCode()!=0)continue;
+            cidInfo.setPriKeyCipher(Encryptor.encryptBySymKeyToJson(cryptoDataByte.getData(), newSymKey));
+        }
+        CidInfo.listToFile(cidInfoList, CidInfo.class);
+    }
+
+    private void reEncryptAllSecretDetails(byte[] oldSymKey, byte[] newSymKey){
+        List<SecretDetail> secretDetailList = SecretDetail.listFromFile(SecretDetail.class);
+        for(SecretDetail secretDetail:secretDetailList){
+            String contentCipher = secretDetail.getContentCipher();
+            if(contentCipher==null)continue;
+            CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(contentCipher,oldSymKey);
+            if(cryptoDataByte.getCode()!=0)continue;
+            secretDetail.setContentCipher(Encryptor.encryptBySymKeyToJson(cryptoDataByte.getData(), newSymKey));
+        }
+        SecretDetail.listToFile(secretDetailList,SecretDetail.class);
+    }
+    
+
+    public void close() {
+        backUpData();
+        settings.close();
+        System.exit(0);
+    }
+
+    public void decryptAsyTwoWayFromBundle(BufferedReader br) {
+        Decryptor decryptor = new Decryptor();
+        System.out.println("Input the bundle in Base64:");
+        String bundle = Inputer.inputString(br,"Input the bundle in Base64:");
+        if(bundle==null){
+            System.out.println("Bundle is null.");
+            return;
+        }
+        String pubKey = Inputer.inputString(br,"Input the pubKey in hex:");
+
+        CidInfo cidInfo = chooseKeyInfo();
+        if (cidInfo == null) return;
+        byte[] bundleBytes = Base64.getDecoder().decode(bundle);
+        System.out.println(decryptor.decryptBundleByAsyTwoWay(bundleBytes, cidInfo.getPriKeyBytes(), Hex.fromHex(pubKey)));
+        Menu.anyKeyToContinue(br);
+    }
+
+    public void decryptAsyOneWayFromBundle(BufferedReader br) {
+        Decryptor decryptor = new Decryptor();
+        try {
+            System.out.println("Input the bundle in Base64:");
+            String bundle = br.readLine();
+            if(bundle==null){
+                System.out.println("Bundle is null.");
+                return;
+            }
+            CidInfo cidInfo = chooseKeyInfo();
+            if (cidInfo == null) return;
+
+            System.out.println(decryptor.decryptBundleByAsyOneWay(Base64.getDecoder().decode(bundle), cidInfo.getPriKeyBytes()));
+
+        } catch (IOException e) {
+            System.out.println("Something wrong:"+e.getMessage());
+        }
+
+        Menu.anyKeyToContinue(br);
+    }
+
+    public void decryptFileAsy(BufferedReader br) {
+        File encryptedFile = getAvailableFile(br);
+        if(encryptedFile==null||encryptedFile.length()> Constants.MAX_FILE_SIZE_M * Constants.M_BYTES)return;
+
+        CidInfo cidInfo = chooseKeyInfo();
+        if (cidInfo == null) return;
+        System.out.println("Input the recipient private key in hex:");
+        Decryptor decryptor = new Decryptor();
+        String plainFileName = Decryptor.recoverEncryptedFileName(encryptedFile.getName());
+        CryptoDataByte cryptoDataByte = decryptor.decryptFileByAsyOneWay(encryptedFile.getName(),plainFileName, cidInfo.getPriKeyBytes());
+        System.out.println(cryptoDataByte.toNiceJson());
+        Menu.anyKeyToContinue(br);
+    }
+
+
+    public void decryptAsyFromJson(BufferedReader br) {
+        String eccAesDataJson = Inputer.inputString(br,"Input the json string of EccAesData:");
+        decryptAsyJson(eccAesDataJson);
+        Menu.anyKeyToContinue(br);
+    }
+
+    public void decryptAsyJson(String eccAesDataJson)  {
+        CidInfo cidInfo = chooseKeyInfo();
+        if (cidInfo == null) return;
+        Decryptor decryptor = new Decryptor();
+        CryptoDataByte cryptoDataByte = decryptor.decryptJsonByAsyOneWay(eccAesDataJson, cidInfo.getPriKeyBytes());
+        System.out.println(new String(cryptoDataByte.getData()));
+    }
+
+
+    public static void getRandom(BufferedReader br){
+        int len;
+        while(true) {
+            System.out.println("Input the bytes length of the random you want. Enter to exit:");
+            String input = Inputer.inputString(br);
+            if ("".equals(input)) {
+                return;
+            }
+
+            try {
+                len = Integer.parseInt(input);
+                break;
+            }catch(Exception ignored) {
+            }
+        }
+
+        byte[] bytes = BytesUtils.getRandomBytes(len);
+        printRandomInMultipleFormats(bytes);
+    }
+
+    public void decryptBitcoreFromBundle(BufferedReader br) {
+        String cipher = Inputer.inputString(br,"Input the cipher:");
+        CidInfo cidInfo = chooseKeyInfo();
+        if (cidInfo == null) return;
+        byte[] decrypted;
+        try {
+            decrypted = Bitcore.decrypt(Base64.getDecoder().decode(cipher), cidInfo.getPriKeyBytes());
+            if(decrypted==null){
+                System.out.println("Decrypt failed.");
+                return;
+            }
+            System.out.println("Decrypted: \n"+new String(decrypted));
+        } catch (Exception e) {
+            System.out.println("Decrypt failed.");
+            e.printStackTrace();
+        }
+    }
+
+    public void multiSign(BufferedReader br) {
+           Menu menu = new Menu("Multisig");
+           menu.add("Create multisig FID", () -> createFid(br));
+           menu.add("Parse multisig FID from redeem script", () -> showFid(br));
+           menu.add("Create new Tx",() -> createTx(br));
+           menu.add("Sign multisig raw TX", () -> multiSignTx(br));
+           menu.add("Build multisig TX", () -> buildSignedTx(br));
+           menu.showAndSelect(br);
+    }
+
+    public void createTx(BufferedReader br) {
+        MainNetParams mainnetwork = chooseMainNetWork(br);
+        System.out.println("Input TX information String. Enter to input the element one by one");
+        OffLineTxInfo offLineTxInfo;
+        String offLineTx = inputStringMultiLine(br);
+        if("".equals(offLineTx))
+            offLineTxInfo = OffLineTxInfo.fromUserInput(br,null);
+        else offLineTxInfo = OffLineTxInfo.fromString(offLineTx);
+        P2SH p2sh;
+
+        while(true) {
+            String redeemScriptStr = Inputer.inputString(br, "Input the redeem script. Enter to exit:");
+            if("".equals(redeemScriptStr))return;
+            try {
+                p2sh = P2SH.parseP2shRedeemScript(redeemScriptStr);
+                if(p2sh==null){
+                    System.out.println("Failed to parse redeemScript. Try again.");
+                    continue;
+                }
+            } catch (Exception e) {
+                System.out.println("Invalid redeem script.");
+                continue;
+            }
+            System.out.println("MultiSign Info:\n"+ JsonUtils.toNiceJson(p2sh));
+            break;
+        }
+        if(offLineTxInfo ==null)return;
+
+        offLineTxInfo.setP2sh(p2sh);
+        Transaction transaction = TxCreator.createUnsignedTx(offLineTxInfo, mainnetwork);
+        if(transaction==null){
+            System.out.println("Create unsigned tx failed.");
+            return;
+        }
+        byte[] rawTx = transaction.bitcoinSerialize();
+
+        MultiSigData multiSignData = new MultiSigData(rawTx, p2sh, offLineTxInfo.getInputs());
+
+        showMultiUnsignedResult(br, p2sh, multiSignData);
+
+        if(askIfYes(br,"Would you sign it?")){
+            do {
+                CidInfo cidInfo = chooseKeyInfo();
+                if(cidInfo ==null)break;
+                TxCreator.signSchnorrMultiSignTx(multiSignData, cidInfo.getPriKeyBytes(), mainnetwork);
+                System.out.println("Signed by "+ cidInfo.getId());
+            }while (askIfYes(br,"Sign with more keys?"));
+
+            showMultiSignedResult(multiSignData);
+        }
+    }
+
+    public static void showMultiSignedResult(MultiSigData multiSignData) {
+        System.out.println("Multisig data signed:");
+        Shower.printUnderline(10);
+        System.out.println(multiSignData.toJson());
+        Shower.printUnderline(10);
+    }
+
+    public static void showMultiUnsignedResult(BufferedReader br, P2SH p2sh, MultiSigData multiSignData) {
+        System.out.println("Multisig data unsigned:");
+        Shower.printUnderline(10);
+        System.out.println(multiSignData.toJson());
+        Shower.printUnderline(10);
+
+        System.out.println("Next step: sign it separately with the priKeys of: ");
+        Shower.printUnderline(10);
+        for (String fid1 : p2sh.getFids()) System.out.println(fid1);
+        Shower.printUnderline(10);
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void buildSignedTx(BufferedReader br) {
+           String[] signedData = Inputer.inputMultiLineStringArray(br, "Input the signatures one by one.");
+
+           String signedTx = TxCreator.buildSignedTx(signedData, FchMainNetwork.MAINNETWORK);
+           if (signedTx == null) return;
+           System.out.println("Signed TX:");
+           System.out.println(signedTx);
+           QRCodeUtils.generateQRCode(signedTx);
+           Menu.anyKeyToContinue(br);
+       }
+
+    public void createFid(BufferedReader br) {
+
+        List<String> pubKeyStringList = inputPubKeys(br);
+        int m = pubKeyStringList.size();
+
+        List<byte[]> pubKeyList = new ArrayList<>();
+        for (String pubKeyString : pubKeyStringList) {
+            pubKeyList.add(HexFormat.of().parseHex(pubKeyString));
+        }
+
+        P2SH p2SH = TxCreator.createP2sh(pubKeyList, m);
+
+           Shower.printUnderline(10);
+           System.out.println("The multisig information is: \n" + JsonUtils.toNiceJson(p2SH));
+           System.out.println("It's generated from :");
+           for (String pubKeyString : pubKeyStringList) {
+               System.out.println(KeyTools.pubKeyToFchAddr(pubKeyString));
+           }
+           Shower.printUnderline(10);
+           if(p2SH==null)return;
+        String fid = p2SH.getId();
+        System.out.println("Your multisig FID: \n" + fid);
+           Shower.printUnderline(10);
+           Menu.anyKeyToContinue(br);
+    }
+
+
+    public List<String> inputPubKeys(BufferedReader br) {
+        List<String> pubKeyStringList = new ArrayList<>();
+        while (true) {
+            if(askIfYes(br,"Choose a pubKey from the local list?")){
+                CidInfo cidInfo = chooseKeyInfo();
+                if(cidInfo ==null)continue;
+                pubKeyStringList.add(cidInfo.getPubKey());
+            }else{
+                String pubKeyString = Inputer.inputString(br, "Input the public key. Enter to end:");
+                if ("".equals(pubKeyString)) {  
+                    break;
+                }
+                if(Hex.isHexString(pubKeyString) && pubKeyString.length()==66){
+                    pubKeyStringList.add(pubKeyString);
+                }else{
+                    System.out.println("Wrong pubKey.");
+                }
+            }
+        }
+        return pubKeyStringList;
+    }
+    
+    public static void showFid(BufferedReader br) {
+        P2SH p2sh = inputP2SH(br);
+        Shower.printUnderline(10);
+        System.out.println("Multisig:");
+        System.out.println(JsonUtils.toNiceJson(p2sh));
+        Shower.printUnderline(10);
+        Menu.anyKeyToContinue(br);
+    }
+
+    @Nullable
+    private static P2SH inputP2SH(BufferedReader br) {
+        String redeemScript = Inputer.inputString(br, "Input the redeem script of the multisig FID:");
+        if(redeemScript==null) return null;
+        P2SH p2sh;
+        try {
+            p2sh = P2SH.parseP2shRedeemScript(redeemScript);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+        return p2sh;
+    }
+
+    public void pubKeyConvert(BufferedReader br) {
+        CidInfo cidInfo = chooseKeyInfo();
+        if(cidInfo ==null)return;
+        String pubKey = cidInfo.getPubKey();
+        pubKeyInMultiFormats(br, pubKey);
+    }
+
+    public static void pubKeyInMultiFormats(BufferedReader br, @Nullable String pubKey) {
+        String pubKey33 = null;
+        if(pubKey==null)
+            while (true) {
+                String input = Inputer.inputString(br,"Input the public key. Enter to exit:");
+                if ("".equals(input)) {
+                    break;
+                } else {
+                    try{
+                        pubKey33 = KeyTools.getPubKey33(input);
+                    }catch(Exception e){
+                        System.out.println("Wrong pubKey.");
+                        if(!askIfYes(br,"Try again?")) return;
+                    }
+                }
+                if(pubKey33==null){
+                    System.out.println("Wrong pubKey.");
+                    if(!askIfYes(br,"Try again?")) return;
+                } else break;
+            }
+        else {
+            if(pubKey.length()!=66)
+                pubKey33 = KeyTools.getPubKey33(pubKey);
+            else pubKey33 = pubKey;
+        }
+        if(pubKey33==null)return;
+        Shower.printUnderline(10);
+        System.out.println("FID: \n" + KeyTools.pubKeyToFchAddr(pubKey33));
+        Shower.printUnderline(10);
+        System.out.println("* PubKey 33 bytes compressed hex:\n" + pubKey33);
+        Shower.printUnderline(10);
+        System.out.println("* PubKey 65 bytes uncompressed hex:\n" + KeyTools.recoverPK33ToPK65(pubKey33));
+        Shower.printUnderline(10);
+        System.out.println("* PubKey WIF uncompressed:\n" + KeyTools.getPubKeyWifUncompressed(pubKey33));
+        Shower.printUnderline(10);
+        System.out.println("* PubKey WIF compressed with ver 0:\n" + KeyTools.getPubKeyWifCompressedWithVer0(pubKey33));
+        Shower.printUnderline(10);
+        System.out.println("* PubKey WIF compressed without ver:\n" + KeyTools.getPubKeyWifCompressedWithoutVer(pubKey33));
+        Shower.printUnderline(10);
+        Menu.anyKeyToContinue(br);
+    }
+
+    public void addressConvert(BufferedReader br) {
+        Map<String, String> addrMap;
+        String id;
+        String pubKey;
+
+        while (true) {
+            System.out.println("Enter to convert the local FID, or input the address or pubKey:");
+            String input = Inputer.inputString(br);
+            if ("".equals(input)) {
+                CidInfo cidInfo = chooseKeyInfo();
+                if(cidInfo ==null)return;
+                String priKeyCipher = cidInfo.getPriKeyCipher();
+                byte[] priKey = Decryptor.decryptPriKey(priKeyCipher, settings.getSymKey());
+                pubKey = Hex.toHex(KeyTools.priKeyToPubKey(priKey));
+                addrMap = KeyTools.pubKeyToAddresses(pubKey);
+                break;
+            }
+
+            addrMap = convert(input);
+            if(addrMap!=null) break;
+            System.out.println("Wrong FID or pubKey. Try again.");
+        }
+        if(addrMap==null) return;
+        Shower.printUnderline(10);
+        System.out.println(JsonUtils.toNiceJson(addrMap));
+        Shower.printUnderline(10);
+        Menu.anyKeyToContinue(br);
+       }
+
+    public void priKeyConvert(BufferedReader br) {
+
+        CidInfo cidInfo = chooseKeyInfo();
+        if(cidInfo ==null)return;
+        String priKeyCipher = cidInfo.getPriKeyCipher();
+        if(priKeyCipher==null){
+            System.out.println(cidInfo.getId() + " is a watching FID.");
+            return;
+        }
+        byte[] priKey = Decryptor.decryptPriKey(priKeyCipher, settings.getSymKey());
+        showPriKeyInfo(br, priKey);
+    }
+
+    public void keyTools(BufferedReader br) {
+           Menu menu = new Menu("Key & Address");
+           menu.add("Random", () -> getRandom(br));
+           menu.add("Find Nice FID", () -> findNiceFid(br));
+           menu.add("PriKey Convert", () -> priKeyConvert(br));
+           menu.add("PubKey Convert", () -> pubKeyConvert(br));
+           menu.add("Address Convert", () -> addressConvert(br));
+
+           menu.showAndSelect(br);
+    }
+}

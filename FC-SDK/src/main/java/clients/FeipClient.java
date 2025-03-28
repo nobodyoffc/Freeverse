@@ -1,5 +1,6 @@
 package clients;
 
+import crypto.Decryptor;
 import fch.fchData.Cid;
 import appTools.Menu;
 import appTools.Shower;
@@ -16,10 +17,10 @@ import feip.feipData.*;
 import feip.feipData.Feip.ProtocolName;
 import feip.feipData.serviceParams.Params;
 import handlers.MailHandler;
-import tools.Hex;
-import tools.JsonTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.Hex;
+import utils.JsonUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import nasa.NaSaRpcClient;
 import org.jetbrains.annotations.Nullable;
 
@@ -117,7 +118,7 @@ public class FeipClient {
         String master;
         String masterPubKey;
 
-        byte[] priKey = Client.decryptPriKey(userPriKeyCipher,symKey);
+        byte[] priKey = Decryptor.decryptPriKey(userPriKeyCipher,symKey);
         if(priKey==null){
             System.out.println("Failed to get private Key.");
             return;
@@ -130,7 +131,7 @@ public class FeipClient {
                 masterPubKey = master;
                 master = KeyTools.pubKeyToFchAddr(master);
             }else {
-                if (KeyTools.isValidFchAddr(master)){
+                if (KeyTools.isGoodFid(master)){
                     Cid masterInfo = apipClient.cidInfoById(master);
                     if(masterInfo==null){
                         System.out.println("Failed to get CID info.");
@@ -197,7 +198,7 @@ public class FeipClient {
                 System.out.println(rawTx);
                 Shower.printUnderline(10);
             }else {
-                byte[] priKey = Client.decryptPriKey(userPriKeyCipher,symKey);
+                byte[] priKey = Decryptor.decryptPriKey(userPriKeyCipher,symKey);
                 if(priKey==null)return;
                 String result = Wallet.sendTxByApip(br, priKey, null, dataOnChainJson, requiredCd, maxCashes, apipClient);
                 if (Hex.isHexString(result))
@@ -288,7 +289,7 @@ public class FeipClient {
         String result = sendFeip(sendToList, cd, priKey, offLineFid, feip, apipClient, nasaClient);
         if(result==null) return null;
         if(br !=null && !Hex.isHex32(result)){
-            String str = JsonTools.strToNiceJson(result);
+            String str = JsonUtils.strToNiceJson(result);
             if(str==null)str = result;
             System.out.println("Unsigned Tx:");
             Shower.printUnderline(20);

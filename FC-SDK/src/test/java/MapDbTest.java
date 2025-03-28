@@ -1,6 +1,6 @@
 import fcData.TalkUnit;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 import org.mapdb.*;
 
 import java.util.concurrent.ConcurrentMap;
@@ -26,7 +26,7 @@ public class MapDbTest {
         byte[] bytes = "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK".getBytes();
         byte[] subBytes = "cjWK".getBytes();
 
-        if(BytesTools.contains(bytes,subBytes)) System.out.println("Yes.");
+        if(BytesUtils.contains(bytes,subBytes)) System.out.println("Yes.");
     }
 
     @SuppressWarnings("unused")

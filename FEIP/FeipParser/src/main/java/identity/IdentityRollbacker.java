@@ -1,6 +1,6 @@
 package identity;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
@@ -11,7 +11,7 @@ import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
 import feip.feipData.CidHist;
 import feip.feipData.RepuHist;
-import tools.JsonTools;
+import utils.JsonUtils;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +37,7 @@ public class IdentityRollbacker {
 		if(signerList==null || signerList.isEmpty())return error;
 		
 		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'cid': ");
-		JsonTools.printJson(signerList);
+		JsonUtils.printJson(signerList);
 		
 		deleteEffectedCids(esClient, signerList);
 		
@@ -45,7 +45,7 @@ public class IdentityRollbacker {
 		
 		TimeUnit.SECONDS.sleep(3);
 		
-		List<CidHist>reparseList = 	EsTools.getHistsForReparse(esClient, IndicesNames.CID_HISTORY,"signer",signerList, CidHist.class);
+		List<CidHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.CID_HISTORY,"signer",signerList, CidHist.class);
 		
 		reparse(esClient,reparseList);
 		
@@ -80,12 +80,12 @@ public class IdentityRollbacker {
 	}
 
 	private void deleteEffectedCids(ElasticsearchClient esClient, ArrayList<String> signerList) throws Exception {
-		EsTools.bulkDeleteList(esClient, IndicesNames.CID, signerList);
+		EsUtils.bulkDeleteList(esClient, IndicesNames.CID, signerList);
 		
 	}
 
 	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, histIdList);
+		EsUtils.bulkDeleteList(esClient, index, histIdList);
 		
 	}
 
@@ -145,7 +145,7 @@ public class IdentityRollbacker {
 		int i = 0;
 		while(true) {
 			ArrayList<String> rateeSubList = new ArrayList<String> ();
-			for(int j = i; j<i+ EsTools.WRITE_MAX; j++) {
+			for(int j = i; j<i+ EsUtils.WRITE_MAX; j++) {
 				if(j>=rateeList.size())break;
 				rateeSubList.add(rateeList.get(j));
 			}

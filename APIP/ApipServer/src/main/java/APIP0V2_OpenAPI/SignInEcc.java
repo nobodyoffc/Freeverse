@@ -30,28 +30,38 @@ public class SignInEcc extends HttpServlet {
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
 
-        FcSession fcSession;
-        String pubKey;
-        SessionHandler sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
-        boolean isOk = httpRequestChecker.checkSignInRequestHttp(request, response);
-        if (!isOk) {
-            return;
-        }
-        pubKey = httpRequestChecker.getPubKey();
-        String fid = httpRequestChecker.getFid();
-        RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
+        try {
+            FcSession fcSession;
+            String pubKey;
+            SessionHandler sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
+            if (sessionHandler == null) {
+                System.out.println("Failed to get session handler.");
+                replier.replyOtherErrorHttp("Failed to get session handler.", response);
+                return;
+            }
+            boolean isOk = httpRequestChecker.checkSignInRequestHttp(request, response);
+            if (!isOk) {
+                return;
+            }
+            pubKey = httpRequestChecker.getPubKey();
+            String fid = httpRequestChecker.getFid();
+            RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
 
-        if (sessionHandler.getSessionById(fid)==null || RequestBody.SignInMode.REFRESH.equals(mode)) {
-            fcSession = sessionHandler.addNewSession(fid, pubKey);
-        } else {
-            fcSession = sessionHandler.getSessionById(fid);
+            if (sessionHandler.getSessionById(fid) == null || RequestBody.SignInMode.REFRESH.equals(mode)) {
+                fcSession = sessionHandler.addNewSession(fid, pubKey);
+            } else {
+                fcSession = sessionHandler.getSessionById(fid);
+            }
+            if (fcSession == null) {
+                replier.replyOtherErrorHttp("Failed to get session.", response);
+                return;
+            }
+            fcSession.setKey(null);
+            replier.reply0SuccessHttp(fcSession, response);
+        }catch (Exception e){
+            e.printStackTrace();
+            replier.replyOtherErrorHttp(e.toString(),response);
         }
-        if(fcSession == null){
-            replier.replyOtherErrorHttp("Failed to get session.", response);
-            return;
-        }
-        fcSession.setKey(null);
-        replier.reply0SuccessHttp(fcSession,response);
     }
 
     @Override

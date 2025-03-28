@@ -7,13 +7,13 @@ import handlers.CashHandler;
 import constants.*;
 import crypto.KeyTools;
 import fcData.ReplyBody;
-import fch.ParseTools;
+import fch.FchUtils;
 import handlers.CashHandler.SearchResult;
 import handlers.Handler.HandlerType;
 import fch.fchData.Cash;
 import initial.Initiator;
 import server.ApipApiNames;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 import handlers.MempoolHandler;
 import javax.servlet.annotation.WebServlet;
@@ -48,7 +48,7 @@ public class GetUtxo extends HttpServlet {
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
         httpRequestChecker.checkRequestHttp(request, response, authType);
         String idRequested = request.getParameter(ADDRESS);
-        if (idRequested==null || !KeyTools.isValidFchAddr(idRequested)){
+        if (idRequested==null || !KeyTools.isGoodFid(idRequested)){
             replier.replyHttp(CodeMessage.Code2003IllegalFid,null,response);
             return;
         }
@@ -57,7 +57,7 @@ public class GetUtxo extends HttpServlet {
         Long cd;
 
         if(request.getParameter(AMOUNT)!=null){
-            amount= ParseTools.coinStrToSatoshi(request.getParameter(AMOUNT));
+            amount= FchUtils.coinStrToSatoshi(request.getParameter(AMOUNT));
         }else{
             amount=0L;
         }

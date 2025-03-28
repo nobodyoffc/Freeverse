@@ -1,6 +1,6 @@
 package publish;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -9,7 +9,7 @@ import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
 import feip.feipData.ProofHistory;
 import feip.feipData.TokenHistory;
-import tools.JsonTools;
+import utils.JsonUtils;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -46,14 +46,14 @@ public class PublishRollbacker {
 
 		if(itemIdList==null||itemIdList.isEmpty())return error;
 		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'proof': ");
-		JsonTools.printJson(itemIdList);
+		JsonUtils.printJson(itemIdList);
 		deleteEffectedItems(esClient, IndicesNames.PROOF, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY,histIdList);
 
 		TimeUnit.SECONDS.sleep(3);
 
-		List<ProofHistory>reparseHistList = EsTools.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,"gid",itemIdList, ProofHistory.class);
+		List<ProofHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,"gid",itemIdList, ProofHistory.class);
 
 		reparseProof(esClient,reparseHistList);
 
@@ -108,7 +108,7 @@ public class PublishRollbacker {
 
 		if(tokenIdList==null||tokenIdList.isEmpty())return error;
 		System.out.println("If Rollback is interrupted, reparse all effected ids of index 'token': ");
-		JsonTools.printJson(tokenIdList);
+		JsonUtils.printJson(tokenIdList);
 		deleteEffectedItems(esClient, IndicesNames.TOKEN, tokenIdList);
 
 		if(histIdList==null||histIdList.isEmpty())return error;
@@ -117,7 +117,7 @@ public class PublishRollbacker {
 
 		TimeUnit.SECONDS.sleep(3);
 
-		List<TokenHistory>reparseHistList = EsTools.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY,"tokenId",tokenIdList, TokenHistory.class);
+		List<TokenHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY,"tokenId",tokenIdList, TokenHistory.class);
 
 		deleteEffectedTokenHolders(esClient,tokenIdList);
 
@@ -182,10 +182,10 @@ public class PublishRollbacker {
 	}
 
 	private void deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, itemIdList);
+		EsUtils.bulkDeleteList(esClient, index, itemIdList);
 	}
 
 	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, histIdList);
+		EsUtils.bulkDeleteList(esClient, index, histIdList);
 	}
 }

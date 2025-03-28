@@ -6,7 +6,6 @@ import java.util.List;
 
 public class ProofHistory extends FcObject {
 	
-	private String id;
 	private Long height;
 	private Integer index;
 	private Long time;

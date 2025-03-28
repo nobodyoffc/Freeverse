@@ -4,6 +4,7 @@ import co.elastic.clients.elasticsearch._types.FieldSort;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import constants.FieldNames;
+import constants.Values;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,20 +15,20 @@ import static constants.Strings.*;
 
 public class Sort {
     private String field;
-    private String order = DESC;
+    private String order = Values.DESC;
 
     public Sort() {
     }
 
     public Sort(String field, String order) {
-        if (order.equals(DESC) || order.equals(ASC)) {
+        if (order.equals(Values.DESC) || order.equals(Values.ASC)) {
             this.field = field;
             this.order = order;
         }
     }
 
     public static List<SortOptions> makeHeightTxIndexSort() {
-        return makeTwoFieldsSort(HEIGHT, DESC, FieldNames.TX_INDEX, DESC);
+        return makeTwoFieldsSort(HEIGHT, Values.DESC, FieldNames.TX_INDEX, Values.DESC);
     }
 
     public static List<SortOptions> makeTwoFieldsSort(String field1, String order1, String field2, String order2) {
@@ -58,7 +59,7 @@ public class Sort {
                 sort.setField(input);
 
                 while (true) {
-                    System.out.println("Input the order. " + DESC + " or " + ASC + ": ");
+                    System.out.println("Input the order. " + Values.DESC + " or " + Values.ASC + ": ");
                     input = br.readLine();
                     if ("q".equals(input)) break;
                     if ("desc".equals(input)) {
@@ -84,9 +85,9 @@ public class Sort {
         List<SortOptions> soList = new ArrayList<>();
         for (Sort sort1 : sortList) {
             SortOrder order;
-            if (sort1.getOrder().equals(ASC)) {
+            if (sort1.getOrder().equals(Values.ASC)) {
                 order = SortOrder.Asc;
-            } else if (sort1.getOrder().equals(DESC)) {
+            } else if (sort1.getOrder().equals(Values.DESC)) {
                 order = SortOrder.Desc;
             } else {
                 order = null;
@@ -104,20 +105,20 @@ public class Sort {
         Sort sort = new Sort();
         sort.setField(field1);
         if (isAsc1)
-            sort.setOrder(ASC);
+            sort.setOrder(Values.ASC);
         sortList.add(sort);
 
         if (field2 != null) {
             Sort sort1 = new Sort();
             sort1.setField(field2);
-            if (isAsc2) sort1.setOrder(ASC);
+            if (isAsc2) sort1.setOrder(Values.ASC);
             sortList.add(sort1);
         }
 
         if (field3 != null) {
             Sort sort1 = new Sort();
             sort1.setField(field3);
-            if (isAsc3) sort1.setOrder(ASC);
+            if (isAsc3) sort1.setOrder(Values.ASC);
             sortList.add(sort1);
         }
         return sortList;

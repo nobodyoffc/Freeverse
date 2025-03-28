@@ -6,19 +6,20 @@ import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
-import clients.Client;
 import clients.FeipClient;
 import constants.FieldNames;
+import constants.Values;
+import crypto.Decryptor;
 import fch.fchData.SendTo;
 import feip.feipData.Group;
 import feip.feipData.GroupOpData;
 import feip.feipData.Service;
-import tools.Hex;
-import tools.JsonTools;
-import tools.PersistentSequenceMap;
-import tools.StringTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.Hex;
+import utils.JsonUtils;
+import fcData.PersistentSequenceMap;
+import utils.StringUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import nasa.NaSaRpcClient;
 
 import javax.annotation.Nullable;
@@ -68,7 +69,7 @@ public class GroupHandler extends Handler {
 
     // 4. Public Methods - Main Interface
     public void menu() {
-        byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
+        byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         Menu menu = new Menu("Group", this::close);
         menu.add("List", () -> handleListGroups(priKey, br));
         menu.add("Check", () -> checkGroup(br));
@@ -93,7 +94,7 @@ public class GroupHandler extends Handler {
 
         if (!groupList.isEmpty()) {
             lastTimeMap.put(FieldNames.GROUP, groupList.get(0).getLastHeight());
-            JsonTools.saveToJsonFile(lastTimeMap, myFid, null, FieldNames.LAST_TIME, false);
+            JsonUtils.saveToJsonFile(lastTimeMap, myFid, null, FieldNames.LAST_TIME, false);
         }
 
         System.out.println("Found " + groupList.size() + " updated groups.");
@@ -265,7 +266,7 @@ public class GroupHandler extends Handler {
                 System.out.println("You have already joined this group: ["+group.getId()+"]");
                 continue;
             } else {
-                System.out.println("Group: "+ StringTools.omitMiddle(group.getId(), 15)+" - "+group.getName());
+                System.out.println("Group: "+ StringUtils.omitMiddle(group.getId(), 15)+" - "+group.getName());
                 if(!Inputer.askIfYes(br,"Join this group?")) continue;
                 List<String> members = getGroupMembers(group.getId(),apipClient);
                 if(members!=null && members.contains(myFid)) {
@@ -303,7 +304,7 @@ public class GroupHandler extends Handler {
     public void updateGroups(List<Group> chosenGroupList, boolean isMyGroupList,
             byte[] priKey, String offLineFid, ApipClient apipClient, BufferedReader br) {
         for(Group group : chosenGroupList) {
-            System.out.println("Group: "+ StringTools.omitMiddle(group.getId(), 15)+" - "+group.getName());
+            System.out.println("Group: "+ StringUtils.omitMiddle(group.getId(), 15)+" - "+group.getName());
             if(!Inputer.askIfYes(br,"Update this group?")) continue;
             if(!isMyGroupList) {
                 List<String> members = getGroupMembers(group.getId(), apipClient);
@@ -350,7 +351,7 @@ public class GroupHandler extends Handler {
         if(searchTerm!=null && !"".equals(searchTerm))
             fcdsl.addNewQuery()
                  .addNewPart()
-                 .addNewFields(FieldNames.GID, FieldNames.NAME, FieldNames.DESC,FieldNames.MEMBERS)
+                 .addNewFields(FieldNames.GID, FieldNames.NAME, Values.DESC,FieldNames.MEMBERS)
                  .addNewValue(searchTerm);
         return apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
@@ -388,22 +389,22 @@ public class GroupHandler extends Handler {
             List<Object> valueList = new ArrayList<>();
             valueList.add(
                 group.getId()!=null && group.getId().length()>15?
-                StringTools.omitMiddle(group.getId(), 15):group.getId()
+                StringUtils.omitMiddle(group.getId(), 15):group.getId()
             );
             valueList.add(group.getMemberNum());
             valueList.add(group.gettCdd());
             valueList.add(
                     group.getName()!=null && group.getName().length()>20?
-                            StringTools.omitMiddle(group.getName(), 20):group.getName()
+                            StringUtils.omitMiddle(group.getName(), 20):group.getName()
             );
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, 0, true);
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
     public void viewGroups(List<Group> chosenGroupMaskList, BufferedReader br) {
         while (true) {
             List<Group> viewGroupList = chooseGroupList(chosenGroupMaskList, br);
-            System.out.println(JsonTools.toNiceJson(viewGroupList));
+            System.out.println(JsonUtils.toNiceJson(viewGroupList));
             if(Inputer.askIfYes(br,"Continue?"))continue;
             else break;
         }

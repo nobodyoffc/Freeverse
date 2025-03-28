@@ -1,6 +1,6 @@
 package server.reward;
 
-import constants.FieldNames;
+import constants.Values;
 import fcData.ReplyBody;
 import fch.TxCreator;
 import fch.Wallet;
@@ -8,14 +8,15 @@ import feip.feipData.Feip;
 import feip.feipData.serviceParams.Params;
 import clients.ApipClient;
 import apip.apipData.Sort;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.*;
 import fch.Inputer;
 import appTools.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.ApiAccount;
-import tools.JsonTools;
-import tools.NumberTools;
+import org.bitcoinj.fch.FchMainNetwork;
+import utils.JsonUtils;
+import utils.NumberUtils;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,7 @@ import static constants.Constants.*;
 import static constants.FieldNames.PARAMS;
 import static constants.Strings.*;
 import static appTools.Settings.addSidBriefToName;
+import static constants.FieldNames.ORDER_VIA_SHARE;
 
 public class Rewarder {
     private static final Logger log = LoggerFactory.getLogger(Rewarder.class);
@@ -80,7 +82,7 @@ public class Rewarder {
         }
 
         System.out.println("Check the reward parameters:");
-        JsonTools.printJson(rewardParams);
+        JsonUtils.printJson(rewardParams);
         Menu.anyKeyToContinue(br);
     }
     public RewardInfo doReward(List<ApiAccount> chargedAccountList,byte[] priKey) {
@@ -89,8 +91,8 @@ public class Rewarder {
         bestHeight = wallet.getBestHeight();
 
         ArrayList<Sort> sortList = new ArrayList<>();
-        Sort sort1 = new Sort(VALUE, ASC);
-        Sort sort2 = new Sort(ID, ASC);
+        Sort sort1 = new Sort(VALUE, Values.ASC);
+        Sort sort2 = new Sort(ID, Values.ASC);
         sortList.add(sort1);
         sortList.add(sort2);
         List<Cash> cashList;
@@ -104,7 +106,7 @@ public class Rewarder {
         Cash.checkImmatureCoinbase(cashList, bestHeight);
 
         if (cashList.size() > 200) {
-            wallet.mergeCashList(cashList, priKey);
+            Wallet.mergeCashList(cashList, priKey, apipClient, naSaRpcClient);
             try {
                 TimeUnit.SECONDS.sleep(600);
             } catch (InterruptedException ignore) {
@@ -114,9 +116,9 @@ public class Rewarder {
 
         long total = Cash.sumCashValue(cashList);
 
-        log.debug("Ready to reward "+ParseTools.satoshiToCoin(total)+" F from "+cashList.get(0).getOwner()+"...");
+        log.debug("Ready to reward "+ FchUtils.satoshiToCoin(total)+" F from "+cashList.get(0).getOwner()+"...");
         double sumApiMinPaymentDouble = sumApiMinPayment(chargedAccountList);
-        long sumApiMinPayment = ParseTools.coinToSatoshi(sumApiMinPaymentDouble);
+        long sumApiMinPayment = FchUtils.coinToSatoshi(sumApiMinPaymentDouble);
 
         total -= sumApiMinPayment;
         if (isNoMoreThanZero(total)) return null;
@@ -161,7 +163,7 @@ public class Rewarder {
         addQualifiedPendingToPay(sendToMap);
         backUpPending();
 
-        String txSigned = TxCreator.createTxFch(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate);
+        String txSigned = TxCreator.createTxFch(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate, FchMainNetwork.MAINNETWORK);
 
         ReplyBody replyBody = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
         if (replyBody.getCode() != 0) {
@@ -209,7 +211,7 @@ public class Rewarder {
                 String fid = sendTo.getFid();
                 double amount = sendTo.getAmount();
                 if (amount < MinPayValue) {
-                    addToPending(fid, ParseTools.coinToSatoshi(amount), jedis);
+                    addToPending(fid, FchUtils.coinToSatoshi(amount), jedis);
                     iterator.remove();
                 }
             }
@@ -218,7 +220,7 @@ public class Rewarder {
     private void addQualifiedPendingToPay(Map<String, SendTo> sendToMap) {
         if(pendingMap==null || pendingMap.isEmpty())return;
         for(String key: pendingMap.keySet()){
-            double amount = ParseTools.satoshiToCoin(pendingMap.get(key));
+            double amount = FchUtils.satoshiToCoin(pendingMap.get(key));
             SendTo sendTo = new SendTo();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
@@ -267,7 +269,7 @@ public class Rewarder {
         rewardData.setSid(sid);
         dataOnChain.setData(rewardData);
 
-        opReturnJson = JsonTools.toJson(dataOnChain);
+        opReturnJson = JsonUtils.toJson(dataOnChain);
         return opReturnJson;
     }
 
@@ -279,7 +281,7 @@ public class Rewarder {
             if(apiAccount.getPayments()==null)continue;
             for(String key:apiAccount.getPayments().keySet()){
                 double paid = apiAccount.getPayments().get(key);
-                apiCost += ParseTools.coinToSatoshi(paid);
+                apiCost += FchUtils.coinToSatoshi(paid);
             }
         }
         return apiCost;
@@ -336,12 +338,12 @@ public class Rewarder {
             SendTo sendTo = new SendTo();
             String fid = payDetail.getFid();
             sendTo.setFid(fid);
-            double amount = ParseTools.satoshiToCoin(payDetail.getAmount());
+            double amount = FchUtils.satoshiToCoin(payDetail.getAmount());
             if(sendToMap.get(fid)!=null){
                 amount = amount+ sendToMap.get(fid).getAmount();
-                sendTo.setAmount(NumberTools.roundDouble8(amount));
+                sendTo.setAmount(NumberUtils.roundDouble8(amount));
             }else{
-                sendTo.setAmount(NumberTools.roundDouble8(amount));
+                sendTo.setAmount(NumberUtils.roundDouble8(amount));
             }
             sendToMap.put(sendTo.getFid(),sendTo);
         }
@@ -454,7 +456,7 @@ public class Rewarder {
         for(String fid: costMap.keySet()) {
             long amount;
             try {
-                amount = ParseTools.coinStrToSatoshi(costMap.get(fid));
+                amount = FchUtils.coinStrToSatoshi(costMap.get(fid));
             } catch (Exception e) {
                 log.error("Get cost of {} from redis wrong.", fid, e);
                 return null;
@@ -463,11 +465,11 @@ public class Rewarder {
             if(amount+costSum+paidSum > income){
                 if(costSum+paidSum < income){
                     long payNow = income-costSum-paidSum;
-                    double unpaid = ParseTools.satoshiToCoin(amount - payNow);
+                    double unpaid = FchUtils.satoshiToCoin(amount - payNow);
                     unpaidCostMap.put(fid,String.valueOf(unpaid));
                     amount = payNow;
                     costAmountMap.put(fid, amount);
-                }else unpaidCostMap.put(fid,String.valueOf(ParseTools.satoshiToCoin(amount)));
+                }else unpaidCostMap.put(fid,String.valueOf(FchUtils.satoshiToCoin(amount)));
             }else {
                 costAmountMap.put(fid, amount);
             }
@@ -561,7 +563,7 @@ public class Rewarder {
             return false;
         }
 
-        JsonTools.writeObjectToJsonFile(rewardInfo,REWARD_HISTORY_FILE,true);
+        JsonUtils.writeObjectToJsonFile(rewardInfo,REWARD_HISTORY_FILE,true);
 
         log.debug("Backup rewardInfo into "+REWARD_HISTORY_FILE+" success. BestHeight {}.",rewardInfo.getBestHeight());
         return true;

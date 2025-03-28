@@ -7,10 +7,10 @@ import fcData.FcSession;
 import feip.feipData.Service;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import tools.FileTools;
-import tools.Hex;
-import tools.JsonTools;
-import tools.MapQueue;
+import utils.FileUtils;
+import utils.Hex;
+import utils.JsonUtils;
+import utils.MapQueue;
 
 import java.util.Map;
 
@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.ArrayList;
 
-import tools.IdNameTools;
+import utils.IdNameUtils;
 /**
  * FcSessionClient is a client for managing sessions.
  * There are two ways to store sessions: 1) MapQueue in memory and MapDB for persistence; 2) JedisPool in Redis.
@@ -50,12 +50,12 @@ public class SessionHandler extends Handler<FcSession> {
         this.useRedis = (jedisPool != null);
         
         
-        this.jedisNameSessionKey = useRedis ? FileTools.makeFileName(null, sid, SESSIONS, null) : null;
-        this.jedisIdNameKey = useRedis ? FileTools.makeFileName(null, sid, ID_SESSION_NAME, null) : null;
+        this.jedisNameSessionKey = useRedis ? FileUtils.makeFileName(null, sid, SESSIONS, null) : null;
+        this.jedisIdNameKey = useRedis ? FileUtils.makeFileName(null, sid, ID_SESSION_NAME, null) : null;
         this.sessionDB = useRedis ? null : new SessionDB(mainFid, sid, dbPath);
         this.nameSessionMap = useRedis ? null : new MapQueue<>(1000);
         this.idNameMap = useRedis ? null : new MapQueue<>(1000);
-        this.jedisUsedSessionsKey = useRedis ? FileTools.makeFileName(null, sid, "usedSessions", null) : null;
+        this.jedisUsedSessionsKey = useRedis ? FileUtils.makeFileName(null, sid, "usedSessions", null) : null;
         this.usedSessionsMap = useRedis ? null : new HashMap<>();
     }
 
@@ -66,12 +66,12 @@ public class SessionHandler extends Handler<FcSession> {
         this.useRedis = (jedisPool != null);
         // this.dbName = settings.getSid()==null? FileTools.makeFileName(mainFid, sid, SESSIONS, constants.Strings.DOT_DB) 
         //     : FileTools.makeFileName(null, sid, SESSIONS, constants.Strings.DOT_DB);
-        this.jedisNameSessionKey = useRedis ? FileTools.makeFileName(null, sid, SESSIONS, null) : null;
-        this.jedisIdNameKey = useRedis ? FileTools.makeFileName(null, sid, ID_SESSION_NAME, null) : null;
+        this.jedisNameSessionKey = useRedis ? FileUtils.makeFileName(null, sid, SESSIONS, null) : null;
+        this.jedisIdNameKey = useRedis ? FileUtils.makeFileName(null, sid, ID_SESSION_NAME, null) : null;
         this.sessionDB = useRedis ? null : new SessionDB(mainFid, sid, settings.getDbDir());
         this.nameSessionMap = useRedis ? null : new MapQueue<>(1000);
         this.idNameMap = useRedis ? null : new MapQueue<>(1000);
-        this.jedisUsedSessionsKey = useRedis ? FileTools.makeFileName(null, sid, "usedSessions", null) : null;
+        this.jedisUsedSessionsKey = useRedis ? FileUtils.makeFileName(null, sid, "usedSessions", null) : null;
         this.usedSessionsMap = useRedis ? null : new HashMap<>();
     }     
 
@@ -148,10 +148,10 @@ public class SessionHandler extends Handler<FcSession> {
             // Add to usedSessions in Redis
             String sessionsJson = jedis.hget(jedisUsedSessionsKey, fid);
             List<String> sessionNames = sessionsJson != null ? 
-                JsonTools.listFromJson(sessionsJson, String.class) : new ArrayList<>();
+                JsonUtils.listFromJson(sessionsJson, String.class) : new ArrayList<>();
             if (!sessionNames.contains(sessionName)) {
                 sessionNames.add(sessionName);
-                jedis.hset(jedisUsedSessionsKey, fid, JsonTools.toJson(sessionNames));
+                jedis.hset(jedisUsedSessionsKey, fid, JsonUtils.toJson(sessionNames));
             }
         }
     }
@@ -236,12 +236,12 @@ public class SessionHandler extends Handler<FcSession> {
                 // Update usedSessions
                 String sessionsJson = jedis.hget(jedisUsedSessionsKey, fid);
                 if (sessionsJson != null) {
-                    List<String> sessionNames = JsonTools.listFromJson(sessionsJson, String.class);
+                    List<String> sessionNames = JsonUtils.listFromJson(sessionsJson, String.class);
                     sessionNames.remove(sessionName);
                     if (sessionNames.isEmpty()) {
                         jedis.hdel(jedisUsedSessionsKey, fid);
                     } else {
-                        jedis.hset(jedisUsedSessionsKey, fid, JsonTools.toJson(sessionNames));
+                        jedis.hset(jedisUsedSessionsKey, fid, JsonUtils.toJson(sessionNames));
                     }
                 }
             }
@@ -285,8 +285,8 @@ public class SessionHandler extends Handler<FcSession> {
         String sessionName;
         FcSession session = null;
 
-        sessionKey = IdNameTools.genNew32BytesKey();
-        sessionName = IdNameTools.makeKeyName(sessionKey);
+        sessionKey = IdNameUtils.genNew32BytesKey();
+        sessionName = IdNameUtils.makeKeyName(sessionKey);
 
         //Set the new session
         session = new FcSession();
@@ -375,7 +375,7 @@ public class SessionHandler extends Handler<FcSession> {
 
         // Update Redis
         try (var jedis = jedisPool.getResource()) {
-            jedis.hset(jedisUsedSessionsKey, key, JsonTools.toJson(sessionNamesCopy));
+            jedis.hset(jedisUsedSessionsKey, key, JsonUtils.toJson(sessionNamesCopy));
         }
     }
 
@@ -411,7 +411,7 @@ public class SessionHandler extends Handler<FcSession> {
             String sessionsJson = jedis.hget(jedisUsedSessionsKey, key);
             if (sessionsJson == null) return null;
             
-            List<String> sessionNames = JsonTools.listFromJson(sessionsJson, String.class);
+            List<String> sessionNames = JsonUtils.listFromJson(sessionsJson, String.class);
             List<FcSession> sessions = new ArrayList<>();
             for (String name : sessionNames) {
                 FcSession session = getSessionByName(name);

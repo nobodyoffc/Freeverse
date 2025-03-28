@@ -5,9 +5,9 @@ import com.google.gson.reflect.TypeToken;
 import crypto.Hash;
 import fch.fchData.Cash;
 import fch.fchData.P2SH;
-import tools.BytesTools;
-import tools.JsonTools;
-import tools.ObjectTools;
+import utils.BytesUtils;
+import utils.JsonUtils;
+import utils.ObjectUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Type;
@@ -22,7 +22,7 @@ public final class MultiSigData {
     private Map<String, List<byte[]>> fidSigMap;
 
     public MultiSigData(byte[] rawTx, P2SH p2SH, List<Cash> cashList) {
-        this.nonce = BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4));
+        this.nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
         this.rawTx = rawTx;
         this.p2SH = p2SH;
         this.cashList = cashList;
@@ -30,10 +30,10 @@ public final class MultiSigData {
     }
 
     public MultiSigData(String rawTxHex, String p2SHStr, String cashList) {
-        this.nonce = BytesTools.bytes4ToLongBE(BytesTools.getRandomBytes(4));
+        this.nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
         this.rawTx = HexFormat.of().parseHex(rawTxHex);
         this.p2SH = new Gson().fromJson(p2SHStr, P2SH.class);
-        this.cashList = ObjectTools.objectToList(cashList,Cash.class);//DataGetter.getCashList(cashList);
+        this.cashList = ObjectUtils.objectToList(cashList,Cash.class);//DataGetter.getCashList(cashList);
     }
 
     public MultiSigData() {
@@ -57,7 +57,7 @@ public final class MultiSigData {
         if (dataMap.get("p2SH") != null)
             multiSignData.setP2SH(gson.fromJson(gson.toJson(dataMap.get("p2SH")), P2SH.class));
         if (dataMap.get("cashList") != null)
-            multiSignData.setCashList(ObjectTools.objectToList(dataMap.get("cashList"),Cash.class));//DataGetter.getCashList(dataMap.get("cashList")));
+            multiSignData.setCashList(ObjectUtils.objectToList(dataMap.get("cashList"),Cash.class));//DataGetter.getCashList(dataMap.get("cashList")));
         if (dataMap.get("fidSigMap") != null) {
             Map<String, List<byte[]>> fidSigMap = makeStringListMapToBytesListMap(dataMap.get("fidSigMap"));
             multiSignData.setFidSigMap(fidSigMap);
@@ -121,9 +121,9 @@ public final class MultiSigData {
     public String toString() {
         return "MultiSignData[\n" +
                 "rawTxHex=" + HexFormat.of().formatHex(rawTx) + ", \n" +
-                "p2SH=" + JsonTools.toNiceJson(p2SH) + ", \n" +
-                "cashList=" + JsonTools.toNiceJson(cashList) + ", \n" +
-                "fidSigMap=" + JsonTools.toNiceJson(fidSigMap) + "\n]";
+                "p2SH=" + JsonUtils.toNiceJson(p2SH) + ", \n" +
+                "cashList=" + JsonUtils.toNiceJson(cashList) + ", \n" +
+                "fidSigMap=" + JsonUtils.toNiceJson(fidSigMap) + "\n]";
     }
 
     public Map<String, List<byte[]>> getFidSigMap() {
@@ -178,7 +178,7 @@ public final class MultiSigData {
             dataMap.put("fidSigMap", getFidSigHexMap());
         }
 
-        return JsonTools.toNiceJson(dataMap);
+        return JsonUtils.toNiceJson(dataMap);
     }
 
     public String getRawTxId() {

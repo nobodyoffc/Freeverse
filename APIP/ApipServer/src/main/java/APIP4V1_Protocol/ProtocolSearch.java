@@ -6,7 +6,7 @@ import constants.FieldNames;
 import constants.IndicesNames;
 import feip.feipData.Protocol;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 
 import javax.servlet.ServletException;

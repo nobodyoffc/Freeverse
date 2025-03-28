@@ -1,6 +1,6 @@
 package apip.apipData;
 
-import tools.StringTools;
+import utils.StringUtils;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -14,14 +14,12 @@ public class Terms {
     @Nullable
     public static String termsToUrlParam(Terms terms) {
         if(terms==null)return null;
-        if(terms.getFields().length>1){
-            System.out.println("To make terms into URL, the field can not more than one.");
-            return null;
-        }
+       
         List<String> stringList = new ArrayList<>();
-        stringList.add(terms.getFields()[0]);
+        stringList.add(String.valueOf(terms.getFields().length));
+        stringList.addAll(Arrays.asList(terms.getFields()));
         stringList.addAll(Arrays.asList(terms.getValues()));
-        return StringTools.listToString(stringList);
+        return StringUtils.listToString(stringList);
     }
 
     public Terms addNewFields(String... fields) {

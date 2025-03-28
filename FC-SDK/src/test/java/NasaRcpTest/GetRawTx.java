@@ -1,6 +1,6 @@
 package NasaRcpTest;
 
-import tools.JsonTools;
+import utils.JsonUtils;
 import nasa.RpcRequest;
 import org.junit.jupiter.api.Test;
 
@@ -16,7 +16,7 @@ public class GetRawTx {
         String url = "http://127.0.0.1:8332";
 //        String url = "http://127.0.0.1:22555";
         String rawTx = getRawTx(params, url, "username", "password");
-        JsonTools.printJson(rawTx);
+        JsonUtils.printJson(rawTx);
     }
 
     public String getRawTx(String txId, String url, String username, String password) {

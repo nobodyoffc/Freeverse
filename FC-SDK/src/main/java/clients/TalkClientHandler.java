@@ -6,15 +6,15 @@ import java.util.Map;
 import apip.apipData.RequestBody;
 import fcData.*;
 import fcData.TalkUnit.IdType;
-import fch.ParseTools;
+import fch.FchUtils;
 import handlers.TalkUnitSender;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.timeout.IdleStateEvent;
-import tools.JsonTools;
-import tools.TalkUnitExecutor;
+import utils.JsonUtils;
+import utils.TalkUnitExecutor;
 
 import static fcData.TalkUnit.*;
 
@@ -81,7 +81,7 @@ public class TalkClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }
 
         if(parsedTalkUnit==null){
-            talkClient.disply("Failed to parse talkUnit:"+JsonTools.toNiceJson(decryptedTalkUnit));
+            talkClient.disply("Failed to parse talkUnit:"+ JsonUtils.toNiceJson(decryptedTalkUnit));
             return;
         }
 
@@ -122,7 +122,7 @@ public class TalkClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
                     talkClient.disply("Failed to verify service information:\n"+signature.toNiceJson());
                     return false;
                 }
-                talkClient.getDisplayer().displayAppNotice("Got TALK service info from "+ ctx.channel().remoteAddress().toString()+":\n" + JsonTools.strToNiceJson(signature.getMsg()));
+                talkClient.getDisplayer().displayAppNotice("Got TALK service info from "+ ctx.channel().remoteAddress().toString()+":\n" + JsonUtils.strToNiceJson(signature.getMsg()));
             }catch(Exception e){
                 talkClient.disply("Failed to verify service information:\n"+new String(bytes));
                 return false;
@@ -136,7 +136,7 @@ public class TalkClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
     private void pay(Map<String,Integer> payToForBytes) {
         try{
             String priceStr = talkClient.getApiProvider().getApiParams().getPricePerKBytes();
-            long price = ParseTools.coinStrToSatoshi(priceStr);
+            long price = FchUtils.coinStrToSatoshi(priceStr);
             Map<String,Long> payList = new HashMap<>();
             for(Map.Entry<String,Integer> entry:payToForBytes.entrySet()){
                 String fid = entry.getKey();

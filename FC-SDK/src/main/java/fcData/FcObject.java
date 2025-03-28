@@ -1,7 +1,7 @@
 package fcData;
 
 import crypto.Hash;
-import tools.Hex;
+import utils.Hex;
 
 public class FcObject extends FcEntity {
     // The 'id' of this class is called 'DID' in FC.

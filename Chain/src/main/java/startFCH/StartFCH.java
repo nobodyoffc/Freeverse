@@ -6,13 +6,13 @@ import appTools.Starter;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Constants;
 import constants.UpStrings;
-import fch.OpReFileTools;
+import fch.OpReFileUtils;
 import fch.fchData.Block;
 import feip.feipData.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parser.Preparer;
-import tools.EsTools;
+import utils.EsUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -42,7 +42,7 @@ public class StartFCH {
     static {
         settingMap.put(Settings.LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
     }
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args)  {
         String name = "Freecash Chain Parser";
         Menu.welcome(name);
 
@@ -141,7 +141,7 @@ public class StartFCH {
         long bestHeight;
         Block bestBlock;
         try {
-            bestBlock = EsTools.getBestBlock(esClient);
+            bestBlock = EsUtils.getBestBlock(esClient);
             if (bestBlock==null){
                 log.error("Failed to get bestHeight wrong.");
                 return;
@@ -189,7 +189,7 @@ public class StartFCH {
             if (file.exists()) {
                 boolean done = file.delete();
                 if(!done)log.error("Failed to delete file:"+fileName);
-                fileName = OpReFileTools.getNextFile(fileName);
+                fileName = OpReFileUtils.getNextFile(fileName);
             } else break;
         }
     }

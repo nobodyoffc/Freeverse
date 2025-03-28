@@ -6,7 +6,7 @@ import feip.feipData.Group;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.FcdslRequestHandler;
-import tools.http.AuthType;
+import utils.http.AuthType;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -31,14 +31,14 @@ public class GroupMembers extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        doRequest(request,response,authType, settings);
+        doRequest(request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        doRequest(request,response,authType, settings);
+        doRequest(request,response,authType);
     }
-    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) throws ServletException, IOException {
         List<Group> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.GROUP, Group.class, null, null, null, null, null, request, response, authType);
         if (meetList == null) return;
         //Make data

@@ -4,7 +4,6 @@ import fcData.FcObject;
 
 public class BoxHistory extends FcObject {
 	
-	private String id;
 	private Long height;
 	private Integer index;
 	private Long time;

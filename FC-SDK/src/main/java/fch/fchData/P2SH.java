@@ -6,20 +6,21 @@ import co.elastic.clients.elasticsearch.core.GetResponse;
 import constants.IndicesNames;
 import crypto.KeyTools;
 import fcData.FcObject;
-import tools.BytesTools;
+import utils.BytesUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class P2SH extends FcObject {
 	private String redeemScript;
 	private Integer m;
 	private Integer n;
-	private String pubKeys[];
-	private String fids[];
+	private List<String> pubKeys;
+	private List<String> fids;
 
 	private Long birthHeight;
 	private Long birthTime;
@@ -63,7 +64,7 @@ public class P2SH extends FcObject {
 		}
 
 
-		InputStream scriptIs = new ByteArrayInputStream(BytesTools.hexToByteArray(script));
+		InputStream scriptIs = new ByteArrayInputStream(BytesUtils.hexToByteArray(script));
 
 		byte[] b = new byte[1];
 		scriptIs.read(b);
@@ -97,7 +98,7 @@ public class P2SH extends FcObject {
 			byte[] pkBytes = new byte[pkLen];
 			scriptIs.read(pkBytes);
 			redeemScriptBytesList.add(pkBytes.clone());
-			String pubKey = BytesTools.bytesToHexStringBE(pkBytes);
+			String pubKey = BytesUtils.bytesToHexStringBE(pkBytes);
 			String addr = KeyTools.pubKeyToFchAddr(pubKey);
 			pukList.add(pubKey);
 			addrList.add(addr);
@@ -110,14 +111,12 @@ public class P2SH extends FcObject {
 		redeemScriptBytesList.add(b.clone());
 
 
-		this.setRedeemScript(BytesTools.bytesToHexStringBE(BytesTools.bytesMerger(redeemScriptBytesList)));
+		this.setRedeemScript(BytesUtils.bytesToHexStringBE(BytesUtils.bytesMerger(redeemScriptBytesList)));
 		this.setM(m);
 		this.setN(n);
 
-		String[] pubKeys = pukList.toArray(new String[]{});
-		this.setPubKeys(pubKeys);
-		String[] addrs = addrList.toArray(new String[]{});
-		this.setFids(addrs);
+		this.setPubKeys(pukList);
+		this.setFids(addrList);
 
 		this.setId(input.getOwner());
 		this.setBirthHeight(input.getSpendHeight());
@@ -131,19 +130,19 @@ public class P2SH extends FcObject {
 		P2SH p2sh = new P2SH();
 
 		p2sh.setId(KeyTools.scriptToMultiAddr(script));
-		InputStream scriptIs = new ByteArrayInputStream(BytesTools.hexToByteArray(script));
+		InputStream scriptIs = new ByteArrayInputStream(BytesUtils.hexToByteArray(script));
 
 		byte[] b = new byte[1];
 
-		ArrayList<byte[]> redeemScriptBytesList = new ArrayList<byte[]>();
+		ArrayList<byte[]> redeemScriptBytesList = new ArrayList<>();
 		scriptIs.read(b);
 		redeemScriptBytesList.add(b.clone());
 		int m = b[0]-80;
 
 		if(m>16 || m<0) return null;
 
-		ArrayList<String> pukList = new ArrayList<String>();
-		ArrayList<String> addrList = new ArrayList<String>();
+		ArrayList<String> pukList = new ArrayList<>();
+		ArrayList<String> addrList = new ArrayList<>();
 
 		while(true) {
 			scriptIs.read(b);
@@ -154,10 +153,11 @@ public class P2SH extends FcObject {
 			byte[] pkBytes = new byte[pkLen];
 			scriptIs.read(pkBytes);
 			redeemScriptBytesList.add(pkBytes.clone());
-			String pubKey = BytesTools.bytesToHexStringBE(pkBytes);
+			String pubKey = BytesUtils.bytesToHexStringBE(pkBytes);
 			String addr = KeyTools.pubKeyToFchAddr(pubKey);
 			pukList.add(pubKey);
 			addrList.add(addr);
+			if(scriptIs.available()==0)break;
 		}
 
 		if(pukList.size()==0) return null;
@@ -167,14 +167,12 @@ public class P2SH extends FcObject {
 		redeemScriptBytesList.add(b.clone());
 
 
-		p2sh.setRedeemScript(BytesTools.bytesToHexStringBE(BytesTools.bytesMerger(redeemScriptBytesList)));
+		p2sh.setRedeemScript(BytesUtils.bytesToHexStringBE(BytesUtils.bytesMerger(redeemScriptBytesList)));
 		p2sh.setM(m);
 		p2sh.setN(n);
 
-		String[] pubKeys = pukList.toArray(new String[]{});
-		p2sh.setPubKeys(pubKeys);
-		String[] fids = addrList.toArray(new String[]{});
-		p2sh.setFids(fids);
+		p2sh.setPubKeys(pukList);
+		p2sh.setFids(addrList);
 		return p2sh;
 	}
 
@@ -202,11 +200,11 @@ public class P2SH extends FcObject {
 		this.n = n;
 	}
 
-	public String[] getPubKeys() {
+	public List<String> getPubKeys() {
 		return pubKeys;
 	}
 
-	public void setPubKeys(String[] pubKeys) {
+	public void setPubKeys(List<String> pubKeys) {
 		this.pubKeys = pubKeys;
 	}
 
@@ -234,11 +232,11 @@ public class P2SH extends FcObject {
 		this.birthTxId = birthTxId;
 	}
 
-	public String[] getFids() {
+	public List<String> getFids() {
 		return fids;
 	}
 
-	public void setFids(String[] fids) {
+	public void setFids(List<String> fids) {
 		this.fids = fids;
 	}
 }

@@ -1,5 +1,6 @@
 package app;
 
+import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
 import appTools.Starter;
@@ -7,6 +8,11 @@ import handlers.SecretHandler;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Map;
+
+import static constants.Constants.UserHome;
+import static constants.Strings.LISTEN_PATH;
 
 public class SecretApp {
 
@@ -16,14 +22,19 @@ public class SecretApp {
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-        Settings settings = Starter.startClient(SecretHandler.name, null, br, SecretHandler.modules);
+        Map<String,Object> settingsMap = new HashMap<>();
+        settingsMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 
-        if(settings==null)return;
+        while(true) {
+            Settings settings = Starter.startClient(SecretHandler.name, settingsMap, br, SecretHandler.modules);
 
-        SecretHandler secretHandler = new SecretHandler(settings);
+            if (settings == null) return;
 
-        secretHandler.freshOnChainSecrets(br);
-
-        secretHandler.menu(br, true);
+            SecretHandler secretHandler = new SecretHandler(settings);
+            secretHandler.freshOnChainSecrets(br);
+            secretHandler.menu(br, true);
+            if (!Inputer.askIfYes(br, "Switch to another FID relevant to "+settings.getMainFid()+"?")) break;
+            if (!Inputer.askIfYes(br, "Switch to another FID?")) System.exit(0);
+        }
     }
 }

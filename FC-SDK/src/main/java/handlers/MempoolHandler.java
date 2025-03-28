@@ -1,6 +1,7 @@
 package handlers;
 
-import fch.ParseTools;
+import fcData.FcEntity;
+import fch.FchUtils;
 import fch.RawTxParser;
 import fch.fchData.Cash;
 import fch.fchData.Tx;
@@ -25,7 +26,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-public class MempoolHandler extends Handler<Object>{
+public class MempoolHandler extends Handler<FcEntity>{
     private static final Logger log = LoggerFactory.getLogger(MempoolHandler.class);
     
     private final NaSaRpcClient nasaClient;
@@ -107,7 +108,7 @@ public class MempoolHandler extends Handler<Object>{
     private void scanNewBlockToClearLists() {
         Thread listenerThread = new Thread(() -> {
             while (running.get()) {
-                ParseTools.waitForChangeInDirectory(listenPath, running);
+                FchUtils.waitForChangeInDirectory(listenPath, running);
                 if (running.get()) {
                     clearLists();
                 }
@@ -140,10 +141,7 @@ public class MempoolHandler extends Handler<Object>{
                     
                     // Parse transaction
                     TxHasInfo txInfo = RawTxParser.parseMempoolTx(rawTxHex, txId, apipClient, esClient);
-                    if (txInfo == null) {
-                        continue;
-                    }
-                    
+
                     // Add to lists
                     txIdList.add(txId);
                     txList.add(txInfo.getTx());

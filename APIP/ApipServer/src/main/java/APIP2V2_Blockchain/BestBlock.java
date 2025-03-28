@@ -6,8 +6,8 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import fch.fchData.Block;
 import initial.Initiator;
-import tools.EsTools;
-import tools.http.AuthType;
+import utils.EsUtils;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -55,7 +55,7 @@ public class BestBlock extends HttpServlet {
             return;
         }
 
-        Block bestBlock = EsTools.getBestBlock(esClient);
+        Block bestBlock = EsUtils.getBestBlock(esClient);
         
         replier.setBestHeight(bestBlock.getHeight());
         replier.setBestBlockId(bestBlock.getId());

@@ -3,8 +3,8 @@ package NasaRcpTest;
 import nasa.RpcRequest;
 import nasa.data.UTXO;
 import com.google.gson.Gson;
-import tools.JsonTools;
-import tools.NumberTools;
+import utils.JsonUtils;
+import utils.NumberUtils;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
@@ -29,12 +29,12 @@ public class ListUnspent {
         String addrFch = "FSpN4acDqFD9jYM6DoTVRjvTKU4DPXgQHx";
 
         UTXO[] utxos2 = listUnspent(urlFch, username, password);
-        JsonTools.printJson(utxos2);
+        JsonUtils.printJson(utxos2);
 
         String minConf = "0";
         boolean includeUnsafe = true;
         UTXO[] utxos = listUnspent(addrFch, minConf, urlFch, username, password);
-        JsonTools.printJson(utxos);
+        JsonUtils.printJson(utxos);
 
         //String minconf, String maxconf,String[]addrs , boolean includeUnsafe,String minimumAmount, String maximumAmount, String maximumCount, String minimumSumAmount
         String maxconf = "99999999";
@@ -46,7 +46,7 @@ public class ListUnspent {
         String minimumSumAmount = null;//"25";
 
         UTXO[] utxos1 = listUnspent(minConf, maxconf, addrs, includeUnsafe, minimumAmount, maximumAmount, maximumCount, minimumSumAmount, urlFch, username, password);
-        JsonTools.printJson(utxos1);
+        JsonUtils.printJson(utxos1);
     }
 
     public UTXO[] listUnspent(String url, String username, String password) {
@@ -177,12 +177,12 @@ public class ListUnspent {
 
                 optionMap = new HashMap<>();
                 if (minimumAmount != null)
-                    optionMap.put("minimumAmount", NumberTools.roundDouble8(Double.valueOf(minimumAmount)));
+                    optionMap.put("minimumAmount", NumberUtils.roundDouble8(Double.valueOf(minimumAmount)));
                 if (maximumAmount != null)
-                    optionMap.put("maximumAmount", NumberTools.roundDouble8(Double.valueOf(maximumAmount)));
+                    optionMap.put("maximumAmount", NumberUtils.roundDouble8(Double.valueOf(maximumAmount)));
                 if (maximumCount != null) optionMap.put("maximumCount", Long.parseLong(maximumCount));
                 if (minimumSumAmount != null)
-                    optionMap.put("minimumSumAmount", NumberTools.roundDouble8(Double.valueOf(minimumSumAmount)));
+                    optionMap.put("minimumSumAmount", NumberUtils.roundDouble8(Double.valueOf(minimumSumAmount)));
             }
             if (optionMap != null && !optionMap.isEmpty()) objects.add(optionMap);
 

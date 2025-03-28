@@ -1,15 +1,14 @@
 package crypto.old;
 
 
+import app.HomeApp;
 import appTools.Inputer;
 import appTools.Menu;
 import constants.Constants;
 import crypto.*;
-import tools.BytesTools;
-import tools.Hex;
-import tools.FileTools;
-import org.bitcoinj.core.ECKey;
-import org.bitcoinj.params.MainNetParams;
+import utils.BytesUtils;
+import utils.Hex;
+import utils.FileUtils;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
@@ -18,8 +17,10 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
-import java.text.SimpleDateFormat;
 import java.util.*;
+
+import static app.HomeApp.findNiceFid;
+import static constants.Values.SHA256;
 
 
 public class StartTools {
@@ -121,7 +122,7 @@ public class StartTools {
             String ask = "Input the password:";
             char[] password = Inputer.inputPassword(br, ask);
             byte[] bundleBytes = Base64.getDecoder().decode(bundle);
-            byte[] passwordBytes = BytesTools.utf8CharArrayToByteArray(password);
+            byte[] passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
             byte[] msgBytes = ecc.decryptPasswordBundle(bundleBytes, passwordBytes);
             System.out.println(new String(msgBytes));
 
@@ -137,7 +138,7 @@ public class StartTools {
         char[] password = Inputer.inputPassword(br, ask);
         assert msg != null;
         byte[] msgBytes = msg.getBytes(StandardCharsets.UTF_8);
-        byte[] passwordBytes = BytesTools.utf8CharArrayToByteArray(password);
+        byte[] passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
         byte[] bundle = ecc.encryptPasswordBundle(msgBytes, passwordBytes);
         System.out.println(Base64.getEncoder().encodeToString(bundle));
         Menu.anyKeyToContinue(br);
@@ -239,7 +240,7 @@ public class StartTools {
     }
 
     private static void decryptFileSymKey(BufferedReader br) {
-        File encryptedFile = FileTools.getAvailableFile(br);
+        File encryptedFile = FileUtils.getAvailableFile(br);
         EccAes256K1P7 ecc = new EccAes256K1P7();
         if (encryptedFile == null || encryptedFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) return;
         String ask = "Input the symKey in hex:";
@@ -250,7 +251,7 @@ public class StartTools {
     }
 
     private static void encryptFileWithSymKey(BufferedReader br) {
-        File originalFile = FileTools.getAvailableFile(br);
+        File originalFile = FileUtils.getAvailableFile(br);
         EccAes256K1P7 ecc = new EccAes256K1P7();
         if (originalFile == null || originalFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) return;
 
@@ -291,7 +292,7 @@ public class StartTools {
 
 
     private static void decryptFileAsy(BufferedReader br) {
-        File encryptedFile = FileTools.getAvailableFile(br);
+        File encryptedFile = FileUtils.getAvailableFile(br);
         if (encryptedFile == null || encryptedFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) return;
 
         System.out.println("Input the recipient private key in hex:");
@@ -306,14 +307,14 @@ public class StartTools {
             System.out.println("The symKey should be 64 characters in hex.");
         }
         EccAes256K1P7 ecc = new EccAes256K1P7();
-        String result = ecc.decrypt(encryptedFile, BytesTools.hexCharArrayToByteArray(priKey));
+        String result = ecc.decrypt(encryptedFile, BytesUtils.hexCharArrayToByteArray(priKey));
         System.out.println(result);
         Menu.anyKeyToContinue(br);
     }
 
     private static void encryptFileAsy(BufferedReader br) {
 
-        File originalFile = FileTools.getAvailableFile(br);
+        File originalFile = FileUtils.getAvailableFile(br);
         if (originalFile == null || originalFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) return;
         String pubKeyB;
         pubKeyB = getPubKey(br);
@@ -498,7 +499,7 @@ public class StartTools {
             }
         }
 
-        byte[] bytes = BytesTools.getRandomBytes(len);
+        byte[] bytes = BytesUtils.getRandomBytes(len);
 
         if (bytes.length <= 8) {
             // Create a ByteBuffer with the byte array
@@ -516,7 +517,7 @@ public class StartTools {
 
             System.out.println("No longer than 8 bytes, in number:\n----\n" + Math.abs(value) + "\n----");
         } else {
-            System.out.println("Longer than 8 bytes, in hex:\n----\n" + BytesTools.bytesToHexStringBE(bytes) + "\n----");
+            System.out.println("Longer than 8 bytes, in hex:\n----\n" + BytesUtils.bytesToHexStringBE(bytes) + "\n----");
         }
         Menu.anyKeyToContinue(br);
     }
@@ -547,47 +548,47 @@ public class StartTools {
         }
     }
 
-    private static void findNiceFid(BufferedReader br) throws IOException {
-        String input = null;
-        SimpleDateFormat sdf = new SimpleDateFormat();
-        Date begin = new Date();
-        System.out.println(sdf.format(begin));
-        while (true) {
-            System.out.println("Input 4 characters you want them be in the end of your fid, enter to exit:");
-            input = br.readLine();
-            if ("".equals(input)) {
-                return;
-            }
-            if (input.length() != 4) {
-                System.out.println("Input 4 characters you want them be in the end of your fid:");
-            } else break;
-        }
-        long i = 0;
-        long j = 0;
-        System.out.println("Finding...");
-        while (true) {
-            ECKey ecKey = new ECKey();
-            String fid = KeyTools.pubKeyToFchAddr(ecKey.getPubKey());
-            if (fid.substring(30).equals(input)) {
-                System.out.println("----");
-                System.out.println("FID:" + fid);
-                System.out.println("PubKey: " + ecKey.getPublicKeyAsHex());
-                System.out.println("PriKeyHex: " + ecKey.getPrivateKeyAsHex());
-                System.out.println("PriKeyBase58: " + ecKey.getPrivateKeyEncoded(MainNetParams.get()));
-                System.out.println("----");
-                System.out.println("Begin at: " + sdf.format(begin));
-                Date end = new Date();
-                System.out.println("End at: " + sdf.format(end));
-                System.out.println("----");
-                break;
-            }
-            i++;
-            if (i % 1000000 == 0) {
-                j++;
-                System.out.println(sdf.format(new Date()) + ": " + j + " million tryings.");
-            }
-        }
-    }
+//    private static void findNiceFid(BufferedReader br) throws IOException {
+//        String input = null;
+//        SimpleDateFormat sdf = new SimpleDateFormat();
+//        Date begin = new Date();
+//        System.out.println(sdf.format(begin));
+//        while (true) {
+//            System.out.println("Input 4 characters you want them be in the end of your fid, enter to exit:");
+//            input = br.readLine();
+//            if ("".equals(input)) {
+//                return;
+//            }
+//            if (input.length() != 4) {
+//                System.out.println("Input 4 characters you want them be in the end of your fid:");
+//            } else break;
+//        }
+//        long i = 0;
+//        long j = 0;
+//        System.out.println("Finding...");
+//        while (true) {
+//            ECKey ecKey = new ECKey();
+//            String fid = KeyTools.pubKeyToFchAddr(ecKey.getPubKey());
+//            if (fid.substring(30).equals(input)) {
+//                System.out.println("----");
+//                System.out.println("FID:" + fid);
+//                System.out.println("PubKey: " + ecKey.getPublicKeyAsHex());
+//                System.out.println("PriKeyHex: " + ecKey.getPrivateKeyAsHex());
+//                System.out.println("PriKeyBase58: " + ecKey.getPrivateKeyEncoded(MainNetParams.get()));
+//                System.out.println("----");
+//                System.out.println("Begin at: " + sdf.format(begin));
+//                Date end = new Date();
+//                System.out.println("End at: " + sdf.format(end));
+//                System.out.println("----");
+//                break;
+//            }
+//            i++;
+//            if (i % 1000000 == 0) {
+//                j++;
+//                System.out.println(sdf.format(new Date()) + ": " + j + " million tryings.");
+//            }
+//        }
+//    }
 
     private static void pubKeyToAddrs(BufferedReader br) throws Exception {
         System.out.println("Input the public key, enter to exit:");
@@ -608,10 +609,15 @@ public class StartTools {
         KeyTools.showPubKeys(pubKey);
 
         Map<String, String> addrMap = KeyTools.pubKeyToAddresses(pubKey);
+        if(addrMap==null || addrMap.isEmpty())return;
+        showAddressed(addrMap);
+        Menu.anyKeyToContinue(br);
+    }
 
+    public static void showAddressed(Map<String, String> addrMap) {
         System.out.println("----");
 
-        System.out.println("fch" + ": " + addrMap.get("fchAddr"));
+        System.out.println("FCH" + ": " + addrMap.get("fchAddr"));
         System.out.println("BTC" + ": " + addrMap.get("btcAddr"));
         System.out.println("ETH" + ": " + addrMap.get("ethAddr"));
         System.out.println("BCH" + ": " + addrMap.get("bchAddr"));
@@ -621,7 +627,6 @@ public class StartTools {
 
 
         System.out.println("----");
-        Menu.anyKeyToContinue(br);
     }
 
     private static void sha256File(BufferedReader br) throws IOException {
@@ -684,15 +689,9 @@ public class StartTools {
 
     private static void sha256String(BufferedReader br) {
         String text = Inputer.inputStringMultiLine(br);
+        if(text==null || text.equals(""))return;
         String hash = Hash.sha256(text);
-        System.out.println("----");
-        System.out.println("raw string:");
-        System.out.println("----");
-        System.out.println(text);
-        System.out.println("----");
-        System.out.println("sha256:" + hash);
-        System.out.println("----");
-        Menu.anyKeyToContinue(br);
+        HomeApp.showHash(br, SHA256,text,hash);
     }
 
     private static void sha256x2String(BufferedReader br) {

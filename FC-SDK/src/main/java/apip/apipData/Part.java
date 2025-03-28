@@ -1,6 +1,6 @@
 package apip.apipData;
 
-import tools.StringTools;
+import utils.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,7 +15,7 @@ public class Part {
         if(part==null)return null;
         List<String> stringList = new ArrayList<>(Arrays.asList(part.getFields()));
         stringList.add(part.getValue());
-        return StringTools.listToString(stringList);
+        return StringUtils.listToString(stringList);
     }
 
 

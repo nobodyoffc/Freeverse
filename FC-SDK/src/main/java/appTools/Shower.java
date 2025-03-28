@@ -1,90 +1,138 @@
 package appTools;
 
 import java.io.BufferedReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.lang.reflect.Field;
 
-import tools.DateTools;
-import tools.StringTools;
-import constants.Constants;
+import fcData.FcEntity;
+import fch.FchUtils;
+import utils.DateUtils;
+import utils.FcUtils;
+import utils.QRCodeUtils;
+import utils.StringUtils;
+
+import javax.annotation.Nullable;
+
+import static appTools.Inputer.askIfYes;
 
 public class Shower {
-    public static final int DEFAULT_SIZE = 2;
+    public static final int DEFAULT_SIZE = 20;
 
-    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom, List<String> hideFields, boolean isShortTimestamp) {
-        if (dataList == null || dataList.isEmpty()) {
-            return;
-        }
-        // Get fields from first element
-        T firstElement = dataList.get(0);
-        java.lang.reflect.Field[] classFields = firstElement.getClass().getDeclaredFields();
-        
-        // Filter out hidden fields
-        List<java.lang.reflect.Field> visibleFields = Arrays.stream(classFields)
-            .filter(field -> hideFields == null || !hideFields.contains(field.getName()))
-            .toList();
-        
-        String[] fields = visibleFields.stream()
-            .map(java.lang.reflect.Field::getName)
-            .toArray(String[]::new);
-
-        // Calculate max width for each field
-        int[] widths = new int[fields.length];
-        Arrays.fill(widths, 0);
-
-        // Initialize with field name lengths
-        for (int i = 0; i < fields.length; i++) {
-            widths[i] = Math.max(widths[i], fields[i].length());
+    public static <T> List<T> showOrChooseListInPages(String title, List<T> list, Integer pageSize, LinkedHashMap<String, Integer> fieldWidthMap, List<String> timestampFieldList, List<String> satoshiField, Map<String, String> heightToTimeFieldMap, Map<String, String> showFieldNameAs, boolean choose, BufferedReader br) {
+        if (list == null || list.isEmpty()) {
+            System.out.println("Empty list to show");
+            return null;
         }
 
-        // Find max value length for each field
-        for (T element : dataList) {
-            for (int i = 0; i < visibleFields.size(); i++) {
-                visibleFields.get(i).setAccessible(true);
-                try {
-                    Object value = visibleFields.get(i).get(element);
-                    if (value != null) {
-                        widths[i] = Math.max(widths[i], value.toString().length());
-                    }
-                } catch (IllegalAccessException e) {
-                    // Skip if can't access
+        List<T> allChosenItems = new ArrayList<>();
+        int totalPages = (int) Math.ceil((double) list.size() / pageSize);
+
+        for (int page = 0; page < totalPages; page++) {
+            int startIndex = page * pageSize;
+            int endIndex = Math.min((page + 1) * pageSize, list.size());
+            List<T> pageItems = list.subList(startIndex, endIndex);
+
+            String pageTitle = String.format("%s (Page %d/%d)", title, page + 1, totalPages);
+            List<T> chosenItems = null;
+            if(choose && br!=null){
+                chosenItems = showDataTable(pageTitle, fieldWidthMap, pageItems, timestampFieldList, satoshiField,heightToTimeFieldMap, null, choose, br);
+                if (chosenItems != null) {
+                    allChosenItems.addAll(chosenItems);
                 }
+            }else{
+                showDataTable(pageTitle, fieldWidthMap, pageItems, timestampFieldList, satoshiField,heightToTimeFieldMap, showFieldNameAs, choose, br);
             }
+
+            // Only ask to continue if there are more pages
+            if (br!=null && page < totalPages - 1 && !askIfYes(br, "There are "+ (totalPages - page - 1) +" pages left. Continue?")) break;
         }
 
-        // Convert data to List<List<Object>> format
-        List<List<Object>> valueListList = new ArrayList<>();
-        for (T element : dataList) {
-            List<Object> row = new ArrayList<>();
-            for (java.lang.reflect.Field field : visibleFields) {
-                field.setAccessible(true);
-                try {
-                    row.add(field.get(element));
-                } catch (IllegalAccessException e) {
-                    row.add(null);
-                }
-            }
-            valueListList.add(row);
-        }
-
-        // Call existing showDataTable method
-        showDataTable(title, fields, widths, valueListList, beginFrom, isShortTimestamp);
+        return allChosenItems.isEmpty() ? null : allChosenItems;
     }
 
-    // Add overloaded method for backward compatibility
-    public static <T> void showDataTable(String title, List<T> dataList, int beginFrom, boolean isShortTimestamp) {
-        showDataTable(title, dataList, beginFrom, null, isShortTimestamp);
-    }
-
-    public static void showDataTable(String title, Map<String, Integer> fieldWidthMap, List<List<Object>> valueListList, int beginFrom) {
+    public static <T> List<T> showDataTable(String title, LinkedHashMap<String, Integer> fieldWidthMap, List<T> objectList, List<String> timestampFieldList, List<String> satoshiField, Map<String, String> heightToTimeFieldMap, Map<String, String> showFieldNameAs, boolean choose, BufferedReader br) {
         String[] fields = fieldWidthMap.keySet().toArray(new String[0]);
         int[] widths = fieldWidthMap.values().stream().mapToInt(Integer::intValue).toArray();
-        showDataTable(title, fields, widths, valueListList, beginFrom, true);
+        List<List<Object>> valueListList = new ArrayList<>();
+        
+        for(T t:objectList) {
+            List<Object> valueList = new ArrayList<>();
+            for (String field : fields) {
+                try {
+                    // Get the field from the class or its superclasses
+                    Field fieldObj = null;
+                    Class<?> currentClass = t.getClass();
+                    while (currentClass != null && fieldObj == null) {
+                        try {
+                            fieldObj = currentClass.getDeclaredField(field);
+                        } catch (NoSuchFieldException e) {
+                            currentClass = currentClass.getSuperclass();
+                        }
+                    }
+                    
+                    if (fieldObj == null) {
+                        valueList.add(null);
+                        continue;
+                    }
+                    
+                    fieldObj.setAccessible(true);
+                    Object value = fieldObj.get(t);
+                    
+                    // Handle boolean fields
+                    if (value instanceof Boolean) {
+                        value = (Boolean)value ? "✓" : "×";
+                    }
+                    
+                    if(timestampFieldList.contains(field))
+                        value = formatTimestamp(value);
+                    if(satoshiField.contains(field)) {
+                        value = formatSatoshi(value);
+                    }
+                    if(heightToTimeFieldMap.containsKey(field)){
+                        value = FcUtils.heightToShortDate((long) value);
+                    }
+                    valueList.add(value);
+                } catch (Exception e) {
+                    valueList.add(null);
+                }
+            }
+            valueListList.add(valueList);
+        }
+        showDataTable(title, fields, widths, valueListList, showFieldNameAs);
+
+        if(choose && br!=null)return choose(objectList,br);
+        return null;
     }
 
-    public static void showDataTable(String title, String[] fields, int[] widths, List<List<Object>> valueListList, int beginFrom, boolean isShortTimestamp) {
+    public static <T> List<T> choose(List<T> list, BufferedReader br) {
+        List<T> chosenList = new ArrayList<>();
+        List<Integer> chosen = fch.Inputer.chooseMulti(br,0, list.size());
+        if(chosen.size()>0 && chosen.get(0) == -1) return list;
+        for(Integer i : chosen){
+            chosenList.add(list.get(i-1));
+        }
+        return chosenList;
+    }
+
+    private static Object formatSatoshi(Object value) {
+        try{
+            value = FchUtils.satoshiToCoin((long)value);
+        }catch (Exception ignore){}
+        return value;
+    }
+
+    public static Object formatTimestamp(Object value) {
+        try{
+            String valueStr = String.valueOf(value);
+            long valueLong = Long.parseLong(valueStr);
+            if(valueStr.length()==10) value = DateUtils.longShortToTime(valueLong,DateUtils.TO_MINUTE);
+            else value = DateUtils.longToTime(valueLong,DateUtils.LONG_FORMAT);
+        }catch (Exception ignore){}
+
+        return value;
+    }
+
+    public static void showDataTable(String title, String[] fields, int[] widths, List<List<Object>> valueListList, Map<String, String> showFieldNameAs) {
         if(valueListList==null || valueListList.isEmpty()){
             System.out.println("Nothing to show.");
             return;
@@ -110,16 +158,19 @@ public class Shower {
 
         System.out.println("\n<" + title + ">");
         int orderWidth = String.valueOf(valueListList.size()).length() + 2;
-        printUnderline(totalWidth + orderWidth);
+        int underLineSize = totalWidth + orderWidth+2;
+        printUnderline(underLineSize);
         System.out.print(formatString(" ", orderWidth));
         for (int i = 0; i < fields.length; i++) {
-            System.out.print(formatString(StringTools.capitalize(fields[i]), widths[i] + 2));
+            String field = fields[i];
+            if(showFieldNameAs!=null && showFieldNameAs.get(field)!=null)field = showFieldNameAs.get(field);
+            System.out.print(formatString(StringUtils.capitalize(field), widths[i] + 2));
         }
         System.out.println();
-        printUnderline(totalWidth + String.valueOf(valueListList.size()).length() + 2);
+        printUnderline(underLineSize);
 
         for(int i = 0; i < valueListList.size(); i++){
-            int ordinal = i+beginFrom+1;
+            int ordinal = i+1;
             System.out.print(formatString(String.valueOf(ordinal), orderWidth));
             List<Object> valueList = valueListList.get(i);
             for (int j = 0; j < valueList.size(); j++) {
@@ -130,26 +181,6 @@ public class Shower {
                     str = String.format("%.10f", value).replaceAll("0*$", "").replaceAll("\\.$", "");
                 } else {
                     str = String.valueOf(value);
-                }
-
-                // Check if value is a timestamp (Long value greater than year 2000 in milliseconds)
-                if (value instanceof Long) {  // 2000-01-01 00:00:00
-                    try {
-                        long timestamp;
-                        if(isShortTimestamp && (Long)value > Constants.TIMESTAMP_2000_SECONDS && (Long)value < Constants.TIMESTAMP_2100_SECONDS){
-                            timestamp = ((Long) value)*1000;
-                            str = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
-                        }
-                        else if((Long)value > Constants.TIMESTAMP_2000 && (Long)value < Constants.TIMESTAMP_2100){ //From 2000-01-01 00:00:00 to 2100-01-01 00:00:00
-                            timestamp = (Long) value;
-                            str = DateTools.longToTime(timestamp, DateTools.SHORT_FORMAT);
-                        }
-                        else{
-                            str = String.valueOf(value);
-                        }
-                    } catch (Exception e) {
-                        // Keep original string if date conversion fails
-                    }
                 }
 
                 // Omit middle part if too long
@@ -165,7 +196,7 @@ public class Shower {
             }
             System.out.println();
         }
-        printUnderline(totalWidth + String.valueOf(valueListList.size()).length() + 2);
+        printUnderline(underLineSize);
     }
 
     public static void printUnderline(int num) {
@@ -252,5 +283,121 @@ public class Shower {
             System.out.print(formatString(String.valueOf(ordinal), orderWidth));
             System.out.println(strList.get(i));
         }
+    }
+
+    @Nullable
+    public static List<String> listAndChooseFromStringLongMap(BufferedReader br, Map<String, Long> removedItems, String ask) {
+        if (removedItems == null || removedItems.isEmpty()) {
+            System.out.println("No locally removed items found.");
+            return null;
+        }
+
+        // Show items and let user choose
+        Map<String, Long> selectedDisplayItems = Inputer.chooseMultiFromMapGeneric(
+                removedItems,
+                null,
+                0,
+                DEFAULT_SIZE,
+                ask,
+                br
+        );
+
+        if (selectedDisplayItems == null || selectedDisplayItems.isEmpty()) {
+            return null;
+        }
+
+        // Extract IDs from selected display strings
+        return selectedDisplayItems.keySet().stream().toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> List<T> showOrChooseFromItemList(String title, List<T> currentList, BufferedReader br, boolean choose, Class<T> itemClass) {
+
+        LinkedHashMap<String, Integer> fieldWidthMap;
+        List<String> timestampFieldList;
+        List<String> satoshiField;
+        Map<String, String> heightToTimeFieldMap;
+        Map<String, String> showFieldNameAs;
+
+        try {
+            // Call static methods on the specific itemClass using reflection
+            fieldWidthMap = (LinkedHashMap<String, Integer>) itemClass.getMethod(FcEntity.METHOD_GET_FIELD_WIDTH_MAP).invoke(null);
+            timestampFieldList = (List<String>) itemClass.getMethod(FcEntity.METHOD_GET_TIMESTAMP_FIELD_LIST).invoke(null);
+            satoshiField = (List<String>) itemClass.getMethod(FcEntity.METHOD_GET_SATOSHI_FIELD_LIST).invoke(null);
+            heightToTimeFieldMap = (Map<String, String>) itemClass.getMethod(FcEntity.METHOD_GET_HEIGHT_TO_TIME_FIELD_MAP).invoke(null);
+            showFieldNameAs = (Map<String, String>) itemClass.getMethod(FcEntity.METHOD_GET_SHOW_FIELD_NAME_AS_MAP).invoke(null);
+        } catch (Exception e) {
+            // If reflection fails, fall back to FcEntity defaults
+            fieldWidthMap = FcEntity.getFieldWidthMap();
+            timestampFieldList = FcEntity.getTimestampFieldList();
+            satoshiField = FcEntity.getSatoshiFieldList();
+            heightToTimeFieldMap = FcEntity.getHeightToTimeFieldMap();
+            showFieldNameAs = FcEntity.getShowFieldNameAsMap();
+        }
+
+        return showDataTable(title, fieldWidthMap, currentList, timestampFieldList, satoshiField,heightToTimeFieldMap, showFieldNameAs, choose, br);
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> List<T> showOrChooseListInPages(String title, List<T> currentList, BufferedReader br, boolean choose, Class<T> itemClass) {
+
+        LinkedHashMap<String, Integer> fieldWidthMap;
+        List<String> timestampFieldList;
+        List<String> satoshiField;
+        Map<String, String> heightToTimeFieldMap;
+        Map<String, String> showFieldNameAs;
+
+        try {
+            // Call static methods on the specific itemClass using reflection
+            fieldWidthMap = (LinkedHashMap<String, Integer>) itemClass.getMethod(FcEntity.METHOD_GET_FIELD_WIDTH_MAP).invoke(null);
+            timestampFieldList = (List<String>) itemClass.getMethod(FcEntity.METHOD_GET_TIMESTAMP_FIELD_LIST).invoke(null);
+            satoshiField = (List<String>) itemClass.getMethod(FcEntity.METHOD_GET_SATOSHI_FIELD_LIST).invoke(null);
+            heightToTimeFieldMap = (Map<String, String>) itemClass.getMethod(FcEntity.METHOD_GET_HEIGHT_TO_TIME_FIELD_MAP).invoke(null);
+            showFieldNameAs = (Map<String, String>) itemClass.getMethod(FcEntity.METHOD_GET_SHOW_FIELD_NAME_AS_MAP).invoke(null);
+        } catch (Exception e) {
+            // If reflection fails, fall back to FcEntity defaults
+            fieldWidthMap = FcEntity.getFieldWidthMap();
+            timestampFieldList = FcEntity.getTimestampFieldList();
+            satoshiField = FcEntity.getSatoshiFieldList();
+            heightToTimeFieldMap = FcEntity.getHeightToTimeFieldMap();
+            showFieldNameAs = FcEntity.getShowFieldNameAsMap();
+        }
+
+        return showOrChooseListInPages(
+                title, currentList,
+                DEFAULT_SIZE,
+                fieldWidthMap,
+                timestampFieldList,
+                satoshiField,
+                heightToTimeFieldMap,
+                showFieldNameAs,   // beginFrom
+                choose,  // choose
+                br
+        );
+    }
+
+    public static Boolean alert(String msg, @Nullable String ok, @Nullable String cancel, @Nullable BufferedReader br) {
+        System.out.println(msg);
+        if(br ==null)return null;
+        if(ok !=null && cancel!=null) {
+            String chosenOp = Inputer.chooseOne(new String[]{ok, cancel}, null, "Select an operation", br);
+            if (chosenOp.equals(ok)) return true;
+            if (chosenOp.equals(cancel)) return false;
+        }if(ok!=null){
+            Menu.anyKeyToContinue(br);
+            return true;
+        }else {
+            Menu.anyKeyToContinue(br);
+            return null;
+        }
+    }
+
+    public static void showTextAndQR(String text, String promote) {
+        System.out.println(promote);
+        Shower.printUnderline(10);
+        System.out.println(text);
+        Shower.printUnderline(10);
+        System.out.println("You can also scan the below QR codes:");
+        QRCodeUtils.generateQRCode(text);
     }
 }

@@ -3,7 +3,7 @@ package api;
 import constants.FieldNames;
 import fcData.FcSession;
 import apip.apipData.RequestBody;
-import tools.RedisTools;
+import utils.RedisUtils;
 import server.ApipApiNames;
 import constants.CodeMessage;
 import fcData.ReplyBody;
@@ -34,7 +34,7 @@ public class SignInEcc extends HttpServlet {
         try (Jedis jedis = Initiator.jedisPool.getResource()) {
             replier.setBestHeight(Long.valueOf(jedis.get(BEST_HEIGHT)));
             Map<String, String> paramsMap = jedis.hgetAll(Settings.addSidBriefToName(sid, PARAMS));
-            long windowTime = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(sid,SETTINGS), WINDOW_TIME);
+            long windowTime = RedisUtils.readHashLong(jedis, Settings.addSidBriefToName(sid,SETTINGS), WINDOW_TIME);
 
             httpRequestChecker.checkSignInRequestHttp(request, response);
             pubKey = httpRequestChecker.getPubKey();
@@ -58,6 +58,6 @@ public class SignInEcc extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier =new ReplyBody(Initiator.settings);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,response);
     }
 }

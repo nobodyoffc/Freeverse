@@ -4,19 +4,20 @@ import clients.ApipClient;
 import configure.ApiAccount;
 import fcData.AlgorithmId;
 import fch.fchData.SendTo;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import org.bitcoinj.fch.FchMainNetwork;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import nasa.data.TxInput;
 import nasa.data.TxOutput;
 import constants.Constants;
 import crypto.KeyTools;
-import tools.Hex;
+import utils.Hex;
 import crypto.Hash;
 import fch.fchData.Cash;
 import fch.fchData.P2SH;
 import fcData.Signature;
-import tools.BytesTools;
-import tools.JsonTools;
+import utils.BytesUtils;
+import utils.JsonUtils;
 import appTools.Inputer;
 import appTools.Shower;
 import org.bitcoinj.core.*;
@@ -76,7 +77,7 @@ public class TxTest {
         pubKeyList.add(HexFormat.of().parseHex(pubkeyB));
         pubKeyList.add(HexFormat.of().parseHex(pubkeyC));
 
-        P2SH p2SH = genMultiP2sh(pubKeyList, 2);
+        P2SH p2SH = createP2sh(pubKeyList, 2);
         if(p2SH==null)return;
         String mFid = p2SH.getId();
 
@@ -91,7 +92,7 @@ public class TxTest {
         Map<String, P2SH> p2SHMap = apipClient.p2shByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,mFid);
         if(p2SHMap==null)return;
         P2SH p2sh = p2SHMap.get(mFid);
-        JsonTools.printJson(p2sh);
+        JsonUtils.printJson(p2sh);
 
         //Get cashes of the multisig address
 
@@ -111,26 +112,26 @@ public class TxTest {
 
         if(cashList==null)return;
 
-        JsonTools.printJson(cashList);
+        JsonUtils.printJson(cashList);
 
         //Make raw tx
-        byte[] rawTx = createUnsignedTxFch(cashList, sendToList, msg.getBytes(), p2sh, DEFAULT_FEE_RATE);
-
-        System.out.println(HexFormat.of().formatHex(rawTx));
+        Transaction transaction = createUnsignedTx(cashList, sendToList, msg, p2sh, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
+        byte[] txBytes = transaction.bitcoinSerialize();
+        System.out.println(HexFormat.of().formatHex(txBytes));
         Shower.printUnderline(10);
         //Sign raw tx
         byte[] redeemScript = HexFormat.of().parseHex(p2sh.getRedeemScript());
-        MultiSigData multiSignData = new MultiSigData(rawTx, p2sh, cashList);
+        MultiSigData multiSignData = new MultiSigData(txBytes, p2sh, cashList);
 
-        MultiSigData multiSignDataA = signSchnorrMultiSignTx(multiSignData, priKeyBytesA);
-        MultiSigData multiSignDataB = signSchnorrMultiSignTx(multiSignData, priKeyBytesB);
-        MultiSigData multiSignDataC = signSchnorrMultiSignTx(multiSignData, priKeyBytesC);
+        MultiSigData multiSignDataA = signSchnorrMultiSignTx(multiSignData, priKeyBytesA, FchMainNetwork.MAINNETWORK);
+        MultiSigData multiSignDataB = signSchnorrMultiSignTx(multiSignData, priKeyBytesB, FchMainNetwork.MAINNETWORK);
+        MultiSigData multiSignDataC = signSchnorrMultiSignTx(multiSignData, priKeyBytesC, FchMainNetwork.MAINNETWORK);
 
         Map<String, List<byte[]>> sig1 = multiSignDataA.getFidSigMap();
         Map<String, List<byte[]>> sig2 = multiSignDataB.getFidSigMap();
         Map<String, List<byte[]>> sig3 = multiSignDataC.getFidSigMap();
 
-        System.out.println("Verify sig3:" + rawTxSigVerify(rawTx, ecKeyC.getPubKey(), sig3.get(fidC).get(0), 0, cashList.get(0).getValue(), redeemScript));
+        System.out.println("Verify sig3:" + rawTxSigVerify(txBytes, ecKeyC.getPubKey(), sig3.get(fidC).get(0), 0, cashList.get(0).getValue(), redeemScript, FchMainNetwork.MAINNETWORK));
 
         Map<String, List<byte[]>> sigAll = new HashMap<>();
         sigAll.putAll(sig1);
@@ -145,7 +146,7 @@ public class TxTest {
         }
         Shower.printUnderline(10);
         //build signed tx
-        String signedTx = buildSchnorrMultiSignTx(rawTx, sigAll, p2sh);
+        String signedTx = buildSchnorrMultiSignTx(txBytes, sigAll, p2sh, FchMainNetwork.MAINNETWORK);
 
         System.out.println(signedTx);
 
@@ -166,7 +167,7 @@ public class TxTest {
             if (apiAccount == null) return null;
             sessionKey = ApiAccount.decryptSessionKey(apiAccount.getSession().getKeyCipher(), Hash.sha256x2(passwordBytes));
             if (sessionKey == null) return null;
-            BytesTools.clearByteArray(passwordBytes);
+            BytesUtils.clearByteArray(passwordBytes);
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Wrong password, try again.");
@@ -199,7 +200,7 @@ public class TxTest {
 
         List<Cash> cashList  = apipClient.cashValid(fid,0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
-        String txSigned = createTimeLockedTransaction(cashList, priKeyBytes, sendToList, 1999900, msg);
+        String txSigned = createTimeLockedTransaction(cashList, priKeyBytes, sendToList, 1999900, msg, FchMainNetwork.MAINNETWORK);
         System.out.println(txSigned);
     }
 
@@ -222,7 +223,7 @@ public class TxTest {
         verify = Signature.schnorrMsgVerify(msg + " ", sign, fid);
         System.out.println("verify '" + msg + " " + "':" + verify);
         Signature signature = new Signature(fid, msg, sign, AlgorithmId.FC_SchnorrSignTx_No1_NrC7, null);
-        System.out.println(JsonTools.toNiceJson(signature));
+        System.out.println(JsonUtils.toNiceJson(signature));
     }
 
     public static void schnorrTxTest() {

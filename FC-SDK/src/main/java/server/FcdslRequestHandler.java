@@ -4,7 +4,7 @@ import apip.apipData.*;
 import fch.fchData.Cid;
 import appTools.Settings;
 import feip.feipData.Service;
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
@@ -23,8 +23,8 @@ import constants.CodeMessage;
 import fcData.FidTxMask;
 import fcData.ReplyBody;
 import fch.fchData.*;
-import tools.ObjectTools;
-import tools.http.AuthType;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -65,6 +65,19 @@ public class FcdslRequestHandler {
         if(settings.getClient(Service.ServiceType.ES)!=null)
           this.esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
         else this.esClient = null;
+    }
+
+    @Nullable
+    public static FcdslRequestHandler checkRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) {
+            return null;
+        }
+
+        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+        return fcdslRequestHandler;
     }
 
 
@@ -226,7 +239,7 @@ public class FcdslRequestHandler {
 
         if (meetList.size() == 0) return new HashMap<>();
 
-        Map<String, T> meetMap = ObjectTools.listToMap(meetList, keyFieldName);
+        Map<String, T> meetMap = ObjectUtils.listToMap(meetList, keyFieldName);
 
         replyBody.setGot((long) meetMap.size());
         replyBody.setTotal((long) meetMap.size());
@@ -256,7 +269,7 @@ public class FcdslRequestHandler {
         requestBody = httpRequestChecker.getRequestBody();
 
         if (requestBody == null) {
-            replyBody.replyHttp(CodeMessage.Code1013BadRequest, null);
+            replyBody.replyHttp(CodeMessage.Code1013BadRequest, response);
             return null;
         }
         Fcdsl fcdsl = requestBody.getFcdsl();
@@ -324,13 +337,13 @@ public class FcdslRequestHandler {
                 replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
                 return;
             }
-            blockList = EsTools.getMultiByIdList(esClient, IndicesNames.BLOCK, idList, Block.class).getResultList();
+            blockList = EsUtils.getMultiByIdList(esClient, IndicesNames.BLOCK, idList, Block.class).getResultList();
             if (blockList == null ) {
                 replyBody.replyOtherErrorHttp("Failed to get block info.", response);
                 return;
             }
             if (blockList.size()==0 ) {
-                replyBody.replyHttp(CodeMessage.Code1011DataNotFound,null);
+                replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
 
@@ -340,7 +353,7 @@ public class FcdslRequestHandler {
             Map<String, BlockInfo> meetMap = null;
 
             if(isForMap){
-                meetMap= ObjectTools.listToMap(meetList,idFieldName);
+                meetMap= ObjectUtils.listToMap(meetList,idFieldName);
                 replyBody.setLast(null);
             }
 
@@ -401,7 +414,7 @@ public class FcdslRequestHandler {
         }
 
         Map<String, Cid> meetMap;
-        meetMap= ObjectTools.listToMap(meetAddrList,ID);
+        meetMap= ObjectUtils.listToMap(meetAddrList,ID);
         replyBody.setGot((long) meetAddrList.size());
         replyBody.setTotal((long) meetAddrList.size());
         replyBody.replySingleDataSuccessHttp(meetMap, response);
@@ -487,7 +500,7 @@ public class FcdslRequestHandler {
 
 
             if (meetCidList==null || meetCidList.size() == 0) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound, null);
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
                 return;
             }
 
@@ -551,7 +564,7 @@ public class FcdslRequestHandler {
 
             List<Tx> txList;
 
-            txList = EsTools.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
+            txList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
             if (txList == null ) {
                 replier.replyOtherErrorHttp("Failed to get TX info.", response);
                 return;
@@ -611,7 +624,7 @@ public class FcdslRequestHandler {
 
             List<Tx> txList;
 
-            txList = EsTools.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
+            txList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
             if (txList == null ) {
                 replier.replyOtherErrorHttp("Failed to get TX info.", response);
                 return;
@@ -625,7 +638,7 @@ public class FcdslRequestHandler {
 
 
             Map<String, TxInfo> meetMap = null;
-            if(isForMap)meetMap= ObjectTools.listToMap(meetList,idFieldName);
+            if(isForMap)meetMap= ObjectUtils.listToMap(meetList,idFieldName);
 
             //response
             replier.setGot((long) meetList.size());
@@ -634,7 +647,7 @@ public class FcdslRequestHandler {
             else replier.replySingleDataSuccessHttp(meetList, response);
 
         } catch (Exception e) {
-            replier.replyOtherErrorHttp(e.getMessage(), null);
+            replier.replyOtherErrorHttp(e.getMessage(), response);
         }
     }
 

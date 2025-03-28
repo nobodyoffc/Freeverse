@@ -59,7 +59,8 @@ public class SecretOpData {
 	public enum Op {
         ADD(FeipOp.ADD),
         DELETE(FeipOp.DELETE),
-        RECOVER(FeipOp.RECOVER);
+        RECOVER(FeipOp.RECOVER),
+        UPDATE(FeipOp.UPDATE);
 
 		private final FeipOp feipOp;
 
@@ -91,6 +92,7 @@ public class SecretOpData {
         OP_FIELDS.put(Op.ADD.toLowerCase(), new String[]{FieldNames.ALG, FieldNames.CIPHER});
         OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.SECRET_IDS});
         OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.SECRET_IDS});
+        OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.SECRET_ID, FieldNames.ALG, FieldNames.CIPHER});
     }
 
     // Factory method for ADD operation

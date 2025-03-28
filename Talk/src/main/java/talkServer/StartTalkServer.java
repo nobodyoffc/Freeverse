@@ -25,7 +25,7 @@ import server.order.Order;
 import server.reward.RewardInfo;
 import server.reward.RewardManager;
 import server.serviceManagers.TalkManager;
-import tools.EsTools;
+import utils.EsUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -155,17 +155,6 @@ public class StartTalkServer {
         }
     }
 
-    @Nullable
-    private static byte[] getDealerPriKey(Configure configure, byte[] symKey) {
-        byte[] waiterPriKey;
-        CryptoDataByte result = new Decryptor().decryptJsonBySymKey(configure.getFidCipherMap().get(settings.getMainFid()), symKey);
-        if(result.getCode()!=0 || result.getData()==null){
-            System.out.println("Failed to decrypt the waiter's priKey.");
-            return null;
-        }
-        waiterPriKey = result.getData();
-        return waiterPriKey;
-    }
 
     private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
         byte[] priKey = Settings.getMainFidPriKey(symKey, settings);
@@ -183,16 +172,16 @@ public class StartTalkServer {
 
     private static void recreateAllIndices(ElasticsearchClient esClient,BufferedReader br) {
         if(!Inputer.askIfYes(br,"Recreate the talk data, order, balance, reward indices?"))return;
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,DATA), TalkUnit.MAPPINGS,esClient, br);
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
-        EsTools.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid,DATA), TalkUnit.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
+        EsUtils.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
     }
 
     private static void checkEsIndices(ElasticsearchClient esClient) {
         Map<String,String> nameMappingList = new HashMap<>();
         nameMappingList.put(Settings.addSidBriefToName(sid,DATA), TalkUnit.MAPPINGS);
-        EsTools.checkEsIndices(esClient,nameMappingList);
+        EsUtils.checkEsIndices(esClient,nameMappingList);
     }
 
 }

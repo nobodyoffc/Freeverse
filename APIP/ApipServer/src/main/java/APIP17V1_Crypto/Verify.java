@@ -7,7 +7,7 @@ import fcData.ReplyBody;
 import fcData.Signature;
 import initial.Initiator;
 import server.HttpRequestChecker;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import org.bitcoinj.core.ECKey;
 
 import javax.servlet.annotation.WebServlet;

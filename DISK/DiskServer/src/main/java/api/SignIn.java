@@ -61,6 +61,6 @@ public class SignIn extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier =new ReplyBody(Initiator.settings);
-        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,null);
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,response);
     }
 }

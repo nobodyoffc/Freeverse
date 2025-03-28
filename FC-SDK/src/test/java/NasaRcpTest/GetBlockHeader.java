@@ -1,7 +1,7 @@
 package NasaRcpTest;
 
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import nasa.RpcRequest;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +18,7 @@ public class GetBlockHeader {
 //        String url = "http://127.0.0.1:8332";
         String url = "http://127.0.0.1:22555";
         BlockHeader blockHeader = getBlockHeader(url, "username", "password", params);
-        JsonTools.printJson(blockHeader);
+        JsonUtils.printJson(blockHeader);
     }
 
     public BlockHeader getBlockHeader(String blockId, String url, String username, String password) {

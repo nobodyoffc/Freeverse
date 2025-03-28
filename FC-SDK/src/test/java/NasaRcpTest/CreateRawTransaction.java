@@ -3,8 +3,8 @@ package NasaRcpTest;
 import nasa.RpcRequest;
 import nasa.data.TransactionBrief;
 import com.google.gson.Gson;
-import tools.Hex;
-import tools.JsonTools;
+import utils.Hex;
+import utils.JsonUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -22,16 +22,16 @@ public class CreateRawTransaction {
         String urlDoge = "http://127.0.0.1:22555";
         String urlFch = "http://127.0.0.1:8332";
         result = createRawTransactionFch("FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7", 0.1, "hi", urlFch, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
         result = createRawTransactionDoge("DHrM7fdWX5Px9vSbPNW3gsJrtG872HU3JB", 0.1, "hi", urlDoge, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
     }
 
     public String createRawTransactionFch(String toAddr, double amount, String opreturn, String url, String username, String password) {
         createRawTransactionParamsFch createRawTransactionParams = new createRawTransactionParamsFch(toAddr, amount, opreturn);
         RpcRequest jsonRPC2Request = new RpcRequest(CREATERAWTRANSACTION, createRawTransactionParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
         return (String) result;
@@ -41,7 +41,7 @@ public class CreateRawTransaction {
         CreateRawTransactionParamsDoge createRawTransactionParams = new CreateRawTransactionParamsDoge(toAddr, amount, opreturn);
         RpcRequest jsonRPC2Request = new RpcRequest(CREATERAWTRANSACTION, createRawTransactionParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
         return (String) result;

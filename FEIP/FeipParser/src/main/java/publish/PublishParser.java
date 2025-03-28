@@ -1,6 +1,6 @@
 package publish;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import constants.IndicesNames;
@@ -13,7 +13,7 @@ import crypto.KeyTools;
 import fch.fchData.OpReturn;
 import fch.fchData.SendTo;
 import feip.feipData.*;
-import tools.NumberTools;
+import utils.NumberUtils;
 import startFEIP.StartFEIP;
 
 import java.io.IOException;
@@ -51,32 +51,32 @@ public class PublishParser {
                 if(tokenRaw.getName()==null)return null;
                 setTxInfo(opre, tokenHist);
 
-                tokenHist.setTokenId(opre.getTxId());
+                tokenHist.setTokenId(opre.getId());
                 if(tokenRaw.getName()!=null)tokenHist.setName(tokenRaw.getName());
                 if(tokenRaw.getDesc()!=null)tokenHist.setDesc(tokenRaw.getDesc());
                 if(tokenRaw.getConsensusId()!=null)tokenHist.setConsensusId(tokenRaw.getConsensusId());
                 if(tokenRaw.getCapacity()!=null)tokenHist.setCapacity(tokenRaw.getCapacity());
 
                 if(tokenRaw.getDecimal()!=null){
-                    if (!NumberTools.isInt(tokenRaw.getDecimal())) return null;
+                    if (!NumberUtils.isInt(tokenRaw.getDecimal())) return null;
                     tokenHist.setDecimal(tokenRaw.getDecimal());
                 }
 
 
                 if(tokenRaw.getTransferable()!=null){
-                    if (!NumberTools.isBoolean(tokenRaw.getTransferable(), true)) return null;
+                    if (!NumberUtils.isBoolean(tokenRaw.getTransferable(), true)) return null;
                     tokenHist.setTransferable(tokenRaw.getTransferable());
                 }
 
 
                 if(tokenRaw.getClosable()!=null){
-                    if (!NumberTools.isBoolean(tokenRaw.getClosable(), true)) return null;
+                    if (!NumberUtils.isBoolean(tokenRaw.getClosable(), true)) return null;
                     tokenHist.setClosable(tokenRaw.getClosable());
                 }
 
 
                 if(tokenRaw.getOpenIssue()!=null){
-                    if (!NumberTools.isBoolean(tokenRaw.getOpenIssue(), true)) return null;
+                    if (!NumberUtils.isBoolean(tokenRaw.getOpenIssue(), true)) return null;
                     tokenHist.setOpenIssue(tokenRaw.getOpenIssue());
                 }
 
@@ -115,7 +115,7 @@ public class PublishParser {
 
     public static void setTxInfo(OpReturn opre, TokenHistory tokenHist) {
         if(tokenHist==null)return;
-        tokenHist.setId(opre.getTxId());
+        tokenHist.setId(opre.getId());
         tokenHist.setHeight(opre.getHeight());
         tokenHist.setIndex(opre.getTxIndex());
         tokenHist.setTime(opre.getTime());
@@ -147,8 +147,8 @@ public class PublishParser {
                 if(proofRaw.getContent()==null) return null;
                 if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100)
                     return null;
-                proofHist.setId(opre.getTxId());
-                proofHist.setProofId(opre.getTxId());
+                proofHist.setId(opre.getId());
+                proofHist.setProofId(opre.getId());
                 proofHist.setHeight(opre.getHeight());
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
@@ -168,7 +168,7 @@ public class PublishParser {
             case "destroy":
                 if(proofRaw.getProofId()==null) return null;
                 proofHist.setProofId(proofRaw.getProofId());
-                proofHist.setId(opre.getTxId());
+                proofHist.setId(opre.getId());
                 proofHist.setHeight(opre.getHeight());
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
@@ -177,7 +177,7 @@ public class PublishParser {
             case "transfer":
                 if(proofRaw.getProofId()==null) return null;
                 proofHist.setProofId(proofRaw.getProofId());
-                proofHist.setId(opre.getTxId());
+                proofHist.setId(opre.getId());
                 proofHist.setHeight(opre.getHeight());
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
@@ -209,7 +209,7 @@ public class PublishParser {
 
         Statement statement = new Statement();
 
-        statement.setId(opre.getTxId());
+        statement.setId(opre.getId());
 
         if(statementRaw.getConfirm()==null)return isValid;
 
@@ -240,7 +240,7 @@ public class PublishParser {
         Token token;
         switch(tokenHist.getOp()) {
             case "deploy":
-                token = EsTools.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
+                token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
                 if(token!=null)return false;
 
                 token = new Token();
@@ -283,7 +283,7 @@ public class PublishParser {
                 return true;
 
             case "issue":
-                token = EsTools.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
+                token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
                 if(token==null || token.getClosed().equals(TRUE))return false;
                 if(token.getOpenIssue().equals(FALSE) && !tokenHist.getSigner().equals(token.getDeployer()))return false;
 
@@ -295,7 +295,7 @@ public class PublishParser {
                 if(tokenHist.getIssueTo()==null)return false;
 
                 for (SendTo issueTo : tokenHist.getIssueTo()) {
-                    if(!KeyTools.isValidFchAddr(issueTo.getFid()))return false;
+                    if(!KeyTools.isGoodFid(issueTo.getFid()))return false;
                     if(isBadDecimal(token, issueTo))return false;
                     amount += issueTo.getAmount();
                     receiverAmountMapIssue.put(issueTo.getFid(),issueTo.getAmount());
@@ -338,7 +338,7 @@ public class PublishParser {
 
                 //Set balances of the holders
 
-                EsTools.MgetResult<TokenHolder> result = EsTools.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenRecipientIdListIssue, TokenHolder.class);
+                EsUtils.MgetResult<TokenHolder> result = EsUtils.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenRecipientIdListIssue, TokenHolder.class);
 
                 ArrayList<TokenHolder> newHolderList = new ArrayList<>();
 
@@ -366,18 +366,18 @@ public class PublishParser {
                     newHolderList.add(tokenHolder);
                 }
 
-                EsTools.bulkWriteList(esClient,IndicesNames.TOKEN_HOLDER,newHolderList,tokenRecipientIdListIssue,TokenHolder.class);
+                EsUtils.bulkWriteList(esClient,IndicesNames.TOKEN_HOLDER,newHolderList,tokenRecipientIdListIssue,TokenHolder.class);
                 Token finalToken3 = token;
                 esClient.index(i->i.index(IndicesNames.TOKEN).id(tokenHist.getTokenId()).document(finalToken3));
                 return true;
 
             case "transfer":
-                token = EsTools.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
+                token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
                 if(token==null || token.getClosed().equals(TRUE))return false;
                 int decimal = Integer.parseInt(token.getDecimal());
                 String fromFid = tokenHist.getSigner();
                 String tokenHolderId = TokenHolder.getTokenHolderId(fromFid, tokenHist.getTokenId());
-                TokenHolder tokenHolder = EsTools.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderId, TokenHolder.class);
+                TokenHolder tokenHolder = EsUtils.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderId, TokenHolder.class);
                 if(tokenHolder==null)return false;
                 double senderOldBalance = tokenHolder.getBalance();
 
@@ -389,7 +389,7 @@ public class PublishParser {
                 Map<String,Double> receiverAmountMap = new HashMap<>();
 
                 for (SendTo sendTo : tokenHist.getTransferTo()) {
-                    if(!KeyTools.isValidFchAddr(sendTo.getFid()))return false;
+                    if(!KeyTools.isGoodFid(sendTo.getFid()))return false;
                     if(isBadDecimal(token, sendTo))return false;
                     String id = TokenHolder.getTokenHolderId(sendTo.getFid(), tokenHist.getTokenId());
                     tokenHolderIdListTransfer.add(id);
@@ -400,10 +400,10 @@ public class PublishParser {
 
                 if(sum>senderOldBalance)return false;
 
-                tokenHolder.setBalance(NumberTools.roundDouble(senderOldBalance-sum,decimal,RoundingMode.FLOOR));
+                tokenHolder.setBalance(NumberUtils.roundDouble(senderOldBalance-sum,decimal,RoundingMode.FLOOR));
                 tokenHolder.setLastHeight(tokenHist.getHeight());
 
-                EsTools.MgetResult<TokenHolder> resultTransfer = EsTools.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderIdListTransfer, TokenHolder.class);
+                EsUtils.MgetResult<TokenHolder> resultTransfer = EsUtils.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderIdListTransfer, TokenHolder.class);
 
                 for(String id:resultTransfer.getMissList()) {
                     TokenHolder tokenReceiver = new TokenHolder();
@@ -430,17 +430,17 @@ public class PublishParser {
                 newHolderListTransfer.add(tokenHolder);
                 tokenHolderIdListTransfer.add(tokenHolderId);
 
-                EsTools.bulkWriteList(esClient,IndicesNames.TOKEN_HOLDER,newHolderListTransfer,tokenHolderIdListTransfer,TokenHolder.class);
+                EsUtils.bulkWriteList(esClient,IndicesNames.TOKEN_HOLDER,newHolderListTransfer,tokenHolderIdListTransfer,TokenHolder.class);
 
                 return true;
 
             case "destroy":
 
-                token = EsTools.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
+                token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
                 if(token==null || token.getClosed().equals(TRUE))return false;
                 decimal = Integer.parseInt(token.getDecimal());
                 String tokenReceiverId= TokenHolder.getTokenHolderId(tokenHist.getSigner(), tokenHist.getTokenId());
-                TokenHolder tokenHolderDestroy = EsTools.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenReceiverId, TokenHolder.class);
+                TokenHolder tokenHolderDestroy = EsUtils.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenReceiverId, TokenHolder.class);
 
                 if(tokenHolderDestroy==null)return false;
                 if(!tokenHolderDestroy.getFid().equals(tokenHist.getSigner()))return false;
@@ -451,7 +451,7 @@ public class PublishParser {
                 tokenHolderDestroy.setBalance(0D);
                 tokenHolderDestroy.setLastHeight(tokenHist.getHeight());
 
-                token.setCirculating(NumberTools.roundDouble(token.getCirculating()-balance,decimal,RoundingMode.FLOOR));
+                token.setCirculating(NumberUtils.roundDouble(token.getCirculating()-balance,decimal,RoundingMode.FLOOR));
                 updataTokenLastInfo(tokenHist, token);
 
                 esClient.index(i->i.index(IndicesNames.TOKEN_HOLDER).id(tokenReceiverId).document(tokenHolderDestroy));
@@ -462,7 +462,7 @@ public class PublishParser {
 
             case "close":
 
-                token = EsTools.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
+                token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
                 if(token==null || token.getClosed().equals(TRUE))return false;
 
                 if(!tokenHist.getSigner().equals(token.getDeployer()))return false;
@@ -486,7 +486,7 @@ public class PublishParser {
 
     private static boolean isBadDecimal(Token token, SendTo issueTo) {
         try {
-            int decimalPlaces = NumberTools.getDecimalPlaces(issueTo.getAmount());
+            int decimalPlaces = NumberUtils.getDecimalPlaces(issueTo.getAmount());
             int maxDecimal = Integer.parseInt(token.getDecimal());
             return decimalPlaces > maxDecimal;
         }catch (Exception e){
@@ -499,7 +499,7 @@ public class PublishParser {
         Proof proof;
         switch(proofHist.getOp()) {
             case "issue":
-                proof = EsTools.getById(esClient, IndicesNames.PROOF, proofHist.getProofId(), Proof.class);
+                proof = EsUtils.getById(esClient, IndicesNames.PROOF, proofHist.getProofId(), Proof.class);
                 if(proof!=null)return false;
 
                 proof = new Proof();
@@ -542,7 +542,7 @@ public class PublishParser {
 
             case "sign":
 
-                proof = EsTools.getById(esClient, IndicesNames.PROOF, proofHist.getProofId(), Proof.class);
+                proof = EsUtils.getById(esClient, IndicesNames.PROOF, proofHist.getProofId(), Proof.class);
 
                 if(proof==null) return false;
 
@@ -581,7 +581,7 @@ public class PublishParser {
 
             case "transfer":
 
-                proof = EsTools.getById(esClient, IndicesNames.PROOF, proofHist.getProofId(), Proof.class);
+                proof = EsUtils.getById(esClient, IndicesNames.PROOF, proofHist.getProofId(), Proof.class);
 
                 if(proof==null) return false;
 
@@ -601,7 +601,7 @@ public class PublishParser {
 
                 if(proofHist.getProofIds()==null||proofHist.getProofIds().isEmpty())return false;
 
-                EsTools.MgetResult<Proof> result = EsTools.getMultiByIdList(esClient, IndicesNames.PROOF, proofHist.getProofIds(), Proof.class);
+                EsUtils.MgetResult<Proof> result = EsUtils.getMultiByIdList(esClient, IndicesNames.PROOF, proofHist.getProofIds(), Proof.class);
                 if(result==null||result.getResultList()==null||result.getResultList().isEmpty())return false;   
                 BulkRequest.Builder br = new BulkRequest.Builder();
                 for(Proof proofItem:result.getResultList()){
@@ -678,7 +678,7 @@ public class PublishParser {
                 }
                 height = opre.getHeight();
 
-                EsTools.MgetResult<Nid> result = EsTools.getMultiByIdList(esClient, IndicesNames.NID, nameIds, Nid.class);
+                EsUtils.MgetResult<Nid> result = EsUtils.getMultiByIdList(esClient, IndicesNames.NID, nameIds, Nid.class);
                 if(result==null||result.getResultList()==null||result.getResultList().isEmpty())return false;
                 BulkRequest.Builder br = new BulkRequest.Builder();
                 for(Nid nid1:result.getResultList()){

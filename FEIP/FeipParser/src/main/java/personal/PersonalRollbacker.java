@@ -1,13 +1,13 @@
 package personal;
 
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
 import feip.feipData.BoxHistory;
-import tools.JsonTools;
+import utils.JsonUtils;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -35,13 +35,13 @@ public class PersonalRollbacker {
 
 		if(itemIdList==null||itemIdList.isEmpty())return false;
 		System.out.println("If rolling back is interrupted, reparse all effected ids of index 'box': ");
-		JsonTools.printJson(itemIdList);
+		JsonUtils.printJson(itemIdList);
 		deleteEffectedItems(esClient, IndicesNames.BOX,itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return false;
 		deleteRolledHists(esClient, IndicesNames.BOX_HISTORY,histIdList);
 		TimeUnit.SECONDS.sleep(2);
 
-		List<BoxHistory>reparseHistList = EsTools.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY,"bid",itemIdList,BoxHistory.class);
+		List<BoxHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY,"bid",itemIdList,BoxHistory.class);
 
 		reparseBox(esClient,reparseHistList);
 
@@ -87,10 +87,10 @@ public class PersonalRollbacker {
 	}
 
 	private void deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, itemIdList);
+		EsUtils.bulkDeleteList(esClient, index, itemIdList);
 	}
 
 	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
-		EsTools.bulkDeleteList(esClient, index, histIdList);
+		EsUtils.bulkDeleteList(esClient, index, histIdList);
 	}
 }

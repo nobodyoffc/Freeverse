@@ -6,7 +6,7 @@ import server.ApipApiNames;
 import constants.IndicesNames;
 import fch.fchData.Cash;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 
 import javax.servlet.ServletException;
@@ -17,9 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-
-import static constants.FieldNames.CASH_ID;
-import static constants.FieldNames.LAST_TIME;
+import static constants.FieldNames.*;
 
 @WebServlet(name = ApipApiNames.CASH_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_SEARCH)
 public class CashSearch extends HttpServlet {
@@ -33,13 +31,13 @@ public class CashSearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,ID,true,null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CASH, Cash.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,CASH_ID,true,null,null);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,ID,true,null,null);
         fcdslRequestHandler.doSearchRequest(IndicesNames.CASH, Cash.class, defaultSort, request,response,authType);
     }
 }

@@ -7,8 +7,8 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import fch.Wallet;
 import initial.Initiator;
-import tools.NumberTools;
-import tools.http.AuthType;
+import utils.NumberUtils;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
@@ -46,6 +46,6 @@ public class FeeRate extends HttpServlet {
             replier.replyOtherErrorHttp("Calculating fee rate wrong.", response);
             return;
         }
-        replier.replySingleDataSuccessHttp(NumberTools.roundDouble8(feeRate),response);
+        replier.replySingleDataSuccessHttp(NumberUtils.roundDouble8(feeRate),response);
     }
 }

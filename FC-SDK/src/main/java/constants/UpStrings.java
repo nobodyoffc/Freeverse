@@ -24,4 +24,5 @@ public class UpStrings {
     public static final String MAIL = "Mail";
     public static final String CONTACT = "Contact";
     public static final String CHAIN = "Chain";
+    public static final String OP_RETURN = "OpReturn";
 }

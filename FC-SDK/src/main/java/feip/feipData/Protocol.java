@@ -4,7 +4,6 @@ import fcData.FcObject;
 
 public class Protocol extends FcObject {
 
-	private String id;
 	private String type;
 	private String sn;
 	private String ver;

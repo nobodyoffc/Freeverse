@@ -2,21 +2,24 @@ package constants;
 
 public class Constants {
     public static final String HOME = "Home";
+    public static final String HASH160_F_FCH = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFCgHbzz";
+    public static final String HASH160_1_BTC = "1111111111111111111114oLvT2";
     public static final int EMPTY_BLOCK_SIZE = 273;
     public static final Double MIN_FEE_RATE = 0.00001;
-    public static final int DEFAULT_CASH_LIST_SIZE = 200;
+    public static final int DEFAULT_DISPLAY_LIST_SIZE = 200;
     public static final int DEFAULT_SESSION_DAYS = 100;
     public static final String YYYYMMDD_HHMMSSSSS = "yyyyMMdd_HHmmssSSS";
     public static final String FUND_FID = "FTqiqAyXHnK7uDTXzMap3acvqADK4ZGzts";
     public static final byte[] MAGIC_BYTES = new byte[]{(byte)0xf9,(byte)0xbe,(byte)0xb4,(byte)0xd9};
-    public static final String FUND_ADDR = "FTqiqAyXHnK7uDTXzMap3acvqADK4ZGzts";
+    public static final int MAXIMUM_MULTI_SIGNER = 16;
 
     public static long CDD_CHECK_HEIGHT =3000000;
     public static long CD_REQUIRED =0;
     public static final Long COIN_TO_SATOSHI = 100000000L;
-    public static final Long OneDayInterval = 1L;//1440L;
+    public static final Long CASH_TO_SATOSHI = 100L;
+    public static final Long OneDayInterval = 1440L;
     public static final Long BalanceBackupInterval = OneDayInterval;
-    public static final Long RewardInterval = OneDayInterval * 1;//10
+    public static final Long RewardInterval = OneDayInterval * 10;
     public static final String UserDir = "user.dir";
     public static final String UserHome = "user.home";
     public static final int MaxRequestSize = 3000;

@@ -2,29 +2,29 @@ import com.google.common.hash.Hashing;
 import crypto.Hash;
 import fcData.AlgorithmId;
 import fcData.Signature;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 
 public class Test {
     public static void main(String[] args) {
 //        byte[] symKey = BytesTools.bytesMerger(passwordBytes, randomBytes);
-        byte[] passwordBytes = BytesTools.getRandomBytes(16);
-        byte[] randomBytes = BytesTools.getRandomBytes(8);
+        byte[] passwordBytes = BytesUtils.getRandomBytes(16);
+        byte[] randomBytes = BytesUtils.getRandomBytes(8);
         long start;
         byte[] hash;
 
         start= System.currentTimeMillis();
-        hash =Hash.sha256(BytesTools.addByteArray(Hash.sha256(passwordBytes), randomBytes));
+        hash =Hash.sha256(BytesUtils.addByteArray(Hash.sha256(passwordBytes), randomBytes));
         System.out.println(Hex.toHex(hash));
         System.out.println("256:"+(System.currentTimeMillis()-start));
 
         start = System.currentTimeMillis();
-        hash= sha256(BytesTools.addByteArray(sha256(passwordBytes), randomBytes));
+        hash= sha256(BytesUtils.addByteArray(sha256(passwordBytes), randomBytes));
         System.out.println(Hex.toHex(hash));
         System.out.println("local 256:"+(System.currentTimeMillis()-start));
 
         start = System.currentTimeMillis();
-        hash = Hash.sha512(BytesTools.addByteArray(Hash.sha512(passwordBytes), randomBytes));
+        hash = Hash.sha512(BytesUtils.addByteArray(Hash.sha512(passwordBytes), randomBytes));
         System.out.println(Hex.toHex(hash));
         System.out.println("512:"+(System.currentTimeMillis()-start));
 

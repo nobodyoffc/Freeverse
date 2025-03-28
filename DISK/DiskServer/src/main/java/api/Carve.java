@@ -2,7 +2,7 @@ package api;
 
 import constants.FieldNames;
 import fcData.DiskItem;
-import tools.RedisTools;
+import utils.RedisUtils;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
@@ -11,9 +11,9 @@ import constants.CodeMessage;
 import crypto.Hash;
 import fcData.ReplyBody;
 import initial.Initiator;
-import tools.FileTools;
-import tools.Hex;
-import tools.http.AuthType;
+import utils.FileUtils;
+import utils.Hex;
+import utils.http.AuthType;
 import org.jetbrains.annotations.NotNull;
 import redis.clients.jedis.Jedis;
 import server.HttpRequestChecker;
@@ -33,8 +33,8 @@ import java.util.Map;
 
 import static constants.Strings.*;
 import static initial.Initiator.esClient;
-import static tools.FileTools.checkFileOfFreeDisk;
-import static tools.FileTools.getSubPathForDisk;
+import static utils.FileUtils.checkFileOfFreeDisk;
+import static utils.FileUtils.getSubPathForDisk;
 import static appTools.Settings.addSidBriefToName;
 import static startManager.StartDiskManager.STORAGE_DIR;
 
@@ -69,7 +69,7 @@ public class Carve extends HttpServlet {
             Map<String,String> dataMap = new HashMap<>();
             dataMap.put("did", DidAndLength.did());
 
-            Double price = RedisTools.readHashDouble(jedis, addSidBriefToName(Initiator.sid, PARAMS), FieldNames.PRICE_PER_K_BYTES_CARVE);
+            Double price = RedisUtils.readHashDouble(jedis, addSidBriefToName(Initiator.sid, PARAMS), FieldNames.PRICE_PER_K_BYTES_CARVE);
             replier.reply0SuccessHttp(dataMap,response);
 
             //Update item info into ES
@@ -81,7 +81,7 @@ public class Carve extends HttpServlet {
     @SuppressWarnings("UnstableApiUsage")
     public static Result hashAndSaveFile(HttpServletRequest request) throws IOException {
         InputStream inputStream = request.getInputStream();
-        String tempFileName = FileTools.getTempFileName();
+        String tempFileName = FileUtils.getTempFileName();
         OutputStream outputStream = new FileOutputStream(tempFileName);
         HashFunction hashFunction = Hashing.sha256();
         Hasher hasher = hashFunction.newHasher();

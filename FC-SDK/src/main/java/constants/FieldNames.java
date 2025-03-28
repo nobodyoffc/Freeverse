@@ -3,13 +3,25 @@ package constants;
 public class FieldNames {
     public static final String OWNER = "owner";
 
+    public static final String LABEL = "label";
+    public static final String PUBKEY = "pubKey";
+    public static final String IS_NOBODY = "isNobody";
+    public static final String PRIKEY = "priKey";
+    public static final String BTC_ADDR = "btcAddr";
+    public static final String ETH_ADDR = "ethAddr";
+    public static final String BCH_ADDR = "bchAddr";
+    public static final String LTC_ADDR = "ltcAddr";
+    public static final String DOGE_ADDR = "dogeAddr";
+    public static final String TRX_ADDR = "trxAddr";
     public static final String ADDRESS = "address";
     public static final String ISSUER = "issuer";
     public static final String SIGNER = "signer";
     public static final String ME = "me";
     public static final String TYPES = "types";
     public static final String IDS = "ids";
+    public static final String FIDS = "fids";
     public static final String LAST_HEIGHT = "lastHeight";
+    public static final String LAST_INDEX = "lastIndex";
     public static final String BIRTH_HEIGHT = "birthHeight";
     public static final String SPEND_HEIGHT = "spendHeight";
     public static final String BIRTH_TIME = "birthTime";
@@ -73,6 +85,9 @@ public class FieldNames {
     public static final String RECIPIENT = "recipient";
     public static final String TX_ID = "txId";
     public static final String CASH_ID = "cashId";
+    public static final String FROM_FID = "fromFid";
+    public static final String TO_FID = "toFid";
+
     public static final String CDD = "cdd";
     public static final String SHOW_NAME = "showName";
     public static final String ACCOUNTS = "accounts";
@@ -142,7 +157,6 @@ public class FieldNames {
     public static final String MEMBER_NUM = "memberNum";
     public static final String TCDD = "tCdd";
     public static final String TYPE = "type";
-    public static final String DESC = "desc";
     public static final String TRANSFEREE = "transferee";
     public static final String VIA_CONSUME = "viaConsume";
     public static final String CONSUME_VIA = "consumeVia";
@@ -209,7 +223,13 @@ public class FieldNames {
     public static final String PROOF_IDS = "proofIds";
 
     public static final String TITLE = "title";
-
+    public static final String TITLES = "titles";
+    public static final String MEMO = "memo";
+    public static final String SEE_STATEMENT = "seeStatement";
+    public static final String SEE_WRITINGS = "seeWritings";
+    public static final String NOTICE_FEE = "noticeFee";
+    public static final String UPDATE_HEIGHT = "updateHeight";
+    public static final String UPDATE_TIME = "updateTime";
     public static final String COSIGNERS = "cosigners";
 
     public static final String TRANSFERABLE = "transferable";
@@ -252,5 +272,34 @@ public class FieldNames {
     public static final String LANG = "lang";
     public static final String LANGS = "langs";
 
+    public static final String WATCH_ONLY = "watchOnly";
+    public static final String ACCOUNT_DB = "account";
+    public static final String ORDER_VIA_SHARE = "orderViaShare";
+    public static final String CONSUME_VIA_SHARE = "consumeViaShare";
+    public static final String LAST_INCOME = "lastIncome";
+    public static final String LAST_EXPENSE = "lastExpense";
+    public static final String LAST_SETTLE_HEIGHT = "lastSettleHeight";
+    public static final String LAST_EXPENSE_HEIGHT = "lastExpenseHeight";
+    public static final String DEALER_MIN_BALANCE = "dealerMinBalance";
+    public static final String MIN_DISTRIBUTE_BALANCE = "minDistributeBalance";
+    public static final String AUTO_SCAN_STRATEGY = "autoScanStrategy";
+    public static final String LAST_BLOCK_ID = "lastBlockId";
+    // Map names for different data types
+    public static final String USER_BALANCE_MAP = "userBalance";
+    public static final String FID_VIA_MAP = "fidVia";
+    public static final String VIA_BALANCE_MAP = "viaBalance";
+    public static final String UNPAID_VIA_BALANCE_MAP = "unpaidViaBalance";
+    public static final String UNPAID_FIXED_COST_MAP = "unpaidFixedCost";
+    public static final String FIXED_COST_MAP = "fixedCost";
+    public static final String CONTRIBUTOR_SHARE_MAP = "contributorShare";
+    public static final String META_MAP = "meta";
+    public static final String INCOME_MAP = "income";
+    public static final String INCOME_ORDER_MAP = "income_order";
+    public static final String EXPENSE_MAP = "expense";
+    public static final String EXPENSE_ORDER_MAP = "expense_order";
+    public static final String PAYOFF_MAP = "payoff";
+    public static final String BUILDER_SHARE_MAP = "builderShareMap";
+
+    public static final String COST_MAP = "costMap";
 }
 

@@ -10,10 +10,10 @@ import crypto.old.EccAes256K1P7;
 import org.jetbrains.annotations.Nullable;
 
 import redis.clients.jedis.Jedis;
-import tools.BytesTools;
-import tools.Hex;
-import tools.IdNameTools;
-import tools.JsonTools;
+import utils.BytesUtils;
+import utils.Hex;
+import utils.IdNameUtils;
+import utils.JsonUtils;
 
 import java.security.SecureRandom;
 import java.util.HashMap;
@@ -51,7 +51,7 @@ public class FcSession extends FcObject {
             byte[] keyBytes = Hex.fromHex(sessionKey);
             session.setKeyBytes(keyBytes);
             session.setKey(sessionKey);
-            session.setName(IdNameTools.makeKeyName(keyBytes));
+            session.setName(IdNameUtils.makeKeyName(keyBytes));
         }
         session.setPubKey(sessionMap.get(PUB_KEY));
         session.makeKeyBytes();
@@ -64,14 +64,14 @@ public class FcSession extends FcObject {
         return sign(keyBytes,dataBytes);
     }
     public static String sign(byte[] sessionKeyBytes, byte[] dataBytes) {
-        byte[] signBytes = Hash.sha256x2(BytesTools.bytesMerger(dataBytes, sessionKeyBytes));
+        byte[] signBytes = Hash.sha256x2(BytesUtils.bytesMerger(dataBytes, sessionKeyBytes));
         return Hex.toHex(signBytes);
     }
 
     public String verifySign(String sign, byte[] requestBodyBytes) {
         if(sign==null)return "The sign is null.";
         if(requestBodyBytes==null)return "The byte array is null.";
-        byte[] signBytes = BytesTools.bytesMerger(requestBodyBytes, keyBytes);
+        byte[] signBytes = BytesUtils.bytesMerger(requestBodyBytes, keyBytes);
         String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
 
         if(!sign.equals(doubleSha256Hash)){
@@ -159,11 +159,11 @@ public class FcSession extends FcObject {
         SecureRandom random = new SecureRandom();
         byte[] keyBytes = new byte[length];
         random.nextBytes(keyBytes);
-        return BytesTools.bytesToHexStringBE(keyBytes);
+        return BytesUtils.bytesToHexStringBE(keyBytes);
     }
 
     public static String makeSessionName(byte[] sessionKey) {
-        return IdNameTools.makeKeyName(sessionKey);
+        return IdNameUtils.makeKeyName(sessionKey);
     }
 
     public String getName() {
@@ -217,10 +217,10 @@ public class FcSession extends FcObject {
         this.keyCipher = keyCipher;
     }
     public static String toJsonList(List<FcSession> value) {
-        return JsonTools.toJson(value);
+        return JsonUtils.toJson(value);
     }
 
     public static List<FcSession> fromJsonList(String json) {
-        return JsonTools.listFromJson(json, FcSession.class);
+        return JsonUtils.listFromJson(json, FcSession.class);
     }
 }

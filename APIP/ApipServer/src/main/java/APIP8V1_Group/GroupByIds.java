@@ -6,7 +6,7 @@ import constants.FieldNames;
 import constants.IndicesNames;
 import feip.feipData.Group;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -38,7 +38,8 @@ public class GroupByIds extends HttpServlet {
     }
 
     public static void doGroupIdsRequest(String keyFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(settings);
+        FcdslRequestHandler fcdslRequestHandler = FcdslRequestHandler.checkRequest(request, response, authType, settings);
+        if (fcdslRequestHandler == null) return;
         Map<String, Group> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.GROUP, Group.class, keyFieldName);
         if (meetMap == null) return;
 
@@ -47,4 +48,5 @@ public class GroupByIds extends HttpServlet {
         }
         fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
     }
+
 }

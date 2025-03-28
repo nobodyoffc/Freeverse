@@ -1,6 +1,6 @@
 package feip.feipData;
 
-import tools.JsonTools;
+import utils.JsonUtils;
 
 public class Feip {
 
@@ -96,11 +96,11 @@ public class Feip {
 	}
 
 	public String toJson(){
-		return JsonTools.toJson(this);
+		return JsonUtils.toJson(this);
 	}
 
 	public String toNiceJson(){
-		return JsonTools.toNiceJson(this);
+		return JsonUtils.toNiceJson(this);
 	}
 
 	public String getDid() {

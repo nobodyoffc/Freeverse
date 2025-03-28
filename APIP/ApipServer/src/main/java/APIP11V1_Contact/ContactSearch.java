@@ -15,7 +15,7 @@ import java.util.ArrayList;
 
 import feip.feipData.Contact;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 import appTools.Settings;
 import static constants.FieldNames.ID;

@@ -11,8 +11,8 @@ import feip.feipData.serviceParams.Params;
 import clients.ApipClient;
 import feip.feipData.Service;
 import appTools.Inputer;
-import tools.JsonTools;
-import tools.http.HttpTools;
+import utils.JsonUtils;
+import utils.http.HttpUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -28,7 +28,7 @@ import static appTools.Inputer.askIfYes;
 import static appTools.Inputer.promptAndUpdate;
 import static feip.feipData.Service.ServiceType.*;
 import static constants.Strings.URL_HEAD;
-import static constants.Ticks.FCH;
+import static constants.Tickers.FCH;
 
 
 public class ApiProvider {
@@ -143,7 +143,7 @@ public class ApiProvider {
         if(service==null || service.getParams()==null)return false;
         apiParams = (Params) service.getParams();
         System.out.println("Got the service:");
-        JsonTools.printJson(service);
+        JsonUtils.printJson(service);
         id = service.getId();
         name = service.getStdName();
         owner = service.getOwner();
@@ -254,7 +254,7 @@ public class ApiProvider {
             this.apiUrl = Inputer.promptAndSet(br, "the url of API request. The default is " + defaultUrl, this.apiUrl);
             if(apiUrl==null)
                 apiUrl=defaultUrl;
-            if(!HttpTools.illegalUrl(apiUrl))break;
+            if(!HttpUtils.illegalUrl(apiUrl))break;
             System.out.println("Illegal URL. Try again.");
         }
     }

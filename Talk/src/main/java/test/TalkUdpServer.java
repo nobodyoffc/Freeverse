@@ -4,7 +4,7 @@ import appTools.Settings;
 import clients.ApipClient;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
-import tools.ObjectTools;
+import utils.ObjectUtils;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
@@ -58,7 +58,7 @@ public class TalkUdpServer {
 
         try(Jedis jedis = jedisPool.getResource()){
             Map<String, String> nPriceStrMap = jedis.hgetAll(Settings.addSidBriefToName(sid, N_PRICE));
-            nPriceMap = ObjectTools.convertToLongMap(nPriceStrMap);
+            nPriceMap = ObjectUtils.convertToLongMap(nPriceStrMap);
         }
 
     }

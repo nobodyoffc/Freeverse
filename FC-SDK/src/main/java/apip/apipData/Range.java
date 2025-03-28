@@ -1,6 +1,6 @@
 package apip.apipData;
 
-import tools.StringTools;
+import utils.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,7 +40,7 @@ public class Range {
             stringList.add(LTE);
             stringList.add(range.getLte());
         }
-        return StringTools.listToString(stringList);
+        return StringUtils.listToString(stringList);
     }
 
     public Range addNewFields(String... fields) {

@@ -1,7 +1,7 @@
 import NasaRcpTest.*;
 import com.google.gson.Gson;
-import tools.Hex;
-import tools.JsonTools;
+import utils.Hex;
+import utils.JsonUtils;
 import nasa.RpcRequest;
 import nasa.data.TransactionRPC;
 import nasa.data.UTXO;
@@ -47,7 +47,7 @@ public class NaSaRpcClient {
         createRawTransactionParamsFch createRawTransactionParams = new createRawTransactionParamsFch(toAddr, amount, opreturn);
         RpcRequest jsonRPC2Request = new RpcRequest(CREATERAWTRANSACTION, createRawTransactionParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
         return (String) result;
@@ -57,7 +57,7 @@ public class NaSaRpcClient {
     public String createRawTransactionDoge(String toAddr, double amount, String opreturn) {
         CreateRawTransactionParamsDoge createRawTransactionParams = new CreateRawTransactionParamsDoge(toAddr, amount, opreturn);
         RpcRequest jsonRPC2Request = new RpcRequest(CREATERAWTRANSACTION, createRawTransactionParams.toParams());
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
         return (String) result;
 //        return new CreateRawTransaction().createRawTransactionDoge(toAddr,amount,opreturn,url,username,password);
@@ -276,7 +276,7 @@ public class NaSaRpcClient {
     public double estimateFee(int nBlocks){
         Object[] params = new Object[]{nBlocks};
         RpcRequest jsonRPC2Request = new RpcRequest(ESTIMATE_FEE, params);
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
         return (double) RpcRequest.requestRpc(url, username, password, ESTIMATE_FEE, jsonRPC2Request);
     }
 

@@ -3,7 +3,7 @@ package clients;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import tools.DateTools;
+import utils.DateUtils;
 
 public class Displayer extends Thread {
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -52,7 +52,7 @@ public class Displayer extends Thread {
     }
 
     public void displayAppNotice(String message) {
-        String time = DateTools.now("yy-MM-dd HH:mm:ss");
+        String time = DateUtils.now("yy-MM-dd HH:mm:ss");
         displayMessage("[APP] " + time + " " + message);
     }
 

@@ -1,31 +1,90 @@
 package fcData;
 
-import tools.FchTools;
-import tools.JsonTools;
+import appTools.Inputer;
+import crypto.Base58;
+import crypto.Encryptor;
+import org.jetbrains.annotations.NotNull;
+import utils.BytesUtils;
+import utils.FcUtils;
+import utils.JsonUtils;
 import feip.feipData.Secret;
 import crypto.Decryptor;
 import crypto.CryptoDataByte;
 import crypto.Algorithm.Bitcore;
-import java.util.Base64;
-import java.util.List;
 
+import java.io.BufferedReader;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.ArrayList;
 import appTools.Shower;
 
-public class SecretDetail extends FcObject{
+import static appTools.Inputer.askIfYes;
+import static constants.FieldNames.*;
+import static constants.FieldNames.ID;
+
+public class SecretDetail extends FcObject {
     private String type;
     private String title;
     private String content;
     private String memo;
     private Long updateHeight;
+    private String contentCipher;
+
+    public static LinkedHashMap<String,Integer> getFieldWidthMap(){
+        LinkedHashMap<String,Integer> fieldWidthMap = new LinkedHashMap<>();
+        fieldWidthMap.put(TITLE, TEXT_DEFAULT_SHOW_SIZE);
+        fieldWidthMap.put(TYPE, TEXT_SHORT_DEFAULT_SHOW_SIZE);
+        fieldWidthMap.put(UPDATE_HEIGHT, TIME_DEFAULT_SHOW_SIZE);
+        fieldWidthMap.put(MEMO, TEXT_DEFAULT_SHOW_SIZE);
+        fieldWidthMap.put(ID, ID_DEFAULT_SHOW_SIZE);
+        return fieldWidthMap;
+    }
+
+    public static List<String> getTimestampFieldList(){
+        List<String> timestampFieldList = new ArrayList<>();
+        timestampFieldList.add(UPDATE_HEIGHT);
+        return timestampFieldList;
+    }
+
+    public static Map<String,String> getShowFieldNameAs(){
+        Map<String,String> showFieldNameAs = new HashMap<>();
+        showFieldNameAs.put(UPDATE_HEIGHT, "Update Time");
+        return showFieldNameAs;
+    }
+    
+    @NotNull
+    public static SecretDetail inputSecret(BufferedReader br, byte[] symKey) {
+        SecretDetail secretDetail = new SecretDetail();
+        secretDetail.setTitle(Inputer.inputString(br, "Input the title:"));
+        String content= null;
+        if(askIfYes(br, "Generate a random content?")){
+            int length = Inputer.inputInt(br, "Input the length no more than 128:", 128);
+            String randomContent = Base58.encode(BytesUtils.getRandomBytes(length));
+            System.out.println("Random content: "+randomContent);
+            if(askIfYes(br,"Input more for content?"))content = Inputer.inputString(br, "Input:");
+            content = randomContent + content;
+        }else{
+            content = Inputer.inputString(br, "Input the content:");
+        }
+        if(content !=null && !content.isEmpty()){
+            String cipher = Encryptor.encryptBySymKeyToJson(content.getBytes(), symKey);
+            secretDetail.setContentCipher(cipher);
+        }
+        secretDetail.setType(Inputer.inputString(br, "Input the type:"));
+        secretDetail.setMemo(Inputer.inputString(br, "Input the memo:"));
+        return secretDetail;
+    }
 
     // Similar utility methods as ContactDetail
     public byte[] toBytes() {
-        return tools.JsonTools.toJson(this).getBytes();
+        return JsonUtils.toJson(this).getBytes();
     }
 
     public static SecretDetail fromBytes(byte[] bytes) {
-        return tools.JsonTools.fromJson(new String(bytes), SecretDetail.class);
+        return JsonUtils.fromJson(new String(bytes), SecretDetail.class);
     }
 
     public static SecretDetail fromSecret(Secret secret, byte[] priKey) {
@@ -49,7 +108,7 @@ public class SecretDetail extends FcObject{
                     if (cryptoDataByte == null || cryptoDataByte.getCode() != 0) {
                         try {
                             byte[] dataBytes = Bitcore.decrypt(cipherBytes, priKey);
-                            SecretDetail secretDetail = JsonTools.fromJson(new String(dataBytes), SecretDetail.class);
+                            SecretDetail secretDetail = JsonUtils.fromJson(new String(dataBytes), SecretDetail.class);
                             if (secretDetail != null) {
                                 secretDetail.setId(secret.getId());
                                 secretDetail.setUpdateHeight(secret.getLastHeight());
@@ -79,8 +138,8 @@ public class SecretDetail extends FcObject{
             if (cryptoDataByte.getCode() == 0) {
                 // Successfully decrypted
                 String decryptedContent = new String(cryptoDataByte.getData());
-                SecretDetail decryptedDetail = JsonTools.fromJson(decryptedContent, SecretDetail.class);
-                
+                SecretDetail decryptedDetail = JsonUtils.fromJson(decryptedContent, SecretDetail.class);
+
                 if (decryptedDetail != null) {
                     decryptedDetail.setId(secret.getId());
                     decryptedDetail.setUpdateHeight(secret.getLastHeight());
@@ -99,14 +158,15 @@ public class SecretDetail extends FcObject{
         for (SecretDetail secret : secretList) {
             List<Object> showList = new ArrayList<>();
             showList.add(secret.getId());
-            if(secret.getUpdateHeight()!=null)showList.add(showList.add(FchTools.heightToLongDate(secret.getUpdateHeight())));
+            if (secret.getUpdateHeight() != null)
+                showList.add(showList.add(FcUtils.heightToLongDate(secret.getUpdateHeight())));
             else showList.add(null);
             showList.add(secret.getTitle());
             showList.add(secret.getType());
             showList.add(secret.getMemo());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
 
     // Getters and Setters
@@ -157,4 +217,13 @@ public class SecretDetail extends FcObject{
     public void setUpdateHeight(Long updateHeight) {
         this.updateHeight = updateHeight;
     }
+
+    public String getContentCipher() {
+        return contentCipher;
+    }
+
+    public void setContentCipher(String contentCipher) {
+        this.contentCipher = contentCipher;
+    }
+
 }

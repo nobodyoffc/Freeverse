@@ -1,9 +1,10 @@
 package startClient;
 
+import crypto.Decryptor;
+import crypto.Encryptor;
 import fcData.FcSession;
 import apip.apipData.RequestBody;
 import appTools.*;
-import clients.Client;
 import clients.ApipClient;
 import clients.DiskClient;
 import fcData.DiskItem;
@@ -15,10 +16,10 @@ import fcData.ReplyBody;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.ApipParams;
 import server.DiskApiNames;
-import tools.Hex;
-import tools.JsonTools;
-import tools.http.AuthType;
-import tools.http.RequestMethod;
+import utils.Hex;
+import utils.JsonUtils;
+import utils.http.AuthType;
+import utils.http.RequestMethod;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.BufferedReader;
@@ -95,15 +96,15 @@ public class StartDiskClient {
     }
 
     private static void signInEcc(byte[] symKey) {
-        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL, symKey);
-        JsonTools.printJson(fcSession);
+        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL, symKey, null);
+        JsonUtils.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);
     }
 
     private static void signIn(byte[] symKey) {
         FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL,symKey);
-        JsonTools.printJson(fcSession);
+        JsonUtils.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);
     }
@@ -111,7 +112,7 @@ public class StartDiskClient {
     public static void getService() {
         System.out.println("Getting the service information...");
         ReplyBody replier = DiskClient.getService(diskClient.getUrlHead(), VERSION_1, ApipParams.class);
-        if(replier!=null)JsonTools.printJson(replier);
+        if(replier!=null) JsonUtils.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
     }
@@ -169,7 +170,7 @@ public class StartDiskClient {
             } catch (IOException e) {
                 System.out.println("Failed to hash file:"+fileName);
             }
-            fileName = Client.encryptFile(fileName, diskClient.getApiAccount().getUserPubKey());
+            fileName = Encryptor.encryptFile(fileName, diskClient.getApiAccount().getUserPubKey());
             System.out.println("Encrypted to: "+fileName);
         }
         return fileName;
@@ -189,8 +190,8 @@ public class StartDiskClient {
 
     private static void tryToDecryptFile(String path, String gotFileId,byte[] symKey) {
         try {
-            JsonTools.readOneJsonFromFile(path, gotFileId, CryptoDataStr.class);
-            String did = Client.decryptFile(path, gotFileId,symKey, diskClient.getApiAccount().getUserPriKeyCipher());
+            JsonUtils.readOneJsonFromFile(path, gotFileId, CryptoDataStr.class);
+            String did = Decryptor.decryptFile(path, gotFileId,symKey, diskClient.getApiAccount().getUserPriKeyCipher());
             if(did!= null) System.out.println("Decrypted to:"+Path.of(path,did));
         } catch (IOException ignore) {}
     }
@@ -261,6 +262,6 @@ public class StartDiskClient {
             else valueList.add("");
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title,fields,widths,valueListList, 0, false);
+        Shower.showDataTable(title,fields,widths,valueListList, null);
     }
 }

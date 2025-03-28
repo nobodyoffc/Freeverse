@@ -1,8 +1,9 @@
 package fch.fchData;
 
-public class OpReturn {
+import fcData.FcObject;
 
-	private String id;		//txid
+public class OpReturn extends FcObject {
+
 	private Long height;		//block height
 	private Long time;
 	private Integer txIndex;		//tx index in the block
@@ -11,12 +12,6 @@ public class OpReturn {
 	private String recipient;	//address of the first output, but the first input address and opReturn output.
 	private Long cdd;
 
-	public String getTxId() {
-		return id;
-	}
-	public void setId(String id) {
-		this.id = id;
-	}
 	public Long getHeight() {
 		return height;
 	}

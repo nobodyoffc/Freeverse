@@ -5,7 +5,7 @@ import server.FcdslRequestHandler;
 import constants.IndicesNames;
 import fch.fchData.Cash;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;

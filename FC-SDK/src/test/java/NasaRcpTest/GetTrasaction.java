@@ -4,7 +4,7 @@ import nasa.RpcRequest;
 import nasa.data.TransactionBrief;
 import nasa.data.TransactionRPC;
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -22,14 +22,14 @@ public class GetTrasaction {
 //        String url = "http://127.0.0.1:8332";
 //        String txId = "ba15e9eb90790bc97dcc6860468a9fb66968586384746b48b32f5d122e651d80";
         result = getTransaction(txId, true, url, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
     }
 
     public TransactionRPC getTransaction(String txId, boolean includeWatchOnly, String url, String username, String password) {
         TransactionParams txParams = new TransactionParams(txId, includeWatchOnly);
         RpcRequest jsonRPC2Request = new RpcRequest(GETTRANSACTION, txParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
         return getTransactions(result);
@@ -136,7 +136,7 @@ public class GetTrasaction {
             objects.add(txId);
             if (includeWatchOnly) objects.add(includeWatchOnly);
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 

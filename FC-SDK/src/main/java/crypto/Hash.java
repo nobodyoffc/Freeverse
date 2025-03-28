@@ -4,14 +4,14 @@ import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
-import tools.Hex;
+import utils.Hex;
 import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.jcajce.provider.digest.Keccak;
 import org.junit.jupiter.api.Test;
-import tools.BytesTools;
+import utils.BytesUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -86,27 +86,27 @@ public class Hash {
     }
 
     public static byte[] getSign(byte[] text, byte[] symKey) {
-        byte[] bytes = BytesTools.bytesMerger(text, symKey);
+        byte[] bytes = BytesUtils.bytesMerger(text, symKey);
         return Hash.sha256x2(bytes);
     }
 
     public static String getSign(String text, byte[] symKey) {
         byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
         byte[] signBytes = getSign(textBytes, symKey);
-        return BytesTools.bytesToHexStringBE(signBytes);
+        return BytesUtils.bytesToHexStringBE(signBytes);
     }
 
     public static String getSign(String symKey, String text) {
         byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
-        byte[] keyBytes = BytesTools.hexToByteArray(symKey);
-        byte[] bytes = BytesTools.bytesMerger(textBytes, keyBytes);
+        byte[] keyBytes = BytesUtils.hexToByteArray(symKey);
+        byte[] bytes = BytesUtils.bytesMerger(textBytes, keyBytes);
         System.out.println("----");
         System.out.println("Content in hex to be signed: ");
         System.out.println("----");
         System.out.println(HexFormat.of().formatHex(bytes));
 //        System.out.println("------");
         byte[] signBytes = Hash.sha256x2(bytes);
-        return BytesTools.bytesToHexStringBE(signBytes);
+        return BytesUtils.bytesToHexStringBE(signBytes);
     }
 
     public static byte[] Ripemd160(byte[] b) {

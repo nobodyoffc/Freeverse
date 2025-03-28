@@ -1,8 +1,8 @@
 package apip;
 
 import crypto.Hash;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 import redis.clients.jedis.Jedis;
 
 import java.nio.charset.StandardCharsets;
@@ -44,7 +44,7 @@ public class ApipTools {
 
     public static boolean isGoodSign(byte[] bytes, String sign, byte[] symKey) {
         if (sign == null || bytes == null) return false;
-        byte[] signBytes = BytesTools.bytesMerger(bytes, symKey);
+        byte[] signBytes = BytesUtils.bytesMerger(bytes, symKey);
         byte[] hash = Hash.sha256x2(signBytes);
         String doubleSha256Hash = Hex.toHex(hash);
 

@@ -2,11 +2,10 @@ package endpoint;
 
 import nasa.NaSaRpcClient;
 import server.ApipApiNames;
-import fcData.ReplyBody;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
-import tools.JsonTools;
-import tools.http.AuthType;
+import utils.JsonUtils;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -38,6 +37,6 @@ public class FreecashInfo extends HttpServlet {
         httpRequestChecker.checkRequestHttp(request, response, authType);
         FchChainInfo freecashInfo = new FchChainInfo();
         freecashInfo.infoBest(naSaRpcClient);
-        response.getWriter().write(JsonTools.toNiceJson(freecashInfo));
+        response.getWriter().write(JsonUtils.toNiceJson(freecashInfo));
     }
 }

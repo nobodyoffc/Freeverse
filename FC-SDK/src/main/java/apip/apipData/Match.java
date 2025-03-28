@@ -1,6 +1,6 @@
 package apip.apipData;
 
-import tools.StringTools;
+import utils.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,7 +14,7 @@ public class Match {
         if(match==null)return null;
         List<String> stringList = new ArrayList<>(Arrays.asList(match.getFields()));
         stringList.add(match.getValue());
-        return StringTools.listToString(stringList);
+        return StringUtils.listToString(stringList);
     }
 
     public Match addNewFields(String... fields) {

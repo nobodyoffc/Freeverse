@@ -6,7 +6,7 @@ import feip.feipData.Feip;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import feip.feipData.MasterOpData;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.slf4j.Logger;
 
 import static constants.Constants.*;
@@ -21,10 +21,10 @@ public class FeipTools {
 
         Feip feip = null;
         try {
-            String json = JsonTools.strToJson(opre.getOpReturn());
+            String json = JsonUtils.strToJson(opre.getOpReturn());
             feip = new Gson().fromJson(json, Feip.class);
         }catch(JsonSyntaxException e) {
-            log.debug("Bad json on {}. ",opre.getTxId());
+            log.debug("Bad json on {}. ",opre.getId());
         }
         return  feip;
     }
@@ -56,7 +56,7 @@ public class FeipTools {
 
         data.setData(masterOpData);
 
-        return JsonTools.toJson(data);
+        return JsonUtils.toJson(data);
     }
     public static String getCidUnregisterData() {
         return getCidData(null,UNREGISTER);
@@ -74,6 +74,6 @@ public class FeipTools {
         if(name!=null) cidOpData.setName(name);
 
         data.setData(cidOpData);
-        return JsonTools.toJson(data);
+        return JsonUtils.toJson(data);
     }
 }

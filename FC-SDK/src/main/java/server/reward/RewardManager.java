@@ -4,14 +4,15 @@ import apip.apipData.Sort;
 import appTools.Menu;
 import appTools.Shower;
 import clients.ApipClient;
-import tools.EsTools;
+import constants.Values;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch.core.DeleteResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import fch.ParseTools;
-import tools.JsonTools;
+import fch.FchUtils;
+import utils.JsonUtils;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,14 +78,14 @@ public class RewardManager {
         ArrayList<RewardInfo> rewardInfoList = getRewardInfoList(esClient);
         if(rewardInfoList==null)return;
         for(RewardInfo rewardInfo:rewardInfoList){
-            JsonTools.writeObjectToJsonFile(rewardInfo,REWARD_HISTORY_FILE,true);
+            JsonUtils.writeObjectToJsonFile(rewardInfo,REWARD_HISTORY_FILE,true);
         }
         log.debug(rewardInfoList.size() +" reward records saved to "+REWARD_HISTORY_FILE+ ".");
         Menu.anyKeyToContinue(br);
     }
 
     private ArrayList<RewardInfo> getRewardInfoList(ElasticsearchClient esClient) {
-        List<SortOptions> sort = Sort.makeTwoFieldsSort(TIME, DESC, REWARD_ID, ASC);
+        List<SortOptions> sort = Sort.makeTwoFieldsSort(TIME, Values.DESC, REWARD_ID, Values.ASC);
         ArrayList<RewardInfo> rewardInfoList = new ArrayList<>();
         SearchResponse<RewardInfo> result;
         List<String> last = null;
@@ -92,7 +93,7 @@ public class RewardManager {
         try {
             result = esClient.search(s -> s
                             .index(addSidBriefToName(sid,REWARD).toLowerCase())
-                            .size(EsTools.READ_MAX / 10)
+                            .size(EsUtils.READ_MAX / 10)
                             .sort(sort)
                     , RewardInfo.class);
         } catch (IOException e) {
@@ -109,12 +110,12 @@ public class RewardManager {
             last =  hitList.get(hitList.size()-1).sort();
         }
 
-        while(size == EsTools.READ_MAX / 10){
+        while(size == EsUtils.READ_MAX / 10){
             try {
                 List<String> finalLast = last;
                 result = esClient.search(s -> s
                                 .index(addSidBriefToName(sid,REWARD).toLowerCase())
-                                .size(EsTools.READ_MAX / 10)
+                                .size(EsUtils.READ_MAX / 10)
                                 .sort(sort)
                                 .searchAfter(finalLast)
                         , RewardInfo.class);
@@ -154,10 +155,10 @@ public class RewardManager {
         for(RewardInfo rewardInfo : unpaidRewardList){
             System.out.print(Shower.formatString(rewardInfo.getState().name(),12));
 
-            String time = ParseTools.convertTimestampToDate(rewardInfo.getTime());
+            String time = FchUtils.convertTimestampToDate(rewardInfo.getTime());
             System.out.print(Shower.formatString(time,22));
 
-            String rewardT = String.valueOf(ParseTools.satoshiToCoin(rewardInfo.getRewardT()));
+            String rewardT = String.valueOf(FchUtils.satoshiToCoin(rewardInfo.getRewardT()));
             System.out.print(Shower.formatString(rewardT,20));
 
             System.out.print(Shower.formatString(rewardInfo.getRewardId(),66));
@@ -194,7 +195,7 @@ public class RewardManager {
 
     private void showLastReward(ElasticsearchClient esClient, BufferedReader br) {
         RewardInfo reward = getLastRewardInfo(sid, esClient);
-        System.out.println(JsonTools.toNiceJson(reward));
+        System.out.println(JsonUtils.toNiceJson(reward));
         Menu.anyKeyToContinue(br);
     }
 

@@ -9,10 +9,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static tools.StringTools.listToString;
-import static tools.http.AuthType.FC_SIGN_BODY;
+import static utils.StringTools.listToString;
+import static utils.http.AuthType.FC_SIGN_BODY;
 import static constants.FieldNames.*;
-import static tools.StringTools.arrayToString;
+import static utils.StringTools.arrayToString;
 
 public class SwapHallAPIs {
 

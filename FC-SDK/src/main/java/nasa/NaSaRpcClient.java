@@ -1,6 +1,6 @@
 package nasa;
 
-import tools.*;
+import utils.*;
 import nasa.data.TransactionBrief;
 import nasa.data.TransactionRPC;
 import nasa.data.UTXO;
@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static nasa.NasaRpcNames.*;
-import static tools.StringTools.isBase64;
+import static utils.StringUtils.isBase64;
 
 @SuppressWarnings({ "unused"})
 public class NaSaRpcClient {
@@ -270,14 +270,14 @@ public class NaSaRpcClient {
         Object[] params=null;
         if(nBlocks!=null)params = new Object[]{nBlocks};
         RpcRequest jsonRPC2Request = new RpcRequest(ESTIMATE_FEE, params);
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
         return (double) RpcRequest.requestRpc(url, username, password, ESTIMATE_FEE, jsonRPC2Request);
     }
 
     public ResultEstimateSmartFee estimateSmartFee(Integer nBlocks){
         Object[] params = new Object[]{nBlocks};
         RpcRequest jsonRPC2Request = new RpcRequest(NasaRpcNames.ESTIMATE_SMART_FEE, params);
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
         Object result1 = RpcRequest.requestRpc(url, username, password, NasaRpcNames.ESTIMATE_SMART_FEE, jsonRPC2Request);
         Gson gson = new Gson();
         return gson.fromJson(gson.toJson(result1), ResultEstimateSmartFee.class);
@@ -348,7 +348,7 @@ public class NaSaRpcClient {
             }
 
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 
@@ -500,7 +500,7 @@ public class NaSaRpcClient {
             }
 
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 
@@ -536,7 +536,7 @@ public class NaSaRpcClient {
     public BlockchainInfo getBlockchainInfo(){
         RpcRequest jsonRPC2Request = new RpcRequest(GETBLOCKCHAININFO, null);
         Object result = RpcRequest.requestRpc(url, username, password, "getBlockchainInfo", jsonRPC2Request);
-        return ObjectTools.objectToClass(result,BlockchainInfo.class);//BlockchainInfo.makeBlockchainInfo(result);
+        return ObjectUtils.objectToClass(result,BlockchainInfo.class);//BlockchainInfo.makeBlockchainInfo(result);
     }
     public static class BlockchainInfo {
         private String chain;
@@ -944,18 +944,20 @@ public class NaSaRpcClient {
     public String getRawTx(String txId){
         RpcRequest jsonRPC2Request = new RpcRequest(GETRAWTRANSACTION, new Object[]{txId});
         Object result = RpcRequest.requestRpc(url, username, password, GETRAWTRANSACTION, jsonRPC2Request);
+        if(result==null)return null;
         return (String) result;
     }
     
     public String[] getRawMempoolIds(){
         Object result = getRawMempool(url,false,username,password);
+        if(result==null)return null;
         Gson gson = new Gson();
         return gson.fromJson(gson.toJson(result),String[].class);
     }
 
     public Map<String, TxInMempool> getRawMempoolTxs(){
         Object result = getRawMempool(url,true,username,password);
-        return ObjectTools.objectToMap(result,String.class, TxInMempool.class);
+        return ObjectUtils.objectToMap(result,String.class, TxInMempool.class);
     }
 
     private Object getRawMempool(String url, boolean verbose,String username, String password) {
@@ -966,7 +968,7 @@ public class NaSaRpcClient {
     private MempoolInfo getMempoolInfo(String url, boolean verbose,String username, String password) {
         RpcRequest jsonRPC2Request = new RpcRequest(GETMEMPOOLINFO, new Object[]{verbose});
         Object result = RpcRequest.requestRpc(url, username, password, GETMEMPOOLINFO, jsonRPC2Request);
-        return ObjectTools.objectToClass(result, MempoolInfo.class);
+        return ObjectUtils.objectToClass(result, MempoolInfo.class);
     }
 
     public static class MempoolInfo {
@@ -1159,7 +1161,7 @@ public class NaSaRpcClient {
         TransactionParams txParams = new TransactionParams(txId, includeWatchOnly);
         RpcRequest jsonRPC2Request = new RpcRequest(GETTRANSACTION, txParams.toParams());
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
-        return ObjectTools.objectToClass(result,TransactionRPC.class);
+        return ObjectUtils.objectToClass(result,TransactionRPC.class);
     }
     public static class TransactionParams {
         private String txId;
@@ -1180,7 +1182,7 @@ public class NaSaRpcClient {
             objects.add(txId);
             if (includeWatchOnly) objects.add(includeWatchOnly);
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 
@@ -1208,10 +1210,10 @@ public class NaSaRpcClient {
         ListSinceBlockParams listSinceBlockParams = new ListSinceBlockParams(block, minConf, includeWatchOnly);
         RpcRequest jsonRPC2Request = new RpcRequest(LISTSINCEBLOCK, listSinceBlockParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
-        ListSinceBlockResult listSinceBlockResult = ObjectTools.objectToClass(result,ListSinceBlockResult.class);
+        ListSinceBlockResult listSinceBlockResult = ObjectUtils.objectToClass(result,ListSinceBlockResult.class);
         if (listSinceBlockResult != null && listSinceBlockResult.getTransactions() != null) {
             listSinceBlockResult.getTransactions().removeIf(tx -> tx.getConfirmations() < Integer.parseInt(minConf));
         }
@@ -1241,7 +1243,7 @@ public class NaSaRpcClient {
             }
 
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 
@@ -1299,21 +1301,21 @@ public class NaSaRpcClient {
         ListUnspentParams listUnspentParams = new ListUnspentParams(null, (String[]) null);
         RpcRequest jsonRPC2Request = new RpcRequest(LISTUNSPENT, listUnspentParams.toParams());
         Object result = RpcRequest.requestRpc(url, username, password, "listUnspent", jsonRPC2Request);
-        return ObjectTools.objectToClass(result, UTXO[].class);
+        return ObjectUtils.objectToClass(result, UTXO[].class);
     }
 
     public UTXO[] listUnspent(@Nullable String addr, @Nullable String minConf){
         ListUnspentParams listUnspentParams = new ListUnspentParams(minConf, new String[]{addr});
         RpcRequest jsonRPC2Request = new RpcRequest(LISTUNSPENT, listUnspentParams.toParams());
         Object result = RpcRequest.requestRpc(url, username, password, LISTUNSPENT, jsonRPC2Request);
-        return ObjectTools.objectToClass(result, UTXO[].class);
+        return ObjectUtils.objectToClass(result, UTXO[].class);
     }
 
     public UTXO[] listUnspent(@Nullable String addr, @Nullable String minConf, boolean includeUnsafe){
         ListUnspentParams listUnspentParams = new ListUnspentParams(minConf, new String[]{addr}, includeUnsafe);
         RpcRequest jsonRPC2Request = new RpcRequest(LISTUNSPENT, listUnspentParams.toParams());
         Object result = RpcRequest.requestRpc(url, username, password, LISTUNSPENT, jsonRPC2Request);
-        return ObjectTools.objectToClass(result, UTXO[].class);
+        return ObjectUtils.objectToClass(result, UTXO[].class);
     }
     private static class ListUnspentParams {
         private String minconf;
@@ -1367,12 +1369,12 @@ public class NaSaRpcClient {
 
                 optionMap = new HashMap<>();
                 if (minimumAmount != null)
-                    optionMap.put("minimumAmount", NumberTools.roundDouble8(Double.valueOf(minimumAmount)));
+                    optionMap.put("minimumAmount", NumberUtils.roundDouble8(Double.valueOf(minimumAmount)));
                 if (maximumAmount != null)
-                    optionMap.put("maximumAmount", NumberTools.roundDouble8(Double.valueOf(maximumAmount)));
+                    optionMap.put("maximumAmount", NumberUtils.roundDouble8(Double.valueOf(maximumAmount)));
                 if (maximumCount != null) optionMap.put("maximumCount", Long.parseLong(maximumCount));
                 if (minimumSumAmount != null)
-                    optionMap.put("minimumSumAmount", NumberTools.roundDouble8(Double.valueOf(minimumSumAmount)));
+                    optionMap.put("minimumSumAmount", NumberUtils.roundDouble8(Double.valueOf(minimumSumAmount)));
             }
             if (optionMap != null && !optionMap.isEmpty()) objects.add(optionMap);
 
@@ -1457,14 +1459,17 @@ public class NaSaRpcClient {
             this.optionMap = optionMap;
         }
     }
+    public String broadcast(String signedTx){
+        return sendRawTransaction(signedTx);
+    }
     public String sendRawTransaction(String signedTx){
         if(isBase64(signedTx))
-            signedTx = StringTools.base64ToHex(signedTx);
+            signedTx = StringUtils.base64ToHex(signedTx);
         String[] params = new String[]{signedTx};
         RpcRequest jsonRPC2Request = new RpcRequest(SENDRAWTRANSACTION, params);
         Object result = RpcRequest.requestRpc(url, username, password, SENDRAWTRANSACTION, jsonRPC2Request);
         if(Hex.isHexString((String) result) )return (String) result;
-        else return JsonTools.toNiceJson(result);
+        else return JsonUtils.toNiceJson(result);
     }
 
     public Object decodeRawTransaction(String hex){

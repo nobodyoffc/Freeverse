@@ -54,7 +54,7 @@ public class CashAddress {
     public static String createCashAddr(byte[] pubkey){
         byte[] pubHash = Utils.sha256hash160(pubkey);
         byte[] out = packAddress(AddressType.P2PKH.getAddressType(),pubHash);
-        String addr = Bech32.encode(Prefix.MainNet.getPrefix(),out);
+        String addr = Bech32Address.encode(Prefix.MainNet.getPrefix(),out);
         return addr.substring(addr.indexOf(":")+1);
     }
 
@@ -71,7 +71,7 @@ public class CashAddress {
         payload[0] = version.byteValue();
         System.arraycopy(pubHash, 0, payload, 1, payload.length - 1);
         //进行8->5位转换
-        byte[] out = Bech32.toWords(payload);
+        byte[] out = Bech32Address.toWords(payload);
         return out;
     }
 

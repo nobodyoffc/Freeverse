@@ -1,5 +1,6 @@
 package apip.apipData;
 
+import fcData.FcObject;
 import fch.fchData.CashMark;
 import fch.fchData.Tx;
 import fch.fchData.TxHas;
@@ -9,12 +10,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import tools.DateTools;
-import fch.ParseTools;
+import utils.DateUtils;
+import fch.FchUtils;
 import appTools.Shower;
 
-public class TxInfo {
-    private String txId;        //txid,hash of tx
+public class TxInfo extends FcObject {
     private Integer version;        //version
     private Long lockTime;    //locktime
     private Long blockTime;        //blockTime
@@ -50,7 +50,7 @@ public class TxInfo {
 
             if (tx != null) {
                 TxInfo txInfo = new TxInfo();
-                txInfo.setTxId(tx.getId());
+                txInfo.setId(tx.getId());
                 txInfo.setHeight(txHas.getHeight());
                 txInfo.setSpentCashes(txHas.getInMarks());
                 txInfo.setIssuedCashes(txHas.getOutMarks());
@@ -81,22 +81,14 @@ public class TxInfo {
 
         for (TxInfo txInfo : txInfoList) {
             List<Object> showList = new ArrayList<>();
-            showList.add(DateTools.longToTime(txInfo.getBlockTime()*1000, "yyyy-MM-dd"));
-            showList.add(txInfo.getTxId());
+            showList.add(DateUtils.longToTime(txInfo.getBlockTime()*1000, "yyyy-MM-dd"));
+            showList.add(txInfo.getId());
             showList.add(txInfo.getInCount());
             showList.add(txInfo.getOutCount());
-            showList.add(String.valueOf(ParseTools.satoshiToCoin(txInfo.getOutValueT())));
+            showList.add(String.valueOf(FchUtils.satoshiToCoin(txInfo.getOutValueT())));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, totalDisplayed, true);
-    }
-
-    public String getTxId() {
-        return txId;
-    }
-
-    public void setTxId(String txId) {
-        this.txId = txId;
+        Shower.showDataTable(title, fields, widths, valueListList, null);
     }
 
     public Integer getVersion() {

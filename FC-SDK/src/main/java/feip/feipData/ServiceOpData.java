@@ -4,6 +4,7 @@ import appTools.Inputer;
 import clients.ApipClient;
 import constants.FieldNames;
 import constants.OpNames;
+import constants.Values;
 import feip.FeipOp;
 
 import java.io.BufferedReader;
@@ -65,8 +66,8 @@ public class ServiceOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, FieldNames.DESC, FieldNames.VER, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.SID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, FieldNames.DESC, FieldNames.VER, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.VER, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.SID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.VER, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.SIDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.SIDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.SIDS});

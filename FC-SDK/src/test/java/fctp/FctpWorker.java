@@ -1,6 +1,6 @@
 package fctp;
 
-import tools.BytesTools;
+import utils.BytesUtils;
 
 import java.io.IOException;
 import java.net.*;
@@ -16,7 +16,7 @@ public class FctpWorker {
     private static Integer resendTime;
     private final boolean isReceiptRequired;
     private final boolean isOrdered;
-    private final Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap = new HashMap<>();
+    private final Map<BytesUtils.ByteArrayAsKey, MsgUnit> sentMap = new HashMap<>();
     private final Queue<MsgUnit> receivedQueue = new PriorityQueue<>();
     private final Queue<MsgUnit> sendTaskQueue = new PriorityQueue<>();
     public static Boolean isRunning;
@@ -56,9 +56,9 @@ public class FctpWorker {
         private final String hisHost;
         private final int hisPort;
         private final Queue<MsgUnit> sendTaskQueue;
-        private final Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap;
+        private final Map<BytesUtils.ByteArrayAsKey, MsgUnit> sentMap;
         private Queue<MsgUnit> receivedQueue;
-        public SendThread(String host, int port, Queue<MsgUnit> sendTaskQueue, Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap, Queue<MsgUnit> receivedQueue) {
+        public SendThread(String host, int port, Queue<MsgUnit> sendTaskQueue, Map<BytesUtils.ByteArrayAsKey, MsgUnit> sentMap, Queue<MsgUnit> receivedQueue) {
             this.hisHost = host;
             this.hisPort = port;
             this.sendTaskQueue = sendTaskQueue;
@@ -86,7 +86,7 @@ public class FctpWorker {
             while(isRunning) {
                 //Check resend
                 long now = System.currentTimeMillis();
-                for(BytesTools.ByteArrayAsKey id:this.sentMap.keySet()){
+                for(BytesUtils.ByteArrayAsKey id:this.sentMap.keySet()){
                     MsgUnit msgUnit = sentMap.get(id);
                     synchronized (sentMap) {
                         if(msgUnit.getSendCount() > RESEND_COUNT){
@@ -116,7 +116,7 @@ public class FctpWorker {
                         datagramSocket.send(datagramPacket);
                         msgUnit.sendCountAddOne();
                         synchronized (sentMap) {
-                            sentMap.put(new BytesTools.ByteArrayAsKey(msgUnit.makeIdBytes()), msgUnit);
+                            sentMap.put(new BytesUtils.ByteArrayAsKey(msgUnit.makeIdBytes()), msgUnit);
                         }
                     } catch (IOException e) {
                         throw new RuntimeException(e);
@@ -132,10 +132,10 @@ public class FctpWorker {
     public static class ReceiveThread extends Thread {
         private byte[] data;
         private final int myPort;
-        private final Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap;
+        private final Map<BytesUtils.ByteArrayAsKey, MsgUnit> sentMap;
         private final Queue<MsgUnit> receivedQueue;
 
-        public ReceiveThread(int myPort, Queue<MsgUnit> receivedQueue, Map<BytesTools.ByteArrayAsKey, MsgUnit> sentMap) {
+        public ReceiveThread(int myPort, Queue<MsgUnit> receivedQueue, Map<BytesUtils.ByteArrayAsKey, MsgUnit> sentMap) {
             this.myPort = myPort;
             this.sentMap = sentMap;
             this.receivedQueue = receivedQueue;
@@ -161,7 +161,7 @@ public class FctpWorker {
                     MsgUnit msgUnit = MsgUnit.fromBytes(this.data);
 
                     if(MsgUnit.DataType.RECEIPT.equals(msgUnit.getDataType())){
-                        BytesTools.ByteArrayAsKey key = new BytesTools.ByteArrayAsKey((byte[]) msgUnit.getData());
+                        BytesUtils.ByteArrayAsKey key = new BytesUtils.ByteArrayAsKey((byte[]) msgUnit.getData());
                         MsgUnit srcMsgUnit = this.sentMap.get(key);
                         if(srcMsgUnit !=null) {
                             synchronized (sentMap) {

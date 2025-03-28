@@ -1,6 +1,6 @@
 package nasa;
 
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -19,7 +19,7 @@ public class test {
 
     public static void connectNaSaRpc(String url, String username, String password) {
         NaSaRpcClient.BlockchainInfo blockchainInfo = new NaSaRpcClient(url,username,password).getBlockchainInfo();
-        JsonTools.printJson(blockchainInfo);
+        JsonUtils.printJson(blockchainInfo);
     }
 
     public void request(String minConf,String address){

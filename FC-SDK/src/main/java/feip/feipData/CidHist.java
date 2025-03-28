@@ -2,6 +2,8 @@ package feip.feipData;
 
 import fcData.FcObject;
 
+import java.util.List;
+
 public class CidHist extends FcObject {
 	//txId
 	private Long height;
@@ -17,7 +19,7 @@ public class CidHist extends FcObject {
 	private String master;
 	private String cipherPriKey;
 	private String alg;
-	private String[] homepages;
+	private List<String> homepages;
 	private String noticeFee;
 
 	public Long getHeight() {
@@ -124,11 +126,11 @@ public class CidHist extends FcObject {
 		this.alg = alg;
 	}
 
-	public String[] getHomepages() {
+	public List<String> getHomepages() {
 		return homepages;
 	}
 
-	public void setHomepages(String[] homepages) {
+	public void setHomepages(List<String> homepages) {
 		this.homepages = homepages;
 	}
 

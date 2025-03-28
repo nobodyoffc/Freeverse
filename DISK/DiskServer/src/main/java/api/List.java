@@ -5,7 +5,7 @@ import fcData.DiskItem;
 import server.ApipApiNames;
 import fcData.ReplyBody;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import redis.clients.jedis.Jedis;
 import server.FcdslRequestHandler;
 import server.HttpRequestChecker;

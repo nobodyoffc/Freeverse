@@ -13,8 +13,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import server.TalkServer;
-import tools.BytesTools;
-import tools.TcpTools;
+import utils.BytesUtils;
+import utils.TcpUtils;
 
 import java.io.DataOutputStream;
 import java.util.HashSet;
@@ -91,7 +91,7 @@ public class TalkUnitSender extends Handler {
     public static boolean writeBytesByTcp(DataOutputStream outputStream, EncryptType encryptType, byte[] key, byte[] pubKey, byte[] data) {
         Encryptor encryptor;
         if(encryptType ==null)
-            return TcpTools.writeBytes(outputStream, data);
+            return TcpUtils.writeBytes(outputStream, data);
 
         CryptoDataByte cryptoDataByte=null;
         switch (encryptType){
@@ -101,7 +101,7 @@ public class TalkUnitSender extends Handler {
             }
             case Password -> {
                 encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
-                cryptoDataByte = encryptor.encryptByPassword(data, BytesTools.bytesToChars(key));
+                cryptoDataByte = encryptor.encryptByPassword(data, BytesUtils.bytesToChars(key));
             }
             case AsyTwoWay -> {
                 encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
@@ -116,7 +116,7 @@ public class TalkUnitSender extends Handler {
         if(cryptoDataByte==null || cryptoDataByte.getCode()!=0)
             return false;
 
-        return TcpTools.writeBytes(outputStream, cryptoDataByte.toBundle());
+        return TcpUtils.writeBytes(outputStream, cryptoDataByte.toBundle());
     }
 
     public static boolean sendBytesByNettyCtx(byte[] bytes, ChannelHandlerContext ctx) {

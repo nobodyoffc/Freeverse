@@ -1,8 +1,8 @@
 package nasa;
 
 import com.google.gson.Gson;
-import tools.BytesTools;
-import tools.http.ApacheHttp;
+import utils.BytesUtils;
+import utils.http.ApacheHttp;
 import constants.NetNames;
 
 import java.util.Base64;
@@ -30,8 +30,8 @@ public class RpcRequest {
             Object[] params) {
         this.method = method;
         this.params = params;
-        byte[] rd = BytesTools.getRandomBytes(4);
-        this.id = String.valueOf(BytesTools.byte4ArrayToUnsignedInt(rd));
+        byte[] rd = BytesUtils.getRandomBytes(4);
+        this.id = String.valueOf(BytesUtils.byte4ArrayToUnsignedInt(rd));
     }
 
     public static Object requestRpc(String url, String username, String password, String method, RpcRequest jsonRPC2Request) {

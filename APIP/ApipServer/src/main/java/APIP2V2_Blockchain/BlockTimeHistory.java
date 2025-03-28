@@ -7,8 +7,8 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
-import tools.ObjectTools;
-import tools.http.AuthType;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -54,7 +54,7 @@ public class BlockTimeHistory extends HttpServlet {
         int count = 0;
         if(httpRequestChecker.getRequestBody()!=null && httpRequestChecker.getRequestBody().getFcdsl()!=null && httpRequestChecker.getRequestBody().getFcdsl().getOther()!=null) {
             Object other =  httpRequestChecker.getRequestBody().getFcdsl().getOther();
-            Map<String, String> paramMap = ObjectTools.objectToMap(other,String.class,String.class);
+            Map<String, String> paramMap = ObjectUtils.objectToMap(other,String.class,String.class);
             String endTimeStr = paramMap.get(END_TIME);
             String startTimeStr = paramMap.get(START_TIME);
             String countStr = paramMap.get(COUNT);

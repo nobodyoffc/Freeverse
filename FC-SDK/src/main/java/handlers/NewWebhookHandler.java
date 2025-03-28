@@ -10,7 +10,7 @@ import constants.FieldNames;
 import constants.IndicesNames;
 import constants.Strings;
 import crypto.Hash;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.Cash;
 import fch.fchData.OpReturn;
 import feip.feipData.Service;
@@ -18,17 +18,15 @@ import nasa.NaSaRpcClient;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.ApipApiNames;
-import tools.EsTools;
-import tools.ObjectTools;
-import tools.http.AuthType;
-import tools.http.HttpTools;
-import tools.http.RequestMethod;
+import utils.EsUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
+import utils.http.HttpUtils;
+import utils.http.RequestMethod;
 import appTools.Menu;
 import appTools.Settings;
-import appTools.Shower;
 import clients.ApipClient;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.mapdb.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,8 +50,8 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
     // private static final String METHOD_FID_ENDPOINT_INFO_MAP_MAP = "methodFidEndpointInfoMapMap";
 
 
-    public NewWebhookHandler(Settings settings, List<String> methods, HandlerType handlerType, db.LocalDB.SortType sortType, Serializer<WebhookHandler.WebhookRequestBody> valueSerializer) {
-        super(settings, handlerType, sortType, valueSerializer, WebhookHandler.WebhookRequestBody.class, true);
+    public NewWebhookHandler(Settings settings, List<String> methods, HandlerType handlerType, db.LocalDB.SortType sortType) {
+        super(settings, handlerType, sortType, WebhookHandler.WebhookRequestBody.class, true, false);
         this.sid = settings.getSid();
         this.listenPath = (String) settings.getSettingMap().get(Settings.LISTEN_PATH);
         this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
@@ -68,7 +66,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
         Thread pusherThread = new Thread(() -> {
             while (running.get()) {
                 // readMethodFidWebhookInfoMapMapFromDB();
-                ParseTools.waitForChangeInDirectory(listenPath, running);
+                FchUtils.waitForChangeInDirectory(listenPath, running);
                 try {
                     TimeUnit.SECONDS.sleep(3);
                     pushWebhookData();
@@ -85,7 +83,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
         String lastPushHeightKey = "lastPushHeight";
         long lastPushHeight;
         try {
-            lastPushHeight = (Long) getMeta(lastPushHeightKey);
+            lastPushHeight = (Long) localDB.getState(lastPushHeightKey);
         } catch (Exception e) {
             log.error("Error pushing webhook data", e);
             lastPushHeight = 0;
@@ -95,13 +93,13 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
         if (lastPushHeight < bestHeight) {
             pushWebhooks(lastPushHeight);
             lastPushHeight = bestHeight;
-            putMeta(lastPushHeightKey, String.valueOf(lastPushHeight));
+            localDB.putState(lastPushHeightKey, String.valueOf(lastPushHeight));
         }
     }
 
     public void subscribe(WebhookHandler.WebhookRequestBody webhookRequestBody) {
         try {
-            putInMap(webhookRequestBody.getMethod(), webhookRequestBody.getUserId(), webhookRequestBody, valueSerializer);
+            localDB.putInMap(webhookRequestBody.getMethod(), webhookRequestBody.getUserId(), webhookRequestBody);
             // Save to ES
             if(esClient != null){
                 esClient.index(i -> i
@@ -117,7 +115,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
 
     public void unsubscribe(WebhookHandler.WebhookRequestBody webhookInfo) {
         try {
-            removeFromMap(webhookInfo.getMethod(), webhookInfo.getUserId());
+            localDB.removeFromMap(webhookInfo.getMethod(), webhookInfo.getUserId());
             
             // Delete from ES
             if(esClient != null){
@@ -133,7 +131,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
 
     private void pushWebhooks(long sinceHeight) {
         for (String method : methods) {
-            Map<String, WebhookHandler.WebhookRequestBody> fidWebhookInfoMap = getAllFromMap(method, valueSerializer);
+            Map<String, WebhookHandler.WebhookRequestBody> fidWebhookInfoMap = localDB.getAllFromMap(method);
             
             switch (method) {
                 case ApipApiNames.NEW_CASH_BY_FIDS -> pushNewCashByFids(fidWebhookInfoMap, sinceHeight);
@@ -193,7 +191,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
             String jsonBody = new Gson().toJson(pushBody);
             Map<String, String> headers = new HashMap<>();
             headers.put("Content-Type", "application/json");
-            try (CloseableHttpResponse response = HttpTools.post(webhookInfo.getEndpoint(), headers, HttpTools.BodyType.STRING, jsonBody.getBytes())) {
+            try (CloseableHttpResponse response = HttpUtils.post(webhookInfo.getEndpoint(), headers, HttpUtils.BodyType.STRING, jsonBody.getBytes())) {
                 if (response == null || response.getStatusLine().getStatusCode() != 200) {
                     log.error("Failed to push webhook data to {}: {}", 
                         webhookInfo.getEndpoint(),
@@ -206,24 +204,24 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
     }
 
     private List<Cash> getNewCashList(WebhookHandler.WebhookRequestBody webhookInfo, long sinceHeight) {
-        Map<String, Object> dataMap = ObjectTools.objectToMap(webhookInfo.getData(), String.class, Object.class);
+        Map<String, Object> dataMap = ObjectUtils.objectToMap(webhookInfo.getData(), String.class, Object.class);
         if (dataMap == null) return null;
         Object idsObj = dataMap.get(FieldNames.IDS);
-        List<String> idList = ObjectTools.objectToList(idsObj, String.class);
+        List<String> idList = ObjectUtils.objectToList(idsObj, String.class);
         if (idList == null) return null;
-        return CashHandler.getAllCashListByFids(idList, true, sinceHeight, Constants.DEFAULT_CASH_LIST_SIZE, null, null, apipClient, nasaClient, esClient);
+        return CashHandler.getAllCashListByFids(idList, true, sinceHeight, Constants.DEFAULT_DISPLAY_LIST_SIZE, null, null, apipClient, nasaClient, esClient);
     }
 
     private List<OpReturn> getNewOpReturnList(WebhookHandler.WebhookRequestBody webhookInfo, Long sinceHeight, List<String> last) {
-        Map<String, Object> dataMap = ObjectTools.objectToMap(webhookInfo.getData(), String.class, Object.class);
+        Map<String, Object> dataMap = ObjectUtils.objectToMap(webhookInfo.getData(), String.class, Object.class);
         if (dataMap == null) return null;
         Object idsObj = dataMap.get(FieldNames.IDS);
-        List<String> idList = ObjectTools.objectToList(idsObj, String.class);
+        List<String> idList = ObjectUtils.objectToList(idsObj, String.class);
         if (idList == null) return null;
         List<OpReturn> opReturnList = new ArrayList<>();
         if (apipClient != null) {
             Fcdsl fcdsl = new Fcdsl();
-            fcdsl.addSize(Constants.DEFAULT_CASH_LIST_SIZE);
+            fcdsl.addSize(Constants.DEFAULT_DISPLAY_LIST_SIZE);
             fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.SIGNER).addNewValues(idList.toArray(new String[0]));
             if (sinceHeight != null) {
                 fcdsl.getQuery().addNewRange().addNewFields(FieldNames.HEIGHT).addGt(String.valueOf(sinceHeight));
@@ -234,7 +232,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
             opReturnList = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         } else if (esClient != null) {
             try {
-                opReturnList = EsTools.getListByTermsSinceHeight(esClient, Settings.addSidBriefToName(sid, IndicesNames.OPRETURN), FieldNames.SIGNER, idList, sinceHeight, FieldNames.HEIGHT, SortOrder.Desc, OpReturn.class, last);
+                opReturnList = EsUtils.getListByTermsSinceHeight(esClient, Settings.addSidBriefToName(sid, IndicesNames.OPRETURN), FieldNames.SIGNER, idList, sinceHeight, FieldNames.HEIGHT, SortOrder.Desc, OpReturn.class, last);
             } catch (IOException e) {
                 log.error("Error getting op return list from es: {}", e.getMessage());
             }
@@ -270,7 +268,7 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
             WebhookHandler.WebhookRequestBody requestBody = new WebhookHandler.WebhookRequestBody();
             unsubscribe(requestBody);
         });
-        menu.add("Show Webhook Requests", () -> showAndChooseItems("Showing Webhook Requests...",null, 20, br,true,false));
+        menu.add("Show Webhook Requests", () -> showOrChooseItemList("Showing Webhook Requests...",null, 20, br,true,false));
 
         addBasicMenuItems(br, menu);
         
@@ -339,14 +337,6 @@ public class NewWebhookHandler extends Handler<WebhookHandler.WebhookRequestBody
             this.method = method;
         }
 
-        public static void showWebhookRequestBodyList(String title, List<WebhookRequestBody> webhookRequestBodyList) {
-            if (webhookRequestBodyList == null || webhookRequestBodyList.isEmpty()) {
-                System.out.println("No webhook request bodies to display.");
-                return;
-            }
-            
-            // Use the Shower class to display the data
-            Shower.showDataTable(title, webhookRequestBodyList, 0, true);
-        }
+
     }
 } 

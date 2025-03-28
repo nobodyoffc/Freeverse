@@ -4,7 +4,7 @@ import server.ApipApiNames;
 import constants.IndicesNames;
 import feip.feipData.Team;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -41,6 +41,8 @@ public class TeamByIds extends HttpServlet {
     }
 
     public void doTeamIdsRequest( HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        FcdslRequestHandler fcdslRequestHandler = FcdslRequestHandler.checkRequest(request, response, authType, settings);
+        if (fcdslRequestHandler == null) return;
         Map<String, Team> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, ID);
         if (meetMap == null) return;
         for(Team team :meetMap.values()){
@@ -51,6 +53,5 @@ public class TeamByIds extends HttpServlet {
             team.setTransferee(null);
         }
         fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
-
     }
 }

@@ -2,10 +2,9 @@ package APIP9V1_Team;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fcData.ReplyBody;
 import feip.feipData.Team;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -41,7 +40,6 @@ public class TeamMembers extends HttpServlet {
         doRequest(request,response,authType,settings);
     }
     protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
-        ReplyBody replier = new ReplyBody(settings);
         List<Team> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.TEAM, Team.class, null, null, null, null, null, request, response, authType);
         if (meetList == null) return;
         //Make data
@@ -49,6 +47,6 @@ public class TeamMembers extends HttpServlet {
         for(Team team:meetList){
             dataMap.put(team.getId(),team.getMembers());
         }
-        replier.reply0SuccessHttp(dataMap,response);
+        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
     }
 }

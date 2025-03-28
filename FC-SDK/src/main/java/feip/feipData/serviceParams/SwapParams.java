@@ -21,7 +21,7 @@ import static fch.Inputer.inputGoodFid;
 import static appTools.Inputer.askIfYes;
 import static constants.Strings.BTC;
 import static constants.Strings.LTC;
-import static constants.Ticks.*;
+import static constants.Tickers.*;
 
 @SuppressWarnings("unused")
 public class SwapParams extends Params {

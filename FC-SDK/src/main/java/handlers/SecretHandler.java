@@ -5,13 +5,11 @@ import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import constants.Constants;
-import constants.FieldNames;
 import crypto.CryptoDataByte;
 import crypto.Encryptor;
 import crypto.KeyTools;
 import db.LocalDB;
 import fcData.AlgorithmId;
-import fcData.FcEntity;
 import fcData.SecretDetail;
 import feip.feipData.Feip;
 import feip.feipData.Secret;
@@ -19,10 +17,9 @@ import feip.feipData.SecretOpData;
 import feip.feipData.Service;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.mapdb.Serializer;
-import tools.DateTools;
-import tools.Hex;
-import tools.JsonTools;
+import utils.DateUtils;
+import utils.Hex;
+import utils.JsonUtils;
 
 import java.io.BufferedReader;
 import java.util.*;
@@ -30,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static constants.FieldNames.*;
 import static constants.Strings.SECRET;
+import static appTools.Shower.listAndChooseFromStringLongMap;
 
 public class SecretHandler extends Handler<SecretDetail> {
     public static String name = HandlerType.SECRET.name();
@@ -41,9 +39,9 @@ public class SecretHandler extends Handler<SecretDetail> {
     private Map<String,String> fakeSecretCipherMap;
 
     public SecretHandler(Settings settings) {
-        super(settings, HandlerType.SECRET, LocalDB.SortType.UPDATE_ORDER, FcEntity.getMapDBSerializer(SecretDetail.class), SecretDetail.class, true);
+        super(settings, HandlerType.SECRET, LocalDB.SortType.UPDATE_ORDER, SecretDetail.class, true, true);
         this.myPubKey = KeyTools.priKeyToPubKey(priKey);
-        hideFieldsInListing = Arrays.asList(FieldNames.CONTENT);
+        hideFieldsInListing = List.of(CONTENT);
     }
 
     @Override
@@ -65,34 +63,34 @@ public class SecretHandler extends Handler<SecretDetail> {
         menu.showAndSelect(br);
     }
 
-    @Nullable
-    private static List<String> listAndChooseFromStringLongMap(BufferedReader br, Map<String, Long> removedItems, String ask) {
-        if (removedItems == null || removedItems.isEmpty()) {
-            System.out.println("No locally removed items found.");
-            return null;
-        }
-
-        // Show items and let user choose
-        Map<String, Long> selectedDisplayItems = Inputer.chooseMultiFromMapGeneric(
-                removedItems,
-                null,
-                0,
-                Shower.DEFAULT_SIZE,
-                ask,
-                br
-        );
-
-        if (selectedDisplayItems == null || selectedDisplayItems.isEmpty()) {
-            return null;
-        }
-
-        // Extract IDs from selected display strings
-        return selectedDisplayItems.keySet().stream().toList();
-    }
+//    @Nullable
+//    public static List<String> listAndChooseFromStringLongMap(BufferedReader br, Map<String, Long> removedItems, String ask) {
+//        if (removedItems == null || removedItems.isEmpty()) {
+//            System.out.println("No locally removed items found.");
+//            return null;
+//        }
+//
+//        // Show items and let user choose
+//        Map<String, Long> selectedDisplayItems = Inputer.chooseMultiFromMapGeneric(
+//                removedItems,
+//                null,
+//                0,
+//                Shower.DEFAULT_SIZE,
+//                ask,
+//                br
+//        );
+//
+//        if (selectedDisplayItems == null || selectedDisplayItems.isEmpty()) {
+//            return null;
+//        }
+//
+//        // Extract IDs from selected display strings
+//        return selectedDisplayItems.keySet().stream().toList();
+//    }
 
     protected void reloadRemovedItems(BufferedReader br) {
         // Get all locally removed items
-        Map<String, Long> removedItems = getAllFromMap(LocalDB.LOCAL_REMOVED_MAP, Serializer.LONG);
+        Map<String, Long> removedItems = localDB.getAllFromMap(LocalDB.LOCAL_REMOVED_MAP);
 
         List<String> chosenIds = listAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
 
@@ -139,7 +137,7 @@ public class SecretHandler extends Handler<SecretDetail> {
 
         List<String> reloadedIdList = reloadedList.stream().map(Secret::getId).collect(Collectors.toList());
         // Remove from locally removed tracking
-        removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
+        localDB.removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
 
         handleFakeSecretData(br);
 
@@ -285,6 +283,7 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     public void deleteSecrets(BufferedReader br) {
+        if (dbEmpty(br)) return;
         List<SecretDetail> chosenSecrets = chooseItems(br);
         deleteSecrets(chosenSecrets, br);
     }
@@ -296,7 +295,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         }
 
         if (Inputer.askIfYes(br, "View them before delete?")) {
-            showItemList("Secrets", chosenSecrets, 0);
+            Shower.showOrChooseListInPages("Chosen Secrets", chosenSecrets, br,true,SecretDetail.class);
         }
 
         if (Inputer.askIfYes(br, "Delete " + chosenSecrets.size() + " secrets?")) {
@@ -343,15 +342,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         }
 
         Iterator<Secret> iterator = onChainDeleted.iterator();
-        Set<String> checkedRemovedIds = null;
-        if(deletedIds!=null && !deletedIds.isEmpty())
-            checkedRemovedIds = deletedIds.keySet();
-
-        while (iterator.hasNext()){
-            if(checkedRemovedIds != null && checkedRemovedIds.contains(iterator.next().getId()))
-                iterator.remove();
-            else iterator.next();
-        }
+        removeDeleted(deletedIds, iterator);
 
         List<Secret> finalChosenDeleted = new ArrayList<>();
         finalChosenDeleted.addAll(onChainDeleted);
@@ -383,7 +374,7 @@ public class SecretHandler extends Handler<SecretDetail> {
 
         if (Hex.isHex32(result)) {
             System.out.println("Recovered secrets: " + secretIds + " in TX " + result + ".");
-            removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, secretIds);
+            localDB.removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, secretIds);
             return true;
         } else {
             System.out.println("Failed to recover secrets: " + secretIds + ": " + result);
@@ -409,10 +400,13 @@ public class SecretHandler extends Handler<SecretDetail> {
             System.out.println("Unable to update on chain data due to the absence of ApipClient.");
             return;
         }
-        Object lastHeightObj = getMeta(LAST_HEIGHT);
+        Object lastHeightObj = localDB.getState(LAST_HEIGHT);
         long lastHeight;
         if(lastHeightObj==null) lastHeight = 0;
-        else  lastHeight = ((Number)lastHeightObj).longValue();
+        else  {
+            if(lastHeightObj instanceof String) lastHeight = Long.parseLong((String)lastHeightObj);
+            else lastHeight = ((Number)lastHeightObj).longValue();
+        }
         List<Secret> secretList = loadAllOnChainItems(SECRET, LAST_HEIGHT,OWNER,lastHeight, true,apipClient,Secret.class, null, true);
         List<SecretDetail> secretDetailList;
         if (secretList!=null && !secretList.isEmpty()) {
@@ -421,7 +415,7 @@ public class SecretHandler extends Handler<SecretDetail> {
             putAllSecretDetail(secretDetailList);
 
             System.out.println("You have " + secretDetailList.size() + " updated secrets.");
-            if (secretDetailList.size() > 0) chooseToShow(secretDetailList, br);
+            if (secretDetailList.size() > 0) chooseToShowNiceJsonList(secretDetailList, br);
 
             handleFakeSecretData(br);
 
@@ -507,7 +501,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         secretDetail.setId(null);
         SecretOpData secretOpData = new SecretOpData();
         Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonTools.toJson(secretDetail).getBytes(), myPubKey);
+        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonUtils.toJson(secretDetail).getBytes(), myPubKey);
         if (cryptoDataByte.getCode() != 0) {
             log.error("Failed to encrypt.");
             return null;
@@ -526,7 +520,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         for (Secret secret : secretList) {
             SecretDetail secretDetail = SecretDetail.fromSecret(secret, priKey);
             if (secretDetail == null) {
-                fakeSecretCipherMap.put(secret.getId(), DateTools.longToTime(secret.getBirthTime(),DateTools.LONG_FORMAT)+" "+secret.getCipher());
+                fakeSecretCipherMap.put(secret.getId(), DateUtils.longToTime(secret.getBirthTime(), DateUtils.LONG_FORMAT)+" "+secret.getCipher());
                 if (!ignoreBadCipher) {
                     secretDetail = new SecretDetail();
                     secretDetail.setId(secret.getId());
@@ -635,15 +629,15 @@ public class SecretHandler extends Handler<SecretDetail> {
         // Test map operations from Handler
         System.out.println("\nTesting Handler map operations...");
         String testMapName = "test_map";
-        createMap(testMapName, Serializer.STRING);
-        putInMap(testMapName, "test_key", "test_value", Serializer.STRING);
-        String retrievedValue = getFromMap(testMapName, "test_key", Serializer.STRING);
+        createMap(testMapName);
+        localDB.putInMap(testMapName, "test_key", "test_value");
+        String retrievedValue = localDB.getFromMap(testMapName, "test_key");
         System.out.println("Map operation successful: " + "test_value".equals(retrievedValue));
 
         // Clean up test data
         System.out.println("\nCleaning up test data...");
         removeSecret(testId);
-        clearMap(testMapName);
+        localDB.clearMap(testMapName);
 
         // Get all map names
         System.out.println("\nAvailable maps:");

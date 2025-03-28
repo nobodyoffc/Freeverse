@@ -1,6 +1,6 @@
 package apip.apipData;
 
-import tools.StringTools;
+import utils.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,7 +19,7 @@ public class Equals {
         List<String> stringList = new ArrayList<>();
         stringList.add(equals.getFields()[0]);
         stringList.addAll(Arrays.asList(equals.getValues()));
-        return StringTools.listToString(stringList);
+        return StringUtils.listToString(stringList);
     }
 
     public Equals addNewFields(String... fields) {

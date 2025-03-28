@@ -2,7 +2,7 @@ package server.order;
 
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.json.JsonData;
-import fch.ParseTools;
+import fch.FchUtils;
 import feip.feipData.Service;
 import appTools.Inputer;
 import appTools.Menu;
@@ -13,8 +13,8 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.IndicesNames;
 import crypto.KeyTools;
 import feip.feipData.serviceParams.Params;
-import tools.JsonTools;
-import tools.NumberTools;
+import utils.JsonUtils;
+import utils.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -134,7 +134,7 @@ public class OrderManager {
                 return;
             }
             if ("q".equals(input)) return;
-            if (!KeyTools.isValidFchAddr(input)) {
+            if (!KeyTools.isGoodFid(input)) {
                 System.out.println("Invalid FID. Input again.");
                 continue;
             }
@@ -210,8 +210,8 @@ public class OrderManager {
             for(Hit<Order> hit: result.hits().hits()){
                 Order order = hit.source();
                 if (order==null)continue;
-                String fch = String.valueOf(ParseTools.satoshiToCoin(order.getAmount()));
-                String time = ParseTools.convertTimestampToDate(order.getTime());
+                String fch = String.valueOf(FchUtils.satoshiToCoin(order.getAmount()));
+                String time = FchUtils.convertTimestampToDate(order.getTime());
                 String txId = order.getTxId();
                 String via = order.getVia();
                 System.out.print(Shower.formatString(fch, FCH_LENGTH +2));
@@ -255,10 +255,10 @@ public class OrderManager {
 
         Params params = (Params) service.getParams();
         Shower.printUnderline(20);
-        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +params.getDealer()+ " to buy the service. The price is " + NumberTools.numberToPlainString(params.getPricePerKBytes(),"8")+"f/KB.");
+        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +params.getDealer()+ " to buy the service. The price is " + NumberUtils.numberToPlainString(params.getPricePerKBytes(),"8")+"f/KB.");
         System.out.println("If you want to set the 'via' FID, write below into the OP_RETURN of the TX:");
         Shower.printUnderline(20);
-        System.out.println(JsonTools.toNiceJson(Order.getJsonBuyOrder(sid)));
+        System.out.println(JsonUtils.toNiceJson(Order.getJsonBuyOrder(sid)));
         Shower.printUnderline(20);
 //                "\nMake sure the 'sid' is your service id. " );
         Menu.anyKeyToContinue(br);

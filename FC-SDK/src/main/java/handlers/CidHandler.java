@@ -3,7 +3,7 @@ package handlers;
 import avatar.AvatarMaker;
 import clients.ApipClient;
 import feip.feipData.Service;
-import tools.MapQueue;
+import utils.MapQueue;
 import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
@@ -74,8 +74,8 @@ public class CidHandler extends Handler {
         }
 
         // Query API
-        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(tools.http.RequestMethod.POST,
-                                                                 tools.http.AuthType.FC_SIGN_BODY, fid);
+        Map<String, Cid> cidInfoMap = apipClient.cidByIds(utils.http.RequestMethod.POST,
+                                                                 utils.http.AuthType.FC_SIGN_BODY, fid);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
             Cid cidInfo = cidInfoMap.get(fid);
             if (cidInfo != null) {
@@ -223,8 +223,8 @@ public class CidHandler extends Handler {
             if (searchTerm == null) return;
             
             Map<String, String[]> results = apipClient.fidCidSeek(searchTerm, 
-                tools.http.RequestMethod.POST, 
-                tools.http.AuthType.FC_SIGN_BODY);
+                utils.http.RequestMethod.POST,
+                utils.http.AuthType.FC_SIGN_BODY);
                 
             if (results != null && !results.isEmpty()) {
                 System.out.println("\nSearch Results:");

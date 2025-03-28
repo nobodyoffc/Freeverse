@@ -15,10 +15,10 @@ import handlers.NonceHandler;
 import handlers.SessionHandler;
 import org.bitcoinj.core.ECKey;
 import org.jetbrains.annotations.Nullable;
-import tools.Hex;
-import tools.ObjectTools;
-import tools.http.AuthType;
-import tools.http.HttpTools;
+import utils.Hex;
+import utils.ObjectUtils;
+import utils.http.AuthType;
+import utils.http.HttpUtils;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -32,9 +32,9 @@ import java.util.Map;
 import static appTools.Settings.log;
 import static constants.Strings.*;
 import static crypto.KeyTools.pubKeyToFchAddr;
-import static tools.http.AuthType.*;
-import static tools.http.HttpTools.getApiNameFromUrl;
-import static tools.http.HttpTools.illegalUrl;
+import static utils.http.AuthType.*;
+import static utils.http.HttpUtils.getApiNameFromUrl;
+import static utils.http.HttpUtils.illegalUrl;
 
 public class HttpRequestChecker {
     private String apiName;
@@ -75,7 +75,7 @@ public class HttpRequestChecker {
         this.accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
         this.sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
         this.nonceHandler = (NonceHandler)settings.getHandler(Handler.HandlerType.NONCE);
-        this.params = ObjectTools.objectToClass(settings.getService().getParams(),Params.class) ;
+        this.params = ObjectUtils.objectToClass(settings.getService().getParams(),Params.class) ;
         Object windowTimeRaw = settings.getSettingMap().get(Settings.WINDOW_TIME);
         this.windowTime = ((Number) windowTimeRaw).longValue();
 
@@ -83,7 +83,7 @@ public class HttpRequestChecker {
     }
 
     public boolean checkSignInRequestHttp(HttpServletRequest request, HttpServletResponse response){
-        String url = HttpTools.getEntireUrl(request);
+        String url = HttpUtils.getEntireUrl(request);
         String sid = settings.getSid();
         if (illegalUrl(url)) {
             replyBody.replyHttp(CodeMessage.Code1016IllegalUrl, response);
@@ -125,7 +125,7 @@ public class HttpRequestChecker {
             return false;
         }
         if (requestBodyBytes == null) {
-            replyBody.replyHttp(CodeMessage.Code1003BodyMissed, null);
+            replyBody.replyHttp(CodeMessage.Code1003BodyMissed, response);
             return false;
         }
 
@@ -133,7 +133,7 @@ public class HttpRequestChecker {
         if (requestBody == null) return false;
 
         if (nonceHandler.isBadNonce(requestBody.getNonce())) {
-            replyBody.replyHttp(CodeMessage.Code1007UsedNonce, null);
+            replyBody.replyHttp(CodeMessage.Code1007UsedNonce, response);
             return false;
         }
         replyBody.setNonce(this.requestBody.getNonce());
@@ -142,11 +142,11 @@ public class HttpRequestChecker {
         try {
             pubKey = checkAsySignAndGetPubKey(fid, sign, requestBodyBytes);
         } catch (SignatureException e) {
-            replyBody.replyHttp(CodeMessage.Code1008BadSign, null);
+            replyBody.replyHttp(CodeMessage.Code1008BadSign, response);
             return false;
         }
         if (null == pubKey) {
-            replyBody.replyHttp(CodeMessage.Code1008BadSign, null);
+            replyBody.replyHttp(CodeMessage.Code1008BadSign, response);
             return false;
         }
         setPubKey(pubKey);
@@ -193,7 +193,7 @@ public class HttpRequestChecker {
     public boolean checkRequestHttp(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
         String sid = settings.getSid();
 
-        String url = HttpTools.getEntireUrl(request);
+        String url = HttpUtils.getEntireUrl(request);
         if (illegalUrl(url)) {
             replyBody.replyHttp(CodeMessage.Code1016IllegalUrl, response);
             return false;
@@ -247,13 +247,13 @@ public class HttpRequestChecker {
         }
         if (signInfo.code != 0) {
             if (isForbidFreeApi) {
-                replyBody.replyHttp(signInfo.code, null);
+                replyBody.replyHttp(signInfo.code, response);
                 return false;
             } else return true;
         }
         FcSession fcSession = sessionHandler.getSessionByName(signInfo.sessionName);
         if (fcSession == null) {
-            replyBody.replyHttp(CodeMessage.Code1009SessionTimeExpired, null);
+            replyBody.replyHttp(CodeMessage.Code1009SessionTimeExpired, response);
             return false;
         }
 
@@ -419,7 +419,7 @@ public class HttpRequestChecker {
             return null;
         }
         if (requestBody == null) {
-            replyBody.replyHttp(CodeMessage.Code1003BodyMissed, null);
+            replyBody.replyHttp(CodeMessage.Code1003BodyMissed, response);
             return null;
         }
         Fcdsl fcdsl = requestBody.getFcdsl();

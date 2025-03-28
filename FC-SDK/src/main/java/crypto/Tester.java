@@ -1,8 +1,8 @@
 package crypto;
 
 import crypto.Algorithm.AesCbc256;
-import tools.BytesTools;
-import tools.Hex;
+import utils.BytesUtils;
+import utils.Hex;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -20,7 +20,7 @@ public class Tester {
     @Test
     public void testSym() throws InterruptedException {
         System.out.println("\n# Info");
-        byte[] key = BytesTools.getRandomBytes(32);
+        byte[] key = BytesUtils.getRandomBytes(32);
         String keyHex = HexFormat.of().formatHex(key);
         System.out.println("SymKey:"+Hex.toHex(key));
         String dataStr = "hello world!";
@@ -36,7 +36,7 @@ public class Tester {
         CryptoDataByte cryptoDataByte;
         try(ByteArrayInputStream bis = new ByteArrayInputStream(data); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
             long start = System.currentTimeMillis();
-            byte[] iv = BytesTools.getRandomBytes(16);
+            byte[] iv = BytesUtils.getRandomBytes(16);
             cryptoDataByte = encryptor.encryptStreamBySymKey(bis,bos,key, iv, null);
             System.out.println("Encrypt time:"+(System.currentTimeMillis()-start)+" milliSec");
             byte[] cipher = bos.toByteArray();

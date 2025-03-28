@@ -2,6 +2,7 @@ package feip.feipData;
 
 import feip.FeipOp;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import constants.FieldNames;
@@ -9,7 +10,7 @@ import constants.FieldNames;
 public class HomepageOpData {
 	
 	private String op;
-	private String[] homepages;
+	private List<String> homepages;
 	
 	public enum Op {
 		REGISTER(FeipOp.REGISTER),
@@ -45,22 +46,6 @@ public class HomepageOpData {
 		OP_FIELDS.put(Op.REGISTER.toLowerCase(), new String[]{FieldNames.HOMEPAGES});
 		OP_FIELDS.put(Op.UNREGISTER.toLowerCase(), new String[]{FieldNames.HOMEPAGES});
 	}
-	
-	// Factory method for REGISTER operation
-	public static HomepageOpData makeRegister(String[] homepages) {
-		HomepageOpData data = new HomepageOpData();
-		data.setOp(Op.REGISTER.toLowerCase());
-		data.setHomepages(homepages);
-		return data;
-	}
-
-	// Factory method for UNREGISTER operation
-	public static HomepageOpData makeUnregister(String[] homepages) {
-		HomepageOpData data = new HomepageOpData();
-		data.setOp(Op.UNREGISTER.toLowerCase());
-		data.setHomepages(homepages);
-		return data;
-	}
 
 	// Existing getters and setters
 	public String getOp() {
@@ -69,10 +54,12 @@ public class HomepageOpData {
 	public void setOp(String op) {
 		this.op = op;
 	}
-	public String[] getHomepages() {
+
+	public List<String> getHomepages() {
 		return homepages;
 	}
-	public void setHomepages(String[] url) {
-		this.homepages = url;
+
+	public void setHomepages(List<String> homepages) {
+		this.homepages = homepages;
 	}
 }

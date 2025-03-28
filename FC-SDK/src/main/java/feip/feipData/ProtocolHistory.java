@@ -4,7 +4,6 @@ import fcData.FcObject;
 
 public class ProtocolHistory extends FcObject {
 	
-	private String txId;
 	private Long height;
 	private Integer index;
 	private Long time;

@@ -13,8 +13,8 @@ import handlers.CashHandler.SearchResult;
 import handlers.Handler.HandlerType;
 import fch.fchData.Cash;
 import initial.Initiator;
-import tools.ObjectTools;
-import tools.http.AuthType;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 import server.HttpRequestChecker;
 
@@ -32,7 +32,7 @@ import static constants.IndicesNames.CASH;
 import static constants.Strings.FID;
 import static constants.Values.FALSE;
 import static constants.Values.TRUE;
-import static fch.ParseTools.coinToSatoshi;
+import static fch.FchUtils.coinToSatoshi;
 
 import appTools.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -112,7 +112,7 @@ public class CashValid extends HttpServlet {
                     Object other = requestBody.getFcdsl().getOther();
                     Map<String, String> otherMap;
                     if (other != null) {
-                        otherMap = ObjectTools.objectToMap(other, String.class, String.class);
+                        otherMap = ObjectUtils.objectToMap(other, String.class, String.class);
                         if (otherMap != null && !otherMap.isEmpty()) {
                             fid = otherMap.get(FID);
                             amountStr = otherMap.get(FieldNames.AMOUNT);

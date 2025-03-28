@@ -6,11 +6,11 @@ import appTools.Starter;
 import appTools.Inputer;
 import appTools.Menu;
 import constants.FieldNames;
-import fch.ParseTools;
+import fch.FchUtils;
 import fch.fchData.Cid;
 import handlers.AccountHandler;
 import handlers.Handler;
-import tools.EsTools;
+import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import configure.Configure;
@@ -29,7 +29,7 @@ import swap.SwapAffair;
 import swap.SwapLpData;
 import swap.SwapPendingData;
 import swap.SwapStateData;
-import tools.ObjectTools;
+import utils.ObjectUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -97,7 +97,7 @@ public class StartApipManager {
 		byte[] symKey = settings.getSymKey();
 		service =settings.getService();
 		sid = service.getId();
-		params = ObjectTools.objectToClass(service.getParams(),ApipParams.class);
+		params = ObjectUtils.objectToClass(service.getParams(),ApipParams.class);
 
 		//Prepare API clients
 		esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
@@ -113,59 +113,45 @@ public class StartApipManager {
 		AccountHandler accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
 
 		while(true) {
-			Menu menu = new Menu();
+			Menu menu = new Menu("APIP Manager", () -> close(br));
 
-			ArrayList<String> menuItemList = new ArrayList<>();
+			menu.add("Manage service", () -> new ApipManager(service,null,br,symKey,ApipParams.class).menu());
+			menu.add("Manage account", () -> accountHandler.menu(br, false));
+			menu.add("Manage indices", () -> new IndicesApip(esClient,br).menu());
+			menu.add("Repair address", () -> repairAddress());
+			menu.add("Reset nPrice", () -> Order.setNPrices(sid, ApipApiNames.apiList,jedisPool,br,true));
+			menu.add("Settings", () -> settings.setting(br, serverType));
 
-			menuItemList.add("Manage service");
-			menuItemList.add("Manage account");
-			menuItemList.add("Manage indices");
-			menuItemList.add("Repair address");
-			menuItemList.add("Reset nPrice");
-			menuItemList.add("Settings");
-
-			menu.add(menuItemList);
-			menu.setTitle("APIP Manager");
-			menu.show();
-
-			int choice = menu.choose(br);
-			switch (choice) {
-				case 1 -> new ApipManager(service,null,br,symKey,ApipParams.class).menu();
-				case 2 -> accountHandler.menu(br, false);
-				case 3 -> new IndicesApip(esClient,br).menu();
-				case 4 -> repairAddress();
-				case 5 -> Order.setNPrices(sid, ApipApiNames.apiList,jedisPool,br,true);
-				case 6 -> settings.setting(br, serverType);
-				case 0 -> {
-					if (close()) return;
-				}
-				default -> {}
-			}
+			menu.showAndSelect(br);
 		}
 	}
 
-	private static boolean close() throws IOException {
-		System.out.println("Do you want to quit? 'q' to quit.");
-		String input = br.readLine();
+
+
+	private static void close(BufferedReader br)  {
+		try {
+			System.out.println("Do you want to quit? 'q' to quit.");
+			String input = br.readLine();
 		if ("q".equals(input)) {
 			br.close();
 			settings.close();
 			System.out.println("Exited, see you again.");
 			System.exit(0);
-			return true;
+			}
+		} catch (IOException e) {
+			log.error("Failed to close resources", e);
 		}
-		return false;
 	}
 
 	private static void repairAddress() {
 		List<String> addrList = Inputer.inputStringList(br, "Input address list:", 0);
 		try {
-			EsTools.MgetResult<Cid> result = EsTools.getMultiByIdList(esClient, CID, addrList, Cid.class);
+			EsUtils.MgetResult<Cid> result = EsUtils.getMultiByIdList(esClient, CID, addrList, Cid.class);
 			List<Cid> cidList = result.getResultList();
 
 			addrList = cidList.stream().map(Cid::getId).collect(Collectors.toList());
-			ParseTools.makeAddress(cidList,esClient);
-			BulkResponse bulkResponse = EsTools.bulkWriteList(esClient, CID, cidList, addrList, Cid.class);
+			FchUtils.makeAddress(cidList,esClient);
+			BulkResponse bulkResponse = EsUtils.bulkWriteList(esClient, CID, cidList, addrList, Cid.class);
 			boolean result1;
 			if(bulkResponse!= null)result1 = !bulkResponse.errors();
 			else result1 =  false;
@@ -181,7 +167,7 @@ public class StartApipManager {
 		nameMappingList.put(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS);
 		nameMappingList.put(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
 		nameMappingList.put(Settings.addSidBriefToName(sid,WEBHOOK), WebhookInfo.MAPPINGS);
-		EsTools.checkEsIndices(esClient,nameMappingList);
+		EsUtils.checkEsIndices(esClient,nameMappingList);
 	}
 
 	public static void checkSwapIndices(ElasticsearchClient esClient) {
@@ -191,7 +177,7 @@ public class StartApipManager {
 		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_FINISHED), SwapAffair.swapFinishedMappingJsonStr);
 		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_PENDING), SwapPendingData.swapPendingMappingJsonStr);
 		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
-		EsTools.checkEsIndices(esClient,nameMappingList);
+		EsUtils.checkEsIndices(esClient,nameMappingList);
 
 	}
 

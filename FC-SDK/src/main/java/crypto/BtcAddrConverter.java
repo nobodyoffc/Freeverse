@@ -25,78 +25,140 @@ public class BtcAddrConverter {
     }
 
     public static byte[] bech32ToHash160(String bech32Address) {
-        String[] parts = bech32Address.split("1");
-        byte[] data = bech32Decode(parts[1]);
-        return Arrays.copyOfRange(data, 1, data.length);
+        // Split human-readable part and data part
+        int pos = bech32Address.lastIndexOf('1');
+        String hrp = bech32Address.substring(0, pos);
+        String data = bech32Address.substring(pos + 1);
+        
+        // Convert characters to 5-bit values
+        int[] values = new int[data.length()];
+        for (int i = 0; i < data.length(); i++) {
+            values[i] = CHARSET.indexOf(data.charAt(i));
+        }
+        
+        // Remove the checksum (last 6 characters)
+        int[] dataValues = Arrays.copyOfRange(values, 0, values.length - 6);
+        
+        // Convert from 5-bit to 8-bit
+        int[] converted = convertBits(dataValues, 5, 8, false);
+        
+        // Skip the witness version byte
+        byte[] result = new byte[converted.length - 1];
+        for (int i = 1; i < converted.length; i++) {
+            result[i - 1] = (byte) converted[i];
+        }
+        
+        return result;
     }
 
     public static String hash160ToBech32(byte[] hash160) {
-        byte[] data = new byte[hash160.length + 1];
-        data[0] = 0x00; // Witness version
-        System.arraycopy(hash160, 0, data, 1, hash160.length);
-        return "bc1" + bech32Encode(data);
+        // For P2WPKH, we need exactly 20 bytes of hash160
+        if (hash160.length != 20) {
+            throw new IllegalArgumentException("Hash160 must be 20 bytes for P2WPKH");
+        }
+        
+        // Witness version 0 + hash160
+        int[] witnessProgram = new int[hash160.length + 1];
+        witnessProgram[0] = 0; // Witness version 0
+        for (int i = 0; i < hash160.length; i++) {
+            witnessProgram[i + 1] = hash160[i] & 0xff;
+        }
+        
+        // Convert to 5-bit values - this is the critical part
+        int[] converted = convertBits(witnessProgram, 8, 5, true);
+        
+        // Create the full address with human-readable part
+        return bech32Encode("bc", converted);
     }
 
-    private static String bech32Encode(byte[] data) {
-        int[] values = convertBits(data, 8, 5, true);
-        StringBuilder result = new StringBuilder();
-        for (int v : values) {
-            result.append(CHARSET.charAt(v));
+    private static String bech32Encode(String hrp, int[] data) {
+        // Calculate checksum
+        int[] checksum = createChecksum(hrp, data);
+        
+        // Build the address
+        StringBuilder sb = new StringBuilder(hrp + "1");
+        
+        // Add the data part
+        for (int b : data) {
+            sb.append(CHARSET.charAt(b));
         }
-        return result.toString();
+        
+        // Add the checksum
+        for (int b : checksum) {
+            sb.append(CHARSET.charAt(b));
+        }
+        
+        return sb.toString();
     }
 
-    private static byte[] bech32Decode(String encoded) {
-        int[] data = new int[encoded.length()];
-        for (int i = 0; i < encoded.length(); i++) {
-            data[i] = CHARSET.indexOf(encoded.charAt(i));
+    private static int[] createChecksum(String hrp, int[] data) {
+        int[] values = hrpExpand(hrp);
+        int[] combined = new int[values.length + data.length + 6];
+        System.arraycopy(values, 0, combined, 0, values.length);
+        System.arraycopy(data, 0, combined, values.length, data.length);
+        
+        int polymod = polymod(combined) ^ 1;
+        int[] checksum = new int[6];
+        for (int i = 0; i < 6; i++) {
+            checksum[i] = (polymod >> 5 * (5 - i)) & 31;
         }
-        int[] result = convertBits(data, 5, 8, false);
-        byte[] bytes = new byte[result.length];
-        for (int i = 0; i < result.length; i++) {
-            bytes[i] = (byte) result[i];
-        }
-        return bytes;
+        return checksum;
     }
-
-    private static int[] convertBits(byte[] data, int fromBits, int toBits, boolean pad) {
-        int acc = 0;
-        int bits = 0;
-        int maxv = (1 << toBits) - 1;
-        int[] ret = new int[data.length * fromBits / toBits + (pad ? 1 : 0)];
-        int index = 0;
-        for (byte value : data) {
-            int b = value & 0xff;
-            acc = (acc << fromBits) | b;
-            bits += fromBits;
-            while (bits >= toBits) {
-                bits -= toBits;
-                ret[index++] = (acc >> bits) & maxv;
+    
+    private static int[] hrpExpand(String hrp) {
+        int[] result = new int[hrp.length() * 2 + 1];
+        for (int i = 0; i < hrp.length(); i++) {
+            result[i] = hrp.charAt(i) >> 5;
+            result[i + hrp.length() + 1] = hrp.charAt(i) & 31;
+        }
+        result[hrp.length()] = 0;
+        return result;
+    }
+    
+    private static int polymod(int[] values) {
+        int chk = 1;
+        for (int value : values) {
+            int b = chk >> 25;
+            chk = ((chk & 0x1ffffff) << 5) ^ value;
+            for (int i = 0; i < 5; i++) {
+                if (((b >> i) & 1) == 1) {
+                    chk ^= GENERATOR[i];
+                }
             }
         }
-        if (pad && bits > 0) {
-            ret[index++] = (acc << (toBits - bits)) & maxv;
-        }
-        return Arrays.copyOf(ret, index);
+        return chk;
     }
 
     private static int[] convertBits(int[] data, int fromBits, int toBits, boolean pad) {
         int acc = 0;
         int bits = 0;
         int maxv = (1 << toBits) - 1;
-        int[] ret = new int[data.length * fromBits / toBits + (pad ? 1 : 0)];
+        // Calculate a safe maximum size for the result array
+        int maxSize = (data.length * fromBits + toBits - 1) / toBits;
+        int[] ret = new int[maxSize];
         int index = 0;
+        
         for (int value : data) {
+            if ((value >>> fromBits) != 0) {
+                throw new IllegalArgumentException(
+                    String.format("Invalid value: %d (exceeds %d bits)", value, fromBits));
+            }
+            
             acc = (acc << fromBits) | value;
             bits += fromBits;
+            
             while (bits >= toBits) {
                 bits -= toBits;
                 ret[index++] = (acc >> bits) & maxv;
             }
         }
+        
         if (pad && bits > 0) {
             ret[index++] = (acc << (toBits - bits)) & maxv;
+        } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv) != 0) {
+            throw new IllegalArgumentException("Could not convert bits, invalid padding");
         }
+        
         return Arrays.copyOf(ret, index);
     }
 

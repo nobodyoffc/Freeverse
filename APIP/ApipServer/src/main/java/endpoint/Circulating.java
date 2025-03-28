@@ -4,10 +4,9 @@ import appTools.Settings;
 import feip.feipData.Service;
 import nasa.NaSaRpcClient;
 import server.ApipApiNames;
-import fcData.ReplyBody;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;

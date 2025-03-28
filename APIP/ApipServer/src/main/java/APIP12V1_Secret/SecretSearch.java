@@ -16,7 +16,7 @@ import java.util.ArrayList;
 
 import feip.feipData.Secret;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.FcdslRequestHandler;
 
 import static constants.FieldNames.ID;

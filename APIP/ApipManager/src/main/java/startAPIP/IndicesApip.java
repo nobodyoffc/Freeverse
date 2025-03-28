@@ -39,7 +39,7 @@ public class IndicesApip {
         this.esClient = esClient;
     }
 
-    public void menu() throws IOException, InterruptedException {
+    public void menu(){
 
         Menu menu = new Menu();
 
@@ -71,7 +71,7 @@ public class IndicesApip {
         }
     }
 
-    public void recreateAllSwapIndex(BufferedReader br, ElasticsearchClient esClient) throws IOException, InterruptedException {
+    public void recreateAllSwapIndex(BufferedReader br, ElasticsearchClient esClient) {
         recreateSwapIndex(br, esClient, SWAP_STATE, swapStateJsonStr);
         recreateSwapIndex(br, esClient, SWAP_LP, swapLpMappingJsonStr);
         recreateSwapIndex(br, esClient,SWAP_FINISHED, swapFinishedMappingJsonStr);
@@ -79,7 +79,7 @@ public class IndicesApip {
         recreateSwapIndex(br, esClient,SWAP_PRICE, swapPriceMappingJsonStr);
     }
 
-    private void recreateAllApipIndex(BufferedReader br, ElasticsearchClient esClient) throws IOException, InterruptedException {
+    private void recreateAllApipIndex(BufferedReader br, ElasticsearchClient esClient) {
         recreateApipIndex(br, esClient, ORDER, orderMappingJsonStr);
         recreateApipIndex(br, esClient, BALANCE, balanceMappingJsonStr);
         recreateApipIndex(br, esClient,REWARD, rewardMappingJsonStr);
@@ -103,11 +103,15 @@ public class IndicesApip {
             log.debug("Recreate index {} wrong.",index);
         }
     }
-    public static void listIndices(BufferedReader br) throws IOException {
+    public static void listIndices(BufferedReader br)  {
         for (IndicesNames.Indices index : IndicesNames.Indices.values()) {
             System.out.println(index.sn()+". "+index.name().toLowerCase());
         }
-        br.readLine();
+        try {
+            br.readLine();
+        } catch (IOException e) {
+            log.error("Failed to read line", e);
+        }
     }
 
     public static void recreateIndex(String index, ElasticsearchClient esClient, String mappingJsonStr) throws InterruptedException {

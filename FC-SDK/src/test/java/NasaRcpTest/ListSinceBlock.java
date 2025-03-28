@@ -3,7 +3,7 @@ package NasaRcpTest;
 import nasa.RpcRequest;
 import nasa.data.TransactionBrief;
 import com.google.gson.Gson;
-import tools.JsonTools;
+import utils.JsonUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -19,14 +19,14 @@ public class ListSinceBlock {
 //        String url = "http://127.0.0.1:22555";
         String url = "http://127.0.0.1:8332";
         result = listSinceBlock("0000000000000217bdaa4bb757a6dfeac279905dde7914b01946e4e3b14e1380", "30", true, url, "username", "password");
-        JsonTools.printJson(result);
+        JsonUtils.printJson(result);
     }
 
     public ListSinceBlockResult listSinceBlock(String block, String minConf, boolean includeWatchOnly, String url, String username, String password) {
         ListSinceBlockParams listSinceBlockParams = new ListSinceBlockParams(block, minConf, includeWatchOnly);
         RpcRequest jsonRPC2Request = new RpcRequest(LISTSINCEBLOCK, listSinceBlockParams.toParams());
 
-        JsonTools.printJson(jsonRPC2Request);
+        JsonUtils.printJson(jsonRPC2Request);
 
         Object result = RpcRequest.requestRpc(url, username, password, "listSinceBlock", jsonRPC2Request);
         ListSinceBlockResult listSinceBlockResult = getTransactions(result);
@@ -148,7 +148,7 @@ public class ListSinceBlock {
             }
 
             Object[] params = objects.toArray();
-            JsonTools.printJson(params);
+            JsonUtils.printJson(params);
             return params;
         }
 

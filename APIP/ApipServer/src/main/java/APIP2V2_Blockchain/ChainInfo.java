@@ -8,8 +8,8 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import fch.fchData.FchChainInfo;
 import initial.Initiator;
-import tools.ObjectTools;
-import tools.http.AuthType;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -54,7 +54,7 @@ public class ChainInfo extends HttpServlet {
             if(request.getParameter(HEIGHT)!=null)height = request.getParameter(HEIGHT);
             else if(null!= httpRequestChecker.getRequestBody().getFcdsl().getOther()){
                 Object other = httpRequestChecker.getRequestBody().getFcdsl().getOther();
-                Map<String,String> otherMap = ObjectTools.objectToMap(other,String.class,String.class);
+                Map<String,String> otherMap = ObjectUtils.objectToMap(other,String.class,String.class);
                 if(otherMap!=null)
                     height = otherMap.get(HEIGHT);
             }

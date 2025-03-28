@@ -4,7 +4,7 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import fch.fchData.Cash;
 import initial.Initiator;
-import tools.http.AuthType;
+import utils.http.AuthType;
 import server.HttpRequestChecker;
 import handlers.MempoolHandler;
 

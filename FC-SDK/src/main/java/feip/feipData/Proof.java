@@ -4,7 +4,6 @@ import fcData.FcObject;
 
 public class Proof extends FcObject {
 
-	private String id;
 	private String title;
 	private String content;
 	private String[] cosignersInvited;

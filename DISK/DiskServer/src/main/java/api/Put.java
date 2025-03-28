@@ -2,7 +2,7 @@ package api;
 
 import fcData.DiskItem;
 import server.DiskApiNames;
-import tools.RedisTools;
+import utils.RedisUtils;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
@@ -12,10 +12,10 @@ import constants.CodeMessage;
 import constants.Strings;
 import crypto.Hash;
 import initial.Initiator;
-import tools.DateTools;
-import tools.FileTools;
-import tools.Hex;
-import tools.http.AuthType;
+import utils.DateUtils;
+import utils.FileUtils;
+import utils.Hex;
+import utils.http.AuthType;
 import fcData.ReplyBody;
 import org.jetbrains.annotations.NotNull;
 import redis.clients.jedis.Jedis;
@@ -37,8 +37,8 @@ import java.util.Map;
 import static constants.Strings.DATA;
 import static constants.Strings.DATA_LIFE_DAYS;
 import static initial.Initiator.esClient;
-import static tools.FileTools.checkFileOfFreeDisk;
-import static tools.FileTools.getSubPathForDisk;
+import static utils.FileUtils.checkFileOfFreeDisk;
+import static utils.FileUtils.getSubPathForDisk;
 import static startManager.StartDiskManager.STORAGE_DIR;
 
 @WebServlet(name = DiskApiNames.PUT, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.PUT)
@@ -66,7 +66,7 @@ public class Put extends HttpServlet {
             if (httpRequestChecker ==null){
                 return;
             }
-            dataLifeDays = RedisTools.readHashLong(jedis, Settings.addSidBriefToName(Initiator.sid,Strings.PARAMS),DATA_LIFE_DAYS);
+            dataLifeDays = RedisUtils.readHashLong(jedis, Settings.addSidBriefToName(Initiator.sid,Strings.PARAMS),DATA_LIFE_DAYS);
 
             //Do request
             Result DidAndLength = hashAndSaveFile(request);
@@ -84,7 +84,7 @@ public class Put extends HttpServlet {
     @SuppressWarnings("UnstableApiUsage")
     public static Result hashAndSaveFile(HttpServletRequest request) throws IOException {
         InputStream inputStream = request.getInputStream();
-        String tempFileName = FileTools.getTempFileName();
+        String tempFileName = FileUtils.getTempFileName();
         OutputStream outputStream = new FileOutputStream(tempFileName);
         HashFunction hashFunction = Hashing.sha256();
         Hasher hasher = hashFunction.newHasher();
@@ -127,7 +127,7 @@ public class Put extends HttpServlet {
         System.out.println("Save File info to ES...");
 
         long saveDate = System.currentTimeMillis();
-        Long expire = saveDate + DateTools.dayToLong(dataLifeDays);
+        Long expire = saveDate + DateUtils.dayToLong(dataLifeDays);
         DiskItem diskItem = new DiskItem(did, saveDate,expire, bytesLength);
         IndexResponse result = esClient.index(i -> i.index(Settings.addSidBriefToName(Initiator.sid, DATA)).id(did).document(diskItem));
         System.out.println("Result:"+result.result().jsonValue());
