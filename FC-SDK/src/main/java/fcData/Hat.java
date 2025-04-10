@@ -1,8 +1,9 @@
 package fcData;
 
+import java.util.List;
+
 public class Hat extends FcObject {
     //basic
-    private String did;
     private String hAlg;
     private Long size;
     private Long born;
@@ -38,7 +39,7 @@ public class Hat extends FcObject {
     //manage
     private Integer rank;
     private DataState state;
-    private String[] locas;
+    private List<String> locas;
 
 
 
@@ -54,15 +55,6 @@ public class Hat extends FcObject {
             this.number = number;
         }
     }
-
-    public String getDid() {
-        return did;
-    }
-
-    public void setDid(String did) {
-        this.did = did;
-    }
-
     public String gethAlg() {
         return hAlg;
     }
@@ -207,11 +199,11 @@ public class Hat extends FcObject {
         this.state = state;
     }
 
-    public String[] getLocas() {
+    public List<String> getLocas() {
         return locas;
     }
 
-    public void setLocas(String[] locas) {
+    public void setLocas(List<String> locas) {
         this.locas = locas;
     }
 

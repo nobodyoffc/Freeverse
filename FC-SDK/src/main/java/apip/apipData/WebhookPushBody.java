@@ -1,6 +1,11 @@
 package apip.apipData;
 
 import com.google.gson.Gson;
+import fcData.FcSession;
+import handlers.SessionHandler;
+import org.jetbrains.annotations.Nullable;
+
+import static fcData.Signature.symSign;
 
 public class WebhookPushBody {
     private String hookUserId;
@@ -9,6 +14,29 @@ public class WebhookPushBody {
     private String data;
     private String sign;
     private Long bestHeight;
+
+    @Nullable
+    public static WebhookPushBody checkWebhookPushBody(SessionHandler sessionHandler, byte[] requestBodyBytes) {
+        WebhookPushBody webhookPushBody;
+
+        try {
+            webhookPushBody = new Gson().fromJson(new String(requestBodyBytes), WebhookPushBody.class);
+            if (webhookPushBody ==null) return null;
+        }catch (Exception ignore){
+            return null;
+        }
+
+        FcSession session = sessionHandler.getSessionByName(webhookPushBody.getSessionName());
+        String hookUserId = session.getUserId();
+        String pushedHookUserId = webhookPushBody.getHookUserId();
+        if(!hookUserId.equals(pushedHookUserId)) return null;
+
+
+        String sign = symSign(webhookPushBody.getData(),session.getKey());
+        if(!sign.equals(webhookPushBody.getSign()))return null;
+        return webhookPushBody;
+    }
+
     public String toJson(){
         return new Gson().toJson(this);
     }

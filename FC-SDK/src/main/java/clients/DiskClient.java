@@ -203,7 +203,7 @@ public class DiskClient extends Client {
 
             // 3. Create and save Hat
             Hat hat = new Hat();
-            hat.setDid(encryptedDid);
+            hat.setId(encryptedDid);
             hat.setRawDid(dataFilePath.substring(dataFilePath.lastIndexOf("/") + 1));
             hat.setSize((long) dataBytes.length);
             hat.setBorn(System.currentTimeMillis());

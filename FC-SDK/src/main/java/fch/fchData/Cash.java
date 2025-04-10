@@ -1,5 +1,6 @@
 package fch.fchData;
 
+import java.io.BufferedReader;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -8,9 +9,9 @@ import com.google.gson.Gson;
 import appTools.Shower;
 import crypto.Hash;
 import fcData.FcObject;
-import fch.FchUtils;
 import utils.BytesUtils;
 import nasa.data.UTXO;
+import utils.FchUtils;
 
 import static constants.Constants.COINBASE;
 import static constants.Constants.OneDayInterval;
@@ -73,13 +74,19 @@ public class Cash extends FcObject {
 	}
 
 	public static Map<String, String> getShowFieldNameAsMap() {
-		return new HashMap<>();
+		Map<String,String> map = new HashMap<>();
+		map.put(ID,CASH_ID);
+		return map;
+	}
+	public static List<String> getReplaceWithMeFieldList() {
+		return List.of(OWNER,ISSUER);
 	}
 
+	//For create with user input
 	public static Map<String, Object> getInputFieldDefaultValueMap() {
 		return new HashMap<>();
 	}
-	public static Integer[] ShowWidths = new Integer[]{14,5, 17,11};
+
 	public Cash() {
 		// default constructor
 	}
@@ -101,22 +108,26 @@ public class Cash extends FcObject {
 				));
 	}
 
+	public static List<Cash> makeCashListForPay(List<Cash> cashList) {
+		List<Cash> resultCashList = new ArrayList<>();
+		if(cashList==null || cashList.isEmpty())return resultCashList;
+
+		for(Cash cash:cashList){
+			Cash newCash = new Cash();
+			newCash.setBirthTxId(cash.getBirthTxId());
+			newCash.setBirthIndex(cash.getBirthIndex());
+			newCash.setValue(cash.getValue());
+//			newCash.setOwner(cash.getOwner());
+			resultCashList.add(newCash);
+		}
+		return resultCashList;
+	}
+
 	public String makeId(String txId, Integer index){
 		this.id = makeCashId(txId,index);
 		return this.id;
 	}
 
-	public static List<Cash> getCashForSpendList(List<Cash> cashList) {
-		List<Cash> spendList = new ArrayList<>();
-		for (Cash cash : cashList) {
-			Cash spendCash = new Cash();
-			spendCash.setBirthTxId(cash.getBirthTxId());
-			spendCash.setBirthIndex(cash.getBirthIndex());
-			spendCash.setValue(cash.getValue());
-			spendList.add(spendCash);
-		}
-		return spendList;
-	}
 
 	public Cash(int outIndex, String type, String addr, long value, String lockScript, String txId, int txIndex,
 				String blockId, long birthTime, long birthHeight) {
@@ -154,8 +165,8 @@ public class Cash extends FcObject {
 		cash.setBirthIndex(utxo.getVout());
 		cash.setOwner(utxo.getAddress());
 		cash.setLockScript(utxo.getScriptPubKey());
-		cash.setValue(FchUtils.coinToSatoshi(utxo.getAmount()));
-		cash.setValid(true);	
+		cash.setValue(utils.FchUtils.coinToSatoshi(utxo.getAmount()));
+		cash.setValid(true);
 		return cash;
 	}
 
@@ -163,7 +174,7 @@ public class Cash extends FcObject {
 		if (utxoList == null || utxoList.isEmpty()) {
 			return new ArrayList<>();
 		}
-		
+
 		return utxoList.stream()
 			.map(Cash::fromUtxo)
 			.collect(Collectors.toList());
@@ -201,64 +212,19 @@ public class Cash extends FcObject {
 		cashList.removeIf(cash -> COINBASE.equals(cash.getIssuer()) && bestHeight != 0 && (bestHeight - cash.getBirthHeight()) < OneDayInterval * 10);
 	}
 
-    public static void showCashList(List<Cash> cashList, String title, int totalDisplayed, String myFid) {
-		for(Cash cash:cashList){
-			if(myFid.equals(cash.getOwner()))cash.setOwner(ME);
-			if(myFid.equals(cash.getIssuer()))cash.setIssuer(ME);
-		}
-		Shower.showOrChooseListInPages(
+    public static List<Cash> showOrChooseCashList(List<Cash> cashList, String title, String myFid, boolean choose, BufferedReader br) {
+		return Shower.showOrChooseList(
 				title,
 				cashList,
-				Shower.DEFAULT_SIZE,
-				getFieldWidthMap(),
-				getTimestampFieldList(),
-				getSatoshiFieldList(),
-				null,
-				null,   // beginFrom
-				false,  // choose
-				null
+				myFid, choose,  // choose
+				Cash.class, br
 		);
     }
-    
-    public static List<Cash> showAndChooseCashList(List<Cash> cashList, String title, int totalDisplayed, String myFid, java.io.BufferedReader br) {
-        if (cashList == null || cashList.isEmpty()) {
-            System.out.println("No cash items to show.");
-            return new ArrayList<>();
-        }
-        
-        showCashList(cashList, title, totalDisplayed, myFid);
-        
-        List<Cash> chosenItems = new ArrayList<>();
-        if (br != null) {
-            System.out.println("\nChoose cash items (comma separated numbers, 'a' for all, 0 to cancel):");
-            try {
-                String input = br.readLine();
-                if (input == null || input.trim().equals("0")) {
-                    return chosenItems;
-                }
-                
-                if (input.trim().equalsIgnoreCase("a")) {
-                    return new ArrayList<>(cashList);
-                }
-                
-                String[] choices = input.split(",");
-                for (String choice : choices) {
-                    try {
-                        int index = Integer.parseInt(choice.trim()) - 1;
-                        if (index >= 0 && index < cashList.size()) {
-                            chosenItems.add(cashList.get(index));
-                        }
-                    } catch (NumberFormatException e) {
-                        // Skip invalid numbers
-                    }
-                }
-            } catch (Exception e) {
-                System.out.println("Error reading input: " + e.getMessage());
-            }
-        }
-        
-        System.out.println(chosenItems.size() + " cash items chosen.");
-        return chosenItems;
+
+
+	public static List<Cash> showAndChooseCashListInPages(List<Cash> cashList, String title, String myFid, boolean choose,java.io.BufferedReader br) {
+        if(cashList==null || cashList.isEmpty())return null;
+		return Shower.showOrChooseListInPages(title,cashList,Shower.DEFAULT_PAGE_SIZE, myFid, choose,Cash.class,br);
     }
 
     public String getBirthBlockId() {
@@ -391,7 +357,8 @@ public class Cash extends FcObject {
 	}
 	public Long makeCd(){
 		if(value==null || birthTime==null)return null;
-		return FchUtils.cdd(getValue(),getBirthTime(),System.currentTimeMillis()/1000);
+		this.cd = utils.FchUtils.cdd(getValue(),getBirthTime(),System.currentTimeMillis()/1000);
+		return this.cd;
 	}
 	public void setCd(Long cd) {
 		this.cd = cd;

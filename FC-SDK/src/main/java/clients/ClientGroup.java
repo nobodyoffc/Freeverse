@@ -1,5 +1,6 @@
 package clients;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.Serializable;
@@ -58,12 +59,21 @@ public class ClientGroup implements Serializable {
         if(clientMap==null)clientMap = new HashMap<>();
         clientMap.put(accountId, client);
     }
+
+    public void addToFirstClient(String accountId, Object client) {
+        if (accountIds.isEmpty()) {
+            accountIds.add(0, accountId);
+        }
+        if(clientMap==null)clientMap = new HashMap<>();
+        clientMap.put(accountId, client);
+    }
+
     public void addApiAccount(ApiAccount apiAccount) {
         if (apiAccountMap == null) apiAccountMap = new HashMap<>();
         apiAccountMap.put(apiAccount.getId(), apiAccount);
     }
 
-    public void connectAllClients(Configure configure, Settings settings, byte[] symKey) {
+    public void connectAllClients(Configure configure, Settings settings, byte[] symKey, BufferedReader br) {
         for (String accountId:accountIds) {
             ApiAccount apiAccount = configure.getApiAccountMap().get(accountId);
             if(apiAccount==null) {
@@ -78,7 +88,7 @@ public class ClientGroup implements Serializable {
                 System.exit(-1);
             }
             addApiAccount(apiAccount);
-            Object client = apiAccount.connectApi(configure.getApiProviderMap().get(apiAccount.getProviderId()), symKey);
+            Object client = apiAccount.connectApi(configure.getApiProviderMap().get(apiAccount.getProviderId()), symKey, br);
             if(client==null)break;
             apiAccount.setClient(client);
             addClient(apiAccount.getId(), client);

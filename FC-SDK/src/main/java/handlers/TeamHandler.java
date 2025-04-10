@@ -10,13 +10,13 @@ import clients.FeipClient;
 import constants.FieldNames;
 import constants.Values;
 import crypto.Decryptor;
+import db.LocalDB;
 import fch.fchData.SendTo;
 import feip.feipData.Service;
 import feip.feipData.Team;
 import feip.feipData.TeamOpData;
 import utils.Hex;
 import utils.JsonUtils;
-import fcData.PersistentSequenceMap;
 import utils.StringUtils;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TeamHandler extends Handler {
+public class TeamHandler extends Handler<Team> {
     // 1. Constants
     public static final int DEFAULT_SIZE = 50;
 
@@ -40,35 +40,23 @@ public class TeamHandler extends Handler {
     private final ApipClient apipClient;
     private final byte[] symKey;
     private final String myPriKeyCipher;
-    private final PersistentSequenceMap teamDB;
     private final Map<String, Long> lastTimeMap;
 
     // 3. Constructor
-    public TeamHandler(String myFid, ApipClient apipClient, byte[] symKey,
-                       String myPriKeyCipher, Map<String, Long> lastTimeMap, String dbPath, BufferedReader br) {
-        this.myFid = myFid;
-        this.apipClient = apipClient;
-        this.symKey = symKey;
-        this.myPriKeyCipher = myPriKeyCipher;
-        this.lastTimeMap = lastTimeMap;
-        this.teamDB = new PersistentSequenceMap(myFid, null, FieldNames.TEAM, dbPath);
-        this.br = br;
-    }
-
     public TeamHandler(Settings settings){
+        super(settings, HandlerType.TEAM, LocalDB.SortType.UPDATE_ORDER, Team.class, true, true);
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.myFid = settings.getMainFid();
         this.symKey = settings.getSymKey();
         this.myPriKeyCipher = settings.getMyPriKeyCipher();
         this.br = settings.getBr(); 
         this.lastTimeMap = new HashMap<>();
-        this.teamDB = new PersistentSequenceMap(myFid, (String)null, FieldNames.TEAM, settings.getDbDir());
     }   
 
     // 4. Public Methods - Main Interface
-    public void menu() {
+    public void menu(BufferedReader br, boolean isRootMenu) {
         byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
-        Menu menu = new Menu("Team", this::close);
+        Menu menu = newMenu("Team",isRootMenu);
         menu.add("List", () -> handleListTeams(priKey, br));
         menu.add("Check", () -> checkTeam(br));
         menu.add("Create", () -> handleCreateTeam(priKey, br));
@@ -101,7 +89,7 @@ public class TeamHandler extends Handler {
             return;
         }
         for (Team team : teamList) {
-            teamDB.put(Hex.fromHex(team.getId()), team.toJson().getBytes());
+            localDB.put(team.getId(), team);
         }
 
         if (!teamList.isEmpty()) {
@@ -420,7 +408,7 @@ public class TeamHandler extends Handler {
             valueList.add(StringUtils.omitMiddle(team.getDesc(), 25));
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
     public List<String> getTeamMembers(String tid, ApipClient apipClient) {
@@ -431,7 +419,7 @@ public class TeamHandler extends Handler {
 
     public Boolean isOwner(String fid, String tid) {
         if(fid == null || tid == null) return false;
-        Team team = Team.fromJson(new String(teamDB.get(Hex.fromHex(tid))));
+        Team team = localDB.get(tid);
         if(team == null) return false;
         return fid.equals(team.getOwner());
     }
@@ -459,18 +447,8 @@ public class TeamHandler extends Handler {
         int offset = 0;
 
         while (true) {
-            List<byte[]> batchTeams = teamDB.getValuesBatch(offset, size);
-            if (batchTeams == null || batchTeams.isEmpty()) break;
-
-            List<Team> teamBatch = new ArrayList<>();
-            for (byte[] teamBytes : batchTeams) {
-                Team team = Team.fromJson(new String(teamBytes));
-                if (team != null) {
-                    teamBatch.add(team);
-                }
-            }
-
-            if (teamBatch.isEmpty()) break;
+            List<Team> teamBatch = localDB.getList(size, null, (long)offset, false, null, null, false, false);
+            if (teamBatch == null || teamBatch.isEmpty()) break;
 
             List<Team> chosenTeamList;
             if (choose) {
@@ -488,7 +466,7 @@ public class TeamHandler extends Handler {
 
             resultTeamList.addAll(chosenTeamList);
 
-            if (batchTeams.size() < size) break;
+            if (teamBatch.size() < size) break;
             if (br != null && !Inputer.askIfYes(br, "Get more teams?")) break;
 
             offset += size;
@@ -594,12 +572,9 @@ public class TeamHandler extends Handler {
 
     public Team getTeamInfo(String tid, ApipClient apipClient) {
         // First check local database
-        byte[] teamBytes = teamDB.get(Hex.fromHex(tid));
-        if (teamBytes != null) {
-            Team team = Team.fromJson(new String(teamBytes));
-            if (team != null) {
-                return team;
-            }
+        Team team = localDB.get(tid);
+        if (team != null) {
+            return team;
         }
 
         // If not found locally, fetch from API
@@ -607,9 +582,9 @@ public class TeamHandler extends Handler {
         if (result == null || result.isEmpty()) return null;
         
         // Cache the result before returning
-        Team team = result.get(tid);
+        team = result.get(tid);
         if (team != null) {
-            teamDB.put(Hex.fromHex(tid), team.toJson().getBytes());
+            localDB.put(tid, team);
         }
         
         return team;

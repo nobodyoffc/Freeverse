@@ -43,13 +43,6 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/org.mapdb/mapdb -->
-        <dependency>
-            <groupId>org.mapdb</groupId>
-            <artifactId>mapdb</artifactId>
-            <version>3.1.0</version>
-        </dependency>
-
         <dependency>
             <groupId>com.github.nobodyoffc</groupId>
             <artifactId>shadeBitcoinj159</artifactId>
@@ -93,23 +86,23 @@
             <version>2.10.1</version>
         </dependency>
         <!-- Nitrite NoSQL Database -->
-        <dependency>
-            <groupId>org.dizitart</groupId>
-            <artifactId>nitrite</artifactId>
-            <version>3.4.4</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.dizitart</groupId>-->
+<!--            <artifactId>nitrite</artifactId>-->
+<!--            <version>3.4.4</version>-->
+<!--        </dependency>-->
                 
         <!-- Realm Database -->
-        <dependency>
-            <groupId>io.realm</groupId>
-            <artifactId>realm-gradle-plugin</artifactId>
-            <version>10.15.1</version>
-        </dependency>
-        <dependency>
-            <groupId>io.realm.kotlin</groupId>
-            <artifactId>library-base</artifactId>
-            <version>1.13.0</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>io.realm</groupId>-->
+<!--            <artifactId>realm-gradle-plugin</artifactId>-->
+<!--            <version>10.15.1</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>io.realm.kotlin</groupId>-->
+<!--            <artifactId>library-base</artifactId>-->
+<!--            <version>1.13.0</version>-->
+<!--        </dependency>-->
 
         <!-- LevelDB dependencies -->
         <dependency>

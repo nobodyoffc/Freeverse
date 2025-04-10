@@ -1,7 +1,6 @@
 package handlers;
 
 import fcData.FcEntity;
-import fch.FchUtils;
 import fch.RawTxParser;
 import fch.fchData.Cash;
 import fch.fchData.Tx;
@@ -15,6 +14,7 @@ import apip.apipData.UnconfirmedInfo;
 import appTools.Settings;
 import clients.ApipClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import utils.FchUtils;
 
 import static constants.Strings.LISTEN_PATH;
 

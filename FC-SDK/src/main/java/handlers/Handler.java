@@ -5,7 +5,6 @@ import appTools.Menu;
 import appTools.Settings;
 import appTools.Shower;
 import clients.ApipClient;
-import clients.FeipClient;
 import crypto.Hash;
 import db.EasyDB;
 import db.LevelDB;
@@ -28,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static appTools.Shower.DEFAULT_PAGE_SIZE;
 import static constants.FieldNames.*;
 import static db.LocalDB.LOCAL_REMOVED_MAP;
 import static db.LocalDB.ON_CHAIN_DELETED_MAP;
@@ -47,6 +47,7 @@ public abstract class Handler<T extends FcEntity>{
     protected final ApipClient apipClient;
     protected CashHandler cashHandler;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    protected String name;
     protected String mainFid;
     private final String sid;
     private final byte[] symKey;
@@ -54,7 +55,7 @@ public abstract class Handler<T extends FcEntity>{
     protected final String itemName;
     private final HandlerType handlerType;
     protected final Settings settings;
-    protected volatile AtomicBoolean isRunning = new AtomicBoolean(false);
+//    protected volatile AtomicBoolean isRunning = new AtomicBoolean(false);
     protected List<String> hideFieldsInListing;
     private final LocalDB.DbType dbType;
     private final Boolean opOnChain;
@@ -88,25 +89,6 @@ public abstract class Handler<T extends FcEntity>{
             this.cashHandler = null;
             this.settings = null;
             this.opOnChain=false;
-        }
-    
-        public Handler(HandlerType handlerType, String dbDir, LocalDB.SortType sortType, Class<T> itemClass, ApipClient apipClient, CashHandler cashHandler, LocalDB.DbType dbType, Boolean opOnChain) {
-            this.handlerType = handlerType;
-            this.dbType = dbType;
-            this.mainFid = null;
-            this.localDB = new LevelDB<>(sortType, itemClass);
-            this.localDB.initialize(getMainFid(), getSid(), dbDir, handlerType.toString());
-            createMap(LOCAL_REMOVED_MAP);
-            createMap(ON_CHAIN_DELETED_MAP);
-            this.sid = null;
-            this.symKey = null;
-            this.priKey = null;
-            this.itemClass = itemClass;
-            this.apipClient = apipClient;
-            this.itemName = handlerType.name().toLowerCase();
-            this.cashHandler = cashHandler;
-            this.settings = null;
-            this.opOnChain = opOnChain;
         }
     public Handler(Settings settings, HandlerType handlerType) {
         this(settings, handlerType,null, null, false, false);
@@ -142,7 +124,6 @@ public abstract class Handler<T extends FcEntity>{
 
     public void menu(BufferedReader br, boolean withSettings) {
         Menu menu = new Menu(handlerType.toString(), this::close);
-
         addBasicMenuItems(br, menu);
         if(withSettings)
             menu.add("Settings", () -> settings.setting(br, null));
@@ -150,126 +131,24 @@ public abstract class Handler<T extends FcEntity>{
         menu.showAndSelect(br);
     }
 
-    protected void put(String id, T item) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.put(id, item);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    protected void putAll(Map<String, T> items) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.putAll(items);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    protected void putAll(List<T> items, String idField) {
-        if (localDB == null) return;
-        lock.writeLock().lock();
-        try {
-            localDB.putAll(items, idField);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-
-    protected T get(String id) {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.get(id);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    protected List<T> get(List<String> ids) {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.get(ids);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    protected Map<String, T> getAll() {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.getAll();
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    protected NavigableMap<Long, String> getIndexIdMap() {
-        if (localDB == null) return null;
-        return localDB.getIndexIdMap();
-    }
-
-    protected NavigableMap<String, Long> getIdIndexMap() {
-        if (localDB == null) return null;
-        return localDB.getIdIndexMap();
-    }
-
-    protected T getItemById(String id) {
-        if (localDB == null) return null;
-        return localDB.get(id);
-    }
-
-    protected T getItemByIndex(long index) {
+    protected T getByIndex(long index) {
         if (localDB == null) return null;
         String id = localDB.getIndexIdMap().get(index);
         return id != null ? localDB.get(id) : null;
     }
 
-    protected Long getIndexById(String id) {
-        if (localDB == null) return null;
-        return localDB.getIdIndexMap().get(id);
-    }
-
-    protected String getIdByIndex(long index) {
-        if (localDB == null) return null;
-        return localDB.getIndexIdMap().get(index);
-    }
-
-    protected List<T> getItemList(Integer size, Long fromIndex, String fromId,
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        if (localDB == null) return null;
-        return localDB.getList(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
-    }
-
-    protected LinkedHashMap<String, T> getItemMap(int size, Long fromIndex, String fromId,
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        if (localDB == null) return null;
-        lock.readLock().lock();
-        try {
-            return localDB.getMap(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
     public db.LocalDB.SortType getDatabaseSortType() {
         if (localDB == null) return null;
         return localDB.getSortType();
     }
 
-    public AtomicBoolean getIsRunning() {
-        return isRunning;
-    }
+//    public AtomicBoolean getIsRunning() {
+//        return isRunning;
+//    }
 
-    public void setIsRunning(AtomicBoolean isRunning) {
-        this.isRunning = isRunning;
-    }
+//    public void setIsRunning(AtomicBoolean isRunning) {
+//        this.isRunning = isRunning;
+//    }
 
     protected <T2> List<T2> loadAllOnChainItems(String index, String sortField, String termField, Long lastHeight, Boolean active, ApipClient apipClient, Class<T2> tClass, BufferedReader br, boolean freshLast) {
         if(apipClient==null){
@@ -289,8 +168,9 @@ public abstract class Handler<T extends FcEntity>{
             if (subSecretList == null || subSecretList.isEmpty()) break;
             List<T2> batchChosenList;
             if(br!=null) {
-                batchChosenList = Inputer.chooseMultiFromListGeneric(subSecretList, 0, subSecretList.size(), "Choose the items you want:", br);
-                itemList.addAll(batchChosenList);
+                batchChosenList = Shower.showOrChooseListInPages(tClass.getSimpleName(),subSecretList,DEFAULT_PAGE_SIZE, null, true, tClass,br);
+                if(batchChosenList!=null && !batchChosenList.isEmpty())
+                    itemList.addAll(batchChosenList);
             }else itemList.addAll(subSecretList);
             last = apipClient.getFcClientEvent().getResponseBody().getLast();
 
@@ -341,7 +221,13 @@ public abstract class Handler<T extends FcEntity>{
         }
         System.out.println("Removed " + itemIds.size() + " items from local.");
     }
-
+    @NotNull
+    protected Menu newMenu(String title, boolean isRootMenu) {
+        Menu menu;
+        if(isRootMenu)menu = new Menu(title, settings::close);
+        else menu = new Menu(title,this::closeMenu);
+        return menu;
+    }
     /**
      * Gets a metadata value as Long
      * @param metaKey metadata key
@@ -423,7 +309,7 @@ public abstract class Handler<T extends FcEntity>{
         if(itemList.isEmpty()){
             return;
         }
-        List<T> chosenItems = Shower.showOrChooseListInPages("Choose to show them",itemList, br,true, itemClass);//FcEntity.chooseList(itemName,itemList,defaultFields,defaultWidths,null,br);//showAndChooseItems("Choose to show items...", itemList, 20, br, true, true);
+        List<T> chosenItems = Shower.showOrChooseListInPages("Choose to show them",itemList, DEFAULT_PAGE_SIZE, null, true, itemClass, br);//FcEntity.chooseList(itemName,itemList,defaultFields,defaultWidths,null,br);//showAndChooseItems("Choose to show items...", itemList, 20, br, true, true);
         if(chosenItems==null || chosenItems.isEmpty()){
             return;
         }
@@ -433,20 +319,33 @@ public abstract class Handler<T extends FcEntity>{
 
     public List<T> showOrChooseItemList(String promote, @Nullable List<T> itemList, Integer sizeInPage, @Nullable BufferedReader br, boolean isFromEnd, boolean choose) {
         if(itemList!=null)
-            return Shower.showOrChooseListInPages(promote,itemList, br, choose, itemClass);
+            return Shower.showOrChooseListInPages(promote,itemList, DEFAULT_PAGE_SIZE, mainFid, choose, itemClass, br);
 
-        if (dbEmpty(br)) return null;
+        int title = localDB.getSize();
+        System.out.println("Total: "+ title + " items.");
+        int totalPages = (int) Math.ceil((double) title / DEFAULT_PAGE_SIZE);
+        int currentPage =1;
+        if (dbEmpty()) {
+            if(br!=null)Menu.anyKeyToContinue(br);
+            return null;
+        }
         Long fromIndex = null;
         List<T> finalChosenList = new ArrayList<>();
         while(true) {
-            List<T> batchItemList = getItemList(sizeInPage, fromIndex, null, false, null, null, true, isFromEnd);
+            List<T> batchItemList = localDB.getList(sizeInPage, null, fromIndex, false, null, null, true, isFromEnd);
             if(batchItemList==null || batchItemList.isEmpty())break;
-            List<T> chosenList = Shower.showOrChooseFromItemList(promote,batchItemList , br,choose, itemClass);
+            String batchPromote = String.format("%s (Page %d/%d)", promote, currentPage, totalPages);
+            List<T> chosenList = Shower.showOrChooseList(batchPromote,batchItemList , mainFid, choose, itemClass, br);
             if(chosenList!=null && !chosenList.isEmpty())
                 finalChosenList.addAll(chosenList);
-            if(batchItemList.size()<sizeInPage)break;
-            fromIndex = getIndexById(batchItemList.get(batchItemList.size()-1).getId());
-            if(br!=null && Inputer.askIfYes(br,"Stop choosing?"))break;
+            if(batchItemList.size()<sizeInPage){
+                System.out.println("No more items.");
+                if(br!=null)Menu.anyKeyToContinue(br);
+                break;
+            }
+            fromIndex = localDB.getIndexById(batchItemList.get(batchItemList.size()-1).getId());
+            if(br!=null && Inputer.askIfYes(br,(totalPages-currentPage)+" pages left. Stop choosing?"))break;
+            currentPage++;
         }
         return finalChosenList;
     }
@@ -468,19 +367,21 @@ public abstract class Handler<T extends FcEntity>{
     }
 
     protected List<T> searchItems(BufferedReader br, boolean withChoose,boolean withOperation){
-        if (dbEmpty(br)) return null;
+        if (dbEmpty()) return null;
         String searchStr = Inputer.inputString(br, "Input the search string:");
         List<T> foundItems = searchInValue(searchStr);
         System.out.println();
-        if(foundItems.size()>0 && Inputer.askIfYes(br, "Found "+foundItems.size()+" items. List and choose?")){
-            return Shower.showOrChooseFromItemList(itemName,foundItems, br,true, itemClass);
+        List<T> chosenItems;
+        if(foundItems.size()>0){
+            chosenItems = Shower.showOrChooseList(itemName,foundItems, null, true, itemClass, br);
+            opItems(chosenItems,"What to do with them?",br);
         }
         return null;
     }
 
-    protected boolean dbEmpty(BufferedReader br) {
+    protected boolean dbEmpty() {
         if(localDB.getSize()==0){
-            Shower.alert("No any "+itemName+" yet.",null,null, br);
+            System.out.println("No any "+itemName+" yet.");
             return true;
         }
         return false;
@@ -493,7 +394,7 @@ public abstract class Handler<T extends FcEntity>{
         menu.add("Clear Local Database", () -> clearTheDatabase(br));
     }
 
-    private void clearTheDatabase(BufferedReader br) {
+    protected void clearTheDatabase(BufferedReader br) {
         if(Inputer.askIfYes(br, "Are you sure you want to clear the entire database? This will remove ALL data including metadata.")){
             clearDB();
             System.out.println("Database cleared completely.");
@@ -501,7 +402,7 @@ public abstract class Handler<T extends FcEntity>{
     }
 
     @NotNull
-    private Runnable addItemsToLocalDB(BufferedReader br, String itemName) {
+    protected Runnable addItemsToLocalDB(BufferedReader br, String itemName) {
         return () -> {
             try {
                 Map<String, T> items = new HashMap<>();
@@ -520,7 +421,7 @@ public abstract class Handler<T extends FcEntity>{
                     }
                     if(Inputer.askIfYes(br, "Finished?"))break;
                 }
-                putAll(items);
+                localDB.putAll(items);
                 System.out.println("\n"+items.size() +" "+ itemName+ "s added.");
             } catch (IOException | ReflectiveOperationException e) {
                 System.out.println("Error: " + e.getMessage());
@@ -533,31 +434,12 @@ public abstract class Handler<T extends FcEntity>{
         if(chosenItems!=null && chosenItems.size()>0)
             opItems(chosenItems,"What you want to do with them?",br);
     }
-//    protected List<T> showItemList(BufferedReader br) {
-//        return showOrChooseItemList(Shower.DEFAULT_SIZE, false,br);
-//    }
+
 
     protected List<T> chooseItemList(BufferedReader br) {
-        return showOrChooseItemList(itemName,null,Shower.DEFAULT_SIZE, br,true,true);
+        return showOrChooseItemList(itemName,null, DEFAULT_PAGE_SIZE, br,true,true);
     }
 
-    //    private List<T> showOrChooseItemList(int batchSize, boolean choose, BufferedReader br) {
-//        String lastKey = null;
-//        List<T> finalChosenList = new ArrayList<>();
-//        while(true) {
-//            List<T> currentList = getItemList(batchSize, null, lastKey, false, null, null, true, true);
-//            if(currentList == null || currentList.isEmpty()) break;
-//            lastKey = currentList.get(currentList.size() - 1).getId();
-//
-//            List<T> result = showOrChooseItemListInPages(null, currentList, br, true);
-//            if(result != null) {
-//                finalChosenList.addAll(result);
-//            }
-//
-//            if(currentList.size() < batchSize || !Inputer.askIfYes(br, "Load more?")) break;
-//        }
-//        return finalChosenList;
-//    }
 
     public void remove(String id) {
         if (localDB == null) return;
@@ -594,11 +476,10 @@ public abstract class Handler<T extends FcEntity>{
     public List<T> chooseItems(BufferedReader br) {
         List<T> chosenItems = new ArrayList<>();
         String lastKey = null;
-        int totalDisplayed = 0;
-        Integer size = Shower.DEFAULT_SIZE; //Inputer.inputInteger(br, "Enter the size of a page: ", 1, 0);
+        Integer size = DEFAULT_PAGE_SIZE; //Inputer.inputInteger(br, "Enter the size of a page: ", 1, 0);
 
         while (true) {
-            List<T> currentList = getItemList(size, null, lastKey, false, null, null, true, true);
+            List<T> currentList = localDB.getList(size, lastKey, null, false, null, null, true, true);
 
 
             if (currentList.isEmpty()) {
@@ -607,9 +488,7 @@ public abstract class Handler<T extends FcEntity>{
 
             lastKey = localDB.getTempId();//currentList.get(currentList.size()-1);
 
-            List<T> result = Shower.showOrChooseListInPages(null, currentList, br, true, itemClass);
-
-            totalDisplayed += currentList.size();
+            List<T> result = Shower.showOrChooseListInPages(null, currentList, DEFAULT_PAGE_SIZE, null, true, itemClass, br);
 
             if (result == null)
                 continue;
@@ -758,10 +637,19 @@ public abstract class Handler<T extends FcEntity>{
         return sid;
     }
     public void close() {
-        if (localDB != null)
-            localDB.close();
-        isRunning.set(false);
-        // System.exit(0);  // Removing this line to prevent application termination
+        if (localDB != null) {
+            try {
+                log.debug("Closing LevelDB for handler: {}", handlerType);
+                localDB.close();
+                localDB = null;
+            } catch (Exception e) {
+                log.error("Error closing LevelDB for handler {}: {}", handlerType, e.getMessage(), e);
+                throw new RuntimeException("Failed to close LevelDB for handler " + handlerType, e);
+            }
+        }
+    }
+
+    public void closeMenu() {
     }
 
     protected void initializeDB(String fid, String sid, String dbPath, String dbName, 
@@ -853,5 +741,21 @@ public abstract class Handler<T extends FcEntity>{
      */
     protected Map<String, String> getHeightToTimeFieldMap() {
         return new HashMap<>();
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Class<T> getItemClass() {
+        return itemClass;
+    }
+
+    public String getItemName() {
+        return itemName;
     }
 }

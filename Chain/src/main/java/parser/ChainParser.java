@@ -8,13 +8,13 @@ import constants.Constants;
 import crypto.Hash;
 import fch.BlockFileUtils;
 import fch.OpReFileUtils;
-import fch.FchUtils;
 import fch.fchData.Block;
 import fch.fchData.BlockMark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.BytesUtils;
 import utils.EsUtils;
+import utils.FchUtils;
 import writeEs.*;
 
 import java.io.ByteArrayInputStream;

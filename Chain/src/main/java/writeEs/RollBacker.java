@@ -11,13 +11,13 @@ import constants.Constants;
 import constants.FieldNames;
 import constants.IndicesNames;
 import fch.OpReFileUtils;
-import fch.FchUtils;
 import fch.fchData.Cash;
 import fch.fchData.OpReturn;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.BytesUtils;
 import utils.EsUtils;
+import utils.FchUtils;
 
 
 import java.io.File;
@@ -171,11 +171,11 @@ public class RollBacker {
 
 
     private void bulkUpdateAddr(ElasticsearchClient esClient, Map<String, Map<String, Long>> aggsMaps,long lastHeight) throws ElasticsearchException, IOException {
-		Map<String, Long> utxoSumMap = aggsMaps.get(FchUtils.UTXO_SUM);
-		Map<String, Long> stxoSumMap = aggsMaps.get(FchUtils.STXO_SUM);
-		Map<String, Long> stxoCddMap = aggsMaps.get(FchUtils.CDD);
-		Map<String, Long> utxoCountMap = aggsMaps.get(FchUtils.UTXO_COUNT);
-		Map<String, Long> txoSumMap = aggsMaps.get(FchUtils.TXO_SUM);
+		Map<String, Long> utxoSumMap = aggsMaps.get(utils.FchUtils.UTXO_SUM);
+		Map<String, Long> stxoSumMap = aggsMaps.get(utils.FchUtils.STXO_SUM);
+		Map<String, Long> stxoCddMap = aggsMaps.get(utils.FchUtils.CDD);
+		Map<String, Long> utxoCountMap = aggsMaps.get(utils.FchUtils.UTXO_COUNT);
+		Map<String, Long> txoSumMap = aggsMaps.get(utils.FchUtils.TXO_SUM);
 		Set<String> addrSet = txoSumMap.keySet();
 
 		if(addrSet.isEmpty())return;
@@ -227,6 +227,7 @@ public class RollBacker {
 							.doc(updateMap)))
 			);
 		}
+
 		br.timeout(t->t.time("600s"));
 		esClient.bulk(br.build());
 	}

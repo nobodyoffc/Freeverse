@@ -6,7 +6,7 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -48,13 +48,13 @@ public class General extends HttpServlet {
                 return;
         }
         List<Object> meetList;
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
+        FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
         ArrayList<Sort> defaultSortList = null;
         String index = httpRequestChecker.getRequestBody().getFcdsl().getIndex();
-        meetList = fcdslRequestHandler.doRequest(index, defaultSortList, Object.class);
+        meetList = fcHttpRequestHandler.doRequest(index, defaultSortList, Object.class);
         if(meetList==null){
             try {
-                response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
+                response.getWriter().write(fcHttpRequestHandler.getFinalReplyJson());
             } catch (IOException ignore) {
             }
             return;

@@ -6,7 +6,7 @@ import constants.IndicesNames;
 import feip.feipData.App;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -23,21 +23,21 @@ import static constants.Strings.ACTIVE;
 
 @WebServlet(name = ApipApiNames.APP_SEARCH, value = "/"+ ApipApiNames.SN_7+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.APP_SEARCH)
 public class AppSearch extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public AppSearch() {
-        this.fcdslRequestHandler = new FcdslRequestHandler(Initiator.settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(Initiator.settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.APP, App.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.APP, App.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.APP, App.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.APP, App.class, defaultSort, request,response,authType);
     }
 }

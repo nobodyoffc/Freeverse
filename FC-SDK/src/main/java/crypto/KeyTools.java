@@ -58,7 +58,7 @@ public class KeyTools {
     public static String getPubKey(String fid, SessionHandler sessionHandler, TalkIdHandler talkIdHandler, ContactHandler contactHandler, ApipClient apipClient) {
         String pubKey = null;
         if(sessionHandler!=null){
-            FcSession session = sessionHandler.getSessionById(fid);
+            FcSession session = sessionHandler.getSessionByUserId(fid);
             if(session!=null)pubKey = session.getPubKey();
             if(pubKey!=null)return pubKey;
         }
@@ -100,7 +100,7 @@ public class KeyTools {
     }
 
     public static String scriptToMultiAddr(String script) {
-        byte[] scriptBytes = HexFormat.of().parseHex(script);
+        byte[] scriptBytes = Hex.fromHex(script);
         byte[] b = Hash.sha256(scriptBytes);
         byte[] h = Hash.Ripemd160(b);
         return hash160ToMultiAddr(h);
@@ -998,7 +998,7 @@ public class KeyTools {
         return false;
     }
 
-    public static String priKey32To38(String priKey32) {
+    public static String priKey32To38WifCompressed(String priKey32) {
         /*
         26字节长度为WIF compressed私钥格式。过程：
         在32位私钥加入版本号前缀0x80
@@ -1006,7 +1006,7 @@ public class KeyTools {
         sha256x2(80+priKey32+01)取前4字节checksum
         对80+priKey32+01+checksum取base58编码
          */
-
+        if(priKey32.startsWith("0x")||priKey32.startsWith("0X"))priKey32 = priKey32.substring(2);
         String priKey26;
         if (priKey32.length() != 64) {
             System.out.println("Private keys must be 32 bytes");

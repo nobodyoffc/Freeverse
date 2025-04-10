@@ -7,7 +7,6 @@ import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import clients.ApipClient;
 import apip.apipData.Fcdsl;
-import fch.FchUtils;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import com.google.gson.reflect.TypeToken;
 import utils.*;
@@ -113,13 +112,13 @@ public class Counter implements Runnable {
             if (countBackUpBalance == BalanceBackupInterval) {
                 countBackUpBalance = backupBalance();
 
-                localTask();
+//                localTask();
             }
 
             if (countReward == RewardInterval) {
                 RewardInfo rewardInfo= rewarder.doReward(paidApiAccountList,counterPriKey);
                 if(rewardInfo!=null) log.info("Reward is done: " +
-                        "\n\tTotal amount: " + FchUtils.satoshiToCoin(rewardInfo.getRewardT()) +
+                        "\n\tTotal amount: " + utils.FchUtils.satoshiToCoin(rewardInfo.getRewardT()) +
                         "\n\tBestHeight:" + rewardInfo.getBestHeight());
             }
 
@@ -217,7 +216,7 @@ public class Counter implements Runnable {
 protected void waitNewOrder() {
     DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     log.debug(LocalDateTime.now().format(formatter) + "  Wait for new order...");
-    FchUtils.waitForChangeInDirectory(listenPath,running);
+    utils.FchUtils.waitForChangeInDirectory(listenPath,running);
 }
 
     protected void checkRollback() {
@@ -401,7 +400,7 @@ protected void waitNewOrder() {
                     jedis0Common.hset(Settings.addSidBriefToName(sid, FieldNames.CONSUME_VIA), via, String.valueOf(viaT + order.getAmount()));
                 }
 
-                log.debug("New order from [" + order.getFromFid() + "]: " + FchUtils.satoshiToCoin(order.getAmount()) + "f.");
+                log.debug("New order from [" + order.getFromFid() + "]: " + utils.FchUtils.satoshiToCoin(order.getAmount()) + "f.");
 
                 orderIdList.add(order.getOrderId());
             }

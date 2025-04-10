@@ -1,7 +1,6 @@
 package webhook;
 
 import apip.apipData.WebhookPushBody;
-import fch.FchUtils;
 import fch.fchData.Cash;
 import fch.fchData.OpReturn;
 import handlers.WebhookHandler;
@@ -12,6 +11,7 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import com.google.gson.Gson;
 import constants.*;
 
+import utils.FchUtils;
 import utils.JsonUtils;
 import utils.ObjectUtils;
 import utils.http.HttpUtils;
@@ -63,7 +63,7 @@ public class Pusher implements Runnable{
             while (running.get()) {
                 jedis.select(Constants.RedisDb4Webhook);
                 readMethodFidWebhookInfoMapMapFromRedis(jedis);
-                FchUtils.waitForChangeInDirectory(listenDir, running);
+                utils.FchUtils.waitForChangeInDirectory(listenDir, running);
                 TimeUnit.SECONDS.sleep(3);
                 jedis.select(0);
                 bestHeight = Long.parseLong(jedis.get(BEST_HEIGHT));

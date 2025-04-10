@@ -257,7 +257,7 @@ public class HttpRequestChecker {
             return false;
         }
 
-        String fid = fcSession.getId();
+        String fid = fcSession.getUserId();
         String sessionKey = fcSession.getKey();
 
         setSessionName(signInfo.sessionName);

@@ -301,6 +301,9 @@ public class ApipClientEvent {
                 return false;
             }
 
+            //TODO
+            System.out.println("Request Url GET: "+apiUrl.getUrl());
+
             if(httpResponse==null){
                 code= CodeMessage.Code3002GetRequestFailed;
                 message = CodeMessage.Msg3002GetRequestFailed;

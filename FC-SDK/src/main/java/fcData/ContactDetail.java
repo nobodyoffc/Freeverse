@@ -195,7 +195,7 @@ public class ContactDetail extends FcEntity {
             showList.add(FcUtils.heightToLongDate(contact.getUpdateHeight()));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
     public String getFid() {

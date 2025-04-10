@@ -18,29 +18,29 @@ import java.util.ArrayList;
 import feip.feipData.Nid;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import appTools.Settings;
 import static constants.FieldNames.*;
 
 
 @WebServlet(name = ApipApiNames.NID_SEARCH, value = "/"+ ApipApiNames.SN_19+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NID_SEARCH)
 public class NidSearch extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public NidSearch() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false, FieldNames.ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
     }
 }

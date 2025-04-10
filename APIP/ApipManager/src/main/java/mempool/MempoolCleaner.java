@@ -1,6 +1,5 @@
 package mempool;
 
-import fch.FchUtils;
 import fch.fchData.Block;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Constants;
@@ -8,6 +7,7 @@ import constants.Strings;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import utils.FchUtils;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;

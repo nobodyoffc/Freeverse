@@ -1,5 +1,8 @@
 package api;
 
+import appTools.Settings;
+import feip.feipData.Service;
+import redis.clients.jedis.JedisPool;
 import server.ApipApiNames;
 import initial.Initiator;
 import server.DiskApiNames;
@@ -18,45 +21,35 @@ import java.io.IOException;
 
 import static constants.FieldNames.DID;
 import static utils.FileUtils.getSubPathForDisk;
-import static startManager.StartDiskManager.STORAGE_DIR;
+import static startManager.StartDiskManager.diskDir;
 
 @WebServlet(name = DiskApiNames.CHECK, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.CHECK)
 public class Check extends HttpServlet {
+
+    private final Settings settings = Initiator.settings;
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ReplyBody replier = new ReplyBody(Initiator.settings);
+        ReplyBody replier = new ReplyBody(settings);
 
         AuthType authType = AuthType.FC_SIGN_URL;
-
         //Check authorization
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
-            httpRequestChecker.checkRequestHttp(request, response, authType);
-            if (httpRequestChecker ==null){
-                return;
-            }
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
 
         //Do request
-            doRequest(request, response, replier);
-        }
+        doRequest(request, response, replier);
     }
 
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
         AuthType authType = AuthType.FC_SIGN_URL;
 
-        ReplyBody replier = new ReplyBody(Initiator.settings);
-
+        ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
-            httpRequestChecker.checkRequestHttp(request, response, authType);
-            if (httpRequestChecker ==null){
-                return;
-            }
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
         //Do request
-            doRequest(request, response, replier);
-        }
+        doRequest(request, response, replier);
     }
 
     private void doRequest(HttpServletRequest request, HttpServletResponse response, ReplyBody replier) {
@@ -71,8 +64,8 @@ public class Check extends HttpServlet {
             return;
         }
         String subDir = getSubPathForDisk(did);
-        String path = STORAGE_DIR + subDir;
-        Boolean isFileExists = Boolean.TRUE.equals(FileUtils.checkFileOfFreeDisk(path, did));
+        String path = diskDir + subDir;
+        Boolean isFileExists = Boolean.TRUE.equals(FileUtils.checkFileOfDisk(path, did));
         replier.reply0SuccessHttp(isFileExists,response);
     }
 

@@ -112,7 +112,7 @@ public class TalkClient extends Client{
         this.talkIdHandler = new TalkIdHandler(apiAccount.getUserId(),null, null);
         this.diskHandler = new DiskHandler(apiAccount.getUserId(), null);
         this.hatHandler = new HatHandler(settings);
-        this.talkUnitHandler = new TalkUnitHandler(myFid,null);
+        this.talkUnitHandler = new TalkUnitHandler(settings);
     }
 
     private void checkHandlers() {
@@ -157,7 +157,7 @@ public class TalkClient extends Client{
 //            sendBytes("Test sendBytes".getBytes());
 //            sendWords("Test sendWords",getTalkIdInfoById(dealer));
             if(serverSession==null){
-                serverSession = sessionHandler.getSessionById(dealer);
+                serverSession = sessionHandler.getSessionByUserId(dealer);
                 if(serverSession==null)
                     askKey(dealer, dealer, TalkUnit.IdType.FID, apipClient, br);
             }
@@ -298,11 +298,11 @@ public class TalkClient extends Client{
 
         switch (choice){
             case 1 -> settings.checkFidInfo(apipClient, br);
-            case 2 -> groupHandler.menu();
-            case 3 -> teamHandler.menu();
-            case 4 -> mailHandler.menu();
+            case 2 -> groupHandler.menu(br,false);
+            case 3 -> teamHandler.menu(br,false);
+            case 4 -> mailHandler.menu(br,false);
             case 5 -> contactHandler.menu(br, false);
-            case 6 -> cashHandler.menu();
+            case 6 -> cashHandler.menu(br, false);
             case 7 -> findTalkId(br);
             case 8 -> askKey(inputs[1],null,null,apipClient,br);
             // case 9 -> requestData(inputs[1],null,null);
@@ -401,7 +401,7 @@ public class TalkClient extends Client{
 
 
     private byte[] prepareSession(TalkIdInfo talkIdInfo) {
-        FcSession fcSession = sessionHandler.getSessionById(talkIdInfo.getId());
+        FcSession fcSession = sessionHandler.getSessionByUserId(talkIdInfo.getId());
         if(fcSession!=null) return fcSession.getKeyBytes();
         boolean isOwner = myFid.equals(talkIdInfo.getOwner());
         byte[] newSessionKey = null;
@@ -697,7 +697,7 @@ public class TalkClient extends Client{
         int[] widths = {10,20};
         List<List<Object>> valueListList = new ArrayList<>();
         for(TalkIdInfo talkIdInfo:talkIdInfoList)valueListList.add(Arrays.asList(talkIdInfo.getIdType(),talkIdInfo.getShowName()));
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
 
@@ -1378,7 +1378,7 @@ public class TalkClient extends Client{
             if(senderSessionKey == null) return null;
             decryptor = new Decryptor();
             cryptoDataByte = decryptor.decrypt(bytes, senderSessionKey);
-            talkUnit.setFrom(session.getId());
+            talkUnit.setFrom(session.getUserId());
         }else if (encryptType.equals(EncryptType.AsyTwoWay) && priKey != null) {
             decryptor = new Decryptor();
             cryptoDataByte.setPriKeyB(priKey);

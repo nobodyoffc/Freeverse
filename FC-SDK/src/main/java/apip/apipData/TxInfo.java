@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Map;
 
 import utils.DateUtils;
-import fch.FchUtils;
 import appTools.Shower;
+import utils.FchUtils;
 
 public class TxInfo extends FcObject {
     private Integer version;        //version
@@ -88,7 +88,7 @@ public class TxInfo extends FcObject {
             showList.add(String.valueOf(FchUtils.satoshiToCoin(txInfo.getOutValueT())));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
     public Integer getVersion() {

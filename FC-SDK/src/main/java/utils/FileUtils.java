@@ -110,7 +110,7 @@ public class FileUtils {
             } catch (IOException e) {
                 return null;
             }
-        }else if(Boolean.TRUE.equals(checkFileOfFreeDisk(path, did)))return did;
+        }else if(Boolean.TRUE.equals(checkFileOfDisk(path, did)))return did;
         else return null;
     }
 
@@ -154,7 +154,7 @@ public class FileUtils {
         return "/"+did.substring(0,2)+"/"+did.substring(2,4)+"/"+did.substring(4,6)+"/"+did.substring(6,8);
     }
 
-    public static Boolean checkFileOfFreeDisk(String path, String did) {
+    public static Boolean checkFileOfDisk(String path, String did) {
         File file = new File(path,did);
         if(!file.exists())return false;
 

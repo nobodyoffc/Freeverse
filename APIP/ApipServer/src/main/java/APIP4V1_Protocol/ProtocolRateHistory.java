@@ -6,7 +6,7 @@ import constants.IndicesNames;
 import feip.feipData.ProtocolHistory;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -25,22 +25,22 @@ import static constants.Strings.OP;
 
 @WebServlet(name = ApipApiNames.PROTOCOL_RATE_HISTORY, value = "/"+ ApipApiNames.SN_4+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROTOCOL_RATE_HISTORY)
 public class ProtocolRateHistory extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public ProtocolRateHistory() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.PROTOCOL_HISTORY, ProtocolHistory.class, OP,RATE,null,null, defaultSort,request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.PROTOCOL_HISTORY, ProtocolHistory.class, OP,RATE,null,null, defaultSort,request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.PROTOCOL_HISTORY, ProtocolHistory.class, OP,RATE,null,null, defaultSort,request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.PROTOCOL_HISTORY, ProtocolHistory.class, OP,RATE,null,null, defaultSort,request,response,authType);
     }
 }

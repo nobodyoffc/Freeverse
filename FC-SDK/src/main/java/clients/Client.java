@@ -1,21 +1,22 @@
 package clients;
 
 import appTools.Shower;
-import configure.Configure;
 import fcData.FcSession;
 import apip.apipData.Fcdsl;
 import apip.apipData.RequestBody;
 import constants.*;
 import fcData.ReplyBody;
 import fcData.Signature;
-import fch.FchUtils;
 import com.google.gson.Gson;
 import configure.ApiAccount;
 import configure.ApiProvider;
 import crypto.*;
 import fch.Inputer;
+import fch.fchData.SendTo;
 import feip.feipData.Service;
+import feip.feipData.serviceParams.ApipParams;
 import feip.feipData.serviceParams.Params;
+import org.jetbrains.annotations.NotNull;
 import server.ApipApiNames;
 import utils.*;
 import utils.http.AuthType;
@@ -42,9 +43,12 @@ import static constants.Strings.URL_HEAD;
 import static constants.UpStrings.BALANCE;
 import static fcData.AlgorithmId.FC_AesCbc256_No1_NrC7;
 import static utils.ObjectUtils.listToMap;
+import static utils.ObjectUtils.objectToClass;
 
 public class Client {
     protected static final Logger log = LoggerFactory.getLogger(Client.class);
+    public static final String OFF_LINE_TX_VER = "2";
+    public static final int WAIT_CONFIRMATION_SECONDS = 10*60;
     protected ApiProvider apiProvider;
     protected ApiAccount apiAccount;
     protected String urlHead;
@@ -223,7 +227,7 @@ public class Client {
         //If any request besides signIn or signInEcc got a session response, it means the client signed in again. So repeat the request.
         try {
             serverSession = (FcSession) result;
-            if (serverSession == null || serverSession.getName() == null) return result;
+            if (serverSession == null || serverSession.getId() == null) return result;
             else return requestBase(urlTail, requestBodyType, fcdsl, requestBodyStr, requestBodyBytes, paramMap, requestFileName, responseBodyType, responseFileName, responseFilePath, authType, authKey, httpMethod);
         }catch (ClassCastException e){
             return result;
@@ -249,35 +253,35 @@ public class Client {
         if(apipClientEvent.getCode()!= CodeMessage.Code0Success) {
             if (apipClientEvent.getResponseBody()== null) {
                 log.debug("ResponseBody is null when requesting "+this.apipClientEvent.getApiUrl().getUrl());
-//                System.out.println(fcClientEvent.getMessage());
             } else {
                 log.debug(apipClientEvent.getResponseBody().getCode() + ":" + apipClientEvent.getResponseBody().getMessage());
-//                System.out.println(fcClientEvent.getResponseBody().getMessage());
                 if (apipClientEvent.getResponseBody().getData() != null)
                     log.debug(JsonUtils.toJson(apipClientEvent.getResponseBody().getData()));
             }
 
             if (apipClientEvent.getCode() == CodeMessage.Code1004InsufficientBalance) {
+
                 if(apipClient==null && this.serviceType.equals(Service.ServiceType.APIP)){
                     apipClient = (ApipClient) this;
                 }
-                double paid = apiAccount.buyApi(symKey, apipClient, null);
-                if(paid==0){
-                    if(apipClientEvent.getResponseBody().getCode().equals(CodeMessage.Code1026InsufficientFchOnChain)){
-                        System.out.println("Send some FCH to "+apiAccount.getUserId()+"...");
-                        while(true) {
-                            waitSeconds(30);
+
+                Double paid = apiAccount.buyApi(symKey, apipClient, null);
+
+                if (paid == null) {
+                    if (apipClientEvent.getResponseBody().getCode().equals(CodeMessage.Code1026InsufficientFchOnChain)) {
+                        System.out.println("Send some FCH to " + apiAccount.getUserId() + "...");
+                        for(int i=0;i<10;i++) {
+                            waitSeconds(WAIT_CONFIRMATION_SECONDS);
                             paid = apiAccount.buyApi(symKey, apipClient, null);
-                            if (paid!=0)break;
+                            if (paid!=null) break;
                             System.out.println("Waiting...");
                         }
                     }
-                    System.out.println("Failed to pay from "+ apiAccount.getUserId());
-                    return null;
                 }
                 System.out.println("Checking the balance...");
+
                 while(true){
-                    waitSeconds(5);
+                    waitSeconds(10);
                     serverSession = checkSignInEcc();
                     apiAccount.setSession(serverSession);
                     apiAccount.setSessionKey(sessionKey);
@@ -369,7 +373,7 @@ public class Client {
                 log.debug("Failed to buy APIP service.");
                 return null;
             }
-            apiAccount.setBalance(balance + FchUtils.coinToSatoshi(topUp));
+            apiAccount.setBalance(balance + utils.FchUtils.coinToSatoshi(topUp));
         }else {
 
             return balance/price;
@@ -541,8 +545,8 @@ public class Client {
 
         String sessionName = FcSession.makeSessionName(Hex.fromHex(serverSession.getKey()));
         String fid = KeyTools.priKeyToFid(priKey);
-        serverSession.setId(fid);
-        serverSession.setName(sessionName);
+        serverSession.setUserId(fid);
+        serverSession.setId(sessionName);
 
         if(serverSession.getKeyCipher()==null) {
             Encryptor encryptor = new Encryptor();
@@ -560,7 +564,9 @@ public class Client {
     public FcSession signInEcc(ApiAccount apiAccount, RequestBody.SignInMode mode, byte[] symKey, BufferedReader br) {
 
         Decryptor decryptor = new Decryptor();
-        if(apiAccount.getUserPriKeyCipher()==null) return signInEccOffLine(apiAccount, mode, symKey, br);
+        if(apiAccount.getUserPriKeyCipher()==null)
+            return signInEccOffLine(apiAccount, mode, symKey, br);
+
         CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymKey(apiAccount.getUserPriKeyCipher(),symKey);
         if(cryptoDataByte.getCode()!=0)return null;
         byte[] priKey = cryptoDataByte.getData();
@@ -583,98 +589,166 @@ public class Client {
     private FcSession signInEccOffLine(ApiAccount apiAccount, RequestBody.SignInMode mode, byte[] symKey, BufferedReader br) {
         apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN_ECC);
         apipClientEvent.makeSignInRequest(via, mode);
+        String myFid = apiAccount.getUserId();
 
+        serverSession = inputSession(symKey, br);
+        if(serverSession!=null)return serverSession;
         Shower.showTextAndQR(apipClientEvent.getRequestBodyStr(),"No priKey to sign in. Please sign below request with the priKey with the algorithm "+BTC_ECDSA_SIGNMSG_NO1_NRC7+":");
 
-        if(br !=null && Inputer.askIfYes(br,"Waiting for the signature?")){
-            while (true) {
-                System.out.print("Input the signature.");
-                String sign = Inputer.inputStringMultiLine(br);
-                Signature signature;
-                try {
-                    if(sign==null || sign.equals("")){
-                        if (Inputer.askIfYes(br, "Failed. Try again?")) continue;
+        while (true) {
+            System.out.print("Input the signature. ");
+            String sign = Inputer.inputStringMultiLine(br);
+            Signature signature;
+            try {
+                if(sign==null || sign.equals("")){
+                    if (Inputer.askIfYes(br, "Failed. Try again?")) continue;
+                    else return null;
+                }
+                signature = Signature.parseSignature(sign.trim());//Signature.fromJson(sign);
+                if(signature==null ) {
+                    if (Inputer.askIfYes(br, "Failed. Try again?")) continue;
                         else return null;
-                    }
-                    signature = Signature.parseSignature(sign.trim());//Signature.fromJson(sign);
-                    if(signature==null ) {
-                        if (Inputer.askIfYes(br, "Failed. Try again?")) continue;
-                            else return null;
-                    }
-                    if(!signature.verify()) {
-                        if (Inputer.askIfYes(br, "Failed to be verified. Try again?")) continue;
-                        else return null;
-                    }
+                }
+                if(!myFid.equals(signature.getFid())) {
+                    if (Inputer.askIfYes(br, "The signer "+signature.getFid()+" is not "+myFid+". Try again?")) continue;
+                    else return null;
+                }
+                if(!signature.verify()) {
+                    if (Inputer.askIfYes(br, "Failed to be verified. Try again?")) continue;
+                    else return null;
+                }
+                if(! apipClientEvent.getRequestBodyStr().equals(signature.getMsg())){
+                    if(Inputer.askIfYes(br,"The signed message is not the original request. Try again?"))continue;
+                    else return null;
+                }
 
-                    if(! apipClientEvent.getRequestBodyStr().equals(signature.getMsg())){
-                        if(Inputer.askIfYes(br,"The signed message is not the original request. Try again?"))continue;
-                        else return null;
-                    }
+                apipClientEvent.requestHeaderMap.put(UpStrings.FID, myFid);
+                apipClientEvent.requestHeaderMap.put(SIGN, signature.getSign());
 
-//                    apipClientEvent.requestHeaderMap = new HashMap<>();
-//                    apipClientEvent.requestHeaderMap.put("Content-Type", "application/json");
-                    apipClientEvent.requestHeaderMap.put(UpStrings.FID, signature.getFid());
-                    apipClientEvent.requestHeaderMap.put(SIGN, signature.getSign());
+                apipClientEvent.post();
 
-                    apipClientEvent.post();
+                ReplyBody responseBody = apipClientEvent.responseBody;
+                if(responseBody !=null){
+                    apipClientEvent.code = responseBody.getCode();
+                    apipClientEvent.message = responseBody.getMessage();
 
-                    ReplyBody responseBody = apipClientEvent.responseBody;
-                    if(responseBody !=null){
-                        apipClientEvent.code = responseBody.getCode();
-                        apipClientEvent.message = responseBody.getMessage();
-                        if(apipClientEvent.getResponseBody().getCode()==CodeMessage.Code1004InsufficientBalance){
-                            System.out.println(responseBody.getMessage());
-                            if(responseBody.getData()!=null) System.out.println(responseBody.getData());
-                            for(String url :ApipClient.freeAPIs){
+                    if(apipClientEvent.getResponseBody().getCode()==CodeMessage.Code1004InsufficientBalance){
+                        System.out.println(responseBody.getMessage());
 
-                            }
-                            return null;
+                        Double paid = apiAccount.buyApi(symKey, apipClient, br);
+                        if(paid!=null && paid>0){
+                            ApipClient apipClient1 = (ApipClient)apiAccount.getClient();
+                            FcSession rawSession;
+
+                            rawSession = trySignIn(apiAccount, symKey, br, apipClient1);
+
+                            return tryConvertSessionKey(symKey, br, apipClient1, rawSession);
                         }
-                    }else{
-                        apipClientEvent.code = 1020;
-                        apipClientEvent.message = "Failed to sign in.";
+                        return null;
                     }
-                        if(apipClientEvent.getResponseBody()==null|| apipClientEvent.getResponseBody().getData()==null)
-                            return null;
-                    FcSession rawSession = (FcSession) apipClientEvent.getResponseBody().getData();
-                    if(rawSession ==null|| rawSession.getKeyCipher()==null){
-                        System.out.println("Got wrong session from the server.");
-                            return null;
-                    }
+                }else{
+                    apipClientEvent.code = 1020;
+                    apipClientEvent.message = "Failed to sign in.";
+                }
+                    if(apipClientEvent.getResponseBody()==null|| apipClientEvent.getResponseBody().getData()==null)
+                        return null;
+                Object data = apipClientEvent.getResponseBody().getData();
 
-                    String sessionKeyCipher1 = rawSession.getKeyCipher();
+                FcSession rawSession = objectToClass(data,FcSession.class);
 
-                    Shower.showTextAndQR(sessionKeyCipher1,"Got the cipher of the new session. Please decrypt with your priKey:");
-
-                    if(Inputer.askIfYes(br,"Wait for inputting the decrypted session?")){
-                        while(true) {
-                            String input = Inputer.inputString(br, "Input the decrypted session json:");
-                            try {
-                                FcSession fcSession = FcSession.fromJson(input, FcSession.class);
-                                if (fcSession != null && fcSession.getKey() != null) {
-                                    serverSession = fcSession;
-                                    String newKeyCipher = Encryptor.encryptBySymKeyToJson(serverSession.getKeyBytes(), symKey);
-                                    serverSession.setKeyCipher(newKeyCipher);
-                                    apiAccount.setSession(serverSession);
-                                    apiAccount.setSessionKey(sessionKey);
-                                    return serverSession;
-                                }else {
-                                    if(!Inputer.askIfYes(br,"Failed to get a good session json. Try again?"))
-                                        return null;
-                                }
-                            } catch (Exception e) {
-                                if(!Inputer.askIfYes(br,"Failed to get a good session json. Try again?"))
-                                    return null;
-                            }
-                        }
-                    }
-                }catch (Exception e){
+                if(rawSession ==null|| rawSession.getKeyCipher()==null){
+                    System.out.println("Got wrong session from the server.");
                         return null;
                 }
+
+                return convertSession(rawSession, symKey, br);
+            }catch (Exception e){
+                    return null;
+            }
+        }
+    }
+
+    private FcSession inputSession(byte[] symKey, BufferedReader br) {
+        while (true){
+            String input = Inputer.inputString(br, "Input the session key hex:");
+            if(!Hex.isHexString(input)){
+                if(Inputer.askIfYes(br,"It's not hex. Give up importing?"))return null;
+                else continue;
             }
 
+            FcSession fcSession = new FcSession();
+            fcSession.setKey(input);
+            byte[] keyBytes = Hex.fromHex(input);
+            fcSession.setKeyBytes(keyBytes);
+            fcSession.setKeyCipher(Encryptor.encryptBySymKeyToJson(keyBytes, symKey));
+            fcSession.makeId();
+            serverSession = fcSession;
+            apiAccount.setSession(serverSession);
+            return serverSession;
         }
-        return null;
+    }
+
+    private FcSession tryConvertSessionKey(byte[] symKey, BufferedReader br, ApipClient apipClient1, FcSession rawSession) {
+        while(true) {
+            convertSession(rawSession, symKey, br);
+            Object result = apipClient1.ping(VERSION_1, RequestMethod.POST, AuthType.FC_SIGN_BODY, Service.ServiceType.APIP);
+            if (result != null) return serverSession;
+            System.out.println("Failed. Try again.");
+        }
+    }
+
+    @NotNull
+    private static FcSession trySignIn(ApiAccount apiAccount, byte[] symKey, BufferedReader br, ApipClient apipClient1) {
+        FcSession rawSession;
+        while(true) {
+            rawSession = apipClient1.signInEcc(apiAccount, RequestBody.SignInMode.NORMAL, symKey, br);
+            if (rawSession != null) break;
+            System.out.println("Failed. Wait a moment.");
+            waitSeconds(60);
+        }
+        return rawSession;
+    }
+
+    private FcSession convertSession(FcSession rawSession, byte[] symKey, BufferedReader br) {
+        String sessionKeyCipher1 = rawSession.getKeyCipher();
+
+        Shower.showTextAndQR(sessionKeyCipher1,"Got the cipher of the new sessionKey. Please decrypt with your priKey:");
+
+        while(true) {
+            String input = Inputer.inputString(br, "Input the decrypted session key:");
+            if(!Hex.isHexString(input)){
+                System.out.println("The sessionKey should be a hex.");
+                continue;
+            }
+
+            rawSession.setKey(input);
+            String newKeyCipher = Encryptor.encryptBySymKeyToJson(Hex.fromHex(input), symKey);
+            rawSession.setKeyCipher(newKeyCipher);
+            serverSession = rawSession;
+            apiAccount.setSession(serverSession);
+            return serverSession;
+        }
+    }
+
+    private void prepareOffLinePayment(ApiAccount apiAccount) {
+
+        try {
+            ApipParams params = (ApipParams) apiAccount.getApipParams();
+            ApipClient apipClient1 = (ApipClient) this;
+
+            List<SendTo> sendToList = new ArrayList<>();
+            SendTo sendTo = new SendTo();
+            sendTo.setFid(params.getDealer());
+            double amount = Double.parseDouble(params.getMinPayment());
+            sendTo.setAmount(amount);
+            sendToList.add(sendTo);
+
+
+            Double result = apiAccount.buyApi(symKey, apipClient1, null);
+
+        }catch (Exception e){
+            System.out.println();
+        }
     }
 
 
@@ -695,8 +769,8 @@ public class Client {
         String sessionName = FcSession.makeSessionName(sessionKey);
 
         fcSession.setKey(Hex.toHex(sessionKey));
-        fcSession.setName(sessionName);
-        fcSession.setId(fid);
+        fcSession.setId(sessionName);
+        fcSession.setUserId(fid);
         return fcSession;
     }
 

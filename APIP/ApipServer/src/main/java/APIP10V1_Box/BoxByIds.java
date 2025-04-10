@@ -15,24 +15,24 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import appTools.Settings;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 @WebServlet(name = ApipApiNames.BOX_BY_IDS, value = "/"+ ApipApiNames.SN_10+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BOX_BY_IDS)
 public class BoxByIds extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public BoxByIds() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }   
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.BOX, Box.class, FieldNames.ID, request,response,authType);
     }
 }

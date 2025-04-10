@@ -7,7 +7,7 @@ import fcData.ReplyBody;
 import feip.feipData.TokenHolder;
 import initial.Initiator;
 import server.ApipApiNames;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import utils.http.AuthType;
 
 import javax.servlet.ServletException;
@@ -46,11 +46,11 @@ public class TokenHoldersByIds extends HttpServlet {
     }
 
     public void doRequest(List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(settings);
+        FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
 
-        List<TokenHolder> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.TOKEN_HOLDER, TokenHolder.class, null, null, null, null, sort, request, response, authType);
+        List<TokenHolder> meetList = fcHttpRequestHandler.doRequestForList(IndicesNames.TOKEN_HOLDER, TokenHolder.class, null, null, null, null, sort, request, response, authType);
         if (meetList == null) return;
-        ReplyBody replier = fcdslRequestHandler.getReplyBody();
+        ReplyBody replier = fcHttpRequestHandler.getReplyBody();
         Map<String, Map<String,Double>> meetMap = new HashMap<>();
 
         for (TokenHolder tokenHolder : meetList) {

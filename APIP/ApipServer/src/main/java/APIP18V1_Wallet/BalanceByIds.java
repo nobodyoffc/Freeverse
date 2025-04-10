@@ -8,7 +8,7 @@ import constants.CodeMessage;
 import fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
@@ -51,9 +51,9 @@ public class BalanceByIds extends HttpServlet {
         List<String> fids = httpRequestChecker.getRequestBody().getFcdsl().getIds();
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
 
-        FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(settings);
-        Map<String,Long> balanceMap = fcdslRequestHandler.sumCashValueByOwners(fids, esClient);
-        fcdslRequestHandler.updateAddressBalances(balanceMap, esClient);
+        FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
+        Map<String,Long> balanceMap = fcHttpRequestHandler.sumCashValueByOwners(fids, esClient);
+        fcHttpRequestHandler.updateAddressBalances(balanceMap, esClient);
         replier.replySingleDataSuccessHttp(balanceMap,response);
     }
 }

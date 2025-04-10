@@ -77,6 +77,7 @@ public class FieldNames {
     public static final String ORDER = "order";
     public static final String LAST = "last";
     public static final String DID = "did";
+    public static final String RESULT = "result";
     public static final String HAT = "hat";
     public static final String INDEX = "index";
     public static final String SINCE = "since";
@@ -301,5 +302,6 @@ public class FieldNames {
     public static final String BUILDER_SHARE_MAP = "builderShareMap";
 
     public static final String COST_MAP = "costMap";
+    public static final String DISK_DIR = "diskDir";
 }
 

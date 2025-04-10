@@ -21,6 +21,8 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 
+import static fcData.AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+
 public class Signature extends FcObject{
     private String fid;
     private String msg;
@@ -125,7 +127,7 @@ public class Signature extends FcObject{
     public void bytesToStr() {
         if(algBytes!=null)alg = switch (Arrays.toString(algBytes)) {
             case "[0, 0, 0, 0, 0, 3]" ->AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7;
-            case "[0, 0, 0, 0, 0, 4]" ->AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 4]" -> BTC_EcdsaSignMsg_No1_NrC7;
             default -> alg;
         };
 
@@ -215,7 +217,7 @@ public class Signature extends FcObject{
                 signature.setKeyNameBytes(keyNameBytes);
             }
             case "[0, 0, 0, 0, 0, 4]" -> {
-                alg = AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+                alg = BTC_EcdsaSignMsg_No1_NrC7;
                 byte[] hash120 = new byte[20];
                 System.arraycopy(bundle, offset, hash120, 0, 20);
                 offset+=20;
@@ -329,7 +331,7 @@ public class Signature extends FcObject{
         try {
             if (rawSignJson.contains("----")) {
                 signature = parseOldSign(rawSignJson);
-                signature.setAlg(AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
+                signature.setAlg(BTC_EcdsaSignMsg_No1_NrC7);
             } else {
                 signature = fromJson(rawSignJson);
                 signature.makeSignature();
@@ -367,6 +369,7 @@ public class Signature extends FcObject{
     }
 
     public boolean verify() {
+        if(alg==null)alg = BTC_EcdsaSignMsg_No1_NrC7;
         switch (alg){
             case BTC_EcdsaSignMsg_No1_NrC7 ->{
                 try {

@@ -5,7 +5,7 @@ import appTools.Settings;
 import clients.ApipClient;
 import constants.FieldNames;
 import handlers.NonceHandler;
-import utils.RedisUtils;
+import utils.*;
 import constants.CodeMessage;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
@@ -15,12 +15,8 @@ import fcData.AlgorithmId;
 import fcData.ReplyBody;
 import fcData.Signature;
 import fcData.TalkUnit;
-import fch.FchUtils;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.TalkParams;
-import utils.BytesUtils;
-import utils.Hex;
-import utils.JsonUtils;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -241,7 +237,7 @@ class ServerUdpThread extends Thread {
 
         if(userFid.equals(talkParams.getDealer())){
             String minPay = talkParams.getMinPayment();
-            balance= FchUtils.coinToSatoshi(Double.parseDouble(minPay));
+            balance= utils.FchUtils.coinToSatoshi(Double.parseDouble(minPay));
             return balance;
         }
 

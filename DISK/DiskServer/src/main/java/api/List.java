@@ -6,8 +6,7 @@ import server.ApipApiNames;
 import fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
-import redis.clients.jedis.Jedis;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 import appTools.Settings;
 
@@ -26,6 +25,8 @@ import static constants.Strings.DATA;
 @WebServlet(name = LIST, value ="/"+ ApipApiNames.VERSION_1 +"/"+ LIST)
 public class List extends HttpServlet {
 
+    private final Settings settings = Initiator.settings;
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
@@ -38,35 +39,31 @@ public class List extends HttpServlet {
         doRequest(request, response, authType);
     }
 
-    private static void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
-        ReplyBody replier = new ReplyBody(Initiator.settings);
+    private void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
+        ReplyBody replier = new ReplyBody(settings);
 
         //Check authorization
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
-            httpRequestChecker.checkRequestHttp(request, response, authType);
-            if (httpRequestChecker ==null){
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
+
+        //Do request
+        FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
+        ArrayList<Sort> defaultSortList=null;
+
+        if(httpRequestChecker.getRequestBody()==null || httpRequestChecker.getRequestBody().getFcdsl()==null|| httpRequestChecker.getRequestBody().getFcdsl().getSort()==null)
+            defaultSortList = Sort.makeSortList(SINCE, true, DID, true, null, null);
+
+
+        java.util.List<DiskItem> meetList = fcHttpRequestHandler.doRequest(Settings.addSidBriefToName(settings.getSid(), DATA), defaultSortList, DiskItem.class);
+
+        if(meetList==null){
+            try {
+                response.getWriter().write(fcHttpRequestHandler.getFinalReplyJson());
+            } catch (IOException ignore) {
                 return;
             }
-            //Do request
-            FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, Initiator.settings);
-            ArrayList<Sort> defaultSortList=null;
-
-            if(httpRequestChecker.getRequestBody()==null || httpRequestChecker.getRequestBody().getFcdsl()==null|| httpRequestChecker.getRequestBody().getFcdsl().getSort()==null)
-                defaultSortList = Sort.makeSortList(SINCE, true, DID, true, null, null);
-
-
-            java.util.List<DiskItem> meetList = fcdslRequestHandler.doRequest(Settings.addSidBriefToName(Initiator.sid, DATA), defaultSortList, DiskItem.class);
-
-            if(meetList==null){
-                try {
-                    response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
-                } catch (IOException ignore) {
-                    return;
-                }
-            }
-
-            replier.reply0SuccessHttp(meetList,response);
         }
+
+        replier.reply0SuccessHttp(meetList,response);
     }
 }

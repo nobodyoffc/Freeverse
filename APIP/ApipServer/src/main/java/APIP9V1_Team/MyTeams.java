@@ -18,16 +18,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static constants.FieldNames.*;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 @WebServlet(name = ApipApiNames.MY_TEAMS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MY_TEAMS)
 public class MyTeams extends HttpServlet {
     private final Settings settings;
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public MyTeams() {
         this.settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -41,7 +41,7 @@ public class MyTeams extends HttpServlet {
         doRequest(defaultSort,request,response,authType,settings);
     }
     protected void doRequest( List<Sort> sortList,HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
-        List<Team> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.TEAM, Team.class, null, null, null, null, sortList, request, response, authType);
+        List<Team> meetList = fcHttpRequestHandler.doRequestForList(IndicesNames.TEAM, Team.class, null, null, null, null, sortList, request, response, authType);
         if (meetList == null) return;
         for(Team team : meetList){
             team.setMembers(null);
@@ -50,6 +50,6 @@ public class MyTeams extends HttpServlet {
             team.setInvitees(null);
             team.setTransferee(null);
         }
-        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetList,response);
+        fcHttpRequestHandler.getReplyBody().reply0SuccessHttp(meetList,response);
     }
 }

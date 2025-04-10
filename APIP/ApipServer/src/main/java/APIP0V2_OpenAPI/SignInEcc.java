@@ -1,13 +1,10 @@
 package APIP0V2_OpenAPI;
 
-import apip.apipData.RequestBody;
 import constants.CodeMessage;
-import fcData.FcSession;
 import fcData.ReplyBody;
-import handlers.Handler;
-import handlers.SessionHandler;
 import initial.Initiator;
 import server.ApipApiNames;
+import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
@@ -29,39 +26,7 @@ public class SignInEcc extends HttpServlet {
         this.httpRequestChecker = new HttpRequestChecker(settings, replier);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-
-        try {
-            FcSession fcSession;
-            String pubKey;
-            SessionHandler sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
-            if (sessionHandler == null) {
-                System.out.println("Failed to get session handler.");
-                replier.replyOtherErrorHttp("Failed to get session handler.", response);
-                return;
-            }
-            boolean isOk = httpRequestChecker.checkSignInRequestHttp(request, response);
-            if (!isOk) {
-                return;
-            }
-            pubKey = httpRequestChecker.getPubKey();
-            String fid = httpRequestChecker.getFid();
-            RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
-
-            if (sessionHandler.getSessionById(fid) == null || RequestBody.SignInMode.REFRESH.equals(mode)) {
-                fcSession = sessionHandler.addNewSession(fid, pubKey);
-            } else {
-                fcSession = sessionHandler.getSessionById(fid);
-            }
-            if (fcSession == null) {
-                replier.replyOtherErrorHttp("Failed to get session.", response);
-                return;
-            }
-            fcSession.setKey(null);
-            replier.reply0SuccessHttp(fcSession, response);
-        }catch (Exception e){
-            e.printStackTrace();
-            replier.replyOtherErrorHttp(e.toString(),response);
-        }
+        FcHttpRequestHandler.doSigInPost(request, response,replier,settings,httpRequestChecker);
     }
 
     @Override

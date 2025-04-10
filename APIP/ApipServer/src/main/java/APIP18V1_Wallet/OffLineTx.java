@@ -2,7 +2,6 @@ package APIP18V1_Wallet;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import handlers.CashHandler;
-import fch.FchUtils;
 import org.jetbrains.annotations.Nullable;
 import server.ApipApiNames;
 import constants.CodeMessage;
@@ -13,6 +12,7 @@ import fch.fchData.Cash;
 import fch.fchData.SendTo;
 import initial.Initiator;
 import server.HttpRequestChecker;
+import utils.FchUtils;
 import utils.http.AuthType;
 import handlers.MempoolHandler;
 import handlers.Handler.HandlerType;
@@ -27,9 +27,7 @@ import java.util.Map;
 import java.util.ArrayList;
 
 import static constants.Constants.Dust;
-import static constants.FieldNames.DATA_FOR_OFF_LINE_TX;
-import static constants.FieldNames.MESSAGE;
-import static constants.FieldNames.CD;
+import static constants.FieldNames.*;
 import static fch.TxCreator.parseDataForOffLineTxFromOther;
 import appTools.Settings;
 import feip.feipData.Service;
@@ -59,38 +57,39 @@ public class OffLineTx extends HttpServlet {
 
         Map<String, String> other = httpRequestChecker.checkOtherRequestHttp(request, response, authType);
         if (other == null) return;
+        String ver = "2";
 
-        TxCreator.OffLineTxRequestData offLineTxRequestData;
+        OffLineTxInfo offLineTxInfo;
         if (request.getMethod().equals("GET")) {
-            offLineTxRequestData = parseUrlParamsToOffLineRequestData(request, response);
-            if (offLineTxRequestData == null){
+            offLineTxInfo = parseUrlParamsToOffLineRequestData(request, response);
+            if (offLineTxInfo == null){
                 replier.replyHttp(CodeMessage.Code1012BadQuery, null, response);
                 return;
             }
         } else {
             // Handle POST request as before
             String json = other.get(DATA_FOR_OFF_LINE_TX);
-            offLineTxRequestData = parseDataForOffLineTxFromOther(json);
+            offLineTxInfo = parseDataForOffLineTxFromOther(json);
         }
 
         //Check API
-        if(offLineTxRequestData==null) {
+        if(offLineTxInfo ==null) {
             replier.replyHttp(CodeMessage.Code1012BadQuery,null,response);
             return;
         }
 
-        String fromFid = offLineTxRequestData.getFromFid();
-        Long cd = offLineTxRequestData.getCd();
-        List<SendTo> sendToList = offLineTxRequestData.getSendToList();
+        String fromFid = offLineTxInfo.getSender();
+        Long cd = offLineTxInfo.getCd();
+        List<SendTo> sendToList = offLineTxInfo.getOutputs();
         int outputSize=0;
         if(sendToList!=null)outputSize=sendToList.size();
-        String msg = offLineTxRequestData.getMsg();
+        String msg = offLineTxInfo.getMsg();
         int msgSize=0;
         if(msg!=null)msgSize = msg.getBytes().length;
 
         long amount = 0;
-        if(offLineTxRequestData.getSendToList()!=null && !offLineTxRequestData.getSendToList().isEmpty()) {
-            for (SendTo sendTo : offLineTxRequestData.getSendToList()) {
+        if(offLineTxInfo.getOutputs()!=null && !offLineTxInfo.getOutputs().isEmpty()) {
+            for (SendTo sendTo : offLineTxInfo.getOutputs()) {
                 if (sendTo.getAmount() < Dust) {
                     replier.replyOtherErrorHttp("The amount must be more than "+Dust+"fch.", response);
                     return;
@@ -124,26 +123,28 @@ public class OffLineTx extends HttpServlet {
             return;
         }
 
-        String rawTxForCs = TxCreator.makeOldCsTxRequiredJson(offLineTxRequestData,meetList);
+        String rawTxForCs = TxCreator. makeOffLineTxRequiredJson(offLineTxInfo,meetList);
+
         replier.replyHttp(CodeMessage.Code0Success, rawTxForCs, response);
     }
 
     @Nullable
-    public TxCreator.OffLineTxRequestData parseUrlParamsToOffLineRequestData(HttpServletRequest request, HttpServletResponse response) {
-        TxCreator.OffLineTxRequestData dataForSignInCs;
+    public OffLineTxInfo parseUrlParamsToOffLineRequestData(HttpServletRequest request, HttpServletResponse response) {
+        OffLineTxInfo dataForSignInCs;
         // Parse URL parameters for GET request
         String fromFid = request.getParameter("fromFid");
         String toFidsStr = request.getParameter("toFids");
         String amountsStr = request.getParameter("amounts");
         String msg = request.getParameter(MESSAGE);
         String cdStr = request.getParameter(CD);
+        String ver = request.getParameter(VER);
 
         if (fromFid == null) {
             return null;
         }
 
-        dataForSignInCs = new TxCreator.OffLineTxRequestData();
-        dataForSignInCs.setFromFid(fromFid);
+        dataForSignInCs = new OffLineTxInfo();
+        dataForSignInCs.setSender(fromFid);
 
         // Parse sendToList from toFids and amounts
         if (toFidsStr != null && amountsStr != null) {
@@ -160,7 +161,7 @@ public class OffLineTx extends HttpServlet {
                 sendTo.setAmount(Double.parseDouble(amounts[i]));
                 sendToList.add(sendTo);
             }
-            dataForSignInCs.setSendToList(sendToList);
+            dataForSignInCs.setOutputs(sendToList);
         }
 
         if (msg != null) {
@@ -169,6 +170,10 @@ public class OffLineTx extends HttpServlet {
 
         if (cdStr != null) {
             dataForSignInCs.setCd(Long.parseLong(cdStr));
+        }
+
+        if(ver!=null){
+            dataForSignInCs.setVer(ver);
         }
         return dataForSignInCs;
     }

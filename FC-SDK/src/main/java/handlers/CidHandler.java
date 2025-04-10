@@ -7,6 +7,7 @@ import utils.MapQueue;
 import appTools.Inputer;
 import appTools.Menu;
 import appTools.Settings;
+import fch.fchData.Cid;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,48 +16,40 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import fch.fchData.Cid;
-
-public class CidHandler extends Handler {
+public class CidHandler extends Handler<Cid> {
     private static final int MAX_FID_CID_CACHE_SIZE = 100;
     private static final int MAX_CID_FID_CACHE_SIZE = 100;
     private static final int MAX_FID_AVATAR_CACHE_SIZE = 50;
+    
+    private static final String MAP_FID_CID = "fidCid";
+    private static final String MAP_CID_FID = "cidFid";
+    private static final String MAP_FID_AVATAR = "fidAvatar";
 
     private final String mainFid;
     private final String sid;
     private final ApipClient apipClient;
-    private final CidDB cidDB;
     private final String avatarBasePath;
     private final String avatarFilePath;
 
     private final MapQueue<String, String> fidCidCache;
     private final MapQueue<String, String> cidFidCache;
     private final MapQueue<String, String> fidAvatarCache;
-
-    public CidHandler(String mainFid, String sid, ApipClient apipClient,
-                      String avatarBasePath, String avatarFilePath, String dbPath) {
-        this.mainFid = mainFid;
-        this.sid = sid;
-        this.apipClient = apipClient;
-        this.avatarBasePath = avatarBasePath;
-        this.avatarFilePath = avatarFilePath;
-        this.cidDB = new CidDB(mainFid, sid, dbPath);
-        
-        this.fidCidCache = new MapQueue<>(MAX_FID_CID_CACHE_SIZE);
-        this.cidFidCache = new MapQueue<>(MAX_CID_FID_CACHE_SIZE);
-        this.fidAvatarCache = new MapQueue<>(MAX_FID_AVATAR_CACHE_SIZE);
-    }
-
     public CidHandler(Settings settings){
+        super(settings, HandlerType.CID);
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.mainFid = settings.getMainFid();
         this.sid = settings.getSid();
         this.avatarBasePath = Settings.DEFAULT_AVATAR_BASE_PATH;
         this.avatarFilePath = Settings.DEFAULT_AVATAR_FILE_PATH;
-        this.cidDB = new CidDB(mainFid,sid, settings.getDbDir());
+        
         this.fidCidCache = new MapQueue<>(MAX_FID_CID_CACHE_SIZE);
         this.cidFidCache = new MapQueue<>(MAX_CID_FID_CACHE_SIZE);
         this.fidAvatarCache = new MapQueue<>(MAX_FID_AVATAR_CACHE_SIZE);
+        
+        // Initialize maps in LevelDB
+        createMap(MAP_FID_CID);
+        createMap(MAP_CID_FID);
+        createMap(MAP_FID_AVATAR);
     }
 
     public String getCid(String fid) {
@@ -67,7 +60,7 @@ public class CidHandler extends Handler {
         if (cid != null) return cid;
 
         // Check DB
-        cid = cidDB.getCidByFid(fid);
+        cid = localDB.getFromMap(MAP_FID_CID, fid);
         if (cid != null) {
             fidCidCache.put(fid, cid);
             return cid;
@@ -97,7 +90,7 @@ public class CidHandler extends Handler {
         if (fid != null) return fid;
 
         // Check DB
-        fid = cidDB.getFidByCid(cid);
+        fid = localDB.getFromMap(MAP_CID_FID, cid);
         if (fid != null) {
             cidFidCache.put(cid, fid);
             return fid;
@@ -109,7 +102,8 @@ public class CidHandler extends Handler {
     private void updateCidPair(String fid, String cid) {
         fidCidCache.put(fid, cid);
         cidFidCache.put(cid, fid);
-        cidDB.setFidCid(fid, cid);
+        localDB.putInMap(MAP_FID_CID, fid, cid);
+        localDB.putInMap(MAP_CID_FID, cid, fid);
     }
 
     public String getAvatar(String fid) {
@@ -120,7 +114,7 @@ public class CidHandler extends Handler {
         if (avatarPath != null) return avatarPath;
 
         // Check DB
-        avatarPath = cidDB.getFidAvatar(fid);
+        avatarPath = localDB.getFromMap(MAP_FID_AVATAR, fid);
         if (avatarPath != null) {
             fidAvatarCache.put(fid, avatarPath);
             return avatarPath;
@@ -132,7 +126,7 @@ public class CidHandler extends Handler {
             if (paths != null && paths.length > 0) {
                 avatarPath = paths[0];
                 fidAvatarCache.put(fid, avatarPath);
-                cidDB.setFidAvatar(fid, avatarPath);
+                localDB.putInMap(MAP_FID_AVATAR, fid, avatarPath);
                 return avatarPath;
             }
         } catch (IOException e) {
@@ -154,8 +148,9 @@ public class CidHandler extends Handler {
         return result;
     }
 
+    @Override
     public void close() {
-        cidDB.close();
+        super.close();
     }
 
     public void menu(BufferedReader br, boolean withSettings) {

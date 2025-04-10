@@ -4,6 +4,7 @@ import appTools.Settings;
 import server.ApipApiNames;
 import fcData.ReplyBody;
 import initial.Initiator;
+import server.FcHttpRequestHandler;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
 
@@ -24,24 +25,14 @@ public class Ping extends HttpServlet {
     }
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-
         AuthType authType = AuthType.FC_SIGN_BODY;
-
-        //Check authorization
-        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
-        if (!isOk) return;
-        replier.reply0SuccessHttp(response);
+        FcHttpRequestHandler.doPingPost(request, response, authType,replier,httpRequestChecker);
 
     }
 
-    protected void doGet(HttpServletRequest request, HttpServletResponse response){
+    public void doGet(HttpServletRequest request, HttpServletResponse response){
         AuthType authType = AuthType.FREE;
-
-        //Check authorization
-        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
-        if (!isOk){
-                return;
-        }
-        replier.reply0SuccessHttp(true,response);
+        FcHttpRequestHandler.doPingGet(request, response, authType,replier,httpRequestChecker);
     }
+
 }

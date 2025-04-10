@@ -7,7 +7,7 @@ import constants.IndicesNames;
 import feip.feipData.TokenHolder;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -23,22 +23,22 @@ import static constants.FieldNames.LAST_HEIGHT;
 
 @WebServlet(name = ApipApiNames.MY_TOKENS, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MY_TOKENS)
 public class MyTokens extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public MyTokens() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.TOKEN_HOLDER, TokenHolder.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN_HOLDER, TokenHolder.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.TOKEN_HOLDER, TokenHolder.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN_HOLDER, TokenHolder.class, defaultSort, request,response,authType);
     }
 }

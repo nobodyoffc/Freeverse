@@ -1,7 +1,6 @@
 package handlers;
 
 import crypto.Decryptor;
-import fcData.PersistentSequenceMap;
 import fch.fchData.Cid;
 import appTools.Inputer;
 import appTools.Menu;
@@ -26,6 +25,7 @@ import org.jetbrains.annotations.Nullable;
 import utils.*;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
+import db.LocalDB;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -36,9 +36,10 @@ import static appTools.Inputer.askIfYes;
 import static constants.Constants.Dust;
 import static constants.OpNames.*;
 
-public class MailHandler extends Handler {
+public class MailHandler extends Handler<MailDetail> {
     // Constants and Enums
     private static final Integer DEFAULT_SIZE = 50;
+    private static final String LAST_HEIGHT = "last_height";
 
     public enum MailOp {
         SEND(Op.SEND),
@@ -60,33 +61,23 @@ public class MailHandler extends Handler {
     private final CashHandler cashHandler;
     private final byte[] symKey;
     private final String myPriKeyCipher;
-    private final PersistentSequenceMap mailDB;
     private List<String> failedDecryptMailIdList;
 
     // Constructor
-    public MailHandler(String myFid, ApipClient apipClient, CashHandler cashHandler, byte[] symKey, String myPriKeyCipher,String dbPath, BufferedReader br) {
-        this.myFid = myFid;
-        this.apipClient = apipClient;
-        this.cashHandler = cashHandler;
-        this.symKey = symKey;
-        this.myPriKeyCipher = myPriKeyCipher;
-        this.br = br;
-        this.mailDB = new PersistentSequenceMap(myFid,null, constants.Strings.MAIL, dbPath);
-    }
 
-    public MailHandler(Settings settings){
+    public MailHandler(Settings settings) {
+        super(settings, HandlerType.MAIL, LocalDB.SortType.BIRTH_ORDER, MailDetail.class, true, true);
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.cashHandler = (CashHandler) settings.getHandler(HandlerType.CASH);
         this.myFid = settings.getMainFid();
         this.symKey = settings.getSymKey();
         this.myPriKeyCipher = settings.getMyPriKeyCipher();
-        this.br = settings.getBr(); 
-        this.mailDB = new PersistentSequenceMap(myFid,null, constants.Strings.MAIL, settings.getDbDir());
-    }   
+        this.br = settings.getBr();
+    }
 
     // Public Methods
-    public void menu() {
-        Menu menu = new Menu("Mail Menu", this::close);
+    public void menu(BufferedReader br, boolean isRootMenu) {
+        Menu menu = newMenu("Mail",isRootMenu);
         menu.add(READ, () -> readMails(br));
         menu.add(UPDATE, () -> checkMail(br));
         menu.add(MailOp.SEND.toLowerCase(), () -> sendMails(br));
@@ -168,14 +159,14 @@ public class MailHandler extends Handler {
     public void checkMail(BufferedReader br) {
         List<String> last = null;
         List<Mail> mailList = null;
-        Long lastHeight = mailDB.getLastHeight();
+        Long lastHeight = getLastHeight();
         mailList = loadAllMailList(lastHeight, true, last, DEFAULT_SIZE);
 
         List<MailDetail> mailDetailList = new ArrayList<>();
 
         if (!mailList.isEmpty()) {
             mailDetailList = mailToMailDetail(mailList);
-            mailDB.setLastHeight(mailList.get(0).getLastHeight());
+            setLastHeight(mailList.get(0).getLastHeight());
             deleteInvalidMails(br);
         }
 
@@ -356,14 +347,14 @@ public class MailHandler extends Handler {
                 System.out.println("The mail is " + op.toLowerCase() + "ed in TX  " + result + ".");
                 if(op.equals(MailOp.DELETE)){
                     for(String mailId1:mailIds) {
-                        mailDB.remove(Hex.fromHex(mailId1));
+                        remove(mailId1);
                     }
                 }else if(op.equals(MailOp.RECOVER)){
                     if(recoverMailMap!=null && !recoverMailMap.isEmpty()) {
                         List<MailDetail> mailDetailList = mailToMailDetail(new ArrayList<>(recoverMailMap.values()));
                         if(mailDetailList!=null && !mailDetailList.isEmpty()) {
                             for(MailDetail mailDetail:mailDetailList) {
-                                mailDB.put(mailDetail.getIdBytes(), mailDetail.toBytes());
+                                put(mailDetail.getId(), mailDetail);
                             }
                         }
                     }   
@@ -405,7 +396,7 @@ public class MailHandler extends Handler {
     }
 
     private List<MailDetail> mailToMailDetail(List<Mail> mailList) {
-        if(failedDecryptMailIdList ==null) failedDecryptMailIdList = new ArrayList<>();
+        if(failedDecryptMailIdList == null) failedDecryptMailIdList = new ArrayList<>();
         List<MailDetail> mailDetailList = new ArrayList<>();
         byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         Set<String> fidSet = new HashSet<>();
@@ -420,8 +411,8 @@ public class MailHandler extends Handler {
         if (fidCidMap != null)
             for (int i = mailList.size() - 1; i >= 0; i--) {
                 Mail mail = mailList.get(i);
-                MailDetail mailDetail = MailDetail.fromMail(myFid,mail, priKey,apipClient);
-                if(mailDetail==null){
+                MailDetail mailDetail = MailDetail.fromMail(myFid, mail, priKey, apipClient);
+                if(mailDetail == null) {
                     failedDecryptMailIdList.add(mail.getId());
                     continue;
                 }
@@ -429,10 +420,8 @@ public class MailHandler extends Handler {
                 String recipientCid = fidCidMap.get(mail.getRecipient());
                 if (senderCid != null) mailDetail.setFromCid(senderCid);
                 if (recipientCid != null) mailDetail.setToCid(recipientCid);
-                byte[] key = mailDetail.getIdBytes();
-                byte[] bytes = mailDetail.toBytes();
-                if (key != null && bytes != null) {
-                    mailDB.put(key, bytes);
+                if (mailDetail.getId() != null) {
+                    put(mailDetail.getId(), mailDetail);
                     mailDetailList.add(mailDetail);
                 }
             }
@@ -440,50 +429,7 @@ public class MailHandler extends Handler {
     }
 
     private List<MailDetail> chooseMailDetails(BufferedReader br) {
-        List<MailDetail> chosenMails = new ArrayList<>();
-        byte[] lastId = null;
-        int totalDisplayed = 0;
-
-        while (true) {
-            List<MailDetail> currentList = mailDB.getListFromEnd(lastId, DEFAULT_SIZE, (byte[] value) -> MailDetail.fromBytes(value));
-            if (currentList.isEmpty()) {
-                break;
-            }
-
-            String title = "Choose Mails";
-            showMailDetailList(currentList, title, totalDisplayed);
-
-            System.out.println("Enter mail numbers to select (comma-separated), 'q' to quit, or press Enter for more:");
-            String input = Inputer.inputString(br);
-
-            if ("".equals(input)) {
-                totalDisplayed += currentList.size();
-                lastId = currentList.get(currentList.size() - 1).getIdBytes();
-                continue;
-            }
-
-            if (input.equals("q")) {
-                break;
-            } 
-
-            String[] selections = input.split(",");
-            for (String selection : selections) {
-                try {
-                    int index = Integer.parseInt(selection.trim()) - 1;
-                    if (index >= 0 && index < totalDisplayed + currentList.size()) {
-                        int listIndex = index - totalDisplayed;
-                        chosenMails.add(currentList.get(listIndex));
-                    }
-                } catch (NumberFormatException e) {
-                    System.out.println("Invalid input: " + selection);
-                }
-            }
-
-            totalDisplayed += currentList.size();
-            lastId = currentList.get(currentList.size() - 1).getIdBytes();
-        }
-
-        return chosenMails;
+        return chooseItems(br);
     }
 
     private MailDetail chooseOneMailDetailFromList(List<MailDetail> mailDetailList, BufferedReader br) {
@@ -522,7 +468,7 @@ public class MailHandler extends Handler {
             showList.add(mailDetail.getContent());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
     private static void showMailDetail(MailDetail mail) {
@@ -626,29 +572,36 @@ public class MailHandler extends Handler {
 
     private List<MailDetail> findMailDetails(String searchStr) {
         byte[] searchBytes;
-        List<MailDetail> chosenMails;
         if (KeyTools.isGoodFid(searchStr)) searchBytes = KeyTools.addrToHash160(searchStr);
         else searchBytes = searchStr.getBytes();
-        chosenMails = findMailDetails(searchBytes);
-        return chosenMails;
+        return findMailDetails(searchBytes);
     }
 
     private List<MailDetail> findMailDetails(byte[] searchBytes) {
-        List<MailDetail> foundMails = new ArrayList<>();
-        
-        for (Map.Entry<byte[], byte[]> entry : mailDB.entrySet()) {
-            if (BytesUtils.contains(entry.getValue(), searchBytes)) {
-                MailDetail mailDetail = MailDetail.fromBytes(entry.getValue());
-                if (mailDetail != null) {
-                    foundMails.add(mailDetail);
-                }
-            }
-        }
-        return foundMails;
+        return searchInValue(new String(searchBytes));
     }
 
     // Getter Methods
     public Feip getFeip() {
         return Feip.fromProtocolName(Feip.ProtocolName.MAIL);
+    }
+
+    private Long getLastHeight() {
+        return getLongState(LAST_HEIGHT);
+    }
+
+    private void setLastHeight(Long height) {
+        if (localDB != null) {
+            localDB.putState(LAST_HEIGHT, height);
+        }
+    }
+
+    private void put(String id, MailDetail mailDetail) {
+        if (localDB == null) return;
+        try {
+            localDB.put(id, mailDetail);
+        } catch (Exception e) {
+            log.error("Failed to put mail detail: {}", e.getMessage());
+        }
     }
 }

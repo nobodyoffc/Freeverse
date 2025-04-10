@@ -1,23 +1,18 @@
 package handlers;
 
 import fcData.TalkUnit;
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
-
 import appTools.Settings;
 import utils.FileUtils;
+import db.LocalDB;
 
-import java.io.File;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.*;
 
-public class TalkUnitHandler extends Handler {
+public class TalkUnitHandler extends Handler<TalkUnit> {
     private final String dbName;
-    private final DB db;
     private final Map<String, ConcurrentHashMap<String, TalkUnit>> mapMap;
     private final ConcurrentHashMap<String, String> recentTalkUnits; // id -> roomId
     private final Queue<String> recentIdQueue; // to maintain order and size
@@ -25,39 +20,21 @@ public class TalkUnitHandler extends Handler {
     private final ScheduledExecutorService commitScheduler;
     private volatile boolean hasUncommittedChanges = false;
 
-    public TalkUnitHandler(String myFid, String sid) {
-        String userHome = System.getProperty("user.home");
-        this.dbName = FileUtils.makeName(myFid, sid, "talkUnit", true);
-        String dbPath = Paths.get(userHome, dbName + ".db").toString();
-        
-        // Initialize DB with a single file
-        this.db = DBMaker.fileDB(new File(dbPath))
-                .fileMmapEnable()
-                .closeOnJvmShutdown()
-                .make();
-        
+    public TalkUnitHandler(Settings settings) {
+        super(settings, HandlerType.TALK_UNIT, LocalDB.SortType.UPDATE_ORDER, TalkUnit.class, true, false);
+        this.dbName = FileUtils.makeName(settings.getMainFid(), settings.getSid(), "talkUnit", true);
+
         this.mapMap = new ConcurrentHashMap<>();
         this.recentTalkUnits = new ConcurrentHashMap<>();
         this.recentIdQueue = new ConcurrentLinkedQueue<>();
-        
         this.commitScheduler = Executors.newSingleThreadScheduledExecutor();
         commitScheduler.scheduleWithFixedDelay(this::commitIfNeeded, 5, 5, TimeUnit.SECONDS);
     }
 
-    public TalkUnitHandler(Settings settings){
-        String userHome = System.getProperty("user.home");
-        this.dbName = FileUtils.makeName(settings.getMainFid(), settings.getSid(), "talkUnit", true);
-        String dbPath = Paths.get(userHome, dbName + ".db").toString();
-
-        this.db = DBMaker.fileDB(new File(dbPath))
-                .fileMmapEnable()
-                .closeOnJvmShutdown()
-                .make();
-        this.mapMap = new ConcurrentHashMap<>();
-        this.recentTalkUnits = new ConcurrentHashMap<>();
-        this.recentIdQueue = new ConcurrentLinkedQueue<>();
-        this.commitScheduler = Executors.newSingleThreadScheduledExecutor();
-        commitScheduler.scheduleWithFixedDelay(this::commitIfNeeded, 5, 5, TimeUnit.SECONDS);
+    private void commitIfNeeded() {
+        if (hasUncommittedChanges) {
+            hasUncommittedChanges = false;
+        }
     }
 
     public void saveTalkUnit(TalkUnit rawTalkUnit, boolean done) {
@@ -68,13 +45,6 @@ public class TalkUnitHandler extends Handler {
             rawTalkUnit.setStata(TalkUnit.State.FAILED_TO_SEND);
         }
         put(rawTalkUnit);
-    }
-
-    private void commitIfNeeded() {
-        if (hasUncommittedChanges) {
-            db.commit();
-            hasUncommittedChanges = false;
-        }
     }
 
     public void put(TalkUnit talkUnit) {
@@ -89,6 +59,9 @@ public class TalkUnitHandler extends Handler {
         
         // Add to recent map
         addToRecentMap(id, roomId);
+        
+        // Store in LevelDB
+        localDB.put(id, talkUnit);
         
         hasUncommittedChanges = true;
     }
@@ -148,25 +121,33 @@ public class TalkUnitHandler extends Handler {
         return result;
     }
 
-    public TalkUnit get(String id,TalkUnit talkUnitForRoomId) {
-        if(talkUnitForRoomId!=null){
+    public TalkUnit get(String id, TalkUnit talkUnitForRoomId) {
+        if(talkUnitForRoomId != null) {
             String roomId = makeRoomId(talkUnitForRoomId);
-            if(roomId!=null)return get(roomId,id);
+            if(roomId != null) return get(roomId, id);
         }
         return get(id);
     }
-    public TalkUnit get(String id){
-        // Search through all rooms in mapMap
+
+    public TalkUnit get(String id) {
+        // First try to get from LevelDB
+        TalkUnit unit = localDB.get(id);
+        if (unit != null) {
+            return unit;
+        }
+        
+        // If not found, search through all rooms in mapMap
         for (Map<String, TalkUnit> room : mapMap.values()) {
-            TalkUnit unit = room.get(id);
+            unit = room.get(id);
             if (unit != null) {
                 return unit;
             }
         }
         return null;
     }
+
     public TalkUnit get(String roomId, String id) {
-        if(roomId==null)return get(id);
+        if(roomId == null) return get(id);
         Map<String, TalkUnit> room = mapMap.get(roomId);
         return room != null ? room.get(id) : null;
     }
@@ -186,6 +167,7 @@ public class TalkUnitHandler extends Handler {
         return dbName;
     }
 
+    @Override
     public void close() {
         try {
             commitScheduler.shutdown();
@@ -197,12 +179,9 @@ public class TalkUnitHandler extends Handler {
             Thread.currentThread().interrupt();
         }
         
-        if (hasUncommittedChanges) {
-            db.commit();
-        }
-        db.close();
         mapMap.clear();
         recentTalkUnits.clear();
         recentIdQueue.clear();
+        super.close();
     }
 } 

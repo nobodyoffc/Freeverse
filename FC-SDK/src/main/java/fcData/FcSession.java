@@ -26,10 +26,10 @@ import static constants.FieldNames.SESSION_KEY;
 import static constants.Values.TRUE;
 
 public class FcSession extends FcObject {
-    private String name;
     private String key;
     private String pubKey;
     private String keyCipher;
+    private String userId;
     private transient byte[] keyBytes;
 
 
@@ -45,13 +45,13 @@ public class FcSession extends FcObject {
     }
     private static FcSession fromMap(Map<String, String> sessionMap) {
         FcSession session = new FcSession();
-        session.setId(sessionMap.get(FieldNames.ID));
+        session.setUserId(sessionMap.get(FieldNames.ID));
         String sessionKey = sessionMap.get(SESSION_KEY);
         if(sessionKey!=null) {
             byte[] keyBytes = Hex.fromHex(sessionKey);
             session.setKeyBytes(keyBytes);
             session.setKey(sessionKey);
-            session.setName(IdNameUtils.makeKeyName(keyBytes));
+            session.setId(IdNameUtils.makeKeyName(keyBytes));
         }
         session.setPubKey(sessionMap.get(PUB_KEY));
         session.makeKeyBytes();
@@ -85,8 +85,8 @@ public class FcSession extends FcObject {
         jedis.select(0);
         String sessionName = jedis.hget(Settings.addSidBriefToName(sid, Strings.ID_SESSION_NAME), id);
         FcSession fcSession =new FcSession();
-        fcSession.setId(id);
-        fcSession.setName(sessionName);
+        fcSession.setUserId(id);
+        fcSession.setId(sessionName);
         jedis.select(1);
         String sessionKey = jedis.hget(sessionName, SESSION_KEY);
         if (sessionKey != null) {
@@ -165,13 +165,9 @@ public class FcSession extends FcObject {
     public static String makeSessionName(byte[] sessionKey) {
         return IdNameUtils.makeKeyName(sessionKey);
     }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
+    public String makeId() {
+        if(keyBytes==null & key!=null)keyBytes=Hex.fromHex(key);
+        return IdNameUtils.makeKeyName(keyBytes);
     }
 
     public byte[] getKeyBytes() {
@@ -222,5 +218,13 @@ public class FcSession extends FcObject {
 
     public static List<FcSession> fromJsonList(String json) {
         return JsonUtils.listFromJson(json, FcSession.class);
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 }

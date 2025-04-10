@@ -40,7 +40,7 @@ public class SignIn extends HttpServlet {
         String fid = httpRequestChecker.getFid();
         RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
 
-        if (sessionHandler.getSessionById(fid)==null || RequestBody.SignInMode.REFRESH.equals(mode)) {
+        if (sessionHandler.getSessionByUserId(fid)==null || RequestBody.SignInMode.REFRESH.equals(mode)) {
             try {
                 fcSession = sessionHandler.addNewSession(fid, null);
             } catch (Exception e) {
@@ -48,7 +48,7 @@ public class SignIn extends HttpServlet {
                 return;
             }
         } else {
-            fcSession = sessionHandler.getSessionById(fid);
+            fcSession = sessionHandler.getSessionByUserId(fid);
             if (fcSession == null) {
                 try {
                     fcSession = sessionHandler.addNewSession(fid, null);

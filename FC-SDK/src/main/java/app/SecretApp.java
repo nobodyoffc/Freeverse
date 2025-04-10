@@ -26,7 +26,7 @@ public class SecretApp {
         settingsMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 
         while(true) {
-            Settings settings = Starter.startClient(SecretHandler.name, settingsMap, br, SecretHandler.modules);
+            Settings settings = Starter.startClient(SecretHandler.name, settingsMap, br, SecretHandler.modules, null);
 
             if (settings == null) return;
 

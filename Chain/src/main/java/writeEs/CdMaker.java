@@ -13,13 +13,13 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.FieldNames;
 import constants.Strings;
-import fch.FchUtils;
 import fch.WeightMethod;
 import fch.fchData.Cid;
 import fch.fchData.Block;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.EsUtils;
+import utils.FchUtils;
 import utils.JsonUtils;
 
 import java.io.IOException;

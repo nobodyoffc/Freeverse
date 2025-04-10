@@ -57,7 +57,7 @@ public class StartDiskClient {
         br = new BufferedReader(new InputStreamReader(System.in));
         Menu.welcome(clientName);
 
-        settings = Starter.startClient(clientName, settingMap, br, modules);
+        settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
         apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);//settings.getApipAccount().getClient();
         diskClient = (DiskClient) settings.getClient(Service.ServiceType.DISK);//settings.getDiskAccount().getClient();
@@ -262,6 +262,6 @@ public class StartDiskClient {
             else valueList.add("");
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title,fields,widths,valueListList, null);
+        Shower.showOrChooseList(title,fields,widths,valueListList, null);
     }
 }

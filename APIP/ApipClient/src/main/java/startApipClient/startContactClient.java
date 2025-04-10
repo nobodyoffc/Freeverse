@@ -45,7 +45,7 @@ public class startContactClient {
         Menu.welcome(clientName);
 
         br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startClient(clientName, settingMap, br, modules);
+        settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
         apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         cashHandler = (CashHandler)settings.getHandler(Handler.HandlerType.CASH);

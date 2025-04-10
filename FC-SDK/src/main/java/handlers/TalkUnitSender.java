@@ -166,8 +166,8 @@ public class TalkUnitSender extends Handler {
         else if(price!=null)
             cost = length * price;
         else cost =0;
-        newBalance = accountHandler.addUserBalance(userFid, -cost);
-        if(newBalance!= null && newBalance >= 0) accountHandler.addViaBalance(userFid, cost, null);
+        newBalance = accountHandler.updateUserBalance(userFid, -cost);
+        if(newBalance!= null && newBalance >= 0) accountHandler.updateViaBalance(userFid, cost, null);
         return newBalance;
     }
 
@@ -183,7 +183,7 @@ public class TalkUnitSender extends Handler {
         String pubKey = null;
         byte[] priKey = myPriKey;
 
-        FcSession session = sessionHandler.getSessionById(toId);
+        FcSession session = sessionHandler.getSessionByUserId(toId);
         if(session!=null){
             sessionKey = session.getKeyBytes();
             pubKey = session.getPubKey();

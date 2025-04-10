@@ -41,7 +41,7 @@ public class Talk{
         Talk talk = new Talk();
 
         talk.settings = Starter.startClient(talk.clientName,
-                talk.getSettingMap(), br, modules);
+                talk.getSettingMap(), br, modules, null);
         if(talk.settings == null) return;
 
         TalkClient talkClient = (TalkClient) talk.settings.getApiAccount(Service.ServiceType.TALK).getClient();

@@ -10,7 +10,6 @@ import constants.FieldNames;
 import crypto.CryptoDataByte;
 import crypto.Decryptor;
 import crypto.Encryptor;
-import crypto.KeyTools;
 import db.LocalDB;
 import fcData.AlgorithmId;
 import fcData.ContactDetail;
@@ -37,8 +36,8 @@ import java.util.stream.Collectors;
 
 import javax.annotation.Nullable;
 
-import static constants.FieldNames.CIPHER;
-import static constants.FieldNames.ID;
+import static appTools.Shower.DEFAULT_PAGE_SIZE;
+import static constants.FieldNames.*;
 import static constants.IndicesNames.CONTACT;
 import static constants.Strings.TIME;
 
@@ -68,27 +67,39 @@ public class ContactHandler extends Handler<ContactDetail> {
     }
 
     @Override
-    public void menu(BufferedReader br, boolean withSettings) {
-        this.cashHandler = (CashHandler)settings.getHandler(HandlerType.CASH);
-        if(this.cashHandler==null)this.cashHandler = new CashHandler(settings);
+    public void menu(BufferedReader br, boolean isRootMenu) {
+        if(cashHandler==null) cashHandler = (CashHandler) settings.getHandler(HandlerType.CASH);
 
-        Menu menu = new Menu("Contact Menu", this::close);
-        addBasicMenuItems(br,menu);
-        menu.add("List Locally Removed Contacts", () -> reloadRemovedItems(br));
-        menu.add("Clear Locally Removed Records", () -> clearAllLocallyRemoved(br));
-        menu.add("Check Contacts on Chain", () -> freshOnChainContacts(br));
+        freshOnChainContacts(br);
+
+        Menu menu = newMenu(itemName, isRootMenu);
+
+        menu.add("List Local "+ StringUtils.capitalize(itemName), () -> listItems(br));
+        menu.add("Search Local "+ StringUtils.capitalize(itemName), () -> searchItems(br, true,true));
+        menu.add("Fresh Contacts on Chain", () -> freshOnChainContacts(br));
         menu.add("Add Contacts on Chain", () -> addContacts(br));
         menu.add("Delete Contacts on Chain", () -> deleteContacts(br));
-        menu.add("List deleted Contacts on Chain", () -> recoverContacts(br));
+        menu.add("List on Chain deleted Contacts", () -> recoverContacts(br));
+        menu.add("List Locally Removed Contacts", () -> reloadRemovedItems(br));
+        menu.add("Clear Locally Removed Records", () -> clearAllLocallyRemoved(br));
         menu.add("Clear on Chain Deleted Records", () -> clearDeletedRecord(br));
-        if(cashHandler!=null)menu.add("Manage Cash", cashHandler::menu);
-        if(withSettings)
+        menu.add("Clear and Reload",()->reloadAllContactsFromChain(br));
+        if(isRootMenu && cashHandler!=null)
+            menu.add("My Cash", () -> cashHandler.menu(br, false));
+        if(isRootMenu)
             menu.add("Settings", () -> settings.setting(br, null));
 
         menu.showAndSelect(br);
     }
 
-    public List<String> searchAndChooseFidList(BufferedReader br){
+
+
+    private void reloadAllContactsFromChain(BufferedReader br) {
+        clearTheDatabase(br);
+        freshOnChainContacts(br);
+    }
+
+    public List<String> inputOrSearchFidList(BufferedReader br){
         List<String> fidList = new ArrayList<>();
         String op = Inputer.chooseOne(new String[]{"Input FIDs","Search in contacts","Search on chain"}, null, "Select an algorithm", br);
         switch (op) {
@@ -101,7 +112,7 @@ public class ContactHandler extends Handler<ContactDetail> {
             case "Search in contacts" -> {
                 List<ContactDetail> contactDetailList = searchFidInContact(br);
                 if (contactDetailList != null && !contactDetailList.isEmpty()) {
-                    List<ContactDetail> chosenContactDetailList = Inputer.chooseMultiFromListGeneric(contactDetailList, 0, 20, "Choose the contacts to add:", br);
+                    List<ContactDetail> chosenContactDetailList = Shower.showOrChooseListInPages("Contacts",contactDetailList,DEFAULT_PAGE_SIZE, null, true,ContactDetail.class,br);
                     if (chosenContactDetailList != null && !chosenContactDetailList.isEmpty()) {
                         fidList.addAll(chosenContactDetailList.stream().map(ContactDetail::getFid).collect(Collectors.toList()));
                     }
@@ -110,10 +121,7 @@ public class ContactHandler extends Handler<ContactDetail> {
             case "Search on chain" -> {
                 List<Cid> cidList = searchCidOnChain(br);
                 if (cidList != null && !cidList.isEmpty()) {
-                    List<Cid> chosenCidList = Inputer.chooseMultiFromListGeneric(cidList, 0, 20, "Choose the contacts to add:", br);
-                    if (chosenCidList != null && !chosenCidList.isEmpty()) {
-                        fidList.addAll(chosenCidList.stream().map(Cid::getId).toList());
-                    }
+                    fidList.addAll(cidList.stream().map(Cid::getId).toList());
                 }
             }
         }
@@ -134,8 +142,10 @@ public class ContactHandler extends Handler<ContactDetail> {
     public List<Cid> searchCidOnChain(BufferedReader br){
         List<Cid> cidList = new ArrayList<>();
         while(true){
-            List<Cid> batchCidList = apipClient.searchCid(br);
-            cidList.addAll(batchCidList);
+            List<Cid> batchCidList = apipClient.searchCidList(br, true);
+            if(batchCidList!=null && !batchCidList.isEmpty())
+                cidList.addAll(batchCidList);
+            else System.out.println("No items found. Mind the capitalization.");
             if(Inputer.askIfYes(br, "Search more?"))continue;
             else break;
         }
@@ -144,7 +154,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
     protected void reloadRemovedItems(BufferedReader br) {
         Map<String, Long> removedItems = localDB.getAllFromMap(LocalDB.LOCAL_REMOVED_MAP);
-        List<String> chosenIds = Shower.listAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
+        List<String> chosenIds = Shower.showAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
         Map<String, Contact> items = reloadContactsFromChain(br, chosenIds);
         
         if(items.isEmpty()) System.out.println("No item reloaded.");
@@ -158,7 +168,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         List<Contact> reloadedList = new ArrayList<>();
         if(items==null|| items.isEmpty())return new HashMap<>();
 
-        List<Contact> chosenDeletedContactList;
+        List<Contact> chosenDeletedContactList = null;
         List<Contact> deletedContactList = new ArrayList<>();
         boolean recovered;
         for(Contact item:items.values()){
@@ -170,7 +180,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
         if(!deletedContactList.isEmpty()){
             if(Inputer.askIfYes(br, "There are " + deletedContactList.size() + " on chain deleted contacts. Choose to recover them?")){
-                chosenDeletedContactList = Inputer.chooseMultiFromListGeneric(deletedContactList, 0, 20, "Choose the deleted contacts to reload:", br);
+                chosenDeletedContactList = Shower.showOrChooseListInPages("Delete Contacts",chosenDeletedContactList,DEFAULT_PAGE_SIZE, null, true,Contact.class,br);
                 if(chosenDeletedContactList!=null){
                     recovered = recoverContacts(chosenDeletedContactList.stream().map(Contact::getId).collect(Collectors.toList()), null, br);
                     if(recovered) {
@@ -202,7 +212,7 @@ public class ContactHandler extends Handler<ContactDetail> {
     }
 
     public void putContact(String id, ContactDetail contact) {
-        put(id, contact);
+        localDB.put(id, contact);
         recentContactDetailMapQueue.put(id, contact);
     }
 
@@ -211,49 +221,11 @@ public class ContactHandler extends Handler<ContactDetail> {
         if (contact != null) {
             return contact;
         }
-        contact = get(id);
+        contact = localDB.get(id);
         if (contact != null) {
             recentContactDetailMapQueue.put(id, contact);
         }
         return contact;
-    }
-
-    public Map<String, ContactDetail> getAllContacts() {
-        return getAll();
-    }
-
-    public NavigableMap<Long, String> getContactIndexIdMap() {
-        return getIndexIdMap();
-    }
-
-    public NavigableMap<String, Long> getContactIdIndexMap() {
-        return getIdIndexMap();
-    }
-
-    public ContactDetail getContactById(String id) {
-        return getItemById(id);
-    }
-
-    public ContactDetail getContactByIndex(long index) {
-        return getItemByIndex(index);
-    }
-
-    public Long getContactIndexById(String id) {
-        return getIndexById(id);
-    }
-
-    public String getContactIdByIndex(long index) {
-        return getIdByIndex(index);
-    }
-
-    public List<ContactDetail> getContactList(Integer size, Long fromIndex, String fromId,
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        return getItemList(size, fromIndex, fromId, isFromInclude, toIndex, toId, isToInclude, isFromEnd);
-    }
-
-    public LinkedHashMap<String, ContactDetail> getContactMap(int size, Long fromIndex, String fromId,
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        return getItemMap(size, fromIndex, fromId, isFromInclude, toIndex, toId, isToInclude, isFromEnd);
     }
 
     public void removeContact(String id) {
@@ -305,8 +277,18 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
     }
 
-    public void addContact(BufferedReader br) {
-        opContact(null, null, ContactOpData.Op.ADD, br);
+    public void addContacts(BufferedReader br) {
+        List<String> fids = inputOrSearchFidList(br);
+
+        if(fids.size()==1) {
+            opContact(fids.get(0), null, ContactOpData.Op.ADD, br);
+            return;
+        }
+        System.out.println(fids.size()+" contact will be encrypted and carve on chain...");
+        for (String fid:fids){
+            opContact(fid, null, ContactOpData.Op.ADD, br);
+            if(Inputer.askIfYes(br,"Stop to add?"))break;
+        }
     }
 
     public void addContacts(List<ContactDetail> itemList, @Nullable BufferedReader br) {
@@ -321,19 +303,13 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
     }
 
-    public void addContacts(BufferedReader br) {
-        do {
-            addContact(br);
-        } while (Inputer.askIfYes(br, "Do you want to add another contact?"));
-    }
-
 
     public String deleteContact(List<String> contactIds, BufferedReader br) {
         return opContact(null, contactIds, ContactOpData.Op.DELETE, br);
     }
 
     public void deleteContacts(BufferedReader br) {
-        if (dbEmpty(br)) return;
+        if (dbEmpty()) return;
         List<ContactDetail> finalChosenList = chooseItemList(br);
         if(finalChosenList!=null && finalChosenList.size()>0)
             deleteContacts(finalChosenList, br);
@@ -346,7 +322,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
 
         if (Inputer.askIfYes(br, "View them before delete?")) {
-            Shower.showOrChooseListInPages("Chosen  Contacts", chosenContacts, br,true, ContactDetail.class);
+            Shower.showOrChooseListInPages("Chosen  Contacts", chosenContacts, DEFAULT_PAGE_SIZE, null, true, ContactDetail.class, br);
         }
 
         if (Inputer.askIfYes(br, "Delete " + chosenContacts.size() + " contacts?")) {
@@ -377,17 +353,17 @@ public class ContactHandler extends Handler<ContactDetail> {
 
 
     public void putAllContactDetail(Map<String, ContactDetail> items) {
-        super.putAll(items);
+        super.localDB.putAll(items);
         for (Map.Entry<String, ContactDetail> entry : items.entrySet()) {
             recentContactDetailMapQueue.put(entry.getKey(), entry.getValue());
         }
     }
 
-    private String opContact(String contactId, List<String> contactIds, ContactOpData.Op op,  BufferedReader br) {
+    private String opContact(String id, List<String> ids, ContactOpData.Op op,  BufferedReader br) {
         if (op == null) return null;
         ContactOpData contactOpData = new ContactOpData();
         contactOpData.setOp(op.toLowerCase());
-        ContactDetail contactDetail = new ContactDetail();
+
         byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
         if (priKey == null) {
             System.out.println("Failed to get the priKey of " + mainFid);
@@ -395,22 +371,27 @@ public class ContactHandler extends Handler<ContactDetail> {
         }
 
         if (op.equals(ContactOpData.Op.ADD) ) {
-            if (contactId != null) {
-                contactDetail.setFid(contactId);
+            String fid;
+            if (id != null) {
+                fid = id;
             } else {
-                String fid = apipClient.chooseFid(br);
+                fid = apipClient.chooseFid(br);
                 if (fid == null) return null;
-                contactDetail.setFid(fid);
+
             }
-            contactDetail.setTitles(Inputer.inputStringList(br, "Input title:",0));
+
+            ContactDetail contactDetail = new ContactDetail();
+            System.out.println("\nAdding "+fid+"...");
+            contactDetail.setFid(fid);
+            contactDetail.setTitles(Inputer.inputStringList(br, "Input titles:",0));
             contactDetail.setMemo(Inputer.inputString(br, "Input memo:"));
             contactDetail.setSeeStatement(Inputer.askIfYes(br, "See its statements?"));
             contactDetail.setSeeWritings(Inputer.askIfYes(br, "See its writings?"));
 
             if (!encryptContactDetail(contactOpData, contactDetail)) return null;
         } else {
-            if (contactIds == null) return null;
-            contactOpData.setContactIds(contactIds);
+            if (ids == null) return null;
+            contactOpData.setContactIds(ids);
         }
 
         Feip feip = getFeip();
@@ -459,7 +440,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         if(lastHeightObj==null) lastHeight = 0;
         else lastHeight = ((Number)lastHeightObj).longValue();
 
-        List<Contact> contactList = loadAllOnChainItems("contact", FieldNames.LAST_HEIGHT, FieldNames.OWNER, lastHeight, true, apipClient, Contact.class, null, true);
+        List<Contact> contactList = loadAllOnChainItems(CONTACT, FieldNames.LAST_HEIGHT, FieldNames.OWNER, lastHeight, true, apipClient, Contact.class, null, true);
         List<ContactDetail> contactDetailList;
         
         if (contactList!=null && !contactList.isEmpty()) {
@@ -501,7 +482,7 @@ public class ContactHandler extends Handler<ContactDetail> {
                     valueListList.add(valueList);
                 }
 
-                Shower.showDataTable("Failed to decrypted",fields, widths, valueListList, null);
+                Shower.showOrChooseList("Failed to decrypted",fields, widths, valueListList, null);
             }
             deleteUnreadableContacts(br);
             fakeContactCipherMap.clear();
@@ -537,7 +518,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         Map<String, Contact> localDeletedContacts = new HashMap<>();
         if(deletedIds!=null && !deletedIds.isEmpty()) {
             System.out.println("There are "+deletedIds.size()+" on chain deleted record in local DB.");
-            chosenIds = Shower.listAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
+            chosenIds = Shower.showAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
             if(chosenIds!=null && !chosenIds.isEmpty()) {
                 localDeletedContacts = reloadContactsFromChain(br, chosenIds);
                 count += localDeletedContacts.size();
@@ -560,7 +541,7 @@ public class ContactHandler extends Handler<ContactDetail> {
 
         List<ContactDetail> contactDetailList = contactToContactDetail(finalChosenDeleted);
 
-        List<ContactDetail> chosenContacts = Shower.showOrChooseListInPages("Chosen  Contacts", contactDetailList, br,true, ContactDetail.class);
+        List<ContactDetail> chosenContacts = Shower.showOrChooseListInPages("Chosen  Contacts", contactDetailList, DEFAULT_PAGE_SIZE, null, true, ContactDetail.class, br);
 
         recoverContacts(null,chosenContacts,br);
 

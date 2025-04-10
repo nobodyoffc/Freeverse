@@ -8,7 +8,6 @@ import crypto.Decryptor;
 import crypto.KeyTools;
 import fcData.TalkUnit;
 import handlers.TalkUnitHandler;
-import fch.FchUtils;
 import handlers.*;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import feip.feipData.Service;
@@ -22,6 +21,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import nasa.NaSaRpcClient;
 import utils.BytesUtils;
 import redis.clients.jedis.JedisPool;
+import utils.FchUtils;
 
 import java.io.BufferedReader;
 import java.net.MalformedURLException;
@@ -183,7 +183,7 @@ public class TalkServer {
             }
 
             // Deduct from sender
-            Long newBalance = accountHandler.addUserBalance(payerFid, -amount);
+            Long newBalance = accountHandler.updateUserBalance(payerFid, -amount);
             if (newBalance == null || newBalance < 0) {
                 System.out.println(CodeMessage.Msg1004InsufficientBalance);
                 return CodeMessage.Code1004InsufficientBalance;
@@ -191,7 +191,7 @@ public class TalkServer {
             sum += amount;
 
             // Add to recipient
-            accountHandler.addUserBalance(recipientFid, amount);
+            accountHandler.updateUserBalance(recipientFid, amount);
 
             String msg = payerFid+" paid "+amount+" to "+recipientFid+".";
             // Send notification to recipient

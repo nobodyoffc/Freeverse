@@ -16,7 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Map;
 
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.GROUP_BY_IDS, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GROUP_BY_IDS)
@@ -38,15 +38,15 @@ public class GroupByIds extends HttpServlet {
     }
 
     public static void doGroupIdsRequest(String keyFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
-        FcdslRequestHandler fcdslRequestHandler = FcdslRequestHandler.checkRequest(request, response, authType, settings);
-        if (fcdslRequestHandler == null) return;
-        Map<String, Group> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.GROUP, Group.class, keyFieldName);
+        FcHttpRequestHandler fcHttpRequestHandler = FcHttpRequestHandler.checkRequest(request, response, authType, settings);
+        if (fcHttpRequestHandler == null) return;
+        Map<String, Group> meetMap = fcHttpRequestHandler.doRequestForMap(IndicesNames.GROUP, Group.class, keyFieldName);
         if (meetMap == null) return;
 
         for(Group group :meetMap.values()){
             group.setMembers(null);
         }
-        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
+        fcHttpRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
     }
 
 }

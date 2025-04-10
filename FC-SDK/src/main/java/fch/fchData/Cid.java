@@ -6,8 +6,13 @@ import fcData.FcSubject;
 import fch.WeightMethod;
 
 import java.io.BufferedReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+import static appTools.Shower.DEFAULT_PAGE_SIZE;
 import static constants.FieldNames.*;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -41,25 +46,41 @@ public class Cid extends FcSubject {
     protected Long nameTime;
     protected Long lastHeight;     //the height where this address info changed latest. If roll back happened, lastHei point to the lastHeight before fork.
 
-    public static String[] DefaultShowField = {
-        ID,
-        CID,
-        CASH,
-        BALANCE,
-        CD,
-        LAST_HEIGHT
-    };
-    public static Integer[] DefaultShowWidth = {
-        ID_DEFAULT_SHOW_SIZE,
-        TEXT_SHORT_DEFAULT_SHOW_SIZE,
-        AMOUNT_DEFAULT_SHOW_SIZE,
-        AMOUNT_DEFAULT_SHOW_SIZE,
-        CD_DEFAULT_SHOW_SIZE,
-        TIME_DEFAULT_SHOW_SIZE
-    };
+
+    public static LinkedHashMap<String,Integer> getFieldWidthMap(){
+        LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+        map.put(ID,ID_DEFAULT_SHOW_SIZE);
+        map.put(CID,ID_DEFAULT_SHOW_SIZE);
+        map.put(CASH,AMOUNT_DEFAULT_SHOW_SIZE);
+        map.put(BALANCE,AMOUNT_DEFAULT_SHOW_SIZE);
+        map.put(CDD,CD_DEFAULT_SHOW_SIZE);
+        map.put(LAST_HEIGHT,TIME_DEFAULT_SHOW_SIZE);
+        return map;
+    }
+    public static List<String> getTimestampFieldList(){
+        return new ArrayList<>();
+    }
+
+    public static List<String> getSatoshiFieldList(){
+        return List.of(BALANCE);
+    }
+    public static Map<String, String> getHeightToTimeFieldMap() {
+        Map<String, String> map = new HashMap<>();
+        map.put(LAST_HEIGHT,LAST_TIME);
+        return map;
+    }
+
+    public static Map<String, String> getShowFieldNameAsMap() {
+        return new HashMap<>();
+    }
+
+    public static Map<String, Object> getInputFieldDefaultValueMap() {
+        return new HashMap<>();
+    }
+
 
     public static List<Cid> showCidList(String title, List<Cid> list, Integer maxFieldWidth, boolean choose, BufferedReader br) {
-        return Shower.showOrChooseListInPages("FID Info", list, br,choose, Cid.class);
+        return Shower.showOrChooseListInPages("FID Info", list, DEFAULT_PAGE_SIZE, null, choose, Cid.class, br);
     }
         public void reCalcWeight() {
         if(reputation==null)reputation=0L;

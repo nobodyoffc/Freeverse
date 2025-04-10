@@ -14,9 +14,7 @@ import fch.fchData.*;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.params.MainNetParams;
 import org.jetbrains.annotations.NotNull;
-import utils.BytesUtils;
-import utils.Hex;
-import utils.JsonUtils;
+import utils.*;
 import nasa.data.TxInput;
 import nasa.data.TxOutput;
 import org.bitcoinj.core.*;
@@ -114,7 +112,7 @@ public class TxCreator {
         ECKey eckey = ECKey.fromPrivate(priKey);
 
         for (SendTo output : outputs) {
-            long value = FchUtils.coinToSatoshi(output.getAmount());
+            long value = utils.FchUtils.coinToSatoshi(output.getAmount());
             totalOutput += value;
             transaction.addOutput(Coin.valueOf(value), Address.fromBase58(mainnetwork, output.getFid()));
         }
@@ -162,7 +160,7 @@ public class TxCreator {
         return createUnsignedTx(offLineTxInfo.getInputs(), offLineTxInfo.getOutputs(), offLineTxInfo.getMsg(), offLineTxInfo.getP2sh(), offLineTxInfo.getFeeRate(), null, mainnetwork);
     }
 
-    public static Transaction createUnsignedTx(List<Cash> inputs, List<SendTo> outputs, String opReturn, P2SH p2shForMultiSign, double feeRate, String changeToFid, MainNetParams mainnetwork) {
+    public static Transaction createUnsignedTx(List<Cash> inputs, List<SendTo> outputs, String opReturn, P2SH p2shForMultiSign, Double feeRate, String changeToFid, MainNetParams mainnetwork) {
         byte[] opReturnBytes= null;
         if(opReturn!=null) opReturnBytes = opReturn.getBytes();
         if(changeToFid==null)
@@ -170,6 +168,7 @@ public class TxCreator {
 
         boolean isMultiSign = inputs.get(0).getOwner().startsWith("3");
 
+        if(feeRate==null || feeRate==0)feeRate=DEFAULT_FEE_RATE;
         long fee;
 
         int inputSize = inputs.size();
@@ -186,12 +185,12 @@ public class TxCreator {
 
         if(outputs !=null && outputs.size()>0){
             for (SendTo output : outputs) {
-                long value = FchUtils.coinToSatoshi(output.getAmount());
+                long value = utils.FchUtils.coinToSatoshi(output.getAmount());
                 totalOutput += value;
                 transaction.addOutput(Coin.valueOf(value), Address.fromBase58(mainnetwork, output.getFid()));
             }
         }
-        long changeOutputFee = 34L * FchUtils.coinToSatoshi(feeRate/ 1000);
+        long changeOutputFee = 34L * utils.FchUtils.coinToSatoshi(feeRate/ 1000);
 
         if(!(totalOutput + fee - changeOutputFee == totalMoney)){
 
@@ -232,6 +231,11 @@ public class TxCreator {
         return totalMoney;
     }
 
+    public static String signOffLineTx(byte[] priKey,OffLineTxInfo offLineTxInfo, fch.FchMainNetwork mainnetwork) {
+        Transaction transaction = parseOffLineTx(offLineTxInfo,mainnetwork);
+        return signTx(priKey,transaction);
+    }
+
     @Test
     public void testTx(){
         MainNetParams mainnetwork = fch.FchMainNetwork.get();//BtcMainNetParams.get();//
@@ -259,8 +263,11 @@ public class TxCreator {
 
     }
 
-    @NotNull
+
     public static String signTx(byte[] priKey, Transaction transaction) {
+        if(priKey==null){
+            return null;
+        }
         ECKey eckey = ECKey.fromPrivate(priKey);
 
         List<TransactionInput> inputs = transaction.getInputs();
@@ -302,9 +309,9 @@ public class TxCreator {
     /**
      * Parse user off-line TX request json
      */
-    public static OffLineTxRequestData parseDataForOffLineTxFromOther(String json) {
+    public static OffLineTxInfo parseDataForOffLineTxFromOther(String json) {
         Gson gson = new Gson();
-        return gson.fromJson(json, OffLineTxRequestData.class);
+        return gson.fromJson(json, OffLineTxInfo.class);
     }
 
     /**
@@ -316,45 +323,54 @@ public class TxCreator {
         String msg = offLineTxInfo.getMsg();
         return createUnsignedTx(cashList, sendToList, msg, offLineTxInfo.getP2sh(), offLineTxInfo.getFeeRate(), null, mainnetwork);
     }
-
-    public static class OffLineTxRequestData {
-        private String fromFid;
-        private List<SendTo> sendToList;
-        private Long cd;
-        private String msg;
-
-        public String getFromFid() {
-            return fromFid;
-        }
-
-        public void setFromFid(String fromFid) {
-            this.fromFid = fromFid;
-        }
-
-        public List<SendTo> getSendToList() {
-            return sendToList;
-        }
-
-        public void setSendToList(List<SendTo> sendToList) {
-            this.sendToList = sendToList;
-        }
-
-        public Long getCd() {
-            return cd;
-        }
-
-        public void setCd(Long cd) {
-            this.cd = cd;
-        }
-
-        public String getMsg() {
-            return msg;
-        }
-
-        public void setMsg(String msg) {
-            this.msg = msg;
-        }
-    }
+//
+//    public static class OffLineTxInfo {
+//        private String sender;
+//        private List<SendTo> outputs;
+//        private Long cd;
+//        private String msg;
+//        private String ver;
+//
+//        public String getVer() {
+//            return ver;
+//        }
+//
+//        public void setVer(String ver) {
+//            this.ver = ver;
+//        }
+//
+//        public String getSender() {
+//            return sender;
+//        }
+//
+//        public void setSender(String sender) {
+//            this.sender = sender;
+//        }
+//
+//        public List<SendTo> getOutputs() {
+//            return outputs;
+//        }
+//
+//        public void setOutputs(List<SendTo> outputs) {
+//            this.outputs = outputs;
+//        }
+//
+//        public Long getCd() {
+//            return cd;
+//        }
+//
+//        public void setCd(Long cd) {
+//            this.cd = cd;
+//        }
+//
+//        public String getMsg() {
+//            return msg;
+//        }
+//
+//        public void setMsg(String msg) {
+//            this.msg = msg;
+//        }
+//    }
 
 
     //Old methods
@@ -460,81 +476,54 @@ public class TxCreator {
         return txInput;
     }
 
-    //For old CryptoSign off line TX
-    public static String createUnsignedTxForOldCs(List<Cash> cashList, List<SendTo> outputs, String opReturn, P2SH p2shForMultiSign, double feeRate, MainNetParams mainnetwork) {
-        List<RawTxForCs> rawTxForCsList = new ArrayList<>();
+    //For old CryptoSign off-line TX
 
-        for(int i = 0; i < cashList.size(); i++){
-            Cash cash = cashList.get(i);
-            rawTxForCsList.add(RawTxForCs.newInput(cash.getOwner(), FchUtils.satoshiToCoin(cash.getValue()), cash.getBirthTxId(), cash.getBirthIndex(), i));
-        }
-
-        int j=0;
-        for(; j < outputs.size(); j++){
-            SendTo output = outputs.get(j);
-            RawTxForCs rawTxForCs = RawTxForCs.newOutput(output.getFid(), output.getAmount(), j);
-            if(rawTxForCs!=null)rawTxForCsList.add(rawTxForCs);
-        }
-        if(opReturn!=null){
-            RawTxForCs rawTxForCs = RawTxForCs.newOpReturn(opReturn, j);
-            if(rawTxForCs!=null)rawTxForCsList.add(rawTxForCs);
-        }
-
-
-        return new Gson().toJson(rawTxForCsList);
+    public static String makeOffLineTxRequiredJson(OffLineTxInfo sendRequestForCs, List<Cash> meetList) {
+        if(sendRequestForCs.getVer().equals("1"))return makeCsTxRequiredJsonV1(sendRequestForCs,meetList);
+        sendRequestForCs.setInputs(meetList);
+        return sendRequestForCs.toJson();
     }
 
-    public static String makeOldCsTxRequiredJson(OffLineTxRequestData sendRequestForCs, List<Cash> meetList) {
+        public static String makeCsTxRequiredJsonV1(OffLineTxInfo sendRequestForCs, List<Cash> meetList) {
         Gson gson = new Gson();
         StringBuilder RawTx = new StringBuilder("[");
         int i = 0;
         for (Cash cash : meetList) {
             if (i > 0) RawTx.append(",");
-            RawTxForCs rawTxForCs = new RawTxForCs();
-            rawTxForCs.setAddress(cash.getOwner());
-            rawTxForCs.setAmount((double) cash.getValue() / COIN_TO_SATOSHI);
-            rawTxForCs.setTxid(cash.getBirthTxId());
-            rawTxForCs.setIndex(cash.getBirthIndex());
-            rawTxForCs.setSeq(i);
-            rawTxForCs.setDealType(RawTxForCs.DealType.INPUT);
-            RawTx.append(gson.toJson(rawTxForCs));
+            RawTxForCsV1 rawTxForCsV1 = new RawTxForCsV1();
+            rawTxForCsV1.setAddress(cash.getOwner());
+            rawTxForCsV1.setAmount((double) cash.getValue() / COIN_TO_SATOSHI);
+            rawTxForCsV1.setTxid(cash.getBirthTxId());
+            rawTxForCsV1.setIndex(cash.getBirthIndex());
+            rawTxForCsV1.setSeq(i);
+            rawTxForCsV1.setDealType(RawTxForCsV1.DealType.INPUT);
+            RawTx.append(gson.toJson(rawTxForCsV1));
             i++;
         }
         int j = 0;
-        if (sendRequestForCs.getSendToList() != null) {
-            for (SendTo sendTo : sendRequestForCs.getSendToList()) {
-                RawTxForCs rawTxForCs = new RawTxForCs();
-                rawTxForCs.setAddress(sendTo.getFid());
-                rawTxForCs.setAmount(sendTo.getAmount());
-                rawTxForCs.setSeq(j);
-                rawTxForCs.setDealType(RawTxForCs.DealType.OUTPUT);
+        if (sendRequestForCs.getOutputs() != null) {
+            for (SendTo sendTo : sendRequestForCs.getOutputs()) {
+                RawTxForCsV1 rawTxForCsV1 = new RawTxForCsV1();
+                rawTxForCsV1.setAddress(sendTo.getFid());
+                rawTxForCsV1.setAmount(sendTo.getAmount());
+                rawTxForCsV1.setSeq(j);
+                rawTxForCsV1.setDealType(RawTxForCsV1.DealType.OUTPUT);
                 RawTx.append(",");
-                RawTx.append(gson.toJson(rawTxForCs));
+                RawTx.append(gson.toJson(rawTxForCsV1));
                 j++;
             }
         }
 
         if (sendRequestForCs.getMsg() != null) {
-            RawTxForCs rawOpReturnForCs = new RawTxForCs();
+            RawTxForCsV1 rawOpReturnForCs = new RawTxForCsV1();
             rawOpReturnForCs.setMsg(sendRequestForCs.getMsg());
             rawOpReturnForCs.setSeq(j);
-            rawOpReturnForCs.setDealType(RawTxForCs.DealType.OP_RETURN);
+            rawOpReturnForCs.setDealType(RawTxForCsV1.DealType.OP_RETURN);
             RawTx.append(",");
             RawTx.append(gson.toJson(rawOpReturnForCs));
         }
         RawTx.append("]");
         return RawTx.toString();
-    }
-
-    //TODO Same function below 2 methods
-    public static Transaction parseCsRawTxToTx(String oldCsUnsignedTx, MainNetParams mainnetwork) {
-        List<RawTxForCs> rawTxForCsList = JsonUtils.listFromJson(oldCsUnsignedTx, RawTxForCs.class);
-        if(rawTxForCsList == null) {
-            System.out.println("Invalid TX information.");
-            return null;
-        }
-        OffLineTxInfo offLineTxInfo = OffLineTxInfo.fromRawTxForCs(rawTxForCsList);
-        return parseOffLineTx(offLineTxInfo, mainnetwork);
     }
 
     public static Transaction parseOldCsRawTxToTx(String oldCsUnsignedTx, MainNetParams mainnetwork) {
@@ -543,11 +532,11 @@ public class TxCreator {
         String msg = null;
 
         // Parse the JSON array
-        List<RawTxForCs> rawTxForCsList = parseRawTxForCsList(oldCsUnsignedTx);
+        List<RawTxForCsV1> rawTxForCsV1List = parseRawTxForCsList(oldCsUnsignedTx);
 
-        for (RawTxForCs element : rawTxForCsList) {
+        for (RawTxForCsV1 element : rawTxForCsV1List) {
             
-            int dealType = element.getDealType().getValue();
+            int dealType = element.getDealType();
 
             switch (dealType) {
                 case 1: // Cash entries
@@ -574,9 +563,9 @@ public class TxCreator {
         return createUnsignedTx(cashList, sendToList, msg, null, DEFAULT_FEE_RATE, null, mainnetwork);
     }
 
-    private static List<RawTxForCs> parseRawTxForCsList(String oldCsUnsignedTx) {
+    private static List<RawTxForCsV1> parseRawTxForCsList(String oldCsUnsignedTx) {
         Gson gson = new Gson();
-        return gson.fromJson(oldCsUnsignedTx, new TypeToken<List<RawTxForCs>>() {}.getType());
+        return gson.fromJson(oldCsUnsignedTx, new TypeToken<List<RawTxForCsV1>>() {}.getType());
     }
 
 // Sign TX
@@ -695,7 +684,7 @@ public class TxCreator {
         ECKey eckey = ECKey.fromPrivate(priKey);
 
         for (SendTo output : outputs) {
-            long value = FchUtils.coinToSatoshi(output.getAmount());
+            long value = utils.FchUtils.coinToSatoshi(output.getAmount());
             byte[] pubKeyHash = KeyTools.addrToHash160(output.getFid());
             totalOutput += value;
 
@@ -1052,6 +1041,7 @@ public class TxCreator {
         builder.op(172);
         return builder.build();
     }
+
     @Test
     public void test(){
         int opReturnBytesLen = "hi".getBytes().length;
@@ -1059,4 +1049,5 @@ public class TxCreator {
         String txHex= "020000000185231da3cc3a00496258f633d7e48442e51ffa51c9b0efe92d80a84eb61b43c103000000f0004151e694db47016366908a43f9900a00ab537e5fba8da4892e1db3ba4f00b893792d920c13d7fc3dafa88ec6bbc3027cfb308ef2264f470fdb819e90d16d956fec4141447743a23a589ecef0e30d05dc2957c8213127e66efeb6738142df035e5d1f21d2ed933a9e7eb00bef22af016b248ee34b9877f52bf0fcfd98714d4ecf4b218f414c695221030be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a2102536e4f3a6871831fa91089a5d5a950b96a31c861956f01459c0cd4f4374b2f672103f0145ddf5debc7169952b17b5c6a8a566b38742b6aa7b33b667c0a7fa73762e253aeffffffff03809698000000000017a914d86ffd4d1ade6ca5f19e8205bb4ddb0a05c92a72870000000000000000046a026869fe457f0f0000000017a914d86ffd4d1ade6ca5f19e8205bb4ddb0a05c92a728700000000";
         System.out.println(txHex.length()/2);
     }
+
 }

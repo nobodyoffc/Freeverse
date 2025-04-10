@@ -22,7 +22,6 @@ import constants.*;
 import crypto.KeyTools;
 import db.LocalDB;
 import fcData.ReplyBody;
-import fch.FchUtils;
 import fch.OffLineTxInfo;
 import fch.RawTxParser;
 import fch.TxCreator;
@@ -81,22 +80,6 @@ public class CashHandler extends Handler<Cash> {
     private long bestHeight;
     private Long lastFee;
 
-    public CashHandler(String myPriKeyCipher,
-                       ApipClient apipClient, NaSaRpcClient nasaClient, String blockDir, ElasticsearchClient esClient, String dbPath,
-                       BufferedReader br, ContactHandler contactHandler) {
-        super(HandlerType.CASH, dbPath, LocalDB.SortType.UPDATE_ORDER, Cash.class, apipClient, null, LocalDB.DbType.LEVEL_DB, false);
-        this.apipClient = apipClient;
-        this.nasaClient = nasaClient;
-        this.esClient = esClient;
-        if(nasaClient!=null)this.mempoolHandler = new MempoolHandler(nasaClient, apipClient, esClient, blockDir);
-        else this.mempoolHandler = null;
-        this.contactHandler = contactHandler;
-        this.br = br;
-        this.settings = null;
-        unsafeIdJumpNumMap=new HashMap<>();
-
-    }
-
     public CashHandler(Settings settings){
         super(settings, HandlerType.CASH, LocalDB.SortType.UPDATE_ORDER, Cash.class,true,true);
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
@@ -115,7 +98,66 @@ public class CashHandler extends Handler<Cash> {
         settings.saveClientSettings(mainFid,name);
         this.br = settings.getBr();
         unsafeIdJumpNumMap=new HashMap<>();
+        freshCashDB();
+    }
 
+
+    public void menu(BufferedReader br, boolean isRootMenu) {
+        showSummary();
+        if(contactHandler==null)contactHandler = (ContactHandler)settings.getHandler(HandlerType.CONTACT);
+        Menu menu = newMenu("Cash",isRootMenu);
+
+        menu.add("Wallet", this::show);
+        menu.add("Contact",()->contactHandler.menu(this.br,false));
+        menu.add("Send", this::simpleSend);
+        menu.add("Carve", this::carve);
+        menu.add("Move All", this::moveAll);
+        menu.add("Merge or Split", this::rearrange);
+        menu.add("Advanced Send", this::sendTx);
+        menu.add("Sign TX", this::signTx);
+        menu.add("Decode and Broadcast", this::broadcast);
+        menu.add("Incomes", this::incomes);
+        menu.add("Expense", this::expense);
+        menu.add("MultiSign",()-> HomeApp.multiSign(settings));
+        menu.add("Detail by ID", this::cashDetail);
+        menu.add("Reload All", this::freshValidCashes);
+        menu.add("Fresh", this::freshCashDB);
+        if(isRootMenu)
+            menu.add("Settings", () -> settings.setting(this.br, null));
+        menu.showAndSelect(this.br);
+    }
+
+    public static String makeOffLineTx(String sender, List<Cash> cashList, List<SendTo> sendToList, Long cd, Double feeRate, P2SH p2sh, String ver, @org.jetbrains.annotations.Nullable BufferedReader br) {
+        String signedTx;
+        if(cashList!=null) cashList = Cash.makeCashListForPay(cashList);
+
+        OffLineTxInfo txInfo = new OffLineTxInfo(sender, cashList, sendToList,null,cd, feeRate,p2sh ,ver);
+        String txJson = txInfo.toNiceJson();
+        System.out.println("Unsigned TX: \n--------\n" + txJson + "\n--------");
+        QRCodeUtils.generateQRCode(txJson);
+        if(br!=null) {
+            if(askIfYes(br,"Show unsigned TX for CryptoSign V3?")){
+                List<RawTxForCsV1> rawTxForCsV1List = RawTxForCsV1.fromV2(txInfo);
+                String json = JsonUtils.toJson(rawTxForCsV1List);
+                System.out.println("For CryptoSign v1-v3.");
+                System.out.println("Unsigned TX: \n--------\n" + json + "\n--------");
+                if(askIfYes(br,"Show QR codes?"))
+                    QRCodeUtils.generateQRCode(json);
+            }
+
+            while (true) {
+                System.out.println("Please sign the TX and input the signed Tx. 'q' to quit:");
+                signedTx = Inputer.inputStringMultiLine(br);
+                if ("q".equals(signedTx)) System.exit(0);
+                if (Hex.isHexString(signedTx)) break;
+                if (StringUtils.isBase64(signedTx)) {
+                    signedTx = StringUtils.base64ToHex(signedTx);
+                    break;
+                }
+                System.out.println("Failed to get signed Tx. Try again.");
+            }
+        } else  return null;
+        return signedTx;
     }
 
     private ContactHandler getContactHandler() {
@@ -204,27 +246,28 @@ public class CashHandler extends Handler<Cash> {
         return lastFee;
     }
 
-
-    public void menu() {
-        // Break circular dependency by getting ContactHandler from settings without creating new instance
-        this.contactHandler = (ContactHandler)settings.getHandler(HandlerType.CONTACT);
-        if(this.contactHandler ==null)this.contactHandler = new ContactHandler(settings);
-        Menu menu = new Menu("Cash", this::close);
-        menu.add("Wallet", this::show);
-        menu.add("Contact",()->getContactHandler().menu(br,false));
-        menu.add("Send", this::simpleSend);
-        menu.add("Carve", this::carve);
-        menu.add("Move All", this::moveAll);
-        menu.add("Merge or Split", this::rearrange);
-        menu.add("Advanced Send", this::sendTx);
-        menu.add("Decode and Broadcast", this::broadcast);
-        menu.add("Incomes", this::incomes);
-        menu.add("Expense", this::expense);
-        menu.add("Detail by ID", this::cashDetail);
-        menu.add("MultiSign",()-> HomeApp.multiSign(settings));
-        menu.add("Reload All", this::freshValidCashes);
-        menu.add("Fresh", this::freshCashDB);
-        menu.showAndSelect(br);
+    private void signTx() {
+        OffLineTxInfo offLineTxInfo;
+        try {
+            if(askIfYes(br,"Input the unsigned TX json:")) {
+                String unsignedTxJson = Inputer.inputStringMultiLine(br);
+                offLineTxInfo = OffLineTxInfo.fromJson(unsignedTxJson, OffLineTxInfo.class);
+                if (askIfYes(br, "Modify it?")) {
+                    offLineTxInfo = Inputer.updateFromUserInput(br, offLineTxInfo, null, null, null);
+                }
+            }else {
+                offLineTxInfo = Inputer.createFromInput(br,OffLineTxInfo.class);
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            return;
+        }
+        if(offLineTxInfo==null)return;
+        System.out.println("Confirm your TX carefully:");
+        System.out.println(offLineTxInfo.toNiceJson());
+        if(askIfYes(br,"Give up it?"))return;
+        String signedTx = TxCreator.signOffLineTx(priKey,offLineTxInfo, fch.FchMainNetwork.MAINNETWORK);
+        Shower.showTextAndQR(signedTx,"The signed TX:");
     }
 
     private void broadcast() {
@@ -247,19 +290,15 @@ public class CashHandler extends Handler<Cash> {
     }
 
     private void simpleSend() {
-        if (dbEmpty(br)) return;
-        List<Cash> cashList;
         String fid = Inputer.inputFid(br, "Input the fid of the receiver. Enter to send to yourself:");
         if(fid==null || fid.equals(""))fid = mainFid;
         Double amount = Inputer.inputDouble(br, "Input the amount of the each cash. Enter to stop:");
         if(amount==null || amount==0)return;
-        cashList = getCashesForSend(amount, 0L, 1, 0);
-        sendAndUpdate(cashList, amount, 0L, new ArrayList<>(Arrays.asList(new SendTo(fid, amount))), null, DEFAULT_FEE_RATE, br);
+        sendAndUpdate(null, amount, 0L, new ArrayList<>(List.of(new SendTo(fid, amount))), null, DEFAULT_FEE_RATE, br);
         Menu.anyKeyToContinue(br);
     }
 
     public void moveAll() {
-        if (dbEmpty(br)) return;
         if(localDB.getSize()==0){
             System.out.println("No valid cashes.");
             return;
@@ -270,8 +309,8 @@ public class CashHandler extends Handler<Cash> {
             return;
         }
 
-        List<Cash> cashList = getAll().values().stream().toList();
-        if(cashList.isEmpty())return;
+        List<Cash> cashList = localDB.getAll().values().stream().toList();
+        if(exitWithoutValidCash(cashList))return;
         String fid =null;
         if(br!=null)fid = Inputer.inputFid(br, "Input the fid of the receiver. Enter to send to yourself:");
         if(fid==null)fid = mainFid;
@@ -279,6 +318,10 @@ public class CashHandler extends Handler<Cash> {
         if(br!=null)
             words = Inputer.inputString(br,"Input the message written on the blockchain. Enter to ignore:");
         sendAllTo(cashList, fid, words, br);
+    }
+
+    private boolean exitWithoutValidCash(List<Cash> cashList) {
+        return (cashList==null || cashList.isEmpty()) && !askIfYes(br, "Failed to get valid cash list. Continue?");
     }
 
     private boolean tooManyInputs(long size) {
@@ -291,8 +334,7 @@ public class CashHandler extends Handler<Cash> {
     }
 
     public void show() {
-        if (dbEmpty(br)) return;
-        List<Cash> chosenItems = showOrChooseItemList("Chose to show details...",null,Shower.DEFAULT_SIZE,br,true,true);
+        List<Cash> chosenItems = showOrChooseItemList("Chose your cashes",null,Shower.DEFAULT_PAGE_SIZE,br,true,true);
 
         if(chosenItems==null || chosenItems.isEmpty()){
             return;
@@ -312,7 +354,7 @@ public class CashHandler extends Handler<Cash> {
         if(op==null)return;
         switch (op) {
             case "Show details" -> showItemDetails(items, br);
-            case "Send" -> sendTx(items, br);
+            case "Send" -> sendTx(items);
             case "Carve" -> carve(items);
             case "Merge or Split" -> rearrange(items);
         }
@@ -336,7 +378,7 @@ public class CashHandler extends Handler<Cash> {
             log.error("The input is not a cashId.");
             return;
         }
-        Cash cash = get(cashId);
+        Cash cash = localDB.get(cashId);
         if(cash==null){
             Map<String,Cash> cashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY,cashId);
             if(cashMap==null || cashMap.isEmpty())return;
@@ -353,6 +395,7 @@ public class CashHandler extends Handler<Cash> {
     }
 
     public void incomes() {
+        String title = "Your incomes";
         if(apipClient==null){
             System.out.println(APIP_CLIENT_IS_NULL);
             return;
@@ -361,19 +404,36 @@ public class CashHandler extends Handler<Cash> {
         fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(mainFid);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ISSUER).addNewValues(mainFid,OP_RETURN);
         fcdsl.addSort(BIRTH_HEIGHT,DESC).addSort(ID,ASC);
-        fcdsl.addSize(BATCH_SIZE);
+        fcdsl.addSize(Shower.DEFAULT_PAGE_SIZE);
+        requestAndShowCashList(title, fcdsl);
+    }
+
+    private void requestAndShowCashList(String title, Fcdsl fcdsl) {
         List<String> last = new ArrayList<>();
-        int count = 0;
+        Long totalPages = 0L;
+        int currentPage = 1;
         while(true){
             if(!last.isEmpty()) fcdsl.addAfter(last);
             List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.FC_SIGN_BODY);
-            if(cashList==null || cashList.isEmpty())return;
-            Cash.showCashList(cashList, "Your incomes:", count, mainFid);
-            if(cashList.size()<BATCH_SIZE)return;
-            count += cashList.size();
+
+            if(totalPages==0) {
+                Long total = apipClient.getFcClientEvent().getResponseBody().getTotal();
+                System.out.println("\nTotal: "+total+" items.");
+                totalPages = total/Shower.DEFAULT_PAGE_SIZE +1 ;
+            }
+            if(exitWithoutValidCash(cashList)) return;
+            Cash.showOrChooseCashList(cashList, title +" (page "+currentPage+"/"+totalPages+") :", mainFid, false, br);
+
+            if(cashList.size()<Shower.DEFAULT_PAGE_SIZE){
+                System.out.println("No more items.");
+                Menu.anyKeyToContinue(br);
+                return;
+            }
             last.clear();
             last.addAll(apipClient.getFcClientEvent().getResponseBody().getLast());
-            if(!askIfYes(br,"Continue?"))return;
+            long left = totalPages-currentPage;
+            if(askIfYes(br,"There are "+ left +" pages left. Stop?")) return;
+            currentPage++;
         }
     }
 
@@ -386,36 +446,35 @@ public class CashHandler extends Handler<Cash> {
         fcdsl.addNewQuery().addNewTerms().addNewFields(ISSUER).addNewValues(mainFid);
         fcdsl.addNewExcept().addNewTerms().addNewFields(OWNER).addNewValues(mainFid,OP_RETURN);
         fcdsl.addSort(SPEND_HEIGHT,DESC).addSort(ID,ASC);
-        fcdsl.addSize(BATCH_SIZE);
-        List<String> last = new ArrayList<>();
-        int count = 0;
-        while(true){
-            if(!last.isEmpty()) fcdsl.addAfter(last);
-            List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.FC_SIGN_BODY);
-            if(cashList==null || cashList.isEmpty())return;
-            Cash.showCashList(cashList, "Your expense:", count, mainFid);
-            if(cashList.size()<BATCH_SIZE)return;
-            count += cashList.size();
-            last.clear();
-            last.addAll(apipClient.getFcClientEvent().getResponseBody().getLast());
-            if(!askIfYes(br,"Continue?"))return;
-        }
+        fcdsl.addSize(Shower.DEFAULT_PAGE_SIZE);
+        requestAndShowCashList("Your expenses",fcdsl);
+//        List<String> last = new ArrayList<>();
+//        while(true){
+//            if(!last.isEmpty()) fcdsl.addAfter(last);
+//            List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.FC_SIGN_BODY);
+//            if(exitWithoutValidCash(cashList))return;
+//            Cash.showCashList(cashList, "Your expense:", mainFid);
+//            if(cashList.size()<Shower.DEFAULT_PAGE_SIZE)return;
+//            last.clear();
+//            last.addAll(apipClient.getFcClientEvent().getResponseBody().getLast());
+//            long left = (apipClient.getFcClientEvent().getResponseBody().getTotal()-cashList.size())/Shower.DEFAULT_PAGE_SIZE;
+//            if(askIfYes(br,"There are "+ left +" pages left. Stop?"))return;
+//        }
     }
     public void rearrange() {
-        if (dbEmpty(br)) return;
         System.out.println("You have " + cid.getCash() + " cashes.");
         List<Cash> validCashList ;
         if(askIfYes(br, "Do you want to rearrange all cashes?")){
             if(tooManyInputs(cid.getCash())){
                 Menu.anyKeyToContinue(br);
-                validCashList = showOrChooseItemList("Chose to rearrange...", null, Shower.DEFAULT_SIZE, br, true, true);
+                validCashList = showOrChooseItemList("Chose to rearrange...", null, Shower.DEFAULT_PAGE_SIZE, br, true, true);
             }else{
-            validCashList = new ArrayList<>(getAll().values());
+                validCashList = new ArrayList<>(localDB.getAll().values());
             }
     }else{
-        validCashList = showOrChooseItemList("Chose to rearrange...",null,Shower.DEFAULT_SIZE,br,true,true);
+        validCashList = showOrChooseItemList("Chose to rearrange...",null,Shower.DEFAULT_PAGE_SIZE,br,true,true);
     }
-    if(validCashList==null || validCashList.isEmpty())return;
+    if(exitWithoutValidCash(validCashList))return;
     rearrange(validCashList);
    }
 
@@ -437,40 +496,37 @@ public class CashHandler extends Handler<Cash> {
 }
 
     public void carve() {
-        if (dbEmpty(br)) return;
-        List<Cash> chosenCashes = showOrChooseItemList("Chose to carve...",null,Shower.DEFAULT_SIZE,br,true,true);
-        if(chosenCashes==null || chosenCashes.isEmpty())return;
+        List<Cash> chosenCashes = showOrChooseItemList("Chose to carve...",null,Shower.DEFAULT_PAGE_SIZE,br,true,true);
         carve(chosenCashes);
     }
 
     public void carve(List<Cash> chosenCashes) {
+        if(exitWithoutValidCash(chosenCashes))return;
+
         System.out.println("Input the message written on the blockchain. Enter to ignore:");
         String words = Inputer.inputStringMultiLine(br);
-        if(words==null)return;
+        if(words==null || words.equals(""))return;
         if(!askIfYes(br, "Do you sure to carve the words on chain. It's irreversible. "))return;
         String fid;
         fid = Inputer.inputFid(br, "Input the fid of the receiver. Enter to send to yourself:");
 
-        if(fid==null)fid = mainFid;
+        if(fid==null||fid.equals(""))fid = mainFid;
 
-        sendAllTo(chosenCashes,fid, words, null);
+        sendAllTo(chosenCashes,fid, words, br);
     }
 
     public void sendAllTo(List<Cash> cashList, String fid, String words, BufferedReader br) {
-
         List<SendTo> sendToList = new ArrayList<>();
         int wordsLength = 0;
         if(words!=null&&!"".equals(words))wordsLength = words.getBytes().length;
-        long feeLong = TxCreator.calcFee(cashList.size(), 1, wordsLength,DEFAULT_FEE_RATE,false,null);
-        double feeCoin = FchUtils.satoshiToCoin(feeLong);
+        long feeLong = TxCreator.calcFee(cashList==null?0:cashList.size(), 1, wordsLength,DEFAULT_FEE_RATE,false,null);
+//        double feeCoin = utils.FchUtils.satoshiToCoin(feeLong);
         long sum = Cash.sumCashValue(cashList);
-        double sumCoin = FchUtils.satoshiToCoin(sum);
-        if(sumCoin<feeCoin){
-        System.out.println("It's sufficient to pay the fee.");
-        return;
+//        double sumCoin = utils.FchUtils.satoshiToCoin(sum);
+        if(sum>=feeLong) {
+            if (fid == null || fid.equals("")) fid = mainFid;
+            sendToList.add(new SendTo(fid, utils.FchUtils.satoshiToCoin(sum-feeLong)));
         }
-        if(fid==null||fid.equals(""))fid = mainFid;
-        sendToList.add(new SendTo(fid,sumCoin-feeCoin));
         sendAndUpdate(cashList, null, null, sendToList, words, DEFAULT_FEE_RATE, br);
         if(br!=null)Menu.anyKeyToContinue(br);
     }
@@ -511,7 +567,7 @@ public class CashHandler extends Handler<Cash> {
         for(SendTo sendTo :sendToList){
             System.out.println("to "+sendTo.getFid()+" "+ sendTo.getAmount()+"f");
         }
-        System.out.println("with the fee: "+FchUtils.satoshiToCash(lastFee)+"c (1c = 100 sats; 1f = 1,000,000c)");
+        System.out.println("with the fee: "+ FchUtils.satoshiToCash(lastFee)+"c (1c = 100 sats; 1f = 1,000,000c)");
         if(askIfYes(br,"Send it?")) {
             sendAndUpdate(cashList, null, null, sendToList, null, DEFAULT_FEE_RATE, br);
             Menu.anyKeyToContinue(br);
@@ -519,7 +575,7 @@ public class CashHandler extends Handler<Cash> {
     }
 
     public void manualMerge(List<Cash> cashList, BufferedReader br) {
-        if(cashList==null || cashList.isEmpty())return;
+        if(exitWithoutValidCash(cashList))return;
         double cashSum = Cash.sumCashAmount(cashList);
         List<SendTo> sendToList = new ArrayList<>();
         double avaliable = cashSum;
@@ -574,117 +630,86 @@ public class CashHandler extends Handler<Cash> {
     }
 
     public void sendTx() {
-        if (dbEmpty(br)) return;
-        sendTx(null,br);
+        sendTx(null);
     }  
-    public void sendTx(@Nullable List<Cash> cashList, @Nullable BufferedReader br){
+    public void sendTx(@Nullable List<Cash> cashList){
         String sender = mainFid;
 
        System.out.println("Sender:  " + sender);
        
-       if(cashList==null||cashList.isEmpty())System.out.println("Balance: "+ FchUtils.satoshiToCoin(cid.getBalance())+".\nCashes:  "+ cid.getCash());
-       else System.out.println("Available sum:  "+ FchUtils.satoshiToCoin(cashList.stream().mapToLong(Cash::getValue).sum()));
+       if(cashList==null||cashList.isEmpty()) {
+           cashList = showOrChooseItemList("Choose the cashes to spend",null,Shower.DEFAULT_PAGE_SIZE,br,true,true);
+       }
+       if(cashList==null || cashList.isEmpty())return;
 
-       String op = Inputer.chooseOne(new String[]{"Input","Search"}, null, "Set the receivers and amounts", br);
-       List<SendTo> sendToList=null;
-        switch (op) {
-            case "Input" -> sendToList = SendTo.inputSendToList(br);
-            case "Search" -> {
-                sendToList = new ArrayList<>();
-                List<String> fidList = getContactHandler().searchAndChooseFidList(br);
-                if (fidList == null || fidList.isEmpty()) {
-                    System.out.println("No receiver. Cancel.");
-                    return;
-                }
-                for (String fid : fidList) {
-                    Double amount = Inputer.inputDouble(br, "Input the amount of the each cash. Enter to stop:");
-                    if (amount == null || amount == 0) continue;
-                    sendToList.add(new SendTo(fid, amount));
-                }
-            }
+       System.out.println("Available sum:  "+ utils.FchUtils.satoshiToCoin(cashList.stream().mapToLong(Cash::getValue).sum()));
+
+       List<SendTo> sendToList=new ArrayList<>();
+        List<String> fidList = getContactHandler().inputOrSearchFidList(br);
+        if (fidList == null || fidList.isEmpty()) {
+            System.out.println("No receiver. Cancel.");
+            return;
+        }
+        for (String fid : fidList) {
+            Double amount = Inputer.inputDouble(br, "Input the amount of the each cash. Enter to stop:");
+            if (amount == null || amount == 0) continue;
+            sendToList.add(new SendTo(fid, amount));
         }
 
        double sum = 0;
-       if(sendToList!=null && !sendToList.isEmpty()){
+       if(!sendToList.isEmpty()){
         for (SendTo sendTo : sendToList) sum += sendTo.getAmount();
        }
 
        System.out.println("Input the message written on the blockchain. Enter to ignore:");
-       String msg =null;
-       if(br!=null)msg = Inputer.inputString(br);
-
-       Long cd = cashList==null? Inputer.inputLong(br, "CD", 0L):0;
-
-       if(sendToList!=null && !sendToList.isEmpty()){
+       String msg = Inputer.inputString(br);
+        if(!sendToList.isEmpty()){
             System.out.println("\nSend to: ");
             for(SendTo sendTo:sendToList){
                 System.out.println(sendTo.getFid()+" : "+sendTo.getAmount());
             }
             checkNobodys(br,sendToList,apipClient,null);
        }else System.out.println("No receiver.  All the change will be sent back to the sender.");
-       if(cd!=0)System.out.println("Required CD: "+cd);
        if(msg!=null && !msg.isEmpty())System.out.println("Message: "+msg);
        System.out.println();
 
-       if(cashList==null)cashList = getCashesForSend(sum, cd, sendToList==null ? 0 : sendToList.size(), msg==null ? 0 : msg.getBytes().length);
+       sendAndUpdate(cashList, sum, 0L, sendToList, msg, DEFAULT_FEE_RATE, br);
 
-       sendAndUpdate(cashList, sum, cd, sendToList, msg, DEFAULT_FEE_RATE, br);
-
-       if(br!=null)Menu.anyKeyToContinue(br);
+        Menu.anyKeyToContinue(br);
    }
 
     private void sendAndUpdate(List<Cash> cashList, Double sum, Long cd, List<SendTo> sendToList, String msg, Double feeRate, BufferedReader br) {
         String result = send(cashList, sum, cd, sendToList, msg, null, feeRate, null, fch.FchMainNetwork.MAINNETWORK, br);
-        sendResult(cashList, br, result);
+        sendResult(br, result);
     }
 
-    private String sendResult(List<Cash> cashList, @org.jetbrains.annotations.Nullable BufferedReader br, String result) {
+    public String sendResult(@Nullable BufferedReader br, String result) {
         if(result==null){
             System.out.println("Failed to send TX.");
             return null;
         }
-        String typeName = result.split(":")[0];
+        String typeName = result.substring(0,result.indexOf(":"));
+
         TxResultType resultType = TxResultType.fromString(typeName);
         switch (resultType) {
-            case TX_ID:
-                System.out.println("Sent Tx:");
-                Shower.printUnderline(10);
-                System.out.println(result);
-                Shower.printUnderline(10);
-                cashList = new ArrayList<>();
-                break;
-            case UNSIGNED_JSON:
-                System.out.println("Unsigned TX json. Import it into CryptoSign to sign it:");
-                Shower.printUnderline(10);
-                System.out.println(result);
-                Shower.printUnderline(10);
-                cashList = new ArrayList<>();
-                break;
-            case SINGED_HEX:
-                System.out.println("Signed TX in hex. Broadcast it:");
-                Shower.printUnderline(10);
-                System.out.println(result);
-                Shower.printUnderline(10);
-                cashList = new ArrayList<>();
-                break;
-            case SIGNED_BASE64:
-                System.out.println("Signed TX in base64. Broadcast it:");
-                Shower.printUnderline(10);
-                System.out.println(result);
-                Shower.printUnderline(10);
-                cashList = new ArrayList<>();
-                break;
-            case ERROR_STRING:
-                System.out.println("Error:");
-                Shower.printUnderline(10);
-                System.out.println(result);
-                Shower.printUnderline(10);
-                break;
-            case NULL:
-                System.out.println("Failed to send TX.");
-                break;
+            case TX_ID -> showSendResult(result, "Sent Tx:", br);
+            case UNSIGNED_JSON -> showSendResult(result, "Unsigned TX json. Import it into CryptoSign to sign it:", br);
+            case TX_WITHOUT_INPUTS -> showSendResult(result, "Unsigned TX json without valid cashes. Complete it:", br);
+            case SINGED_HEX -> showSendResult(result, "Signed TX in hex. Broadcast it:", br);
+            case SIGNED_BASE64 -> showSendResult(result, "Signed TX in base64. Broadcast it:", br);
+            case ERROR_STRING -> showSendResult(result, "Error:", br);
+            case NULL -> System.out.println("Failed to send TX.");
         }
         return result;
+    }
+
+    private static void showSendResult(String result, String promote, @Nullable BufferedReader br) {
+        System.out.println(promote);
+        Shower.printUnderline(10);
+        System.out.println(result);
+        Shower.printUnderline(10);
+        if(br!=null && askIfYes(br,"Show in QR codes?"))
+            QRCodeUtils.generateQRCode(result);
     }
 
 
@@ -694,15 +719,12 @@ public class CashHandler extends Handler<Cash> {
      * @param cd            if null, input cd.
      * @param sendToList    if null, input sendToList.
      * @param opReturn      if null, input opReturn.
-     * @param p2SH
-     * @param feeRate
-     * @param changeTo
-     * @param mainNetParams
      * @param br            if null, no input and prompt.
      * @return the sent txid, unsigned rawTx or null if failed.
      */
     public String send(@Nullable List<Cash> cashList, @Nullable Double amount, @Nullable Long cd, @Nullable List<SendTo> sendToList, @Nullable String opReturn, P2SH p2SH, Double feeRate, String changeTo, MainNetParams mainNetParams, @Nullable BufferedReader br){
         TxResultType resultType = TxResultType.NULL;
+        if(feeRate==null)feeRate=DEFAULT_FEE_RATE;
         List<Cash> meetList;
         int opReturnSize = opReturn == null ? 0 : opReturn.getBytes().length;
         if(cashList!=null)meetList = cashList;
@@ -710,49 +732,47 @@ public class CashHandler extends Handler<Cash> {
             if(amount == null && sendToList!=null)amount = sendToList.stream().mapToDouble(SendTo::getAmount).sum();
             meetList = getCashesForSend(amount, cd, sendToList==null ? 0 : sendToList.size(), opReturnSize);
             if(meetList==null || meetList.isEmpty()){
-                System.out.println("No cashes to spend.");
-                return null;
+                System.out.println("Can't get the valid cash list to make the TX");
+                OffLineTxInfo offLineTxInfo = new OffLineTxInfo(mainFid, null, sendToList, opReturn, cd, feeRate, p2SH, "2");
+                String result = offLineTxInfo.toNiceJson();
+                resultType= TxResultType.TX_WITHOUT_INPUTS;
+                return resultType.addTypeAheadResult(result);
             }
         }
-        if(meetList.isEmpty())return null;
 
         boolean immatureRemoved = removeImmatureCashes(meetList, bestHeight);
         if(immatureRemoved){
             System.out.println("Some immature cashes have been removed.");
-            if(br!=null && !askIfYes(br,"Continue?"))return null;
+            if(br!=null && !askIfYes(br,"Continue?"))return resultType+"";
         }
 
         long destroyingCd = Cash.sumCashCd(meetList);
         if(cd!=null && destroyingCd < cd){
-            System.out.println("The required CD is not enough:"+destroyingCd+" < "+cd);
-            return null;
+            String error = "The required CD is not enough:"+destroyingCd+" < "+cd;
+            resultType = TxResultType.ERROR_STRING;
+            return resultType.addTypeAheadResult(error);
         }
 
         System.out.println("Destroying CD:"+destroyingCd);
 
-        if(br!=null && !askIfYes(br,"\nAre you sure to send?"))return null;
+        if(br!=null && !askIfYes(br,"\nAre you sure to send?"))return resultType+"";
 
 
         Integer maxJumpNum = getMaxJumpNum(meetList);
         if(maxJumpNum>=Constants.MAX_JUMP_NUM){
-            System.out.println("The jump number is too large:"+ maxJumpNum);
             updateCashesIfOverJumped();
-            return null;
+            String error = "The jump number is too large:"+ maxJumpNum;
+            resultType = TxResultType.ERROR_STRING;
+            return resultType.addTypeAheadResult(error);
         }
         String result;
         
         if(priKey==null){
-            OffLineTxInfo offLineTxInfo = new OffLineTxInfo();
-            offLineTxInfo.setInputs(cashList);
-            offLineTxInfo.setOutputs(sendToList);
-            offLineTxInfo.setFeeRate(feeRate);
-            offLineTxInfo.setMsg(opReturn);
-            offLineTxInfo.setP2sh(p2SH);
-            offLineTxInfo.setSender(mainFid);
+            OffLineTxInfo offLineTxInfo = new OffLineTxInfo(mainFid, meetList, sendToList,opReturn,cd,feeRate,p2SH,"2");
             resultType = TxResultType.UNSIGNED_JSON;
             result = offLineTxInfo.toNiceJson();
         }else {
-            String signedTx = signTx(cashList, sendToList, opReturn, p2SH, feeRate, changeTo, mainNetParams);
+            String signedTx = signTx(meetList, sendToList, opReturn, p2SH, feeRate, changeTo, mainNetParams);
 
             if (nasaClient != null) {
                 result = nasaClient.sendRawTransaction(signedTx);
@@ -766,54 +786,62 @@ public class CashHandler extends Handler<Cash> {
             }
             else {
                 System.out.println("No way to broadcast the TX:");
-                result = StringUtils.hexToBase64(signedTx);
-                resultType = TxResultType.SIGNED_BASE64;
+                result = signedTx;
+                resultType = TxResultType.SINGED_HEX;
                 System.out.println(result);
                 QRCodeUtils.generateQRCode(result);
             }
         }
 
-        for(Cash cash : meetList){
+        double restAmount = calcRestAmount(meetList, sendToList, opReturnSize, null, false, null);
+
+        if(cid!=null) {
+            updateLocalInfo(meetList,sendToList, maxJumpNum, result, restAmount);
+        }
+        maxJumpNum = getMaxJumpNum();
+        if(maxJumpNum>=Constants.MAX_JUMP_NUM){
+            updateCashesIfOverJumped();
+        }
+        Iterator<Cash> iterator = meetList.iterator();
+        while(iterator.hasNext()){
+            Cash cash = iterator.next();
             remove(cash.getId());
+            iterator.remove();
         }
 
+        return resultType.addTypeAheadResult(result);
+    }
+
+    private void updateLocalInfo(List<Cash> meetList, @org.jetbrains.annotations.Nullable List<SendTo> sendToList, Integer maxJumpNum, String result, double restAmount) {
         Long balance = cid.getBalance();
-        if(balance==null)balance = getAll().values().stream().mapToLong(Cash::getValue).sum();
+        if (balance == null) balance = localDB.getAll().values().stream().mapToLong(Cash::getValue).sum();
         Long cashCount = cid.getCash();
-        if(cashCount==null)cashCount = getAll().values().stream().count();
-        
-        if(sendToList!=null){
-            for(int i=0; i<sendToList.size();i++){
+        if (cashCount == null) cashCount = localDB.getAll().values().stream().count();
+
+        if (sendToList != null && Hex.isHex32(result)) {
+            for (int i = 0; i < sendToList.size(); i++) {
                 SendTo sendTo = sendToList.get(i);
-                if(sendTo.getFid().equals(mainFid)){
+                if (sendTo.getFid().equals(mainFid)) {
                     addNewSelfCash(result, i, sendTo.getAmount(), maxJumpNum);
                     cashCount++;
-                }else{
+                } else {
                     balance -= FchUtils.coinToSatoshi(sendTo.getAmount());
                 }
             }
         }
 
-        double restAmount = calcRestAmount(meetList, sendToList, opReturnSize, null, false, null);
-
-        if(restAmount > 0) {
+        if (restAmount > 0 && Hex.isHex32(result)) {
             int index = sendToList == null ? 0 : sendToList.size();
             balance += FchUtils.coinToSatoshi(restAmount);
             addNewSelfCash(result, index, restAmount, maxJumpNum);
             cashCount++;
         }
-        if(cid==null){
+        if (cid == null) {
             cid = new Cid();
             cid.setId(mainFid);
         }
         cid.setBalance(balance);
-        cid.setCash(cashCount);
-
-        maxJumpNum = getMaxJumpNum();
-        if(maxJumpNum>=Constants.MAX_JUMP_NUM){
-            updateCashesIfOverJumped();
-        }
-        return resultType + ":" + result;
+        cid.setCash(cashCount-meetList.size());
     }
 
     public String signTx(@org.jetbrains.annotations.Nullable List<Cash> cashList, @org.jetbrains.annotations.Nullable List<SendTo> sendToList, @org.jetbrains.annotations.Nullable String opReturn, P2SH p2SH, Double feeRate, String changeToFid, MainNetParams mainNetParams) {
@@ -840,7 +868,7 @@ public class CashHandler extends Handler<Cash> {
 
     public double calcRestAmount(int cashListSize, double cashAmountSum, double outPutSum, int sendToListSize, int opReturnSize, Double feeRate, boolean isMultiSign, P2SH p2sh) {
         this.lastFee = TxCreator.calcFee(cashListSize, sendToListSize, opReturnSize, feeRate, isMultiSign, p2sh);
-        double feeCoin = FchUtils.satoshiToCoin(lastFee);
+        double feeCoin = utils.FchUtils.satoshiToCoin(lastFee);
         return NumberUtils.roundDouble8(cashAmountSum-feeCoin-outPutSum);
     }
 
@@ -915,7 +943,7 @@ public class CashHandler extends Handler<Cash> {
         List<Cash> chosenCashes = new ArrayList<>();
 
         String title = "Choose Cashes";
-        Cash.showCashList(currentList, title, totalDisplayed, mainFid);
+        Cash.showOrChooseCashList(currentList, title, mainFid, false, br);
 
         System.out.println("Enter cash numbers to select (comma-separated). 'a' to select all. Enter to ignore:");
         String input = Inputer.inputString(br);
@@ -954,7 +982,7 @@ public class CashHandler extends Handler<Cash> {
         List<Cash> meetList = new ArrayList<>();
         List<Cash> cashList = getListFromEnd( null, Constants.DEFAULT_DISPLAY_LIST_SIZE);
         long spendValue = 0L;
-        if (amount != null) spendValue = FchUtils.coinToSatoshi(amount);
+        if (amount != null) spendValue = utils.FchUtils.coinToSatoshi(amount);
 
         if (cd == null) {
             cd = 0L;
@@ -992,11 +1020,11 @@ public class CashHandler extends Handler<Cash> {
         cash.setBirthIndex(index);
         cash.setIssuer(mainFid);
         cash.setOwner(mainFid);
-        cash.setValue(FchUtils.coinToSatoshi(amount));
+        cash.setValue(utils.FchUtils.coinToSatoshi(amount));
         cash.setValid(true);
         cash.makeId(txId, index);
         unsafeIdJumpNumMap.put(cash.getId(), maxJumpNum+1);
-        put(cash.getId(), cash);
+        localDB.put(cash.getId(), cash);
         return cash;
     }
 
@@ -1031,7 +1059,32 @@ public class CashHandler extends Handler<Cash> {
                 if (freshCashDBByNasaRpc()) return;
             }
         }
+        freshCd();
         freshUnconfirmed();
+//        if(br!=null)Menu.anyKeyToContinue(br);
+    }
+
+    public void freshCd() {
+        if(dbEmpty())return;
+        long sumCd=0;
+        for(Cash cash:localDB.getAll().values()){
+            cash.makeCd();
+            if(cash.getCd()!=null)sumCd+=cash.getCd();
+        }
+        if(cid!=null)cid.setCd(sumCd);
+    }
+
+    private void showSummary() {
+        if(cid==null)return;
+        Shower.printUnderline(20);
+        if(cid.getId()!=null)System.out.println("FID: "+cid.getId());
+        if(cid.getCid()!=null)System.out.println("CID: "+cid.getCid());
+        if(cid.getCash()!=null)System.out.println("Cashes: "+cid.getCash());
+        if(cid.getBalance()!=null)System.out.println("Balance: "+FchUtils.satoshiToCoin(cid.getBalance())+" f");
+        if(cid.getCd()!=null)System.out.println("CD: "+cid.getCd()+" cd");
+        if(bestHeight!=0) System.out.println("FV date: "+ FchUtils.heightToMinuteDate(bestHeight));
+
+        Shower.printUnderline(20);
     }
 
     private boolean freshCashDBByNasaRpc() {
@@ -1043,7 +1096,7 @@ public class CashHandler extends Handler<Cash> {
         }
         List<Cash> cashList = (List<Cash>) replier.getData();
         for (Cash cash : cashList) {
-            put(cash.getId(), cash);
+            localDB.put(cash.getId(), cash);
         }
         bestHeight = nasaClient.getBestHeight();
         localDB.putState(LAST_HEIGHT, bestHeight);
@@ -1101,7 +1154,7 @@ public class CashHandler extends Handler<Cash> {
                     if(cash==null)continue;;
                     newLastHeight = cash.getLastHeight();
                     newLast = hit.sort();
-                    put(cash.getId(), cash);
+                    localDB.put(cash.getId(), cash);
                     total++;
                 }
                 if (newLast != null)
@@ -1140,9 +1193,9 @@ public class CashHandler extends Handler<Cash> {
                 return;
             }
             List<Cash> cashList = ObjectUtils.objectToList(result.getData(),Cash.class);
-            if(cashList==null||cashList.isEmpty())break;
+            if(exitWithoutValidCash(cashList))break;
             for (Cash cash : cashList) {
-                put(cash.getId(), cash);
+                localDB.put(cash.getId(), cash);
                 total++;
             }
             if(result.getLast()!=null)
@@ -1220,22 +1273,27 @@ public class CashHandler extends Handler<Cash> {
             log.info("Failed to freshValidCashes because apipClient, esClient and nasaClient are null.");
             return;
         }
+        long sumCd=0;
+        List<Cash> cashList;
         if(apipClient!=null){
             cid = apipClient.cidInfoById(mainFid);
             if(cid ==null){
                 log.error("Failed to get cidInfo from apipClient when checkValidCashes.");
             }
 
-            List<Cash> cashList = pullAllValidFromApip(br,false);//getCashListFromApip(myFid, true, 200, null, null, bestHeight, apipClient);
+            cashList = pullAllValidFromApip(br,false);//getCashListFromApip(myFid, true, 200, null, null, bestHeight, apipClient);
             if(cashList.isEmpty()){
                 log.error("Failed to get cash list from apipClient.");
                 return;
             }
+
             for (Cash cash : cashList) {
                 String id = cash.getId();  // Use the ID directly, don't convert with Hex.fromHex
-                put(id, cash);
+                localDB.put(id, cash);
+                if(cash.getCd()!=null)
+                    sumCd+=cash.getCd();
+                bestHeight = cash.getLastHeight();
             }
-            bestHeight = apipClient.getBestHeight();
             localDB.putState(LAST_HEIGHT, bestHeight);
         }else if(esClient!=null){
             ReplyBody replier = getAllCashListFromEs(new ArrayList<>(Arrays.asList(mainFid)), true, null, DEFAULT_DISPLAY_LIST_SIZE, null, null, esClient);
@@ -1243,39 +1301,42 @@ public class CashHandler extends Handler<Cash> {
                 log.error("Failed to get cash list from esClient:{}", replier.getMessage());
                 return;
             }
-            List<Cash> cashList = (List<Cash>) replier.getData();
+
+            cashList = (List<Cash>) replier.getData();
             if(cashList==null || cashList.isEmpty()){
                 log.error("Failed to get cash list from esClient.");
                 return;
             }
+
             for (Cash cash : cashList) {
                 String id = cash.getId();  // Use the ID directly, don't convert with Hex.fromHex
-                put(id, cash);
+                localDB.put(id, cash);
+                if(cash.getCd()!=null)
+                    sumCd+=cash.getCd();
+                bestHeight = cash.getLastHeight();
             }
-            try {
-                bestHeight = EsUtils.getBestBlock(esClient).getHeight();
-                this.localDB.putState(LAST_HEIGHT, bestHeight);
-            } catch (IOException ignore) {}
-            
+            this.localDB.putState(LAST_HEIGHT, bestHeight);
         }else {
             ReplyBody replier = getCashListFromNasaNode(mainFid, "1", true, nasaClient);
             if(replier.getCode()!=0){
                 log.error("Failed to get cash list from nasaClient:{}", replier.getMessage());
                 return;
             }
-            List<Cash> cashList = (List<Cash>) replier.getData();
+            cashList = (List<Cash>) replier.getData();
             if(cashList==null || cashList.isEmpty()){
                 log.error("Failed to get cash list from nasaClient.");
                 return;
             }
             for (Cash cash : cashList) {
                 String id = cash.getId();  // Use the ID directly, don't convert with Hex.fromHex
-                put(id, cash);
+                localDB.put(id, cash);
             }
             bestHeight = nasaClient.getBestHeight();
             localDB.putState(LAST_HEIGHT, bestHeight);
         }
-
+        if(!cashList.isEmpty())
+            System.out.println("Got "+cashList.size() +" new cashes.");
+        if(cid!=null)cid.setCd(sumCd);
         freshUnconfirmed();
     }
 
@@ -1328,7 +1389,7 @@ public class CashHandler extends Handler<Cash> {
             if(unconfirmedCashes!=null){
                 for(Cash cash : unconfirmedCashes){
                     if(cash.isValid())
-                        put(cash.getId(), cash);
+                        localDB.put(cash.getId(), cash);
                 }
             }
         }else if(nasaClient!=null){
@@ -1343,7 +1404,7 @@ public class CashHandler extends Handler<Cash> {
                 if(txHasInfo.getOutCashList()!=null){
                     for (Cash cash : txHasInfo.getOutCashList()) {
                         if(mainFid.equals(cash.getOwner())){
-                            put(cash.getId(), cash);
+                            localDB.put(cash.getId(), cash);
                         }
                     }
                 }
@@ -1356,7 +1417,7 @@ public class CashHandler extends Handler<Cash> {
                 for (Cash cash : unconfirmedCashes) {
                     if(mainFid.equals(cash.getOwner())){
                         if(cash.isValid())
-                            put(cash.getId(), cash);
+                            localDB.put(cash.getId(), cash);
                         else
                             remove(cash.getId());
                     }
@@ -1376,7 +1437,7 @@ public class CashHandler extends Handler<Cash> {
             if(cashes==null)return;
             for(Cash cash : cashes){
                 String id = cash.getId();  // Use the ID directly, don't convert with Hex.fromHex
-                put(id, cash);
+                localDB.put(id, cash);
                 unsafeIdJumpNumMap.remove(id);
             }
             cid = apipClient.cidInfoById(mainFid);
@@ -1610,7 +1671,7 @@ public class CashHandler extends Handler<Cash> {
             cash.setOwner(utxo.getAddress());
             cash.setBirthTxId(utxo.getTxid());
             cash.setBirthIndex(utxo.getVout());
-            cash.setValue(FchUtils.coinToSatoshi(utxo.getAmount()));
+            cash.setValue(utils.FchUtils.coinToSatoshi(utxo.getAmount()));
             cash.setLockScript(utxo.getRedeemScript());
             cashList.add(cash);
         }
@@ -1688,7 +1749,7 @@ public class CashHandler extends Handler<Cash> {
                      }
                      continue;
                  }else{
-                     Cash.showCashList(finalCashes,"Chosen Cashes",0, mainFid);
+                     Cash.showOrChooseCashList(finalCashes,"Chosen Cashes", mainFid, false, br);
                      return finalCashes;
                  }
              }else{
@@ -1846,7 +1907,7 @@ public class CashHandler extends Handler<Cash> {
             if(Boolean.TRUE.equals(isImmature(cash, bestheight)))continue;
             long cdd=0;
             if(cash.getBirthTime()!=null) {
-                cdd = FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+                cdd = utils.FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
             }
             fchSum += cash.getValue();
             cdSum += cdd;
@@ -1997,14 +2058,15 @@ public class CashHandler extends Handler<Cash> {
 
     /**
      * Static method to send FCH to one or more recipients
-     * @param priKey The private key for signing the transaction
-     * @param sendToList List of recipients and amounts
-     * @param apipClient APIP client for blockchain interaction (required)
-     * @param esClient Optional ES client for backup cash lookup
+     *
+     * @param priKey        The private key for signing the transaction
+     * @param sendToList    List of recipients and amounts
+     * @param apipClient    APIP client for blockchain interaction (required)
+     * @param esClient      Optional ES client for backup cash lookup
      * @return Transaction ID if successful, null if failed
      */
-    public static String send(byte[] priKey, List<SendTo> sendToList, ApipClient apipClient, @Nullable ElasticsearchClient esClient) {
-        if (priKey == null || sendToList == null || sendToList.isEmpty() || apipClient == null) {
+    public static String send(byte[] priKey, List<SendTo> sendToList, ApipClient apipClient, @Nullable ElasticsearchClient esClient, NaSaRpcClient naSaRpcClient) {
+        if (priKey == null || sendToList == null || sendToList.isEmpty()) {
             return null;
         }
 
@@ -2018,7 +2080,7 @@ public class CashHandler extends Handler<Cash> {
         // Get valid cashes that meet the amount requirement
         SearchResult<Cash> searchResult = getValidCashes(
             fid, 
-            FchUtils.coinToSatoshi(totalAmount),
+            utils.FchUtils.coinToSatoshi(totalAmount),
             null, 
             null, 
             sendToList.size(), 
@@ -2048,7 +2110,13 @@ public class CashHandler extends Handler<Cash> {
         String signedTx = TxCreator.signTx( priKey,transaction);
 
         // Broadcast the transaction
-        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(apipClient!=null)
+            return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        else if(naSaRpcClient!=null) {
+            return naSaRpcClient.sendRawTransaction(signedTx);
+        } else{
+            return signedTx;
+        }
     }
 
 
@@ -2060,10 +2128,10 @@ public class CashHandler extends Handler<Cash> {
      */
     public List<Cash> getListFromEnd(byte[] start, int batchSize) {
         if (start == null) {
-            return getItemList(batchSize, null, null, false, null, null, true, true);
+            return localDB.getList(batchSize, null, null, false, null, null, true, true);
         } else {
             String startId = Hex.toHex(start);
-            return getItemList(batchSize, null, startId, false, null, null, true, true);
+            return localDB.getList(batchSize, startId, null, false, null, null, true, true);
         }
     }
 

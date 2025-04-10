@@ -126,54 +126,58 @@ public class P2SH extends FcObject {
 		esClient.index(i->i.index(IndicesNames.P2SH).id(this.getId()).document(this));
 	}
 
-	public static P2SH parseP2shRedeemScript(String script) throws IOException {
+	public static P2SH parseP2shRedeemScript(String script)  {
 		P2SH p2sh = new P2SH();
 
 		p2sh.setId(KeyTools.scriptToMultiAddr(script));
 		InputStream scriptIs = new ByteArrayInputStream(BytesUtils.hexToByteArray(script));
 
 		byte[] b = new byte[1];
-
-		ArrayList<byte[]> redeemScriptBytesList = new ArrayList<>();
-		scriptIs.read(b);
-		redeemScriptBytesList.add(b.clone());
-		int m = b[0]-80;
-
-		if(m>16 || m<0) return null;
-
-		ArrayList<String> pukList = new ArrayList<>();
-		ArrayList<String> addrList = new ArrayList<>();
-
-		while(true) {
+		try{
+			ArrayList<byte[]> redeemScriptBytesList = new ArrayList<>();
 			scriptIs.read(b);
 			redeemScriptBytesList.add(b.clone());
-			int pkLen = b[0];
-			if(pkLen!=33 && pkLen!=65)break;
+			int m = b[0]-80;
 
-			byte[] pkBytes = new byte[pkLen];
-			scriptIs.read(pkBytes);
-			redeemScriptBytesList.add(pkBytes.clone());
-			String pubKey = BytesUtils.bytesToHexStringBE(pkBytes);
-			String addr = KeyTools.pubKeyToFchAddr(pubKey);
-			pukList.add(pubKey);
-			addrList.add(addr);
-			if(scriptIs.available()==0)break;
+			if(m>16 || m<0) return null;
+
+			ArrayList<String> pukList = new ArrayList<>();
+			ArrayList<String> addrList = new ArrayList<>();
+
+			while(true) {
+				scriptIs.read(b);
+				redeemScriptBytesList.add(b.clone());
+				int pkLen = b[0];
+				if(pkLen!=33 && pkLen!=65)break;
+
+				byte[] pkBytes = new byte[pkLen];
+				scriptIs.read(pkBytes);
+				redeemScriptBytesList.add(pkBytes.clone());
+				String pubKey = BytesUtils.bytesToHexStringBE(pkBytes);
+				String addr = KeyTools.pubKeyToFchAddr(pubKey);
+				pukList.add(pubKey);
+				addrList.add(addr);
+				if(scriptIs.available()==0)break;
+			}
+
+			if(pukList.size()==0) return null;
+
+			int n = b[0]-80;
+
+			scriptIs.read(b);
+
+			redeemScriptBytesList.add(b.clone());
+			p2sh.setRedeemScript(BytesUtils.bytesToHexStringBE(BytesUtils.bytesMerger(redeemScriptBytesList)));
+			p2sh.setM(m);
+			p2sh.setN(n);
+
+			p2sh.setPubKeys(pukList);
+			p2sh.setFids(addrList);
+			return p2sh;
+		} catch (IOException e) {
+
+			return null;
 		}
-
-		if(pukList.size()==0) return null;
-
-		int n = b[0]-80;
-		scriptIs.read(b);
-		redeemScriptBytesList.add(b.clone());
-
-
-		p2sh.setRedeemScript(BytesUtils.bytesToHexStringBE(BytesUtils.bytesMerger(redeemScriptBytesList)));
-		p2sh.setM(m);
-		p2sh.setN(n);
-
-		p2sh.setPubKeys(pukList);
-		p2sh.setFids(addrList);
-		return p2sh;
 	}
 
 	public String getRedeemScript() {

@@ -13,7 +13,7 @@ import fch.MultiSigData;
 import fch.OffLineTxInfo;
 import fch.TxCreator;
 import fch.fchData.P2SH;
-import fch.fchData.RawTxForCs;
+import fch.fchData.RawTxForCsV1;
 
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.params.MainNetParams;
@@ -22,17 +22,15 @@ import org.bitcoinj.fch.FchMainNetwork;
 import org.jetbrains.annotations.Nullable;
 import utils.*;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static app.HomeApp.*;
 import static appTools.Inputer.askIfYes;
 import static appTools.Inputer.inputStringMultiLine;
+import static appTools.Shower.DEFAULT_PAGE_SIZE;
 import static constants.Strings.DOT_JSON;
 import static constants.Tickers.BCH;
 import static constants.Tickers.FCH;
@@ -67,7 +65,7 @@ public class CryptoSign extends FcApp {
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         Map<String,Object> settingMap = new HashMap<>();
-        Settings settings = Starter.startTool(APP_NAME, settingMap, br, null);
+        Settings settings = Starter.startTool(APP_NAME, settingMap, br, null, null);
         if (settings == null) return;
 
         CryptoSign cryptoSign = new CryptoSign(settings, br);
@@ -101,8 +99,19 @@ public class CryptoSign extends FcApp {
         keyManagementMenu.add("New Key", () -> newKey(br));
         keyManagementMenu.add("Import Key", () -> importKey(br));
         keyManagementMenu.add("Edit key info", () -> editKeyInfo(br));
+        keyManagementMenu.add("Remove key", () -> removeKey(br));
         keyManagementMenu.add("Add watch only key", () -> addWatchOnlyKey(br));
         keyManagementMenu.showAndSelect(br);
+    }
+
+    private void removeKey(BufferedReader br) {
+        List<CidInfo> cidInfoList = CidInfo.listFromFile(CidInfo.class);
+        if(cidInfoList ==null || cidInfoList.isEmpty()) {
+            System.out.println("No keys found.");
+            return;
+        }
+        List<CidInfo> chosen = CidInfo.showList(cidInfoList, br);
+        removeKey(br,cidInfoList,chosen);
     }
 
     private void editKeyInfo(BufferedReader br) {
@@ -180,15 +189,19 @@ public class CryptoSign extends FcApp {
                 System.out.println();
             }
             case "Delete" -> {
-                if (askIfYes(br, "Are you sure you want to delete these keys?")) {
-                    for (CidInfo cidInfo : chosen) {
-                        cidInfoList.remove(cidInfo);
-                    }
-                    CidInfo.listToFile(cidInfoList, CidInfo.class);
-                }
+                removeKey(br, cidInfoList, chosen);
             }
         }
         Menu.anyKeyToContinue(br);
+    }
+
+    private static void removeKey(BufferedReader br, List<CidInfo> cidInfoList, List<CidInfo> chosen) {
+        if (askIfYes(br, "Are you sure you want to delete these keys?")) {
+            for (CidInfo cidInfo : chosen) {
+                cidInfoList.remove(cidInfo);
+            }
+            CidInfo.listToFile(cidInfoList, CidInfo.class);
+        }
     }
 
     private void showKeyInfoList(List<CidInfo> cidInfoList, BufferedReader br){
@@ -403,22 +416,33 @@ public class CryptoSign extends FcApp {
         byte[] priKey = cidInfo.decryptPriKey(settings.getSymKey());
         Transaction transaction;
         OffLineTxInfo offLineTxInfo = null;
-        System.out.println("Input the json of off line TX information. Enter to ignore:");
+        System.out.println("Input the json of off line TX information. 'f' to load from file. Enter to ignore:");
         rawTx = Inputer.inputStringMultiLine(br);
-        if(rawTx!=null && !"".equals(rawTx)) {
-            try {
-                rawTx = rawTx.trim();
-                offLineTxInfo = JsonUtils.fromJson(rawTx, OffLineTxInfo.class);
-            } catch (Exception e) {
-                try{
-                    List<RawTxForCs> rawTxForCsList = JsonUtils.listFromJson(rawTx, RawTxForCs.class);
-                    offLineTxInfo = OffLineTxInfo.fromRawTxForCs(rawTxForCsList);
-                }catch(Exception e2){
-                    System.out.println("Invalid off line TX information.");
-                    return;
-                }
+        if(rawTx==null || "".equals(rawTx))return;
+        if("f".equals(rawTx)) {
+            rawTx = Inputer.inputString(br,"Input the file path:");
+            if(rawTx==null || "".equals(rawTx))return;
+
+            try(FileInputStream fis = new FileInputStream(rawTx);) {
+                rawTx = new String(fis.readAllBytes(), StandardCharsets.UTF_8);
+            }catch (Exception e){
+                System.out.println("Failed to load file:"+e.getMessage());
+                return;
             }
         }
+        try {
+            rawTx = rawTx.trim();
+            offLineTxInfo = JsonUtils.fromJson(rawTx, OffLineTxInfo.class);
+        } catch (Exception e) {
+            try{
+                List<RawTxForCsV1> rawTxForCsV1List = JsonUtils.listFromJson(rawTx, RawTxForCsV1.class);
+                offLineTxInfo = OffLineTxInfo.fromRawTxForCs(rawTxForCsV1List);
+            }catch(Exception e2){
+                System.out.println("Invalid off line TX information.");
+                return;
+            }
+        }
+
         if(offLineTxInfo == null) {
             if(!askIfYes(br, "Input TX items one by one?"))return;
             offLineTxInfo = OffLineTxInfo.fromUserInput(br, cidInfo.getId());
@@ -431,9 +455,9 @@ public class CryptoSign extends FcApp {
 
         System.out.println("Signed by "+ cidInfo.getId()+".");
         String txBase64 = Base64.getEncoder().encodeToString(Hex.fromHex(signedTxHex));
-        System.out.println("Base64:\n\t"+ txBase64);
+        System.out.println("Base64:\n"+ txBase64);
         QRCodeUtils.generateQRCode(txBase64);
-        System.out.println("Hex:\n\t"+ signedTxHex);
+        System.out.println("Hex:\n"+ signedTxHex);
         QRCodeUtils.generateQRCode(signedTxHex);
         Menu.anyKeyToContinue(br);
     }
@@ -485,7 +509,7 @@ public class CryptoSign extends FcApp {
                 return;
             }
 
-            showRawTxInfo(multiSignDataJson, br);
+            showRawMultiSignTxInfo(multiSignDataJson, br);
 
             Shower.printUnderline(60);
             String signedSchnorrMultiSignTx = TxCreator.signSchnorrMultiSignTx(multiSignDataJson, cidInfo.getPriKeyBytes(), FchMainNetwork.MAINNETWORK);
@@ -553,32 +577,34 @@ public class CryptoSign extends FcApp {
 
     public void encrypt(BufferedReader br) {
         Menu menu = new Menu("Encrypt");
-        menu.add("Encrypt with symKey to json",()->encryptWithSymKeyToJson(br));
-        menu.add("Encrypt with symKey to bundle",()->encryptWithSymKeyToBundle(br));
-        menu.add("Encrypt with password to json",()->encryptWithPasswordToJson(br));
-        menu.add("Encrypt with password to bundle",()->encryptWithPasswordBundle(br));
-        menu.add("Encrypt with public key EccAes256K1P7 to json",()->encryptAsyToJson(br));
-        menu.add("Encrypt with public key EccAes256K1P7 to bundle one way",()->encryptAsyOneWayBundle(br));
-        menu.add("Encrypt with public key EccAes256K1P7 to bundle two way",()->encryptAsyTwoWayBundle(br));
-        menu.add("Encrypt file with symKey EccAes256K1P7 to json",()->encryptFileWithSymKey(br));
-        menu.add("Encrypt file with public key EccAes256K1P7 to json",()->encryptFileAsy(br));
-        menu.add("Encrypt with public key Bitcore-ECEIS to bundle one way",()->encryptBitcoreToBundle(br));
+        menu.add("To json by symKey",()->encryptWithSymKeyToJson(br));
+        menu.add("To json by password",()->encryptWithPasswordToJson(br));
+        menu.add("To json by pubKey",()->encryptAsyToJson(br));
+        menu.add("Encrypt file with symKey",()->encryptFileWithSymKey(br));
+        menu.add("Encrypt file with pubKey",()->encryptFileAsy(br));
+
+        menu.add("To bundle by password",()->encryptWithPasswordBundle(br));
+        menu.add("To bundle by symKey",()->encryptWithSymKeyToBundle(br));
+        menu.add("To bundle by pubKey one way",()->encryptAsyOneWayBundle(br));
+        menu.add("To bundle by pubKey two way",()->encryptAsyTwoWayBundle(br));
+        menu.add("By Bitcore-ECEIS",()->encryptBitcoreToBundle(br));
 
         menu.showAndSelect(br);
     }
 
     public void decrypt(BufferedReader br) {
         Menu menu = new Menu("Decrypt");
-        menu.add("Decrypt with symKey from json",()->decryptWithSymKeyFromJson(br));
-        menu.add("Decrypt with symKey from bundle",()->decryptWithSymKeyFromBundle(br));
-        menu.add("Decrypt with password from json",()->decryptWithPasswordFromJson(br));
-        menu.add("Decrypt with password from bundle",()->decryptWithPasswordFromBundle(br));
-        menu.add("Decrypt with private key EccAes256K1P7 from json",()->decryptAsyFromJson(br));
-        menu.add("Decrypt with private key EccAes256K1P7 from bundle one way",()->decryptAsyOneWayFromBundle(br));
-        menu.add("Decrypt with private key EccAes256K1P7 from bundle two way",()->decryptAsyTwoWayFromBundle(br));
-        menu.add("Decrypt file with symKey EccAes256K1P7 from json",()->decryptFileSymKey(br));
-        menu.add("Decrypt file with private key EccAes256K1P7 from json",()->decryptFileAsy(br));
-        menu.add("Decrypt Bitcore-ECEIS from bundle",()->decryptBitcoreFromBundle(br));
+        menu.add("Json by symKey",()->decryptWithSymKeyFromJson(br));
+        menu.add("Json by password",()->decryptWithPasswordFromJson(br));
+        menu.add("Json by priKey",()->decryptAsyFromJson(br));
+
+        menu.add("Bundle by symKey",()->decryptWithSymKeyFromBundle(br));
+        menu.add("Bundle by password",()->decryptWithPasswordFromBundle(br));
+        menu.add("Bundle by priKey B",()->decryptAsyOneWayFromBundle(br));
+        menu.add("Bundle by priKey B and pubKey A",()->decryptAsyTwoWayFromBundle(br));
+        menu.add("File by symKey",()->decryptFileSymKey(br));
+        menu.add("File by priKey",()->decryptFileAsy(br));
+        menu.add("Bitcore-ECEIS bundle",()->decryptBitcoreFromBundle(br));
 
         menu.showAndSelect(br);
     }
@@ -626,7 +652,7 @@ public class CryptoSign extends FcApp {
     }
 
     private void updateSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList) {
-        List<SecretDetail> chosenSecretDetailList =  Shower.showOrChooseListInPages("FID Info", finalSecretDetailList, br,true,SecretDetail.class);
+        List<SecretDetail> chosenSecretDetailList =  Shower.showOrChooseListInPages("FID Info", finalSecretDetailList, DEFAULT_PAGE_SIZE, null, true, SecretDetail.class, br);
         if(chosenSecretDetailList==null || chosenSecretDetailList.isEmpty()){
             System.out.println("No secret details selected.");
             return;
@@ -716,7 +742,7 @@ public class CryptoSign extends FcApp {
     }
 
     private void listSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> secretDetailList) {
-        List<SecretDetail> chosenSecretDetailList = Shower.showOrChooseListInPages("FID Info", secretDetailList, br,true,SecretDetail.class);
+        List<SecretDetail> chosenSecretDetailList = Shower.showOrChooseListInPages("FID Info", secretDetailList, DEFAULT_PAGE_SIZE, null, true, SecretDetail.class, br);
         if(chosenSecretDetailList==null || chosenSecretDetailList.isEmpty()){
             System.out.println("No secret details selected.");
             return;
@@ -971,7 +997,7 @@ public class CryptoSign extends FcApp {
 
 
     public void decryptAsyFromJson(BufferedReader br) {
-        String eccAesDataJson = Inputer.inputString(br,"Input the json string of EccAesData:");
+        String eccAesDataJson = Inputer.inputString(br,"Input the json string:");
         decryptAsyJson(eccAesDataJson);
         Menu.anyKeyToContinue(br);
     }
@@ -981,7 +1007,8 @@ public class CryptoSign extends FcApp {
         if (cidInfo == null) return;
         Decryptor decryptor = new Decryptor();
         CryptoDataByte cryptoDataByte = decryptor.decryptJsonByAsyOneWay(eccAesDataJson, cidInfo.getPriKeyBytes());
-        System.out.println(new String(cryptoDataByte.getData()));
+        System.out.println("UTF-8:\n"+new String(cryptoDataByte.getData()));
+        System.out.println("Hex:\n"+Hex.toHex(cryptoDataByte.getData()));
     }
 
 
@@ -1095,7 +1122,10 @@ public class CryptoSign extends FcApp {
     public static void showMultiUnsignedResult(BufferedReader br, P2SH p2sh, MultiSigData multiSignData) {
         System.out.println("Multisig data unsigned:");
         Shower.printUnderline(10);
-        System.out.println(multiSignData.toJson());
+        String unsignedJson = multiSignData.toJson();
+        System.out.println(unsignedJson);
+        if(Inputer.askIfYes(br,"Show the QR codes?"))
+            QRCodeUtils.generateQRCode(unsignedJson);
         Shower.printUnderline(10);
 
         System.out.println("Next step: sign it separately with the priKeys of: ");
@@ -1179,12 +1209,7 @@ public class CryptoSign extends FcApp {
         String redeemScript = Inputer.inputString(br, "Input the redeem script of the multisig FID:");
         if(redeemScript==null) return null;
         P2SH p2sh;
-        try {
-            p2sh = P2SH.parseP2shRedeemScript(redeemScript);
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
+        p2sh = P2SH.parseP2shRedeemScript(redeemScript);
         return p2sh;
     }
 

@@ -2,7 +2,6 @@ package server.order;
 
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.json.JsonData;
-import fch.FchUtils;
 import feip.feipData.Service;
 import appTools.Inputer;
 import appTools.Menu;
@@ -13,6 +12,7 @@ import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.IndicesNames;
 import crypto.KeyTools;
 import feip.feipData.serviceParams.Params;
+import utils.FchUtils;
 import utils.JsonUtils;
 import utils.NumberUtils;
 import org.slf4j.Logger;
@@ -210,7 +210,7 @@ public class OrderManager {
             for(Hit<Order> hit: result.hits().hits()){
                 Order order = hit.source();
                 if (order==null)continue;
-                String fch = String.valueOf(FchUtils.satoshiToCoin(order.getAmount()));
+                String fch = String.valueOf(utils.FchUtils.satoshiToCoin(order.getAmount()));
                 String time = FchUtils.convertTimestampToDate(order.getTime());
                 String txId = order.getTxId();
                 String via = order.getVia();

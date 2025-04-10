@@ -25,9 +25,10 @@ import java.io.BufferedReader;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static appTools.Shower.DEFAULT_PAGE_SIZE;
 import static constants.FieldNames.*;
 import static constants.Strings.SECRET;
-import static appTools.Shower.listAndChooseFromStringLongMap;
+import static appTools.Shower.showAndChooseFromStringLongMap;
 
 public class SecretHandler extends Handler<SecretDetail> {
     public static String name = HandlerType.SECRET.name();
@@ -45,8 +46,8 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     @Override
-    public void menu(BufferedReader br, boolean withSettings) {
-        Menu menu = new Menu("Secret Menu", this::close);
+    public void menu(BufferedReader br, boolean isRootMenu) {
+        Menu menu = newMenu("Secret",isRootMenu);
         addBasicMenuItems(br,menu);
         menu.add("List Locally Removed Secrets", () -> reloadRemovedItems(br));
         menu.add("Clear Locally Removed Records", () -> clearAllLocallyRemoved(br));
@@ -56,8 +57,8 @@ public class SecretHandler extends Handler<SecretDetail> {
         menu.add("List deleted Secrets on Chain", () -> recoverSecrets(br));
         menu.add("Clear on Chain Deleted Records", () -> clearDeletedRecord(br));
         menu.add("Test Methods", () -> testMethods(br));
-        if(cashHandler!=null)menu.add("Manage Cash", cashHandler::menu);
-        if(withSettings)
+        if(cashHandler!=null)menu.add("Manage Cash", () -> cashHandler.menu(br, false));
+        if(isRootMenu)
             menu.add("Settings", () -> settings.setting(br, null));
 
         menu.showAndSelect(br);
@@ -92,7 +93,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         // Get all locally removed items
         Map<String, Long> removedItems = localDB.getAllFromMap(LocalDB.LOCAL_REMOVED_MAP);
 
-        List<String> chosenIds = listAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
+        List<String> chosenIds = showAndChooseFromStringLongMap(br,removedItems,"Choose to reload:");
 
         Map<String, Secret> items = reloadSecretsFromChain(br, chosenIds);
 
@@ -119,7 +120,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         }
         if(!deletedSecretList.isEmpty()){
             if(Inputer.askIfYes(br, "There are " + deletedSecretList.size() + " on chain deleted secrets. Choose to recover them?")){
-                chosenDeletedSecretList = Inputer.chooseMultiFromListGeneric(deletedSecretList, 0, 20, "Choose the deleted secrets to reload:", br);
+                chosenDeletedSecretList = Shower.showOrChooseListInPages("Deleted secrets",deletedSecretList,DEFAULT_PAGE_SIZE, null, true, Secret.class,br);
                 if(chosenDeletedSecretList!=null){
                     recovered = recoverSecrets(chosenDeletedSecretList.stream().map(Secret::getId).collect(Collectors.toList()), null, br);
                     if(recovered) {
@@ -159,50 +160,50 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     public void putSecret(String id, SecretDetail secret) {
-            put(id, secret);
+            localDB.put(id, secret);
         }
 
     public SecretDetail getSecret(String id) {
-        return get(id);
+        return localDB.get(id);
     }
 
     public Map<String, SecretDetail> getAllSecrets() {
-        return getAll();
+        return localDB.getAll();
     }
 
     public NavigableMap<Long, String> getSecretIndexIdMap() {
-        return getIndexIdMap();
+        return localDB.getIndexIdMap();
     }
 
     public NavigableMap<String, Long> getSecretIdIndexMap() {
-        return getIdIndexMap();
+        return localDB.getIdIndexMap();
     }
 
     public SecretDetail getSecretById(String id) {
-        return getItemById(id);
+        return localDB.get(id);
     }
 
     public SecretDetail getSecretByIndex(long index) {
-        return getItemByIndex(index);
+        return localDB.getByIndex(index);
     }
 
     public Long getSecretIndexById(String id) {
-        return getIndexById(id);
+        return localDB.getIndexById(id);
     }
 
     public String getSecretIdByIndex(long index) {
-        return getIdByIndex(index);
+        return localDB.getIdByIndex(index);
     }
 
 
     public List<SecretDetail> getSecretList(Integer size, Long fromIndex, String fromId,
             boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        return getItemList(size, fromIndex, fromId, isFromInclude, toIndex, toId, isToInclude, isFromEnd);
+        return localDB.getList(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
     }
 
     public LinkedHashMap<String, SecretDetail> getSecretMap(int size, Long fromIndex, String fromId,
             boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
-        return getItemMap(size, fromIndex, fromId, isFromInclude, toIndex, toId, isToInclude, isFromEnd);
+        return localDB.getMap(size, fromId,fromIndex,  isFromInclude, toId, toIndex, isToInclude, isFromEnd);
     }
 
     public void removeSecret(String id) {
@@ -283,7 +284,7 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     public void deleteSecrets(BufferedReader br) {
-        if (dbEmpty(br)) return;
+        if (dbEmpty()) return;
         List<SecretDetail> chosenSecrets = chooseItems(br);
         deleteSecrets(chosenSecrets, br);
     }
@@ -295,7 +296,7 @@ public class SecretHandler extends Handler<SecretDetail> {
         }
 
         if (Inputer.askIfYes(br, "View them before delete?")) {
-            Shower.showOrChooseListInPages("Chosen Secrets", chosenSecrets, br,true,SecretDetail.class);
+            Shower.showOrChooseListInPages("Chosen Secrets", chosenSecrets, DEFAULT_PAGE_SIZE, null, true, SecretDetail.class, br);
         }
 
         if (Inputer.askIfYes(br, "Delete " + chosenSecrets.size() + " secrets?")) {
@@ -327,7 +328,7 @@ public class SecretHandler extends Handler<SecretDetail> {
 
         if(deletedIds!=null && !deletedIds.isEmpty()) {
             System.out.println("There are "+deletedIds.size()+" on chain deleted record in local DB.");
-            chosenIds = listAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
+            chosenIds = showAndChooseFromStringLongMap(br,deletedIds,"Choose items to recover:" );
             if(chosenIds!=null && !chosenIds.isEmpty()) {
                 localDeletedSecrets = reloadSecretsFromChain(br, chosenIds);
                 count += localDeletedSecrets.size();
@@ -424,7 +425,7 @@ public class SecretHandler extends Handler<SecretDetail> {
     }
 
     public void putAllSecretDetail(List<SecretDetail> secretDetailList) {
-        putAll(secretDetailList,ID);
+        localDB.putAll(secretDetailList,ID);
     }
 
     private void deleteUnreadableSecrets(BufferedReader br) {

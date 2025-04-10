@@ -49,7 +49,7 @@ public class StartFEIP {
 		settingMap.put(Settings.OP_RETURN_PATH, FileUtils.getUserDir()+"/opreturn");
 		settingMap.put(Settings.LISTEN_PATH,settingMap.get(Settings.OP_RETURN_PATH));
 
-		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules);
+		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules,null);
 		if(settings ==null)return;
 		String opReturnJsonPath = (String) settings.getSettingMap().get(Settings.OP_RETURN_PATH);
 

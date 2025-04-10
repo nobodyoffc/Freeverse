@@ -8,6 +8,7 @@ import appTools.Shower;
 import clients.ApipClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldSort;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
@@ -18,12 +19,15 @@ import co.elastic.clients.json.JsonData;
 import constants.*;
 import crypto.Decryptor;
 import crypto.KeyTools;
+import db.LocalDB;
 import fcData.FcEntity;
+import fcData.FcObject;
 import fcData.ReplyBody;
 import fch.FchMainNetwork;
-import utils.IdNameUtils;
+import nasa.NaSaRpcClient;
+import org.jetbrains.annotations.NotNull;
+import utils.*;
 import fch.BlockFileUtils;
-import fch.FchUtils;
 import fch.fchData.Block;
 import fch.fchData.Cash;
 import fch.fchData.OpReturn;
@@ -36,25 +40,15 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.TalkServer;
 import server.rollback.Rollbacker;
-import utils.BytesUtils;
-import utils.Hex;
-import utils.MapQueue;
-import utils.NumberUtils;
-import utils.ObjectUtils;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
-import utils.EsUtils;
 
 import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static appTools.Settings.DEALER_MIN_BALANCE;
-import static appTools.Settings.LISTEN_PATH;
 import static constants.Constants.DEFAULT_DISPLAY_LIST_SIZE;
 import static constants.FieldNames.*;
 import static constants.Strings.TIME;
@@ -62,35 +56,40 @@ import static constants.Strings.VIA;
 
 public class AccountHandler extends Handler<FcEntity> {
     final static Logger log = LoggerFactory.getLogger(AccountHandler.class);
+    public static final String DEALER_MIN_BALANCE = "dealerMinBalance";
+    public static final String MIN_DISTRIBUTE_BALANCE ="minDistributeBalance";
+    public static final String DISTRIBUTE_DAYS = "distributeDays";
     public static final Long DEFAULT_DEALER_MIN_BALANCE = 100000000L;
-    public static final Long DEFAULT_DISTRIBUTE_BALANCE = 100 * 100000000L;
-    public static final Long APIP_REQUEST_INTERVAL = 30000L;
+    public static final Long DEFAULT_MIN_DISTRIBUTE_BALANCE = 5 * 100000000L;
+    public static final long DEFAULT_DISTRIBUTE_DAYS = 10;
+
     private static final int MAX_USER_BALANCE_CACHE_SIZE = 2;
     private static final int MAX_FID_VIA_CACHE_SIZE = 2;
     private static final int MAX_VIA_BALANCE_CACHE_SIZE = 2;
-    // private static final String ORDER_VIA_SHARE = "orderViaShare";
-    // private static final String CONSUME_VIA_SHARE = "consumeViaShare";
-    public static final String USER_BALANCE = "balance";
-    public static final String FID_CONSUME_VIA = "fid_consume_via";
-    public static final String VIA_BALANCE = "via_balance";
-    public static final String N_PRICE = "n_price";
+
+    private static final String USER_BALANCE = "user_balance";
+    private static final String FID_CONSUME_VIA = "fid_consume_via";
+    private static final String VIA_BALANCE = "via_balance";
+    private static final String N_PRICE = "n_price";
+
     public String dbPath;
     private final BufferedReader br;
     private Long myBalance;
     private final MapQueue<String, Long> userBalance;
     private final MapQueue<String, String> fidViaMap;
     private final MapQueue<String, Long> viaBalance;
-    private final Map<String, Long> payoffMap;
+    private Map<String, Long> payoffMap;
+    private long lastUpdateExpenseTime = 0;
 
-    // Constructor injected fields
     private final String mainFid;
     private final String sid;
     private final ApipClient apipClient;
-    private ElasticsearchClient esClient;
+    private final ElasticsearchClient esClient;
+    private final NaSaRpcClient nasaClient;
     private final CashHandler cashHandler;
-    private Long dealerMinBalance;
-    private Long minDistributeBalance;
-    private final AccountDB accountDB;
+    private final Long dealerMinBalance;
+    private final Long minDistributeBalance;
+    private final Long distributeDays;
     private final byte[] priKey;
     private String startHeight;
 
@@ -101,126 +100,21 @@ public class AccountHandler extends Handler<FcEntity> {
     private Double minPay;
     
     // Add these constants at the class level
-    private final String REDIS_KEY_USER_BALANCE;
-    private final String REDIS_KEY_FID_CONSUME_VIA;
-    private final String REDIS_KEY_VIA_BALANCE;
+    private final String redisKeyUserBalance;
+    private final String redisKeyFidConsumeVia;
+    private final String redisKeyViaBalance;
     // Add these fields
     private final JedisPool jedisPool;
     private final boolean useRedis;
 
     // Add these constants at the class level
-    private static final long AUTO_UPDATE_INTERVAL = 30 * 1000;//3600000*24; // 1 hour in milliseconds
-    private Thread distributionThread;
-    private AutoScanStrategy autoScanStrategy;
-
     private String listenPath;
 
-    // Add this enum definition
-    public enum AutoScanStrategy {
-        NO_AUTO_SCAN("No automatic scanning"),
-        ES_CLIENT("Elasticsearch client scanning"),
-        APIP_CLIENT("APIP client scanning"),
-        WEBHOOK("Webhook notifications"),
-        FILE_MONITOR("Monitor file changes");
-
-        private final String description;
-
-        AutoScanStrategy(String description) {
-            this.description = description;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        @Override
-        public String toString() {
-            return description;
-        }
-    }
-
     public AccountHandler(TalkServer talkServer){
-        super(HandlerType.ACCOUNT);
-        this.br = talkServer.getBr();
-        this.mainFid = talkServer.getDealer();
-        this.priKey = talkServer.getDealerPriKey();
-        this.sid = talkServer.getService().getId();
-        this.apipClient = talkServer.getApipClient();
-        this.cashHandler = talkServer.getCashHandler();
-        this.jedisPool = talkServer.getJedisPool();
-        this.priceBase = talkServer.getPrice();
-
-        this.useRedis = (jedisPool != null);
-        
-        // Add dealer min balance input logic
-        if(br!=null) {
-            Long inputDealerMinBalance = Inputer.inputLong(br, "Input dealer minimum balance (press Enter for default " + DEFAULT_DEALER_MIN_BALANCE / 100000000.0 + " FCH):", null);
-            this.dealerMinBalance = inputDealerMinBalance != null ? inputDealerMinBalance : DEFAULT_DEALER_MIN_BALANCE;
-
-            // Add min distribute balance input logic
-            Long inputMinDistributeBalance = Inputer.inputLong(br, "Input minimum distribute balance (press Enter for default " + DEFAULT_DISTRIBUTE_BALANCE / 100000000.0 + " FCH):", null);
-            this.minDistributeBalance = inputMinDistributeBalance != null ? inputMinDistributeBalance : DEFAULT_DISTRIBUTE_BALANCE;
-        }
-        // Initialize collections
-        if(useRedis){
-            this.userBalance = null;
-            this.fidViaMap = null;
-            this.viaBalance = null;
-        }else {
-            this.userBalance = new MapQueue<>(MAX_USER_BALANCE_CACHE_SIZE);
-            this.fidViaMap = new MapQueue<>(MAX_FID_VIA_CACHE_SIZE);
-            this.viaBalance = new MapQueue<>(MAX_VIA_BALANCE_CACHE_SIZE);
-        }
-        this.payoffMap = new HashMap<>();
-
-        // Initialize storage (Redis or AccountDB)
-        this.accountDB = useRedis ? new AccountDB(null, sid, dbPath) : new AccountDB(mainFid, sid, dbPath);
-        if(br!=null) {
-            accountDB.setDealerMinBalance(this.dealerMinBalance);
-            accountDB.setMinDistributeBalance(this.minDistributeBalance);
-        }
-        // Get start height
-        if (useRedis) {
-            REDIS_KEY_USER_BALANCE = IdNameUtils.makeKeyName(null,sid, USER_BALANCE,null);
-            REDIS_KEY_FID_CONSUME_VIA = IdNameUtils.makeKeyName(null,sid, FID_CONSUME_VIA,null);
-            REDIS_KEY_VIA_BALANCE = IdNameUtils.makeKeyName(null,sid, VIA_BALANCE,null);
-        } else {
-            REDIS_KEY_USER_BALANCE = null;
-            REDIS_KEY_FID_CONSUME_VIA = null;
-            REDIS_KEY_VIA_BALANCE = null;
-        }
-
-        if (br != null) setNPrices(Arrays.stream(talkServer.getChargeType()).toList(),br,false);
-
-        if(accountDB.getLastIncome().isEmpty() && br!=null) {
-            this.startHeight = Inputer.inputLongStr(br, "Input the start height by which the order scanning starts. Enter to start from 0:");
-        }else this.startHeight=null;
-
-        String orderViaShareStr = talkServer.getTalkParams().getOrderViaShare();
-        orderViaShare = Double.parseDouble(orderViaShareStr);
-        String consumeViaShareStr = talkServer.getTalkParams().getConsumeViaShare();
-        consumeViaShare = Double.parseDouble( consumeViaShareStr);
-
-        // Add auto update input logic after other initializations
-        AutoScanStrategy storedStrategy = accountDB.getAutoScanStrategy();
-        if (storedStrategy != null) {
-            this.autoScanStrategy = storedStrategy;
-        } else if (br != null) {
-            this.autoScanStrategy = selectAutoScanStrategy(br);
-            accountDB.setAutoScanStrategy(this.autoScanStrategy);
-        } else {
-            this.autoScanStrategy = AutoScanStrategy.NO_AUTO_SCAN;
-            accountDB.setAutoScanStrategy(this.autoScanStrategy);
-        }
-
-        initShareAndCost(br, orderViaShare, consumeViaShare, false);
-
-        // Load existing listenPath if available
-        this.listenPath = accountDB.getListenPath();
-        
+        this(talkServer.getSettings());
     }
     public AccountHandler(Settings settings){
-        super(HandlerType.ACCOUNT);
+        super(settings, HandlerType.ACCOUNT, LocalDB.SortType.BIRTH_ORDER, FcEntity.class,true,false);
 
         this.br = settings.getBr();
         this.mainFid = settings.getMainFid();
@@ -229,13 +123,14 @@ public class AccountHandler extends Handler<FcEntity> {
         this.dbPath = settings.getDbDir();
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        this.nasaClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
         this.cashHandler = settings.getHandler(Handler.HandlerType.CASH)!=null ?(CashHandler) settings.getHandler(Handler.HandlerType.CASH): new CashHandler(settings);
         this.jedisPool =(JedisPool) settings.getClient(Service.ServiceType.REDIS);
         Params params = ObjectUtils.objectToClass(settings.getService().getParams(), Params.class);
         String priceStr = params.getPricePerKBytes();
         if(priceStr!=null) {
             double price = Double.parseDouble(priceStr);
-            this.priceBase = FchUtils.coinToSatoshi(price);
+            this.priceBase = utils.FchUtils.coinToSatoshi(price);
         }else this.priceBase = 0L;
         String orderViaShareStr = params.getOrderViaShare();
         orderViaShare = Double.parseDouble(orderViaShareStr);
@@ -256,316 +151,144 @@ public class AccountHandler extends Handler<FcEntity> {
             this.fidViaMap = new MapQueue<>(MAX_FID_VIA_CACHE_SIZE);
             this.viaBalance = new MapQueue<>(MAX_VIA_BALANCE_CACHE_SIZE);
         }
+
+        // this.accountDB = useRedis ? new AccountDB(null, sid, dbPath) : new AccountDB(mainFid, sid, dbPath);
         this.payoffMap = new HashMap<>();
-
-        this.accountDB = useRedis ? new AccountDB(null, sid, dbPath) : new AccountDB(mainFid, sid, dbPath);
-
         // Add dealer min balance input logic
-        if(this.accountDB.getDealerMinBalance()!=null) {
-            this.dealerMinBalance = this.accountDB.getDealerMinBalance();
-        }else if(settings.getSettingMap().get(DEALER_MIN_BALANCE)!=null){
-            this.dealerMinBalance = (long)settings.getSettingMap().get(DEALER_MIN_BALANCE);
-            accountDB.setDealerMinBalance(this.dealerMinBalance);
-        }else if(br!=null){
-            Double inputDealerMinBalance = Inputer.inputDouble(br, "dealer minimum balance(FCH)", FchUtils.satoshiToCoin(DEFAULT_DEALER_MIN_BALANCE));
-            // Add default value if input is null
-            this.dealerMinBalance = inputDealerMinBalance != null ? 
-                FchUtils.coinToSatoshi(inputDealerMinBalance) :
-                DEFAULT_DEALER_MIN_BALANCE;
-            accountDB.setDealerMinBalance(this.dealerMinBalance);
+        if(localDB.getSetting(Settings.DEALER_MIN_BALANCE)!=null) {
+            this.dealerMinBalance = (long)localDB.getSetting(Settings.DEALER_MIN_BALANCE);
+        }else if(settings.getSettingMap().get(Settings.DEALER_MIN_BALANCE)!=null) {
+            this.dealerMinBalance = ObjectUtils.objectToClass(settings.getSettingMap().get(Settings.DEALER_MIN_BALANCE),Long.class);
         }else{
             this.dealerMinBalance = DEFAULT_DEALER_MIN_BALANCE;
-            accountDB.setDealerMinBalance(this.dealerMinBalance);
+            localDB.putSetting(Settings.DEALER_MIN_BALANCE, this.dealerMinBalance);
         }
 
         // Add min distribute balance input logic
-        if(this.accountDB.getMinDistributeBalance()!=null) {
-            this.minDistributeBalance = this.accountDB.getMinDistributeBalance();
+        if(localDB.getSetting(FieldNames.MIN_DISTRIBUTE_BALANCE)!=null) {
+            this.minDistributeBalance = (long)localDB.getSetting(FieldNames.MIN_DISTRIBUTE_BALANCE);
         }else if(settings.getSettingMap().get(Settings.MIN_DISTRIBUTE_BALANCE)!=null){
-            this.minDistributeBalance = (long)settings.getSettingMap().get(Settings.MIN_DISTRIBUTE_BALANCE);
-            accountDB.setMinDistributeBalance(this.minDistributeBalance);
-        }else if(br!=null){
-            Double inputMinDistributeBalance = Inputer.inputDouble(br, "minimum distribute balance(FCH)" , FchUtils.satoshiToCoin(DEFAULT_DISTRIBUTE_BALANCE));
-            // Add default value if input is null
-            this.minDistributeBalance = inputMinDistributeBalance != null ?
-                FchUtils.coinToSatoshi(inputMinDistributeBalance) :
-                DEFAULT_DISTRIBUTE_BALANCE;
-            accountDB.setMinDistributeBalance(this.minDistributeBalance);
+            this.minDistributeBalance = ObjectUtils.objectToClass(settings.getSettingMap().get(Settings.MIN_DISTRIBUTE_BALANCE),Long.class);
+            localDB.putSetting(FieldNames.MIN_DISTRIBUTE_BALANCE, this.minDistributeBalance);
         }else{
-            this.minDistributeBalance = DEFAULT_DISTRIBUTE_BALANCE;
-            accountDB.setMinDistributeBalance(this.minDistributeBalance);
+            this.minDistributeBalance = DEFAULT_MIN_DISTRIBUTE_BALANCE;
+            localDB.putSetting(FieldNames.MIN_DISTRIBUTE_BALANCE, this.minDistributeBalance);
+        }
+
+        if(localDB.getSetting(DISTRIBUTE_DAYS)!=null) {
+            this.distributeDays = (long)localDB.getSetting(FieldNames.MIN_DISTRIBUTE_BALANCE);
+        }else if(settings.getSettingMap().get(DISTRIBUTE_DAYS)!=null){
+            this.distributeDays = ObjectUtils.objectToClass(settings.getSettingMap().get(DISTRIBUTE_DAYS),Long.class);
+            localDB.putSetting(DISTRIBUTE_DAYS, this.distributeDays);
+        }else{
+            this.distributeDays = DEFAULT_MIN_DISTRIBUTE_BALANCE;
+            localDB.putSetting(DISTRIBUTE_DAYS, this.distributeDays);
         }
 
         // Get start height
         if (useRedis) {
-            REDIS_KEY_USER_BALANCE = IdNameUtils.makeKeyName(null,sid, USER_BALANCE,true);
-            REDIS_KEY_FID_CONSUME_VIA = IdNameUtils.makeKeyName(null,sid, FID_CONSUME_VIA,true);
-            REDIS_KEY_VIA_BALANCE = IdNameUtils.makeKeyName(null,sid, VIA_BALANCE,true);
+            redisKeyUserBalance = RedisUtils.makeRedisKey(sid,USER_BALANCE);
+            redisKeyFidConsumeVia = RedisUtils.makeRedisKey(sid,FID_CONSUME_VIA);
+            redisKeyViaBalance = RedisUtils.makeRedisKey(sid,VIA_BALANCE);
         } else {
-            REDIS_KEY_USER_BALANCE = null;
-            REDIS_KEY_FID_CONSUME_VIA = null;
-            REDIS_KEY_VIA_BALANCE = null;
+            redisKeyUserBalance = null;
+            redisKeyFidConsumeVia = null;
+            redisKeyViaBalance = null;
         }
 
         if(br!=null)setNPrices(settings.getApiList(),br,false);
-        else setAllNPricesWithValue(settings.getApiList(), 1L);
-        if(accountDB.getLastIncome().isEmpty()) {
+
+        if(this.nPriceMap==null)
+            this.nPriceMap = getNPriceMap();
+
+        if(getLastIncome()==null || getLastIncome().isEmpty()) {
             if(br==null)this.startHeight = null;
             else this.startHeight = Inputer.inputLongStr(br, "Input the start height by which the order scanning starts. Enter to start from 0:");
         }else this.startHeight=null;
         initShareAndCost(br, orderViaShare, consumeViaShare, false);
 
-        // Add auto update input logic after other initializations
-        AutoScanStrategy storedStrategy = accountDB.getAutoScanStrategy();
-        if (storedStrategy != null) {
-            this.autoScanStrategy = storedStrategy;
-        } else if (br != null) {
-            this.autoScanStrategy = selectAutoScanStrategy(br);
-            accountDB.setAutoScanStrategy(this.autoScanStrategy);
-        } else {
-            this.autoScanStrategy = AutoScanStrategy.NO_AUTO_SCAN;
-            accountDB.setAutoScanStrategy(this.autoScanStrategy);
-        }
-
-        switch(this.autoScanStrategy){
-            case ES_CLIENT:
-            case APIP_CLIENT:
-                break;
-            case WEBHOOK:
-            case FILE_MONITOR:{
-                // Load existing listenPath if available
-                this.listenPath = accountDB.getListenPath();
-                if(listenPath==null|| listenPath.isEmpty()){
-                    this.listenPath = (String) settings.getSettingMap().get(LISTEN_PATH);
-                    accountDB.setListenPath(this.listenPath);
-                }
-                break;
-            }
-            default:
-                this.listenPath = null;
-                break;
-        }
-    }
-    public AccountHandler(String mainFid, Service service, String mainFidPriKeyCipher, List<String> apiList,  byte[] symKey, ApipClient apipClient, CashHandler cashHandler,JedisPool jedisPool, BufferedReader br) {
-        super(HandlerType.ACCOUNT);
-
-        this.br = br;
-        this.mainFid = mainFid;
-        this.priKey = Decryptor.decryptPriKey(mainFidPriKeyCipher,symKey);
-        this.sid = service.getId();
-        this.apipClient = apipClient;
-        this.cashHandler = cashHandler;
-        this.jedisPool = jedisPool;
-
-        this.useRedis = (jedisPool != null);
-        // Initialize collections
-        if(useRedis){
-        this.userBalance = null;
-        this.fidViaMap = null;
-        this.viaBalance = null;
-        }else {
-        this.userBalance = new MapQueue<>(MAX_USER_BALANCE_CACHE_SIZE);
-        this.fidViaMap = new MapQueue<>(MAX_FID_VIA_CACHE_SIZE);
-        this.viaBalance = new MapQueue<>(MAX_VIA_BALANCE_CACHE_SIZE);
-        }
-        this.payoffMap = new HashMap<>();
-
-        Params params = (Params) service.getParams();
-        String priceStr = params.getPricePerKBytes();
-        if(priceStr!=null) {
-            double price = Double.parseDouble(priceStr);
-            this.priceBase = FchUtils.coinToSatoshi(price);
-        }else this.priceBase = 0L;
-        String orderViaShareStr = params.getOrderViaShare();
-        orderViaShare = Double.parseDouble(orderViaShareStr);
-        String consumeViaShareStr = params.getConsumeViaShare();
-        consumeViaShare = Double.parseDouble( consumeViaShareStr);
-
-        // Initialize storage and save balance settings
-        this.accountDB = useRedis ? new AccountDB(null, service.getId(), dbPath) : new AccountDB(mainFid, service.getId(), dbPath);
-        // Add dealer min balance input logic
-        if(this.accountDB.getDealerMinBalance()!=null) {
-            this.dealerMinBalance = this.accountDB.getDealerMinBalance();
-        }else{
-            Double inputDealerMinBalance = Inputer.inputDouble(br, "dealer minimum balance(FCH)", FchUtils.satoshiToCoin(DEFAULT_DEALER_MIN_BALANCE));
-            this.dealerMinBalance = FchUtils.coinToSatoshi(inputDealerMinBalance);
-            accountDB.setDealerMinBalance(this.dealerMinBalance);
-        }
-
-        // Add min distribute balance input logic
-        if(this.accountDB.getMinDistributeBalance()!=null) {
-            this.minDistributeBalance = this.accountDB.getMinDistributeBalance();
-        }else{
-            Double inputMinDistributeBalance = Inputer.inputDouble(br, "minimum distribute balance(FCH)" , FchUtils.satoshiToCoin(DEFAULT_DISTRIBUTE_BALANCE));
-            this.minDistributeBalance = FchUtils.coinToSatoshi(inputMinDistributeBalance);
-            accountDB.setMinDistributeBalance(this.minDistributeBalance);
-        }
-
-        // Get start height
-        if (useRedis) {
-            REDIS_KEY_USER_BALANCE = IdNameUtils.makeKeyName(null,sid, USER_BALANCE,true);
-            REDIS_KEY_FID_CONSUME_VIA = IdNameUtils.makeKeyName(null,sid, FID_CONSUME_VIA,true);
-            REDIS_KEY_VIA_BALANCE = IdNameUtils.makeKeyName(null,sid, VIA_BALANCE,true);
-        } else {
-            REDIS_KEY_USER_BALANCE = null;
-            REDIS_KEY_FID_CONSUME_VIA = null;
-            REDIS_KEY_VIA_BALANCE = null;
-        }
-
-        setNPrices(apiList,br,false);
-
-        if(accountDB.getLastIncome().isEmpty()) {
-            this.startHeight = Inputer.inputLongStr(br, "Input the start height by which the order scanning starts:");
-        }else this.startHeight=null;
-        initShareAndCost(br, orderViaShare, consumeViaShare, false);
-
-        // Add auto update input logic after other initializations
-        AutoScanStrategy storedStrategy = accountDB.getAutoScanStrategy();
-        if (storedStrategy != null) {
-            this.autoScanStrategy = storedStrategy;
-        } else if (br != null) {
-            this.autoScanStrategy = selectAutoScanStrategy(br);
-            accountDB.setAutoScanStrategy(this.autoScanStrategy);
-        } else {
-            this.autoScanStrategy = AutoScanStrategy.NO_AUTO_SCAN;
-            accountDB.setAutoScanStrategy(this.autoScanStrategy);
-        }
     }
 
-    public void menu(BufferedReader br, boolean withSettings) {
-        Menu menu = new Menu("Account Management Menu", this::close);
-        
-        // Replace toggle auto update option with strategy selection
-        menu.add("Change Auto Scan Strategy", () -> {
-            AutoScanStrategy newStrategy = selectAutoScanStrategy(br);
-            autoScanStrategy = newStrategy;
-            accountDB.setAutoScanStrategy(newStrategy);
-            System.out.println("Auto scan strategy changed to: " + newStrategy.getDescription());
-        });
-        
-        menu.add("Update Income", () -> {
-            Map<String, Income> newIncomes = updateIncome();
-            if (newIncomes == null) {
-                System.out.println("No new incomes found.");
-            } else {
-                System.out.println("Processed " + newIncomes.size() + " new incomes.");
-            }
-        });
-        
-        menu.add("Update Expense", () -> {
-            int newExpenses = updateExpense();
-            if (newExpenses == -1) {
-                System.out.println("Request too frequent. Please wait before trying again.");
-            } else {
-                System.out.println("Processed " + newExpenses + " new expenses.");
-            }
-        });
-        
-        menu.add("Show Income List", () -> {
-            Integer incomeSize = Inputer.inputInteger(br, "Enter number of records to show: ", 1, DEFAULT_DISPLAY_LIST_SIZE);
-            if(incomeSize==null)return;
-            showIncomeList(incomeSize, br);
-        });
-        
-        menu.add("Show Expense List", () -> {
-            Integer expenseSize = Inputer.inputInteger(br, "Enter number of records to show: ", 1, DEFAULT_DISPLAY_LIST_SIZE);
-            if(expenseSize==null)return;
-            showExpenseList(expenseSize, br);
-        });
-
-        if(cashHandler!=null)menu.add("Manage My Cashes", cashHandler::menu);
-        
-        menu.add("Distribute Balance", () -> {
-            boolean distributionResult = distribute();
-            if (distributionResult) {
-                System.out.println("Distribution completed successfully.");
-            } else {
-                System.out.println("Distribution failed. Insufficient funds or other error.");
-            }
-        });
-        
-        menu.add("Settle Payments", () -> {
-            boolean settlementResult = settle();
-            if (settlementResult) {
-                System.out.println("Settlement completed successfully.");
-            } else {
-                System.out.println("Settlement failed.");
-            }
-        });
-        
-        menu.add("Update My Balance", () -> {
-            boolean balanceUpdate = updateMyBalance();
-            if (balanceUpdate) {
-                System.out.println("Current balance: " + myBalance);
-            } else {
-                System.out.println("Failed to update balance.");
-            }
-        });
-        
+    public void menu(BufferedReader br, boolean isRootMenu) {
+        Menu menu = newMenu("Account manager",isRootMenu);
+        menu.add("Update Income", () -> updateIncomes(br));
+        menu.add("Update Expense", () -> updateExpenses(br));
+        menu.add("List Incomes", this::showIncomeList);
+        menu.add("List Expenses", this::showExpenseList);
+        menu.add("Distribute Balance", () -> distribute(br));
+        menu.add("Pay all", () -> settlePayments(br));
+        menu.add("Update My Balance", () -> updateMyBalance(br));
         menu.add("Modify Contributor Shares", () -> inputContributorShare(br));
-        
         menu.add("Modify Fixed Costs", () -> inputFixedCost(br));
+        if(cashHandler!=null)
+            menu.add("Manage My Cashes", () -> cashHandler.menu(br, false));
+        menu.add("Test", () -> test());
         
         menu.showAndSelect(br);
     }
 
-    
+    public void test(){
+        String fid = "FD4jHk3bGHijHWJqZddSXaEY9zZdvUbody";
+        long value = 10000000;
+        updateUserBalance(fid,value);
+        System.out.println("Balance:"+checkUserBalance(fid));
+        Map<String,Long> bs = new HashMap<>();
+        bs.put(fid,20000000L);
+        updateUserBalanceMap(bs);
+        System.out.println("Balance:"+checkUserBalance(fid));
 
-    
-    public void start() {
-        if (!getIsRunning().get()) {
-            getIsRunning().set(true);
-            distributionThread = new Thread(() -> {
-                while (getIsRunning().get()) {
-                    if(autoScanStrategy != AutoScanStrategy.NO_AUTO_SCAN){
-                        try {
-                            switch (autoScanStrategy) {
-                                case ES_CLIENT:
-                                    if (esClient != null) {
-                                        updateAll();
-                                    }
-                                    break;
-                                case APIP_CLIENT:
-                                    if (apipClient != null) {
-                                        updateAll();
-                                    }
-                                    break;
-                                case WEBHOOK:
-                                    if (listenPath != null) {
-                                        FchUtils.waitForNewItemInFile(listenPath);
-                                        TimeUnit.SECONDS.sleep(2);
-                                        updateAll();
-                                    }
-                                    break;
-                                case FILE_MONITOR:
-                                    if (listenPath != null) {
-                                        FchUtils.waitForChangeInDirectory(listenPath, getIsRunning());
-                                        TimeUnit.SECONDS.sleep(2);
-                                        updateAll();
-                                    }
-                                    break;
-                                default:
-                                    break;
-                            }
-                            
-                            if (myBalance > minDistributeBalance && distribute()) {
-                                settle();
-                            }
+        String via = "FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7";
+        updateViaBalance(fid,value,via);
+        System.out.println("Via balance:"+getViaBalance(via));
+    }
 
-                            Thread.sleep(AUTO_UPDATE_INTERVAL);
-                        } catch (InterruptedException e) {
-                            log.error("Distribution thread interrupted", e);
-                            Thread.currentThread().interrupt();
-                            break;
-                        } catch (Exception e) {
-                            log.error("Error in distribution thread", e);
-                        }
-                    }
-                }
-            });
-            distributionThread.setName("Auto-Scan-Thread");
-            distributionThread.start();
+    private void updateMyBalance(BufferedReader br) {
+        boolean balanceUpdate = updateMyBalance();
+        if (balanceUpdate) {
+            System.out.println("Current balance: " + FchUtils.satoshiToCoin(myBalance) +" f");
+        } else {
+            System.out.println("Failed to update balance.");
         }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void settlePayments(BufferedReader br) {
+        boolean settlementResult = settle();
+        if (settlementResult) {
+            System.out.println("Settlement completed successfully.");
+        } else {
+            System.out.println("Settlement failed.");
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void distribute(BufferedReader br) {
+        Boolean done = distribute();
+        if(done ==null)return;
+        if(!done)System.out.println("The balance is insufficient. Some distributions are deferred to next period.");
+        done = settle();
+        if (done) System.out.println("Distribution completed successfully.");
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void updateExpenses(BufferedReader br) {
+        int newExpenses = updateExpense();
+        if (newExpenses == -1) {
+            System.out.println("Request too frequent. Please wait before trying again.");
+        } else {
+            System.out.println("Processed " + newExpenses + " new expenses.");
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void updateIncomes(BufferedReader br) {
+        List<Income> newIncomes = updateIncome();
+        if (newIncomes == null) {
+            System.out.println("No new incomes found.");
+        } else {
+            System.out.println("Processed " + newIncomes.size() + " new incomes.");
+        }
+        Menu.anyKeyToContinue(br);
     }
 
     /**
@@ -576,47 +299,63 @@ public class AccountHandler extends Handler<FcEntity> {
         updateIncome();
         updateExpense();
         updateMyBalance();
-        getIsRunning().set(true);
     }
 
-    public Long getPriceByDataTypeName(String dataType) {
-        return nPriceMap.get(dataType);
+    public Long getApiPrice(String name) {
+        return nPriceMap.get(name);
     }
 
     // Inner classes for Income and Expense
-    public static class Income implements Serializable {
-        private String cashId;
+    public static class Income extends FcObject {
         private String from;
         private Long value;
         private Long time;
-        private Long birthHeight;
+        private Long height;
 
 
 
         // Constructor and getters/setters
-        public Income(String cashId, String from, Long value, Long time, Long birthHeight) {
-            this.cashId = cashId;
+        public Income(String id, String from, Long value, Long time, Long height) {
+            this.id= id;
             this.from = from;
             this.value = value;
             this.time = time;
-            this.birthHeight = birthHeight;
+            this.height = height;
 
         }
         public static LinkedHashMap<String,Integer>getFieldWidthMap(){
             LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-            map.put(CASH_ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
+            map.put(ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
             map.put(FROM,FcEntity.ID_DEFAULT_SHOW_SIZE);
             map.put(VALUE,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
             map.put(TIME,FcEntity.TIME_DEFAULT_SHOW_SIZE);
-            map.put(BIRTH_HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            map.put(HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
             return map;
         }
-        public String getCashId() {
-            return cashId;
+
+        public static List<String> getTimestampFieldList(){
+            return List.of(TIME);
         }
 
-        public void setCashId(String cashId) {
-            this.cashId = cashId;
+        public static List<String> getSatoshiFieldList(){
+            return List.of(VALUE);
+        }
+        public static Map<String, String> getHeightToTimeFieldMap() {
+            return  new HashMap<>();
+        }
+
+        public static Map<String, String> getShowFieldNameAsMap() {
+            Map<String,String> map = new HashMap<>();
+            map.put(ID,CASH_ID);
+            return map;
+        }
+
+        public static List<String> getReplaceWithMeFieldList() {
+            return List.of(OWNER,ISSUER);
+        }
+
+        public static Map<String, Object> getInputFieldDefaultValueMap() {
+            return new HashMap<>();
         }
 
         public String getFrom() {
@@ -643,47 +382,66 @@ public class AccountHandler extends Handler<FcEntity> {
             this.time = time;
         }
 
-        public Long getBirthHeight() {
-            return birthHeight;
+        public Long getHeight() {
+            return height;
         }
 
-        public void setBirthHeight(Long birthHeight) {
-            this.birthHeight = birthHeight;
+        public void setHeight(Long height) {
+            this.height = height;
         }   
     }
 
-    public static class Expense implements Serializable {
-        private String cashId;
+    public static class Expense extends FcObject {
         private String to;
         private Long value;
         private Long time;
-        private Long birthHeight;
+        private Long height;
         // Constructor and getters/setters
-        public Expense(String cashId, String to, Long value, Long time, Long birthHeight) {
-            this.cashId = cashId;
+        public Expense(String id, String to, Long value, Long time, Long height) {
+            this.id = id;
             this.to = to;
             this.value = value;
             this.time = time;
-            this.birthHeight = birthHeight;
+            this.height = height;
         }
         public static LinkedHashMap<String,Integer>getFieldWidthMap(){
             LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-            map.put(CASH_ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
+            map.put(ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
             map.put(TO,FcEntity.ID_DEFAULT_SHOW_SIZE);
             map.put(VALUE,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
             map.put(TIME,FcEntity.TIME_DEFAULT_SHOW_SIZE);
-            map.put(BIRTH_HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            map.put(HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
             return map;
         }
+
+
+        public static List<String> getTimestampFieldList(){
+            return List.of(TIME);
+        }
+
+        public static List<String> getSatoshiFieldList(){
+            return List.of(VALUE);
+        }
+        public static Map<String, String> getHeightToTimeFieldMap() {
+            return  new HashMap<>();
+        }
+
+        public static Map<String, String> getShowFieldNameAsMap() {
+            Map<String,String> map = new HashMap<>();
+            map.put(ID,CASH_ID);
+            return map;
+        }
+
+        public static List<String> getReplaceWithMeFieldList() {
+            return List.of(OWNER,ISSUER);
+        }
+
+        public static Map<String, Object> getInputFieldDefaultValueMap() {
+            return new HashMap<>();
+        }
+
+
         // Getters and setters
-
-        public String getCashId() {
-            return cashId;
-        }
-
-        public void setCashId(String cashId) {
-            this.cashId = cashId;
-        }
 
         public String getTo() {
             return to;
@@ -709,12 +467,12 @@ public class AccountHandler extends Handler<FcEntity> {
             this.time = time;
         }
 
-        public Long getBirthHeight() {
-            return birthHeight;
+        public Long getHeight() {
+            return height;
         }
 
-        public void setBirthHeight(Long birthHeight) {
-            this.birthHeight = birthHeight;
+        public void setHeight(Long height) {
+            this.height = height;
         }
     }
 
@@ -742,7 +500,7 @@ public class AccountHandler extends Handler<FcEntity> {
                             .field(FieldNames.OWNER)
                             .value(mainFid)
                         )
-                    );
+                    ).must(m2->m2.term(t2->t2.field(VALID).value(FieldValue.TRUE)));
 
                 // Build search request
                 SearchRequest searchRequest = new SearchRequest.Builder()
@@ -755,12 +513,11 @@ public class AccountHandler extends Handler<FcEntity> {
                 SearchResponse<Cash> response = esClient.search(searchRequest, Cash.class);
                 
                 // Sum up all cash values
-                long totalBalance = response.hits().hits().stream()
+
+                myBalance = response.hits().hits().stream()
                     .map(Hit::source)
                     .mapToLong(Cash::getValue)
                     .sum();
-
-                myBalance = totalBalance;
                 return true;
             } catch (IOException e) {
                 log.error("Error searching ES for balance", e);
@@ -773,8 +530,8 @@ public class AccountHandler extends Handler<FcEntity> {
 
     private boolean checkAndHandleRollback() {
         try {
-            Long lastHeight = accountDB.getLastHeight();
-            String lastBlockId = accountDB.getLastBlockId();
+            Long lastHeight = (Long)localDB.getState(LAST_HEIGHT);
+            String lastBlockId = (String)localDB.getState(LAST_BLOCK_ID);
             boolean isRolledBack = false;
             
             if (lastHeight == null || lastBlockId == null) {
@@ -792,19 +549,19 @@ public class AccountHandler extends Handler<FcEntity> {
                 long newHeight = Math.max(0, lastHeight - 30);
                 
                 // Remove transactions after newHeight
-                accountDB.removeIncomeSinceHeight(newHeight);
-                accountDB.removeExpenseSinceHeight(newHeight);
+                removeIncomeSinceHeight(newHeight);
+                removeExpenseSinceHeight(newHeight);
                 
                 // Update height and block ID
-                accountDB.setLastHeight(newHeight);
+                localDB.putState(LAST_HEIGHT, newHeight);
                 Block block = BlockFileUtils.getBlockByHeight(esClient, newHeight);
                 if (block != null) {
-                    accountDB.setLastBlockId(block.getId());
+                    localDB.putState(LAST_BLOCK_ID, block.getId());
                 }
                 
                 // Clear last income and expense to force rescan from new height
-                accountDB.setLastIncome(new ArrayList<>());
-                accountDB.setLastExpense(new ArrayList<>());
+                localDB.putState(LAST_INCOME, new ArrayList<>());
+                localDB.putState(LAST_EXPENSE, new ArrayList<>());
                 this.startHeight=String.valueOf(newHeight);
                 return true;
             }
@@ -823,54 +580,70 @@ public class AccountHandler extends Handler<FcEntity> {
         }
         return false;
     }
-    
-        public void persistBalance(){
-            accountDB.updateUserBalance(userBalance.getMap());
-        }
+
         /**
          * Adds a value to the user's balance
          * @param userFid The user's FID
          * @param value The value to add
          * @return The new balance
          */
-        public Long addUserBalance(String userFid, Long value) {
+        public Long updateUserBalance(String userFid, Long value) {
             if(!KeyTools.isGoodFid(userFid) || value==null)return null;
             if (useRedis) {
                 try (var jedis = jedisPool.getResource()) {
-                    String currentBalanceStr = jedis.hget(REDIS_KEY_USER_BALANCE, userFid);
-                    long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
-                    long newBalance = currentBalance + value;
-                    
-                    if (newBalance <= 0) {
-                        jedis.hdel(REDIS_KEY_USER_BALANCE, userFid);
-                    } else {
-                        jedis.hset(REDIS_KEY_USER_BALANCE, userFid, String.valueOf(newBalance));
-                    }
-                    return newBalance;
+                    return updateUserBalanceInRedis(userFid,value,jedis);
                 }
             } else {
                 // Existing MapQueue and AccountDB logic
-                Long currentBalance = userBalance.get(userFid);
-                if (currentBalance == null) {
-                    currentBalance = accountDB.getUserBalance(userFid);
-                    if(currentBalance == null)
-                        currentBalance = 0L;
-                    if(userBalance.size() >= MAX_USER_BALANCE_CACHE_SIZE)
-                        accountDB.updateUserBalance(userBalance.peek());
-                }
-                long newBalance = currentBalance + value;
-                if (newBalance <= 0) {
-                    userBalance.remove(userFid);
-                    accountDB.removeUserBalance(userFid);
-                } else {
-                    userBalance.put(userFid, newBalance);
-                }
-                return newBalance;
+                return updateUserBalanceInLocal(userFid, value);
             }
         }
+    private long updateUserBalanceInRedis(String userFid, Long value, Jedis jedis) {
+        String valueStr = jedis.hget(redisKeyUserBalance, userFid);
+        long currentBalance = valueStr != null ? Long.parseLong(valueStr) : 0L;
+        long newBalance = currentBalance + value;
+        if (newBalance <= 0) {
+            updateIncome();
+            valueStr = jedis.hget(redisKeyUserBalance, userFid);
+            currentBalance = valueStr != null ? Long.parseLong(valueStr) : 0L;
+            newBalance = currentBalance + value;
+            if (newBalance <= 0)jedis.hdel(redisKeyUserBalance, userFid);
+            else jedis.hset(redisKeyUserBalance, userFid, String.valueOf(newBalance));
+        } else {
+            jedis.hset(redisKeyUserBalance, userFid, String.valueOf(newBalance));
+        }
+        return newBalance;
+    }
+    private long updateUserBalanceInLocal(String userFid, Long value) {
+        Long balanceFromLocal = getBalanceFromLocal(userFid);
+        long newBalance  = balanceFromLocal +value;
+        if (newBalance <= 0) {
+            updateIncome();
+            newBalance = getBalanceFromLocal(userFid) +value;
+            if (newBalance <= 0) {
+                userBalance.remove(userFid);
+                removeUserBalanceInLocalDB(userFid);
+                return 0;
+            }
+        }
+        Map.Entry<String, Long> oldest = userBalance.put(userFid, newBalance);
+        if(oldest!=null)localDB.putInMap(USER_BALANCE_MAP,oldest.getKey(),oldest.getValue());
+        return newBalance;
+    }
 
-        public Long userSpend(String userFid, String api,Long length) {
-            long amount = length / 1000;
+    @NotNull
+    private Long getBalanceFromLocal(String userFid) {
+        Long currentBalance = userBalance.get(userFid);
+        if (currentBalance == null) {
+            currentBalance = getUserBalance(userFid);
+            if(currentBalance == null)
+                currentBalance = 0L;
+        }
+        return currentBalance;
+    }
+
+    public Long userSpend(String userFid, String api,Long length,String via) {
+            long amount = (length + 999) / 1000;
             // Get nPrice multiplier
             long nPrice;
             if(api!=null)
@@ -878,412 +651,370 @@ public class AccountHandler extends Handler<FcEntity> {
             else nPrice=1;
             
             long cost = amount * priceBase * nPrice;
-            return addUserBalance(userFid, -cost);
+            Long newBalance = updateUserBalance(userFid, -cost);
+            if(newBalance>0)updateViaBalance(userFid, cost, via);
+            return newBalance;
         }
     
-        public void addAllBalance(int length, String from, List<String> toFidList, long kbPrice) {
+        public void transferBalanceFromOneToMulti(int length, String from, List<String> toFidList, long kbPrice) {
             int kb = (int) Math.ceil(length / 1024.0); // Round up to ensure partial KB counts as 1
-            addUserBalance(from,(-1)*(kbPrice*toFidList.size()+1)*kb);
+            updateUserBalance(from,(-1)*(kbPrice*toFidList.size()+1)*kb);
             for(String fid:toFidList){
-                addUserBalance(fid,kbPrice*kb);
+                updateUserBalance(fid,kbPrice*kb);
             }
         }
 
-        public void addAllBalance(Map<String, Long> balanceMap) {
+        public void updateUserBalanceMap(Map<String, Long> balanceMap) {
             if(useRedis){
-                try (var jedis = jedisPool.getResource()) {
-                    // Process each balance individually
-                    for (Map.Entry<String, Long> entry : balanceMap.entrySet()) {
-                        String fid = entry.getKey();
-                        Long addValue = entry.getValue();
-                        
-                        // Get current balance for this specific FID
-                        String currentBalanceStr = jedis.hget(REDIS_KEY_USER_BALANCE, fid);
-                        Long currentBalance = currentBalanceStr != null ? 
-                            Long.parseLong(currentBalanceStr) : 0L;
-                        
-                        // Add new value
-                        Long newBalance = currentBalance + addValue;
-                        
-                        // Update Redis
-                        if (newBalance <= 0) {
-                            jedis.hdel(REDIS_KEY_USER_BALANCE, fid);
-                        } else {
-                            jedis.hset(REDIS_KEY_USER_BALANCE, fid, String.valueOf(newBalance));
-                        }
-                    }
-                }
-            } else {
-                // Create a map to collect entries that need to be saved to DB
-                Map<String, Long> toSaveDB = new HashMap<>();
-                
-                // For each balance to add
-                for (Map.Entry<String, Long> entry : balanceMap.entrySet()) {
-                    String fid = entry.getKey();
-                    Long addValue = entry.getValue();
-                    
-                    // Get current balance from cache or DB
-                    Long currentBalance = userBalance.get(fid);
-                    if (currentBalance == null) {
-                        currentBalance = accountDB.getUserBalance(fid);
-                        if (currentBalance == null) {
-                            currentBalance = 0L;
-                        }
-                    }
-                    
-                    // Add new value
-                    Long newBalance = currentBalance + addValue;
-                    
-                    // If cache is full, collect the oldest entries
-                    if (userBalance.size() >= MAX_USER_BALANCE_CACHE_SIZE) {
-                        Map.Entry<String, Long> oldest = userBalance.peek();
-                        if (oldest != null) {
-                            toSaveDB.put(oldest.getKey(), oldest.getValue());
-                        }
-                    }
-                    
-                    // Update cache
-                    if (newBalance <= 0) {
-                        userBalance.remove(fid);
-                        accountDB.removeUserBalance(fid);
-                    } else {
-                        userBalance.put(fid, newBalance);
-                    }
-                }
-                
-                // Batch save all collected entries to DB
-                if (!toSaveDB.isEmpty()) {
-                    accountDB.updateUserBalance(toSaveDB);
-                }
-            }
+                updateUserBalanceInRedis(balanceMap);
+            } else updateUserBalanceInLocal(balanceMap);
         }
-    
-        public void updateAllBalance(Map<String, Long> balanceMap) {
-            if (useRedis) {
-                try (var jedis = jedisPool.getResource()) {
-                    Map<String, String> balances = balanceMap.entrySet().stream()
-                        .collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            e -> String.valueOf(e.getValue())
-                        ));
-                    jedis.hmset(REDIS_KEY_USER_BALANCE, balances);
-                }
-            } else {
-                Map<String, Long> pulledMap = userBalance.putAll(balanceMap);
-                Map<String, Long> all = new HashMap<>();
-                all.putAll(pulledMap);
-                all.putAll(balanceMap);
-                accountDB.addUserBalance(all);
-            }
-        }
-    
-        /**
-         * Checks if a user has sufficient balance
-         * @param userFid The user's FID
-         * @return The user's balance if greater than 0, null otherwise
-         */
-        public Long checkUserBalance(String userFid) {
-            if (userFid == null) return null;
-            
-            Long balance = null;
-            if (useRedis) {
-                try (var jedis = jedisPool.getResource()) {
-                    String balanceStr = jedis.hget(REDIS_KEY_USER_BALANCE, userFid);
-                    if (balanceStr == null) return null;
-                    balance = Long.parseLong(balanceStr);
-                    return balance;
-                }
-            }else{
-                // First check current balance
-                balance = userBalance.get(userFid);
-                if (balance != null && balance > 0) {
-                    return balance;
-                }
-                balance = accountDB.getUserBalance(userFid);
 
-                if(balance == null){
-                    Map<String, Income> newIncomes = updateIncome();
-                    if (newIncomes != null && !newIncomes.isEmpty()) {
-                        balance = checkUserBalance(userFid);
-                        if(balance == null)
-                            return null;
-                    }else{
-                        return null;
-                    }  
+    private void updateUserBalanceInLocal(Map<String, Long> balanceMap) {
+        // For each balance to add
+        Map<String,Long> moveToLocalDB = new HashMap<>();
+        List<String> removedKeyList = new ArrayList<>();
+        for (Map.Entry<String, Long> entry : balanceMap.entrySet()) {
+            String userFid = entry.getKey();
+            Long balanceFromLocal = getBalanceFromLocal(userFid);
+            Long value = entry.getValue();
+            long newBalance  = balanceFromLocal + value;
+            if (newBalance <= 0) {
+                updateIncome();
+                newBalance = getBalanceFromLocal(userFid) +value;
+                if (newBalance <= 0) {
+                    userBalance.remove(userFid);
+                    removedKeyList.add(userFid);
+                    continue;
                 }
+            }
+            Map.Entry<String, Long> oldest = userBalance.put(userFid, newBalance);
+            if(oldest!=null)moveToLocalDB.put(oldest.getKey(),oldest.getValue());
+        }
+        localDB.putAllInMap(USER_BALANCE_MAP,moveToLocalDB.keySet().stream().toList(),moveToLocalDB.values().stream().toList());
+        localDB.removeFromMap(USER_BALANCE_MAP,removedKeyList);
+        localDB.commit();
+    }
+
+    private void updateUserBalanceInRedis(Map<String, Long> balanceMap) {
+        try (var jedis = jedisPool.getResource()) {
+            // Process each balance individually
+            for (Map.Entry<String, Long> entry : balanceMap.entrySet()) {
+                updateUserBalanceInRedis(entry.getKey(),entry.getValue(),jedis);
+            }
+        }
+    }
+
+    public void removeUserBalanceInLocalDB(String fid) {
+        localDB.removeFromMap(USER_BALANCE_MAP, fid);
+        localDB.commit();
+    }
+
+    /**
+     * Checks if a user has sufficient balance
+     * @param userFid The user's FID
+     * @return The user's balance if greater than 0, null otherwise
+     */
+    public Long checkUserBalance(String userFid) {
+        if (userFid == null) return null;
+        if(userFid.equals(this.mainFid))return FchUtils.coinToSatoshi(this.minPay);
+        Long balance;
+        if (useRedis) {
+            try (var jedis = jedisPool.getResource()) {
+                String balanceStr = jedis.hget(redisKeyUserBalance, userFid);
+                if (balanceStr == null) return null;
+                balance = Long.parseLong(balanceStr);
                 return balance;
             }
+        }else{
+            // First check current balance
+            balance = userBalance.get(userFid);
+            if (balance != null && balance > 0) {
+                return balance;
+            }
+            balance = getUserBalance(userFid);
+
+            if(balance == null){
+                List<Income> newIncomes = updateIncome();
+                if (newIncomes != null && !newIncomes.isEmpty()) {
+                    balance = checkUserBalance(userFid);
+                }else{
+                    return null;
+                }
+            }
+            return balance;
         }
-    
-        /**
-         * Updates or creates an entry in the FID via map
-         * @param userFid The user's FID
-         * @param viaFid The via FID to map to
-         */
-        public void updateFidConsumeVia(String userFid, String viaFid) {
-            if (userFid == null || viaFid == null || !KeyTools.isGoodFid(userFid) || !KeyTools.isGoodFid(viaFid)) {
-                return;
-            }
-    
-            if (useRedis) {
-                try (var jedis = jedisPool.getResource()) {
-                    jedis.hset(REDIS_KEY_FID_CONSUME_VIA, userFid, viaFid);
-                }
-            } else {
-                if (fidViaMap.get(userFid) == null && fidViaMap.size()>=MAX_FID_VIA_CACHE_SIZE) {
-                    accountDB.updateFidConsumeVia(fidViaMap.peek());
-                }
-                fidViaMap.put(userFid, viaFid);
-            }
+    }
+
+    /**
+     * Updates or creates an entry in the FID via map
+     * @param userFid The user's FID
+     * @param viaFid The via FID to map to
+     */
+    public void updateFidConsumeVia(String userFid, String viaFid) {
+        if (userFid == null || viaFid == null || !KeyTools.isGoodFid(userFid) || !KeyTools.isGoodFid(viaFid)) {
+            return;
         }
 
-        public String getFidConsumeVia(String userFid){
-            if(useRedis){
+        if (useRedis) {
+            try (var jedis = jedisPool.getResource()) {
+                jedis.hset(redisKeyFidConsumeVia, userFid, viaFid);
+            }
+        } else {
+            localDB.putInMap(FieldNames.FID_VIA_MAP, userFid, viaFid);
+            fidViaMap.put(userFid, viaFid);
+        }
+    }
+
+    public String getFidConsumeVia(String userFid){
+        String via;
+        if(useRedis){
+            try (var jedis = jedisPool.getResource()) {
+                via = jedis.hget(redisKeyFidConsumeVia, userFid);
+            }
+        }else {
+            via = fidViaMap.get(userFid);
+            if(via ==null)via = localDB.getFromMap(FieldNames.FID_VIA_MAP,userFid);
+        }
+        return via;
+    }
+       /**
+     * Updates via balances based on user transactions
+     * @param userFid The user's FID
+     * @param value The transaction value
+     * @param orderVia the via fid if this is an order, null if consumption
+     */
+    public void updateViaBalance(String userFid, Long value, @Nullable String orderVia) {
+        if(!KeyTools.isGoodFid(userFid))return;
+        if(orderVia!=null && !KeyTools.isGoodFid(orderVia))return;
+        String viaFid;
+        if(orderVia==null) {
+            if (useRedis) {
                 try (var jedis = jedisPool.getResource()) {
-                    return jedis.hget(REDIS_KEY_FID_CONSUME_VIA, userFid);
+                    viaFid = jedis.hget(redisKeyFidConsumeVia, userFid);
+                }
+            } else {
+                viaFid = fidViaMap.get(userFid);
+                if (viaFid == null) {
+                    viaFid = getFidVia(userFid);
+                    fidViaMap.put(userFid, viaFid);
                 }
             }
-            return fidViaMap.get(userFid);
+        }else{
+            viaFid = orderVia;
         }
-           /**
-         * Updates via balances based on user transactions
-         * @param userFid The user's FID
-         * @param value The transaction value
-         * @param orderVia the via fid if this is an order, null if consumption
-         */
-        public void addViaBalance(String userFid, Long value, @Nullable String orderVia) {
-            if(!KeyTools.isGoodFid(userFid))return;
-            if(orderVia!=null && !KeyTools.isGoodFid(orderVia))return;
-            String viaFid;
-            if(orderVia==null) {
-                if (useRedis) {
-                    try (var jedis = jedisPool.getResource()) {
-                        viaFid = jedis.hget(REDIS_KEY_FID_CONSUME_VIA, userFid);
-                    }
-                } else {
-                    viaFid = fidViaMap.get(userFid);
-                    if (viaFid == null) {
-                        viaFid = accountDB.getFidVia(userFid);
-                        fidViaMap.put(userFid, viaFid);
-                    }
+        if(viaFid==null)return;
+
+        Double sharePercentage = orderVia==null ? getConsumeViaShare():getOrderViaShare() ;
+        String str = "{\"type\":\"FEIP\",\"sn\":\"5\",\"ver\":\"2\",\"name\":\"Service\",\"data\":{\"sid\":\"6999afe95b0e8daa93405434cee9014aae123e7181218c13633b8c661a6f248b\",\"op\":\"update\",\"stdName\":\"TestLocalApip\",\"desc\":\"Testing service on localhost\",\"ver\":\"1\",\"types\":[\"APIP\",\"FEIP\"],\"urls\":[\"http://127.0.0.1:8081\"],\"waiters\":[\"FB7UTj7vH6Qp69pNbKCJjv1WSAz2m9XRe7\"],\"params\":{\"dealer\":\"FB7UTj7vH6Qp69pNbKCJjv1WSAz2m9XRe7\",\"pricePerKBytes\":\"0.0000001\",\"minPayment\":\"0.01\",\"sessionDays\":\"100\",\"urlHead\":\"http://127.0.0.1:8081/APIP\",\"consumeViaShare\":\"0.2\",\"orderViaShare\":\"0.3\",\"currency\":\"fch\"}}}";
+        if (sharePercentage == null) return;
+
+        long viaShare = (long)(value * sharePercentage);
+        if(viaShare<=0)return;
+        if (useRedis) {
+            try (var jedis = jedisPool.getResource()) {
+                String currentBalanceStr = jedis.hget(redisKeyViaBalance, viaFid);
+                long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
+                jedis.hset(redisKeyViaBalance, viaFid, String.valueOf(currentBalance + viaShare));
+            }
+        } else {
+            Long currentViaBalance = viaBalance.get(viaFid);
+            if (currentViaBalance == null) {
+                currentViaBalance = 0L;
+                Long oldValue = getViaBalance(viaFid);
+                if (oldValue != null) currentViaBalance = oldValue;
+            }
+            Map.Entry<String, Long> oldest = viaBalance.put(viaFid, currentViaBalance + viaShare);
+            updateViaBalanceInLocalDB(oldest);
+        }
+    }
+
+    public String getFidVia(String fid) {
+        return localDB.getFromMap(FID_VIA_MAP, fid);
+    }
+
+    public void setFidVia(String fid, String viaFid) {
+        localDB.putInMap(FID_VIA_MAP, fid, viaFid);
+        localDB.commit();
+    }
+
+
+    /**
+     * Adds elements from in-memory maps to the corresponding AccountDB maps
+     */
+    public void saveMapsToLocalDB() {
+        if(useRedis)return;
+        // Add user balances
+        updateUserBalanceInLocal(userBalance.getMap());
+        // Add via balances
+        updateViaBalanceMapInLocalDB(viaBalance.getMap());
+    }
+
+
+    // Add this field at the class level
+    private long lastUpdateIncomeTime = 0;
+
+    /**
+     * Updates income records and related balances
+     */
+    public List<Income> updateIncome() {
+        // Get last income based on storage type
+        List<String> lastIncome = getLastIncome();
+
+        // Get new incomes from APIP
+        Map<String, Long> userFidValueMap = new HashMap<>();
+        List<Cash> newCashes=null;
+        Long lastHeight = null;
+        String lastBlockId = null;
+
+        while(true){
+            if(apipClient!=null){
+                // Create Fcdsl query to get new incomes
+                Fcdsl fcdsl = new Fcdsl();
+                fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.OWNER).addNewValues(mainFid);
+                if((lastIncome==null|| lastIncome.isEmpty()) && startHeight!=null) {
+                    fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
+                }
+                // Change sort order to DESC to get newest items first
+                fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(ID, Values.DESC);
+                fcdsl.addSize(DEFAULT_DISPLAY_LIST_SIZE);
+                if (lastIncome!=null && !lastIncome.isEmpty()) {
+                    fcdsl.addAfter(lastIncome);
+                }
+
+                if (lastIncome!=null && !lastIncome.isEmpty()) {
+                    fcdsl.addAfter(lastIncome);
+                }
+                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+                ReplyBody responseBody = apipClient.getFcClientEvent().getResponseBody();
+                if(responseBody!=null){
+                    lastIncome = responseBody.getLast();
+                    lastHeight = responseBody.getBestHeight();
+                    lastBlockId = responseBody.getBestBlockId();
+                }
+                if (newCashes == null || newCashes.isEmpty()) {
+                    break;
+                }
+
+            }else if (esClient!=null){
+                try {
+                // Create sort options list
+                List<SortOptions> soList = new ArrayList<>();
+
+                // Change sort order to DESC to get newest items first
+                FieldSort fs1 = FieldSort.of(f -> f
+                    .field(BIRTH_HEIGHT)
+                    .order(SortOrder.Asc));
+                SortOptions so1 = SortOptions.of(s -> s.field(fs1));
+                soList.add(so1);
+
+                FieldSort fs2 = FieldSort.of(f -> f
+                    .field(ID)
+                    .order(SortOrder.Asc));
+                SortOptions so2 = SortOptions.of(s -> s.field(fs2));
+                soList.add(so2);
+
+                // Build the bool query
+                BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder()
+                    .must(m -> m
+                        .term(t -> t
+                            .field(FieldNames.OWNER)
+                            .value(mainFid)
+                        )
+                    );
+
+                // Add range condition only if lastIncome is empty
+                if ((lastIncome==null || lastIncome.isEmpty()) && startHeight!=null) {
+                    boolQueryBuilder.must(m -> m
+                        .range(r -> r
+                            .field(BIRTH_HEIGHT)
+                            .gt(JsonData.of(startHeight))
+                        )
+                    );
+                }
+
+                // Build search request
+                SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
+                    .index(IndicesNames.CASH)
+                    .query(q -> q.bool(boolQueryBuilder.build()))
+                    .sort(soList)
+                    .size(DEFAULT_DISPLAY_LIST_SIZE);
+
+                if (lastIncome!=null && !lastIncome.isEmpty()) {
+                    searchBuilder.searchAfter(lastIncome);
+                }
+
+                SearchResponse<Cash> response = esClient.search(searchBuilder.build(), Cash.class);
+
+                if (response.hits().hits().isEmpty()) {
+                    break;
+                }
+
+                newCashes = response.hits().hits().stream()
+                    .map(Hit::source)
+                    .collect(Collectors.toList());
+
+                // Update lastIncome with sort values from last hit
+                if (!response.hits().hits().isEmpty()) {
+                    lastIncome = response.hits().hits().get(response.hits().hits().size() - 1).sort();
+
+                    // Update last values
+                    Cash lastCash = newCashes.get(newCashes.size() - 1);
+                    lastHeight = lastCash.getBirthHeight();
+                    lastBlockId = lastCash.getBirthBlockId();
+
+                }
+                } catch (IOException e) {
+                    log.error("Error searching ES for cashes", e);
+                    break;
                 }
             }else{
-                viaFid = orderVia;
+                log.error("No client available to fetch cash data");
+                break;
             }
-            if(viaFid==null)return;
-
-            Double sharePercentage = orderVia==null ? accountDB.getConsumeViaShare():accountDB.getOrderViaShare() ;
-
-            if (sharePercentage == null) return;
-    
-            Long viaShare = (long)(value * sharePercentage);
-            
-            if (useRedis) {
-                try (var jedis = jedisPool.getResource()) {
-                    String currentBalanceStr = jedis.hget(REDIS_KEY_VIA_BALANCE, viaFid);
-                    long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
-                    jedis.hset(REDIS_KEY_VIA_BALANCE, viaFid, String.valueOf(currentBalance + viaShare));
-                }
-            } else {
-                Long currentViaBalance = viaBalance.get(viaFid);
-                if (currentViaBalance == null) {
-                    currentViaBalance = 0L;
-                    Long oldValue = accountDB.getViaBalance(viaFid);
-                    if (oldValue != null) currentViaBalance = oldValue;
-                    if (viaBalance.size() >= MAX_VIA_BALANCE_CACHE_SIZE)
-                        accountDB.updateViaBalance(viaBalance.peek());  
-                }
-                viaBalance.put(viaFid, currentViaBalance + viaShare);
+            if(newCashes.size() < DEFAULT_DISPLAY_LIST_SIZE){
+                break;
             }
         }
 
-        /**
-         * Adds elements from in-memory maps to the corresponding AccountDB maps
-         */
-        private void saveMapsToAccountDB() {
-            // Add user balances
-            accountDB.addUserBalance(userBalance.getMap());
-    
-            // Add fid via mappings
-            accountDB.updateFidVia(fidViaMap.getMap());
-    
-            // Add via balances
-            accountDB.updateViaBalance(viaBalance.getMap());
-        }
-    
- 
-        // Add this field at the class level
-        private long lastUpdateIncomeTime = 0;
-    
-        /**
-         * Updates income records and related balances
-         */
-        public Map<String, Income> updateIncome() {
-            // Rate limiting check 
-            long currentTime = System.currentTimeMillis();
-            if (currentTime - lastUpdateIncomeTime < APIP_REQUEST_INTERVAL) {
-                return null; 
+        List<Income> newIncomeList = addToNewIncomeAndUserBalance(userFidValueMap, newCashes);
+        if(newIncomeList==null)return null;
+        // Store updates based on storage type
+        if (!newIncomeList.isEmpty()) {
+
+            updateIncomes(newIncomeList);
+
+            // Update lastHeight and lastBlockId
+            if (lastHeight != null) {
+                setLastHeight(lastHeight);
+                setLastBlockId(lastBlockId);
             }
-            
-            // Update the last execution time
-            lastUpdateIncomeTime = currentTime;
-            
-            // Get last income based on storage type
-            List<String> lastIncome;
-  
-            lastIncome = accountDB.getLastIncome();
-            
-            // Get new incomes from APIP
-            Map<String, Long> userFidValueMap = new HashMap<>();
-            Map<String, Income> newIncomeMap = new HashMap<>();
-            List<Cash> newCashes=null;
-            List<Cash> newOrderCasheList = new ArrayList<>();
-            Long lastHeight = null;
-            String lastBlockId = null;
-            
-            while(true){
-                if(apipClient!=null){
-                    // Create Fcdsl query to get new incomes
-                    Fcdsl fcdsl = new Fcdsl();
-                    fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.OWNER).addNewValues(mainFid);
-                    if((lastIncome==null|| lastIncome.isEmpty()) && startHeight!=null) {
-                        fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
-                    }
-                    fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(ID, Values.ASC);
-                    fcdsl.addSize(DEFAULT_DISPLAY_LIST_SIZE);
-                    if (lastIncome!=null && !lastIncome.isEmpty()) {
-                        fcdsl.addAfter(lastIncome);
-                    }
+            // Display using map values instead of list
+            System.out.println("Got "+newIncomeList.size()+" new incomes.");
+//                Shower.showOrChooseList("New Incomes", newIncomeList, null, false, Income.class, br);
 
-                    if (lastIncome!=null && !lastIncome.isEmpty()) {
-                        fcdsl.addAfter(lastIncome);
-                    }
-                    newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-                    ReplyBody responseBody = apipClient.getFcClientEvent().getResponseBody();
-                    if(responseBody!=null){
-                        lastIncome = responseBody.getLast();
-                        lastHeight = responseBody.getBestHeight();
-                        lastBlockId = responseBody.getBestBlockId();
-                    }
-                    if (newCashes == null || newCashes.isEmpty()) {
-                        break;
-                    }
-
-                }else if (esClient!=null){
-                    try {
-                    // Create sort options list
-                    List<SortOptions> soList = new ArrayList<>();
-                    
-                    FieldSort fs1 = FieldSort.of(f -> f
-                        .field(BIRTH_HEIGHT)
-                        .order(SortOrder.Asc));
-                    SortOptions so1 = SortOptions.of(s -> s.field(fs1));
-                    soList.add(so1);
-
-                    FieldSort fs2 = FieldSort.of(f -> f
-                        .field(ID)
-                        .order(SortOrder.Asc));
-                    SortOptions so2 = SortOptions.of(s -> s.field(fs2));
-                    soList.add(so2);
-
-                    // Build the bool query
-                    BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder()
-                        .must(m -> m
-                            .term(t -> t
-                                .field(FieldNames.OWNER)
-                                .value(mainFid)
-                            )
-                        );
-                    
-                    // Add range condition only if lastIncome is empty
-                    if ((lastIncome==null || lastIncome.isEmpty()) && startHeight!=null) {
-                        boolQueryBuilder.must(m -> m
-                            .range(r -> r
-                                .field(BIRTH_HEIGHT)
-                                .gt(JsonData.of(startHeight))
-                            )
-                        );
-                    }
-
-                    // Build search request
-                    SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
-                        .index(IndicesNames.CASH)
-                        .query(q -> q.bool(boolQueryBuilder.build()))
-                        .sort(soList)
-                        .size(DEFAULT_DISPLAY_LIST_SIZE);
-
-                    if (lastIncome!=null && !lastIncome.isEmpty()) {
-                        searchBuilder.searchAfter(lastIncome);
-                    }
-
-                    SearchResponse<Cash> response = esClient.search(searchBuilder.build(), Cash.class);
-
-                    if (response.hits().hits().isEmpty()) {
-                        break;
-                    }
-
-                    newCashes = response.hits().hits().stream()
-                        .map(Hit::source)
-                        .collect(Collectors.toList());
-
-                    // Update lastIncome with sort values from last hit
-                    if (!response.hits().hits().isEmpty()) {
-                        lastIncome = response.hits().hits().get(response.hits().hits().size() - 1).sort();
-                        
-                        // Update last values
-                        Cash lastCash = newCashes.get(newCashes.size() - 1);
-                        lastHeight = lastCash.getBirthHeight();
-                        lastBlockId = lastCash.getBirthBlockId();
-
-                    }
-                    } catch (IOException e) {
-                        log.error("Error searching ES for cashes", e);
-                        break;
-                    }
-                }else{
-                    log.error("No client available to fetch cash data");
-                    break;
-                }
-                if(newCashes.size() < DEFAULT_DISPLAY_LIST_SIZE){
-                    break;
-                }
-            }
-
-            addToNewIncomeAndUserBalance(userFidValueMap, newIncomeMap, newCashes, newOrderCasheList);
-
-            // Store updates based on storage type
-            if (!newIncomeMap.isEmpty()) {
-                accountDB.updateIncomes(newIncomeMap);
-                // Update lastHeight and lastBlockId
-                if (lastHeight != null) {
-                    accountDB.setLastHeight(lastHeight);
-                    accountDB.setLastBlockId(lastBlockId);
-                }
-                // Display using map values instead of list
-                Shower.showDataTable("New Incomes", Income.getFieldWidthMap(),new ArrayList<>(newIncomeMap.values()), Arrays.stream(new String[]{TIME}).toList(), Arrays.stream(new String[]{VALUE}).toList(),null, null, false, br);
-
-            }
-
-            if(!userFidValueMap.isEmpty()){
-                addAllBalance(userFidValueMap);
-            }
-
-            // Update lastIncome in persistent storage
-            accountDB.setLastIncome(lastIncome);
-
-            checkIncomeVia(newOrderCasheList);
-            
-            return newIncomeMap;
         }
 
-    private static void addToNewIncomeAndUserBalance(Map<String, Long> userFidValueMap, Map<String, Income> newIncomeMap, List<Cash> newCashes, List<Cash> newOrderCasheList) {
-        if(newCashes==null||newCashes.isEmpty())return;
+        if(!userFidValueMap.isEmpty()){
+            updateUserBalanceMap(userFidValueMap);
+        }
+
+        // Update lastIncome in persistent storage
+        setLastIncome(lastIncome);
+
+        checkIncomeVia(newCashes);
+
+        return newIncomeList;
+    }
+
+    private static List<Income> addToNewIncomeAndUserBalance(Map<String, Long> userFidValueMap, List<Cash> newCashes) {
+        if(newCashes==null||newCashes.isEmpty())return null;
+        List<Income> incomeList = new ArrayList<>();
         for(Cash cash: newCashes){
             // Skip if issuer is the owner
             if (cash.getIssuer().equals(cash.getOwner())) {
                 continue;
             }
-            newOrderCasheList.add(cash);
             // Create new income record
             Income income = new Income(
                 cash.getId(),
@@ -1292,12 +1023,12 @@ public class AccountHandler extends Handler<FcEntity> {
                 cash.getBirthTime(),
                 cash.getBirthHeight()
             );
-
-            newIncomeMap.put(cash.getId(), income);
+            incomeList.add(income);
 
             // Update user balance
             userFidValueMap.merge(cash.getIssuer(), cash.getValue(), Long::sum);
         }
+        return incomeList;
     }
 
     private void checkIncomeVia(List<Cash> newCashes) {
@@ -1331,34 +1062,23 @@ public class AccountHandler extends Handler<FcEntity> {
                     .toList();
                 if(matchingCashes.isEmpty())continue;
                 for(Cash cash:matchingCashes){
-                    addViaBalance(cash.getIssuer(),cash.getValue(),opReturnData.get(VIA));
+                    updateViaBalance(cash.getIssuer(),cash.getValue(),opReturnData.get(VIA));
                 }
             }
         }
     }
             
-        // Add this field at the class level
-    private long lastUpdateExpenseTime = 0;
-    
+
     /**
      * Updates expense records
      */
     public int updateExpense() {
-        // Rate limiting check
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastUpdateExpenseTime < APIP_REQUEST_INTERVAL) {
-            return -1;  // Rate limited
-        }
-
-        // Update the last execution time
-        lastUpdateExpenseTime = currentTime;
-        
         // Get last expense based on storage type
         List<String> lastExpense;
-        lastExpense = accountDB.getLastExpense();
+        lastExpense = getLastExpense();
 
         // Get new expenses from APIP
-        Map<String, Expense> newExpenseMap = new HashMap<>();
+        List<Expense> newExpenseList = new ArrayList<>();
         Long lastHeight = null;
         String lastBlockId = null;
 
@@ -1371,6 +1091,7 @@ public class AccountHandler extends Handler<FcEntity> {
                 if((lastExpense==null || lastExpense.isEmpty()) && startHeight!=null) {
                     fcdsl.getQuery().addNewRange().addNewFields(BIRTH_HEIGHT).addGt(startHeight);
                 }
+                // Change sort order to DESC to get newest items first
                 fcdsl.addSort(BIRTH_HEIGHT, Values.ASC).addSort(FieldNames.ID, Values.ASC);
                 fcdsl.addSize(DEFAULT_DISPLAY_LIST_SIZE);
                 if (lastExpense!=null && !lastExpense.isEmpty()) {
@@ -1393,13 +1114,14 @@ public class AccountHandler extends Handler<FcEntity> {
                         cash.getBirthHeight()
                     );
                     
-                    newExpenseMap.put(cash.getId(), expense);
+                    newExpenseList.add(expense);
                 }
             }else if (esClient!=null){
                 try {
                     // Create sort options list
                     List<SortOptions> soList = new ArrayList<>();
                     
+                    // Change sort order to DESC to get newest items first
                     FieldSort fs1 = FieldSort.of(f -> f
                         .field(BIRTH_HEIGHT)
                         .order(SortOrder.Asc));
@@ -1416,7 +1138,7 @@ public class AccountHandler extends Handler<FcEntity> {
                     BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder()
                         .must(m -> m
                             .term(t -> t
-                                .field("issuer")
+                                .field(ISSUER)
                                 .value(mainFid)
                             )
                         );
@@ -1433,7 +1155,7 @@ public class AccountHandler extends Handler<FcEntity> {
 
                     // Build search request
                     SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
-                        .index("cash")
+                        .index(CASH)
                         .query(q -> q.bool(boolQueryBuilder.build()))
                         .sort(soList)
                         .size(DEFAULT_DISPLAY_LIST_SIZE);
@@ -1472,7 +1194,7 @@ public class AccountHandler extends Handler<FcEntity> {
                             cash.getBirthHeight()
                         );
                         
-                        newExpenseMap.put(cash.getId(), expense);
+                        newExpenseList.add(expense);
                     }
                 } catch (IOException e) {
                     log.error("Error searching ES for cashes", e);
@@ -1489,46 +1211,62 @@ public class AccountHandler extends Handler<FcEntity> {
         }
 
         // Store updates based on storage type
-        if (!newExpenseMap.isEmpty()) {
-            accountDB.updateExpenses(newExpenseMap);
+        if (!newExpenseList.isEmpty()) {
+            updateExpenses(newExpenseList);
             // Update lastHeight and lastBlockId if available
             if (lastHeight != null) {
-                accountDB.setLastHeight(lastHeight);
-                accountDB.setLastBlockId(lastBlockId);
+                setLastHeight(lastHeight);
+                setLastBlockId(lastBlockId);
             }
-            // Display using map values instead of list
-            Shower.showDataTable("New Expenses", Income.getFieldWidthMap(),new ArrayList<>(newExpenseMap.values()), Arrays.stream(new String[]{TIME}).toList(), Arrays.stream(new String[]{VALUE}).toList(),null, null, false, br);
+            System.out.println("Got "+newExpenseList.size()+" new expenses.");
+//            Shower.showOrChooseList("New Expenses", newExpenseList, null, false, Expense.class, br);
         }
 
         // Update lastExpense in persistent storage
-        accountDB.setLastExpense(lastExpense);
+        setLastExpense(lastExpense);
 
-        return newExpenseMap.size();  // Return number of new expenses processed
+        return newExpenseList.size();  // Return number of new expenses processed
     }
     /**
      * Distributes available balance to various recipients
      * @return true if distribution was successful, false if insufficient funds
      */
-    public boolean distribute() {
+    public Boolean distribute() {
         // Update current balance
+        long now = System.currentTimeMillis();
+        Long lastDistributeTime = (Long) localDB.getState("LastDistributeTime");
+
+        if(lastDistributeTime==null || lastDistributeTime==0){
+            localDB.putState("LastDistributeTime",now);
+            return null;
+        }else if( (now-lastDistributeTime)/Constants.DAY_TO_MIL_SEC < distributeDays) return null;
+
+        updateAll();
+        if(cashHandler!=null)cashHandler.freshCashDB();
+
         if (!updateMyBalance()) {
             return false;
         }
         // Calculate available balance for distribution
+
         long validSum = myBalance - dealerMinBalance;
+        if(validSum < minDistributeBalance){
+            log.info("The balance is less than the minDistributeBalance("+FchUtils.satoshiToCoin(myBalance)+"<"+FchUtils.satoshiToCoin(minDistributeBalance)+").");
+            return false;
+        }
         if (validSum <= 0) {
             return false;
         }
 
         // Get pending payoffMap from AccountDB
-        payoffMap.putAll(accountDB.getPayoffMap());
+        payoffMap.putAll(getPayoffMap());
 
-        // Process unpaid via balances first
-        if (!makePaymentToVia(validSum)) {
-            return false;
-        }
         validSum = myBalance - dealerMinBalance - calculateTotalPayoff();
+        // Process unpaid via balances first
+        makePaymentToVia(validSum);
 
+        validSum = myBalance - dealerMinBalance - calculateTotalPayoff();
+        
         // Process fixed costs
         if (!makePaymentForFixedCost(validSum)) {
             return false;
@@ -1540,7 +1278,7 @@ public class AccountHandler extends Handler<FcEntity> {
     }
 
     private boolean makePaymentToVia(long availableBalance) {
-        Map<String, Long> unpaidViaBalance = accountDB.getUnpaidViaBalance();
+        Map<String, Long> unpaidViaBalance = getUnpaidViaBalance();
         
         // Handle unpaid balances first
         long unpaidTotal = unpaidViaBalance.values().stream().mapToLong(Long::longValue).sum();
@@ -1548,26 +1286,26 @@ public class AccountHandler extends Handler<FcEntity> {
             if (availableBalance >= unpaidTotal) {
                 payoffMap.putAll(unpaidViaBalance);
                 unpaidViaBalance.clear();
-                accountDB.clearUnpaidViaBalanceMap();
+                clearUnpaidViaBalanceMap();
             } else {
                 if (useRedis) {
                     try (var jedis = jedisPool.getResource()) {
                         // Get all via balances from Redis
-                        Map<String, String> redisViaBalances = jedis.hgetAll(REDIS_KEY_VIA_BALANCE);
+                        Map<String, String> redisViaBalances = jedis.hgetAll(redisKeyViaBalance);
                         // Convert and add to unpaid balances
                         for (Map.Entry<String, String> entry : redisViaBalances.entrySet()) {
                             unpaidViaBalance.put(entry.getKey(), Long.parseLong(entry.getValue()));
                         }
-                        accountDB.addUnpaidViaBalance(unpaidViaBalance);
+                        updateUnpaidViaBalance(unpaidViaBalance);
                         unpaidViaBalance.clear();
                         if (!redisViaBalances.isEmpty()) {
-                            jedis.del(REDIS_KEY_VIA_BALANCE);
+                            jedis.del(redisKeyViaBalance);
                         }
                         return true;
                     }
                 } else {
                     // Get any additional balances from AccountDB
-                    Map<String, Long> finalViaBalances = accountDB.getViaBalanceMap();
+                    Map<String, Long> finalViaBalances = getViaBalanceMapFromLocalDB();
                     if (finalViaBalances != null && !finalViaBalances.isEmpty()) {
                         unpaidViaBalance.putAll(finalViaBalances);
                     }
@@ -1577,9 +1315,9 @@ public class AccountHandler extends Handler<FcEntity> {
                     
                     // Clear sources
                     viaBalance.clear();
-                    accountDB.clearViaBalanceMap();
+                    clearViaBalanceMapInLocalDB();
                     // Update unpaid balances in storage
-                    accountDB.updateUnpaidViaBalance(unpaidViaBalance);
+                    updateUnpaidViaBalance(unpaidViaBalance);
                     return false;
                 } 
             }
@@ -1590,7 +1328,7 @@ public class AccountHandler extends Handler<FcEntity> {
 
         if(useRedis){
             try (var jedis = jedisPool.getResource()) {
-                Map<String, String> viaBalanceMap = jedis.hgetAll(REDIS_KEY_VIA_BALANCE);
+                Map<String, String> viaBalanceMap = jedis.hgetAll(redisKeyViaBalance);
                 Map<String, Long> finalViaBalance = new HashMap<>();
                 for(Map.Entry<String, String> entry:viaBalanceMap.entrySet()){
                     finalViaBalance.put(entry.getKey(), Long.parseLong(entry.getValue()));
@@ -1599,38 +1337,60 @@ public class AccountHandler extends Handler<FcEntity> {
                 
                 if(availableBalance>=viaTotal){
                     payoffMap.putAll(finalViaBalance);
-                    jedis.del(REDIS_KEY_VIA_BALANCE);
+                    jedis.del(redisKeyViaBalance);
                     return true;
                 }else{
-                    accountDB.updateUnpaidViaBalance(finalViaBalance);
+                    updateUnpaidViaBalance(finalViaBalance);
                     return false;
                 } 
             }
         }else{
-            Map<String, Long> finalViaBalance = accountDB.getViaBalanceMap();
+            Map<String, Long> finalViaBalance = getViaBalanceMapFromLocalDB();
             finalViaBalance.putAll(viaBalance.getMap());
             viaTotal = finalViaBalance.values().stream().mapToLong(Long::longValue).sum();
             if (availableBalance >= viaTotal) {
                 payoffMap.putAll(finalViaBalance);
-                accountDB.clearViaBalanceMap();
+                clearViaBalanceMapInLocalDB();
                 viaBalance.clear();
                 return true;
             } else {
                 // Not enough funds, move all to unpaid
                 unpaidViaBalance.putAll(finalViaBalance);
-                accountDB.updateUnpaidViaBalance(unpaidViaBalance);
-                accountDB.clearViaBalanceMap();
+                updateUnpaidViaBalance(unpaidViaBalance);
+                clearViaBalanceMapInLocalDB();
                 viaBalance.clear();
                 return false;
             }
         }
     }
 
+
+    public Map<String, Long> getViaBalanceMapFromLocalDB() {
+        return localDB.getAllFromMap(FieldNames.VIA_BALANCE_MAP);
+    }
+
+    public void clearViaBalanceMapInLocalDB() {
+        localDB.clearMap(FieldNames.VIA_BALANCE_MAP);
+        localDB.commit();
+    }   
+
+
+    public void setViaBalanceFromLocalDB(String viaFid, Long balance) {
+        localDB.putInMap(FieldNames.VIA_BALANCE_MAP, viaFid, balance);
+        localDB.commit();
+    }
+
+    // Unpaid Via Balance methods
+    public Long getUnpaidViaBalance(String viaFid) {
+        Long balance = localDB.getFromMap(FieldNames.UNPAID_VIA_BALANCE_MAP, viaFid);
+        return balance != null ? balance : 0L;
+    }
+
     public void setNPrices(List<String> apiList, BufferedReader br, boolean reset) {
-        if(accountDB.hasNPrices() && !reset) {
+        if(hasNPrices() && !reset) {
             if(this.nPriceMap == null) {
                 nPriceMap = new HashMap<>();
-                Map<String, Long> storedPrices = accountDB.getNPriceMap();
+                Map<String, Long> storedPrices = getNPriceMap();
                 if(storedPrices != null && !storedPrices.isEmpty()) {
                     nPriceMap.putAll(storedPrices);
                 }
@@ -1692,7 +1452,7 @@ public class AccountHandler extends Handler<FcEntity> {
     private void setAllNPricesWithValue(List<String> apiList, long value) {
         Map<Integer, String> apiMap = apiListToMap(apiList);
         for (Map.Entry<Integer, String> entry : apiMap.entrySet()) {
-            accountDB.setNPrice(entry.getValue(), value);
+            setNPrice(entry.getValue(), value);
             if(nPriceMap == null) nPriceMap = new HashMap<>();
             nPriceMap.put(entry.getValue(), value);
         }
@@ -1705,14 +1465,14 @@ public class AccountHandler extends Handler<FcEntity> {
         }
     }
 
-    private void setNPrice(int i, Map<Integer, String> apiMap, BufferedReader br) throws IOException {
+    private void setNPrice(int i, Map<Integer, String> apiMap, BufferedReader br) {
         if(this.nPriceMap == null) nPriceMap = new HashMap<>();
         String apiName = apiMap.get(i);
         while (true) {
             try {
                 Long n = Inputer.inputLong(br, "Input the multiple number of API " + apiName + ":");
                 // Store in local map
-                accountDB.setNPrice(apiName, n);
+                setNPrice(apiName, n);
                 nPriceMap.put(apiName, n);
                 
                 // Store in Redis if available
@@ -1743,21 +1503,9 @@ public class AccountHandler extends Handler<FcEntity> {
         return apiMap;
     }
 
-    public void resetNPrices(BufferedReader br, String sid, JedisPool jedisPool) {
-        try(Jedis jedis = jedisPool.getResource()) {
-            Map<String, String> nPriceMap = jedis.hgetAll(Settings.addSidBriefToName(sid,Strings.N_PRICE));
-            for (String name : nPriceMap.keySet()) {
-                String ask = "The price multiplier of " + name + " is " + nPriceMap.get(name) + ". Reset it? y/n";
-                int input = Inputer.inputInt(br, ask, 0);
-                if (input != 0)
-                    jedis.hset(Settings.addSidBriefToName(sid,Strings.N_PRICE), name, String.valueOf(input));
-            }
-        }
-    }
-
     private boolean makePaymentForFixedCost(long availableBalance) {
-        Map<String, Long> fixedCostMap = accountDB.getFixedCostMap();
-        Map<String, Long> unpaidFixedCostMap = accountDB.getUnpaidFixedCostMap();
+        Map<String, Long> fixedCostMap = getFixedCostMap();
+        Map<String, Long> unpaidFixedCostMap = getUnpaidFixedCostMap();
         
         long totalCost = fixedCostMap.values().stream().mapToLong(Long::longValue).sum();
         long unpaidTotal = unpaidFixedCostMap.values().stream().mapToLong(Long::longValue).sum();
@@ -1766,23 +1514,23 @@ public class AccountHandler extends Handler<FcEntity> {
         if (availableBalance >= totalCost) {
             payoffMap.putAll(fixedCostMap);
             payoffMap.putAll(unpaidFixedCostMap);
-            accountDB.clearUnpaidFixedCostMap();
+            clearUnpaidFixedCostMap();
             return true;
         } else {
             // Not enough funds, move to unpaid
             unpaidFixedCostMap.putAll(fixedCostMap);
-            accountDB.updateUnpaidFixedCostMap(unpaidFixedCostMap);
+            updateUnpaidFixedCostMap(unpaidFixedCostMap);
             return false;
         }
     }
 
 
     private boolean makeDividends(long availableBalance) {
-        Map<String, Double> contributorShareMap = accountDB.getContributorShareMap();
+        Map<String, Double> contributorShareMap = getContributorShareMap();
         
         for (Map.Entry<String, Double> entry : contributorShareMap.entrySet()) {
             String contributorFid = entry.getKey();
-            Double share = entry.getValue();
+            Double share = ObjectUtils.objectToClass(entry.getValue(),Double.class);
             long dividend = (long)(availableBalance * share);
             
             if (dividend > 0) {
@@ -1802,34 +1550,49 @@ public class AccountHandler extends Handler<FcEntity> {
      * @return true if settlement was successful, false otherwise
      */
     public boolean settle() {
+        long validSum = myBalance - dealerMinBalance;
+        if(validSum<calculateTotalPayoff()){
+            System.out.println("The balance is insufficient for the pay off list.");
+            return false;
+        }
         if (payoffMap.isEmpty()) {
-            return true;
+            payoffMap = getPayoffMap();
+            if(payoffMap==null || payoffMap.isEmpty()){
+                System.out.println("The payoffMap is empty.");
+                return false;
+            }
         }
         System.out.println("Settle all payments...");
+
         // Convert payoffMap to SendTo list
         List<SendTo> sendToList = payoffMap.entrySet().stream()
-            .map(entry -> new SendTo(entry.getKey(), FchUtils.satoshiToCoin(entry.getValue())))
+            .map(entry -> new SendTo(entry.getKey(), utils.FchUtils.satoshiToCoin(entry.getValue())))
             .collect(Collectors.toList());
 
         // Send payments using CashClient
         String txId;
-        if(cashHandler!=null) txId = cashHandler.send(null, null, null, sendToList, null, null, null, null, FchMainNetwork.MAINNETWORK, null);
-        else txId = CashHandler.send(priKey,sendToList,apipClient,esClient);
+        if(cashHandler!=null) {
+            txId = cashHandler.send(null, null, null, sendToList, null, null, null, null, FchMainNetwork.MAINNETWORK, null);
+            cashHandler.sendResult(null,txId);
+        } else {
+            txId = CashHandler.send(priKey,sendToList,apipClient,esClient, nasaClient);
+            if(Hex.isHex32(txId))txId = TxResultType.TX_ID.addTypeAheadResult(txId);
+        }
+
         // Update last settlement height
         Long bestHeight = Settings.getBestHeight(apipClient,null,esClient,jedisPool);
-        accountDB.setLastSettleHeight(bestHeight);
+        setLastSettleHeight(bestHeight);
 
-        if (!Hex.isHex32(txId)) {
+        if (!TxResultType.parseType(txId).equals(TxResultType.TX_ID)) {
             // Save payoffMap to AccountDB if transaction was successful but couldn't get height
-            System.out.println("Failed to get height after settlement, saved payoffMap to AccountDB.");
-            accountDB.updatePayoffMap(payoffMap);
+            System.out.println("Failed to send Tx. Saved payoffMap to localDB. The payments will be send in next distribution.");
+            updatePayoffMap(payoffMap);
             payoffMap.clear();
             return false;
         }
 
         payoffMap.clear();
-
-        accountDB.clearPayoffMap();
+        clearPayoffMap();
         return true;
     }
 
@@ -1841,125 +1604,194 @@ public class AccountHandler extends Handler<FcEntity> {
      */
     public void initShareAndCost(BufferedReader br, Double orderViaShare, Double consumeViaShare, boolean reset) {
         if (!reset) {
-            if (!accountDB.getContributorShareMap().isEmpty()) {
+            if (!getContributorShareMap().isEmpty()) {
                 return;
             }
         }
 
         // Input contributor shares
         System.out.println("Set the share of contributors.");
-        accountDB.inputContributorShare(br);
+        inputContributorShare(br);
 
         // Input fixed costs
         System.out.println("Set the fixed costs.");
-        accountDB.inputFixedCost(br);
+        inputFixedCost(br);
 
         // Set via shares in Redis or AccountDB
 
         if (orderViaShare != null)
-            accountDB.setOrderViaShare(orderViaShare);
+            setOrderViaShare(orderViaShare);
         else{
             Double inputShare = Inputer.inputDouble(br, "Input the order via share percentage:");
             if(inputShare==null)return;
-            accountDB.setOrderViaShare(NumberUtils.roundDouble8(inputShare/100.0));
+            setOrderViaShare(NumberUtils.roundDouble8(inputShare/100.0));
         }
 
         if (consumeViaShare != null){
-            accountDB.setConsumeViaShare(consumeViaShare);
+            setConsumeViaShare(consumeViaShare);
         }else{
             Double inputShare = Inputer.inputDouble(br, "Input the consume via share percentage:");
             if(inputShare==null)return;
-            accountDB.setConsumeViaShare(NumberUtils.roundDouble8(inputShare/100));
+            setConsumeViaShare(NumberUtils.roundDouble8(inputShare/100));
         }
     }
 
     public void inputContributorShare(BufferedReader br) {
-        accountDB.inputContributorShare(br);
+        try {
+            // Clear existing contributor shares
+            Map<String, Double> contributorShareMap = localDB.getAllFromMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
+            if(contributorShareMap.size() > 0){
+                for(String fid : contributorShareMap.keySet()){
+                    System.out.println(fid + " -> " + contributorShareMap.get(fid));
+                }
+                if(Inputer.askIfYes(br,"There are already "+contributorShareMap.size()+" contributors. Reset all contributors? ")){
+                    localDB.clearMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
+                    localDB.commit();
+                } else return;
+            }
+
+            double totalShare = 0.0;
+            while (true) {
+                String fid = Inputer.inputFid(br, "Input the contributor FID:");
+                if (fid == null || fid.isEmpty()) continue;
+
+                Double share;
+                if (Inputer.askIfYes(br, "Set the rest of the share percentage ("+(100-totalShare)+"%) for " + fid + "? \n")) {
+                    share = NumberUtils.roundDouble4((100 - totalShare)/100);
+                    localDB.putInMap(FieldNames.CONTRIBUTOR_SHARE_MAP, fid, share);
+                    localDB.commit();
+                    break;
+                } else {
+                    share = Inputer.inputDouble(br, "Input the share percentage for " + fid + ":");
+                    if (share == null) continue;
+                    totalShare += share;
+                }
+
+                if (totalShare > 100) {
+                    System.out.println("Total share exceeds 100%. Please try again.");
+                    if(Inputer.askIfYes(br,"Reset the share for "+fid+"?")){
+                        totalShare = 0;
+                        localDB.clearMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
+                        continue;
+                    }
+                    totalShare -= share;
+                    continue;
+                }
+                share = NumberUtils.roundDouble4(share/100);
+                localDB.putInMap(FieldNames.CONTRIBUTOR_SHARE_MAP, fid, share);
+                localDB.commit();
+
+                if (totalShare == 100) break;
+                System.out.println("There is still " + (100 - totalShare) + " left. Please add more contributors.");
+            }
+        } catch (Exception e) {
+            System.out.println("Error adding contributor share: " + e.getMessage());
+        }
     }
 
     public void inputFixedCost(BufferedReader br) {
-        accountDB.inputFixedCost(br);
+        Map<String, Long> fixedCostMap = localDB.getAllFromMap(FieldNames.FIXED_COST_MAP);
+        if(fixedCostMap.size() > 0){
+            for(String fid : fixedCostMap.keySet()){
+                System.out.println(fid + " -> " + FchUtils.satoshiToCoin(fixedCostMap.get(fid)));
+            }
+            if(Inputer.askIfYes(br,"There are already "+fixedCostMap.size()+" fixed costs. Reset all fixed costs? ")){
+                localDB.clearMap(FieldNames.FIXED_COST_MAP);
+                localDB.commit();
+            } else return;
+        }
+        try {
+            while (true) {
+                System.out.println("\nInput fid and fixed cost(split by space). Empty line to finish:");
+                String line = br.readLine();
+                if (line == null || line.trim().isEmpty()) {
+                    break;
+                }
+
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length != 2) {
+                    System.out.println("Invalid input format. Please enter fid and cost separated by space.");
+                    continue;
+                }
+
+                String fid = parts[0];
+                double cost;
+                try {
+                    cost = Double.parseDouble(parts[1]);
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid cost value. Please enter a valid number.");
+                    continue;
+                }
+
+                if (cost <= 0) {
+                    System.out.println("Cost must be greater than 0.");
+                    continue;
+                }
+                long costLong = utils.FchUtils.coinToSatoshi(cost);
+                localDB.putInMap(FieldNames.FIXED_COST_MAP, fid, costLong);
+                localDB.commit();
+                System.out.println("Added fixed cost: " + fid + " -> " + cost);
+            }
+        } catch (Exception e) {
+            System.out.println("Error adding fixed cost: " + e.getMessage());
+        }
     }
+
 
     public void close() {
         // Stop the distribution thread
-        getIsRunning().set(false);
-        if (distributionThread != null) {
-            distributionThread.interrupt();
-            try {
-                distributionThread.join(5000); // Wait up to 5 seconds for thread to finish
-            } catch (InterruptedException e) {
-                log.error("Interrupted while waiting for distribution thread to stop", e);
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        if (useRedis) {
-            BytesUtils.clearByteArray(priKey);
-        } else {
-            saveMapsToAccountDB();
-            BytesUtils.clearByteArray(priKey);
-            accountDB.close();
-        }
+        if (!useRedis) saveMapsToLocalDB();
+        BytesUtils.clearByteArray(priKey);
     }
 
     /**
      * Shows income list with pagination
-     * @param size Number of records to show per page
      */
-    public void showIncomeList(int size, BufferedReader br) {
-        Map<String, Income> incomeMap = accountDB.getIncomeMap();
-        if (incomeMap == null || incomeMap.isEmpty()) {
-            System.out.println("No income records found.");
-            return;
-        }
-        
-        // Get income entries from the end (most recent first)
-        List<Income> incomes = accountDB.getIncome(size, true);
-        if (incomes.isEmpty()) {
-            System.out.println("No income records found.");
-            return;
-        }
-        
-        int totalIncomes = incomes.size();
-        int totalPages = (int) Math.ceil((double) totalIncomes / size);
+    public void showIncomeList() {
         int currentPage = 0;
-        
-        while (true) {
-            System.out.println("\n======= Income Records (Page " + (currentPage + 1) + "/" + totalPages + ") =======");
-            System.out.printf("%-20s %-15s %-15s %-20s %-15s\n", "ID", "User FID", "Value (FCH)", "Time", "Block Height");
+        boolean continueShowing = true;
+        long totalItems = localDB.getListSize(FieldNames.INCOME_MAP);
+        int totalPages = (int) Math.ceil((double) totalItems / Shower.DEFAULT_PAGE_SIZE);
+
+        while (continueShowing) {
+            currentPage++;
+            // Calculate indices for pagination
+            long startIndex = (long) (currentPage - 1) * Shower.DEFAULT_PAGE_SIZE;
+            long endIndex = Math.min(startIndex + Shower.DEFAULT_PAGE_SIZE, totalItems);
+
+            // Get items in forward order since they're already stored newest first
+            List<Income> incomes = localDB.getRangeFromListReverse(FieldNames.INCOME_MAP, startIndex, endIndex);
             
-            int startIdx = currentPage * size;
-            int endIdx = Math.min(startIdx + size, totalIncomes);
-            
-            for (int i = startIdx; i < endIdx; i++) {
-                if (i >= incomes.size()) break;
-                
-                Income income = incomes.get(i);
-                if (income != null) {
-                    System.out.printf("%-20s %-15s %-15s %-20s %-15d\n",
-                            income.getCashId(),
-                            income.getFrom(),
-                            FchUtils.satoshiToCoin(income.getValue()),
-                            new Date(income.getTime()),
-                            income.getBirthHeight());
+            if (incomes == null || incomes.isEmpty()) {
+                if (currentPage == 1) {
+                    System.out.println("No income records found.");
                 }
+                break;
             }
-            
-            if (totalPages <= 1) break;
-            
-            System.out.println("\nN: Next page, P: Previous page, Q: Quit");
+
+            System.out.printf("\nPage %d/%d:\n", currentPage, totalPages);
+            Shower.showOrChooseList("Your incomes", incomes, null, false, Income.class, br);
+
+            int remainingPages = totalPages - currentPage;
+            if (remainingPages > 0) {
+                System.out.printf("\nThere are %d more page(s). Press Enter to view more records, or 'q' to quit: ", remainingPages);
+            } else {
+                System.out.println("\nNo more records. Press any key to continue...");
+                try {
+                    br.readLine();
+                } catch (IOException e) {
+                    log.error("Error reading input", e);
+                }
+                break;
+            }
+
             try {
                 String input = br.readLine();
-                if (input == null || input.equalsIgnoreCase("Q")) {
-                    break;
-                } else if (input.equalsIgnoreCase("N")) {
-                    currentPage = (currentPage + 1) % totalPages;
-                } else if (input.equalsIgnoreCase("P")) {
-                    currentPage = (currentPage - 1 + totalPages) % totalPages;
+                if ("q".equalsIgnoreCase(input)) {
+                    continueShowing = false;
                 }
             } catch (IOException e) {
-                log.error("Error reading input: {}", e.getMessage());
+                log.error("Error reading input", e);
                 break;
             }
         }
@@ -1967,185 +1799,61 @@ public class AccountHandler extends Handler<FcEntity> {
 
     /**
      * Shows expense list with pagination
-     * @param size Number of records to show per page
      */
-    public void showExpenseList(int size, BufferedReader br) {
-        Map<String, Expense> expenseMap = accountDB.getExpenseMap();
-        if (expenseMap == null || expenseMap.isEmpty()) {
-            System.out.println("No expense records found.");
-            return;
-        }
-        
-        // Get expense entries from the end (most recent first)
-        List<Expense> expenses = accountDB.getExpense(size, true);
-        if (expenses.isEmpty()) {
-            System.out.println("No expense records found.");
-            return;
-        }
-        
-        int totalExpenses = expenses.size();
-        int totalPages = (int) Math.ceil((double) totalExpenses / size);
+    public void showExpenseList() {
         int currentPage = 0;
-        
-        while (true) {
-            System.out.println("\n======= Expense Records (Page " + (currentPage + 1) + "/" + totalPages + ") =======");
-            System.out.printf("%-20s %-15s %-15s %-20s %-15s\n", "ID", "To FID", "Value (FCH)", "Time", "Block Height");
+        boolean continueShowing = true;
+        long totalItems = localDB.getListSize(FieldNames.EXPENSE_MAP);
+        int totalPages = (int) Math.ceil((double) totalItems / Shower.DEFAULT_PAGE_SIZE);
+
+        while (continueShowing) {
+            currentPage++;
+            // Calculate indices for pagination
+            long startIndex = (long) (currentPage - 1) * Shower.DEFAULT_PAGE_SIZE;
+            long endIndex = Math.min(startIndex + Shower.DEFAULT_PAGE_SIZE, totalItems);
+
+            // Get items in forward order since they're already stored newest first
+            List<Expense> expenses = localDB.getRangeFromListReverse(FieldNames.EXPENSE_MAP, startIndex, endIndex);
             
-            int startIdx = currentPage * size;
-            int endIdx = Math.min(startIdx + size, totalExpenses);
-            
-            for (int i = startIdx; i < endIdx; i++) {
-                if (i >= expenses.size()) break;
-                
-                Expense expense = expenses.get(i);
-                if (expense != null) {
-                    System.out.printf("%-20s %-15s %-15s %-20s %-15d\n",
-                            expense.getCashId(),
-                            expense.getTo(),
-                            FchUtils.satoshiToCoin(expense.getValue()),
-                            new Date(expense.getTime()),
-                            expense.getBirthHeight());
+            if (expenses == null || expenses.isEmpty()) {
+                if (currentPage == 1) {
+                    System.out.println("No expense records found.");
                 }
+                break;
             }
-            
-            if (totalPages <= 1) break;
-            
-            System.out.println("\nN: Next page, P: Previous page, Q: Quit");
+
+            System.out.printf("\nPage %d/%d:\n", currentPage, totalPages);
+            Shower.showOrChooseList("Your expenses", expenses, null, false, Expense.class, br);
+
+            int remainingPages = totalPages - currentPage;
+            if (remainingPages > 0) {
+                System.out.printf("\nThere are %d more page(s). Press Enter to view more records, or 'q' to quit: ", remainingPages);
+            } else {
+                System.out.println("\nNo more records. Press any key to continue...");
+                try {
+                    br.readLine();
+                } catch (IOException e) {
+                    log.error("Error reading input", e);
+                }
+                break;
+            }
+
             try {
                 String input = br.readLine();
-                if (input == null || input.equalsIgnoreCase("Q")) {
-                    break;
-                } else if (input.equalsIgnoreCase("N")) {
-                    currentPage = (currentPage + 1) % totalPages;
-                } else if (input.equalsIgnoreCase("P")) {
-                    currentPage = (currentPage - 1 + totalPages) % totalPages;
+                if ("q".equalsIgnoreCase(input)) {
+                    continueShowing = false;
                 }
             } catch (IOException e) {
-                log.error("Error reading input: {}", e.getMessage());
+                log.error("Error reading input", e);
                 break;
             }
         }
     }
 
-    public Map<String, Long> getPayoffMap() {
-        return accountDB.getPayoffMap();
+    public Long getUserBalance(String fid) {
+        return localDB.getFromMap(USER_BALANCE_MAP, fid);
     }
 
-    /**
-     * Checks if a via has accumulated balance in Redis
-     * @param sid The service ID
-     * @param viaFid The via FID to check
-     * @param jedisPool The Redis connection pool
-     * @return The via's balance if greater than 0, null otherwise
-     */
-    public static Long checkViaBalance(String sid, String viaFid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || viaFid == null) {
-            return null;
-        }
-        
-        try (var jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
-            String balanceStr = jedis.hget(key, viaFid);
-            if (balanceStr == null) {
-                return null;
-            }
-            return Long.parseLong(balanceStr);
-        } catch (Exception e) {
-            log.error("Error checking via balance in Redis", e);
-            return null;
-        }
-    }
-
-    /**
-     * Gets multiple via balances from Redis
-     * @param sid The service ID
-     * @param viaFids List of via FIDs to check
-     * @param jedisPool The Redis connection pool
-     * @return Map of via FIDs to balances, empty map if error
-     */
-    public static Map<String, Long> checkViaBalances(String sid, List<String> viaFids, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || viaFids == null || viaFids.isEmpty()) {
-            return new HashMap<>();
-        }
-
-        try (var jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
-            List<String> balances = jedis.hmget(key, viaFids.toArray(new String[0]));
-            
-            Map<String, Long> result = new HashMap<>();
-            for (int i = 0; i < viaFids.size(); i++) {
-                String balanceStr = balances.get(i);
-                if (balanceStr != null) {
-                    result.put(viaFids.get(i), Long.parseLong(balanceStr));
-                }
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("Error checking multiple via balances in Redis", e);
-            return new HashMap<>();
-        }
-    }
-
-    /**
-     * Gets all via balances from Redis
-     * @param sid The service ID
-     * @param jedisPool The Redis connection pool
-     * @return Map of all via FIDs to balances, empty map if error
-     */
-    public static Map<String, Long> checkAllViaBalances(String sid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null) {
-            return new HashMap<>();
-        }
-
-        try (var jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
-            Map<String, String> allBalances = jedis.hgetAll(key);
-            
-            Map<String, Long> result = new HashMap<>();
-            for (Map.Entry<String, String> entry : allBalances.entrySet()) {
-                try {
-                    result.put(entry.getKey(), Long.parseLong(entry.getValue()));
-                } catch (NumberFormatException e) {
-                    log.error("Invalid via balance format for FID: " + entry.getKey(), e);
-                }
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("Error checking all via balances in Redis", e);
-            return new HashMap<>();
-        }
-    }
-
-    /**
-     * Gets the total via balance
-     * @param sid The service ID
-     * @param jedisPool The Redis connection pool
-     * @return The total via balance, 0 if error
-     */
-    public static long getTotalViaBalance(String sid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null) {
-            return 0L;
-        }
-
-        try (var jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, VIA_BALANCE, null);
-            Map<String, String> allBalances = jedis.hgetAll(key);
-            
-            return allBalances.values().stream()
-                .mapToLong(str -> {
-                    try {
-                        return Long.parseLong(str);
-                    } catch (NumberFormatException e) {
-                        log.error("Invalid via balance format", e);
-                        return 0L;
-                    }
-                })
-                .sum();
-        } catch (Exception e) {
-            log.error("Error getting total via balance from Redis", e);
-            return 0L;
-        }
-    }
 
     public Long getPriceBase() {
         return priceBase;
@@ -2163,362 +1871,6 @@ public class AccountHandler extends Handler<FcEntity> {
         return nPriceMap.getOrDefault(apiName, 1L);
     }
 
-    // Add static methods for reading nPrice
-    public static Long getNPrice(String sid, String apiName, JedisPool jedisPool) {
-        if (jedisPool == null || apiName == null || sid == null) {
-            return null;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String redisKey = IdNameUtils.makeKeyName(null, sid, N_PRICE, null);
-            String value = jedis.hget(redisKey, apiName);
-            return value != null ? Long.parseLong(value) : null;
-        } catch (Exception e) {
-            log.error("Error reading nPrice from Redis", e);
-            return null;
-        }
-    }
-
-    public static Map<String, Long> getAllNPrices(String sid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null) {
-            return null;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String redisKey = IdNameUtils.makeKeyName(null, sid, N_PRICE, null);
-            Map<String, String> redisMap = jedis.hgetAll(redisKey);
-            
-            if (redisMap.isEmpty()) {
-                return null;
-            }
-
-            Map<String, Long> result = new HashMap<>();
-            for (Map.Entry<String, String> entry : redisMap.entrySet()) {
-                try {
-                    result.put(entry.getKey(), Long.parseLong(entry.getValue()));
-                } catch (NumberFormatException e) {
-                    log.error("Error parsing nPrice value for key: " + entry.getKey(), e);
-                }
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("Error reading all nPrices from Redis", e);
-            return null;
-        }
-    }
-
-    // Add these static methods after the existing static methods
-    
-    /**
-     * Updates a user's balance in Redis
-     * @return The new balance if successful, null if failed
-     */
-    public static Long updateUserBalance(String sid, String uid, Long value, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || uid == null || value == null) {
-            return null;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            jedis.hset(key, uid, String.valueOf(value));
-            return value;
-        } catch (Exception e) {
-            log.error("Error updating user balance in Redis", e);
-            return null;
-        }
-    }
-
-    /**
-     * Adds to a user's balance in Redis
-     * @return The new balance if successful, null if failed
-     */
-    public static Long addUserBalance(String sid, String uid, Long value, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || uid == null || value == null) {
-            return null;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            String currentBalanceStr = jedis.hget(key, uid);
-            long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
-            long newBalance = currentBalance + value;
-            
-            if (newBalance <= 0) {
-                jedis.hdel(key, uid);
-                return 0L;
-            } else {
-                jedis.hset(key, uid, String.valueOf(newBalance));
-                return newBalance;
-            }
-        } catch (Exception e) {
-            log.error("Error adding to user balance in Redis", e);
-            return null;
-        }
-    }
-
-    /**
-     * Updates multiple user balances in Redis
-     * @return true if successful, false if failed
-     */
-    public static boolean updateUserBalances(String sid, Map<String, Long> balanceMap, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || balanceMap == null || balanceMap.isEmpty()) {
-            return false;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            Map<String, String> stringBalanceMap = balanceMap.entrySet().stream()
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> String.valueOf(e.getValue())
-                ));
-            jedis.hmset(key, stringBalanceMap);
-            return true;
-        } catch (Exception e) {
-            log.error("Error updating multiple user balances in Redis", e);
-            return false;
-        }
-    }
-
-    /**
-     * Adds to multiple user balances in Redis
-     * @return true if successful, false if failed
-     */
-    public static boolean addUserBalances(String sid, Map<String, Long> valueMap, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || valueMap == null || valueMap.isEmpty()) {
-            return false;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            
-            // Get current balances for all users
-            Set<String> userIds = valueMap.keySet();
-            List<String> currentBalances = jedis.hmget(key, userIds.toArray(new String[0]));
-            Map<String, String> updatedBalances = new HashMap<>();
-            
-            // Calculate new balances
-            int i = 0;
-            for (String uid : userIds) {
-                String currentBalanceStr = currentBalances.get(i++);
-                long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
-                long newBalance = currentBalance + valueMap.get(uid);
-                
-                if (newBalance > 0) {
-                    updatedBalances.put(uid, String.valueOf(newBalance));
-                }
-            }
-            
-            // Update balances in Redis
-            if (!updatedBalances.isEmpty()) {
-                jedis.hmset(key, updatedBalances);
-            }
-            
-            // Remove any zero or negative balances
-            List<String> toRemove = valueMap.entrySet().stream()
-                .filter(e -> !updatedBalances.containsKey(e.getKey()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-            
-            if (!toRemove.isEmpty()) {
-                jedis.hdel(key, toRemove.toArray(new String[0]));
-            }
-            
-            return true;
-        } catch (Exception e) {
-            log.error("Error adding to multiple user balances in Redis", e);
-            return false;
-        }
-    }
-
-    /**
-     * Merges balances with existing values in Redis
-     * @return true if successful, false if failed
-     */
-    public static boolean mergeUserBalances(String sid, Map<String, Long> valueMap, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || valueMap == null || valueMap.isEmpty()) {
-            return false;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            Map<String, String> existingBalances = jedis.hgetAll(key);
-            Map<String, String> updatedBalances = new HashMap<>();
-            
-            // Merge existing balances with new values
-            for (Map.Entry<String, Long> entry : valueMap.entrySet()) {
-                String uid = entry.getKey();
-                Long newValue = entry.getValue();
-                String existingBalanceStr = existingBalances.get(uid);
-                long existingBalance = existingBalanceStr != null ? Long.parseLong(existingBalanceStr) : 0L;
-                
-                if (newValue > existingBalance) {
-                    updatedBalances.put(uid, String.valueOf(newValue));
-                }
-            }
-            
-            // Update Redis with merged balances
-            if (!updatedBalances.isEmpty()) {
-                jedis.hmset(key, updatedBalances);
-            }
-            return true;
-        } catch (Exception e) {
-            log.error("Error merging user balances in Redis", e);
-            return false;
-        }
-    }
-
-    /**
-     * Gets a user's balance from Redis
-     * @return The user's balance if found, null if not found or error
-     */
-    public static Long getUserBalance(String sid, String uid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || uid == null) {
-            return null;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            String balanceStr = jedis.hget(key, uid);
-            return balanceStr != null ? Long.parseLong(balanceStr) : null;
-        } catch (Exception e) {
-            log.error("Error checking user balance in Redis", e);
-            return null;
-        }
-    }
-
-    /**
-     * Gets multiple user balances from Redis
-     * @return Map of user IDs to balances, empty map if error
-     */
-    public static Map<String, Long> getUserBalances(String sid, List<String> uids, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || uids == null || uids.isEmpty()) {
-            return new HashMap<>();
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            List<String> balances = jedis.hmget(key, uids.toArray(new String[0]));
-            
-            Map<String, Long> result = new HashMap<>();
-            for (int i = 0; i < uids.size(); i++) {
-                String balanceStr = balances.get(i);
-                if (balanceStr != null) {
-                    result.put(uids.get(i), Long.parseLong(balanceStr));
-                }
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("Error checking multiple user balances in Redis", e);
-            return new HashMap<>();
-        }
-    }
-
-    /**
-     * Gets all user balances from Redis
-     * @return Map of all user IDs to balances, empty map if error
-     */
-    public static Map<String, Long> getAllUserBalances(String sid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null) {
-            return new HashMap<>();
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            Map<String, String> allBalances = jedis.hgetAll(key);
-            
-            Map<String, Long> result = new HashMap<>();
-            for (Map.Entry<String, String> entry : allBalances.entrySet()) {
-                try {
-                    result.put(entry.getKey(), Long.parseLong(entry.getValue()));
-                } catch (NumberFormatException e) {
-                    log.error("Invalid balance format for user: " + entry.getKey(), e);
-                }
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("Error checking all user balances in Redis", e);
-            return new HashMap<>();
-        }
-    }
-
-    /**
-     * Checks if a user has sufficient balance
-     * @return true if balance is sufficient, false otherwise
-     */
-    public static boolean hasUserSufficientBalance(String sid, String uid, Long requiredAmount, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null || uid == null || requiredAmount == null) {
-            return false;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            String balanceStr = jedis.hget(key, uid);
-            if (balanceStr == null) {
-                return false;
-            }
-            long balance = Long.parseLong(balanceStr);
-            return balance >= requiredAmount;
-        } catch (Exception e) {
-            log.error("Error checking user sufficient balance in Redis", e);
-            return false;
-        }
-    }
-
-        /**
-     * Checks if a user has sufficient balance
-     * @param uid The user's FID
-     * @param requiredAmount The amount required
-     * @return true if balance is sufficient, false otherwise
-     */
-    public boolean hasSufficientBalance(String uid, Long requiredAmount) {
-        if (uid == null || requiredAmount == null) {
-            return false;
-        }
-
-        if (useRedis) {
-            return hasUserSufficientBalance(sid, uid, requiredAmount, jedisPool);
-        } else {
-            Long balance = userBalance.get(uid);
-            if (balance == null) {
-                balance = accountDB.getUserBalance(uid);
-                if (balance == null) {
-                    return false;
-                }
-            }
-            return balance >= requiredAmount;
-        }
-    }
-
-    /**
-     * Gets the total balance of all users
-     * @return The total balance, 0 if error
-     */
-    public static long getTotalBalance(String sid, JedisPool jedisPool) {
-        if (jedisPool == null || sid == null) {
-            return 0L;
-        }
-
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = IdNameUtils.makeKeyName(null, sid, BALANCE, null);
-            Map<String, String> allBalances = jedis.hgetAll(key);
-            
-            return allBalances.values().stream()
-                .mapToLong(str -> {
-                    try {
-                        return Long.parseLong(str);
-                    } catch (NumberFormatException e) {
-                        log.error("Invalid balance format", e);
-                        return 0L;
-                    }
-                })
-                .sum();
-        } catch (Exception e) {
-            log.error("Error getting total balance from Redis", e);
-            return 0L;
-        }
-    }
-
     /**
      * Gets the balance for a specific via FID
      * @param viaFid The via FID to check
@@ -2531,7 +1883,7 @@ public class AccountHandler extends Handler<FcEntity> {
 
         if (useRedis) {
             try (var jedis = jedisPool.getResource()) {
-                String balanceStr = jedis.hget(REDIS_KEY_VIA_BALANCE, viaFid);
+                String balanceStr = jedis.hget(redisKeyViaBalance, viaFid);
                 return balanceStr != null ? Long.parseLong(balanceStr) : null;
             } catch (Exception e) {
                 log.error("Error checking via balance", e);
@@ -2545,28 +1897,282 @@ public class AccountHandler extends Handler<FcEntity> {
             }
             
             // If not in cache, check the database
-            return accountDB.getViaBalance(viaFid);
+            balance = localDB.getFromMap(FieldNames.VIA_BALANCE_MAP, viaFid);
+            return balance != null ? balance : 0L;
         }
     }
 
-    // Add method to select strategy
-    private AutoScanStrategy selectAutoScanStrategy(BufferedReader br) {
-        AutoScanStrategy[] strategies = AutoScanStrategy.values();
-        AutoScanStrategy selectedStrategy= Inputer.chooseOne(strategies, null, "Select Auto Scan Strategy:", br);
-        configureListenPath(br);
-        return selectedStrategy;
+   // Bulk update methods for maps
+   public void updateUserBalanceInLocalDB(Map<String, Long> balances) {
+    for (Map.Entry<String, Long> entry : balances.entrySet()) {
+        localDB.putInMap(FieldNames.USER_BALANCE_MAP, entry.getKey(), entry.getValue());
     }
+    localDB.commit();
+}
 
-    // Add this method to handle listen path input
-    private void configureListenPath(BufferedReader br) {
-        if (autoScanStrategy == AutoScanStrategy.WEBHOOK || autoScanStrategy == AutoScanStrategy.FILE_MONITOR) {
-            String path = Inputer.inputString(br, "Enter the path to monitor for updates:");
-            if (path != null && !path.trim().isEmpty()) {
-                this.listenPath = path;
-                accountDB.setListenPath(path);
+public void updateViaBalanceMapInLocalDB(Map<String, Long> balances) {
+    for (Map.Entry<String, Long> entry : balances.entrySet()) {
+        localDB.putInMap(FieldNames.VIA_BALANCE_MAP, entry.getKey(), entry.getValue());
+    }
+    localDB.commit();
+}
+
+public void updateViaBalanceInLocalDB(Map.Entry<String, Long> balance) {
+    if(balance == null) return;
+    localDB.putInMap(FieldNames.VIA_BALANCE_MAP, balance.getKey(), balance.getValue());
+    localDB.commit();
+}
+
+public void updateUnpaidViaBalance(Map<String, Long> balances) {
+    balances.forEach((viaFid, balance) -> {
+        Long existingBalance = getUnpaidViaBalance(viaFid);
+        localDB.putInMap(FieldNames.UNPAID_VIA_BALANCE_MAP, viaFid, existingBalance + balance);
+    });
+    localDB.commit();
+}
+
+public void clearUnpaidViaBalanceMap() {
+    localDB.clearMap(FieldNames.UNPAID_VIA_BALANCE_MAP);
+    localDB.commit();
+}
+
+public void clearUnpaidFixedCostMap() {
+    localDB.clearMap(FieldNames.UNPAID_FIXED_COST_MAP);
+    localDB.commit();
+}
+
+public void updateUnpaidFixedCostMap(Map<String, Long> costs) {
+    for (Map.Entry<String, Long> entry : costs.entrySet()) {
+        localDB.putInMap(FieldNames.UNPAID_FIXED_COST_MAP, entry.getKey(), entry.getValue());
+    }
+    localDB.commit();
+}
+
+public void updateFidViaMapInLocalDB(Map<String, String> fidViaMap) {
+    for (Map.Entry<String, String> entry : fidViaMap.entrySet()) {
+        localDB.putInMap(FieldNames.FID_VIA_MAP, entry.getKey(), entry.getValue());
+    }
+    localDB.commit();
+}
+
+// Getter methods for entire maps
+public Map<String, Long> getUnpaidViaBalance() {
+    return localDB.getAllFromMap(FieldNames.UNPAID_VIA_BALANCE_MAP);
+}
+
+public Map<String, Long> getFixedCostMap() {
+    return localDB.getAllFromMap(FieldNames.FIXED_COST_MAP);
+}
+
+public Map<String, Long> getUnpaidFixedCostMap() {
+    return localDB.getAllFromMap(FieldNames.UNPAID_FIXED_COST_MAP);
+}
+
+public Map<String, Double> getContributorShareMap() {
+    return localDB.getAllFromMap(FieldNames.CONTRIBUTOR_SHARE_MAP);
+}
+
+// Income/Expense tracking methods
+public List<String> getLastIncome() {
+    String lastIncome = (String) localDB.getState(LAST_INCOME);
+    return lastIncome == null || lastIncome.isEmpty() ? new ArrayList<>() : Arrays.asList(lastIncome.split(","));
+}
+
+public void setLastIncome(List<String> lastIncome) {
+    if(lastIncome == null || lastIncome.isEmpty()) return;
+    localDB.putState(FieldNames.LAST_INCOME, String.join(",", lastIncome));
+    localDB.commit();
+}
+
+public List<String> getLastExpense() {
+    String lastExpense = (String) localDB.getSetting(FieldNames.LAST_EXPENSE);
+    return lastExpense == null || lastExpense.isEmpty() ? new ArrayList<>() : Arrays.asList(lastExpense.split(","));
+}
+
+public void setLastExpense(List<String> lastExpense) {
+    if(lastExpense == null || lastExpense.isEmpty()) return;
+    localDB.putSetting(FieldNames.LAST_EXPENSE, String.join(",", lastExpense));
+    localDB.commit();
+}
+
+public void setLastSettleHeight(Long height) {
+    if(height == null) return;
+    localDB.putSetting(FieldNames.LAST_SETTLE_HEIGHT, height.toString());
+    localDB.commit();
+}
+
+// Add new method for batch income updates
+public void updateIncomes(List<Income> incomes) {
+    localDB.addAllToList(FieldNames.INCOME_MAP, incomes);
+    localDB.commit();
+}
+
+public String getLastExpenseHeight() {
+    return (String) localDB.getSetting(FieldNames.LAST_EXPENSE_HEIGHT);
+}
+
+public void setLastExpenseHeight(String height) {
+    if(height == null) return;
+    localDB.putSetting(FieldNames.LAST_EXPENSE_HEIGHT, height);
+    localDB.commit();
+}
+
+// Add this method for batch expense updates
+public void updateExpenses(List<Expense> expenses) {
+    localDB.addAllToList(FieldNames.EXPENSE_MAP, expenses);
+    localDB.commit();
+}
+
+// Add these methods for payoff management
+public void updatePayoffMap(Map<String, Long> payoffs) {
+    for (Map.Entry<String, Long> entry : payoffs.entrySet()) {
+        localDB.putInMap(FieldNames.PAYOFF_MAP, entry.getKey(), entry.getValue());
+    }
+    localDB.commit();
+}
+
+public Map<String, Long> getPayoffMap() {
+    return localDB.getAllFromMap(FieldNames.PAYOFF_MAP);
+}
+
+public void clearPayoffMap() {
+    localDB.clearMap(FieldNames.PAYOFF_MAP);
+    localDB.commit();
+}
+
+public void setOrderViaShare(double orderViaShare) {
+    localDB.putSetting(FieldNames.ORDER_VIA_SHARE, String.valueOf(orderViaShare));
+    localDB.commit();
+}
+
+public void setConsumeViaShare(double consumeViaShare) {
+    localDB.putSetting(FieldNames.CONSUME_VIA_SHARE, String.valueOf(consumeViaShare));
+    localDB.commit();
+}
+
+public boolean hasNPrices() {
+    // Get all metadata entries and check if any keys start with "nPrice_"
+    Map<String, String> metaMap = localDB.getAllFromMap(FieldNames.META_MAP);
+    return metaMap.keySet().stream()
+        .anyMatch(key -> key.startsWith("nPrice_"));
+}
+
+public Map<String, Long> getNPriceMap() {
+    Map<String, Long> nPriceMap = new HashMap<>();
+    Map<String, String> metaMap = localDB.getAllFromMap(FieldNames.META_MAP);
+    
+    // Iterate through metaMap and collect all nPrice entries
+    metaMap.forEach((key, value) -> {
+        if (key.startsWith("nPrice_")) {
+            String apiName = key.substring("nPrice_".length());
+            try {
+                Long price = Long.parseLong(value);
+                nPriceMap.put(apiName, price);
+            } catch (NumberFormatException e) {
+                // Skip invalid values
             }
         }
+    });
+    
+    return nPriceMap;
+}
+
+public void setNPrice(String apiName, Long value) {
+    if (apiName == null || value == null) return;
+    
+    localDB.putInMap(FieldNames.META_MAP, "nPrice_" + apiName, value.toString());
+    localDB.commit();
+}
+
+public void setDealerMinBalance(Long balance) {
+    if(balance == null) return;
+    // Convert Long to String before storing
+    localDB.putSetting(FieldNames.DEALER_MIN_BALANCE, balance.toString());
+    localDB.commit();
+}
+
+public void setMinDistributeBalance(Long balance) {
+    if(balance == null) return;
+    // Convert Long to String before storing
+    localDB.putSetting(FieldNames.MIN_DISTRIBUTE_BALANCE, balance.toString());
+    localDB.commit();
+}
+
+public Long getMinDistributeBalance() {
+    String balanceStr = (String) localDB.getSetting(FieldNames.MIN_DISTRIBUTE_BALANCE);
+    if (balanceStr == null || balanceStr.isEmpty()) {
+        return null;
     }
+    
+    try {
+        return Long.parseLong(balanceStr);
+    } catch (NumberFormatException e) {
+        System.err.println("Invalid min distribute balance format: " + balanceStr);
+        return null;
+    }
+}
+public void setLastHeight(Long height) {
+    if(height == null) return;
+    // Convert Long to String before storing
+    localDB.putSetting(LAST_HEIGHT, height.toString());
+    localDB.commit();
+}
+
+public Long getLastHeight() {
+    String heightStr = (String) localDB.getSetting(LAST_HEIGHT);
+    if (heightStr == null || heightStr.isEmpty()) {
+        return null;
+    }
+    
+    try {
+        return Long.parseLong(heightStr);
+    } catch (NumberFormatException e) {
+        System.err.println("Invalid last height format: " + heightStr);
+        return null;
+    }
+}
+
+public void setLastBlockId(String blockId) {
+    if(blockId == null) return;
+    localDB.putSetting(FieldNames.LAST_BLOCK_ID, blockId);
+    localDB.commit();
+}
+
+public String getLastBlockId() {
+    return (String) localDB.getSetting(FieldNames.LAST_BLOCK_ID);
+}
+
+public void removeIncomeSinceHeight(long height) {
+    List<Income> allFromList = localDB.getAllFromList(FieldNames.INCOME_MAP);
+
+    Map<String,Long>retreiveMap = new HashMap<>();
+    Iterator<Income> iter = allFromList.iterator();
+
+    while(iter.hasNext()){
+        Income income = iter.next();
+        long value = income.getValue();
+        retreiveMap.merge(income.getFrom(),(-value),Long::sum);
+        if(income.getHeight() > height) iter.remove();
+    }
+
+    updateUserBalanceMap(retreiveMap);
+
+    localDB.clearList(FieldNames.INCOME_MAP);
+    localDB.addAllToList(FieldNames.INCOME_MAP,allFromList);
+    localDB.commit();
+}
+
+public void removeExpenseSinceHeight(long height) {
+    // Get all expense entries
+    List<Expense> allFromList = localDB.getAllFromList(FieldNames.EXPENSE_MAP);
+
+    allFromList.removeIf(expense -> expense.getHeight() > height);
+
+    localDB.clearList(FieldNames.EXPENSE_MAP);
+    localDB.addAllToList(FieldNames.EXPENSE_MAP,allFromList);
+    localDB.commit();
+}
+
     public Long getMyBalance() {
         return myBalance;
     }
@@ -2601,12 +2207,6 @@ public class AccountHandler extends Handler<FcEntity> {
         return useRedis;
     }
 
-    public AutoScanStrategy getAutoScanStrategy() {
-        return autoScanStrategy;
-    }
-    public void setAutoScanStrategy(AutoScanStrategy autoScanStrategy) {
-        this.autoScanStrategy = autoScanStrategy;
-    }
     public String getListenPath() {
         return listenPath;
     }

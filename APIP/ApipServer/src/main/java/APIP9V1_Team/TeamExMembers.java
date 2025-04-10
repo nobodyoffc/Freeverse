@@ -16,17 +16,17 @@ import java.util.List;
 import java.util.Map;
 
 import appTools.Settings;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.TEAM_EX_MEMBERS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_EX_MEMBERS)
 public class TeamExMembers extends HttpServlet {
     private final Settings settings;
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public TeamExMembers() {
         this.settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -39,13 +39,13 @@ public class TeamExMembers extends HttpServlet {
         doRequest(request,response,authType,settings);
     }
     protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
-        List<Team> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.TEAM, Team.class, null, null, null, null, null, request, response, authType);
+        List<Team> meetList = fcHttpRequestHandler.doRequestForList(IndicesNames.TEAM, Team.class, null, null, null, null, null, request, response, authType);
         if (meetList == null) return;
         //Make data
         Map<String,String[]> dataMap = new HashMap<>();
         for(Team team:meetList){
             dataMap.put(team.getId(),team.getExMembers());
         }
-        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
+        fcHttpRequestHandler.getReplyBody().reply0SuccessHttp(dataMap,response);
     }
 }

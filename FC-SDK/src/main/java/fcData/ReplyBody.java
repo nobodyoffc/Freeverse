@@ -2,12 +2,12 @@ package fcData;
 
 import appTools.Settings;
 import constants.CodeMessage;
-import fch.FchUtils;
 import fch.fchData.Block;
 import handlers.AccountHandler;
 import handlers.Handler;
 import handlers.SessionHandler;
 import server.HttpRequestChecker;
+import utils.FchUtils;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -113,13 +113,11 @@ public class ReplyBody extends FcObject {
             return balance;
         }
 
-        long newBalance = accountHandler.userSpend(fid, apiName, length);
-
-        accountHandler.addViaBalance(fid, newBalance, via);
+        long newBalance = accountHandler.userSpend(fid, apiName, length,via);
 
         // If balance is depleted, remove session
         if (newBalance <= 0 && sessionName != null) {
-            sessionHandler.removeSessionByName(sessionName);
+            sessionHandler.removeSession(sessionName);
         }
 
         balance = newBalance;

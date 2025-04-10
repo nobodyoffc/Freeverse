@@ -10,13 +10,13 @@ import clients.FeipClient;
 import constants.FieldNames;
 import constants.Values;
 import crypto.Decryptor;
+import db.LocalDB;
 import fch.fchData.SendTo;
 import feip.feipData.Group;
 import feip.feipData.GroupOpData;
 import feip.feipData.Service;
 import utils.Hex;
 import utils.JsonUtils;
-import fcData.PersistentSequenceMap;
 import utils.StringUtils;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
@@ -30,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class GroupHandler extends Handler {
+public class GroupHandler extends Handler<Group> {
     // 1. Constants
     public static final int DEFAULT_SIZE = 50;
 
@@ -41,36 +41,23 @@ public class GroupHandler extends Handler {
     // private final String sid;
     private final byte[] symKey;
     private final String myPriKeyCipher;
-    private final PersistentSequenceMap groupDB;
     private final Map<String, Long> lastTimeMap;
 
     // 3. Constructor
-    public GroupHandler(String myFid, ApipClient apipClient, byte[] symKey,
-                        String myPriKeyCipher, Map<String, Long> lastTimeMap, String dbPath, BufferedReader br) {
-        this.myFid = myFid;
-        this.apipClient = apipClient;
-        // this.sid = sid;
-        this.symKey = symKey;
-        this.myPriKeyCipher = myPriKeyCipher;
-        this.lastTimeMap = lastTimeMap;
-        this.groupDB = new PersistentSequenceMap(myFid, null, FieldNames.GROUP, dbPath);
-        this.br = br;
-    }
-
-    public GroupHandler(Settings settings){
+    public GroupHandler(Settings settings) {
+        super(settings, HandlerType.GROUP, LocalDB.SortType.UPDATE_ORDER, Group.class, true, true);
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.myFid = settings.getMainFid();
         this.symKey = settings.getSymKey();
         this.myPriKeyCipher = settings.getMyPriKeyCipher();
         this.br = settings.getBr(); 
         this.lastTimeMap = new HashMap<>();
-        this.groupDB = new PersistentSequenceMap(myFid, null, FieldNames.GROUP, settings.getDbDir());
     }   
 
     // 4. Public Methods - Main Interface
-    public void menu() {
+    public void menu(BufferedReader br, boolean isRootMenu) {
         byte[] priKey = Decryptor.decryptPriKey(myPriKeyCipher, symKey);
-        Menu menu = new Menu("Group", this::close);
+        Menu menu = newMenu("Group", isRootMenu);
         menu.add("List", () -> handleListGroups(priKey, br));
         menu.add("Check", () -> checkGroup(br));
         menu.add("Create", () -> handleCreateGroup(priKey, br));
@@ -89,7 +76,7 @@ public class GroupHandler extends Handler {
             return;
         }
         for(Group group : groupList){
-            groupDB.put(Hex.fromHex(group.getId()), group.toJson().getBytes());
+            localDB.put(group.getId(), group);
         }
 
         if (!groupList.isEmpty()) {
@@ -117,14 +104,14 @@ public class GroupHandler extends Handler {
 
     public boolean isNamer(String fid, String gid) {
         if(fid == null || gid == null) return false;
-        Group group = Group.fromJson(new String(groupDB.get(Hex.fromHex(gid))));
+        Group group = localDB.get(gid);
         if(group == null) return false;
         return Arrays.asList(group.getNamers()).contains(fid);
     }
 
     public boolean isLastNamer(String fid, String gid) {
         if(fid == null || gid == null) return false;
-        Group group = Group.fromJson(new String(groupDB.get(Hex.fromHex(gid))));
+        Group group = localDB.get(gid);
         if(group == null) return false;
         List<String> namers = Arrays.asList(group.getNamers());
         return namers.get(namers.size()-1).equals(fid);
@@ -146,29 +133,18 @@ public class GroupHandler extends Handler {
     public List<Group> pullLocalGroupList(boolean choose, BufferedReader br) {
         List<Group> resultGroupList = new ArrayList<>();
         int size = DEFAULT_SIZE;
-        int offset = 0;
+        long offset = 0;
 
         while (true) {
-            // Get groups in batches
-            List<byte[]> batchGroups = groupDB.getValuesBatch(offset, size);
+            // Get groups in batches using localDB
+            List<Group> batchGroups = localDB.getList(size, null, offset, false, null, null, true, true);
             if (batchGroups == null || batchGroups.isEmpty()) break;
-
-            // Convert byte arrays to Group objects
-            List<Group> groupBatch = new ArrayList<>();
-            for (byte[] groupBytes : batchGroups) {
-                Group group = Group.fromJson(new String(groupBytes));
-                if (group != null) {
-                    groupBatch.add(group);
-                }
-            }
-
-            if (groupBatch.isEmpty()) break;
 
             // Handle selection if required
             List<Group> chosenGroupList;
             if (choose) {
                 chosenGroupList = Inputer.chooseMultiFromListShowingMultiField(
-                        groupBatch,
+                        batchGroups,
                         Arrays.asList(FieldNames.GID, FieldNames.NAME),
                         Arrays.asList(11, 21),
                         "Choose groups:",
@@ -176,7 +152,7 @@ public class GroupHandler extends Handler {
                         br
                 );
             } else {
-                chosenGroupList = groupBatch;
+                chosenGroupList = batchGroups;
             }
 
             resultGroupList.addAll(chosenGroupList);
@@ -195,7 +171,7 @@ public class GroupHandler extends Handler {
     private void handleListGroups(byte[] priKey, BufferedReader br) {
         List<Group> chosenGroupMaskList = pullLocalGroupList(true, br);
         if(chosenGroupMaskList==null || chosenGroupMaskList.isEmpty()) return;
-        opGroupList(chosenGroupMaskList, true, priKey, myFid, apipClient, br);
+        opItems(chosenGroupMaskList, true, priKey, myFid, apipClient, br);
     }
     private void handleCreateGroup(byte[] priKey, BufferedReader br) {
         String name = Inputer.inputString(br,"Input the name:");
@@ -210,14 +186,14 @@ public class GroupHandler extends Handler {
         List<Group> searchResult = searchGroups(searchString, apipClient);
         if(searchResult==null || searchResult.isEmpty()) return;
         List<Group> chosenGroupMaskList = chooseGroupList(searchResult, br);
-        opGroupList(chosenGroupMaskList, false, priKey, myFid, apipClient, br);
+        opItems(chosenGroupMaskList, false, priKey, myFid, apipClient, br);
     }
     private void handleLeaveGroups(byte[] priKey, BufferedReader br) {
         List<Group> chosenGroupList = pullLocalGroupList(true, br);
         if(chosenGroupList==null || chosenGroupList.isEmpty()) return;
         List<String> idList = new ArrayList<>();
         for(Group group : chosenGroupList) idList.add(group.getId());
-        showGroupList(chosenGroupList,br);
+        showItems(chosenGroupList,br);
         if(Inputer.askIfYes(br,"Leave all groups?")) {
             String leaveResult = leaveGroups(priKey, myFid, null, idList, apipClient, null);
             if(!Hex.isHexString(leaveResult))System.out.println(leaveResult);
@@ -254,7 +230,7 @@ public class GroupHandler extends Handler {
         GroupOpData data = GroupOpData.makeLeave(gids);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
-    public String opGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList, GroupOpData data, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br){
+    public String opItems(byte[] priKey, String offLineFid, List<SendTo> sendToList, GroupOpData data, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br){
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, br);
     }
 
@@ -283,7 +259,7 @@ public class GroupHandler extends Handler {
     }
     public void leaveGroups(List<Group> chosenGroupList, boolean isMyGroupList,
             byte[] priKey, String offLineFid, ApipClient apipClient, BufferedReader br) {
-        showGroupList(chosenGroupList, br);
+        showItems(chosenGroupList, br);
         if (!Inputer.askIfYes(br, "Leave all these groups?")) return;
 
         List<String> leaveIdList = new ArrayList<>();
@@ -325,7 +301,7 @@ public class GroupHandler extends Handler {
         }
         System.out.println("Work done. Check groups a few minutes later.");
     }
-    public void opGroupList(List<Group> chosenGroupList, boolean isMyGroupList,
+    public void opItems(List<Group> chosenGroupList, boolean isMyGroupList,
             byte[] priKey, String offLineFid, ApipClient apipClient, BufferedReader br) {
         String[] options;
         if(isMyGroupList)
@@ -335,7 +311,7 @@ public class GroupHandler extends Handler {
             String subOp = Inputer.chooseOne(options,null,"What to do?",br);
             if(subOp==null || "".equals(subOp))return;
             switch (subOp) {
-                case "view" -> viewGroups(chosenGroupList, br);
+                case "view" -> viewItems(chosenGroupList, br);
                 case "join" -> joinGroups(chosenGroupList, isMyGroupList, priKey, offLineFid, apipClient, br);
                 case "Leave" -> leaveGroups(chosenGroupList, isMyGroupList, priKey, offLineFid, apipClient, br);
                 case "Update" -> updateGroups(chosenGroupList, isMyGroupList, priKey, offLineFid, apipClient, br);
@@ -379,7 +355,7 @@ public class GroupHandler extends Handler {
             return chosenGroup;
         }
     }
-    public void showGroupList(List<Group> groupList, BufferedReader br) {
+    public void showItems(List<Group> groupList, BufferedReader br) {
         if(groupList==null || groupList.isEmpty())return;
         String title = "Groups";
         String[] fields = { FieldNames.GID, FieldNames.MEMBER_NUM, FieldNames.TCDD,FieldNames.NAME};
@@ -399,9 +375,9 @@ public class GroupHandler extends Handler {
             );
             valueListList.add(valueList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
-    public void viewGroups(List<Group> chosenGroupMaskList, BufferedReader br) {
+    public void viewItems(List<Group> chosenGroupMaskList, BufferedReader br) {
         while (true) {
             List<Group> viewGroupList = chooseGroupList(chosenGroupMaskList, br);
             System.out.println(JsonUtils.toNiceJson(viewGroupList));

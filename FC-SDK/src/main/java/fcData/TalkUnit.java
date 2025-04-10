@@ -1175,7 +1175,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
 
     public static FcSession prepareSession(String fid, SessionHandler sessionHandler, TalkIdHandler talkIdHandler, ContactHandler contactHandler, ApipClient apipClient) {
         FcSession fcSession;
-        fcSession = sessionHandler.getSessionById(fid);
+        fcSession = sessionHandler.getSessionByUserId(fid);
         if(fcSession==null){
             String pubKey = KeyTools.getPubKey(fid, sessionHandler, talkIdHandler, contactHandler, apipClient);
             fcSession = sessionHandler.addNewSession(fid, pubKey);
@@ -1194,7 +1194,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         else pubKey=cryptoDataByte.getPubKeyB();
         if(pubKey!=null)pubKeyHex=Hex.toHex(pubKey);
         String fid = KeyTools.pubKeyToFchAddr(pubKeyHex);
-        session = sessionHandler.getSessionById(fid);
+        session = sessionHandler.getSessionByUserId(fid);
         if(session!=null){
             if(session.getPubKey()==null){
                 session.setPubKey(pubKeyHex);
@@ -1255,9 +1255,9 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         log.debug("Got talkUnit from bytes:"+talkUnit.toNiceJson());
 
         if(cryptoDataByte.getType().equals(EncryptType.AsyTwoWay))
-            talkUnit.setBy(session.getId());
+            talkUnit.setBy(session.getUserId());
         else {
-            talkUnit.setBy(session.getId());
+            talkUnit.setBy(session.getUserId());
         }
 
         talkUnit.setStata(State.GOT);
@@ -1398,7 +1398,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         if (cryptoDataByte.getCode()!=0) return null;
         decryptedUnit.setDataEncryptType(cryptoDataByte.getType());
         decryptedUnit.setFromSession(session);
-        decryptedUnit.setFrom(session.getId());
+        decryptedUnit.setFrom(session.getUserId());
         return cryptoDataByte.getData();
 
 //

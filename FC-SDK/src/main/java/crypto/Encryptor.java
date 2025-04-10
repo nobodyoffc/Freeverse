@@ -36,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.*;
 import java.util.HexFormat;
+import java.util.Objects;
 
 import static fcData.AlgorithmId.*;
 
@@ -452,18 +453,15 @@ public class Encryptor {
         }
 
         byte[] symKey;
-        switch (algorithmId) {
-            case EccAes256K1P7_No1_NrC7 -> {
-                symKey = EccAes256K1P7.asyKeyToSymKey(priKeyX, pubKeyY,cryptoDataByte.getIv());
-                cryptoDataByte.setSymKey(symKey);
-                EccAes256K1P7 ecc = new EccAes256K1P7();
-                ecc.aesEncrypt(cryptoDataByte);
-            }
-            default -> {
-                symKey = Ecc256K1.asyKeyToSymKey(priKeyX, pubKeyY, iv);
-                cryptoDataByte.setSymKey(symKey);
-                encryptStreamBySymKey(is,os,symKey,iv,cryptoDataByte);
-            }
+        if (Objects.requireNonNull(algorithmId) == EccAes256K1P7_No1_NrC7) {
+            symKey = EccAes256K1P7.asyKeyToSymKey(priKeyX, pubKeyY, cryptoDataByte.getIv());
+            cryptoDataByte.setSymKey(symKey);
+            EccAes256K1P7 ecc = new EccAes256K1P7();
+            ecc.aesEncrypt(cryptoDataByte);
+        } else {
+            symKey = Ecc256K1.asyKeyToSymKey(priKeyX, pubKeyY, iv);
+            cryptoDataByte.setSymKey(symKey);
+            encryptStreamBySymKey(is, os, symKey, iv, cryptoDataByte);
         }
 
         cryptoDataByte.setAlg(algorithmId);

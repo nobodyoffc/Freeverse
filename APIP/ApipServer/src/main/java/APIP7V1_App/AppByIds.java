@@ -15,24 +15,24 @@ import java.io.IOException;
 
 import static constants.FieldNames.ID;
 
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.APP_BY_IDS, value = "/"+ ApipApiNames.SN_7+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.APP_BY_IDS)
 public class AppByIds extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public AppByIds() {
-        this.fcdslRequestHandler = new FcdslRequestHandler(Initiator.settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(Initiator.settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
     }
 }

@@ -11,6 +11,8 @@ import utils.Hex;
 import java.io.BufferedReader;
 import java.util.List;
 
+import static appTools.Shower.DEFAULT_PAGE_SIZE;
+
 public class CidInfo extends Cid {
     public static final String KEY_INFO_FILE_PATH = "keyInfo.json";
 
@@ -69,7 +71,7 @@ public class CidInfo extends Cid {
 
 
     public static List<CidInfo> showList(List<CidInfo> cidInfoList, BufferedReader br) {
-        return Shower.showOrChooseListInPages("FID Info", cidInfoList, br,true,CidInfo.class);
+        return Shower.showOrChooseListInPages("FID Info", cidInfoList, DEFAULT_PAGE_SIZE, null, true, CidInfo.class, br);
     }
 
     public void makeAddresses() {

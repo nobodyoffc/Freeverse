@@ -16,25 +16,25 @@ import initial.Initiator;
 import utils.http.AuthType;
 import appTools.Settings;
 import static constants.FieldNames.ID;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.PROOF_BY_IDS, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROOF_BY_IDS)
 public class ProofByIds extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public ProofByIds() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
     }
 }

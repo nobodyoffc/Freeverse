@@ -47,7 +47,7 @@ public class StartFCH {
         Menu.welcome(name);
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        Settings settings = Starter.startTool(UpStrings.CHAIN, settingMap, br, modules);
+        Settings settings = Starter.startTool(UpStrings.CHAIN, settingMap, br, modules, null);
         if(settings==null) return;
 
         //Prepare API clients

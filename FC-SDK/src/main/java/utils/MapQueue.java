@@ -19,19 +19,39 @@ public class MapQueue<K, V> {
         this.queue = new ConcurrentLinkedQueue<>();
     }
 
-    public void put(K key, V value) {
+    public Map.Entry<K, V> put(K key, V value) {
         if (map.containsKey(key)) {
             queue.remove(key);
         }
         map.put(key, value);
         queue.offer(key);
         
-        while (map.size() > maxSize) {
+        Map.Entry<K, V> removedEntry = null;
+        if (map.size() > maxSize) {
             K oldestKey = queue.poll();
             if (oldestKey != null) {
-                map.remove(oldestKey);
+                V oldestValue = map.remove(oldestKey);
+                final K finalKey = oldestKey;
+                final V finalValue = oldestValue;
+                removedEntry = new Map.Entry<>() {
+                    @Override
+                    public K getKey() {
+                        return finalKey;
+                    }
+
+                    @Override
+                    public V getValue() {
+                        return finalValue;
+                    }
+
+                    @Override
+                    public V setValue(V value) {
+                        throw new UnsupportedOperationException();
+                    }
+                };
             }
         }
+        return removedEntry;
     }
 
     public Map<K, V> putAll(Map<K, V> map) {

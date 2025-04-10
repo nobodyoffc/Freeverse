@@ -1,10 +1,12 @@
 package handlers;
 
+import configure.Configure;
 import fch.fchData.Cid;
 import appTools.Settings;
 import fcData.TalkIdInfo;
 import feip.feipData.Group;
 import feip.feipData.Team;
+import db.LocalDB;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,32 +16,39 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class TalkIdHandler extends Handler {
-    private final TalkIdDB talkIdDB;
-    private final Map<String, TalkIdInfo> talkIdInfoCache;
+public class TalkIdHandler extends Handler<TalkIdInfo> {
     private final Map<String, String> tempNameTalkIdMap;
     private final Map<String, String> talkIdTempNameMap;
+    private final Map<String, TalkIdInfo> talkIdInfoCache;
     private String lastTalkId;
 
     public TalkIdHandler(String myFid, String sid, String dbPath) {
-        this.talkIdDB = new TalkIdDB(myFid, sid, dbPath);
-        this.talkIdInfoCache = new ConcurrentHashMap<>();
+        super(createSettings(myFid, sid, dbPath), HandlerType.TALK_ID, LocalDB.SortType.NO_SORT, TalkIdInfo.class, true, false);
         this.tempNameTalkIdMap = new ConcurrentHashMap<>();
         this.talkIdTempNameMap = new ConcurrentHashMap<>();
-        this.lastTalkId = talkIdDB.getLastTalkId();
+        this.talkIdInfoCache = new ConcurrentHashMap<>();
+        this.lastTalkId = (String) localDB.getState("lastTalkId");
+    }
+//TODO
+    private static Settings createSettings(String myFid, String sid, String dbPath) {
+        Settings settings = new Settings((Configure) null, (String) null, null, null, null);
+        settings.setMainFid(myFid);
+        settings.setSid(sid);
+        settings.setDbDir(dbPath);
+        return settings;
     }
 
-    public TalkIdHandler(Settings settings){
-        this.talkIdDB = new TalkIdDB(settings.getMainFid(), settings.getSid(), settings.getDbDir());
-        this.talkIdInfoCache = new ConcurrentHashMap<>();
+    public TalkIdHandler(Settings settings) {
+        super(settings, HandlerType.TALK_ID, LocalDB.SortType.NO_SORT, TalkIdInfo.class, true, false);
         this.tempNameTalkIdMap = new ConcurrentHashMap<>();
         this.talkIdTempNameMap = new ConcurrentHashMap<>();
-        this.lastTalkId = talkIdDB.getLastTalkId();
+        this.talkIdInfoCache = new ConcurrentHashMap<>();
+        this.lastTalkId = (String) localDB.getState("lastTalkId");
     }   
 
     public String getLastTalkId() {
         if(lastTalkId == null) {
-            lastTalkId = talkIdDB.getLastTalkId();
+            lastTalkId = (String) localDB.getState("lastTalkId");
         }
         return lastTalkId;
     }
@@ -85,7 +94,7 @@ public class TalkIdHandler extends Handler {
 
         TalkIdInfo info = TalkIdInfo.fromCidInfo(cid);
         talkIdInfoCache.put(id, info);
-        talkIdDB.put(id, info);
+        localDB.put(id, info);
         setLastTalkId(id);
         return info;
     }
@@ -100,7 +109,7 @@ public class TalkIdHandler extends Handler {
 
         TalkIdInfo info = TalkIdInfo.fromGroup(group);
         talkIdInfoCache.put(id, info);
-        talkIdDB.put(id, info);
+        localDB.put(id, info);
         setLastTalkId(id);
         return info;
     }
@@ -115,19 +124,21 @@ public class TalkIdHandler extends Handler {
 
         TalkIdInfo info = TalkIdInfo.fromTeam(team);
         talkIdInfoCache.put(id, info);
-        talkIdDB.put(id, info);
+        localDB.put(id, info);
         setLastTalkId(id);
         return info;
     }
 
     public TalkIdInfo get(String id) {
+        // Check cache first
         TalkIdInfo cached = talkIdInfoCache.get(id);
         if (cached != null) {
             setLastTalkId(id);
             return cached;
         }
 
-        TalkIdInfo info = talkIdDB.get(id);
+        // If not in cache, get from DB
+        TalkIdInfo info = localDB.get(id);
         if (info != null) {
             talkIdInfoCache.put(id, info);
             setLastTalkId(id);
@@ -135,9 +146,11 @@ public class TalkIdHandler extends Handler {
         return info;
     }
 
+    @Override
     public void close() {
-        talkIdDB.setLastTalkId(lastTalkId);
-        talkIdDB.close();
+        localDB.putState("lastTalkId", lastTalkId);
+        talkIdInfoCache.clear();
+        super.close();
     }
 
     public List<TalkIdInfo> search(String searchTerm) {
@@ -148,23 +161,32 @@ public class TalkIdHandler extends Handler {
         String term = searchTerm.toLowerCase().trim();
         Set<TalkIdInfo> results = new HashSet<>();
 
-        // Search in cache
+        // Search in cache first
         for (TalkIdInfo info : talkIdInfoCache.values()) {
             if (TalkIdInfo.matchesTalkIdInfo(info, term)) {
                 results.add(info);
             }
         }
 
-        // Search in DB
-        List<TalkIdInfo> dbResults = talkIdDB.search(term);
-        results.addAll(dbResults);
+        // Search in DB for any items not in cache
+        Map<String, TalkIdInfo> allObjects = localDB.getAll();
+        for (Map.Entry<String, TalkIdInfo> entry : allObjects.entrySet()) {
+            if (!talkIdInfoCache.containsKey(entry.getKey())) {
+                TalkIdInfo info = entry.getValue();
+                if (TalkIdInfo.matchesTalkIdInfo(info, term)) {
+                    results.add(info);
+                    // Add to cache for future use
+                    talkIdInfoCache.put(entry.getKey(), info);
+                }
+            }
+        }
 
         return new ArrayList<>(results);
     }
 
     public void put(String id, TalkIdInfo info) {
         talkIdInfoCache.put(id, info);
-        talkIdDB.put(id, info);
+        localDB.put(id, info);
         setLastTalkId(id);
     }
 
@@ -183,5 +205,4 @@ public class TalkIdHandler extends Handler {
     public boolean hasTempNameForTalkId(String talkId) {
         return talkIdTempNameMap.containsKey(talkId);
     }
-
 } 

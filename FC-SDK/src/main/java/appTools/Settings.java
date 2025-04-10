@@ -1,10 +1,6 @@
 package appTools;
 
 import app.CidInfo;
-import constants.Constants;
-import crypto.*;
-import db.LocalDB;
-import fch.fchData.Cid;
 import clients.ApipClient;
 import clients.Client;
 import clients.ClientGroup;
@@ -13,18 +9,20 @@ import configure.ApiAccount;
 import configure.ApiProvider;
 import configure.Configure;
 import configure.WebServerConfig;
+import constants.Constants;
 import constants.IndicesNames;
 import constants.Strings;
+import crypto.*;
+import db.LocalDB;
 import fcData.AlgorithmId;
-import utils.IdNameUtils;
-import fch.FchUtils;
+import fcData.AutoTask;
 import fch.fchData.Block;
+import fch.fchData.Cid;
 import feip.feipData.Service;
 import feip.feipData.ServiceMask;
 import feip.feipData.serviceParams.*;
 import handlers.*;
 import nasa.NaSaRpcClient;
-
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -36,7 +34,6 @@ import server.serviceManagers.ApipManager;
 import server.serviceManagers.DiskManager;
 import server.serviceManagers.SwapHallManager;
 import server.serviceManagers.TalkManager;
-import handlers.NonceHandler;
 import utils.*;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
@@ -46,14 +43,13 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static appTools.Inputer.askIfYes;
 import static configure.Configure.*;
-import static feip.feipData.Service.ServiceType.*;
-import static server.ApipApiNames.VERSION_1;
 import static constants.Constants.UserDir;
 import static constants.Strings.*;
+import static feip.feipData.Service.ServiceType.*;
+import static server.ApipApiNames.VERSION_1;
 
 public class Settings {
     public final static Logger log = LoggerFactory.getLogger(Settings.class);
@@ -68,12 +64,10 @@ public class Settings {
     public static final String WINDOW_TIME = "windowTime";
     public static final String DEALER_MIN_BALANCE = "dealerMinBalance";
     public static final String MIN_DISTRIBUTE_BALANCE = "minDistributeBalance";
-    public static final String  SHARE_API = "shareApi";
-    public static final String  LOCAL_DATA_PATH = "localDataPath";
-    public static final String SCAN_MEMPOOL = "scanMempool";
     public static final String AVATAR_ELEMENTS_PATH = "avatarElementsPath";
     public static final String AVATAR_PNG_PATH = "avatarPngPath";
     public static final Long DEFAULT_WINDOW_TIME = 300000L;
+    public static final String DISK_DATA_PATH = Constants.UserHome+".diskData";
 
     public static Map<Service.ServiceType,List<FreeApi>> freeApiListMap;
     private static String fileName;
@@ -85,7 +79,6 @@ public class Settings {
     private transient List<ApiAccount> paidAccountList;
     private transient byte[] symKey;
     private transient Map<Handler.HandlerType, Handler<?>> handlers;
-    private transient AtomicBoolean isRunning = new AtomicBoolean(false);
 
     private Map<Service.ServiceType, ClientGroup> clientGroups;
     private Service.ServiceType serverType;
@@ -98,22 +91,19 @@ public class Settings {
 //    private String master;
     private String myPubKey;
     private String myPriKeyCipher;
-//    private Map<String,KeyInfo> watchFidMap;
-    private String listenPath;
+//    private String listenPath;
 
     //Settings
     private Map<String,Object> settingMap;
 
     private Object[] modules;
-    private Object[] runningModules;
+//    private Object[] runningModules;
     private List<String> apiList;
     private String dbDir;
     private LocalDB.DbType localDBType;
+    private List<AutoTask> autoTaskList;
 
-    public Settings() {
-    }
-
-    public Settings(Configure configure, String clientName) {
+    public Settings(Configure configure, String clientName, Object[] modules, Map<String, Object> settingMap, List<AutoTask> autoTaskList) {
         if(configure!=null) {
             this.config = configure;
             this.br = configure.getBr();
@@ -121,6 +111,26 @@ public class Settings {
             clientGroups = new HashMap<>();
             checkDbDir(null);
             this.clientName = clientName;
+            this.modules = modules;
+            this.autoTaskList = autoTaskList;
+            this.settingMap = settingMap;
+            checkSetting(br);
+            addShutdownHook();
+        }
+    }
+    public Settings(Configure configure, Service.ServiceType serverType, Map<String,Object> settingMap, Object[] modules, List<AutoTask> autoTaskList) {
+        if(configure!=null) {
+            this.config = configure;
+            this.br =configure.getBr();
+            freeApiListMap = configure.getFreeApiListMap();
+            clientGroups = new HashMap<>();
+            this.settingMap = settingMap;
+            this.serverType = serverType;
+            this.modules = modules;
+            this.autoTaskList = autoTaskList;
+            checkSetting(br);
+            checkDbDir(settingMap);
+            addShutdownHook();
         }
     }
 
@@ -131,30 +141,11 @@ public class Settings {
             freeApiListMap = configure.getFreeApiListMap();
             clientGroups = new HashMap<>();
             this.settingMap = settingMap;
-            if(settingMap.get(LISTEN_PATH)!=null)
-                this.listenPath = (String) settingMap.get(LISTEN_PATH);
             this.modules = modules;
             checkDbDir(settingMap);
+            addShutdownHook();
         }
     }
-
-    public Settings(Configure configure, Service.ServiceType serverType, Map<String,Object> settingMap, Object[] modules, Handler.HandlerType[] runningModules) {
-        if(configure!=null) {
-            this.config = configure;
-            this.br =configure.getBr();
-            freeApiListMap = configure.getFreeApiListMap();
-            clientGroups = new HashMap<>();
-            this.settingMap = settingMap;
-            this.serverType = serverType;
-            this.modules = modules;
-            this.runningModules = runningModules;
-            if(settingMap.get(LISTEN_PATH)!=null)
-                this.listenPath = (String) settingMap.get(LISTEN_PATH);
-            checkDbDir(settingMap);
-        }
-    }
-
-
 
     @Nullable
     public static Settings loadSettingsForServer(String configFileName) {
@@ -308,24 +299,25 @@ public class Settings {
 
         br = config.getBr();
 
-        if(sid==null)checkSetting(br);
+//        if(sid==null)checkSetting(br);
 
         mainFid = config.getServiceDealer(sid,symKey);
         myPriKeyCipher = config.getMainCidInfoMap().get(mainFid).getPriKeyCipher();
 
-        initModels(mainFid, sid);
+        initModels();
 
         if(service==null){
             System.out.println("Failed to load service information");
             return;
         }
-
         Object client = getClient(REDIS);
         if(client!=null) jedisPool = (JedisPool) client;
 
         setMyKeys(symKey, config);
 
         saveServerSettings(service.getId());
+
+        runAutoTasks();
 
         Configure.saveConfig();
     }
@@ -380,9 +372,9 @@ public class Settings {
 
         System.out.println("Initiating mute server settings...");
 
-        initModels(mainFid, sid);
+        initModels();
         saveServerSettings(serverName);
-
+        runAutoTasks();
         Configure.saveConfig();
     }
 
@@ -400,13 +392,14 @@ public class Settings {
         if(bestHeightMap==null)
             bestHeightMap=new HashMap<>();
 
-        initModels(mainFid, sid);
+        initModels();
 
         clientDataFileName = FileUtils.makeFileName(mainFid,clientName,DATA,DOT_JSON);
 
         setMyKeys(symKey, config);
 
         saveClientSettings(mainFid,clientName);
+        runAutoTasks();
         Configure.saveConfig();
     }
 
@@ -420,7 +413,7 @@ public class Settings {
         this.br= br;
         freeApiListMap = config.getFreeApiListMap();
 
-        initModels(mainFid, sid);
+        initModels();
 
         Configure.saveConfig();
 
@@ -433,43 +426,72 @@ public class Settings {
 
     public void close() {
         try {
-            if(isRunning !=null) isRunning.set(false);
-            br.close();
-            BytesUtils.clearByteArray(symKey);
+            // Close all handlers first to ensure LevelDB instances are properly closed
+            if (handlers != null) {
+                log.info("Closing {} handlers...", handlers.size());
+                for (Handler<?> handler : handlers.values()) {
+                    if (handler != null) {
+                        try {
+                            log.debug("Closing handler: {}", handler.getHandlerType());
+                            handler.close();
+                        } catch (Exception e) {
+                            log.error("Error closing handler {}: {}", handler.getHandlerType(), e.getMessage(), e);
+                        }
+                    }
+                }
+                handlers.clear();
+            }
+            
+            // Stop all auto tasks
+            if (autoTaskList != null && !autoTaskList.isEmpty()) {
+                log.info("Stopping {} auto tasks...", autoTaskList.size());
+                AutoTask.stopAllTasks();
+            }
             
             // Close all clients in all groups
-            for (ClientGroup group : clientGroups.values()) {
-                for (Object client : group.getClientMap().values()) {
-                    switch (group.getGroupType()) {
-                        case REDIS -> {
-                            if(client instanceof JedisPool jedisPool){
-                                jedisPool.close();
+            if (clientGroups != null) {
+                log.info("Closing client groups...");
+                for (ClientGroup group : clientGroups.values()) {
+                    for (Object client : group.getClientMap().values()) {
+                        try {
+                            switch (group.getGroupType()) {
+                                case REDIS -> {
+                                    if(client instanceof JedisPool jedisPool){
+                                        log.debug("Closing Redis pool");
+                                        jedisPool.close();
+                                    }
+                                }
+                                case ES -> {
+                                    ApiAccount account = getApiAccount(valueOf(group.getGroupType().name()));
+                                    if (account != null) {
+                                        log.debug("Closing ES client");
+                                        account.closeEs();
+                                    }
+                                }
+                                case NASA_RPC -> {
+                                    // Nothing to close
+                                }
+                                default -> {
+                                    if(client instanceof Client client1){
+                                        log.debug("Closing client: {}", client1.getClass().getSimpleName());
+                                        client1.close();
+                                    }
+                                }
                             }
-                        }
-                        case ES -> {
-                            ApiAccount account = getApiAccount(valueOf(group.getGroupType().name()));
-                            if (account != null) account.closeEs();
-                        }
-                        case NASA_RPC -> {
-                        }
-                        default -> {
-                            if(client instanceof Client client1){
-                                client1.close();
-                            }
-//                            throw new IllegalStateException("Unexpected value: " + group.getGroupType());
+                        } catch (Exception e) {
+                            log.error("Error closing client in group {}: {}", group.getGroupType(), e.getMessage(), e);
                         }
                     }
                 }
             }
-
-            if(runningModules != null)
-                for(Object module: runningModules){
-                    if(module instanceof Handler<?> handler){
-                        handler.close();
-                    }
-                }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            
+            // Clear sensitive data
+            BytesUtils.clearByteArray(symKey);
+            
+            log.info("Settings closed successfully");
+        } catch (Exception e) {
+            log.error("Error during settings cleanup: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to close settings", e);
         }
     }
 
@@ -651,7 +673,7 @@ public class Settings {
         if(clientGroups==null) clientGroups = new HashMap<>();
         group = clientGroups.get(groupType);
         if(group!=null){
-            group.connectAllClients(config, this,symKey);
+            group.connectAllClients(config, this,symKey, br);
             return;
         }
 
@@ -854,22 +876,61 @@ public class Settings {
 
     public void setting(BufferedReader br, @Nullable Service.ServiceType serviceTypeOnlyForServer) {
         System.out.println("Setting...");
-        while (true) {
-            Menu menu = new Menu("Setting",this::closeMenu);
-            menu.setTitle("Settings");
-            ApipClient apipClient = (ApipClient) getClient(APIP);
-            menu.add("Reset password", () -> resetPassword(serviceTypeOnlyForServer, jedisPool));
-            menu.add("Add API provider", () -> config.addApiProviderAndConnect(symKey, null, apipClient));
-            menu.add("Add API account", () -> config.addApiAccount(null, symKey, apipClient));
-            menu.add("Update API provider", () -> config.updateApiProvider(apipClient));
-            menu.add("Update API account", () -> config.updateApiAccount(config.chooseApiProviderOrAdd(config.getApiProviderMap(), apipClient), symKey, apipClient));
-            menu.add("Delete API provider", () -> config.deleteApiProvider(symKey, apipClient));
-            menu.add("Delete API account", () -> config.deleteApiAccount(symKey, apipClient));
-            menu.add("Reset Default APIs", () -> resetApi(symKey, apipClient));
-            menu.add("Check settings", () -> checkSetting(br));
-            menu.add("Remove Me", () -> removeMe(br));
+        Menu menu = new Menu("Setting",this::closeMenu);
+        menu.setTitle("Settings");
+        ApipClient apipClient = (ApipClient) getClient(APIP);
+        menu.add("Reset password", () -> resetPassword(serviceTypeOnlyForServer, jedisPool));
+        menu.add("Add API provider", () -> config.addApiProviderAndConnect(symKey, null, apipClient));
+        menu.add("Add API account", () -> config.addApiAccount(null, symKey, apipClient));
+        menu.add("Update API provider", () -> config.updateApiProvider(apipClient));
+        menu.add("Update API account", () -> config.updateApiAccount(config.chooseApiProviderOrAdd(config.getApiProviderMap(), apipClient), symKey, apipClient));
+        menu.add("Delete API provider", () -> config.deleteApiProvider(symKey, apipClient));
+        menu.add("Delete API account", () -> config.deleteApiAccount(symKey, apipClient));
+        menu.add("Reset default APIs", () -> resetApi(symKey, apipClient));
+        menu.add("Check settings", () -> checkSetting(br));
+        menu.add("Show my priKey", () -> dumpPriKey(br));
+        menu.add("Remove me", () -> removeMe(br));
 
-            menu.showAndSelect(br);
+        menu.showAndSelect(br);
+    }
+
+    private void dumpPriKey(BufferedReader br) {
+        if(askIfYes(br,"Never leak your priKey. Continue dumping priKey?")){
+            if(askIfYes(br,"Do you ensure you circumstance is safe?")){
+                byte[] priKey = Decryptor.decryptPriKey(getMyPriKeyCipher(), symKey);
+                if (priKey == null) {
+                    System.out.println("Failed to decrypt your priKey.");
+                    return;
+                }
+                String hex = Hex.toHex(priKey);
+                String base58 = KeyTools.priKey32To38WifCompressed(hex);
+                if(!askIfYes(br,"Encrypt priKey with random password?")) {
+                    System.out.println("PriKey cipher of "+mainFid+":");
+                    System.out.println("Hex:\n" + hex);
+                    QRCodeUtils.generateQRCode(hex);
+
+                    System.out.println("Base58check:\n" + base58);
+                    QRCodeUtils.generateQRCode(base58);
+                    Menu.anyKeyToContinue(br);
+                }else{
+                    System.out.println("PriKey of "+mainFid+":");
+                    byte[] random = BytesUtils.getRandomBytes(6);
+                    CryptoDataByte cryptoDataByte = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7).encryptByPassword(priKey, Base58.encode(random).toCharArray());
+                    if(cryptoDataByte.getCode()==0 && cryptoDataByte.getCipher()!=null) {
+                        String cipher = cryptoDataByte.toNiceJson();
+                        String password = Base58.encode(random);
+                        System.out.println("PriKey Cipher:\n"+cipher);
+                        QRCodeUtils.generateQRCode(cipher);
+                        System.out.println("password: "+password);
+                        QRCodeUtils.generateQRCode(password);
+                        System.out.println("""
+                                IMPORTANT:\s
+                                \t1) Both cipher and password are required to recover your priKey!!!
+                                \t2) The password is still weak for professional hacking.\s""");
+                        Menu.anyKeyToContinue(br);
+                    }
+                }
+            }
         }
     }
 
@@ -932,56 +993,62 @@ public class Settings {
 
         System.out.println("User is deleted successfully.");
     }
-//
-//    public void watchingFids(ApipClient apipClient, BufferedReader br) {
-//        while(true){
-//            String op = Inputer.chooseOne(new String[]{"List", "Add", "Delete", "Delete All"}, null, "Operation:", br);
-//            if(op == null) return;
-//            switch(op) {
-//            case "List" -> {
-//                List<List<Object>> valueListList = new ArrayList<>();
-//                for(String fid : this.getWatchFidMap().keySet()) {
-//                    valueListList.add(List.of(fid));
-//                }
-//                Shower.showDataTable("Watching FIDs", new String[]{"FID"}, new int[]{24}, valueListList, 0, true);
-//                Menu.anyKeyToContinue(br);
-//            }
-//            case "Add" -> {
-//                String[] fids = Inputer.inputFidArray(br, "Input the FIDs you want to watch, enter to exit:", 0);
-//                Map<String, fch.fchData.Cid> fidMap = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fids);
-//                if(fidMap == null || fidMap.isEmpty()) {
-//                    System.out.println("No FIDs found.");
-//                    return;
-//                }
-//                for(String fid : fidMap.keySet()) {
-//                    KeyInfo keyInfo = new KeyInfo(fidMap.get(fid));
-//                    keyInfo.setWatchOnly(true);
-//                    this.getWatchFidMap().put(fid, keyInfo);
-//                    System.out.print("Watching FID: "+fid+" is added.");
-//                    if(this.getWatchFidMap().get(fid) == null) {
-//                        System.out.println(" Without public key.");
-//                    }else System.out.println();
-//                }
-//                Menu.anyKeyToContinue(br);
-//            }
-//            case "Delete" -> {
-//                String fid = Inputer.chooseOneKeyFromMap(this.getWatchFidMap(), false, null, "Choose one to delete:", br);
-//                if(fid != null && askIfYes(br, "Delete the watching FID: "+fid+"?")) {
-//                    this.getWatchFidMap().remove(fid);
-//                    System.out.println(fid+" is deleted.");
-//                    Menu.anyKeyToContinue(br);
-//                }
-//            }
-//            case "Delete All" -> {
-//                    if(askIfYes(br, "Delete all watching FIDs?")) {
-//                        this.getWatchFidMap().clear();
-//                        System.out.println("All watching FIDs are deleted.");
-//                        Menu.anyKeyToContinue(br);
-//                    }
-//                }
-//            }
-//        }
-//    }
+
+
+    /**
+     * Adds a shutdown hook to ensure resources are cleaned up even in unexpected shutdowns.
+     * This includes stopping auto tasks, closing clients, and clearing sensitive data.
+     */
+    private void addShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                // Stop all auto tasks
+                if (this.autoTaskList != null && !this.autoTaskList.isEmpty()) {
+                    AutoTask.stopAllTasks();
+                }
+
+                // Close all clients in all groups
+                if (clientGroups != null) {
+                    for (ClientGroup group : clientGroups.values()) {
+                        for (Object client : group.getClientMap().values()) {
+                            try {
+                                switch (group.getGroupType()) {
+                                    case REDIS -> {
+                                        if (client instanceof JedisPool jedisPool) {
+                                            jedisPool.close();
+                                        }
+                                    }
+                                    case ES -> {
+                                        ApiAccount account = getApiAccount(valueOf(group.getGroupType().name()));
+                                        if (account != null) account.closeEs();
+                                    }
+                                    case NASA_RPC -> {
+                                        // Nothing to close
+                                    }
+                                    default -> {
+                                        if (client instanceof Client client1) {
+                                            client1.close();
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.error("Error closing client in shutdown hook: {}", e.getMessage());
+                            }
+                        }
+                    }
+                }
+
+                // Clear sensitive data
+                if (symKey != null) {
+                    BytesUtils.clearByteArray(symKey);
+                }
+
+                log.info("Shutdown hook completed");
+            } catch (Exception e) {
+                log.error("Error in shutdown hook: {}", e.getMessage());
+            }
+        }));
+    }
 
     public byte[] resetPassword(@Nullable Service.ServiceType serviceType, JedisPool jedisPoolOnlyForServer){
         System.out.println("Reset password...");
@@ -1060,54 +1127,27 @@ public class Settings {
         byte[] data = new Decryptor().decryptJsonBySymKey(oldCipher, oldSymKey).getData();
         return new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7).encryptBySymKey(data,newSymKey).toJson();
     }
-//    public ApiAccount checkIfMainFidIsApiAccountUser(byte[] symKey, Configure config, BufferedReader br, ApiAccount apiAccount, String userFid) {
-//        if(mainFid==null||apiAccount==null)return apiAccount;
-//
-//        String mainFidPriKeyCipher;
-//        if(mainFid.equals(apiAccount.getUserId())) {
-//            mainFidPriKeyCipher = apiAccount.getUserPriKeyCipher();
-//            config.getMainCidInfoMap().put(mainFid,mainFidPriKeyCipher);
-//            if(paidAccountList ==null) paidAccountList = new ArrayList<>();
-//            paidAccountList.add(apiAccount);
-//        }else{
-//            if(askIfYes(br,"Your service dealer "+mainFid+" is not the user of the API account "+apiAccount.getUserId()+". \nReset API account?")){
-//                while(true) {
-//                    apiAccount = config.getApiAccount(symKey, userFid, APIP,null);
-//                    if(mainFid.equals(apiAccount.getUserId())){
-//                        if(paidAccountList ==null) paidAccountList = new ArrayList<>();
-//                        paidAccountList.add(apiAccount);
-//                        String apiProvideType = config.getApiProviderMap().get(apiAccount.getProviderId()).getType().name();
-////                        aliasAccountIdMap.put(apiProvideType,apiAccount.getId());
-//                        ClientGroup clientGroup = clientGroups.get(Service.ServiceType.valueOf(apiProvideType));
-//                        clientGroup.addClient(apiAccount.getId(),apiAccount.getClient());
-//                        break;
-//                    }
-//                    System.out.println("The API user is still not your service account. Reset API account again.");
-//                }
-//            }else {
-//                config.addUser(mainFid, symKey);
-//            }
-//        }
-//
-//        return apiAccount;
-//    }
 
     public void resetApi(byte[] symKey, ApipClient apipClient) {
         System.out.println("Reset default API service...");
         List<Service.ServiceType> requiredBasicServices = new ArrayList<>();
         for(Object model: modules){
-            if(model instanceof Service.ServiceType type){
+            if(model instanceof String str){
+                try{
+                    requiredBasicServices.add(Service.ServiceType.fromString(str));
+                }catch (Exception ignore){}
+            }else if(model instanceof Service.ServiceType type){
                 requiredBasicServices.add(type);
             }
         }
         Service.ServiceType type = Inputer.chooseOne(requiredBasicServices.toArray(new Service.ServiceType[0]),null,"Choose the Service:",br);
 
         ApiProvider apiProvider = config.chooseApiProviderOrAdd(config.getApiProviderMap(), type, apipClient);
+        if(apiProvider==null)return;
         ApiAccount apiAccount = config.findAccountForTheProvider(apiProvider, mainFid, symKey, apipClient);
         if (apiAccount != null) {
-            Object client = apiAccount.connectApi(config.getApiProviderMap().get(apiAccount.getProviderId()), symKey, br, null, config.getMainCidInfoMap());
+            Object client = apiAccount.getClient();//connectApi(config.getApiProviderMap().get(apiAccount.getProviderId()), symKey, br, null, config.getMainCidInfoMap());
             if (client != null) {
-                Configure.saveConfig();
                 System.out.println("Done.");
             } else System.out.println("Failed to connect the apiAccount: " + apiAccount.getApiUrl());
         } else {
@@ -1115,7 +1155,14 @@ public class Settings {
             return;
         }
         addAccountToGroup(type,apiAccount);
-//        freshAliasMaps(type, apiAccount);
+        saveConfig();
+        saveSettings();
+    }
+
+    private void saveSettings() {
+        if(this.sid!=null)saveServerSettings(sid);
+        else if(this.mainFid!=null)saveClientSettings(mainFid,clientName);
+        else saveSimpleSettings(clientName);
     }
 
 //    private void freshAliasMaps(String alias, ApiAccount apiAccount) {
@@ -1127,7 +1174,23 @@ public class Settings {
     private void addAccountToGroup(Service.ServiceType type, ApiAccount apiAccount){
         ClientGroup clientGroup = clientGroups.get(type);
         if(clientGroup==null)clientGroup= new ClientGroup(type);
-        clientGroup.addClient(apiAccount.getId(),apiAccount.getClient());
+        ClientGroup.GroupStrategy strategy = clientGroup.getStrategy();
+        switch (strategy) {
+            case USE_FIRST:
+                clientGroup.addToFirstClient(apiAccount.getId(),apiAccount.getClient());
+                break;
+            case USE_ANY_VALID:
+
+            case USE_ALL:
+
+            case USE_ONE_RANDOM:
+
+            case USE_ONE_ROUND_ROBIN:
+
+            default:
+                clientGroup.addClient(apiAccount.getId(),apiAccount.getClient());
+                break;
+        }
     }
 
     public String getSid() {
@@ -1198,8 +1261,12 @@ public class Settings {
                 settingMap.put(key,Inputer.inputFloat(br, key,(Float) settingMap.get(key)));
             }else if(valueClass.equals(boolean.class)||valueClass.equals(Boolean.class)){
                 settingMap.put(key,Inputer.inputBoolean(br, key,(Boolean) settingMap.get(key)));
-            } else {
-                throw new IllegalStateException("Unexpected value class: " + valueClass);
+            }
+        }
+
+        if(autoTaskList!=null){
+            for(AutoTask autoTask : autoTaskList){
+                autoTask.checkTrigger(br);
             }
         }
     }
@@ -1254,30 +1321,6 @@ public class Settings {
     public static void setFreeApiListMap(Map<Service.ServiceType, List<FreeApi>> freeApiListMap) {
         Settings.freeApiListMap = freeApiListMap;
     }
-//
-//    public Map<String, String> getAliasAccountIdMap() {
-//        return aliasAccountIdMap;
-//    }
-//
-//    public void setAliasAccountIdMap(Map<String, String> aliasAccountIdMap) {
-//        this.aliasAccountIdMap = aliasAccountIdMap;
-//    }
-//
-//    public Map<String, ApiAccount> getAliasAccountMap() {
-//        return aliasAccountMap;
-//    }
-//
-//    public void setAliasAccountMap(Map<String, ApiAccount> aliasAccountMap) {
-//        this.aliasAccountMap = aliasAccountMap;
-//    }
-//
-//    public Map<String, Object> getAliasClientMap() {
-//        return aliasClientMap;
-//    }
-//
-//    public void setAliasClientMap(Map<String, Object> aliasClientMap) {
-//        this.aliasClientMap = aliasClientMap;
-//    }
 
     public Map<String, Object> getSettingMap() {
         return settingMap;
@@ -1366,10 +1409,14 @@ public class Settings {
     }
 
 
-    public void initModulesMute(Object[] modules) {
+    public void initModulesMute() {
         if(clientGroups==null)clientGroups = new HashMap<>();
         if(handlers==null)handlers = new HashMap<>();
+        int total = modules.length;
+        System.out.println("\nThere are "+ total +" modules to be loaded.");
+        int count = 1;
         for (Object model : modules) {
+            System.out.println("Loading module "+(count++) + "/"+ total +"...");
             if (model instanceof String strModel) {
                 try {
                     // Try to parse as ServiceType
@@ -1379,7 +1426,7 @@ public class Settings {
                     // Not a ServiceType, try HandlerType
                     Handler.HandlerType handlerType = Handler.HandlerType.valueOf(strModel);
                     try {
-                        initHandler(handlerType, this.mainFid,this.getSid() );
+                        initHandler(handlerType);
                     }catch (Exception e1){
                         e1.printStackTrace();
                     }
@@ -1387,16 +1434,21 @@ public class Settings {
             } else if (model instanceof Service.ServiceType type) {
                 initClientGroupMute(type);
             } else if (model instanceof Handler.HandlerType type) {
-                initHandler(type,mainFid ,sid );
+                initHandler(type);
             }
         }
+        System.out.println("Nice! All the "+ total +" modules are loaded.\n");
     }
 
-    public void initModels(String mainFid, String sid) {
+    public void initModels() {
         if(modules==null)return;
         if(clientGroups==null)clientGroups = new HashMap<>();
         handlers = new HashMap<>();
+        int total = modules.length;
+        System.out.println("\nThere are "+ total +" modules to be loaded.");
+        int count = 1;
         for (Object model : modules) {
+            System.out.println("Load module "+(count++) + "/"+ total +"...");
             if (model instanceof String strModel) {
                 try {
                     // Try to parse as ServiceType
@@ -1410,49 +1462,25 @@ public class Settings {
                     
                     // Try to parse as HandlerType
                     Handler.HandlerType type = Handler.HandlerType.valueOf(strModel);
-                    initHandler(type, mainFid,sid );
+                    initHandler(type);
                 } catch (IllegalArgumentException e) {
                     log.warn("Unknown module type: " + strModel);
                 }
             } else if (model instanceof Service.ServiceType type) {
                 initClientGroup(type);
             } else if (model instanceof Handler.HandlerType type) {
-                initHandler(type,mainFid ,sid );
+                initHandler(type);
             }
-            if(isRunning ==null) isRunning = new AtomicBoolean(true);
         }
+        System.out.println("All the "+ total +" modules are loaded.\n");
     }
-//
-//    public void initiateHandlers() {
-//        if (requiredHandlers == null || requiredHandlers.length == 0) {
-//            return;
-//        }
-//
-//        handlers = new HashMap<>();
-//
-//        for (HandlerType type : requiredHandlers) {
-//            switch (type) {
-//                case CID -> handlers.put(type, new CidHandler(this));
-//                case CASH -> handlers.put(type, new CashHandler(this));
-//                case SESSION -> handlers.put(type, new SessionHandler(this));
-//                case MAIL -> handlers.put(type, new MailHandler(this));
-//                case CONTACT -> handlers.put(type, new ContactHandler(this));
-//                case GROUP -> handlers.put(type, new GroupHandler(this));
-//                case TEAM -> handlers.put(type, new TeamHandler(this));
-//                case HAT -> handlers.put(type, new HatHandler(this));
-//                case DISK -> handlers.put(type, new DiskHandler(this));
-//                case TALK_ID -> handlers.put(type, new TalkIdHandler(this));
-//                case TALK_UNIT -> handlers.put(type, new TalkUnitHandler(this));
-//                case ACCOUNT -> handlers.put(type, new AccountHandler(this));
-//                default -> throw new IllegalArgumentException("Unexpected handler type: " + type);
-//            }
-//        }
-//    }
 
-    public Handler<?> initHandler(Handler.HandlerType type, String mainFid, String sid) {
+
+    public Handler<?> initHandler(Handler.HandlerType type) {
         if(handlers==null)handlers = new HashMap<>();
         Handler<?> handler = handlers.get(type);
         if(handler!=null)return handler;
+
         switch (type) {
             case CID -> handlers.put(type, new CidHandler(this));
             case CASH -> handlers.put(type, new CashHandler(this));
@@ -1526,95 +1554,94 @@ public class Settings {
         this.modules = modules;
     }
 
-    public String getListenPath() {
-        return listenPath;
-    }
-
-    public void setListenPath(String listenPath) {
-        this.listenPath = listenPath;
-    }
-
     public void runAutoTasks() {
-        runAutoTasks(this.runningModules);
+        if(autoTaskList==null)return;
+        AutoTask.runAutoTask(autoTaskList, this);
     }
+//
+//    public void runAutoTasks(Object[] runningModules) {
+//        if(isRunning!=null && isRunning.get()){
+//            System.out.println("Auto tasks have been running.");
+//            return;
+//        }
+//
+//        System.out.println("Start auto tasks...");
+//
+//        Thread apipManagerThread = new Thread(() -> {
+//            if (getListenPath() == null || getListenPath().isEmpty()) {
+//                log.warn("Cannot start APIP manager thread: listenPath is not set");
+//                return;
+//            }
+//            isRunning = new AtomicBoolean(true);
+//            log.info("Started auto tasks thread by watching path: {}", getListenPath());
+//            System.out.println("Started auto tasks thread by watching path: "+getListenPath());
+//            System.out.println();
+//
+//            AccountHandler accountHandler = null;
+//            WebhookHandler webhookHandler = null;
+//            MempoolHandler mempoolHandler = null;
+//            NonceHandler nonceHandler = null;
+//            DiskHandler diskHandler = null;
+//
+//            for(Object module : runningModules){
+//                if(module instanceof Handler.HandlerType handlerType){
+//                    Handler<?> handler = getHandler(handlerType);
+//                    switch(handlerType){
+//                        case ACCOUNT -> accountHandler = (AccountHandler) handler;
+//                        case WEBHOOK -> webhookHandler = (WebhookHandler) handler;
+//                        case MEMPOOL -> mempoolHandler = (MempoolHandler) handler;
+//                        case NONCE -> nonceHandler = (NonceHandler) handler;
+//                        case DISK-> diskHandler = (DiskHandler) handler;
+//                        default -> {
+//                            continue;
+//                        }
+//                    }
+//                    System.out.println(handlerType + " handler is running.");
+//                }else if(module instanceof Service.ServiceType serviceType){
+//                    switch (serviceType) {
+//                        default -> {}
+//                    }
+//                }
+//            }
+//
+//            while(true) {
+//                try{
+//                    FchUtils.waitForChangeInDirectory(getListenPath(), isRunning);
+//
+//                    for (Object module : runningModules) {
+//                        if (module instanceof Handler.HandlerType handlerType) {
+//                            switch (handlerType) {
+//                                case ACCOUNT -> {if(accountHandler!=null) accountHandler.updateAll();}
+//                                case WEBHOOK -> {if(webhookHandler!=null) webhookHandler.pushWebhookData();}
+//                                case MEMPOOL -> {if(mempoolHandler!=null) mempoolHandler.checkMempool();}
+//                                case NONCE -> {if(nonceHandler!=null) nonceHandler.removeTimeOutNonce();}
+//                                case DISK -> {if (diskHandler!=null) diskHandler.deleteExpiredFiles();}
+//                                default -> {
+//                                    log.warn("Cannot start thread: invalid handler type:{}",handlerType);
+//                                    return;
+//                                }
+//                            }
+//                        } else if (module instanceof Service.ServiceType serviceType) {
+//                            switch (serviceType) {
+//                                default -> {
+//                                    log.warn("Cannot start thread: invalid handler type:{}",serviceType);
+//                                    return;
+//                                }
+//                            }
+//                        }
+//                    }
+//                }catch(Exception e){
+//                    log.error("Error in auto tasks thread: {}", e.getMessage());
+//                    e.printStackTrace();
+//                }
+//            }
+//        });
+//        apipManagerThread.setDaemon(true);
+//        apipManagerThread.start();
+//        System.out.println("Auto tasks thread is created.\n");
+//    }
 
-    public void runAutoTasks(Object[] runningModules) {
-        if(isRunning!=null && isRunning.get()){
-            System.out.println("Auto tasks have been running.");
-            return;
-        }
 
-        System.out.println("Start auto tasks...");
-
-        Thread apipManagerThread = new Thread(() -> {
-            if (getListenPath() == null || getListenPath().isEmpty()) {
-                log.warn("Cannot start APIP manager thread: listenPath is not set");
-                return;
-            }
-            isRunning = new AtomicBoolean(true);
-            log.info("Started auto tasks thread by watching path: {}", getListenPath());
-            System.out.println("Started auto tasks thread by watching path: "+getListenPath());
-            System.out.println();
-
-            AccountHandler accountHandler = null;
-            WebhookHandler webhookHandler = null;
-            MempoolHandler mempoolHandler = null;
-            NonceHandler nonceHandler = null;
-
-            for(Object module : runningModules){
-                if(module instanceof Handler.HandlerType handlerType){
-                    Handler<?> handler = getHandler(handlerType);
-                    handler.getIsRunning().set(true);
-                    switch(handlerType){
-                        case ACCOUNT -> accountHandler = (AccountHandler) handler;
-                        case WEBHOOK -> webhookHandler = (WebhookHandler) handler;
-                        case MEMPOOL -> mempoolHandler = (MempoolHandler) handler;
-                        case NONCE -> nonceHandler = (NonceHandler) handler;
-                        default -> throw new IllegalArgumentException("Unexpected value: " + handlerType);
-                    }
-                    System.out.println(handlerType + " handler is running.");
-                }else if(module instanceof Service.ServiceType serviceType){
-                    switch(serviceType){
-                        default -> throw new IllegalArgumentException("Unexpected value: " + serviceType);
-                    }
-                }
-            }
-
-            while(true) {
-                try{
-                    FchUtils.waitForChangeInDirectory(getListenPath(), isRunning);
-
-                    for (Object module : runningModules) {
-                        if (module instanceof Handler.HandlerType handlerType) {
-                            switch (handlerType) {
-                                case ACCOUNT -> {if(accountHandler!=null) accountHandler.updateAll();}
-                                case WEBHOOK -> {if(webhookHandler!=null) webhookHandler.pushWebhookData();}
-                                case MEMPOOL -> {if(mempoolHandler!=null) mempoolHandler.checkMempool();}
-                                case NONCE -> {if(nonceHandler!=null) nonceHandler.removeTimeOutNonce();}
-                                default -> {
-                                    log.warn("Cannot start thread: invalid handler type:{}",handlerType);
-                                    return;
-                                }
-                            }
-                        } else if (module instanceof Service.ServiceType serviceType) {
-                            switch (serviceType) {
-                                default -> {
-                                    log.warn("Cannot start thread: invalid handler type:{}",serviceType);
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                }catch(Exception e){
-                    log.error("Error in auto tasks thread: {}", e.getMessage());
-                    e.printStackTrace();
-                }
-            }
-        });
-        apipManagerThread.setDaemon(true);
-        apipManagerThread.start();
-        System.out.println("Auto tasks thread is created.\n");
-    }
 
     /**
      * Initialize client group for web server without user interaction
@@ -1634,7 +1661,7 @@ public class Settings {
             return null;
         }
 
-        group.connectAllClients(config, this, symKey);
+        group.connectAllClients(config, this, symKey, br);
 
         if(type == REDIS) {
             jedisPool = (JedisPool) group.getClient();
@@ -1658,14 +1685,6 @@ public class Settings {
         this.localDBType = localDBType;
     }
 
-    public AtomicBoolean getIsRunning() {
-        return isRunning;
-    }
-
-    public void setIsRunning(AtomicBoolean isRunning) {
-        this.isRunning = isRunning;
-    }
-
     public String getClientName() {
         return clientName;
     }
@@ -1674,11 +1693,11 @@ public class Settings {
         this.clientName = clientName;
     }
 
-    public Object[] getRunningModules() {
-        return runningModules;
+    public List<AutoTask> getAutoTaskList() {
+        return autoTaskList;
     }
 
-    public void setRunningModules(Object[] runningModules) {
-        this.runningModules = runningModules;
+    public void setAutoTaskList(List<AutoTask> autoTaskList) {
+        this.autoTaskList = autoTaskList;
     }
 }

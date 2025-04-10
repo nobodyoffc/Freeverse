@@ -7,11 +7,11 @@ import java.util.*;
 
 import app.CidInfo;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import fcData.AutoTask;
 import fch.fchData.Cid;
 import clients.ApipClient;
 import configure.Configure;
 import feip.feipData.Service;
-import handlers.Handler;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +21,7 @@ public class Starter {
 
 
     public static Settings startClient(String clientName,
-                                       Map<String, Object> settingMap, BufferedReader br, Object[] modules) {
+                                       Map<String, Object> settingMap, BufferedReader br, Object[] modules, List<AutoTask> autoTaskList) {
         // Load config info from the file of config.json
 
         Configure.loadConfig(br);
@@ -34,14 +34,8 @@ public class Starter {
 
         settings = Settings.loadSettings(fid, clientName);
 
-        if(settings == null) {
-            settings = new Settings(configure,clientName);
-            settings.setModules(modules);
-            if(settingMap != null) {
-                settings.setSettingMap(settingMap);
-                settings.checkSetting(br);
-            }
-        }
+        if(settings == null)
+            settings = new Settings(configure,clientName, modules, settingMap, autoTaskList);
 
         // Initialize clients and handlers
         settings.initiateClient(fid, clientName, symKey, configure, br);
@@ -60,12 +54,11 @@ public class Starter {
             }
         }
         long bestHeight = settings.getBestHeight();//new Wallet(apipClient).getBestHeight();
-
         if(apipClient!=null) {
             Cid cid = settings.checkFidInfo(apipClient, br);
             
             if(cid!=null){
-            String userPriKeyCipher = configure.getMainCidInfoMap().get(fid).getPriKeyCipher();
+                String userPriKeyCipher = configure.getMainCidInfoMap().get(fid).getPriKeyCipher();
                 CidInfo cidInfo = CidInfo.fromCid(cid, userPriKeyCipher);
                 settings.getConfig().getMainCidInfoMap().put(cidInfo.getId(), cidInfo);
                 Configure.saveConfig();
@@ -82,12 +75,13 @@ public class Starter {
                 }
             }
         }
+
         return settings;
     }
 
 
     public static Settings startTool(String toolName,
-                                       Map<String, Object> settingMap, BufferedReader br, Object[] modules) {
+                                     Map<String, Object> settingMap, BufferedReader br, Object[] modules, List<AutoTask> autoTaskList) {
         Configure.loadConfig(br);
         Configure configure = Configure.checkPassword(br);
         if(configure == null) return null;
@@ -95,19 +89,15 @@ public class Starter {
 
         Settings settings = Settings.loadSettings(null, toolName);
 
-        if(settings == null) {
-            settings = new Settings(configure,toolName);
-            settings.setModules(modules);
-            if(settingMap != null) settings.setSettingMap(settingMap);
-            settings.checkSetting(br);
-        }
+        if(settings == null)
+            settings = new Settings(configure,toolName, modules, settingMap, autoTaskList);
 
         settings.initiateTool(toolName, symKey, configure, br);
         return settings;
     }
 
     public static Settings startServer(Service.ServiceType serverType,
-                                       Map<String, Object> settingMap, List<String> apiList, Object[] modules, Handler.HandlerType[] runningHandlers, BufferedReader br) {
+                                       Map<String, Object> settingMap, List<String> apiList, Object[] modules, BufferedReader br, List<AutoTask> autoTaskList) {
         // Load config info from the file of config.json
         Configure.loadConfig(br);
         Configure configure = Configure.checkPassword(br);
@@ -119,8 +109,7 @@ public class Starter {
             Settings settings =null;
             if(sid!=null)settings = Settings.loadSettings(null, sid);
             if (settings == null) {
-                settings = new Settings(configure, serverType, settingMap, modules, runningHandlers);
-//                settings.checkSetting(br);
+                settings = new Settings(configure, serverType, settingMap, modules, autoTaskList);
             }
 
             settings.initiateServer(sid, symKey, configure,apiList);
@@ -130,7 +119,7 @@ public class Starter {
             System.out.println("Try again.");
         }
     }
-    public static Settings startMuteServer(String serverName, Map<String,Object> settingMap, BufferedReader br, Object[] modules) {
+    public static Settings startMuteServer(String serverName, Map<String,Object> settingMap, BufferedReader br, Object[] modules, List<AutoTask> autoTaskList) {
         Configure.loadConfig(br);
 
         Configure configure = Configure.checkPassword(br);
@@ -139,7 +128,7 @@ public class Starter {
             //Load the local settings from the file of localSettings.json
         Settings settings = Settings.loadSettings(null, serverName);
 
-        if (settings == null) settings = new Settings(configure, null, settingMap, modules, null);
+        if (settings == null) settings = new Settings(configure, null, settingMap, modules, autoTaskList);
         //Check necessary APIs and set them if anyone can't be connected.
         settings.initiateMuteServer(serverName, symKey, configure);
         return settings;

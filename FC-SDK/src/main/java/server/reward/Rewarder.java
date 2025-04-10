@@ -8,13 +8,13 @@ import feip.feipData.Feip;
 import feip.feipData.serviceParams.Params;
 import clients.ApipClient;
 import apip.apipData.Sort;
-import fch.FchUtils;
 import fch.fchData.*;
 import fch.Inputer;
 import appTools.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import configure.ApiAccount;
 import org.bitcoinj.fch.FchMainNetwork;
+import utils.FchUtils;
 import utils.JsonUtils;
 import utils.NumberUtils;
 import nasa.NaSaRpcClient;
@@ -116,9 +116,9 @@ public class Rewarder {
 
         long total = Cash.sumCashValue(cashList);
 
-        log.debug("Ready to reward "+ FchUtils.satoshiToCoin(total)+" F from "+cashList.get(0).getOwner()+"...");
+        log.debug("Ready to reward "+ utils.FchUtils.satoshiToCoin(total)+" F from "+cashList.get(0).getOwner()+"...");
         double sumApiMinPaymentDouble = sumApiMinPayment(chargedAccountList);
-        long sumApiMinPayment = FchUtils.coinToSatoshi(sumApiMinPaymentDouble);
+        long sumApiMinPayment = utils.FchUtils.coinToSatoshi(sumApiMinPaymentDouble);
 
         total -= sumApiMinPayment;
         if (isNoMoreThanZero(total)) return null;
@@ -211,7 +211,7 @@ public class Rewarder {
                 String fid = sendTo.getFid();
                 double amount = sendTo.getAmount();
                 if (amount < MinPayValue) {
-                    addToPending(fid, FchUtils.coinToSatoshi(amount), jedis);
+                    addToPending(fid, utils.FchUtils.coinToSatoshi(amount), jedis);
                     iterator.remove();
                 }
             }
@@ -220,7 +220,7 @@ public class Rewarder {
     private void addQualifiedPendingToPay(Map<String, SendTo> sendToMap) {
         if(pendingMap==null || pendingMap.isEmpty())return;
         for(String key: pendingMap.keySet()){
-            double amount = FchUtils.satoshiToCoin(pendingMap.get(key));
+            double amount = utils.FchUtils.satoshiToCoin(pendingMap.get(key));
             SendTo sendTo = new SendTo();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
@@ -281,7 +281,7 @@ public class Rewarder {
             if(apiAccount.getPayments()==null)continue;
             for(String key:apiAccount.getPayments().keySet()){
                 double paid = apiAccount.getPayments().get(key);
-                apiCost += FchUtils.coinToSatoshi(paid);
+                apiCost += utils.FchUtils.coinToSatoshi(paid);
             }
         }
         return apiCost;
@@ -338,7 +338,7 @@ public class Rewarder {
             SendTo sendTo = new SendTo();
             String fid = payDetail.getFid();
             sendTo.setFid(fid);
-            double amount = FchUtils.satoshiToCoin(payDetail.getAmount());
+            double amount = utils.FchUtils.satoshiToCoin(payDetail.getAmount());
             if(sendToMap.get(fid)!=null){
                 amount = amount+ sendToMap.get(fid).getAmount();
                 sendTo.setAmount(NumberUtils.roundDouble8(amount));
@@ -465,11 +465,11 @@ public class Rewarder {
             if(amount+costSum+paidSum > income){
                 if(costSum+paidSum < income){
                     long payNow = income-costSum-paidSum;
-                    double unpaid = FchUtils.satoshiToCoin(amount - payNow);
+                    double unpaid = utils.FchUtils.satoshiToCoin(amount - payNow);
                     unpaidCostMap.put(fid,String.valueOf(unpaid));
                     amount = payNow;
                     costAmountMap.put(fid, amount);
-                }else unpaidCostMap.put(fid,String.valueOf(FchUtils.satoshiToCoin(amount)));
+                }else unpaidCostMap.put(fid,String.valueOf(utils.FchUtils.satoshiToCoin(amount)));
             }else {
                 costAmountMap.put(fid, amount);
             }

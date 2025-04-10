@@ -23,7 +23,7 @@ public class HandlerTest {
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         Map<String,Object> settingMap = new HashMap<>();
-        Settings settings = Starter.startTool(name, settingMap, br, null);
+        Settings settings = Starter.startTool(name, settingMap, br, null, null);
         if (settings == null) return;
         try {
             // Test with different sort types
@@ -59,8 +59,8 @@ public class HandlerTest {
             // Add timeout protection for potentially problematic operations
             Thread operationThread = new Thread(() -> {
                 try {
-                    handler.put("1", entity1);
-                    TestEntity retrieved = handler.get("1");
+                    handler.localDB.put("1", entity1);
+                    TestEntity retrieved = handler.localDB.get("1");
                     System.out.println("Retrieved entity: " + retrieved);
                 } catch (Exception e) {
                     System.err.println("Error during put/get operations: " + e.getMessage());
@@ -90,8 +90,8 @@ public class HandlerTest {
             
             Thread putAllThread = new Thread(() -> {
                 try {
-                    handler.putAll(testData);
-                    Map<String, TestEntity> allEntities = handler.getAll();
+                    handler.localDB.putAll(testData);
+                    Map<String, TestEntity> allEntities = handler.localDB.getAll();
                     System.out.println("All entities: " + allEntities);
                 } catch (Exception e) {
                     System.err.println("Error during putAll/getAll operations: " + e.getMessage());
@@ -128,7 +128,7 @@ public class HandlerTest {
             // Test list operations
             System.out.println("\n5. Testing list operations");
             try {
-                List<TestEntity> itemList = handler.getItemList(10, null, null, false, null, null, true, false);
+                List<TestEntity> itemList = handler.localDB.getList(10, null, null, false, null, null, true, false);
                 if (itemList != null && !itemList.isEmpty()) {
                     System.out.println("Retrieved items: " + itemList);
                 } else {
@@ -142,7 +142,7 @@ public class HandlerTest {
             // Test removal operations
             System.out.println("\n6. Testing removal operations");
             handler.remove("1");
-            TestEntity removedEntity = handler.get("1");
+            TestEntity removedEntity = handler.localDB.get("1");
             System.out.println("Entity after removal: " + removedEntity);
 
             // Test metadata operations
@@ -154,8 +154,8 @@ public class HandlerTest {
             // Test index operations (if applicable)
             if (sortType != LocalDB.SortType.NO_SORT) {
                 System.out.println("\n8. Testing index operations");
-                Long index = handler.getIndexById("2");
-                String id = handler.getIdByIndex(index);
+                Long index = handler.localDB.getIndexById("2");
+                String id = handler.localDB.getIdByIndex(index);
                 System.out.println("Index for id '2': " + index);
                 System.out.println("Id for index " + index + ": " + id);
             }
@@ -169,7 +169,7 @@ public class HandlerTest {
             // Clean up
             System.out.println("\n10. Testing cleanup operations");
             handler.clearDB();
-            Map<String, TestEntity> afterClear = handler.getAll();
+            Map<String, TestEntity> afterClear = handler.localDB.getAll();
             System.out.println("Entities after clear: " + afterClear);
 
         } finally {

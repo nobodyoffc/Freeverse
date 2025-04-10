@@ -2,6 +2,7 @@ package fcData;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import org.jetbrains.annotations.NotNull;
 import utils.JsonUtils;
 
 import java.io.File;
@@ -17,13 +18,14 @@ public abstract class FcEntity {
     public static final String METHOD_GET_HEIGHT_TO_TIME_FIELD_MAP = "getHeightToTimeFieldMap";
     public static final String METHOD_GET_SHOW_FIELD_NAME_AS_MAP = "getShowFieldNameAsMap";
     public static final String METHOD_GET_INPUT_FIELD_DEFAULT_VALUE_MAP = "getInputFieldDefaultValueMap";
+    public static final String METHOD_GET_REPLACE_WITH_ME_FIELD_LIST = "getReplaceWithMeFieldList";
     public static int ID_DEFAULT_SHOW_SIZE = 13;
     public static int TEXT_DEFAULT_SHOW_SIZE = 33;
     public static int TEXT_SHORT_DEFAULT_SHOW_SIZE = 9;
     public static int TIME_DEFAULT_SHOW_SIZE = 15;
-    public static int AMOUNT_DEFAULT_SHOW_SIZE = 8;
+    public static int AMOUNT_DEFAULT_SHOW_SIZE = 10;
     public static int CD_DEFAULT_SHOW_SIZE = 5;
-    public static int BOOLEAN_DEFAULT_SHOW_SIZE = 15;
+    public static int BOOLEAN_DEFAULT_SHOW_SIZE = 5;
 
     protected String id;
     public static  <T extends FcEntity> int updateIntoListById(T item, List<T> itemList) {
@@ -36,6 +38,35 @@ public abstract class FcEntity {
         }
         itemList.add(item);
         return itemList.size() - 1;
+    }
+
+    @NotNull
+    public static <T> ShowingRules getRules(Class<T> itemClass) {
+        LinkedHashMap<String, Integer> fieldWidthMap;
+        List<String> timestampFieldList;
+        List<String> satoshiField;
+        Map<String, String> heightToTimeFieldMap;
+        Map<String, String> showFieldNameAs;
+        List<String> replaceWithMeFieldList;
+        try {
+            // Call static methods on the specific itemClass using reflection
+            fieldWidthMap = (LinkedHashMap<String, Integer>) itemClass.getMethod(METHOD_GET_FIELD_WIDTH_MAP).invoke(null);
+            timestampFieldList = (List<String>) itemClass.getMethod(METHOD_GET_TIMESTAMP_FIELD_LIST).invoke(null);
+            satoshiField = (List<String>) itemClass.getMethod(METHOD_GET_SATOSHI_FIELD_LIST).invoke(null);
+            heightToTimeFieldMap = (Map<String, String>) itemClass.getMethod(METHOD_GET_HEIGHT_TO_TIME_FIELD_MAP).invoke(null);
+            showFieldNameAs = (Map<String, String>) itemClass.getMethod(METHOD_GET_SHOW_FIELD_NAME_AS_MAP).invoke(null);
+            replaceWithMeFieldList = (List<String>) itemClass.getMethod(METHOD_GET_REPLACE_WITH_ME_FIELD_LIST).invoke(null);
+        } catch (Exception e) {
+            // If reflection fails, fall back to FcEntity defaults
+            fieldWidthMap = getFieldWidthMap();
+            timestampFieldList = getTimestampFieldList();
+            satoshiField = getSatoshiFieldList();
+            heightToTimeFieldMap = getHeightToTimeFieldMap();
+            showFieldNameAs = getShowFieldNameAsMap();
+            replaceWithMeFieldList = getReplaceWithMeFieldList();
+        }
+        ShowingRules result = new ShowingRules(fieldWidthMap, timestampFieldList, satoshiField, heightToTimeFieldMap, showFieldNameAs, replaceWithMeFieldList);
+        return result;
     }
 
     public String getId() {
@@ -156,5 +187,16 @@ public abstract class FcEntity {
      */
     public static Map<String, Object> getInputFieldDefaultValueMap() {
         return new HashMap<>();
+    }
+
+    /**
+     * Get map of input field names to their default values
+     * @return Map of input field names to default values
+     */
+    public static List<String> getReplaceWithMeFieldList() {
+        return new ArrayList<>();
+    }
+
+    public record ShowingRules(LinkedHashMap<String, Integer> fieldWidthMap, List<String> timestampFieldList, List<String> satoshiField, Map<String, String> heightToTimeFieldMap, Map<String, String> showFieldNameAsMap,List<String> replaceWithMeFieldList) {
     }
 }

@@ -6,17 +6,14 @@ import appTools.Settings;
 import appTools.Starter;
 import clients.ApipClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import configure.Configure;
 import constants.FieldNames;
-import crypto.CryptoDataByte;
-import crypto.Decryptor;
+import fcData.AutoTask;
 import fcData.TalkUnit;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.Params;
 import feip.feipData.serviceParams.TalkParams;
 
 import handlers.Handler;
-import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
 import server.TalkServer;
@@ -30,11 +27,10 @@ import utils.EsUtils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import static appTools.Settings.DEFAULT_WINDOW_TIME;
+import static constants.Constants.SEC_PER_DAY;
 import static constants.Strings.*;
 import static handlers.AccountHandler.DEFAULT_DEALER_MIN_BALANCE;
 
@@ -64,21 +60,20 @@ public class StartTalkServer {
             Handler.HandlerType.GROUP
     };
 
-    public static Map<String,Object> settingMap = new HashMap<>();
-    
-    static {
-//        settingMap.put(Settings.FORBID_FREE_API, false);
-        settingMap.put(Settings.WINDOW_TIME, DEFAULT_WINDOW_TIME);
-        settingMap.put(Settings.DEALER_MIN_BALANCE,DEFAULT_DEALER_MIN_BALANCE);
-//        settingMap.put(Settings.LISTEN_PATH, System.getProperty(UserHome) + "/fc_data/blocks");
-//        settingMap.put(Settings.FROM_WEBHOOK, true);
-    }
-
-    
-
     public static void main(String[] args) throws IOException {
+
+        Map<String,Object>  settingMap = new HashMap<> ();
+        settingMap.put(Settings.WINDOW_TIME, DEFAULT_WINDOW_TIME);
+        settingMap.put(Settings.DEALER_MIN_BALANCE, DEFAULT_DEALER_MIN_BALANCE);
+
+        List<AutoTask> autoTaskList = new ArrayList<>();
+        autoTaskList.add(new AutoTask(Handler.HandlerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
+        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startServer(serverType, settingMap, Arrays.stream(TalkServer.chargeType).toList(), modules, null, br);
+        settings = Starter.startServer(serverType, settingMap, Arrays.stream(TalkServer.chargeType).toList(), modules, br, autoTaskList);
         if(settings==null)return;
 
         byte[] symKey = settings.getSymKey();

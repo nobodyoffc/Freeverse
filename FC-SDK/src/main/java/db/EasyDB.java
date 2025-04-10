@@ -54,6 +54,10 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
     private final Map<String, Map<String, Object>> namedMaps = new ConcurrentHashMap<>();
     
     private final Map<String, Class<?>> mapTypes = new ConcurrentHashMap<>();
+    private final Map<String, List<Object>> orderedLists = new ConcurrentHashMap<>();
+    private final Map<String, Long> listCounts = new ConcurrentHashMap<>();
+    private final Set<String> listNames = new HashSet<>();
+    private final Set<String> mapNames = new HashSet<>();
     
     public EasyDB(SortType sortType, Class<T> entityClass) {
         this.sortType = sortType;
@@ -169,6 +173,60 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
             itemMap.remove(key);
             
             putInMap(LOCAL_REMOVED_MAP, key, System.currentTimeMillis());
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    @Override
+    public void remove(List<T> list) {
+        if (list == null || list.isEmpty()) return;
+        
+        writeLock.lock();
+        try {
+            // Collect indices to update
+            List<Long> indicesToUpdate = new ArrayList<>();
+            
+            for (T item : list) {
+                if (item == null) continue;
+                
+                String key = item.getId();
+                if (key == null) continue;
+                
+                // Remove from item map
+                itemMap.remove(key);
+                
+                // Collect index for later update
+                if (sortType != SortType.NO_SORT) {
+                    Long index = idIndexMap.get(key);
+                    if (index != null) {
+                        indicesToUpdate.add(index);
+                    }
+                }
+                
+                // Mark as locally removed
+                putInMap(LOCAL_REMOVED_MAP, key, System.currentTimeMillis());
+            }
+            
+            // Update indices if needed
+            if (sortType != SortType.NO_SORT && !indicesToUpdate.isEmpty()) {
+                // Sort indices in descending order to avoid shifting issues
+                Collections.sort(indicesToUpdate, Collections.reverseOrder());
+                
+                // Remove from maps and shift indices
+                for (Long index : indicesToUpdate) {
+                    String key = indexIdMap.get(index);
+                    if (key != null) {
+                        indexIdMap.remove(index);
+                        idIndexMap.remove(key);
+                    }
+                }
+                
+                // Shift remaining indices
+                for (Long index : indicesToUpdate) {
+                    shiftHigherIndicesDown1(index);
+                }
+            }
         } finally {
             writeLock.unlock();
         }
@@ -635,6 +693,12 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
     }
     
     @Override
+    public int getMapSize(String mapName) {
+        Map<String, Object> map = namedMaps.get(mapName);
+        return map != null ? map.size() : 0;
+    }
+    
+    @Override
     public void putAll(List<T> items, String idField) {
         if (items == null || items.isEmpty()) return;
         
@@ -1069,7 +1133,7 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
 
     // Settings Map methods
     @Override
-    public void putSettings(String key, Object value) {
+    public void putSetting(String key, Object value) {
         if (key == null) {
             return;
         }
@@ -1096,7 +1160,7 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
     }
 
     @Override
-    public String getSettings(String key) {
+    public String getSetting(String key) {
         if (key == null) {
             return null;
         }
@@ -1109,7 +1173,7 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
     }
 
     @Override
-    public void removeSettings(String key) {
+    public void removeSetting(String key) {
         if (key == null) {
             return;
         }
@@ -1137,6 +1201,292 @@ public class EasyDB<T extends FcEntity> implements LocalDB<T> {
         readLock.lock();
         try {
             return getAllFromMap(SETTINGS_MAP);
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public T getByIndex(long index) {
+        readLock.lock();
+        try {
+            return itemMap.get(indexIdMap.get(index));
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    @Override
+    public <V> void createOrderedList(String listName, Class<V> vClass) {
+        if (listName == null || vClass == null) {
+            return;
+        }
+        
+        writeLock.lock();
+        try {
+            if (!listNames.contains(listName)) {
+                listNames.add(listName);
+                putMeta(MAP_NAMES_META_KEY, mapNames);
+                
+                // Register the type for this list
+                mapTypes.put(listName, vClass);
+                
+                // Initialize the list
+                orderedLists.put(listName, new ArrayList<>());
+                listCounts.put(listName, 0L);
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    @Override
+    public <V> long addToList(String listName, V value) {
+        if (listName == null || value == null) {
+            return -1;
+        }
+        
+        writeLock.lock();
+        try {
+            List<Object> list = orderedLists.computeIfAbsent(listName, k -> new ArrayList<>());
+            Long count = listCounts.computeIfAbsent(listName, k -> 0L);
+            
+            // Add the new element
+            long index = count;
+            list.add(value);
+            
+            // Increment the count
+            listCounts.put(listName, count + 1);
+            
+            return index;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    @Override
+    public <V> long addAllToList(String listName, List<V> values) {
+        if (listName == null || values == null || values.isEmpty()) {
+            return -1;
+        }
+        
+        writeLock.lock();
+        try {
+            List<Object> list = orderedLists.computeIfAbsent(listName, k -> new ArrayList<>());
+            Long count = listCounts.computeIfAbsent(listName, k -> 0L);
+            
+            // Add all elements
+            long startIndex = count;
+            list.addAll(values);
+            
+            // Update the count
+            listCounts.put(listName, count + values.size());
+            
+            return startIndex;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    @Override
+    public <V> V getFromList(String listName, long index) {
+        if (listName == null || index < 0) {
+            return null;
+        }
+        
+        readLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list == null || index >= list.size()) {
+                return null;
+            }
+            
+            @SuppressWarnings("unchecked")
+            V value = (V) list.get((int) index);
+            return value;
+        } finally {
+            readLock.unlock();
+        }
+    }
+    
+    @Override
+    public <V> List<V> getAllFromList(String listName) {
+        if (listName == null) {
+            return new ArrayList<>();
+        }
+        
+        readLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list == null) {
+                return new ArrayList<>();
+            }
+            
+            @SuppressWarnings("unchecked")
+            List<V> result = new ArrayList<>((List<V>) list);
+            return result;
+        } finally {
+            readLock.unlock();
+        }
+    }
+    
+    @Override
+    public <V> List<V> getRangeFromList(String listName, long startIndex, long endIndex) {
+        if (listName == null || startIndex < 0 || endIndex <= startIndex) {
+            return new ArrayList<>();
+        }
+        
+        readLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list == null || startIndex >= list.size()) {
+                return new ArrayList<>();
+            }
+            
+            // Adjust endIndex if it's beyond the list size
+            endIndex = Math.min(endIndex, list.size());
+            
+            // Create a new list with the elements in the range
+            List<V> result = new ArrayList<>();
+            for (long i = startIndex; i < endIndex; i++) {
+                @SuppressWarnings("unchecked")
+                V value = (V) list.get((int) (i & 0x7FFFFFFF));
+                result.add(value);
+            }
+            
+            return result;
+        } finally {
+            readLock.unlock();
+        }
+    }
+    
+    @Override
+    public boolean removeFromList(String listName, long index) {
+        if (listName == null || index < 0) {
+            return false;
+        }
+        
+        writeLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list == null || index >= list.size()) {
+                return false;
+            }
+            
+            // Remove the element
+            list.remove((int) index);
+            
+            // Update the count
+            listCounts.put(listName, (long) list.size());
+            
+            return true;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    @Override
+    public int removeFromList(String listName, List<Long> indices) {
+        if (listName == null || indices == null || indices.isEmpty()) {
+            return 0;
+        }
+        
+        writeLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list == null) {
+                return 0;
+            }
+            
+            // Sort indices in descending order to avoid shifting issues
+            List<Long> sortedIndices = new ArrayList<>(indices);
+            sortedIndices.sort(Collections.reverseOrder());
+            
+            int removedCount = 0;
+            for (Long index : sortedIndices) {
+                if (index != null && index >= 0 && index < list.size()) {
+                    list.remove(index);
+                    removedCount++;
+                }
+            }
+            
+            // Update the count
+            listCounts.put(listName, (long) list.size());
+            
+            return removedCount;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+    
+    @Override
+    public long getListSize(String listName) {
+        if (listName == null) {
+            return 0;
+        }
+        
+        readLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            return list != null ? list.size() : 0;
+        } finally {
+            readLock.unlock();
+        }
+    }
+    
+    @Override
+    public void clearList(String listName) {
+        if (listName == null) {
+            return;
+        }
+        
+        writeLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list != null) {
+                list.clear();
+                listCounts.put(listName, 0L);
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    @Override
+    public <V> List<V> getRangeFromListReverse(String listName, long startIndex, long endIndex) {
+        if (listName == null || startIndex < 0 || endIndex <= startIndex) {
+            return new ArrayList<>();
+        }
+        
+        readLock.lock();
+        try {
+            List<Object> list = orderedLists.get(listName);
+            if (list == null || list.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            int count = list.size();
+            
+            // Convert from end-based indices to start-based indices
+            // If startIndex is 0, we want the last element (count-1)
+            // If endIndex is 1, we want up to the second-to-last element (count-2)
+            int startFromBeginning = Math.max(0, count - (int)endIndex);
+            int endFromBeginning = Math.min(count, count - (int)startIndex);
+            
+            // Adjust if the range is beyond the list size
+            if (startFromBeginning >= count || endFromBeginning <= 0) {
+                return new ArrayList<>();
+            }
+            
+            List<V> result = new ArrayList<>();
+            // Iterate in reverse order
+            for (int i = endFromBeginning - 1; i >= startFromBeginning; i--) {
+                @SuppressWarnings("unchecked")
+                V value = (V) list.get(i);
+                result.add(value);
+            }
+            
+            return result;
         } finally {
             readLock.unlock();
         }

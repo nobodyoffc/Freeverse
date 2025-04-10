@@ -14,26 +14,26 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import appTools.Settings;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 import static constants.FieldNames.ID;
 
 @WebServlet(name = ApipApiNames.OP_RETURN_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OP_RETURN_BY_IDS)
 public class OpReturnByIds extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public OpReturnByIds() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, ID, request,response,authType);
     }
 }

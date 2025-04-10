@@ -10,7 +10,6 @@ import java.io.Serial;
 
 import static configure.Configure.makeConfigFileName;
 
-
 public abstract class FcWebServerInitiator extends HttpServlet {
     @Serial
     private static final long serialVersionUID = 1L;
@@ -18,16 +17,16 @@ public abstract class FcWebServerInitiator extends HttpServlet {
     protected String serverName;
     public static Settings settings;
 
-    protected Object[] modules;
-    protected Object[] runningModules;
-
     protected abstract void setServiceName();
-    protected abstract void setModules ();
-    protected abstract void setRunningModules();
+
     @Override
     public void destroy(){
         log.debug("Destroy {} server...",serverName);
-        settings.close();
+        
+        // Ensure settings are properly closed
+        if (settings != null) {
+            settings.close();
+        }
 
         log.debug("The {} server is destroyed.",serverName);
     }
@@ -46,16 +45,23 @@ public abstract class FcWebServerInitiator extends HttpServlet {
             return;
         }
 
-        setModules();
+        // Add a shutdown hook to handle abrupt termination
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.info("JVM shutdown detected, cleaning up resources...");
+            if (settings != null) {
+                try {
+                    settings.close();
+                } catch (Exception e) {
+                    log.error("Error during settings cleanup during shutdown: {}", e.getMessage());
+                }
+            }
+            log.info("Cleanup completed during shutdown");
+        }));
 
-        setRunningModules();
+        settings.initModulesMute();
 
-        settings.initModulesMute(modules);
-
-        settings.runAutoTasks(runningModules);
+        settings.runAutoTasks();
 
         System.out.println("The "+serverName+" server initiated.\n");
     }
-
-
 }

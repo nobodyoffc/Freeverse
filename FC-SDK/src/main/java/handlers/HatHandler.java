@@ -1,34 +1,32 @@
+
 package handlers;
 
+import appTools.Settings;
 import fcData.Hat;
+import db.LocalDB;
+
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Comparator;
 
-import appTools.Settings;
-
-public class HatHandler extends Handler {
+public class HatHandler extends Handler<Hat> {
     // Constants
     private static final int CACHE_SIZE = 1000;
-
-    // Instance Variables
-    private final String myFid;
+    private static final String CIPHER_RAW_DID_MAP = "cipherRawDidMap";
     private final String sid;
-    private final HatDB hatDB;
+    private final String mainFid;
+    // Instance Variables
     private final ConcurrentHashMap<String, Hat> hatCache;
 
     // Constructor
-    public HatHandler(String myFid, String sid, String dbPath) {
-        this.myFid = myFid;
-        this.sid = sid;
-        this.hatDB = new HatDB(myFid, sid, dbPath);
-        this.hatCache = new ConcurrentHashMap<>(CACHE_SIZE);
-    }
 
     public HatHandler(Settings settings) {
-        this(settings.getMainFid(), settings.getSid(), settings.getDbDir());
+        super(settings, HandlerType.HAT, LocalDB.SortType.UPDATE_ORDER, Hat.class, true, false);
+        this.mainFid = settings.getMainFid();
+        this.sid = settings.getSid();
+        this.hatCache = new ConcurrentHashMap<>(CACHE_SIZE);
     }
 
     // Public Methods
@@ -42,7 +40,7 @@ public class HatHandler extends Handler {
         }
 
         // If not in cache, get from persistent storage
-        Hat hatFromDB = hatDB.getHat(did);
+        Hat hatFromDB = localDB.get(did);
         if (hatFromDB != null) {
             addToCache(hatFromDB);
         }
@@ -50,11 +48,16 @@ public class HatHandler extends Handler {
     }
 
     public void putHat(Hat hat) {
-        if (hat == null || hat.getDid() == null) return;
+        if (hat == null || hat.getId() == null) return;
 
         // Update both cache and persistent storage
         addToCache(hat);
-        hatDB.putHat(hat);
+        localDB.put(hat.getId(), hat);
+
+        // Store cipher-raw DID mapping if rawDid exists
+        if (hat.getRawDid() != null) {
+            localDB.putInMap(CIPHER_RAW_DID_MAP, hat.getId(), hat.getRawDid());
+        }
     }
 
     public void removeHat(String did) {
@@ -62,30 +65,31 @@ public class HatHandler extends Handler {
 
         // Remove from both cache and persistent storage
         hatCache.remove(did);
-        hatDB.removeHat(did);
+        remove(did);
+        localDB.removeFromMap(CIPHER_RAW_DID_MAP, did);
     }
 
     public List<Hat> getAllHats() {
-        List<Hat> hats = hatDB.getAllHats();
-        for (Hat hat : hats) {
+        Map<String, Hat> hats = localDB.getAll();
+        for (Hat hat : hats.values()) {
             addToCache(hat);
         }
-        return hats;
+        return List.copyOf(hats.values());
     }
 
     // Private Cache Management Methods
     private void addToCache(Hat hat) {
-        if (hat != null && hat.getDid() != null) {
+        if (hat != null && hat.getId() != null) {
             synchronized (hatCache) {
                 if (hatCache.size() >= CACHE_SIZE) {
                     // Remove oldest entry when cache is full
                     Optional<Map.Entry<String, Hat>> oldest = hatCache.entrySet().stream()
-                        .min(Comparator.comparingLong(e -> e.getValue().getLast() != null ? e.getValue().getLast() : Long.MAX_VALUE));
+                            .min(Comparator.comparingLong(e -> e.getValue().getLast() != null ? e.getValue().getLast() : Long.MAX_VALUE));
                     oldest.ifPresent(entry -> hatCache.remove(entry.getKey()));
                 }
                 // Update last access time
                 hat.setLast(System.currentTimeMillis());
-                hatCache.put(hat.getDid(), hat);
+                hatCache.put(hat.getId(), hat);
             }
         }
     }
@@ -102,16 +106,14 @@ public class HatHandler extends Handler {
         return hat;
     }
 
-    // Cleanup Method
-    public void close() {
-        hatCache.clear();
-        hatDB.close();
-    }
-
-    // Add new method to get rawDid for a cipher DID
     public String getRawDidForCipher(String cipherDid) {
         if (cipherDid == null) return null;
-        
-        return hatDB.getRawDidForCipher(cipherDid);
+        return localDB.getFromMap(CIPHER_RAW_DID_MAP, cipherDid);
+    }
+
+    @Override
+    public void close() {
+        hatCache.clear();
+        super.close();
     }
 } 

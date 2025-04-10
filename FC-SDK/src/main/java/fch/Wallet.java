@@ -8,6 +8,7 @@ import fcData.ReplyBody;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.fch.FchMainNetwork;
 import utils.*;
+import utils.FchUtils;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
 import nasa.NaSaRpcClient;
@@ -215,7 +216,7 @@ public class Wallet {
             spendCashList.add(cash);
             fee = calcTxSize(spendCashList.size(), sendToList.size(), opReturnSize);
             valueSum += cash.getValue();
-            Long cd1 = FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+            Long cd1 = utils.FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
             cdSum += cd1;
             if (valueSum >= (amount + fee) && cdSum >= cd) break;
         }
@@ -240,35 +241,35 @@ public class Wallet {
         int i = 0;
         for (Cash cash : meetList) {
             if (i > 0) RawTx.append(",");
-            RawTxForCs rawTxForCs = new RawTxForCs();
-            rawTxForCs.setAddress(cash.getOwner());
-            rawTxForCs.setAmount(FchUtils.satoshiToCoin(cash.getValue()));
-            rawTxForCs.setTxid(cash.getBirthTxId());
-            rawTxForCs.setIndex(cash.getBirthIndex());
-            rawTxForCs.setSeq(i);
-            rawTxForCs.setDealType(RawTxForCs.DealType.INPUT);
-            RawTx.append(gson.toJson(rawTxForCs));
+            RawTxForCsV1 rawTxForCsV1 = new RawTxForCsV1();
+            rawTxForCsV1.setAddress(cash.getOwner());
+            rawTxForCsV1.setAmount(utils.FchUtils.satoshiToCoin(cash.getValue()));
+            rawTxForCsV1.setTxid(cash.getBirthTxId());
+            rawTxForCsV1.setIndex(cash.getBirthIndex());
+            rawTxForCsV1.setSeq(i);
+            rawTxForCsV1.setDealType(RawTxForCsV1.DealType.INPUT);
+            RawTx.append(gson.toJson(rawTxForCsV1));
             i++;
         }
         int j = 0;
         if (sendToList != null) {
             for (SendTo sendTo : sendToList) {
-                RawTxForCs rawTxForCs = new RawTxForCs();
-                rawTxForCs.setAddress(sendTo.getFid());
-                rawTxForCs.setAmount(sendTo.getAmount());
-                rawTxForCs.setSeq(j);
-                rawTxForCs.setDealType(RawTxForCs.DealType.OUTPUT);
+                RawTxForCsV1 rawTxForCsV1 = new RawTxForCsV1();
+                rawTxForCsV1.setAddress(sendTo.getFid());
+                rawTxForCsV1.setAmount(sendTo.getAmount());
+                rawTxForCsV1.setSeq(j);
+                rawTxForCsV1.setDealType(RawTxForCsV1.DealType.OUTPUT);
                 RawTx.append(",");
-                RawTx.append(gson.toJson(rawTxForCs));
+                RawTx.append(gson.toJson(rawTxForCsV1));
                 j++;
             }
         }
 
         if (opReturn != null) {
-            RawTxForCs rawOpReturnForCs = new RawTxForCs();
+            RawTxForCsV1 rawOpReturnForCs = new RawTxForCsV1();
             rawOpReturnForCs.setMsg(opReturn);
             rawOpReturnForCs.setSeq(j);
-            rawOpReturnForCs.setDealType(RawTxForCs.DealType.OP_RETURN);
+            rawOpReturnForCs.setDealType(RawTxForCsV1.DealType.OP_RETURN);
             RawTx.append(",");
             RawTx.append(gson.toJson(rawOpReturnForCs));
         }
@@ -369,7 +370,7 @@ public class Wallet {
         List<SendTo> sendToList = new ArrayList<>();
         SendTo sendTo = new SendTo();
         sendTo.setFid(fid);
-        sendTo.setAmount(FchUtils.satoshiToCoin(valueForOne));
+        sendTo.setAmount(utils.FchUtils.satoshiToCoin(valueForOne));
         for (int i = 0; i < issueNum - 1; i++) sendToList.add(sendTo);
         SendTo sendTo1 = new SendTo();
         sendTo1.setFid(fid);

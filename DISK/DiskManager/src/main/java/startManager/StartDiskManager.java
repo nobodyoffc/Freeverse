@@ -5,6 +5,7 @@ import clients.ApipClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
 import constants.FieldNames;
+import fcData.AutoTask;
 import feip.feipData.Service;
 import feip.feipData.serviceParams.DiskParams;
 import appTools.Inputer;
@@ -24,45 +25,30 @@ import server.reward.RewardInfo;
 import server.reward.RewardManager;
 import server.serviceManagers.DiskManager;
 import appTools.Settings;
+import utils.ObjectUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
+import static appTools.Settings.*;
+import static constants.Constants.SEC_PER_DAY;
 import static feip.feipData.Service.ServiceType.*;
-import static constants.Constants.UserHome;
 import static constants.IndicesNames.ORDER;
 import static constants.Strings.*;
-import static appTools.Settings.DEFAULT_WINDOW_TIME;
-import static handlers.AccountHandler.*;
+import static feip.feipData.Service.ServiceType.APIP;
 
 public class StartDiskManager {
-    public static  String STORAGE_DIR;
+    public static  String diskDir;
     private static Settings settings;
     public static ElasticsearchClient esClient;
     public static ApipClient apipClient;
     public static Service service;
     public static DiskParams params;
-//    public static DiskCounter counter;
 
     public static String sid;
     public static final Service.ServiceType serverType = Service.ServiceType.DISK;
-
-//    public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{
-//            Service.ServiceType.APIP,
-//            Service.ServiceType.ES,
-//            Service.ServiceType.REDIS
-//    };
-//
-//    public static HandlerType[] requiredHandlers = new HandlerType[]{
-//            HandlerType.CASH,
-//            HandlerType.SESSION,
-//            HandlerType.ACCOUNT
-//    };
 
     public static final Object[] modules = new Object[]{
         Service.ServiceType.REDIS,
@@ -74,26 +60,31 @@ public class StartDiskManager {
     };
 
 
-    public static 	Map<String,Object> settingMap = new HashMap<>();
-    static {
+    public static void main(String[] args) throws IOException {
+        Map<String,Object>  settingMap = new HashMap<> ();
         settingMap.put(Settings.FORBID_FREE_API, false);
         settingMap.put(Settings.WINDOW_TIME, DEFAULT_WINDOW_TIME);
-        settingMap.put(Settings.LISTEN_PATH, System.getProperty(UserHome) + "/fc_data/blocks");
-        settingMap.put(Settings.FROM_WEBHOOK, true);
-        settingMap.put(Settings.MIN_DISTRIBUTE_BALANCE, DEFAULT_DISTRIBUTE_BALANCE);
-        settingMap.put(Settings.DEALER_MIN_BALANCE, DEFAULT_DEALER_MIN_BALANCE);
-    }
-    public static void main(String[] args) throws IOException {
+        settingMap.put(FieldNames.DISK_DIR, DISK_DATA_PATH);
+        settingMap.put(AccountHandler.DISTRIBUTE_DAYS,AccountHandler.DEFAULT_DISTRIBUTE_DAYS);
+        settingMap.put(AccountHandler.MIN_DISTRIBUTE_BALANCE,AccountHandler.DEFAULT_MIN_DISTRIBUTE_BALANCE);
+        settingMap.put(AccountHandler.DEALER_MIN_BALANCE,AccountHandler.DEFAULT_DEALER_MIN_BALANCE);
+
+        List<AutoTask> autoTaskList = new ArrayList<>();
+        autoTaskList.add(new AutoTask(Handler.HandlerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+
         Menu.welcome("DISK Manager");
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startServer(serverType, settingMap, DiskApiNames.diskApiList, modules, null, br);
+        settings = Starter.startServer(serverType, settingMap, DiskApiNames.diskApiList, modules, br, autoTaskList);
         if(settings==null)return;
 
+        diskDir = (String) settings.getSettingMap().get(FieldNames.DISK_DIR);
+
         byte[] symKey = settings.getSymKey();
-        Configure configure = settings.getConfig();
         service =settings.getService();
         sid = service.getId();
-        params = (DiskParams) service.getParams();
+        params = ObjectUtils.objectToClass( service.getParams(),DiskParams.class);
 
         //Prepare API clients
         apipClient = (ApipClient) settings.getClient(APIP);
@@ -112,9 +103,6 @@ public class StartDiskManager {
         menu.setTitle("Disk Manager");
 
         menu.add("Manage the service");
-//        menu.add("Manage order");
-//        menu.add("Manage balance");
-//        menu.add("Manage the rewards");
         menu.add("Manage account");
         menu.add("Reset the price multipliers(nPrice)");
         menu.add("Manage ES indices");
@@ -125,13 +113,11 @@ public class StartDiskManager {
             int choice = menu.choose(br);
             switch (choice) {
                 case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symKey, DiskParams.class).menu();
-//                case 2 -> new OrderManager(service, counter, br, esClient, jedisPool).menu();
-//                case 3 -> new BalanceManager(service, br, esClient,jedisPool).menu();
                 case 2 -> accountHandler.menu(br, false);
                 case 3 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
                 case 4 -> Order.resetNPrices(br, sid, jedisPool);
-                case 5 -> manageIndices(br);//recreateAllIndices(esClient, br);
+                case 5 -> manageIndices(br);
                 case 6 -> settings.setting(br, serverType);
                 case 0 -> {
 //                    if (counter != null) counter.close();
@@ -190,12 +176,6 @@ public class StartDiskManager {
         System.out.println(JsonUtils.toNiceJson(allSumMap));
     }
 
-//    private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
-//        byte[] priKey = Settings.getMainFidPriKey(symKey, settings);
-//        counter = new DiskCounter(settings,priKey, params);
-//        Thread thread = new Thread(counter);
-//        thread.start();
-//    }
     private static void close() throws IOException {
         settings.close();
     }
@@ -216,5 +196,4 @@ public class StartDiskManager {
         nameMappingList.put(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS);
         EsUtils.checkEsIndices(esClient,nameMappingList);
     }
-
 }

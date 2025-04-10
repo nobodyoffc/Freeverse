@@ -12,9 +12,6 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 
-import static constants.Constants.UserHome;
-import static constants.Strings.LISTEN_PATH;
-
 public class ContactApp {
 
     public static void main(String[] args) {
@@ -26,12 +23,12 @@ public class ContactApp {
 //        settingsMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 
         while(true) {
-            Settings settings = Starter.startClient(ContactHandler.name, settingsMap, br, ContactHandler.modules);
+            Settings settings = Starter.startClient(ContactHandler.name, settingsMap, br, ContactHandler.modules, null);
 
             if (settings == null) return;
 
             ContactHandler contactHandler = (ContactHandler)settings.getHandler(Handler.HandlerType.CONTACT);
-            contactHandler.freshOnChainContacts(br);
+
             contactHandler.menu(br, true);
 
             if (!Inputer.askIfYes(br, "Switch to another FID?")) System.exit(0);

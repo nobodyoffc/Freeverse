@@ -20,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static constants.IndicesNames.CASH;
-import static fch.FchUtils.parseVarint;
+import static utils.FchUtils.parseVarint;
 
 public class RawTxParser {
 
@@ -102,7 +102,7 @@ public class RawTxParser {
         // ParseTxOutResult parseTxOutResult
 
         // Get input count./获得输入数量
-        FchUtils.VarintResult varintParseResult;
+        utils.FchUtils.VariantResult varintParseResult;
         varintParseResult = parseVarint(txInputStream);
         long inputCount = varintParseResult.number;
 
@@ -164,7 +164,7 @@ public class RawTxParser {
         // Parse Outputs./解析输出。
         // Parse output count.
         // 解析输出数量。
-        FchUtils.VarintResult varintParseResult1 = parseVarint(txInputStream);
+        utils.FchUtils.VariantResult varintParseResult1 = parseVarint(txInputStream);
         long outputCount = varintParseResult1.number;
 
         // Starting operators in output script.
@@ -273,7 +273,7 @@ public class RawTxParser {
     private static Map<String, Cash> parseInput(ByteArrayInputStream rawTxInputStream, String txid) throws IOException {
 
         // Get input count./获得输入数量
-        FchUtils.VarintResult varintParseResult;
+        utils.FchUtils.VariantResult varintParseResult;
         varintParseResult = parseVarint(rawTxInputStream);
         long inputCount = varintParseResult.number;
 
@@ -341,7 +341,7 @@ public class RawTxParser {
 
         // Parse output count.
         // 解析输出数量。
-        FchUtils.VarintResult varintParseResult = new FchUtils.VarintResult();
+        utils.FchUtils.VariantResult varintParseResult = new utils.FchUtils.VariantResult();
         varintParseResult = parseVarint(rawTxInputStream);
         long outputCount = varintParseResult.number;
 

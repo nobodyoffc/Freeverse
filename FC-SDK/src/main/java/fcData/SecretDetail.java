@@ -166,7 +166,7 @@ public class SecretDetail extends FcObject {
             showList.add(secret.getMemo());
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
     // Getters and Setters

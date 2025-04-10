@@ -532,7 +532,7 @@ public class StartTools {
             }
             if (input.length() == 64) {
                 System.out.println("Hex to Base58:" + "\n----");
-                System.out.println("New: " + KeyTools.priKey32To38(input));
+                System.out.println("New: " + KeyTools.priKey32To38WifCompressed(input));
                 System.out.println("Old: " + KeyTools.priKey32To37(input) + "\n----");
 
             } else if (input.length() == 52) {

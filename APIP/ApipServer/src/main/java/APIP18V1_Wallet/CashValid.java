@@ -15,7 +15,7 @@ import fch.fchData.Cash;
 import initial.Initiator;
 import utils.ObjectUtils;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
@@ -32,7 +32,7 @@ import static constants.IndicesNames.CASH;
 import static constants.Strings.FID;
 import static constants.Values.FALSE;
 import static constants.Values.TRUE;
-import static fch.FchUtils.coinToSatoshi;
+import static utils.FchUtils.coinToSatoshi;
 
 import appTools.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -94,11 +94,11 @@ public class CashValid extends HttpServlet {
                     fcdsl.addNewQuery().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
                 else if (fcdsl.getQuery().getTerms() == null)
                     fcdsl.getQuery().addNewTerms().addNewFields(VALID).addNewValues(TRUE);
-                FcdslRequestHandler fcdslRequestHandler = new FcdslRequestHandler(replier, settings);
-                List<Cash> meetList = fcdslRequestHandler.doRequest(CASH, defaultSort, Cash.class);
+                FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
+                List<Cash> meetList = fcHttpRequestHandler.doRequest(CASH, defaultSort, Cash.class);
                 if(meetList==null){
                     try {
-                        response.getWriter().write(fcdslRequestHandler.getFinalReplyJson());
+                        response.getWriter().write(fcHttpRequestHandler.getFinalReplyJson());
                     } catch (IOException ignore) {
                         return;
                     }

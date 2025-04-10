@@ -11,7 +11,7 @@ import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch.core.DeleteResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import fch.FchUtils;
+import utils.FchUtils;
 import utils.JsonUtils;
 import nasa.NaSaRpcClient;
 import org.slf4j.Logger;
@@ -158,7 +158,7 @@ public class RewardManager {
             String time = FchUtils.convertTimestampToDate(rewardInfo.getTime());
             System.out.print(Shower.formatString(time,22));
 
-            String rewardT = String.valueOf(FchUtils.satoshiToCoin(rewardInfo.getRewardT()));
+            String rewardT = String.valueOf(utils.FchUtils.satoshiToCoin(rewardInfo.getRewardT()));
             System.out.print(Shower.formatString(rewardT,20));
 
             System.out.print(Shower.formatString(rewardInfo.getRewardId(),66));

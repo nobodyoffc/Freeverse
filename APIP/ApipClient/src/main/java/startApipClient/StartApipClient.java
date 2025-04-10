@@ -59,7 +59,7 @@ public class StartApipClient {
         Menu.welcome(clientName);
 
         br = new BufferedReader(new InputStreamReader(System.in));
-        settings = Starter.startClient(clientName, settingMap, br, modules);
+        settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
         byte[] symKey = settings.getSymKey();
         apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
@@ -1663,11 +1663,11 @@ public class StartApipClient {
         String msg = Inputer.inputString(br);
         if ("".equals(msg)) msg = null;
         System.out.println("Requesting Post...");
-        apipClient.offLineTx(fid,sendToList,msg,cd, RequestMethod.POST,  AuthType.FC_SIGN_BODY);
+        apipClient.offLineTx(fid,sendToList,msg,cd, "1", RequestMethod.POST,  AuthType.FC_SIGN_BODY);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
 
         System.out.println("Requesting Get...");
-        apipClient.offLineTx(fid,sendToList,msg,cd, RequestMethod.GET,  AuthType.FREE);
+        apipClient.offLineTx(fid,sendToList,msg,cd, "2", RequestMethod.GET,  AuthType.FREE);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }

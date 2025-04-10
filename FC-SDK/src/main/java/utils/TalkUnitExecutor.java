@@ -337,7 +337,7 @@ public class TalkUnitExecutor {
                 continue;
             }
 
-            Long newBalance = accountHandler.addUserBalance(payerFid, -amount);
+            Long newBalance = accountHandler.updateUserBalance(payerFid, -amount);
             if (newBalance == null || newBalance < 0) {
                 TalkUnit replyTalkUnit = reply(CodeMessage.Code1004InsufficientBalance,null,null,Op.NOTIFY);
                 sendTalkUnitList.add(replyTalkUnit);
@@ -345,7 +345,7 @@ public class TalkUnitExecutor {
             }
             sum += amount;
 
-            accountHandler.addUserBalance(recipientFid, amount);
+            accountHandler.updateUserBalance(recipientFid, amount);
 
             String msg = payerFid+" paid "+amount+" to "+recipientFid+".";
             Affair notifyAffair = Affair.makeNotifyAffair(payerFid,recipientFid,msg);
@@ -452,12 +452,12 @@ public class TalkUnitExecutor {
         boolean done;
         try {
             Hat hat = (Hat) parsedTalkUnit.getData();
-            log.info("Received hat from {}, hat ID: {}", parsedTalkUnit.getFrom(), hat.getDid());
+            log.info("Received hat from {}, hat ID: {}", parsedTalkUnit.getFrom(), hat.getId());
             // Save hat using hatHandler
             hatHandler.putHat(hat);
             code = CodeMessage.Code0Success;
             message = CodeMessage.Msg0Success;
-            this.displayText = title+"HAT-"+hat.getDid();
+            this.displayText = title+"HAT-"+hat.getId();
             executeTalkUnit.setStata(State.DONE);
             done = true;
         } catch (Exception e) {
@@ -483,18 +483,18 @@ public class TalkUnitExecutor {
             if(id.length()==34){
                 // Ask for the key of a FID
                 if(!parsedTalkUnit.getTo().equals(parsedTalkUnit.getFrom()) && !id.equals(parsedTalkUnit.getTo()))return false;
-                shareSession = sessionHandler.getSessionById(parsedTalkUnit.getFrom());
+                shareSession = sessionHandler.getSessionByUserId(parsedTalkUnit.getFrom());
                 if(shareSession==null){
                     shareSession = sessionHandler.addNewSession(id,parsedTalkUnit.getFromSession().getPubKey());
                 }
-                shareSession.setId(id);
+                shareSession.setUserId(id);
                 TalkUnit replyTalkUnit = replySuccess(shareSession.toJson(), Op.SHARE_KEY);
                 sendTalkUnitList.add(replyTalkUnit);
                 return true; 
             }else if(id.length()==32) {
                 // Ask for the key of a team or group
                 if (!isMemberOfTeamOrGroup(parsedTalkUnit.getFrom(), id,groupHandler,teamHandler,apipClient)) return false;
-                shareSession = sessionHandler.getSessionById(id);
+                shareSession = sessionHandler.getSessionByUserId(id);
                 if(shareSession==null){
                     if (!isMemberOfTeamOrGroup(parsedTalkUnit.getTo(), id, groupHandler, teamHandler, apipClient)) return false;
                     shareSession = sessionHandler.addNewSession(id,parsedTalkUnit.getFromSession().getPubKey());
@@ -600,9 +600,9 @@ public class TalkUnitExecutor {
             }
             // Save both the session name->session and id->name mappings
             sessionHandler.putSession(newSession);
-            sessionHandler.putFidName(newSession.getId(), newSession.getName());
+            sessionHandler.putUserIdSessionId(newSession.getUserId(), newSession.getId());
             
-            log.info("Saved session key for: {} with name: {}", replySessionTalkUnit.getFrom(), newSession.getName());
+            log.info("Saved session key for: {} with name: {}", replySessionTalkUnit.getFrom(), newSession.getId());
             code = CodeMessage.Code0Success;
             message = CodeMessage.Msg0Success;
             executeTalkUnit.setStata(State.DONE);
@@ -693,7 +693,7 @@ public class TalkUnitExecutor {
             message = CodeMessage.Msg0Success;
             this.payToForBytes = new HashMap<>();
             this.payToForBytes.put(parsedTalkUnit.getFrom(), hat.toBytes().length);
-            log.info("Saved hat ID from {}: {}",  parsedTalkUnit.getFrom(),hat.getDid());
+            log.info("Saved hat ID from {}: {}",  parsedTalkUnit.getFrom(),hat.getId());
 
             return true;
         } catch (Exception e) {

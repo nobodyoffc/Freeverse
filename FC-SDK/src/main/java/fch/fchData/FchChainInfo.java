@@ -11,8 +11,8 @@ import constants.IndicesNames;
 import constants.Strings;
 
 import fcData.FcObject;
-import fch.FchUtils;
 import utils.DateUtils;
+import utils.FchUtils;
 import utils.JsonUtils;
 import utils.NumberUtils;
 import nasa.NaSaRpcClient;
@@ -43,7 +43,7 @@ public class FchChainInfo extends FcObject {
     private final String stableAnnualIssuance = Constants.STABLE_ANNUAL_ISSUANCE;
     private final String mineMatureDays = Constants.MINE_MATURE_DAYS;
     private final String fundMatureDays = Constants.FUND_MATURE_DAYS;
-    private final String daysPerYear = Constants.DAYS_PER_YEAR;
+    private final String daysPerYear = Constants.DAYS_PER_YEAR_STR;
     private final String blockTimeMinute = Constants.BLOCK_TIME_MINUTE;
     private final String genesisBlockId = Constants.GENESIS_BLOCK_ID;
     private final String startTime = String.valueOf(Constants.START_TIME);
@@ -117,7 +117,7 @@ public class FchChainInfo extends FcObject {
         for(Hit<Block> hit:result.hits().hits()){
             Block block = hit.source();
             if(block==null)continue;
-            String diff = NumberUtils.numberToPlainString(String.valueOf(FchUtils.bitsToDifficulty(block.getBits())),"3");
+            String diff = NumberUtils.numberToPlainString(String.valueOf(utils.FchUtils.bitsToDifficulty(block.getBits())),"3");
             timeDiffMap.put(block.getTime(),diff);
         }
         return timeDiffMap;
@@ -186,7 +186,7 @@ public class FchChainInfo extends FcObject {
         this.time = DateUtils.longToTime(((long)blockchainInfo.getMediantime())*1000,DateUtils.LONG_FORMAT);
 
         this.difficulty= NumberUtils.numberToPlainString(String.valueOf(blockchainInfo.getDifficulty()),"0");
-        double hashRate = FchUtils.difficultyToHashRate(blockchainInfo.getDifficulty());
+        double hashRate = utils.FchUtils.difficultyToHashRate(blockchainInfo.getDifficulty());
         this.hashRate= NumberUtils.numberToPlainString(String.valueOf(hashRate),"0");
         this.chainSize= NumberUtils.numberToPlainString(String.valueOf(blockchainInfo.getSize_on_disk()),null);
 
@@ -204,8 +204,8 @@ public class FchChainInfo extends FcObject {
                     System.out.println("Failed to get block information from ES.");
                     return;
                 }
-                double difficulty = FchUtils.bitsToDifficulty(block.getBits());
-                double hashRate = FchUtils.difficultyToHashRate(difficulty);
+                double difficulty = utils.FchUtils.bitsToDifficulty(block.getBits());
+                double hashRate = utils.FchUtils.difficultyToHashRate(difficulty);
                 this.difficulty= NumberUtils.numberToPlainString(String.valueOf(difficulty),"0");
                 this.hashRate= NumberUtils.numberToPlainString(String.valueOf(hashRate),"0");
                 this.blockId=block.getId();
@@ -222,7 +222,7 @@ public class FchChainInfo extends FcObject {
         double circulating = 0;
         double coinbaseMine = 25;
         double coinbaseFund = 25;
-        long blockPerYear = Long.parseLong(Constants.DAYS_PER_YEAR)*24*60;
+        long blockPerYear = Long.parseLong(Constants.DAYS_PER_YEAR_STR)*24*60;
         height = height+1;
 
         long years = height / blockPerYear;
@@ -339,7 +339,7 @@ public class FchChainInfo extends FcObject {
     }
 
     public String getDaysPerYear() {
-        return Constants.DAYS_PER_YEAR;
+        return Constants.DAYS_PER_YEAR_STR;
     }
 
     public String getMineMutualDays() {

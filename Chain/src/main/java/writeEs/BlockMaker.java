@@ -2,11 +2,11 @@ package writeEs;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import crypto.KeyTools;
-import fch.FchUtils;
 import fch.WeightMethod;
 import fch.fchData.*;
 import parser.ReadyBlock;
 import utils.EsUtils;
+import utils.FchUtils;
 
 import java.util.*;
 

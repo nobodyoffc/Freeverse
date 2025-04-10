@@ -1,21 +1,17 @@
 package api;
 
-import constants.FieldNames;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.core.IndexResponse;
 import fcData.DiskItem;
-import utils.RedisUtils;
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hasher;
-import com.google.common.hash.Hashing;
+import fcData.Hat;
+import feip.feipData.Service;
+import handlers.DiskHandler;
+import handlers.Handler;
 import server.ApipApiNames;
 import constants.CodeMessage;
-import crypto.Hash;
 import fcData.ReplyBody;
 import initial.Initiator;
-import utils.FileUtils;
-import utils.Hex;
 import utils.http.AuthType;
-import org.jetbrains.annotations.NotNull;
-import redis.clients.jedis.Jedis;
 import server.HttpRequestChecker;
 import appTools.Settings;
 
@@ -24,26 +20,19 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
 import static constants.Strings.*;
-import static initial.Initiator.esClient;
-import static utils.FileUtils.checkFileOfFreeDisk;
-import static utils.FileUtils.getSubPathForDisk;
-import static appTools.Settings.addSidBriefToName;
-import static startManager.StartDiskManager.STORAGE_DIR;
 
 @WebServlet(name = ApipApiNames.Carve, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.Carve)
 public class Carve extends HttpServlet {
+    private final Settings settings = Initiator.settings;
+    private final DiskHandler diskHandler = (DiskHandler) Initiator.settings.getHandler(Handler.HandlerType.DISK);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ReplyBody replier = new ReplyBody(Initiator.settings);
+        ReplyBody replier = new ReplyBody(settings);
         replier.setCode(CodeMessage.Code1017MethodNotAvailable);
         replier.setMessage(CodeMessage.Msg1017MethodNotAvailable);
         response.getWriter().write(replier.toNiceJson());
@@ -51,79 +40,85 @@ public class Carve extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ReplyBody replier = new ReplyBody(Initiator.settings);
-
+        ReplyBody replier = new ReplyBody(settings);
         AuthType authType = AuthType.FC_SIGN_URL;
-
         //Check authorization
-        try (Jedis jedis = Initiator.jedisPool.getResource()) {
-            HttpRequestChecker httpRequestChecker = new HttpRequestChecker(Initiator.settings, replier);
-            httpRequestChecker.checkRequestHttp(request, response, authType);
-            if (httpRequestChecker ==null){
-                return;
-            }
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        httpRequestChecker.checkRequestHttp(request, response, authType);
 
-            //Do request
-            Result DidAndLength = hashAndSaveFile(request);
-
-            Map<String,String> dataMap = new HashMap<>();
-            dataMap.put("did", DidAndLength.did());
-
-            Double price = RedisUtils.readHashDouble(jedis, addSidBriefToName(Initiator.sid, PARAMS), FieldNames.PRICE_PER_K_BYTES_CARVE);
-            replier.reply0SuccessHttp(dataMap,response);
-
-            //Update item info into ES
-            updateCarveDataInfoToEs(DidAndLength.bytesLength(), DidAndLength.did());
-        }
-    }
-
-    @NotNull
-    @SuppressWarnings("UnstableApiUsage")
-    public static Result hashAndSaveFile(HttpServletRequest request) throws IOException {
+        //Do request
         InputStream inputStream = request.getInputStream();
-        String tempFileName = FileUtils.getTempFileName();
-        OutputStream outputStream = new FileOutputStream(tempFileName);
-        HashFunction hashFunction = Hashing.sha256();
-        Hasher hasher = hashFunction.newHasher();
-        // Adjust buffer size as per your requirement
-        byte[] buffer = new byte[8192];
-        int bytesRead;
-        long bytesLength = 0;
-        while ((bytesRead = inputStream.read(buffer)) != -1) {
-            // Write the bytes read from the request input stream to the output stream
-            outputStream.write(buffer, 0, bytesRead);
-            hasher.putBytes(buffer, 0, bytesRead);
-            bytesLength +=bytesRead;
-        }
+        Hat hat = diskHandler.put(inputStream);
 
-        String did = Hex.toHex(Hash.sha256(hasher.hash().asBytes()));
-        String subDir = getSubPathForDisk(did);
-        String path = STORAGE_DIR +subDir;
+        Map<String,String> dataMap = new HashMap<>();
+        dataMap.put("did", hat.getId());
 
-        File file = new File(path,did);
-        if(!file.exists() || Boolean.FALSE.equals(checkFileOfFreeDisk(path, did))) {
-            try {
-                Path source = Paths.get(tempFileName);
-                Path target = Paths.get(path, did);
-                Files.createDirectories(target.getParent());
-                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException e) {
-                System.err.println("Error moving file: " + e.getMessage());
-            }
-        }
-        // Close the streams
-        outputStream.close();
-        inputStream.close();
-        return new Result(bytesLength, did);
+        //Update item info into ES
+        String result = updateCarveDataInfoToEs(hat, settings);
+        dataMap.put("result", result);
+        replier.reply0SuccessHttp(dataMap,response);
+
     }
 
-    private record Result(long bytesLength, String did) {
-    }
+//    @NotNull
+//    @SuppressWarnings("UnstableApiUsage")
+//    public static Result hashAndSaveFile(HttpServletRequest request) throws IOException {
+//        InputStream inputStream = request.getInputStream();
+//        String tempFileName = FileUtils.getTempFileName();
+//        OutputStream outputStream = new FileOutputStream(tempFileName);
+//        HashFunction hashFunction = Hashing.sha256();
+//        Hasher hasher = hashFunction.newHasher();
+//        // Adjust buffer size as per your requirement
+//        byte[] buffer = new byte[8192];
+//        int bytesRead;
+//        long bytesLength = 0;
+//        while ((bytesRead = inputStream.read(buffer)) != -1) {
+//            // Write the bytes read from the request input stream to the output stream
+//            outputStream.write(buffer, 0, bytesRead);
+//            hasher.putBytes(buffer, 0, bytesRead);
+//            bytesLength +=bytesRead;
+//        }
+//
+//        String did = Hex.toHex(Hash.sha256(hasher.hash().asBytes()));
+//        String subDir = getSubPathForDisk(did);
+//        String path = diskDir +subDir;
+//
+//        File file = new File(path,did);
+//        if(!file.exists() || Boolean.FALSE.equals(checkFileOfFreeDisk(path, did))) {
+//            try {
+//                Path source = Paths.get(tempFileName);
+//                Path target = Paths.get(path, did);
+//                Files.createDirectories(target.getParent());
+//                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+//            } catch (IOException e) {
+//                System.err.println("Error moving file: " + e.getMessage());
+//            }
+//        }
+//        // Close the streams
+//        outputStream.close();
+//        inputStream.close();
+//        return new Result(bytesLength, did);
+//    }
+//
+//    private record Result(long bytesLength, String did) {
+//    }
 
-    public static void updateCarveDataInfoToEs(long bytesLength, String did) throws IOException {
+    public static String updateCarveDataInfoToEs(Hat hat, Settings settings) {
         long saveDate = System.currentTimeMillis();
         Long expire = null;
-        DiskItem diskItem = new DiskItem(did, saveDate,expire, bytesLength);
-        esClient.index(i->i.index(Settings.addSidBriefToName(Initiator.sid,DATA)).id(did).document(diskItem));
+        DiskItem diskItem = new DiskItem(hat.getId(), saveDate,expire,hat.getSize());
+        ElasticsearchClient esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+
+        try {
+            IndexResponse result = esClient.index(i -> i.index(Settings.addSidBriefToName(settings.getSid(), DATA)).id(hat.getId()).document(diskItem));
+            if(result==null){
+                System.out.println("Failed to updateCarveDataInfoToEs");
+                return null;
+            }
+            return result.result().jsonValue();
+        } catch (IOException e) {
+            System.out.println("Failed to updateCarveDataInfoToEs:"+e.getMessage());
+            return null;
+        }
     }
 }

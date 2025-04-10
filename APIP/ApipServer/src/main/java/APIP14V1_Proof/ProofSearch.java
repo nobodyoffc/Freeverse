@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import feip.feipData.Proof;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import appTools.Settings;
 import static constants.FieldNames.ID;    
 import static constants.FieldNames.LAST_HEIGHT;
@@ -27,22 +27,22 @@ import static constants.Values.FALSE;
 
 @WebServlet(name = ApipApiNames.PROOF_SEARCH, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROOF_SEARCH)
 public class ProofSearch extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public ProofSearch() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }
 }

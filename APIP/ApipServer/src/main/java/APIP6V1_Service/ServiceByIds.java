@@ -15,25 +15,25 @@ import java.io.IOException;
 
 import appTools.Settings;
 import static constants.FieldNames.ID;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.SERVICE_BY_IDS, value = "/"+ ApipApiNames.SN_6+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SERVICE_BY_IDS)
 public class ServiceByIds extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public ServiceByIds() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.SERVICE, Service.class, ID, request,response,authType);
     }
 }

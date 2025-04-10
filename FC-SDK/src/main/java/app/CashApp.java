@@ -25,19 +25,24 @@ public class CashApp extends FcApp{
 //        settingsMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
         Object[] modules = new Object[]{
                 Service.ServiceType.APIP,
-                Handler.HandlerType.CASH
 //                Service.ServiceType.ES,
 //                Service.ServiceType.NASA_RPC
+                Handler.HandlerType.CONTACT,
+                Handler.HandlerType.CASH
         };
 
         while(true) {
-            Settings settings = Starter.startClient(CashHandler.name, settingsMap, br, modules);
+            Settings settings = Starter.startClient(CashHandler.name, settingsMap, br, modules, null);
 
             if (settings == null) return;
 
             CashHandler cashHandler = (CashHandler)settings.getHandler(Handler.HandlerType.CASH);
-            cashHandler.freshCashDB();
-            cashHandler.menu();
+            if(cashHandler==null){
+                cashHandler = new CashHandler(settings);
+                settings.addHandler(cashHandler);
+            }
+
+            cashHandler.menu(br, true);
 
             if (!Inputer.askIfYes(br, "Switch to another main FID?"))
                 System.exit(0);

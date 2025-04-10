@@ -80,6 +80,7 @@ public class Constants {
     public static final String ALG_SIGN_TX_BY_CRYPTO_SIGN = "SignTxByCryptoSign@No1_NrC7";
     public static final String CONFIG_JSON = "config.json";
     public static final long DAY_TO_MIL_SEC = 24*60*60*1000;
+    public static final int SEC_PER_DAY = 24*60*60;
     public static final String DOT_DECRYPTED = ".decrypted";
     public static int RedisDb4Webhook = 4;
     public static int RedisDb3Mempool = 3;
@@ -91,8 +92,8 @@ public class Constants {
     public final static String DOGE_0BlockId = "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691";
     public static long SatoshiDust = 546;
     public static long TenDayBlocks = 60*24*10;
-
-    public static final String DAYS_PER_YEAR = "400";
+    public static final int DAYS_PER_YEAR = 400;
+    public static final String DAYS_PER_YEAR_STR = "400";
     public static final String MINE_MATURE_DAYS = "10";
     public static final String FUND_MATURE_DAYS = "100";
 
@@ -116,4 +117,9 @@ public class Constants {
     public static final long TIMESTAMP_2000_SECONDS = 946684800L; // 2000-01-01 00:00:00 in seconds
     public static final long TIMESTAMP_2100_SECONDS = 4102444800L; // 2100-01-01 00:00:00 in seconds
     public static final long TIMESTAMP_2200 = 4314336000000L; // 2200-01-01 00:00:00
+    public static int DAYS_PER_WEEK = 10;
+    public static int WEEKS_PER_SEASON = 10;
+    public static int SEASONS_PER_YEAR = 4;
+    public static int HOURS_PER_DAY = 24;
+    public static int MINUTES_PER_HOURS = 60;
 }

@@ -2,11 +2,12 @@ package fcData;
 
 import apip.apipData.TxInfo;
 import constants.Constants;
-import fch.FchUtils;
 import fch.fchData.CashMark;
 import org.jetbrains.annotations.NotNull;
 import utils.DateUtils;
 import appTools.Shower;
+import utils.FchUtils;
+
 import java.util.List;
 import java.util.ArrayList;
 
@@ -35,7 +36,7 @@ public class FidTxMask {
                 sum -= spentCash.getValue();
         }
 
-        fidTxMask.setBalance(FchUtils.satoshiToCoin(sum));
+        fidTxMask.setBalance(utils.FchUtils.satoshiToCoin(sum));
         if(txInfo.getFee()!=null)fidTxMask.setFee(FchUtils.satoshiToCoin(txInfo.getFee()));
         fidTxMask.setHeight(txInfo.getHeight());
         fidTxMask.setTime(txInfo.getBlockTime());
@@ -136,6 +137,6 @@ public class FidTxMask {
             showList.add(String.format("%.2f", mask.getFee()*1000000));
             valueListList.add(showList);
         }
-        Shower.showDataTable(title, fields, widths, valueListList, null);
+        Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 }

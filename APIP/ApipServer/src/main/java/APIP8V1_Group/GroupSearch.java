@@ -7,7 +7,7 @@ import constants.IndicesNames;
 import feip.feipData.Group;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -24,11 +24,11 @@ import static constants.FieldNames.*;
 @WebServlet(name = ApipApiNames.GROUP_SEARCH, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GROUP_SEARCH)
 public class GroupSearch extends HttpServlet {
     private final Settings settings;
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public GroupSearch() {
         this.settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -44,11 +44,11 @@ public class GroupSearch extends HttpServlet {
     }
 
     public void doGroupSearchRequest(String filterField, String filterValue, String exceptField, String exceptValue, List<Sort> sort, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
-        List<Group> meetList = fcdslRequestHandler.doRequestForList(IndicesNames.GROUP, Group.class, filterField, filterValue, exceptField, exceptValue, sort, request, response, authType);
+        List<Group> meetList = fcHttpRequestHandler.doRequestForList(IndicesNames.GROUP, Group.class, filterField, filterValue, exceptField, exceptValue, sort, request, response, authType);
         if (meetList == null) return;
         for(Group group :meetList){
             group.setMembers(null);
         }
-        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetList,response);
+        fcHttpRequestHandler.getReplyBody().reply0SuccessHttp(meetList,response);
     }
 }

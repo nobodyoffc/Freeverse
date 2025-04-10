@@ -218,7 +218,7 @@ public class ApipApiNames {
     public static final String DIFFICULTY_HISTORY ="difficultyHistory";
     public static final String HASH_RATE_HISTORY ="hashRateHistory";
     public static final String BLOCK_TIME_HISTORY ="blockTimeHistory";
-    public static final String WEBHOOK_POINT = "webhookPoint";
+    public static final String NEW_ORDER = "newOrder";
 
 
     static {

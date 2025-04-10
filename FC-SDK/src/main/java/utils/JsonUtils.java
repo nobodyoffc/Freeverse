@@ -548,8 +548,9 @@ public class JsonUtils {
     public static <T> List<T> listFromJson(String json, Class<T> clazz) {
         Gson gson = new Gson();
         Type type = TypeToken.getParameterized(ArrayList.class, clazz).getType();
-        String jsonString = gson.toJson(json);
-        List<T> tempList = gson.fromJson(jsonString, type);
+        if(json.startsWith("\""))json = json.substring(1);
+        if(json.endsWith("\""))json = json.substring(0,json.length()-1);
+        List<T> tempList = gson.fromJson(json, type);
         return new ArrayList<>(tempList);
     }
 }

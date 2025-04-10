@@ -194,4 +194,8 @@ private static Object parsePrimitiveOrWrapper(String value, Class<?> type) {
                 type == Short.class ||
                 type == String.class;
     }
+
+    public static String makeRedisKey(String sid, String name) {
+        return IdNameUtils.makeKeyName(null, sid, name, true);
+    }
 }

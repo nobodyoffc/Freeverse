@@ -23,28 +23,10 @@ public class DiskCounter extends Counter {
         super(settings, counterPriKey, params);
     }
 
-    @Override
-    public void localTask() {
-        deleteExpiredFiles(sid);
-    }
+//    @Override
+//    public void localTask() {
+//        deleteExpiredFiles(sid);
+//    }
 
-    private static void deleteExpiredFiles(String sid) {
-        Date date = new Date();
-        SearchResponse<DiskItem> result;
-        try {
-            result = StartDiskManager.esClient.search(s -> s.index(Settings.addSidBriefToName(sid,DATA)).query(q -> q.range(r -> r.field(FieldNames.EXPIRE).lt(JsonData.of(date)))), DiskItem.class);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        if(result==null || result.hits().hits().isEmpty()) return;
 
-        for(Hit<DiskItem> hit:result.hits().hits()){
-            DiskItem source = hit.source();
-            if(source==null)continue;
-            String did = source.getDid();
-            String subDir = FileUtils.getSubPathForDisk(did);
-            File file = new File(StartDiskManager.STORAGE_DIR+subDir,did);
-            if(file.exists())file.delete();
-        }
-    }
 }

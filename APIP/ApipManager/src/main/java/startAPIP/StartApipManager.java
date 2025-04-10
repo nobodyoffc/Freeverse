@@ -6,7 +6,7 @@ import appTools.Starter;
 import appTools.Inputer;
 import appTools.Menu;
 import constants.FieldNames;
-import fch.FchUtils;
+import fcData.AutoTask;
 import fch.fchData.Cid;
 import handlers.AccountHandler;
 import handlers.Handler;
@@ -29,6 +29,7 @@ import swap.SwapAffair;
 import swap.SwapLpData;
 import swap.SwapPendingData;
 import swap.SwapStateData;
+import utils.FchUtils;
 import utils.ObjectUtils;
 
 import java.io.BufferedReader;
@@ -41,8 +42,9 @@ import static appTools.Settings.*;
 import static appTools.Settings.AVATAR_ELEMENTS_PATH;
 import static appTools.Settings.AVATAR_PNG_PATH;
 import static appTools.Settings.LISTEN_PATH;
-import static constants.Constants.UserDir;
-import static constants.Constants.UserHome;
+import static constants.Constants.*;
+import static constants.Constants.SEC_PER_DAY;
+import static constants.IndicesNames.CID;
 import static constants.IndicesNames.ORDER;
 import static constants.IndicesNames.WEBHOOK;
 import static constants.IndicesNames.*;
@@ -63,35 +65,40 @@ public class StartApipManager {
 	public static final Service.ServiceType serverType = Service.ServiceType.APIP;
 
 	public static final Object[] modules = new Object[]{
-			Service.ServiceType.NASA_RPC,
 			Service.ServiceType.REDIS,
+			Service.ServiceType.NASA_RPC,
 			Service.ServiceType.ES,
 			Handler.HandlerType.MEMPOOL,
 			Handler.HandlerType.CASH,
 			Handler.HandlerType.ACCOUNT,
+			Handler.HandlerType.NONCE,
+			Handler.HandlerType.SESSION,
 			Handler.HandlerType.WEBHOOK
     };
 
-	public static final Handler.HandlerType[] runningHandlers = new Handler.HandlerType[]{
-		Handler.HandlerType.ACCOUNT,
-		Handler.HandlerType.WEBHOOK,
-		Handler.HandlerType.MEMPOOL
-	};
-
-	public static Map<String,Object>  settingMap = new HashMap<> ();
-
-	static {
+	public static void main(String[] args) {
+		Map<String,Object>  settingMap = new HashMap<> ();
 		settingMap.put(Settings.FORBID_FREE_API,false);
 		settingMap.put(Settings.WINDOW_TIME,DEFAULT_WINDOW_TIME);
 		settingMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 		settingMap.put(AVATAR_ELEMENTS_PATH,System.getProperty(UserDir)+"/avatar/elements");
 		settingMap.put(AVATAR_PNG_PATH,System.getProperty(UserDir)+"/avatar/png");
-	}
+		settingMap.put(AccountHandler.DISTRIBUTE_DAYS,AccountHandler.DEFAULT_DISTRIBUTE_DAYS);
+		settingMap.put(AccountHandler.MIN_DISTRIBUTE_BALANCE,AccountHandler.DEFAULT_MIN_DISTRIBUTE_BALANCE);
+		settingMap.put(AccountHandler.DEALER_MIN_BALANCE,AccountHandler.DEFAULT_DEALER_MIN_BALANCE);
 
-	public static void main(String[] args)throws Exception{
+		List<AutoTask> autoTaskList = new ArrayList<>();
+		autoTaskList.add(new AutoTask(Handler.HandlerType.MEMPOOL, "checkMempool", (String)settingMap.get(LISTEN_PATH)));
+		autoTaskList.add(new AutoTask(Handler.HandlerType.WEBHOOK, "pushWebhookData", (String)settingMap.get(LISTEN_PATH)));
+		autoTaskList.add(new AutoTask(Handler.HandlerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
+		autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
+		autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+		autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+
 		Menu.welcome("APIP Manager");
+
 		br = new BufferedReader(new InputStreamReader(System.in));
-		settings = Starter.startServer(serverType, settingMap, ApipApiNames.apiList, modules, runningHandlers, br);
+		settings = Starter.startServer(serverType, settingMap, ApipApiNames.apiList, modules, br, autoTaskList);
 		if(settings==null)return;
 
 		byte[] symKey = settings.getSymKey();

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import static appTools.Inputer.askIfYes;
-import static server.ApipApiNames.WEBHOOK_POINT;
+import static server.ApipApiNames.NEW_ORDER;
 import static constants.Strings.*;
 
 public class Order {
@@ -63,7 +63,7 @@ public class Order {
         System.out.println("Check webhook...");
         String urlHead = params.getUrlHead();
         if(!urlHead.endsWith("/"))urlHead=urlHead+"/";
-        String endpoint = urlHead+ ApipApiNames.VERSION_1 +"/"+ WEBHOOK_POINT;
+        String endpoint = urlHead+ ApipApiNames.VERSION_1 +"/"+ NEW_ORDER;
         ApipClient apipClient = (ApipClient) apipAccount.getClient();
 
         Map<String, String> dataMap = apipClient.checkSubscription(hookMethod, endpoint);
@@ -89,7 +89,7 @@ public class Order {
         if(hookUserId!=null){
             try(Jedis jedis = jedisPool.getResource()){
                 jedis.select(1);
-                String sessionName = apipAccount.getSession().getName();
+                String sessionName = apipAccount.getSession().getId();
                 jedis.hset(sessionName, FieldNames.SESSION_KEY, Hex.toHex(apipClient.getSessionKey()));
                 jedis.hset(sessionName, hookMethod+"_"+HOOK_USER_ID,hookUserId);
             }

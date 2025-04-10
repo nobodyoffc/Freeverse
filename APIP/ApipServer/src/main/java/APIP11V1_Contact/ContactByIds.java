@@ -16,25 +16,25 @@ import initial.Initiator;
 import utils.http.AuthType;
 
 import static constants.FieldNames.ID;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.CONTACT_BY_IDS, value = "/"+ ApipApiNames.SN_11+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CONTACT_BY_IDS)
 public class ContactByIds extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public ContactByIds() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.CONTACT, Contact.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.CONTACT, Contact.class, ID, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        fcdslRequestHandler.doIdsRequest(IndicesNames.CONTACT, Contact.class, ID, request,response,authType);
+        fcHttpRequestHandler.doIdsRequest(IndicesNames.CONTACT, Contact.class, ID, request,response,authType);
     }
 }

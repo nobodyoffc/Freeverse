@@ -1758,7 +1758,7 @@ private static String formatTimestamp(Object value) {
         int choice = 0;
 
         while (true) {
-            System.out.println("\nInput the numbers to choose. Separate by comma. 'a' to choose all. Enter to ignore:\n");
+            System.out.println("\nInput the numbers to choose. Separate by comma. 'a' to choose all. Enter to ignore:");
             try {
                 String input = br.readLine();
                 if("".equals(input)) break;

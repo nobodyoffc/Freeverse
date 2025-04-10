@@ -1,7 +1,6 @@
 package server.reward;
 
 import handlers.CashHandler;
-import fch.FchUtils;
 import fcData.Affair;
 import fcData.DataSignTx;
 import fcData.Op;
@@ -12,6 +11,7 @@ import fch.fchData.SendTo;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
 import feip.feipData.Feip;
+import utils.FchUtils;
 import utils.JsonUtils;
 import utils.NumberUtils;
 import org.slf4j.Logger;
@@ -30,7 +30,7 @@ public class AffairMaker {
 
     private RewardInfo rewardInfo;
     private String account;
-    private TxCreator.OffLineTxRequestData offLineTxRequestData;
+    private OffLineTxInfo offLineTxInfo;
     private List<Cash> meetCashList;
     private String msg;
     private final String sid;
@@ -100,12 +100,12 @@ public class AffairMaker {
 
         addQualifiedPendingToPay(sendToMap);
 
-        TxCreator.OffLineTxRequestData offLineTxRequestData = new TxCreator.OffLineTxRequestData();
-        offLineTxRequestData.setFromFid(account);
-        offLineTxRequestData.setSendToList(new ArrayList<>(sendToMap.values()));
-        offLineTxRequestData.setMsg(msg);
+        OffLineTxInfo offLineTxInfo = new OffLineTxInfo();
+        offLineTxInfo.setSender(account);
+        offLineTxInfo.setOutputs(new ArrayList<>(sendToMap.values()));
+        offLineTxInfo.setMsg(msg);
 
-        String rawTxStr = TxCreator.makeOldCsTxRequiredJson(offLineTxRequestData,cashList);
+        String rawTxStr = TxCreator.makeCsTxRequiredJsonV1(offLineTxInfo,cashList);
 
         dataSignTx.setUnsignedTxCs(rawTxStr);
         dataSignTx.setAlg(ALG_SIGN_TX_BY_CRYPTO_SIGN);
@@ -119,7 +119,7 @@ public class AffairMaker {
 
     private void addQualifiedPendingToPay(HashMap<String, SendTo> sendToMap) {
         for(String key: pendingMap.keySet()){
-            double amount = FchUtils.satoshiToCoin(pendingMap.get(key));
+            double amount = utils.FchUtils.satoshiToCoin(pendingMap.get(key));
             SendTo sendTo = new SendTo();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
@@ -144,7 +144,7 @@ public class AffairMaker {
             String fid = sendTo.getFid();
             double amount = sendTo.getAmount();
             if (amount < MinPayValue) {
-                addToPending(fid, FchUtils.coinToSatoshi(amount),jedisPool);
+                addToPending(fid, utils.FchUtils.coinToSatoshi(amount),jedisPool);
                 iterator.remove();
             }
         }
@@ -224,12 +224,12 @@ public class AffairMaker {
         this.account = account;
     }
 
-    public TxCreator.OffLineTxRequestData getDataForOffLineTx() {
-        return offLineTxRequestData;
+    public OffLineTxInfo getDataForOffLineTx() {
+        return offLineTxInfo;
     }
 
-    public void setDataForOffLineTx(TxCreator.OffLineTxRequestData offLineTxRequestData) {
-        this.offLineTxRequestData = offLineTxRequestData;
+    public void setDataForOffLineTx(OffLineTxInfo offLineTxInfo) {
+        this.offLineTxInfo = offLineTxInfo;
     }
 
     public List<Cash> getMeetCashList() {

@@ -184,7 +184,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
         List<String> sentFidList = new ArrayList<>();
         byte[] bytes=null;
         for (String fid : toFidList) {
-            FcSession fcSession = sessionHandler.getSessionById(fid);
+            FcSession fcSession = sessionHandler.getSessionByUserId(fid);
             CryptoDataByte cryptoDataByte;
             if(fcSession!=null && fcSession.getKeyBytes()!=null) {
                 cryptoDataByte = talkUnit.encryptUnit(fcSession.getKeyBytes(), null, null, EncryptType.SymKey);
@@ -203,7 +203,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
             sentFidList.add(fid);
         }
         if(bytes!=null && bytes.length>0)
-            accountHandler.addAllBalance(bytes.length,fromFid,sentFidList,price);
+            accountHandler.transferBalanceFromOneToMulti(bytes.length,fromFid,sentFidList,price);
 
         return true;
     }

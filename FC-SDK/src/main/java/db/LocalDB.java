@@ -20,6 +20,8 @@ public interface LocalDB<T> {
     String ON_CHAIN_DELETED_MAP = "on_chain_deleted";
     String MAP_TYPES_META_KEY = "map_types";
     String SORT_TYPE_META_KEY = "sort_type";
+    String LIST_COUNT_PREFIX = "count:";
+    String LIST_ITEM_PREFIX = "item:";
 
     /**
      * Defines the sort order used for entities in the database.
@@ -98,6 +100,14 @@ public interface LocalDB<T> {
      * @param key The key of the entity to remove
      */
     void remove(String key);
+
+    /**
+     * Removes multiple entities from the database in a batch operation.
+     * This method is more efficient than calling remove() multiple times.
+     *
+     * @param list List of entities to remove
+     */
+    void remove(List<T> list);
 
     /**
      * Commits any pending changes to the database.
@@ -179,14 +189,14 @@ public interface LocalDB<T> {
      * @param key The settings key
      * @param value The value to store
      */
-    void putSettings(String key, Object value);
+    void putSetting(String key, Object value);
     
     /**
      * Removes a settings value from the database.
      *
      * @param key The settings key to remove
      */
-    void removeSettings(String key);
+    void removeSetting(String key);
     
     /**
      * Removes all settings values from the database.
@@ -206,7 +216,7 @@ public interface LocalDB<T> {
      * @param key The settings key
      * @return The settings value, or null if not found
      */
-    Object getSettings(String key);
+    Object getSetting(String key);
     
     /**
      * Stores a state value in the database.
@@ -258,6 +268,7 @@ public interface LocalDB<T> {
      * @return The entity ID, or null if not found
      */
     String getIdByIndex(long index);
+    T getByIndex(long index);
 
     /**
      * Gets the number of entities in the database.
@@ -450,6 +461,14 @@ public interface LocalDB<T> {
     <V> void putAllInMap(String mapName, List<String> keyList, List<V> valueList);
 
     /**
+     * Gets the number of entries in a named map.
+     *
+     * @param mapName The name of the map
+     * @return The number of entries in the map, or 0 if the map doesn't exist
+     */
+    int getMapSize(String mapName);
+
+    /**
      * Enum defining the type of database implementation.
      */
     enum DbType {
@@ -489,4 +508,110 @@ public interface LocalDB<T> {
      * @param <V> The type of values in the map
      */
     <V> void createMap(String mapName, Class<V> vClass);
+
+    /**
+     * Creates an ordered list with the specified name and value type.
+     * The list maintains insertion order and handles element removal properly.
+     *
+     * @param <V> The type of values in the list
+     * @param listName The name of the list
+     * @param vClass The class of values to be stored in the list
+     */
+    <V> void createOrderedList(String listName, Class<V> vClass);
+
+    /**
+     * Adds an element to the end of an ordered list.
+     *
+     * @param <V> The type of the value
+     * @param listName The name of the list
+     * @param value The value to add
+     * @return The index of the added element
+     */
+    <V> long addToList(String listName, V value);
+
+    /**
+     * Adds multiple elements to the end of an ordered list.
+     *
+     * @param <V> The type of the values
+     * @param listName The name of the list
+     * @param values The values to add
+     * @return The starting index of the added elements
+     */
+    <V> long addAllToList(String listName, List<V> values);
+
+    /**
+     * Gets an element from an ordered list by its index.
+     *
+     * @param <V> The type of the value
+     * @param listName The name of the list
+     * @param index The index of the element
+     * @return The element, or null if not found
+     */
+    <V> V getFromList(String listName, long index);
+
+    /**
+     * Gets all elements from an ordered list.
+     *
+     * @param <V> The type of the values
+     * @param listName The name of the list
+     * @return A list of all elements in the list
+     */
+    <V> List<V> getAllFromList(String listName);
+
+    /**
+     * Gets a range of elements from an ordered list.
+     *
+     * @param <V> The type of the values
+     * @param listName The name of the list
+     * @param startIndex The starting index (inclusive)
+     * @param endIndex The ending index (exclusive)
+     * @return A list of elements in the specified range
+     */
+    <V> List<V> getRangeFromList(String listName, long startIndex, long endIndex);
+
+    /**
+     * Gets a range of elements from an ordered list in reverse order (from end to beginning).
+     *
+     * @param <V> The type of the values
+     * @param listName The name of the list
+     * @param startIndex The starting index (inclusive) from the end of the list
+     * @param endIndex The ending index (exclusive) from the end of the list
+     * @return A list of elements in the specified range in reverse order
+     */
+    <V> List<V> getRangeFromListReverse(String listName, long startIndex, long endIndex);
+
+    /**
+     * Removes an element from an ordered list by its index.
+     * The indices of subsequent elements are adjusted to maintain continuity.
+     *
+     * @param listName The name of the list
+     * @param index The index of the element to remove
+     * @return true if the element was removed, false otherwise
+     */
+    boolean removeFromList(String listName, long index);
+
+    /**
+     * Removes multiple elements from an ordered list by their indices.
+     * The indices of subsequent elements are adjusted to maintain continuity.
+     *
+     * @param listName The name of the list
+     * @param indices The indices of the elements to remove
+     * @return The number of elements removed
+     */
+    int removeFromList(String listName, List<Long> indices);
+
+    /**
+     * Gets the size of an ordered list.
+     *
+     * @param listName The name of the list
+     * @return The number of elements in the list
+     */
+    long getListSize(String listName);
+
+    /**
+     * Clears all elements from an ordered list.
+     *
+     * @param listName The name of the list
+     */
+    void clearList(String listName);
 }

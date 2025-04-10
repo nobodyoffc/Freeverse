@@ -10,10 +10,9 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import crypto.*;
 import fcData.ReplyBody;
-import org.bitcoinj.core.Transaction;
+import handlers.CashHandler;
 import org.bitcoinj.fch.FchMainNetwork;
 import utils.IdNameUtils;
-import fch.FchUtils;
 import fch.TxCreator;
 import fch.fchData.Cash;
 import fch.fchData.SendTo;
@@ -80,7 +79,7 @@ public class ApiAccount {
         fcSession.setKeyCipher(newSessionKeyCipher);
         apipAccount.fcSession.setKeyCipher(newSessionKeyCipher);
         String newSessionName = IdNameUtils.makeKeyName(newSessionKey);
-        apipAccount.fcSession.setName(newSessionName);
+        apipAccount.fcSession.setId(newSessionName);
         System.out.println("SessionName:" + newSessionName);
         System.out.println("SessionKeyCipher: " + fcSession.getKeyCipher());
     }
@@ -100,7 +99,7 @@ public class ApiAccount {
 
         switch (apiProvider.getType()){
             case APIP -> {
-                return connectApip(apiProvider,symKey,br,fidCipherMap);
+                return connectApip(apiProvider,symKey,br);
             }
             case NASA_RPC -> {
                 return connectNaSaRPC(symKey);
@@ -128,16 +127,16 @@ public class ApiAccount {
     }
 
 
-    public Object connectApi(ApiProvider apiProvider, byte[] symKey){
+    public Object connectApi(ApiProvider apiProvider, byte[] symKey, BufferedReader br){
 
         if (!checkApiGeneralParams(apiProvider)) return null;
         try {
             return switch (apiProvider.getType()) {
-                case APIP -> connectApip(apiProvider, symKey, null, null);
+                case APIP -> connectApip(apiProvider, symKey, br);
                 case NASA_RPC -> connectNaSaRPC(symKey);
                 case ES -> connectEs(symKey);
                 case REDIS -> connectRedis();
-                case DISK -> connectDisk(apiProvider, symKey, apipClient, null, null);
+                case DISK -> connectDisk(apiProvider, symKey, apipClient, br, null);
                 default -> connectOtherApi(apiProvider, symKey);
             };
         }catch (Exception e){
@@ -212,7 +211,8 @@ public class ApiAccount {
             System.out.println("The password of the API is necessary.");
             return null;
         }
-        password = new Decryptor().decryptJsonBySymKey(passwordCipher,symKey).getData();
+        CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymKey(passwordCipher, symKey);
+        password = cryptoDataByte.getData();
         if(password==null)return null;
 
         NaSaRpcClient naSaRpcClient = new NaSaRpcClient(apiUrl,userName,password);
@@ -555,7 +555,7 @@ public class ApiAccount {
             this.apiUrl = apiProvider.getApiUrl();
             Service.ServiceType type = apiProvider.getType();
             if(type==null)type = chooseOne(Service.ServiceType.values(), null, "Choose the type:",br);
-
+            this.userId= userFid;
             switch (type) {
                 case ES -> {
                     if(askIfYes(br,"Set username and password for ES?")) {
@@ -575,15 +575,13 @@ public class ApiAccount {
                 case APIP, DISK,TALK -> {
                     if(providerId ==null)inputSid(br);
 
-//                    checkUserCipher(symKey, userFid, fidInfoMap, br);
+                    userPriKeyCipher = fidInfoMap.get(userFid).getPriKeyCipher();
 
                     while(userName==null) {
-                        if(userPriKeyCipher==null)userPriKeyCipher = fidInfoMap.get(userFid).getPriKeyCipher();
-                        if(userPriKeyCipher==null)return;
-                        byte[] userPriKey = new Decryptor().decryptJsonBySymKey(userPriKeyCipher, symKey).getData();
-                        userName = KeyTools.priKeyToFid(userPriKey);
-                        userId = userName;
-                        BytesUtils.clearByteArray(userPriKey);
+                        if(userId!=null)userName= userFid;
+                        else{
+                            userName = Inputer.inputString(br,"Input your userName");
+                        }
                     }
                     inputVia(br);
                 }
@@ -648,7 +646,7 @@ public class ApiAccount {
             this.passwordCipher = updateKeyCipher(br, "user's passwordCipher", this.passwordCipher,symKey);
             this.userPriKeyCipher = updateKeyCipher(br, "userPriKeyCipher", this.userPriKeyCipher,symKey);
             this.userPubKey = makePubKey(this.userPriKeyCipher,symKey);
-            this.fcSession.setName(promptAndUpdate(br, "sessionName", this.fcSession.getName()));
+            this.fcSession.setId(promptAndUpdate(br, "sessionName", this.fcSession.getId()));
             this.fcSession.setKeyCipher(updateKeyCipher(br, "sessionKeyCipher", this.fcSession.getKeyCipher(),symKey));
 
             this.via = promptAndUpdate(br, "via", this.via);
@@ -728,7 +726,7 @@ public class ApiAccount {
     }
 
     private void inputSessionName(BufferedReader br) throws IOException {
-        this.fcSession.setName(Inputer.promptAndSet(br, "sessionName", this.fcSession.getName()));
+        this.fcSession.setId(Inputer.promptAndSet(br, "sessionName", this.fcSession.getId()));
     }
 
     private void inputSessionKeyCipher(byte[] symKey, BufferedReader br) throws IOException {
@@ -784,11 +782,11 @@ public class ApiAccount {
         return true;
     }
 
-    public double buyApi(byte[] symKey, ApipClient apipClient, @Nullable BufferedReader br) {
+    public Double buyApi(byte[] symKey, ApipClient apipClient, @Nullable BufferedReader br) {
         if(apipClient==null) apipClient = Settings.getFreeApipClient();
 
         byte[] priKey = decryptUserPriKey(userPriKeyCipher, symKey);
-        long minPay = FchUtils.coinStrToSatoshi(serviceParams.getMinPayment());
+        long minPay = utils.FchUtils.coinStrToSatoshi(serviceParams.getMinPayment());
 
         long price;
         try {
@@ -809,39 +807,23 @@ public class ApiAccount {
         sendToList.add(sendTo);
 
         List<Cash> cashList = apipClient.cashValid(this.userId,payValue,null,sendToList.size(),null, RequestMethod.GET,AuthType.FREE);//apipClient.getCashes(apiUrl,this.userId,payValue);
-        if(cashList==null|| cashList.isEmpty())return 0;
+        if(cashList==null|| cashList.isEmpty())return null;
         String signedTx;
 
         if(priKey==null){
-            Transaction transaction = TxCreator.createUnsignedTx(cashList, sendToList, APIP_Account_JSON, null, payValue, null, FchMainNetwork.MAINNETWORK);
-            System.out.println("Unsigned TX: \n--------" + Hex.toHex(transaction.bitcoinSerialize()) + "\n--------");
-
-            if(br==null){
-                System.out.println("Please sign the TX and broadcast it.");
-                return 0;
-            }
-            while(true) {
-                System.out.println("Please sign the TX and input the signed Tx. 'q' to quit:");
-                signedTx = Inputer.inputString(br);
-                if("q".equals(signedTx))System.exit(0);
-                if(Hex.isHexString(signedTx))break;
-                if(StringUtils.isBase64(signedTx)){
-                    signedTx = StringUtils.base64ToHex(signedTx);
-                    break;
-                }
-                System.out.println("Failed to get signed Tx. Try again.");
-            }
+            signedTx = CashHandler.makeOffLineTx(this.userId, cashList,sendToList, 0L, TxCreator.DEFAULT_FEE_RATE,null, "2", br);
         }else {
             signedTx = TxCreator.createTxFch(cashList, priKey, sendToList, null, FchMainNetwork.MAINNETWORK);
         }
+        if(signedTx==null)return null;
 
         String result = apipClient.broadcastTx(signedTx, RequestMethod.GET, AuthType.FREE);
-        if(result==null){
-            log.error("Failed to buy APIP service. Failed to broadcast TX.");
-            return 0;
+        if(!Hex.isHex32(result)){
+            log.error("Failed to buy APIP service. Failed to broadcast TX:"+result);
+            return null;
         }
         log.debug("TxId: " + result);
-        System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getDealer() + ". \nWait for the confirmation for a few minutes...");
+        System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getDealer() + " by "+result+". \nWait for the confirmation for a few minutes...");
 
         waitConfirmation(cashList.get(0).getId(), apipClient);
         BytesUtils.clearByteArray(priKey);
@@ -851,7 +833,7 @@ public class ApiAccount {
     }
 
 
-    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br, Map<String, CidInfo> fidCipherMap){
+    public ApipClient connectApip(ApiProvider apiProvider, byte[] symKey, BufferedReader br){
 
         if(!apiProvider.getType().equals(Service.ServiceType.APIP)){
             System.out.println("It's not APIP provider.");
@@ -946,10 +928,13 @@ public class ApiAccount {
         } else {
             this.sessionKey =decryptSessionKey(fcSession.getKeyCipher(),symKey);
         }
-        if (this.sessionKey==null) {
-            log.debug("Failed to get sessionKey for "+type+" service.");
-            System.out.println("Failed to get sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
-            return null;
+        if (this.sessionKey==null || this.sessionKey.length==0) {
+            this.sessionKey=freshSessionKey(symKey, type, RequestBody.SignInMode.NORMAL, br);
+            if(this.sessionKey==null){
+                log.debug("Failed to get sessionKey for "+type+" service.");
+                System.out.println("Failed to get sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
+                return null;
+            }
         }
         //test the client
         Client client1 = (Client) client;

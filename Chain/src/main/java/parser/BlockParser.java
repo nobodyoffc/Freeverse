@@ -1,9 +1,9 @@
 package parser;
 import crypto.Hash;
 import crypto.KeyTools;
-import fch.FchUtils;
 import fch.fchData.*;
 import utils.BytesUtils;
+import utils.FchUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -87,7 +87,7 @@ public class BlockParser {
 		ReadyBlock readyBlock = new ReadyBlock();
 		ByteArrayInputStream blockInputStream = new ByteArrayInputStream(blockBodyBytes);
 
-		long txCount = FchUtils.parseVarint(blockInputStream).number;
+		long txCount = utils.FchUtils.parseVarint(blockInputStream).number;
 		block1.setTxCount((int) txCount);
 
 		ArrayList<Tx> txList = new ArrayList<>();
@@ -196,8 +196,8 @@ public class BlockParser {
 
 		// Parse output count.
 		// 解析输出数量。
-		FchUtils.VarintResult varintParseResult;
-		varintParseResult = FchUtils.parseVarint(blockInputStream);
+		utils.FchUtils.VariantResult varintParseResult;
+		varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
 		long outputCount = varintParseResult.number;
 		byte[] b0 = varintParseResult.rawBytes;
 		rawBytesList.add(b0);
@@ -232,7 +232,7 @@ public class BlockParser {
 
 			// Parse the length of script.
 			// 解析脚本长度。
-			varintParseResult = FchUtils.parseVarint(blockInputStream);
+			varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
 			long scriptSize = varintParseResult.number;
 			byte[] b2 = varintParseResult.rawBytes;
 			rawBytesList.add(b2);
@@ -382,8 +382,8 @@ public class BlockParser {
 		ArrayList<Cash> rawInList = new ArrayList<>();// For returning inputs without
 
 		// Get input count./获得输入数量
-		FchUtils.VarintResult varintParseResult;
-		varintParseResult = FchUtils.parseVarint(blockInputStream);
+		FchUtils.VariantResult varintParseResult;
+		varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
 		long inputCount = varintParseResult.number;
 		tx1.setInCount((int) inputCount);
 
@@ -412,7 +412,7 @@ public class BlockParser {
 			input.setId(Cash.makeCashId(b36PreTxIdAndIndex));
 
 			// Read the length of script./读脚本长度。
-			varintParseResult = FchUtils.parseVarint(blockInputStream);
+			varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
 			long scriptLength = varintParseResult.number;
 			byte[] bvVarint1 = varintParseResult.rawBytes;
 			rawBytesList.add(bvVarint1);

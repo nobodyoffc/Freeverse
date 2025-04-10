@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import feip.feipData.Statement;
 import initial.Initiator;
 import utils.http.AuthType;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 import appTools.Settings;
 import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
@@ -25,22 +25,22 @@ import static constants.FieldNames.LAST_HEIGHT;
 
 @WebServlet(name = ApipApiNames.STATEMENT_SEARCH, value = "/"+ ApipApiNames.SN_15+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.STATEMENT_SEARCH)
 public class StatementSearch extends HttpServlet {
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public StatementSearch() {
         Settings settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.STATEMENT, Statement.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.STATEMENT, Statement.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
-        fcdslRequestHandler.doSearchRequest(IndicesNames.STATEMENT, Statement.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.STATEMENT, Statement.class, defaultSort, request,response,authType);
     }
 }

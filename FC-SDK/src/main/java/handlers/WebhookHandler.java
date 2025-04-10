@@ -10,9 +10,10 @@ import constants.Constants;
 import constants.FieldNames;
 import constants.IndicesNames;
 import constants.Strings;
+
 import crypto.Hash;
+import db.LocalDB;
 import fcData.FcEntity;
-import fch.FchUtils;
 import fch.fchData.Cash;
 import fch.fchData.OpReturn;
 import feip.feipData.Service;
@@ -21,17 +22,13 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.ApipApiNames;
 import utils.EsUtils;
+import utils.FchUtils;
 import utils.ObjectUtils;
 import utils.http.AuthType;
 import utils.http.HttpUtils;
 import utils.http.RequestMethod;
 import appTools.Settings;
-import appTools.Shower;
 import clients.ApipClient;
-import org.mapdb.DB;
-import org.mapdb.DBMaker;
-import org.mapdb.HTreeMap;
-import org.mapdb.Serializer;
 
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.slf4j.Logger;
@@ -42,7 +39,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class WebhookHandler extends Handler {
+public class WebhookHandler extends Handler<WebhookHandler.WebhookRequestBody> {
     private static final Logger log = LoggerFactory.getLogger(WebhookHandler.class);
     private final String sid;
     private final String listenPath;
@@ -51,13 +48,12 @@ public class WebhookHandler extends Handler {
     private final ApipClient apipClient;
     private final JedisPool jedisPool;
     private AtomicBoolean running;
-    private DB db;
-    private HTreeMap<String, String> subscriptionMap;
-    private HTreeMap<String, String> metaMap; // General metadata map
     private Map<String, Map<String, WebhookRequestBody>> methodFidEndpointInfoMapMap;
     private long bestHeight;
 
     public WebhookHandler(Settings settings) {
+        super(settings,HandlerType.WEBHOOK, LocalDB.SortType.UPDATE_ORDER, WebhookRequestBody.class,
+               true, false);
         this.sid = settings.getSid();
         this.listenPath = (String) settings.getSettingMap().get(Settings.LISTEN_PATH);
         this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
@@ -65,73 +61,41 @@ public class WebhookHandler extends Handler {
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.jedisPool = (JedisPool)settings.getClient(Service.ServiceType.REDIS);
         this.running = new AtomicBoolean(false);
-        initializeDatabase(settings.getDbDir());
-    }
-
-    public WebhookHandler(String sid, String listenDir, ElasticsearchClient esClient, NaSaRpcClient nasaClient, ApipClient apipClient, JedisPool jedisPool, String dbPath) {
-        this.sid = sid;
-        this.listenPath = listenDir;
-        this.esClient = esClient;
-        this.nasaClient = nasaClient;
-        this.apipClient = apipClient;
-        this.jedisPool = jedisPool;
-        
-        this.running = new AtomicBoolean(false);
-        
-        initializeDatabase(dbPath);
+        this.methodFidEndpointInfoMapMap = new HashMap<>();
     }
 
     public void putWebhookRequestBody(String id, WebhookRequestBody item) {
-        put(id,item);
+        localDB.put(id, item);
     }
+
     public WebhookRequestBody getWebhookRequestBody(String id) {
-        return (WebhookRequestBody) get(id);
-    }
-    private void initializeDatabase(String dbPath) {
-        // Initialize MapDB
-        this.db = DBMaker.fileDB(dbPath + "/webhook.db")
-                .fileMmapEnable()
-                .closeOnJvmShutdown()
-                .make();
-                
-        // Create/Get the subscription map
-        this.subscriptionMap = db.hashMap("subscriptions")
-                .keySerializer(Serializer.STRING)
-                .valueSerializer(Serializer.STRING)
-                .createOrOpen();
-                
-        // Create/Get the metadata map
-        this.metaMap = db.hashMap("metadata")
-                .keySerializer(Serializer.STRING)
-                .valueSerializer(Serializer.STRING)
-                .createOrOpen();
-                
-        this.methodFidEndpointInfoMapMap = new HashMap<>();
+        return localDB.get(id);
     }
 
     public void startPusherThread() {
         Thread pusherThread = new Thread(() -> {
-        running = new AtomicBoolean(true);
-        while (running.get()) {
-            readMethodFidWebhookInfoMapMapFromDB();
-            FchUtils.waitForChangeInDirectory(listenPath, running);
-            try {
-                TimeUnit.SECONDS.sleep(3);
-                pushWebhookData();
-            } catch (InterruptedException e) {
-                log.error("Pusher thread interrupted", e);
+            running = new AtomicBoolean(true);
+            while (running.get()) {
+                readMethodFidWebhookInfoMapMapFromDB();
+                FchUtils.waitForChangeInDirectory(listenPath, running);
+                try {
+                    TimeUnit.SECONDS.sleep(3);
+                    pushWebhookData();
+                } catch (InterruptedException e) {
+                    log.error("Pusher thread interrupted", e);
+                }
             }
-        }
         });
         pusherThread.setDaemon(true);
         pusherThread.start();
     }
 
-    public void pushWebhookData(){
+    public void pushWebhookData() {
         String lastPushHeightKey = "lastPushHeight";
         long lastPushHeight;
         try {
-            lastPushHeight = Long.parseLong(metaMap.getOrDefault(lastPushHeightKey, String.valueOf(bestHeight)));
+            Object lastHeightObj = localDB.getMeta(lastPushHeightKey);
+            lastPushHeight = lastHeightObj != null ? Long.parseLong(lastHeightObj.toString()) : bestHeight;
         } catch (Exception e) {
             log.error("Error pushing webhook data", e);
             lastPushHeight = 0;
@@ -141,19 +105,16 @@ public class WebhookHandler extends Handler {
         if (lastPushHeight < bestHeight) {
             pushWebhooks(methodFidEndpointInfoMapMap, lastPushHeight);
             lastPushHeight = bestHeight;
-            metaMap.put(lastPushHeightKey, String.valueOf(lastPushHeight));
-            db.commit(); // Persist the metadata
+            localDB.putMeta(lastPushHeightKey, String.valueOf(lastPushHeight));
         }
-        getIsRunning().set(true);
+//        getIsRunning().set(true);
     }
 
     // Subscription Management Methods
     public void subscribe(WebhookRequestBody webhookRequestBody) {
         try {
             String key = makeSubscriptionKey(webhookRequestBody.getMethod(), webhookRequestBody.getUserId());
-            String dataJson = new Gson().toJson(webhookRequestBody);
-            subscriptionMap.put(key, dataJson);
-            db.commit(); // Ensure data is persisted
+            localDB.put(key, webhookRequestBody);
             
             // Save to ES
             esClient.index(i -> i
@@ -169,8 +130,7 @@ public class WebhookHandler extends Handler {
     public void unsubscribe(WebhookRequestBody webhookInfo) {
         try {
             String key = makeSubscriptionKey(webhookInfo.getMethod(), webhookInfo.getUserId());
-            subscriptionMap.remove(key);
-            db.commit();
+            localDB.remove(key);
             
             // Delete from ES
             esClient.delete(d -> d
@@ -184,11 +144,7 @@ public class WebhookHandler extends Handler {
 
     public WebhookRequestBody checkSubscription(String userId, String method) {
         String key = makeSubscriptionKey(method, userId);
-        String subscriptionJson = subscriptionMap.get(key);
-        if (subscriptionJson != null) {
-            return new Gson().fromJson(subscriptionJson, WebhookRequestBody.class);
-        }
-        return null;
+        return localDB.get(key);
     }
 
     private String makeSubscriptionKey(String method, String userId) {
@@ -202,18 +158,21 @@ public class WebhookHandler extends Handler {
     private void readMethodFidWebhookInfoMapMapFromDB() {
         Map<String, Map<String, WebhookRequestBody>> newMap = new HashMap<>();
         
+        // Get all items from LevelDB
+        Map<String, WebhookRequestBody> allItems = localDB.getItemMap();
+        
         // Group subscriptions by method
-        for (String key : subscriptionMap.keySet()) {
+        for (Map.Entry<String, WebhookRequestBody> entry : allItems.entrySet()) {
+            String key = entry.getKey();
+            if (!key.contains(":")) continue;
+            
             String[] parts = key.split(":");
             if (parts.length != 2) continue;
             
             String method = parts[0];
             String userId = parts[1];
-            String subscriptionJson = subscriptionMap.get(key);
+            WebhookRequestBody webhookInfo = entry.getValue();
             
-            if (subscriptionJson == null) continue;
-            
-            WebhookRequestBody webhookInfo = new Gson().fromJson(subscriptionJson, WebhookRequestBody.class);
             newMap.computeIfAbsent(method, k -> new HashMap<>())
                  .put(userId, webhookInfo);
         }
@@ -336,9 +295,6 @@ public class WebhookHandler extends Handler {
 
     public void shutdown() {
         running.set(false);
-        if (db != null && !db.isClosed()) {
-            db.close();
-        }
     }
 
     private void updateBestHeight() {
@@ -357,32 +313,29 @@ public class WebhookHandler extends Handler {
     public void checkForUpdates() {
         updateBestHeight();
         
-        for (String key : subscriptionMap.getKeys()) {
+        Map<String, WebhookRequestBody> allItems = localDB.getItemMap();
+        for (Map.Entry<String, WebhookRequestBody> entry : allItems.entrySet()) {
+            String key = entry.getKey();
+            if (!key.contains(":")) continue;
+            
             String[] parts = key.split(":");
             if (parts.length != 2) continue;
             
             String method = parts[0];
             String userId = parts[1];
-            long lastHeight = Long.parseLong(subscriptionMap.get(key));
+            WebhookRequestBody webhookInfo = entry.getValue();
 
             if (method.equals("NEW_CASH_BY_FIDS")) {
                 List<Cash> newCashes = CashHandler.getCashListFromApip(
-                    userId, true, 50, null, null, lastHeight, apipClient);
+                    userId, true, 50, null, null, bestHeight, apipClient);
                 
                 if (newCashes != null && !newCashes.isEmpty()) {
                     // Process new cashes here
                     // Update last processed height
-                    subscriptionMap.put(key, String.valueOf(bestHeight));
-                    db.commit();
+                    localDB.put(key, webhookInfo);
                 }
             }
             // Add other method handlers as needed
-        }
-    }
-    public void close() {
-        if (db != null) {
-            db.close();
-            getIsRunning().set(false);
         }
     }
 
@@ -393,8 +346,6 @@ public class WebhookHandler extends Handler {
         private String endpoint;
         private Object data;
         private String op;
-
-        
 
         public static String makeHookUserId(String sid, String newCashByFidsAPI, String userId) {
             return Hash.sha256x2(sid+newCashByFidsAPI+userId);
@@ -452,7 +403,5 @@ public class WebhookHandler extends Handler {
         public void setMethod(String method) {
             this.method = method;
         }
-
-
     }
 }

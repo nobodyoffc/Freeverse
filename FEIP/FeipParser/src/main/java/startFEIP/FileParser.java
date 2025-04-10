@@ -13,7 +13,6 @@ import constants.IndicesNames;
 import construct.*;
 
 import fch.OpReFileUtils;
-import fch.FchUtils;
 import fch.fchData.OpReturn;
 import fch.opReReadResult;
 import feip.feipData.*;
@@ -29,6 +28,7 @@ import personal.PersonalParser;
 import personal.PersonalRollbacker;
 import publish.PublishParser;
 import publish.PublishRollbacker;
+import utils.FchUtils;
 
 import java.io.File;
 import java.io.FileInputStream;

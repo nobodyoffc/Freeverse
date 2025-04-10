@@ -17,17 +17,17 @@ import java.io.IOException;
 import java.util.Map;
 
 import static constants.FieldNames.ID;
-import server.FcdslRequestHandler;
+import server.FcHttpRequestHandler;
 
 
 @WebServlet(name = ApipApiNames.TEAM_BY_IDS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_BY_IDS)
 public class TeamByIds extends HttpServlet {
     private final Settings settings;
-    private final FcdslRequestHandler fcdslRequestHandler;
+    private final FcHttpRequestHandler fcHttpRequestHandler;
 
     public TeamByIds() {
         this.settings = Initiator.settings;
-        this.fcdslRequestHandler = new FcdslRequestHandler(settings);
+        this.fcHttpRequestHandler = new FcHttpRequestHandler(settings);
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -41,9 +41,9 @@ public class TeamByIds extends HttpServlet {
     }
 
     public void doTeamIdsRequest( HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
-        FcdslRequestHandler fcdslRequestHandler = FcdslRequestHandler.checkRequest(request, response, authType, settings);
-        if (fcdslRequestHandler == null) return;
-        Map<String, Team> meetMap = fcdslRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, ID);
+        FcHttpRequestHandler fcHttpRequestHandler = FcHttpRequestHandler.checkRequest(request, response, authType, settings);
+        if (fcHttpRequestHandler == null) return;
+        Map<String, Team> meetMap = fcHttpRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, ID);
         if (meetMap == null) return;
         for(Team team :meetMap.values()){
             team.setMembers(null);
@@ -52,6 +52,6 @@ public class TeamByIds extends HttpServlet {
             team.setInvitees(null);
             team.setTransferee(null);
         }
-        fcdslRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
+        fcHttpRequestHandler.getReplyBody().reply0SuccessHttp(meetMap,response);
     }
 }

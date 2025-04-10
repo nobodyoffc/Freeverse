@@ -13,7 +13,7 @@ public class DiskApiNames {
 
     static {
         diskAPIs = new String[]{
-                PUT, GET, CHECK, LIST, ApipApiNames.PING, ApipApiNames.SIGN_IN, ApipApiNames.SIGN_IN_ECC, ApipApiNames.WEBHOOK_POINT
+                PUT, GET, CHECK, LIST, ApipApiNames.PING, ApipApiNames.SIGN_IN, ApipApiNames.SIGN_IN_ECC, ApipApiNames.NEW_ORDER
         };
         diskApiList = Arrays.stream(diskAPIs).toList();
     }

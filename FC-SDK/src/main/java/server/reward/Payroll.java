@@ -1,6 +1,6 @@
 package server.reward;
 
-import fch.TxCreator;
+import fch.OffLineTxInfo;
 import fch.fchData.Cash;
 
 import java.util.List;
@@ -9,7 +9,7 @@ public class Payroll {
 
     RewardInfo rewardInfo;
     String account;
-    TxCreator.OffLineTxRequestData offLineTxRequestData;
+    OffLineTxInfo offLineTxInfo;
     List<Cash> meetCashList;
 
     public Payroll(String account,RewardInfo rewardInfo) {

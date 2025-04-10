@@ -2,6 +2,7 @@ package handlers;
 
 public enum TxResultType {
     UNSIGNED_JSON,
+    TX_WITHOUT_INPUTS,
     SINGED_HEX,
     SIGNED_BASE64,
     TX_ID,
@@ -13,6 +14,8 @@ public enum TxResultType {
         switch (typeString.toUpperCase()) {
             case "UNSIGNEDJSON":
                 return UNSIGNED_JSON;
+            case "TXWITHOUTINPUTS":
+                return TX_WITHOUT_INPUTS;
             case "SINGEDTRANSACTION":
                 return SINGED_HEX;
             case "SIGNEDBASE64":
@@ -24,5 +27,12 @@ public enum TxResultType {
             default:
                 return NULL;
         }
+    }
+
+    public String addTypeAheadResult(String result){
+        return this+":"+result;
+    }
+    public static TxResultType parseType(String str){
+        return valueOf(str.substring(0,str.indexOf(":")));
     }
 }

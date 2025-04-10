@@ -1,7 +1,7 @@
 package clients;
 
 import apip.apipData.*;
-import fch.TxCreator;
+import fch.OffLineTxInfo;
 import fch.fchData.Cid;
 import appTools.Menu;
 import constants.*;
@@ -17,7 +17,6 @@ import configure.ApiAccount;
 import configure.ApiProvider;
 import handlers.WebhookHandler;
 import server.ApipApiNames;
-import server.FreeApi;
 import utils.Hex;
 import utils.JsonUtils;
 import utils.ObjectUtils;
@@ -384,13 +383,13 @@ public class ApipClient extends Client {
     }
 
     //TODO untested
-    public List <Cid> searchCid (BufferedReader br){
+    public List <Cid> searchCidList(BufferedReader br, boolean choose){
         String part = Inputer.inputString(br,"Input the FID, CID, used CIDs or a part of any one of them:");
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(ID,FieldNames.USED_CIDS).addNewValue(part);
         List<Cid> result = cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if(result==null || result.isEmpty())return null;
-        return Cid.showCidList("Chose CIDs",result,20,true,br);
+        return Cid.showCidList("Chose CIDs",result,20,choose,br);
     }
 
     public List<Cid> cidSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
@@ -1077,20 +1076,22 @@ public class ApipClient extends Client {
         return (String) data;
     }
 
-    public String offLineTx(String fromFid, List<SendTo> sendToList, String msg, Long cd, RequestMethod requestMethod, AuthType authType){
+    public String offLineTx(String fromFid, List<SendTo> sendToList, String msg, Long cd, String ver, RequestMethod requestMethod, AuthType authType){
         if(requestMethod.equals(RequestMethod.POST)) {
             Fcdsl fcdsl = new Fcdsl();
-            TxCreator.OffLineTxRequestData offLineTxRequestData = new TxCreator.OffLineTxRequestData();
-            offLineTxRequestData.setFromFid(fromFid);
-            offLineTxRequestData.setMsg(msg);
-            offLineTxRequestData.setSendToList(sendToList);
-            offLineTxRequestData.setCd(cd);
-            Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.DATA_FOR_OFF_LINE_TX, JsonUtils.toJson(offLineTxRequestData));
+            OffLineTxInfo offLineTxInfo = new OffLineTxInfo();
+            offLineTxInfo.setSender(fromFid);
+            offLineTxInfo.setMsg(msg);
+            offLineTxInfo.setOutputs(sendToList);
+            offLineTxInfo.setCd(cd);
+            offLineTxInfo.setVer(ver);
+            Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.DATA_FOR_OFF_LINE_TX, JsonUtils.toJson(offLineTxInfo));
             Object data = requestJsonByFcdsl(SN_18, VERSION_1, OFF_LINE_TX, fcdsl, authType, sessionKey, requestMethod);
             return (String) data;
         }
 
         Map<String,String> paramMap = new HashMap<>();
+        paramMap.put(VER,ver);
         paramMap.put("fromFid",fromFid);
         List<String> toList = new ArrayList<>();
         List<String> amountList = new ArrayList<>();
@@ -1100,7 +1101,6 @@ public class ApipClient extends Client {
                 toList.add(sendTo.getFid());
                 amountList.add(String.valueOf(sendTo.getAmount()));
             }
-
             paramMap.put("toFids", String.join(",", toList));
             paramMap.put("amounts", String.join(",", amountList));
         }

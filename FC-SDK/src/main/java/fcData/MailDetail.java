@@ -35,87 +35,87 @@ public class MailDetail extends FcObject{
     private transient String toCid;
     private String content;
     private Boolean active;
+//
+//    public static void main(String[] args) {
+//        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+//        List<MailDetail> chosenMails = new ArrayList<>();
+//        byte[] lastId = null;
+//        int totalDisplayed = 0;
+//        PersistentSequenceMap mailDB = new PersistentSequenceMap(null,"b0819972aa5f78d28606a571c49356a2577a4df6e257e0e84a61b51fbb4417ba", Strings.MAIL,null);
+//        List<MailDetail> currentList = mailDB.getListFromEnd(null, 3, (byte[] value) -> MailDetail.fromBytes(value));
+//        if (currentList.isEmpty()) {
+//            return;
+//        }
+//
+//        for (int i = 0; i < currentList.size(); i++) {
+//            MailDetail mail = currentList.get(i);
+//            String from;
+//            if(mail.getFromCid()!=null)from = StringUtils.omitMiddle(mail.getFromCid(), 13);
+//            else from = StringUtils.omitMiddle(mail.getFrom(), 13);
+//            String to;
+//            if(mail.getToCid()!=null)to = StringUtils.omitMiddle(mail.getToCid(), 13);
+//            else to = StringUtils.omitMiddle(mail.getTo(), 13);
+//            String date = DateUtils.longToTime(mail.getTime(),"yy-mm-dd");
+//            System.out.printf("%d. %s %s To %s Subject: %s%n", totalDisplayed + i + 1,date, from,to, StringUtils.omitMiddle(mail.getContent(), 30));
+//        }
+//
+//        System.out.println("Enter mail numbers to select (comma-separated), 'q' to quit, or press Enter for more:");
+//        String input = null;
+//        try {
+//            input = br.readLine().trim().toLowerCase();
+//        } catch (IOException e) {
+//            throw new RuntimeException(e);
+//        }
+//
+//        if (input.equals("q")) {
+//            return;
+//        }
+//
+//        String[] selections = input.split(",");
+//        for (String selection : selections) {
+//            try {
+//                int index = Integer.parseInt(selection.trim()) - 1;
+//                if (index >= 0 && index < totalDisplayed + currentList.size()) {
+//                    int listIndex = index - totalDisplayed;
+//                    chosenMails.add(currentList.get(listIndex));
+//                }
+//            } catch (NumberFormatException e) {
+//                System.out.println("Invalid input: " + selection);
+//            }
+//        }
+//
+//        totalDisplayed += currentList.size();
+//        lastId = currentList.get(currentList.size() - 1).getIdBytes();
+//        System.out.println("Total:"+totalDisplayed+". LastId:"+Hex.toHex(lastId));
+//    }
+//
+//    private static void testMailBytesJson() {
+//        MailDetail mailDetail = MailDetail.newSample();
+//        mailDetail.getIdBytes();
+//
+//        JsonUtils.printJson(mailDetail);
+//
+//
+//        byte[] bytes = mailDetail.toBytes();
+//        MailDetail newMail = MailDetail.fromBytes(bytes);
+//        JsonUtils.printJson(newMail);
+//
+//        TalkUnit talkUnit = TalkUnit.newSample();
+//        JsonUtils.printJson(talkUnit);
+//
+//        JsonUtils.printJson(TalkUnit.fromBytes(talkUnit.toBytes()));
+//    }
 
-    public static void main(String[] args) {
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-        List<MailDetail> chosenMails = new ArrayList<>();
-        byte[] lastId = null;
-        int totalDisplayed = 0;
-        PersistentSequenceMap mailDB = new PersistentSequenceMap(null,"b0819972aa5f78d28606a571c49356a2577a4df6e257e0e84a61b51fbb4417ba", Strings.MAIL,null);
-        List<MailDetail> currentList = mailDB.getListFromEnd(null, 3, (byte[] value) -> MailDetail.fromBytes(value));
-        if (currentList.isEmpty()) {
-            return;
-        }
 
-        for (int i = 0; i < currentList.size(); i++) {
-            MailDetail mail = currentList.get(i);
-            String from;
-            if(mail.getFromCid()!=null)from = StringUtils.omitMiddle(mail.getFromCid(), 13);
-            else from = StringUtils.omitMiddle(mail.getFrom(), 13);
-            String to;
-            if(mail.getToCid()!=null)to = StringUtils.omitMiddle(mail.getToCid(), 13);
-            else to = StringUtils.omitMiddle(mail.getTo(), 13);
-            String date = DateUtils.longToTime(mail.getTime(),"yy-mm-dd");
-            System.out.printf("%d. %s %s To %s Subject: %s%n", totalDisplayed + i + 1,date, from,to, StringUtils.omitMiddle(mail.getContent(), 30));
-        }
-
-        System.out.println("Enter mail numbers to select (comma-separated), 'q' to quit, or press Enter for more:");
-        String input = null;
-        try {
-            input = br.readLine().trim().toLowerCase();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        if (input.equals("q")) {
-            return;
-        }
-
-        String[] selections = input.split(",");
-        for (String selection : selections) {
-            try {
-                int index = Integer.parseInt(selection.trim()) - 1;
-                if (index >= 0 && index < totalDisplayed + currentList.size()) {
-                    int listIndex = index - totalDisplayed;
-                    chosenMails.add(currentList.get(listIndex));
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid input: " + selection);
-            }
-        }
-
-        totalDisplayed += currentList.size();
-        lastId = currentList.get(currentList.size() - 1).getIdBytes();
-        System.out.println("Total:"+totalDisplayed+". LastId:"+Hex.toHex(lastId));
-    }
-
-    private static void testMailBytesJson() {
-        MailDetail mailDetail = MailDetail.newSample();
-        mailDetail.getIdBytes();
-
-        JsonUtils.printJson(mailDetail);
-
-
-        byte[] bytes = mailDetail.toBytes();
-        MailDetail newMail = MailDetail.fromBytes(bytes);
-        JsonUtils.printJson(newMail);
-
-        TalkUnit talkUnit = TalkUnit.newSample();
-        JsonUtils.printJson(talkUnit);
-
-        JsonUtils.printJson(TalkUnit.fromBytes(talkUnit.toBytes()));
-    }
-
-
-    public static MailDetail newSample(){
-        MailDetail mailDetail = new MailDetail();
-        mailDetail.setMailId(Hex.toHex(BytesUtils.getRandomBytes(32)));
-        mailDetail.setTime(System.currentTimeMillis());
-        mailDetail.setFrom(KeyTools.pubKeyToFchAddr(new ECKey().getPubKey()));
-        mailDetail.setTo(KeyTools.pubKeyToFchAddr(new ECKey().getPubKey()));
-        mailDetail.setContent("The content of "+mailDetail.getMailId());
-        return mailDetail;
-    }
+//    public static MailDetail newSample(){
+//        MailDetail mailDetail = new MailDetail();
+//        mailDetail.setMailId(Hex.toHex(BytesUtils.getRandomBytes(32)));
+//        mailDetail.setTime(System.currentTimeMillis());
+//        mailDetail.setFrom(KeyTools.pubKeyToFchAddr(new ECKey().getPubKey()));
+//        mailDetail.setTo(KeyTools.pubKeyToFchAddr(new ECKey().getPubKey()));
+//        mailDetail.setContent("The content of "+mailDetail.getMailId());
+//        return mailDetail;
+//    }
 
     public byte[] toBytes(){
         try(ByteArrayBuilder bab = new ByteArrayBuilder()) {
