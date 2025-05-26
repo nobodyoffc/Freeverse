@@ -11,11 +11,12 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.UpdateByQueryResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import constants.FieldNames;
 import constants.Strings;
-import fch.WeightMethod;
-import fch.fchData.Cid;
-import fch.fchData.Block;
+import core.fch.Weight;
+import data.fchData.Cid;
+import data.fchData.Block;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.EsUtils;
@@ -25,6 +26,7 @@ import utils.JsonUtils;
 import java.io.IOException;
 import java.util.*;
 
+import static constants.FieldNames.ID;
 import static constants.IndicesNames.*;
 
 public class CdMaker {
@@ -82,7 +84,7 @@ public class CdMaker {
 		long count = 0;
 
 		SearchResponse<Cid> response = esClient.search(
-				s -> s.index(CID).size(EsUtils.READ_MAX).sort(sort -> sort.field(f -> f.field(Strings.FID))),
+				s -> s.index(CID).size(EsUtils.READ_MAX).sort(sort -> sort.field(f -> f.field(ID))),
 				Cid.class);
 
 		ArrayList<Cid> addrOldList = getResultAddrList(response);
@@ -102,7 +104,7 @@ public class CdMaker {
 			Hit<Cid> last = response.hits().hits().get(response.hits().hits().size() - 1);
 			String lastId = last.id();
 			response = esClient.search(s -> s.index(CID).size(EsUtils.READ_MAX)
-					.sort(sort -> sort.field(f -> f.field(Strings.FID))).searchAfter(lastId), Cid.class);
+					.sort(sort -> sort.field(f -> f.field(ID))).searchAfter(lastId), Cid.class);
 
 			addrOldList = getResultAddrList(response);
 			addrOldMap = new HashMap<>();
@@ -135,7 +137,7 @@ public class CdMaker {
 		for(String id: addrNewCdMap.keySet()){
 			Long oldWeight = addrOldMap.get(id).getWeight();
 			if(oldWeight==null) oldWeight=0L;
-			long newWeight =oldWeight +(addrCdGrowMap.get(id)* WeightMethod.cdPercentInWeight)/100;
+			long newWeight =oldWeight +(addrCdGrowMap.get(id)* Weight.cdPercentInWeight)/100;
 			addrWeightMap.put(id, newWeight);
 		}
 		return addrWeightMap;

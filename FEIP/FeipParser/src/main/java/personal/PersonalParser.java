@@ -1,5 +1,6 @@
 package personal;
 
+import data.feipData.*;
 import utils.EsUtils;
 import utils.EsUtils.MgetResult;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
@@ -8,8 +9,7 @@ import constants.IndicesNames;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import com.google.gson.Gson;
-import fch.fchData.OpReturn;
-import feip.feipData.*;
+import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
 
 import java.io.IOException;

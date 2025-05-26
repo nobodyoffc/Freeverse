@@ -2,7 +2,7 @@ package APIP4V1_Protocol;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Protocol;
+import data.feipData.Protocol;
 import initial.Initiator;
 import utils.http.AuthType;
 
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import appTools.Settings;
+import config.Settings;
 import server.FcHttpRequestHandler;
 
 import static constants.FieldNames.ID;

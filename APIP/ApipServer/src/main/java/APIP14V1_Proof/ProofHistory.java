@@ -1,7 +1,7 @@
 
 package APIP14V1_Proof;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
@@ -16,7 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
@@ -33,7 +33,7 @@ public class ProofHistory extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcHttpRequestHandler.doSearchRequest(IndicesNames.PROOF_HISTORY, feip.feipData.ProofHistory.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.PROOF_HISTORY, data.feipData.ProofHistory.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

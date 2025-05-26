@@ -4,6 +4,8 @@
 # Ignore directories named `target` (commonly used in Maven projects)
 /target/
 
+
+
 # Ignore IntelliJ IDEA files
 .idea/
 *.iml
@@ -25,8 +27,9 @@ Thumbs.db
 *.png
 /avatar
 
-# MapDb
+# Db
 *.db
+/db
 
 # vscode
 .vscode/

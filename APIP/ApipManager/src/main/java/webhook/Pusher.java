@@ -1,8 +1,8 @@
 package webhook;
 
-import apip.apipData.WebhookPushBody;
-import fch.fchData.Cash;
-import fch.fchData.OpReturn;
+import data.apipData.WebhookPushBody;
+import data.fchData.Cash;
+import data.fchData.OpReturn;
 import handlers.WebhookHandler;
 import server.ApipApiNames;
 import utils.EsUtils;
@@ -19,7 +19,7 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
-import appTools.Settings;
+import config.Settings;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -27,7 +27,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static fcData.FcSession.sign;
+import static data.fcData.FcSession.sign;
 import static constants.FieldNames.IDS;
 import static constants.Strings.*;
 
@@ -185,8 +185,8 @@ public class Pusher implements Runnable{
             double nPriceF = Double.parseDouble(nPrice);
 
             String pricePerKB = jedis.hget(Settings.addSidBriefToName(sid,PARAMS), FieldNames.PRICE_PER_K_BYTES);
-            long price = FchUtils.coinStrToSatoshi(pricePerKB);
-
+            Long price = FchUtils.coinStrToSatoshi(pricePerKB);
+            if(price==null)price=0L;
 
             long balanceL = Long.parseLong(balance);
             bestHeight = jedis.get(BEST_HEIGHT);

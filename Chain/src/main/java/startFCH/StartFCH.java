@@ -1,14 +1,14 @@
 package startFCH;
 
-import appTools.Menu;
-import appTools.Settings;
-import appTools.Starter;
+import ui.Menu;
+import config.Settings;
+import config.Starter;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Constants;
 import constants.UpStrings;
-import fch.OpReFileUtils;
-import fch.fchData.Block;
-import feip.feipData.Service;
+import core.fch.OpReFileUtils;
+import data.fchData.Block;
+import data.feipData.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import parser.Preparer;

@@ -2,8 +2,8 @@ package APIP17V1_Crypto;
 
 import server.ApipApiNames;
 import constants.FieldNames;
-import crypto.KeyTools;
-import fcData.ReplyBody;
+import core.crypto.KeyTools;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
-import appTools.Settings;
+import config.Settings;
 
 @WebServlet(name = ApipApiNames.ADDRESSES, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.ADDRESSES)
 public class Addresses extends HttpServlet {
@@ -35,21 +35,21 @@ public class Addresses extends HttpServlet {
         if (other == null) return;
         //Do this request
 
-        String addrOrPubKey = other.get(FieldNames.ADDR_OR_PUB_KEY);
+        String addrOrPubkey = other.get(FieldNames.ADDR_OR_PUB_KEY);
 
         Map<String, String> addrMap;
-        String pubKey;
+        String pubkey;
 
-        if(addrOrPubKey.startsWith("F")||addrOrPubKey.startsWith("1")||addrOrPubKey.startsWith("D")||addrOrPubKey.startsWith("L")){
-            byte[] hash160 = KeyTools.addrToHash160(addrOrPubKey);
+        if(addrOrPubkey.startsWith("F")||addrOrPubkey.startsWith("1")||addrOrPubkey.startsWith("D")||addrOrPubkey.startsWith("L")){
+            byte[] hash160 = KeyTools.addrToHash160(addrOrPubkey);
             addrMap = KeyTools.hash160ToAddresses(hash160);
-        }else if (addrOrPubKey.startsWith("02")||addrOrPubKey.startsWith("03")){
-            pubKey = addrOrPubKey;
-            addrMap= KeyTools.pubKeyToAddresses(pubKey);
-        }else if(addrOrPubKey.startsWith("04")){
+        }else if (addrOrPubkey.startsWith("02")||addrOrPubkey.startsWith("03")){
+            pubkey = addrOrPubkey;
+            addrMap= KeyTools.pubkeyToAddresses(pubkey);
+        }else if(addrOrPubkey.startsWith("04")){
             try {
-                pubKey = KeyTools.compressPk65To33(addrOrPubKey);
-                addrMap= KeyTools.pubKeyToAddresses(pubKey);
+                pubkey = KeyTools.compressPk65To33(addrOrPubkey);
+                addrMap= KeyTools.pubkeyToAddresses(pubkey);
             } catch (Exception e) {
                 replier.replyOtherErrorHttp("Wrong public key.", response);
                 return;

@@ -1,14 +1,14 @@
 package api;
 
-import apip.apipData.Sort;
-import fcData.DiskItem;
+import data.apipData.Sort;
+import data.fcData.DiskItem;
 import server.ApipApiNames;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
-import appTools.Settings;
+import config.Settings;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;

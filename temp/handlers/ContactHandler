@@ -2,9 +2,9 @@ package handlers;
 
 import appTools.Inputer;
 import appTools.Menu;
-import appTools.Settings;
+import config.Settings;
 import clients.ApipClient;
-import clients.Client;
+import clients.FcClient;
 import constants.Constants;
 import crypto.CryptoDataByte;
 import crypto.Encryptor;

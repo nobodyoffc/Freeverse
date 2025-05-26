@@ -1,9 +1,9 @@
 package test;
 
-import appTools.Settings;
+import config.Settings;
 import clients.ApipClient;
-import feip.feipData.Service;
-import feip.feipData.serviceParams.TalkParams;
+import data.feipData.Service;
+import data.feipData.serviceParams.TalkParams;
 import utils.ObjectUtils;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;

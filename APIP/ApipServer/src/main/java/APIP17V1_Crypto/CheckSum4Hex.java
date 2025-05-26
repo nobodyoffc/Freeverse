@@ -2,8 +2,8 @@ package APIP17V1_Crypto;
 
 import server.ApipApiNames;
 import constants.FieldNames;
-import crypto.Hash;
-import fcData.ReplyBody;
+import core.crypto.Hash;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.Hex;
@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
-import appTools.Settings;
+import config.Settings;
 
 @WebServlet(name = ApipApiNames.CHECK_SUM_4_HEX, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CHECK_SUM_4_HEX)
 public class CheckSum4Hex extends HttpServlet {

@@ -11,10 +11,10 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import feip.feipData.Mail;
+import data.feipData.Mail;
 import initial.Initiator;
 import utils.http.AuthType;
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 

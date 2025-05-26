@@ -1,9 +1,9 @@
 package writeEs;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import crypto.KeyTools;
-import fch.WeightMethod;
-import fch.fchData.*;
+import core.crypto.KeyTools;
+import data.fchData.*;
+import core.fch.Weight;
 import parser.ReadyBlock;
 import utils.EsUtils;
 import utils.FchUtils;
@@ -327,13 +327,13 @@ public class BlockMaker {
 					else addr.setBalance(addr.getBalance() - inValue);
 					if(addr.getCdd()==null)addr.setCdd(cdd);
 					else addr.setCdd(addr.getCdd() + cdd);
-					if(addr.getWeight()==null)addr.setWeight((cdd* WeightMethod.cddPercentInWeight)/100);
-					else addr.setWeight(addr.getWeight()+(cdd* WeightMethod.cddPercentInWeight)/100);
+					if(addr.getWeight()==null)addr.setWeight((cdd* Weight.cddPercentInWeight)/100);
+					else addr.setWeight(addr.getWeight()+(cdd* Weight.cddPercentInWeight)/100);
 					addr.setLastHeight(txHas.getHeight());
 					if(addr.getCash()==null)addr.setCash(1L);
 					else addr.setCash(addr.getCash() - 1);
 
-					if (addr.getPubKey() == null) {
+					if (addr.getPubkey() == null) {
 						ArrayList<Cash> inList = readyBlock.getInList();
 						for (Cash in : inList) {
 							if (in.getOwner().equals(addr.getId()) && in.getType().equals("P2PKH")) {
@@ -341,7 +341,7 @@ public class BlockMaker {
 								break;
 							}
 							if (in.getOwner().equals(addr.getId()) && in.getType().equals("P2SH")) {
-								P2SH p2sh = new P2SH();
+								data.fchData.P2SH p2sh = new P2SH();
 								p2sh.parseP2SH(esClient, in);
 								break;
 							}
@@ -425,12 +425,12 @@ public class BlockMaker {
 
 		String pk = KeyTools.parsePkFromUnlockScript(unLockScript);
 
-		addr.setPubKey(pk);
-		addr.setBtcAddr(KeyTools.pubKeyToBtcAddr(pk));
-		addr.setEthAddr(KeyTools.pubKeyToEthAddr(pk));
-		addr.setBchAddr(KeyTools.pubKeyToBchBesh32Addr(pk));
-		addr.setLtcAddr(KeyTools.pubKeyToLtcAddr(pk));
-		addr.setDogeAddr(KeyTools.pubKeyToDogeAddr(pk));
-		addr.setTrxAddr(KeyTools.pubKeyToTrxAddr(pk));
+		addr.setPubkey(pk);
+		addr.setBtcAddr(KeyTools.pubkeyToBtcAddr(pk));
+		addr.setEthAddr(KeyTools.pubkeyToEthAddr(pk));
+		addr.setBchAddr(KeyTools.pubkeyToBchBesh32Addr(pk));
+		addr.setLtcAddr(KeyTools.pubkeyToLtcAddr(pk));
+		addr.setDogeAddr(KeyTools.pubkeyToDogeAddr(pk));
+		addr.setTrxAddr(KeyTools.pubkeyToTrxAddr(pk));
 	}
 }

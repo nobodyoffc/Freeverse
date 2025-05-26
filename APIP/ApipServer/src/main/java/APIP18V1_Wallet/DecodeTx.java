@@ -1,8 +1,8 @@
 package APIP18V1_Wallet;
 
-import nasa.NaSaRpcClient;
+import clients.NaSaClient.NaSaRpcClient;
 import server.ApipApiNames;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
@@ -14,8 +14,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 import static constants.FieldNames.RAW_TX;
-import appTools.Settings;
-import feip.feipData.Service;
+import config.Settings;
+import data.feipData.Service;
 
 
 @WebServlet(name = ApipApiNames.DECODE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.DECODE_TX)

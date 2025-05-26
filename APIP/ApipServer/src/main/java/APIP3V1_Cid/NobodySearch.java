@@ -1,7 +1,7 @@
 package APIP3V1_Cid;
 
-import apip.apipData.Sort;
-import fch.fchData.Nobody;
+import data.apipData.Sort;
+import data.fchData.Nobody;
 import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
-import appTools.Settings;
+import config.Settings;
 
 import static constants.FieldNames.*;
 

@@ -1,13 +1,13 @@
 package handlers;
 
-import appTools.Settings;
 import fcData.Hat;
-
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Comparator;
+
+import appTools.Settings;
 
 public class HatHandler extends Handler {
     // Constants
@@ -80,7 +80,7 @@ public class HatHandler extends Handler {
                 if (hatCache.size() >= CACHE_SIZE) {
                     // Remove oldest entry when cache is full
                     Optional<Map.Entry<String, Hat>> oldest = hatCache.entrySet().stream()
-                        .min(Comparator.comparingLong(e -> e.getValue().getLast() != null ? e.getValue().getLast() : Long.MAX_VALUE));
+                            .min(Comparator.comparingLong(e -> e.getValue().getLast() != null ? e.getValue().getLast() : Long.MAX_VALUE));
                     oldest.ifPresent(entry -> hatCache.remove(entry.getKey()));
                 }
                 // Update last access time
@@ -111,7 +111,7 @@ public class HatHandler extends Handler {
     // Add new method to get rawDid for a cipher DID
     public String getRawDidForCipher(String cipherDid) {
         if (cipherDid == null) return null;
-        
+
         return hatDB.getRawDidForCipher(cipherDid);
     }
-} 
+}

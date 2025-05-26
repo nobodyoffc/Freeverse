@@ -1,10 +1,10 @@
 package APIP9V1_Team;
 
-import apip.apipData.Sort;
-import appTools.Settings;
+import data.apipData.Sort;
+import config.Settings;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Team;
+import data.feipData.Team;
 import initial.Initiator;
 import utils.http.AuthType;
 

@@ -1,8 +1,8 @@
 package talkServer;
 
-import feip.feipData.serviceParams.Params;
+import data.feipData.serviceParams.Params;
 import server.Counter;
-import appTools.Settings;
+import config.Settings;
 
 public class TalkCounter extends Counter {
 

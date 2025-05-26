@@ -2,7 +2,7 @@ package APIP9V1_Team;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Team;
+import data.feipData.Team;
 import initial.Initiator;
 import utils.http.AuthType;
 import javax.servlet.ServletException;
@@ -11,7 +11,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import appTools.Settings;
+import config.Settings;
 
 import java.io.IOException;
 import java.util.Map;

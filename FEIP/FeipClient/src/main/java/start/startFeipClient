@@ -2,9 +2,9 @@ package start;
 
 import appTools.Inputer;
 import appTools.Menu;
-import appTools.Settings;
-import appTools.Starter;
-import clients.Client;
+import config.Settings;
+import config.Starter;
+import clients.FcClient;
 import clients.FeipClient;
 import clients.ApipClient;
 import configure.ApiAccount;

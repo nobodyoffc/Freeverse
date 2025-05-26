@@ -1,22 +1,22 @@
 package test;
 
-import apip.apipData.RequestBody;
-import appTools.Settings;
+import data.apipData.RequestBody;
+import config.Settings;
 import clients.ApipClient;
 import constants.FieldNames;
 import handlers.NonceHandler;
 import utils.*;
 import constants.CodeMessage;
-import crypto.CryptoDataByte;
-import crypto.Decryptor;
-import crypto.Encryptor;
-import crypto.KeyTools;
-import fcData.AlgorithmId;
-import fcData.ReplyBody;
-import fcData.Signature;
-import fcData.TalkUnit;
-import feip.feipData.Service;
-import feip.feipData.serviceParams.TalkParams;
+import core.crypto.CryptoDataByte;
+import core.crypto.Decryptor;
+import core.crypto.Encryptor;
+import core.crypto.KeyTools;
+import data.fcData.AlgorithmId;
+import data.fcData.ReplyBody;
+import data.fcData.Signature;
+import data.fcData.TalkUnit;
+import data.feipData.Service;
+import data.feipData.serviceParams.TalkParams;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static constants.FieldNames.BALANCE;
-import static appTools.Settings.addSidBriefToName;
+import static config.Settings.addSidBriefToName;
 
 @SuppressWarnings("unused")
 class ServerUdpThread extends Thread {
@@ -39,9 +39,9 @@ class ServerUdpThread extends Thread {
     private final ApipClient apipClient;
     private final JedisPool jedisPool;
     private String userFid;
-    private String userPubKey;
+    private String userPubkey;
     private byte[] sessionKey;
-    private final byte[] accountPriKey;
+    private final byte[] accountPrikey;
     private long startTime;
     private long balance;
     private String via;
@@ -53,10 +53,10 @@ class ServerUdpThread extends Thread {
 
 
 
-    public ServerUdpThread( byte[] accountPriKey, Map<String,Long> nPriceMap, Service service, Settings settings, ApipClient apipClient, JedisPool jedisPool) {
+    public ServerUdpThread( byte[] accountPrikey, Map<String,Long> nPriceMap, Service service, Settings settings, ApipClient apipClient, JedisPool jedisPool) {
         this.apipClient = apipClient;
         this.jedisPool = jedisPool;
-        this.accountPriKey = accountPriKey;
+        this.accountPrikey = accountPrikey;
         this.nPriceMap = nPriceMap;
         this.service = service;
         this.talkParams = (TalkParams)service.getParams();
@@ -92,7 +92,7 @@ class ServerUdpThread extends Thread {
 //                Boolean done;
 //                if(TransferUnit.DataType.ENCRYPTED_REQUEST.equals(transferUnit.getDataType())){
 //                //Check sign in
-//                    done = handleSignIn(transferUnit, accountPriKey, outputStreamWriter, jedisPool);
+//                    done = handleSignIn(transferUnit, accountPrikey, outputStreamWriter, jedisPool);
 //                    if (!done){
 //                        outputStreamWriter.write("Failed to sign in. Bye.");
 //                        outputStreamWriter.flush();
@@ -141,7 +141,7 @@ class ServerUdpThread extends Thread {
 
             switch (requestBody.getOp()){
                 case PING -> {}
-                case SIGN_IN -> handleSignIn(talkUnit, accountPriKey, outputStreamWriter, jedisPool);
+                case SIGN_IN -> handleSignIn(talkUnit, accountPrikey, outputStreamWriter, jedisPool);
                 case ASK_KEY -> {}
                 case SHARE_KEY -> {}
                 case UPDATE_DATA -> {}
@@ -156,7 +156,7 @@ class ServerUdpThread extends Thread {
         talkUnitTouch.setDataType(TalkUnit.DataType.SIGNED_REQUEST);
 
         Signature signature = new Signature();
-        signature.sign(service.toJson(), accountPriKey,AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
+        signature.sign(service.toJson(), accountPrikey,AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
 
         talkUnitTouch.setData(signature.toJson());
 
@@ -166,7 +166,7 @@ class ServerUdpThread extends Thread {
 
     /*
     signIn with twoWayAsy encrypted request and answer.
-    others with symKey encrypted request and answer.
+    others with symkey encrypted request and answer.
 
     encrypted signed text for special guarantee
 
@@ -181,7 +181,7 @@ class ServerUdpThread extends Thread {
 
      */
 
-    private void replyEncrypted(String from, TalkUnit.IdType toType, String to, OutputStreamWriter outputStreamWriter, int code, String data, String otherError, Integer nonce, boolean byAccountPriKey) {
+    private void replyEncrypted(String from, TalkUnit.IdType toType, String to, OutputStreamWriter outputStreamWriter, int code, String data, String otherError, Integer nonce, boolean byAccountPrikey) {
 
 //        TransferUnit transferUnit = new TransferUnit(from,toType,to, TransferUnit.DataType.ENCRYPTED_REPLY);
         TalkUnit talkUnit = new TalkUnit();
@@ -192,23 +192,23 @@ class ServerUdpThread extends Thread {
         CryptoDataByte cryptoDataByte;
         byte[] dataBytes = replyJson.getBytes();
 
-        if(!byAccountPriKey){
+        if(!byAccountPrikey){
             if(sessionKey==null){
                 System.out.println("Server error: no key to encrypt data.");
                 sendToClient(outputStreamWriter,"Server error: no key to encrypt data.");
                 return;
             }
             encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
-            cryptoDataByte = encryptor.encryptBySymKey(dataBytes, this.sessionKey);
+            cryptoDataByte = encryptor.encryptBySymkey(dataBytes, this.sessionKey);
         }else {
-            if(accountPriKey==null){
+            if(accountPrikey==null){
                 System.out.println("Server error: no key to encrypt data.");
                 sendToClient(outputStreamWriter,"Server error: no key to encrypt data.");
                 return;
             }
             encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-            if( userPubKey!=null) cryptoDataByte = encryptor.encryptByAsyTwoWay(dataBytes, this.accountPriKey,userPubKey.getBytes());
-            else cryptoDataByte = encryptor.encryptByAsyOneWay(dataBytes, this.accountPriKey);
+            if( userPubkey!=null) cryptoDataByte = encryptor.encryptByAsyTwoWay(dataBytes, this.accountPrikey,userPubkey.getBytes());
+            else cryptoDataByte = encryptor.encryptByAsyOneWay(dataBytes, this.accountPrikey);
         }
         
         talkUnit.setData(cryptoDataByte.toJson());
@@ -266,7 +266,7 @@ class ServerUdpThread extends Thread {
         return newBalance;
     }
 
-    private boolean handleSignIn(TalkUnit talkUnitRequest, byte[] waiterPriKey, OutputStreamWriter osw, JedisPool jedisPool) {
+    private boolean handleSignIn(TalkUnit talkUnitRequest, byte[] waiterPrikey, OutputStreamWriter osw, JedisPool jedisPool) {
 
         try (Jedis jedis = jedisPool.getResource()) {
             Integer nonce = talkUnitRequest.getNonce();
@@ -275,7 +275,7 @@ class ServerUdpThread extends Thread {
 
             sessionKey = BytesUtils.getRandomBytes(32);
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-            CryptoDataByte result = encryptor.encryptByAsyTwoWay(sessionKey, waiterPriKey,Hex.fromHex(userPubKey));
+            CryptoDataByte result = encryptor.encryptByAsyTwoWay(sessionKey, waiterPrikey,Hex.fromHex(userPubkey));
             if(result==null || result.getCode()!=0)return false;
             replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code0Success, result.toJson(), null, nonce, false);
 
@@ -286,18 +286,18 @@ class ServerUdpThread extends Thread {
     private RequestBody checkRequest(TalkUnit talkUnitRequest, OutputStreamWriter osw, Jedis jedis) {
         RequestBody requestBody;
         Integer nonce = talkUnitRequest.getNonce();
-        CryptoDataByte cryptoDataByte = decryptWithPriKey(talkUnitRequest, accountPriKey, sessionKey,osw, nonce);
+        CryptoDataByte cryptoDataByte = decryptWithPrikey(talkUnitRequest, accountPrikey, sessionKey,osw, nonce);
         if (cryptoDataByte != null) {
             String requestJson = new String(cryptoDataByte.getData());
 
             requestBody = RequestBody.fromJson(requestJson,RequestBody.class);
             long windowTime = (Long)settings.getSettingMap().get(Settings.WINDOW_TIME);//RedisTools.readHashLong(jedis, Settings.addSidBriefToName(TalkServer.sid, SETTINGS), WINDOW_TIME);
-            this.userFid = KeyTools.pubKeyToFchAddr(cryptoDataByte.getPubKeyA());
+            this.userFid = KeyTools.pubkeyToFchAddr(cryptoDataByte.getPubkeyA());
             if (!userFid.equals(talkUnitRequest.getFrom())) {
                 Map<String, String> dataMap = new HashMap<>();
                 dataMap.put("userFid", userFid);
-                dataMap.put("pubKey", Hex.toHex(cryptoDataByte.getPubKeyA()));
-                replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The pubKey is not of the user FID.", nonce, false);
+                dataMap.put("pubkey", Hex.toHex(cryptoDataByte.getPubkeyA()));
+                replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The pubkey is not of the user FID.", nonce, false);
             } else {
                 if (requestBody.getVia() != null) via = requestBody.getVia();
                 if (isBadBalanceTcp(jedis, service.getId(), userFid)) {
@@ -330,13 +330,13 @@ class ServerUdpThread extends Thread {
         return balance<price;
     }
     @Nullable
-    public CryptoDataByte decryptWithPriKey(TalkUnit talkUnitRequest, byte[] waiterPriKey, byte[] sessionKey, OutputStreamWriter osw, Integer nonce) {
+    public CryptoDataByte decryptWithPrikey(TalkUnit talkUnitRequest, byte[] waiterPrikey, byte[] sessionKey, OutputStreamWriter osw, Integer nonce) {
         CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson((String) talkUnitRequest.getData());
         Decryptor decryptor = new Decryptor();
         switch (cryptoDataByte.getType()){
             case AsyTwoWay -> 
-                cryptoDataByte.setPriKeyB(waiterPriKey);
-            case SymKey -> cryptoDataByte.setSymKey(sessionKey);
+                cryptoDataByte.setPrikeyB(waiterPrikey);
+            case Symkey -> cryptoDataByte.setSymkey(sessionKey);
             default -> {
                 replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError,null,"Failed to decrypt type:"+cryptoDataByte.getType(), nonce, false);
                 return null;

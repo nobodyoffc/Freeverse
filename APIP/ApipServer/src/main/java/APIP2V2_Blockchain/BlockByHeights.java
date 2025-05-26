@@ -11,7 +11,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import appTools.Settings;
+import config.Settings;
 import java.io.IOException;
 
 import static constants.Strings.HEIGHT;

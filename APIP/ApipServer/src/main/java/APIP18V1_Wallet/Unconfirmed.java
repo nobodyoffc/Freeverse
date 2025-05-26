@@ -1,12 +1,12 @@
 package APIP18V1_Wallet;
 
-import apip.apipData.UnconfirmedInfo;
-import appTools.Settings;
+import data.apipData.UnconfirmedInfo;
+import config.Settings;
 import handlers.Handler.HandlerType;
 import handlers.MempoolHandler;
 import server.ApipApiNames;
 import constants.CodeMessage;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;

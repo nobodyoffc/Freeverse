@@ -1,19 +1,17 @@
 package talkClient;
 
-import fcData.FcSession;
-import apip.apipData.RequestBody;
-import appTools.Menu;
-import appTools.Settings;
-import clients.Client;
+import clients.FcClient;
+import data.fcData.*;
+import data.apipData.RequestBody;
+import ui.Menu;
+import config.Settings;
 import clients.ApipClient;
-import configure.ApiAccount;
-import configure.ApiProvider;
-import crypto.CryptoDataByte;
-import crypto.Decryptor;
-import crypto.Encryptor;
-import fcData.*;
-import fcData.TalkUnit;
-import feip.feipData.Service;
+import config.ApiAccount;
+import config.ApiProvider;
+import core.crypto.CryptoDataByte;
+import core.crypto.Decryptor;
+import core.crypto.Encryptor;
+import data.feipData.Service;
 import utils.Hex;
 import utils.UdpUtils;
 import utils.http.AuthType;
@@ -32,7 +30,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings("unused")
-public class TalkUdpClient extends Client {
+public class TalkUdpClient extends FcClient {
     private static final Logger log = LoggerFactory.getLogger(TalkUdpClient.class);
     public Socket socket;
     public String ip;
@@ -44,8 +42,8 @@ public class TalkUdpClient extends Client {
     public TalkUdpClient() {
     }
 
-    public TalkUdpClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symKey, ApipClient apipClient) {
-        super(apiProvider, apiAccount, symKey, apipClient);
+    public TalkUdpClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symkey, ApipClient apipClient) {
+        super(apiProvider, apiAccount, symkey, apipClient);
     }
 
 
@@ -73,20 +71,20 @@ public class TalkUdpClient extends Client {
 
         String request = requestBody.toJson();
 
-        byte[] key  = Decryptor.decryptPriKey(apiAccount.getUserPriKeyCipher(), symKey);
+        byte[] key  = Decryptor.decryptPrikey(apiAccount.getUserPrikeyCipher(), symkey);
         if(key== null){
-            System.out.println("Failed to decrypt priKey.");
+            System.out.println("Failed to decrypt prikey.");
             return null;
         }
 
         Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        String serverPubKey = apiProvider.getDealerPubKey();
+        String serverPubkey = apiProvider.getDealerPubkey();
 
-        if(serverPubKey==null)
-            apipClient.getPubKey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(serverPubkey==null)
+            apipClient.getPubkey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
-        if(serverPubKey==null)return null;
-        cryptoDataByte = encryptor.encryptByAsyTwoWay(request.getBytes(),key, Hex.fromHex(serverPubKey));
+        if(serverPubkey==null)return null;
+        cryptoDataByte = encryptor.encryptByAsyTwoWay(request.getBytes(),key, Hex.fromHex(serverPubkey));
 
         String cipher = cryptoDataByte.toJson();
 
@@ -136,11 +134,11 @@ public class TalkUdpClient extends Client {
     }
 
 
-    public void start(Settings settings, String userPriKeyCipher) {
+    public void start(Settings settings, String userPrikeyCipher) {
         System.out.println("Starting client...");
 
 //        //Get sessionKeys for all recipients.
-//        Map<String,byte[]> sessionKeyMap = decryptSessionKeys(settings.getSessionCipherMap(),symKey);
+//        Map<String,byte[]> sessionKeyMap = decryptSessionKeys(settings.getSessionCipherMap(),symkey);
         if(sessionKeyMap==null)sessionKeyMap=new HashMap<>();
 
         try {
@@ -154,8 +152,8 @@ public class TalkUdpClient extends Client {
         }
 
         try  {
-            Thread sendThread = new Send(ip,port,this,symKey,sessionKeyMap,settings,userPriKeyCipher);
-            Thread getThread = new Get(ip,port,this,symKey,sessionKeyMap,settings,userPriKeyCipher);
+            Thread sendThread = new Send(ip,port,this,symkey,sessionKeyMap,settings,userPrikeyCipher);
+            Thread getThread = new Get(ip,port,this,symkey,sessionKeyMap,settings,userPrikeyCipher);
 
             sendThread.start();
             getThread.start();
@@ -172,16 +170,16 @@ public class TalkUdpClient extends Client {
         private final TalkUdpClient talkUdpClient;
         private byte[] sessionKey;
         private String talkId;
-        private byte[] symKey;
+        private byte[] symkey;
         private String host;
         private int port;
         private String dealer;
 
         private final Map<String, byte[]> sessionKeyMap;
 
-        public Send(String ip,int port,TalkUdpClient talkUdpClient, byte[] symKey, Map<String, byte[]> sessionKeyMap, Settings settings, String userPriKeyCipher) {
+        public Send(String ip,int port,TalkUdpClient talkUdpClient, byte[] symkey, Map<String, byte[]> sessionKeyMap, Settings settings, String userPrikeyCipher) {
             this.talkUdpClient = talkUdpClient;
-            this.symKey = symKey;
+            this.symkey = symkey;
             this.sessionKeyMap=sessionKeyMap;
             this.host = ip;
             this.port = port;
@@ -264,18 +262,18 @@ public class TalkUdpClient extends Client {
         private final String host;
         private final int port;
         private final TalkUdpClient talkTcpClient;
-        private final byte[] symKey;
+        private final byte[] symkey;
         private final Map<String, byte[]> sessionKeyMap;
         private final Settings settings;
-        private final String userPriKeyCipher;
+        private final String userPrikeyCipher;
 
-        public Get(String host, int port,TalkUdpClient talkTcpClient, byte[] symKey, Map<String, byte[]> sessionKeyMap, Settings settings, String userPriKeyCipher) {
+        public Get(String host, int port,TalkUdpClient talkTcpClient, byte[] symkey, Map<String, byte[]> sessionKeyMap, Settings settings, String userPrikeyCipher) {
             this.talkTcpClient = talkTcpClient;
-            this.symKey = symKey;
+            this.symkey = symkey;
             this.sessionKeyMap = sessionKeyMap;
             this.settings = settings;
             this.fid = settings.getMainFid();
-            this.userPriKeyCipher = userPriKeyCipher;
+            this.userPrikeyCipher = userPrikeyCipher;
             this.host = host;
             this.port = port;
         }
@@ -322,11 +320,11 @@ public class TalkUdpClient extends Client {
 
             String sessionKeyCipher = (String)replier.getData();
 
-            CryptoDataByte result = new Decryptor().decryptJsonBySymKey(userPriKeyCipher, symKey);
+            CryptoDataByte result = new Decryptor().decryptJsonBySymkey(userPrikeyCipher, symkey);
             if(result.getCode()!=0)return null;
-            byte[] userPriKey = result.getData();
+            byte[] userPrikey = result.getData();
 
-            result = new Decryptor().decryptJsonByAsyOneWay(sessionKeyCipher,userPriKey);
+            result = new Decryptor().decryptJsonByAsyOneWay(sessionKeyCipher,userPrikey);
             if(result.getCode()!=0)return null;
             byte[] sessionKey = result.getData();
 
@@ -334,7 +332,7 @@ public class TalkUdpClient extends Client {
                 String serverAccount = talkTcpClient.getApiProvider().getApiParams().getDealer();
                 if(serverAccount!=null) {
                     sessionKeyMap.put(serverAccount, sessionKey);
-//                    settings.getSessionCipherMap().put(serverAccount, Client.encryptBySymKey(sessionKey, symKey));
+//                    settings.getSessionCipherMap().put(serverAccount, Client.encryptBySymkey(sessionKey, symkey));
                     settings.saveServerSettings(fid);
                 }
             }catch (Exception e){

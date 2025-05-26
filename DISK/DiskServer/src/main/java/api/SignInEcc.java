@@ -3,10 +3,10 @@ package api;
 import server.FcHttpRequestHandler;
 import server.ApipApiNames;
 import constants.CodeMessage;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
-import appTools.Settings;
+import config.Settings;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;

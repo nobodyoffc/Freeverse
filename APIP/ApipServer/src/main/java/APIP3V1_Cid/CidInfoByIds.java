@@ -12,7 +12,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import appTools.Settings;
+import config.Settings;
 @WebServlet(name = ApipApiNames.CID_BY_IDS, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CID_BY_IDS)
 public class CidInfoByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;

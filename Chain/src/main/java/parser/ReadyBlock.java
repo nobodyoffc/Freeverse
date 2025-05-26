@@ -2,7 +2,7 @@ package parser;
 
 import java.util.ArrayList;
 
-import fch.fchData.*;
+import data.fchData.*;
 
 public class ReadyBlock {
 	

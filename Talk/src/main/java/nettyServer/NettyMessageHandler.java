@@ -1,7 +1,7 @@
 //package nettyServer;
 //
 //import apip.apipData.RequestBody;
-//import appTools.Settings;
+//import config.Settings;
 //import com.google.gson.JsonSyntaxException;
 //import constants.IndicesNames;
 //import constants.ReplyCodeMessage;
@@ -31,7 +31,7 @@
 //import tools.http.AuthType;
 //import tools.http.RequestMethod;
 //
-//import static appTools.Settings.addSidBriefToName;
+//import static config.Settings.addSidBriefToName;
 //import static constants.Strings.*;
 //import static constants.Strings.BALANCE;
 //import static server.RequestChecker.isBadNonce;

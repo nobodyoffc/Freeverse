@@ -11,7 +11,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import appTools.Settings;
+import config.Settings;
 
 @WebServlet(name = ApipApiNames.TX_BY_FID, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TX_BY_FID)
 public class TxByFid extends HttpServlet {

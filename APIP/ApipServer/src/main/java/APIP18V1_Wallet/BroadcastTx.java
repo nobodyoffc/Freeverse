@@ -1,10 +1,10 @@
 package APIP18V1_Wallet;
 
-import appTools.Settings;
-import feip.feipData.Service;
-import nasa.NaSaRpcClient;
+import config.Settings;
+import data.feipData.Service;
+import clients.NaSaClient.NaSaRpcClient;
 import server.ApipApiNames;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.Hex;

@@ -3,7 +3,7 @@ package APIP10V1_Box;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
-import feip.feipData.Box;
+import data.feipData.Box;
 import initial.Initiator;
 import utils.http.AuthType;
 
@@ -14,7 +14,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import appTools.Settings;
+import config.Settings;
 import server.FcHttpRequestHandler;
 
 @WebServlet(name = ApipApiNames.BOX_BY_IDS, value = "/"+ ApipApiNames.SN_10+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BOX_BY_IDS)

@@ -8,28 +8,35 @@
     <artifactId>Freeverse</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
+    
     <modules>
-        <module>FC-SDK</module>
+        <module>FC-JDK</module>
         <module>DISK</module>
         <module>APIP</module>
         <module>TALK</module>
         <module>FEIP</module>
         <module>Chain</module>
-
     </modules>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- Dependency versions -->
+        <junit.version>5.10.1</junit.version>
+        <jedis.version>5.1.0</jedis.version>
+        <elasticsearch.version>8.4.1</elasticsearch.version>
+        <jackson.version>2.15.2</jackson.version>
+        <zxing.version>3.5.2</zxing.version>
+        <leveldb.version>0.12</leveldb.version>
+        <slf4j.version>2.0.7</slf4j.version>
     </properties>
+
     <repositories>
-        <!-- Other repositories if any -->
         <repository>
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
         </repository>
-        <!-- Repository for BridJ -->
         <repository>
             <id>sonatype</id>
             <name>Sonatype OSS Snapshots Repository</name>
@@ -40,18 +47,88 @@
             <url>https://repo.maven.apache.org/maven2</url>
         </repository>
     </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- Testing -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>${junit.version}</version>
+            </dependency>
+
+            <!-- Database and Cache -->
+            <dependency>
+                <groupId>redis.clients</groupId>
+                <artifactId>jedis</artifactId>
+                <version>${jedis.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>co.elastic.clients</groupId>
+                <artifactId>elasticsearch-java</artifactId>
+                <version>${elasticsearch.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.iq80.leveldb</groupId>
+                <artifactId>leveldb</artifactId>
+                <version>${leveldb.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.iq80.leveldb</groupId>
+                <artifactId>leveldb-api</artifactId>
+                <version>${leveldb.version}</version>
+            </dependency>
+
+            <!-- JSON Processing -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-annotations</artifactId>
+                <version>${jackson.version}</version>
+            </dependency>
+
+            <!-- QR Code -->
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>core</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.zxing</groupId>
+                <artifactId>javase</artifactId>
+                <version>${zxing.version}</version>
+            </dependency>
+
+            <!-- Logging -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <!-- Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>RELEASE</version>
-            <scope>compile</scope>
+            <scope>test</scope>
         </dependency>
+
+        <!-- Database and Cache -->
         <dependency>
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
-            <version>5.1.0</version>
-            <scope>compile</scope>
             <exclusions>
                 <exclusion>
                     <groupId>org.slf4j</groupId>
@@ -66,49 +143,39 @@
         <dependency>
             <groupId>co.elastic.clients</groupId>
             <artifactId>elasticsearch-java</artifactId>
-            <version>8.4.1</version>
         </dependency>
-        <dependency>
-            <groupId>net.coobird</groupId>
-            <artifactId>thumbnailator</artifactId>
-            <version>0.4.19</version>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>2.0.7</version>
-            <scope>compile</scope>
-        </dependency>
+
+        <!-- JSON Processing -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.13.4</version><!--$NO-MVN-MAN-VER$-->
         </dependency>
-
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.2</version><!-- Or newer secure version -->
         </dependency>
-
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
-            <version>2.13.4</version>
         </dependency>
 
+        <!-- QR Code -->
         <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>core</artifactId>
-            <version>3.5.2</version>
         </dependency>
-
         <dependency>
             <groupId>com.google.zxing</groupId>
             <artifactId>javase</artifactId>
-            <version>3.5.2</version>
         </dependency>
 
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- Blockchain -->
         <dependency>
             <groupId>com.github.nobodyoffc</groupId>
             <artifactId>freecashj</artifactId>
@@ -128,29 +195,20 @@
                 </exclusion>
             </exclusions>
         </dependency>
-
         <dependency>
             <groupId>com.github.nobodyoffc</groupId>
             <artifactId>shadeBitcoinj159</artifactId>
             <version>0.7</version>
-            <scope>compile</scope>
         </dependency>
 
-
+        <!-- LevelDB -->
         <dependency>
             <groupId>org.iq80.leveldb</groupId>
             <artifactId>leveldb</artifactId>
-            <version>0.12</version>
-            <scope>compile</scope>
         </dependency>
-
-        <!-- Add LevelDB API as a separate dependency -->
         <dependency>
             <groupId>org.iq80.leveldb</groupId>
             <artifactId>leveldb-api</artifactId>
-            <version>0.12</version>
-            <scope>compile</scope>
         </dependency>
-
     </dependencies>
 </project>

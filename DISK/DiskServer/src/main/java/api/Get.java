@@ -1,18 +1,17 @@
 package api;
 
 
-import apip.apipData.Fcdsl;
-import appTools.Settings;
+import data.apipData.Fcdsl;
+import config.Settings;
 import handlers.DiskHandler;
 import handlers.Handler;
 import server.ApipApiNames;
 import constants.CodeMessage;
 import initial.Initiator;
 import server.DiskApiNames;
-import utils.FileUtils;
 import utils.ObjectUtils;
 import utils.http.AuthType;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import server.HttpRequestChecker;
 
 import javax.servlet.ServletException;
@@ -28,7 +27,6 @@ import java.util.Map;
 import static constants.FieldNames.DID;
 import static constants.UpStrings.BALANCE;
 import static constants.UpStrings.CODE;
-import static startManager.StartDiskManager.diskDir;
 
 @WebServlet(name = DiskApiNames.GET, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.GET)
 public class Get extends HttpServlet {
@@ -84,8 +82,8 @@ public class Get extends HttpServlet {
     private void doPostRequest(HttpServletResponse response, ReplyBody replier, String did) throws IOException {
         if (did == null) return;
 
-        String path = FileUtils.getSubPathForDisk(did);
-        File file = new File(diskHandler.getDataDir()+path, did);
+        String path = DiskHandler.makeDataPath(did,settings);
+        File file = new File(path);
         if (!file.exists()) {
             replier.replyHttp(CodeMessage.Code1020OtherError, response);
             return;

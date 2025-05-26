@@ -2,7 +2,7 @@ package APIP7V1_App;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.App;
+import data.feipData.App;
 import initial.Initiator;
 import utils.http.AuthType;
 

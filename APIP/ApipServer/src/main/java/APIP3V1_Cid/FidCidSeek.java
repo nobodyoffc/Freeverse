@@ -1,13 +1,13 @@
 package APIP3V1_Cid;
 
-import appTools.Settings;
+import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import fch.fchData.Cid;
-import feip.feipData.Service;
+import data.fchData.Cid;
+import data.feipData.Service;
 import server.ApipApiNames;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static apip.apipData.FcQuery.PART;
+import static data.apipData.FcQuery.PART;
 import static constants.FieldNames.*;
 
 @WebServlet(name = ApipApiNames.FID_CID_SEEK, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.FID_CID_SEEK)

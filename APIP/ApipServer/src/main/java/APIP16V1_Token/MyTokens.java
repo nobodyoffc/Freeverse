@@ -1,10 +1,10 @@
 
 package APIP16V1_Token;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.TokenHolder;
+import data.feipData.TokenHolder;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 

@@ -1,6 +1,6 @@
 package APIP10V1_Box;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
@@ -32,7 +32,7 @@ public class BoxHistory extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcHttpRequestHandler.doSearchRequest(IndicesNames.BOX_HISTORY, feip.feipData.BoxHistory.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.BOX_HISTORY, data.feipData.BoxHistory.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

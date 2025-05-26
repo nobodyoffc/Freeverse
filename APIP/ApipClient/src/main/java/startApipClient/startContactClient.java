@@ -1,16 +1,16 @@
 package startApipClient;
 
-import appTools.Menu;
-import appTools.Settings;
-import appTools.Starter;
-import clients.Client;
+import clients.FcClient;
+import ui.Menu;
+import config.Settings;
+import config.Starter;
 import clients.ApipClient;
-import feip.feipData.Service;
+import data.feipData.Service;
 import handlers.CashHandler;
 import handlers.ContactHandler;
-import configure.ApiAccount;
-import configure.Configure;
-import feip.feipData.Service.ServiceType;
+import config.ApiAccount;
+import config.Configure;
+import data.feipData.Service.ServiceType;
 import handlers.Handler;
 
 import java.io.BufferedReader;
@@ -32,8 +32,8 @@ public class startContactClient {
     public static String clientName= Handler.HandlerType.CONTACT.name();
     public static String myFid;
     public static String sid;
-    public static byte[] symKey;
-    public static String myPriKeyCipher;
+    public static byte[] symkey;
+    public static String myPrikeyCipher;
     public static Map<String, Long> lastTimeMap;
 
     public static Map<String,Object> settingMap = new HashMap<>();
@@ -54,9 +54,9 @@ public class startContactClient {
 
         myFid = apipAccount.getUserId();
         sid = apipClient.getApiProvider().getId();
-        myPriKeyCipher = apipAccount.getUserPriKeyCipher();
+        myPrikeyCipher = apipAccount.getUserPrikeyCipher();
 
-        lastTimeMap = Client.loadLastTime(myFid,sid);
+        lastTimeMap = FcClient.loadLastTime(myFid,sid);
         if(lastTimeMap==null)lastTimeMap=new HashMap<>();
 
         ContactHandler contactHandler = new ContactHandler(settings);

@@ -1,10 +1,10 @@
 package APIP2V2_Blockchain;
 
-import apip.apipData.Sort;
-import appTools.Settings;
+import data.apipData.Sort;
+import config.Settings;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fch.fchData.Cash;
+import data.fchData.Cash;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;

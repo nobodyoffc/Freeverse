@@ -1,8 +1,8 @@
 package APIP9V1_Team;
 
-import appTools.Settings;
+import config.Settings;
 import constants.IndicesNames;
-import feip.feipData.Team;
+import data.feipData.Team;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.FcHttpRequestHandler;

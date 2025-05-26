@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import fch.fchData.Cid;
+import data.fchData.Cid;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
@@ -22,8 +22,8 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import appTools.Settings;
-import feip.feipData.Service;
+import config.Settings;
+import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.RICHLIST, value = "/"+ ApipApiNames.RICHLIST)
 public class Richlist extends HttpServlet {

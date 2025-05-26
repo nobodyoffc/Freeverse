@@ -1,10 +1,10 @@
 package nettyClient;
 
-import appTools.Settings;
-import appTools.Starter;
+import config.Settings;
+import config.Starter;
 import clients.DiskClient;
 import clients.TalkClient;
-import feip.feipData.Service;
+import data.feipData.Service;
 import handlers.Handler;
 
 import java.io.BufferedReader;

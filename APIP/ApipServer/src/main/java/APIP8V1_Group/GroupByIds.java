@@ -1,10 +1,10 @@
 package APIP8V1_Group;
 
-import appTools.Settings;
+import config.Settings;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
-import feip.feipData.Group;
+import data.feipData.Group;
 import initial.Initiator;
 import utils.http.AuthType;
 

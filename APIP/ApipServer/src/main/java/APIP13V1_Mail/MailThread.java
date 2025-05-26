@@ -1,9 +1,9 @@
 package APIP13V1_Mail;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Mail;
+import data.feipData.Mail;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -21,7 +21,7 @@ import static constants.FieldNames.ID;
 import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
-import appTools.Settings;
+import config.Settings;
 @WebServlet(name = ApipApiNames.MAIL_THREAD, value = "/"+ ApipApiNames.SN_13+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MAIL_THREAD)
 public class MailThread extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;

@@ -2,7 +2,7 @@ package APIP6V1_Service;
 
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Service;
+import data.feipData.Service;
 import initial.Initiator;
 import utils.http.AuthType;
 
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 

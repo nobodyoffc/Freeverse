@@ -1,16 +1,13 @@
 package api;
 
-import appTools.Settings;
-import feip.feipData.Service;
-import redis.clients.jedis.JedisPool;
+import config.Settings;
+import handlers.DiskHandler;
 import server.ApipApiNames;
 import initial.Initiator;
 import server.DiskApiNames;
-import utils.FileUtils;
 import utils.Hex;
 import utils.http.AuthType;
-import fcData.ReplyBody;
-import redis.clients.jedis.Jedis;
+import data.fcData.ReplyBody;
 import server.HttpRequestChecker;
 
 import javax.servlet.annotation.WebServlet;
@@ -20,8 +17,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import static constants.FieldNames.DID;
-import static utils.FileUtils.getSubPathForDisk;
-import static startManager.StartDiskManager.diskDir;
 
 @WebServlet(name = DiskApiNames.CHECK, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.CHECK)
 public class Check extends HttpServlet {
@@ -63,10 +58,8 @@ public class Check extends HttpServlet {
             replier.replyOtherErrorHttp("It is not a hex string of a 32 byte array.", did, response);
             return;
         }
-        String subDir = getSubPathForDisk(did);
-        String path = diskDir + subDir;
-        Boolean isFileExists = Boolean.TRUE.equals(FileUtils.checkFileOfDisk(path, did));
+        String path = DiskHandler.makeDataPath(did,settings);
+        Boolean isFileExists = Boolean.TRUE.equals(DiskHandler.checkFileOfDisk(path, did));
         replier.reply0SuccessHttp(isFileExists,response);
     }
-
 }

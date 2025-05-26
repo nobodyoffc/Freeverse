@@ -1,9 +1,9 @@
 package APIP8V1_Group;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.GroupHistory;
+import data.feipData.GroupHistory;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -16,7 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.INDEX;
 import static constants.OpNames.RATE;
 import static constants.Strings.HEIGHT;

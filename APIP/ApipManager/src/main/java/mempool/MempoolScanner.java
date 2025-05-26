@@ -1,9 +1,9 @@
 package mempool;
 
-import fch.fchData.Cash;
-import fch.fchData.Tx;
-import fch.fchData.TxHasInfo;
-import nasa.NaSaRpcClient;
+import data.fchData.Cash;
+import data.fchData.Tx;
+import data.fchData.TxHasInfo;
+import clients.NaSaClient.NaSaRpcClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static constants.FieldNames.*;
-import static fch.RawTxParser.parseMempoolTx;
+import static core.fch.RawTxParser.parseMempoolTx;
 
 
 public class MempoolScanner implements Runnable {

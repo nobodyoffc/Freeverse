@@ -1,9 +1,9 @@
 package APIP2V2_Blockchain;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fch.fchData.OpReturn;
+import data.fchData.OpReturn;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -16,7 +16,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.*;
 
 @WebServlet(name = ApipApiNames.OP_RETURN_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OP_RETURN_SEARCH)

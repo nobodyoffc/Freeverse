@@ -10,8 +10,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import appTools.Settings;
-import feip.feipData.Contact;
+import config.Settings;
+import data.feipData.Contact;
 import initial.Initiator;
 import utils.http.AuthType;
 

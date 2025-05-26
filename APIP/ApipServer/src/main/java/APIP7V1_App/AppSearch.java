@@ -1,9 +1,9 @@
 package APIP7V1_App;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.App;
+import data.feipData.App;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;

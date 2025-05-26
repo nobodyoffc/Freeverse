@@ -7,8 +7,8 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import feip.feipData.GroupHistory;
-import feip.feipData.TeamHistory;
+import data.feipData.GroupHistory;
+import data.feipData.TeamHistory;
 import utils.JsonUtils;
 
 import java.io.IOException;

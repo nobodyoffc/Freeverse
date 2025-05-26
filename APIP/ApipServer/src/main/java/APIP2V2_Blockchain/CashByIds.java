@@ -3,7 +3,7 @@ package APIP2V2_Blockchain;
 import server.ApipApiNames;
 import server.FcHttpRequestHandler;
 import constants.IndicesNames;
-import fch.fchData.Cash;
+import data.fchData.Cash;
 import initial.Initiator;
 import utils.http.AuthType;
 
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import appTools.Settings;
+import config.Settings;
 
 import java.io.IOException;
 

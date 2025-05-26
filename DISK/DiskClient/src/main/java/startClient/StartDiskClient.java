@@ -1,20 +1,24 @@
 package startClient;
 
-import crypto.Decryptor;
-import crypto.Encryptor;
-import fcData.FcSession;
-import apip.apipData.RequestBody;
-import appTools.*;
+import ui.Inputer;
+import ui.Menu;
+import ui.Shower;
+import config.Settings;
+import config.Starter;
+import core.crypto.Decryptor;
+import core.crypto.Encryptor;
+import data.fcData.FcSession;
+import data.apipData.RequestBody;
 import clients.ApipClient;
 import clients.DiskClient;
-import fcData.DiskItem;
+import data.fcData.DiskItem;
 import handlers.Handler;
 import server.ApipApiNames;
-import crypto.CryptoDataStr;
-import crypto.Hash;
-import fcData.ReplyBody;
-import feip.feipData.Service;
-import feip.feipData.serviceParams.ApipParams;
+import core.crypto.CryptoDataStr;
+import core.crypto.Hash;
+import data.fcData.ReplyBody;
+import data.feipData.Service;
+import data.feipData.serviceParams.ApipParams;
 import server.DiskApiNames;
 import utils.Hex;
 import utils.JsonUtils;
@@ -30,7 +34,7 @@ import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static configure.Configure.saveConfig;
+import static config.Configure.saveConfig;
 import static server.ApipApiNames.VERSION_1;
 
 public class StartDiskClient {
@@ -61,12 +65,12 @@ public class StartDiskClient {
         if(settings==null)return;
         apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);//settings.getApipAccount().getClient();
         diskClient = (DiskClient) settings.getClient(Service.ServiceType.DISK);//settings.getDiskAccount().getClient();
-        byte[] symKey = settings.getSymKey();
+        byte[] symkey = settings.getSymkey();
 
-        disk(symKey);
+        disk(symkey);
     }
 
-    private static void disk(byte[] symKey) {
+    private static void disk(byte[] symkey) {
         Menu menu = new Menu();
         menu.setTitle("Disk Client");
         menu.add("getService","Ping free","Ping","Put","Get","Get by POST","Check","Check by POST","List","List by POST","Carve","SignIn","SignIn encrypted","Settings");
@@ -78,15 +82,15 @@ public class StartDiskClient {
                 case 2 -> pingFree(br);
                 case 3 -> ping(br);
                 case 4 -> put(br);
-                case 5 -> get(RequestMethod.GET, AuthType.FREE, br,symKey);
-                case 6 -> get(RequestMethod.POST,AuthType.FC_SIGN_BODY, br,symKey);
+                case 5 -> get(RequestMethod.GET, AuthType.FREE, br,symkey);
+                case 6 -> get(RequestMethod.POST,AuthType.FC_SIGN_BODY, br,symkey);
                 case 7 -> checkFree(br);
                 case 8 -> check(br);
                 case 9 -> list(RequestMethod.GET, AuthType.FREE, br);
                 case 10 -> list(RequestMethod.POST, AuthType.FC_SIGN_BODY, br);
                 case 11 -> carve(br);
-                case 12 -> signIn(symKey);
-                case 13 -> signInEcc(symKey);
+                case 12 -> signIn(symkey);
+                case 13 -> signInEcc(symkey);
                 case 14 -> settings.setting(br, null);
                 case 0 -> {
                     return;
@@ -95,15 +99,15 @@ public class StartDiskClient {
         }
     }
 
-    private static void signInEcc(byte[] symKey) {
-        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL, symKey, null);
+    private static void signInEcc(byte[] symkey) {
+        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL, symkey, null);
         JsonUtils.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);
     }
 
-    private static void signIn(byte[] symKey) {
-        FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL,symKey);
+    private static void signIn(byte[] symkey) {
+        FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL,symkey);
         JsonUtils.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);
@@ -170,28 +174,28 @@ public class StartDiskClient {
             } catch (IOException e) {
                 System.out.println("Failed to hash file:"+fileName);
             }
-            fileName = Encryptor.encryptFile(fileName, diskClient.getApiAccount().getUserPubKey());
+            fileName = Encryptor.encryptFile(fileName, diskClient.getApiAccount().getUserPubkey());
             System.out.println("Encrypted to: "+fileName);
         }
         return fileName;
     }
 
 
-    public static void get(RequestMethod method, AuthType authType, BufferedReader br,byte[] symKey){
+    public static void get(RequestMethod method, AuthType authType, BufferedReader br,byte[] symkey){
         String filename = Inputer.inputString(br,"Input the DID of the file:");
         String path = Inputer.inputString(br,"Input the destination path. Default:"+MY_DATA_DIR);
         if("".equals(path))path = MY_DATA_DIR;
         String gotFileId = diskClient.get(method,authType,filename,path);
         System.out.println("Got:"+Path.of(path,gotFileId));
         if(!Hex.isHexString(gotFileId))return;
-        tryToDecryptFile(path, gotFileId,symKey);
+        tryToDecryptFile(path, gotFileId,symkey);
         Menu.anyKeyToContinue(br);
     }
 
-    private static void tryToDecryptFile(String path, String gotFileId,byte[] symKey) {
+    private static void tryToDecryptFile(String path, String gotFileId,byte[] symkey) {
         try {
             JsonUtils.readOneJsonFromFile(path, gotFileId, CryptoDataStr.class);
-            String did = Decryptor.decryptFile(path, gotFileId,symKey, diskClient.getApiAccount().getUserPriKeyCipher());
+            String did = Decryptor.decryptFile(path, gotFileId,symkey, diskClient.getApiAccount().getUserPrikeyCipher());
             if(did!= null) System.out.println("Decrypted to:"+Path.of(path,did));
         } catch (IOException ignore) {}
     }

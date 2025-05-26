@@ -2,9 +2,9 @@ package APIP17V1_Crypto;
 
 import server.ApipApiNames;
 import constants.FieldNames;
-import crypto.KeyTools;
-import fcData.ReplyBody;
-import fcData.Signature;
+import core.crypto.KeyTools;
+import data.fcData.ReplyBody;
+import data.fcData.Signature;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
@@ -17,7 +17,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.security.SignatureException;
 import java.util.Map;
 
-import appTools.Settings;
+import config.Settings;
 
 @WebServlet(name = ApipApiNames.VERIFY, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.VERIFY)
 public class Verify extends HttpServlet {
@@ -57,7 +57,7 @@ public class Verify extends HttpServlet {
             String sign = signature.getSign().replace("\\u003d", "=");
             try {
                 String signPubKey = ECKey.signedMessageToKey(signature.getMsg(), sign).getPublicKeyAsHex();
-                isGoodSign= signature.getFid().equals(KeyTools.pubKeyToFchAddr(signPubKey));
+                isGoodSign= signature.getFid().equals(KeyTools.pubkeyToFchAddr(signPubKey));
             } catch (SignatureException e) {
                 isGoodSign = false;
             }

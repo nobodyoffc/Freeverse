@@ -2,7 +2,7 @@
 package APIP12V1_Secret;
 
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
 
@@ -14,7 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import feip.feipData.Secret;
+import data.feipData.Secret;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -24,7 +24,7 @@ import static constants.FieldNames.LAST_HEIGHT;
 import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
-import appTools.Settings;
+import config.Settings;
 @WebServlet(name = ApipApiNames.SECRET_SEARCH, value = "/"+ ApipApiNames.SN_12+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SECRET_SEARCH)
 public class SecretSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;

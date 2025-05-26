@@ -3,14 +3,14 @@ package APIP20V1_Webhook;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import constants.*;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import handlers.Handler;
 import handlers.WebhookHandler;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
-import appTools.Settings;
+import config.Settings;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;

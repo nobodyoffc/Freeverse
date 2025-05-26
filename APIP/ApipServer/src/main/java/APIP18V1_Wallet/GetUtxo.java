@@ -1,15 +1,16 @@
 package APIP18V1_Wallet;
 
-import appTools.Settings;
+import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import feip.feipData.Service;
+import data.apipData.Utxo;
+import data.feipData.Service;
 import handlers.CashHandler;
 import constants.*;
-import crypto.KeyTools;
-import fcData.ReplyBody;
+import core.crypto.KeyTools;
+import data.fcData.ReplyBody;
 import handlers.CashHandler.SearchResult;
 import handlers.Handler.HandlerType;
-import fch.fchData.Cash;
+import data.fchData.Cash;
 import initial.Initiator;
 import server.ApipApiNames;
 import utils.FchUtils;
@@ -58,6 +59,7 @@ public class GetUtxo extends HttpServlet {
 
         if(request.getParameter(AMOUNT)!=null){
             amount= FchUtils.coinStrToSatoshi(request.getParameter(AMOUNT));
+            if(amount==null)amount=0L;
         }else{
             amount=0L;
         }
@@ -74,9 +76,9 @@ public class GetUtxo extends HttpServlet {
             return;
         }
 
-        List<apip.apipData.Utxo> utxoList = new ArrayList<>();
+        List<Utxo> utxoList = new ArrayList<>();
         for(Cash cash:searchResult.getData())
-            utxoList.add(apip.apipData.Utxo.cashToUtxo(cash));
+            utxoList.add(Utxo.cashToUtxo(cash));
 
         replier.setGot((long) utxoList.size());
         replier.setTotal(searchResult.getTotal());

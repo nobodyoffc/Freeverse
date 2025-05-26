@@ -6,12 +6,12 @@ import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.google.gson.Gson;
-import crypto.KeyTools;
-import fch.WeightMethod;
-import fch.fchData.Cid;
-import fch.fchData.Nobody;
-import fch.fchData.OpReturn;
-import feip.feipData.*;
+import core.crypto.KeyTools;
+import data.feipData.*;
+import core.fch.Weight;
+import data.fchData.Cid;
+import data.fchData.Nobody;
+import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
 import java.io.IOException;
 import java.util.*;
@@ -69,7 +69,7 @@ public class IdentityParser {
 			return null;
 		}
 		if(nobodyRaw==null)return null;
-		if(! addrFromPriKey(nobodyRaw.getPriKey()).equals(opre.getSigner()))return null;
+		if(! addrFromPriKey(nobodyRaw.getPrikey()).equals(opre.getSigner()))return null;
 
 		CidHist cidHist = new CidHist();
 
@@ -80,14 +80,14 @@ public class IdentityParser {
 		cidHist.setId(opre.getId());
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
-		cidHist.setPriKey(nobodyRaw.getPriKey());
+		cidHist.setPrikey(nobodyRaw.getPrikey());
 
 		return cidHist;
 	}
 
 	private String addrFromPriKey(String priKey) {
 
-		return KeyTools.pubKeyToFchAddr(KeyTools.priKeyToPubKey(priKey));
+		return KeyTools.pubkeyToFchAddr(KeyTools.prikeyToPubkey(priKey));
 	}
 
 	public CidHist makeMaster(OpReturn opre, Feip feip) {
@@ -115,7 +115,7 @@ public class IdentityParser {
 		cidHist.setIndex(opre.getTxIndex());
 		cidHist.setTime(opre.getTime());
 		cidHist.setMaster(masterRaw.getMaster());
-		cidHist.setCipherPriKey(masterRaw.getCipherPriKey());
+		cidHist.setCipherPrikey(masterRaw.getCipherPriKey());
 		cidHist.setAlg(masterRaw.getAlg());
 
 		return cidHist;
@@ -236,8 +236,8 @@ public class IdentityParser {
 		if(resultGetCid.found()) {
 			Cid cid  = resultGetCid.source();
 			if(cid==null)return false;
-			if(cid.getPriKey()==null) {
-				cid.setPriKey(cidHist.getPriKey());
+			if(cid.getPrikey()==null) {
+				cid.setPrikey(cidHist.getPrikey());
 				cid.setLastHeight(cidHist.getHeight());
 				esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
 
@@ -245,7 +245,7 @@ public class IdentityParser {
 				nobody.setId(cidHist.getSigner());
 				nobody.setDeathTime(cidHist.getTime());
 				nobody.setDeathHeight(cidHist.getHeight());
-				nobody.setPriKey(cidHist.getPriKey());
+				nobody.setPrikey(cidHist.getPrikey());
 				nobody.setDeathTxId(cidHist.getId());
 				nobody.setDeathTxIndex(cidHist.getIndex());
 				esClient.index(i->i.index(NOBODY).id(cidHist.getSigner()).document(nobody));
@@ -475,7 +475,7 @@ public class IdentityParser {
 		Cid addr;
 		if(resultAddr!=null && resultAddr.source()!=null) {
 			addr = resultAddr.source();
-			addr.setWeight(addr.getWeight()+(repuHist.getReputation()* WeightMethod.repuPercentInWeight)/100);
+			addr.setWeight(addr.getWeight()+(repuHist.getReputation()* Weight.reputationPercentInWeight)/100);
 			esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(addr));
 		}
 		esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(cid));

@@ -1,4 +1,41 @@
 Freeverse
+[x] the price should be 10s instead of 1s in order to pay to via. 
+[x] how to broadcast?
+[x] payoffMap test
+[x] auto scan type
+[x] nPrice saved into localDB
+
+* 自动任务
+  - 类型
+    - 1 No automatic scanning
+      2 Elasticsearch client scanning
+      3 APIP client scanning
+      4 Webhook notifications
+      5 Monitor file changes
+  - 需求
+    - 订单扫描（可以采用webhook）
+    - 定时清理数据 disk
+    - 区块触发：mempool
+  - 方案
+    - 增加AutoTask类：
+      - type（byTime,fileChange,dirChange)，
+      - method,
+      - intervalSec，
+      - listenPath(block,opreturn)，
+      - webhookDataLocation
+    - module 的settings里增加autoTaskMap<String name,List<AutoTask> list>
+    - runAutoTask检查每个module的map并运行
+  - 问题
+    - 用户设定:apip
+    - webhook不需要单独设置，收到就执行了。
+
+
+[] Android app suitable off line sending. UI independent.
+[x] cd ==0;
+[x] list in pages: continue?
+[x] send
+[x] imported sessionKey do not be saved.
+[x] cid.cash == 0
 * Home
     * EasyQR
     * Tool: off line tools
@@ -113,13 +150,13 @@ file -> contact,mail,roomInfo,talkUnits,sessionKeyCipher
         at clients.ApipClientEvent.makeHeaderSession(FcClientEvent.java:784)
         at clients.ApipClientEvent.initiate(FcClientEvent.java:166)
         at clients.ApipClientEvent.<init>(FcClientEvent.java:120)
-        at clients.Client.requestBase(Client.java:181)
-        at clients.Client.ping(Client.java:342)
+        at clients.FcClient.requestBase(Client.java:181)
+        at clients.FcClient.ping(Client.java:342)
         at configure.ApiAccount.waitConfirmation(ApiAccount.java:830)
         at configure.ApiAccount.buyApi(ApiAccount.java:889)
-        at clients.Client.checkResult(Client.java:222)
-        at clients.Client.signInEcc(Client.java:363)
-        at clients.Client.signInEcc(Client.java:461)
+        at clients.FcClient.checkResult(Client.java:222)
+        at clients.FcClient.signInEcc(Client.java:363)
+        at clients.FcClient.signInEcc(Client.java:461)
         at configure.ApiAccount.freshSessionKey(ApiAccount.java:1155)
         at configure.ApiAccount.checkSessionKey(ApiAccount.java:1052)
         at configure.ApiAccount.connectApip(ApiAccount.java:926)

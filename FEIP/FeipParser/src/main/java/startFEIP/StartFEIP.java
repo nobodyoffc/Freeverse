@@ -1,15 +1,15 @@
 package startFEIP;
 
-import appTools.Menu;
-import appTools.Settings;
-import appTools.Starter;
+import ui.Menu;
+import config.Settings;
+import config.Starter;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.json.JsonData;
 
 import constants.IndicesNames;
-import feip.feipData.Service;
+import data.feipData.Service;
 import utils.FileUtils;
 import utils.JsonUtils;
 import org.slf4j.Logger;
@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static constants.Constants.UserHome;
 import static constants.FieldNames.LAST_HEIGHT;
 import static constants.FieldNames.LAST_INDEX;
 import static startFEIP.IndicesFEIP.createAllIndices;

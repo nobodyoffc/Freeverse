@@ -1,15 +1,16 @@
 package APIP18V1_Wallet;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import core.fch.OffLineTxInfo;
+import core.fch.TxCreator;
 import handlers.CashHandler;
 import org.jetbrains.annotations.Nullable;
 import server.ApipApiNames;
 import constants.CodeMessage;
-import fcData.ReplyBody;
-import fch.*;
+import data.fcData.ReplyBody;
 import handlers.CashHandler.SearchResult;
-import fch.fchData.Cash;
-import fch.fchData.SendTo;
+import data.fchData.Cash;
+import data.fchData.SendTo;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.FchUtils;
@@ -28,9 +29,9 @@ import java.util.ArrayList;
 
 import static constants.Constants.Dust;
 import static constants.FieldNames.*;
-import static fch.TxCreator.parseDataForOffLineTxFromOther;
-import appTools.Settings;
-import feip.feipData.Service;
+import static core.fch.TxCreator.parseDataForOffLineTxFromOther;
+import config.Settings;
+import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.OFF_LINE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OFF_LINE_TX)
 public class OffLineTx extends HttpServlet {

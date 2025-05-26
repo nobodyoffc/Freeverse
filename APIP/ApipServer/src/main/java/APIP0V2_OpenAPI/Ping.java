@@ -1,8 +1,8 @@
 package APIP0V2_OpenAPI;
 
-import appTools.Settings;
+import config.Settings;
 import server.ApipApiNames;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.FcHttpRequestHandler;
 import utils.http.AuthType;

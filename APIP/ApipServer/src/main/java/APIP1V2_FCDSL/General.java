@@ -1,9 +1,9 @@
 package APIP1V2_FCDSL;
 
-import apip.apipData.Sort;
-import appTools.Settings;
+import data.apipData.Sort;
+import config.Settings;
 import server.ApipApiNames;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;

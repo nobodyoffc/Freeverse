@@ -1,6 +1,6 @@
 package APIP3V1_Cid;
 
-import fch.fchData.Nobody;
+import data.fchData.Nobody;
 import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.ID;
 
 import server.FcHttpRequestHandler;

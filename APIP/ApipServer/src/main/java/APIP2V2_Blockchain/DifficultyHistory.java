@@ -1,11 +1,11 @@
 package APIP2V2_Blockchain;
 
-import appTools.Settings;
+import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import feip.feipData.Service;
+import data.feipData.Service;
 import server.ApipApiNames;
-import fcData.ReplyBody;
-import fch.fchData.FchChainInfo;
+import data.fcData.ReplyBody;
+import data.fchData.FchChainInfo;
 import initial.Initiator;
 import utils.ObjectUtils;
 import utils.http.AuthType;
@@ -22,7 +22,7 @@ import java.util.Map;
 import static constants.FieldNames.END_TIME;
 import static constants.FieldNames.START_TIME;
 import static constants.FieldNames.COUNT;
-import static fch.fchData.FchChainInfo.MAX_REQUEST_COUNT;
+import static data.fchData.FchChainInfo.MAX_REQUEST_COUNT;
 
 @WebServlet(name = ApipApiNames.DIFFICULTY_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.DIFFICULTY_HISTORY)
 public class DifficultyHistory extends HttpServlet {

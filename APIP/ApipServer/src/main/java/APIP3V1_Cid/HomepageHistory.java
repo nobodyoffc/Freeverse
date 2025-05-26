@@ -1,9 +1,9 @@
 package APIP3V1_Cid;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.CidHist;
+import data.feipData.CidHist;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-import appTools.Settings;
+import config.Settings;
 
 @WebServlet(name = ApipApiNames.HOMEPAGE_HISTORY, value = "/"+ ApipApiNames.SN_3+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.HOMEPAGE_HISTORY)
 public class HomepageHistory extends HttpServlet {

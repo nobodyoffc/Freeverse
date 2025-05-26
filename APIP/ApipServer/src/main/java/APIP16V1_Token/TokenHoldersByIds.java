@@ -1,10 +1,10 @@
 package APIP16V1_Token;
 
-import apip.apipData.Sort;
-import appTools.Settings;
+import data.apipData.Sort;
+import config.Settings;
 import constants.IndicesNames;
-import fcData.ReplyBody;
-import feip.feipData.TokenHolder;
+import data.fcData.ReplyBody;
+import data.feipData.TokenHolder;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.FcHttpRequestHandler;

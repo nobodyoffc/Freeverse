@@ -1,6 +1,6 @@
 package startAPIP;
 
-import feip.feipData.ServiceOpData;
+import data.feipData.ServiceOpData;
 
 public class Feip5 {
 	public final String type = "feip";

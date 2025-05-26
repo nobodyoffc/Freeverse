@@ -1,20 +1,19 @@
 package test;
 
-import crypto.CryptoDataByte;
-import crypto.Encryptor;
-import crypto.KeyTools;
-import fcData.AlgorithmId;
-import fcData.Signature;
-import fcData.TalkUnit;
+import core.crypto.CryptoDataByte;
+import core.crypto.Encryptor;
+import core.crypto.KeyTools;
+import data.fcData.AlgorithmId;
+import data.fcData.Signature;
+import data.fcData.TalkUnit;
 import utils.Hex;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import utils.JsonUtils;
 import utils.ObjectUtils;
 
 import java.util.Map;
 
-import static fcData.TalkUnit.decryptUnit;
-import static fcData.TalkUnit.fromBytes;
+import static data.fcData.TalkUnit.fromBytes;
 
 public class ClassTest {
 
@@ -32,7 +31,7 @@ public class ClassTest {
         Signature signature = new Signature();
         signature.setFid("FEk41Kqjar45fLDriztUDTUkdki7mmcjWK");
         String msg = "hello world!";
-        signature.sign(msg, KeyTools.getPriKey32("L2bHRej6Fxxipvb4TiR5bu1rkT3tRp8yWEsUy4R1Zb8VMm2x7sd8"), AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
+        signature.sign(msg, KeyTools.getPrikey32("L2bHRej6Fxxipvb4TiR5bu1rkT3tRp8yWEsUy4R1Zb8VMm2x7sd8"), AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7);
 
         talkUnit.setData(signature);
 
@@ -51,7 +50,7 @@ public class ClassTest {
 
         String symKey = "db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019";
         byte[] symKeyBytes = Hex.fromHex(symKey);
-        CryptoDataByte cryptoDataByte = encryptor.encryptBySymKey(msg.getBytes(),symKeyBytes);
+        CryptoDataByte cryptoDataByte = encryptor.encryptBySymkey(msg.getBytes(),symKeyBytes);
         talkUnit.setData(cryptoDataByte);
 
         talkUnit.toBytes();
@@ -59,14 +58,5 @@ public class ClassTest {
         talkUnit1 = fromBytes(talkUnit.toBytes());
         assert talkUnit1 != null;
         System.out.println(talkUnit1.toNiceJson());
-
-//        talkUnit1.setUnitEncryptType(EncryptType.SymKey);
-//        cryptoDataByte = talkUnit1.encryptData(symKey, null, null);
-//
-//        System.out.println(cryptoDataByte.toNiceJson());
-//        FcSession fcSession = new FcSession();
-//        fcSession.setKeyBytes(symKeyBytes);
-//        TalkUnit talkUnit2 = TalkUnit.decryptUnit(cryptoDataByte.toBundle(), fcSession, null, );
-//        System.out.println(talkUnit2.toNiceJson());
     }
 }

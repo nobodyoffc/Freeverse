@@ -1,6 +1,7 @@
 package organize;
 
-import fch.fchData.Cid;
+import data.fchData.Cid;
+import data.feipData.*;
 import utils.EsUtils;
 import utils.EsUtils.MgetResult;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -8,8 +9,7 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 
 import com.google.gson.Gson;
 import constants.IndicesNames;
-import fch.fchData.OpReturn;
-import feip.feipData.*;
+import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
 
 import java.util.*;

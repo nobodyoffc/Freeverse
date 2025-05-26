@@ -1,17 +1,17 @@
 package talkServer;
 
-import appTools.Inputer;
-import appTools.Menu;
-import appTools.Settings;
-import appTools.Starter;
+import ui.Inputer;
+import ui.Menu;
+import config.Settings;
+import config.Starter;
 import clients.ApipClient;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.FieldNames;
-import fcData.AutoTask;
-import fcData.TalkUnit;
-import feip.feipData.Service;
-import feip.feipData.serviceParams.Params;
-import feip.feipData.serviceParams.TalkParams;
+import data.fcData.AutoTask;
+import data.fcData.TalkUnit;
+import data.feipData.Service;
+import data.feipData.serviceParams.Params;
+import data.feipData.serviceParams.TalkParams;
 
 import handlers.Handler;
 import redis.clients.jedis.JedisPool;
@@ -29,7 +29,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 
-import static appTools.Settings.DEFAULT_WINDOW_TIME;
+import static config.Settings.DEFAULT_WINDOW_TIME;
 import static constants.Constants.SEC_PER_DAY;
 import static constants.Strings.*;
 import static handlers.AccountHandler.DEFAULT_DEALER_MIN_BALANCE;
@@ -76,7 +76,7 @@ public class StartTalkServer {
         settings = Starter.startServer(serverType, settingMap, Arrays.stream(TalkServer.chargeType).toList(), modules, br, autoTaskList);
         if(settings==null)return;
 
-        byte[] symKey = settings.getSymKey();
+        byte[] symkey = settings.getSymkey();
 //        Configure configure = settings.getConfig();
 
         service = settings.getService();
@@ -94,27 +94,8 @@ public class StartTalkServer {
         esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
         JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
 
-//        Configure.checkWebConfig(configure.getPasswordName(), sid,configure, settings,symKey, serviceType, jedisPool, br);
-
         //Check indices in ES
         checkEsIndices(esClient);
-
-        //Check API prices
-//        Order.setNPrices(sid, ApiNames.TalkApiList, jedisPool, br,false);
-
-        //Check user balance
-//        Counter.checkUserBalance(sid, jedisPool, esClient, br);
-
-        //Check webhooks for new orders.
-//        if(settings.getSettingMap().get(Settings.FROM_WEBHOOK).equals(Boolean.TRUE))
-//            if (!Order.checkWebhook(ApiNames.NewCashByFids, params, apipClient.getApiAccount(), br, jedisPool)){
-//                close();
-//                return;
-//            }
-
-//        Rewarder.checkRewarderParams(sid, params, jedisPool, br);
-
-//        startCounterThread(symKey, settings,params);
 
         //Show the main menu
         Menu menu = new Menu();
@@ -134,7 +115,7 @@ public class StartTalkServer {
                     TalkServer talkServer = new TalkServer(settings, price);
                     talkServer.start();
                 }
-                case 2 -> new TalkManager(service, settings.getApiAccount(Service.ServiceType.APIP), br,symKey, TalkParams.class).menu();
+                case 2 -> new TalkManager(service, settings.getApiAccount(Service.ServiceType.APIP), br,symkey, TalkParams.class).menu();
                 case 3 -> Order.resetNPrices(br, sid, jedisPool);
                 case 4 -> recreateAllIndices(esClient, br);
                 case 5 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
@@ -151,13 +132,13 @@ public class StartTalkServer {
     }
 
 
-    private static void startCounterThread(byte[] symKey, Settings settings, Params params) {
-        byte[] priKey = Settings.getMainFidPriKey(symKey, settings);
-        if(priKey==null){
-            System.out.println("Failed to get the priKey of the dealer.");
+    private static void startCounterThread(byte[] symkey, Settings settings, Params params) {
+        byte[] prikey = Settings.getMainFidPrikey(symkey, settings);
+        if(prikey==null){
+            System.out.println("Failed to get the prikey of the dealer.");
             return;
         }
-        counter = new Counter(settings,priKey, params);
+        counter = new Counter(settings,prikey, params);
         Thread thread = new Thread(counter);
         thread.start();
     }
@@ -171,6 +152,7 @@ public class StartTalkServer {
         EsUtils.recreateIndex(Settings.addSidBriefToName(sid,ORDER), Order.MAPPINGS,esClient, br);
         EsUtils.recreateIndex(Settings.addSidBriefToName(sid, FieldNames.BALANCE), BalanceInfo.MAPPINGS,esClient, br);
         EsUtils.recreateIndex(Settings.addSidBriefToName(sid,REWARD), RewardInfo.MAPPINGS,esClient, br);
+
     }
 
     private static void checkEsIndices(ElasticsearchClient esClient) {

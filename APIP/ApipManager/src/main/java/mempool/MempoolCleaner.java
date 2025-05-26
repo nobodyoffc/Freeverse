@@ -1,6 +1,6 @@
 package mempool;
 
-import fch.fchData.Block;
+import data.fchData.Block;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Constants;
 import constants.Strings;
@@ -12,7 +12,7 @@ import utils.FchUtils;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static fch.TxCreator.getBestBlock;
+import static core.fch.TxCreator.getBestBlock;
 
 
 public class MempoolCleaner implements Runnable {

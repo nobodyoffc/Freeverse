@@ -9,8 +9,8 @@ import appTools.Menu;
 import appTools.Shower;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import configure.ApiAccount;
-import configure.Configure;
+import config.ApiAccount;
+import config.Configure;
 import constants.ApiNames;
 import constants.IndicesNames;
 import crypto.Decryptor;
@@ -31,7 +31,7 @@ import java.util.HexFormat;
 import java.util.List;
 
 import static fch.Inputer.inputGoodFid;
-import static configure.ApiAccount.decryptSessionKey;
+import static config.ApiAccount.decryptSessionKey;
 import static constants.Constants.APIP_Account_JSON;
 
 public class StartApipClient {

@@ -1,14 +1,14 @@
 
 package APIP12V1_Secret;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Secret;
+import data.feipData.Secret;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
-import appTools.Settings;
+import config.Settings;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;

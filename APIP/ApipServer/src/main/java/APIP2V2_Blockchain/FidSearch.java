@@ -1,13 +1,13 @@
 package APIP2V2_Blockchain;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import fch.fchData.Cid;
+import data.fchData.Cid;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
-import appTools.Settings;
+import config.Settings;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;

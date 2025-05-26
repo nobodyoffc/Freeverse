@@ -1,8 +1,8 @@
 package APIP3V1_Cid;
 
-import appTools.Settings;
-import avatar.AvatarMaker;
-import fcData.ReplyBody;
+import config.Settings;
+import data.fcData.ReplyBody;
+import feature.avatar.AvatarMaker;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.HttpRequestChecker;

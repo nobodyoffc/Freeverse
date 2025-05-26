@@ -7,10 +7,10 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import feip.feipData.AppHistory;
-import feip.feipData.CodeHistory;
-import feip.feipData.ProtocolHistory;
-import feip.feipData.ServiceHistory;
+import data.feipData.AppHistory;
+import data.feipData.CodeHistory;
+import data.feipData.ProtocolHistory;
+import data.feipData.ServiceHistory;
 import utils.JsonUtils;
 
 import java.io.IOException;

@@ -1,8 +1,8 @@
 package endpoint;
 
-import nasa.NaSaRpcClient;
+import clients.NaSaClient.NaSaRpcClient;
 import server.ApipApiNames;
-import fch.fchData.FchChainInfo;
+import data.fchData.FchChainInfo;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -13,8 +13,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import appTools.Settings;
-import feip.feipData.Service;
+import config.Settings;
+import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.TOTAL_SUPPLY, value = "/"+ ApipApiNames.TOTAL_SUPPLY)
 public class TotalSupply extends HttpServlet {

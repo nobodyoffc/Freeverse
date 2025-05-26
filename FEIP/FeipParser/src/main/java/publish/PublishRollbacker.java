@@ -7,8 +7,8 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import feip.feipData.ProofHistory;
-import feip.feipData.TokenHistory;
+import data.feipData.ProofHistory;
+import data.feipData.TokenHistory;
 import utils.JsonUtils;
 
 import java.util.*;

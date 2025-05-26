@@ -2,7 +2,7 @@
 package APIP15V1_Statement;
 
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
 
@@ -14,11 +14,11 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import feip.feipData.Statement;
+import data.feipData.Statement;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 

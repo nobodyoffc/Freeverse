@@ -2,7 +2,7 @@
 package APIP19V1_Nid;
 
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
@@ -15,11 +15,11 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import feip.feipData.Nid;
+import data.feipData.Nid;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
-import appTools.Settings;
+import config.Settings;
 import static constants.FieldNames.*;
 
 

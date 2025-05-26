@@ -1,7 +1,7 @@
 package parser;
-import crypto.Hash;
-import crypto.KeyTools;
-import fch.fchData.*;
+import core.crypto.Hash;
+import core.crypto.KeyTools;
+import data.fchData.*;
 import utils.BytesUtils;
 import utils.FchUtils;
 
@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HexFormat;
 
-import static fch.RawTxParser.parseOpReturn;
+import static core.fch.RawTxParser.parseOpReturn;
 
 
 public class BlockParser {

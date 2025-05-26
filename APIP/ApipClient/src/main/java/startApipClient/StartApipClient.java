@@ -1,32 +1,35 @@
 package startApipClient;
 
 
-import apip.apipData.*;
-import fch.fchData.Cid;
-import appTools.Starter;
-import appTools.Inputer;
-import appTools.Menu;
-import appTools.Shower;
+import data.apipData.BlockInfo;
+import data.apipData.Fcdsl;
+import data.apipData.RequestBody;
+import data.apipData.TxInfo;
+import data.fchData.*;
+import config.Starter;
+import ui.Inputer;
+import ui.Menu;
+import ui.Shower;
 import clients.ApipClient;
-import configure.ApiAccount;
-import feip.feipData.Service.ServiceType;
-import configure.Configure;
+import config.ApiAccount;
+import data.feipData.*;
+import data.feipData.Service.ServiceType;
+import config.Configure;
 import server.ApipApiNames;
-import crypto.EncryptType;
-import crypto.KeyTools;
-import fcData.ReplyBody;
-import fcData.FcSession;
-import fcData.FidTxMask;
-import fch.fchData.*;
-import feip.feipData.*;
-import feip.feipData.serviceParams.ApipParams;
+import core.crypto.EncryptType;
+import core.crypto.KeyTools;
+import data.fcData.ReplyBody;
+import data.fcData.FcSession;
+import data.fcData.FidTxMask;
+
+import data.feipData.serviceParams.ApipParams;
 import utils.BytesUtils;
 import utils.Hex;
 import utils.JsonUtils;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
 import org.bouncycastle.util.encoders.Base64;
-import appTools.Settings;
+import config.Settings;
 
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
@@ -37,9 +40,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static appTools.Inputer.inputString;
+import static ui.Inputer.inputString;
 import static server.ApipApiNames.*;
-import static fch.Inputer.inputGoodFid;
+import static core.fch.Inputer.inputGoodFid;
 
 public class StartApipClient {
     public static final int DEFAULT_SIZE = 20;
@@ -61,7 +64,7 @@ public class StartApipClient {
         br = new BufferedReader(new InputStreamReader(System.in));
         settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
-        byte[] symKey = settings.getSymKey();
+        byte[] symKey = settings.getSymkey();
         apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         configure = settings.getConfig();
         apipAccount = settings.getApiAccount(ServiceType.APIP);
@@ -104,7 +107,7 @@ public class StartApipClient {
                 case 12 -> endpoint();
                 case 13 -> {
                     settings.setting(br, null);
-                    symKey = settings.getSymKey();
+                    symKey = settings.getSymkey();
                 }
                 case 0 -> {
                     BytesUtils.clearByteArray(symKey);
@@ -386,7 +389,7 @@ public class StartApipClient {
     public static void fidByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
         System.out.println("Requesting fidByIds...");
-        Map<String, fch.fchData.Cid> result = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Cid> result = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -397,7 +400,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting fidSearch...");
-        List<fch.fchData.Cid> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cid> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -469,7 +472,7 @@ public class StartApipClient {
 
     public static void txByFid( ) {
         String fid = Inputer.inputString(br, "Input FID");
-        int size = fch.Inputer.inputInt(br,"Input the size:",0);
+        int size = core.fch.Inputer.inputInt(br,"Input the size:",0);
         String[] last=null;
         String lastStr = Inputer.inputString(br,"Input the last values spited with ','");
         if(!lastStr.isEmpty()) last = lastStr.split(",");
@@ -678,7 +681,7 @@ public class StartApipClient {
     }
 
     public static void avatars( ) {
-        String[] fids = fch.Inputer.inputFidArray(br, "Input FIDs:", 0);
+        String[] fids = core.fch.Inputer.inputFidArray(br, "Input FIDs:", 0);
 
         System.out.println("Requesting avatars...");
         Map<String, String> result = apipClient.avatars(fids, RequestMethod.POST, AuthType.FC_SIGN_BODY);
@@ -1212,8 +1215,8 @@ public class StartApipClient {
     }
 
     public static void mailThread(int defaultSize, String defaultSort) {
-        String fidA = fch.Inputer.inputGoodFid(br,"Input the FID:");
-        String fidB = fch.Inputer.inputGoodFid(br,"Input another FID:");
+        String fidA = core.fch.Inputer.inputGoodFid(br,"Input the FID:");
+        String fidB = core.fch.Inputer.inputGoodFid(br,"Input another FID:");
         if(fidA==null ||fidB==null)return;
         Long startTime = Inputer.inputDate(br,"yyyy-mm-dd","Input the start time. Enter to skip:");
         Long endTime = Inputer.inputDate(br,"yyyy-mm-dd","Input the end time. Enter to skip:");
@@ -1536,7 +1539,7 @@ public class StartApipClient {
                 System.out.println("Input the password no more than 64 chars. Enter to exit:");
                 key = Inputer.inputString(br);
             }
-            case SymKey -> {
+            case Symkey -> {
                 System.out.println("Input the symKey. Enter to exit:");
                 key = Inputer.inputString(br);
             }
@@ -1549,7 +1552,7 @@ public class StartApipClient {
                 }
             }
             default -> {
-                System.out.println("Only for Password, SymKey, AsyOneWay.");
+                System.out.println("Only for Password, Symkey, AsyOneWay.");
                 return;
             }
         }
@@ -1861,10 +1864,10 @@ public class StartApipClient {
 //        byte[] priKey = EccAes256K1P7.decryptJsonBytes(userPriKeyCipher, symKeyOld);
 //
 //        byte[] symKeyNew = Hash.sha256x2(passwordBytesNew);
-//        String buyerPriKeyCipherNew = EccAes256K1P7.encryptWithSymKey(priKey, symKeyNew);
+//        String buyerPriKeyCipherNew = EccAes256K1P7.encryptWithSymkey(priKey, symKeyNew);
 //        if(buyerPriKeyCipherNew.contains("Error"))return null;
 //
-//        String sessionKeyCipherNew = EccAes256K1P7.encryptWithSymKey(sessionKey, symKeyNew);
+//        String sessionKeyCipherNew = EccAes256K1P7.encryptWithSymkey(sessionKey, symKeyNew);
 //        if (sessionKeyCipherNew.contains("Error")) {
 //            System.out.println("Get sessionKey wrong:" + sessionKeyCipherNew);
 //        }

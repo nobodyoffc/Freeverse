@@ -1,14 +1,14 @@
 
 package APIP13V1_Mail;
 
-import apip.apipData.Sort;
+import data.apipData.Sort;
 import server.ApipApiNames;
 import constants.IndicesNames;
-import feip.feipData.Mail;
+import data.feipData.Mail;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
-import appTools.Settings;
+import config.Settings;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;

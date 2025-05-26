@@ -1,6 +1,6 @@
 //package talkClient;
 //
-//import appTools.Settings;
+//import config.Settings;
 //import fcData.TalkUnit;
 //import clients.TalkClient;
 //import tools.JsonTools;

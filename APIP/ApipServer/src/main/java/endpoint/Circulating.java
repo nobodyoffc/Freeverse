@@ -1,10 +1,10 @@
 package endpoint;
 
-import appTools.Settings;
-import feip.feipData.Service;
-import nasa.NaSaRpcClient;
+import config.Settings;
+import data.feipData.Service;
+import clients.NaSaClient.NaSaRpcClient;
 import server.ApipApiNames;
-import fch.fchData.FchChainInfo;
+import data.fchData.FchChainInfo;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;

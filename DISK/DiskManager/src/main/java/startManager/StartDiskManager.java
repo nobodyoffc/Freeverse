@@ -1,18 +1,18 @@
 package startManager;
 
-import appTools.Starter;
+import config.Starter;
 import clients.ApipClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
 import constants.FieldNames;
-import fcData.AutoTask;
-import feip.feipData.Service;
-import feip.feipData.serviceParams.DiskParams;
-import appTools.Inputer;
-import appTools.Menu;
-import fcData.DiskItem;
+import data.fcData.AutoTask;
+import data.feipData.Service;
+import data.feipData.serviceParams.DiskParams;
+import ui.Inputer;
+import ui.Menu;
+import data.fcData.DiskItem;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import configure.Configure;
+import config.Configure;
 import handlers.AccountHandler;
 import handlers.Handler;
 import server.DiskApiNames;
@@ -24,7 +24,7 @@ import server.order.Order;
 import server.reward.RewardInfo;
 import server.reward.RewardManager;
 import server.serviceManagers.DiskManager;
-import appTools.Settings;
+import config.Settings;
 import utils.ObjectUtils;
 
 import java.io.BufferedReader;
@@ -32,12 +32,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 
-import static appTools.Settings.*;
+import static config.Settings.*;
 import static constants.Constants.SEC_PER_DAY;
-import static feip.feipData.Service.ServiceType.*;
+import static data.feipData.Service.ServiceType.*;
 import static constants.IndicesNames.ORDER;
 import static constants.Strings.*;
-import static feip.feipData.Service.ServiceType.APIP;
+import static data.feipData.Service.ServiceType.APIP;
 
 public class StartDiskManager {
     public static  String diskDir;
@@ -81,7 +81,7 @@ public class StartDiskManager {
 
         diskDir = (String) settings.getSettingMap().get(FieldNames.DISK_DIR);
 
-        byte[] symKey = settings.getSymKey();
+        byte[] symkey = settings.getSymkey();
         service =settings.getService();
         sid = service.getId();
         params = ObjectUtils.objectToClass( service.getParams(),DiskParams.class);
@@ -112,7 +112,7 @@ public class StartDiskManager {
             menu.show();
             int choice = menu.choose(br);
             switch (choice) {
-                case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symKey, DiskParams.class).menu();
+                case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symkey, DiskParams.class).menu();
                 case 2 -> accountHandler.menu(br, false);
                 case 3 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());

@@ -1,8 +1,8 @@
 package APIP18V1_Wallet;
 
 import server.ApipApiNames;
-import fcData.ReplyBody;
-import fch.fchData.Cash;
+import data.fcData.ReplyBody;
+import data.fchData.Cash;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import appTools.Settings;
+import config.Settings;
 import handlers.Handler.HandlerType;
 
 @WebServlet(name = ApipApiNames.UNCONFIRMED_CASHES, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.UNCONFIRMED_CASHES)

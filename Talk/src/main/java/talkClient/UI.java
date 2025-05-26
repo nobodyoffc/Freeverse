@@ -2,7 +2,7 @@
 //
 //import appTools.Inputer;
 //import appTools.Menu;
-//import appTools.Settings;
+//import config.Settings;
 //import clients.ApipClient;
 //import clients.Displayer;
 //import handlers.CashHandler;

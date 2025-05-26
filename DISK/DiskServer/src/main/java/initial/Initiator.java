@@ -1,6 +1,6 @@
 package initial;
 
-import feip.feipData.Service;
+import data.feipData.Service;
 import server.FcWebServerInitiator;
 
 public class Initiator extends FcWebServerInitiator {

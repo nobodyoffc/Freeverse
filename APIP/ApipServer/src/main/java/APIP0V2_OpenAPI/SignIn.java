@@ -1,10 +1,10 @@
 package APIP0V2_OpenAPI;
 
-import apip.apipData.RequestBody;
-import appTools.Settings;
+import data.apipData.RequestBody;
+import config.Settings;
 import constants.CodeMessage;
-import fcData.FcSession;
-import fcData.ReplyBody;
+import data.fcData.FcSession;
+import data.fcData.ReplyBody;
 import handlers.Handler;
 import handlers.SessionHandler;
 import initial.Initiator;

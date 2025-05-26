@@ -1,8 +1,8 @@
 package test;
 
 import appTools.Menu;
-import appTools.Settings;
-import appTools.Starter;
+import config.Settings;
+import config.Starter;
 import feip.feipData.Service;
 import handlers.AccountHandler;
 import handlers.AccountHandler.Income;

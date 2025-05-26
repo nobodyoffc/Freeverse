@@ -19,7 +19,7 @@
     <dependencies>
         <dependency>
             <groupId>fc</groupId>
-            <artifactId>FC-SDK</artifactId>
+            <artifactId>FC-JDK</artifactId>
             <version>1.0-SNAPSHOT</version>
             <scope>compile</scope>
         </dependency>

@@ -5,11 +5,11 @@ import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import constants.Constants;
 
-import crypto.Hash;
-import fch.BlockFileUtils;
-import fch.OpReFileUtils;
-import fch.fchData.Block;
-import fch.fchData.BlockMark;
+import core.crypto.Hash;
+import core.fch.BlockFileUtils;
+import core.fch.OpReFileUtils;
+import data.fchData.Block;
+import data.fchData.BlockMark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.BytesUtils;
@@ -37,7 +37,7 @@ public class ChainParser {
 	public static final int BLANK_8 = 8;
 	public static final int WAIT_MORE = 0;
 	private static final Logger log = LoggerFactory.getLogger(ChainParser.class);
-
+	private static Thread lastCdThread = null;  // Track the last CD update thread
 	private final OpReFileUtils opReFile = new OpReFileUtils();
 
 	public int startParse(ElasticsearchClient esClient) throws Exception {
@@ -120,21 +120,124 @@ public class ChainParser {
 		}
 	}
 
-	private static long makeCd(ElasticsearchClient esClient, long cdMakeTime) throws Exception {
+	private static long makeCd(ElasticsearchClient esClient, long cdMakeTime) {
+//		long now = System.currentTimeMillis();
+//		if( now - cdMakeTime > (1000*60*60)) {
+//			Thread cdThread = new Thread(() -> {
+//				try {
+//					Block bestBlock = EsUtils.getBestBlock(esClient);
+//					CdMaker cdMaker = new CdMaker();
+//					cdMaker.makeUtxoCd(esClient, bestBlock);
+//					log.info("All cd of UTXOs updated.");
+//
+//					// Use a shorter sleep time and check for interruption
+//					try {
+//						TimeUnit.SECONDS.sleep(30);
+//					} catch (InterruptedException e) {
+//						Thread.currentThread().interrupt();
+//						return;
+//					}
+//
+//					cdMaker.makeAddrCd(esClient);
+//					log.info("All cd of addresses updated.");
+//
+//					// Use a shorter sleep time and check for interruption
+//					try {
+//						TimeUnit.SECONDS.sleep(15);
+//					} catch (InterruptedException e) {
+//						Thread.currentThread().interrupt();
+//						return;
+//					}
+//				} catch (Exception e) {
+//					log.error("Exception in cd update thread", e);
+//				}
+//			});
+//			cdThread.setDaemon(true); // Mark as daemon thread so it won't prevent JVM exit
+//			cdThread.start();
+//
+//			// Wait for the thread to complete with a timeout
+//			try {
+//				cdThread.join(TimeUnit.MINUTES.toMillis(30)); // Wait up to 30 minutes
+//				if (cdThread.isAlive()) {
+//					log.warn("CD update thread did not complete within timeout period");
+//					cdThread.interrupt(); // Interrupt the thread if it's still running
+//				}
+//			} catch (InterruptedException e) {
+//				log.error("Interrupted while waiting for CD update thread", e);
+//				Thread.currentThread().interrupt();
+//			}
+//
+//			cdMakeTime = now;
+
+
+//			Block bestBlock = EsUtils.getBestBlock(esClient);
+//
+//			CdMaker cdMaker = new CdMaker();
+//
+//			cdMaker.makeUtxoCd(esClient,bestBlock);
+//			log.info("All cd of UTXOs updated.");
+//			TimeUnit.MINUTES.sleep(2);
+//
+//			cdMaker.makeAddrCd(esClient);
+//			log.info("All cd of addresses updated.");
+//			TimeUnit.MINUTES.sleep(1);
+//
+//			cdMakeTime = now;
+//		}
+//		return cdMakeTime;
 		long now = System.currentTimeMillis();
 		if( now - cdMakeTime > (1000*60*60*12)) {
-			Block bestBlock = EsUtils.getBestBlock(esClient);
+			// Check if previous thread is still running
+			if (lastCdThread != null && lastCdThread.isAlive()) {
+				log.warn("Previous CD update thread is still running, skipping new update");
+				return cdMakeTime;
+			}
 
-			CdMaker cdMaker = new CdMaker();
+			Thread cdThread = new Thread(() -> {
+				try {
+					Block bestBlock = EsUtils.getBestBlock(esClient);
+					CdMaker cdMaker = new CdMaker();
+					cdMaker.makeUtxoCd(esClient, bestBlock);
+					log.info("All cd of UTXOs updated.");
 
-			cdMaker.makeUtxoCd(esClient,bestBlock);
-			log.info("All cd of UTXOs updated.");
-			TimeUnit.MINUTES.sleep(2);
+					// Use a shorter sleep time and check for interruption
+					try {
+						TimeUnit.SECONDS.sleep(30);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						return;
+					}
 
-			cdMaker.makeAddrCd(esClient);
-			log.info("All cd of addresses updated.");
-			TimeUnit.MINUTES.sleep(1);
+					cdMaker.makeAddrCd(esClient);
+					log.info("All cd of addresses updated.");
 
+					// Use a shorter sleep time and check for interruption
+					try {
+						TimeUnit.SECONDS.sleep(15);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						return;
+					}
+				} catch (Exception e) {
+					log.error("Exception in cd update thread", e);
+				} finally {
+					// Clear the thread reference when done
+					synchronized (ChainParser.class) {
+						if (lastCdThread == Thread.currentThread()) {
+							lastCdThread = null;
+						}
+					}
+				}
+			});
+
+			cdThread.setDaemon(true); // Mark as daemon thread so it won't prevent JVM exit
+
+			// Store reference to the new thread
+			synchronized (ChainParser.class) {
+				lastCdThread = cdThread;
+			}
+
+			cdThread.start();
 			cdMakeTime = now;
 		}
 		return cdMakeTime;

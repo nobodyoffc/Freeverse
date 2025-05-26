@@ -1,7 +1,7 @@
 package api;
 
-import apip.apipData.WebhookPushBody;
-import appTools.Settings;
+import data.apipData.WebhookPushBody;
+import config.Settings;
 import handlers.AccountHandler;
 import handlers.Handler;
 import handlers.SessionHandler;
@@ -14,7 +14,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-import static fcData.Signature.symSign;
+import static data.fcData.Signature.symSign;
 
 @WebServlet(name = ApipApiNames.NEW_ORDER, value ="/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NEW_ORDER)
 public class NewOrder extends HttpServlet {

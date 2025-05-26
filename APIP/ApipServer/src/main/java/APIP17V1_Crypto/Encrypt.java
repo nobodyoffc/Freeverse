@@ -1,16 +1,16 @@
 package APIP17V1_Crypto;
 
-import apip.apipData.EncryptIn;
+import data.apipData.EncryptIn;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import com.google.gson.Gson;
-import fch.fchData.Cid;
+import data.fchData.Cid;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
-import crypto.CryptoDataByte;
-import crypto.Encryptor;
-import fcData.ReplyBody;
+import core.crypto.CryptoDataByte;
+import core.crypto.Encryptor;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.Hex;
@@ -22,8 +22,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
-import appTools.Settings;
-import feip.feipData.Service;
+import config.Settings;
+import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.ENCRYPT, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.ENCRYPT)
 public class Encrypt extends HttpServlet {
@@ -61,21 +61,21 @@ public class Encrypt extends HttpServlet {
 
             try {
                 switch (encryptInput.getType()) {
-                    case SymKey -> cryptoDataByte = encryptor.encryptBySymKey(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getSymKey()));
+                    case Symkey -> cryptoDataByte = encryptor.encryptBySymkey(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getSymkey()));
                     case Password ->
                             cryptoDataByte = encryptor.encryptByPassword(encryptInput.getMsg().getBytes(), encryptInput.getPassword().toCharArray());
                     case AsyOneWay -> {
-                        if(encryptInput.getPubKey()!=null)
-                            cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getPubKey()));
+                        if(encryptInput.getPubkey()!=null)
+                            cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getPubkey()));
                         else if(encryptInput.getFid()!=null){
                             ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
                             GetResponse<Cid> result = esClient.get(g -> g.index(IndicesNames.CID).id(encryptInput.getFid()), Cid.class);
                             Cid cid = result.source();
-                            if(cid ==null|| cid.getPubKey()==null){
+                            if(cid ==null|| cid.getPubkey()==null){
                                 replier.replyOtherErrorHttp("Failed to get pubkey.", response);
                                 return;
                             }
-                            cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(cid.getPubKey()));
+                            cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(cid.getPubkey()));
                         }
                     }
                     default -> new IllegalArgumentException("Unexpected value: " + encryptInput.getType()).printStackTrace();

@@ -1,5 +1,6 @@
 package startFEIP;
 
+import data.feipData.*;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
@@ -12,10 +13,9 @@ import constants.Constants;
 import constants.IndicesNames;
 import construct.*;
 
-import fch.OpReFileUtils;
-import fch.fchData.OpReturn;
-import fch.opReReadResult;
-import feip.feipData.*;
+import core.fch.OpReFileUtils;
+import data.fchData.OpReturn;
+import core.fch.opReReadResult;
 import identity.IdentityParser;
 import identity.IdentityRollbacker;
 

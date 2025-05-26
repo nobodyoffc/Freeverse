@@ -1,7 +1,7 @@
 package APIP0V2_OpenAPI;
 
 import constants.CodeMessage;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.FcHttpRequestHandler;
@@ -12,7 +12,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import appTools.Settings;
+import config.Settings;
 
 @WebServlet(name = ApipApiNames.SIGN_IN_ECC, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SIGN_IN_ECC)
 public class SignInEcc extends HttpServlet {

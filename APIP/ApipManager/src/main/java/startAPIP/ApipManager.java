@@ -1,9 +1,9 @@
 package startAPIP;
 
-import feip.feipData.Service;
-import feip.feipData.serviceParams.ApipParams;
-import feip.feipData.serviceParams.Params;
-import configure.ApiAccount;
+import data.feipData.Service;
+import data.feipData.serviceParams.ApipParams;
+import data.feipData.serviceParams.Params;
+import config.ApiAccount;
 import server.serviceManagers.ServiceManager;
 
 import java.io.BufferedReader;

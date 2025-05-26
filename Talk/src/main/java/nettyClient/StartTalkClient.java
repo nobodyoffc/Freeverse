@@ -1,8 +1,8 @@
 //package nettyClient;
 //
 //import appTools.Menu;
-//import appTools.Settings;
-//import appTools.Starter;
+//import config.Settings;
+//import config.Starter;
 //import clients.ApipClient;
 //import talkClient.ClientTalk;
 //import feip.feipData.Service.ServiceType;

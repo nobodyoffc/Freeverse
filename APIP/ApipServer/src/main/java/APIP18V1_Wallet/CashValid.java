@@ -1,17 +1,17 @@
 package APIP18V1_Wallet;
 
-import apip.apipData.Fcdsl;
-import apip.apipData.RequestBody;
-import apip.apipData.Sort;
+import data.apipData.Fcdsl;
+import data.apipData.RequestBody;
+import data.apipData.Sort;
 import handlers.CashHandler;
 import handlers.MempoolHandler;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.CodeMessage;
-import fcData.ReplyBody;
+import data.fcData.ReplyBody;
 import handlers.CashHandler.SearchResult;
 import handlers.Handler.HandlerType;
-import fch.fchData.Cash;
+import data.fchData.Cash;
 import initial.Initiator;
 import utils.ObjectUtils;
 import utils.http.AuthType;
@@ -34,9 +34,9 @@ import static constants.Values.FALSE;
 import static constants.Values.TRUE;
 import static utils.FchUtils.coinToSatoshi;
 
-import appTools.Settings;
+import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import feip.feipData.Service;
+import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.CASH_VALID, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_VALID)
 public class CashValid extends HttpServlet {

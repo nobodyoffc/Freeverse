@@ -1,7 +1,7 @@
 //package talkServer;
 //
 //import apip.apipData.RequestBody;
-//import appTools.Settings;
+//import config.Settings;
 //import clients.ApipClient;
 //import co.elastic.clients.elasticsearch.ElasticsearchClient;
 //import feip.feipData.Service.ServiceType;
@@ -36,7 +36,7 @@
 //import static constants.ApiNames.SignInEcc;
 //import static constants.Strings.*;
 //import static server.RequestChecker.*;
-//import static appTools.Settings.addSidBriefToName;
+//import static config.Settings.addSidBriefToName;
 //
 //class ServerThread extends Thread {
 //    private static final Logger log = LoggerFactory.getLogger(TalkServer.class);

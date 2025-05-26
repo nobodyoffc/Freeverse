@@ -1,34 +1,34 @@
 package startAPIP;
 
 
-import apip.apipData.WebhookInfo;
-import appTools.Starter;
-import appTools.Inputer;
-import appTools.Menu;
+import data.apipData.WebhookInfo;
+import config.Starter;
+import ui.Inputer;
+import ui.Menu;
 import constants.FieldNames;
-import fcData.AutoTask;
-import fch.fchData.Cid;
+import data.fcData.AutoTask;
+import data.fchData.Cid;
 import handlers.AccountHandler;
 import handlers.Handler;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
-import configure.Configure;
+import config.Configure;
 import server.ApipApiNames;
-import feip.feipData.Service;
-import feip.feipData.serviceParams.ApipParams;
-import nasa.NaSaRpcClient;
+import data.feipData.Service;
+import data.feipData.serviceParams.ApipParams;
+import clients.NaSaClient.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.JedisPool;
-import appTools.Settings;
+import config.Settings;
 import server.balance.BalanceInfo;
 import server.order.Order;
 import server.reward.RewardInfo;
-import swap.SwapAffair;
-import swap.SwapLpData;
-import swap.SwapPendingData;
-import swap.SwapStateData;
+import data.swap.SwapAffair;
+import data.swap.SwapLpData;
+import data.swap.SwapPendingData;
+import data.swap.SwapStateData;
 import utils.FchUtils;
 import utils.ObjectUtils;
 
@@ -38,10 +38,10 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static appTools.Settings.*;
-import static appTools.Settings.AVATAR_ELEMENTS_PATH;
-import static appTools.Settings.AVATAR_PNG_PATH;
-import static appTools.Settings.LISTEN_PATH;
+import static config.Settings.*;
+import static config.Settings.AVATAR_ELEMENTS_PATH;
+import static config.Settings.AVATAR_PNG_PATH;
+import static config.Settings.LISTEN_PATH;
 import static constants.Constants.*;
 import static constants.Constants.SEC_PER_DAY;
 import static constants.IndicesNames.CID;
@@ -101,7 +101,7 @@ public class StartApipManager {
 		settings = Starter.startServer(serverType, settingMap, ApipApiNames.apiList, modules, br, autoTaskList);
 		if(settings==null)return;
 
-		byte[] symKey = settings.getSymKey();
+		byte[] symkey = settings.getSymkey();
 		service =settings.getService();
 		sid = service.getId();
 		params = ObjectUtils.objectToClass(service.getParams(),ApipParams.class);
@@ -122,7 +122,7 @@ public class StartApipManager {
 		while(true) {
 			Menu menu = new Menu("APIP Manager", () -> close(br));
 
-			menu.add("Manage service", () -> new ApipManager(service,null,br,symKey,ApipParams.class).menu());
+			menu.add("Manage service", () -> new ApipManager(service,null,br,symkey,ApipParams.class).menu());
 			menu.add("Manage account", () -> accountHandler.menu(br, false));
 			menu.add("Manage indices", () -> new IndicesApip(esClient,br).menu());
 			menu.add("Repair address", () -> repairAddress());

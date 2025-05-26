@@ -6,8 +6,8 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
-import fch.BlockFileUtils;
-import fch.fchData.BlockMark;
+import core.fch.BlockFileUtils;
+import data.fchData.BlockMark;
 import utils.EsUtils;
 import writeEs.RollBacker;
 

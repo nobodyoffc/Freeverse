@@ -9,8 +9,8 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import feip.feipData.CidHist;
-import feip.feipData.RepuHist;
+import data.feipData.CidHist;
+import data.feipData.RepuHist;
 import utils.JsonUtils;
 
 import java.util.*;
