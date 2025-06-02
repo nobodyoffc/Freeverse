@@ -7,7 +7,7 @@ import constants.CodeMessage;
 import core.crypto.Decryptor;
 import core.crypto.KeyTools;
 import data.fcData.TalkUnit;
-import handlers.TalkUnitHandler;
+import handlers.TalkUnitManager;
 import handlers.*;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.feipData.Service;
@@ -48,15 +48,15 @@ public class TalkServer {
     private final ApipClient apipClient;
     private final DiskClient diskClient;
     private final ElasticsearchClient esClient;
-    private final SessionHandler sessionHandler;
-    private final CashHandler cashHandler;
-    private final AccountHandler accountHandler;
-    private final HatHandler hatHandler;
-    private final DiskHandler diskHandler;
+    private final SessionManager sessionHandler;
+    private final CashManager cashHandler;
+    private final AccountManager accountHandler;
+    private final HatManager hatHandler;
+    private final DiskManager diskHandler;
     private final NaSaRpcClient nasaClient;
-    private final TalkUnitHandler talkUnitHandler;
-    private final TeamHandler teamHandler;
-    private final GroupHandler groupHandler;
+    private final TalkUnitManager talkUnitHandler;
+    private final TeamManager teamHandler;
+    private final GroupManager groupHandler;
 
     private final JedisPool jedisPool;
     private static int port;
@@ -88,14 +88,14 @@ public class TalkServer {
         this.nasaClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
 
         // Get handlers from settings
-        this.hatHandler = (HatHandler) settings.getHandler(Handler.HandlerType.HAT);
-        this.sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
-        this.cashHandler = (CashHandler) settings.getHandler(Handler.HandlerType.CASH);
-        this.diskHandler = (DiskHandler) settings.getHandler(Handler.HandlerType.DISK);
-        this.talkUnitHandler = (TalkUnitHandler) settings.getHandler(Handler.HandlerType.TALK_UNIT);
-        this.teamHandler = (TeamHandler) settings.getHandler(Handler.HandlerType.TEAM);
-        this.groupHandler = (GroupHandler) settings.getHandler(Handler.HandlerType.GROUP);
-        this.accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
+        this.hatHandler = (HatManager) settings.getManager(Manager.ManagerType.HAT);
+        this.sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
+        this.cashHandler = (CashManager) settings.getManager(Manager.ManagerType.CASH);
+        this.diskHandler = (DiskManager) settings.getManager(Manager.ManagerType.DISK);
+        this.talkUnitHandler = (TalkUnitManager) settings.getManager(Manager.ManagerType.TALK_UNIT);
+        this.teamHandler = (TeamManager) settings.getManager(Manager.ManagerType.TEAM);
+        this.groupHandler = (GroupManager) settings.getManager(Manager.ManagerType.GROUP);
+        this.accountHandler = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
 
         this.dealerMinBalance = (Long) settings.getSettingMap().get(Settings.DEALER_MIN_BALANCE);
 
@@ -274,7 +274,7 @@ public class TalkServer {
         TalkServer.nPriceMap = nPriceMap;
     }
 
-    public SessionHandler getFcSessionHandler() {
+    public SessionManager getFcSessionHandler() {
         return sessionHandler;
     }
 
@@ -282,11 +282,11 @@ public class TalkServer {
         return dealerPrikey;
     }
 
-    public CashHandler getCashClient() {
+    public CashManager getCashClient() {
         return cashHandler;
     }
 
-    public AccountHandler getAccountHandler() {
+    public AccountManager getAccountHandler() {
         return accountHandler;
     }
 
@@ -294,7 +294,7 @@ public class TalkServer {
         return dealer;
     }
 
-    public HatHandler getHatHandler() {
+    public HatManager getHatHandler() {
         return hatHandler;
     }
 
@@ -306,11 +306,11 @@ public class TalkServer {
         TalkServer.isRunning = isRunning;
     }
 
-    public SessionHandler getSessionHandler() {
+    public SessionManager getSessionHandler() {
         return sessionHandler;
     }
 
-    public CashHandler getCashHandler() {
+    public CashManager getCashHandler() {
         return cashHandler;
     }
 
@@ -318,11 +318,11 @@ public class TalkServer {
         return nasaClient;
     }
 
-    public DiskHandler getDiskHandler() {
+    public DiskManager getDiskHandler() {
         return diskHandler;
     }
 
-    public TalkUnitHandler getTalkUnitHandler() {
+    public TalkUnitManager getTalkUnitHandler() {
         return talkUnitHandler;
     }
 
@@ -334,11 +334,11 @@ public class TalkServer {
         return diskClient;
     }
 
-    public TeamHandler getTeamHandler() {
+    public TeamManager getTeamHandler() {
         return teamHandler;
     }
 
-    public GroupHandler getGroupHandler() {
+    public GroupManager getGroupHandler() {
         return groupHandler;
     }
 

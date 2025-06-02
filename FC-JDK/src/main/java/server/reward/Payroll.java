@@ -1,7 +1,7 @@
 package server.reward;
 
 
-import core.fch.OffLineTxInfo;
+import core.fch.RawTxInfo;
 import data.fchData.Cash;
 
 import java.util.List;
@@ -10,7 +10,7 @@ public class Payroll {
 
     RewardInfo rewardInfo;
     String account;
-    OffLineTxInfo offLineTxInfo;
+    RawTxInfo rawTxInfo;
     List<Cash> meetCashList;
 
     public Payroll(String account,RewardInfo rewardInfo) {

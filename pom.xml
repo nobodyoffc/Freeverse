@@ -15,7 +15,7 @@
         <module>APIP</module>
         <module>TALK</module>
         <module>FEIP</module>
-        <module>Chain</module>
+        <module>FchParser</module>
     </modules>
 
     <properties>

@@ -1,22 +1,22 @@
 package APIP18V1_Wallet;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import core.fch.OffLineTxInfo;
+import core.fch.RawTxInfo;
 import core.fch.TxCreator;
-import handlers.CashHandler;
+import handlers.CashManager;
+import handlers.MempoolManager;
 import org.jetbrains.annotations.Nullable;
 import server.ApipApiNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
-import handlers.CashHandler.SearchResult;
+import handlers.CashManager.SearchResult;
 import data.fchData.Cash;
 import data.fchData.SendTo;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.FchUtils;
 import utils.http.AuthType;
-import handlers.MempoolHandler;
-import handlers.Handler.HandlerType;
+import handlers.Manager.ManagerType;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -60,37 +60,37 @@ public class OffLineTx extends HttpServlet {
         if (other == null) return;
         String ver = "2";
 
-        OffLineTxInfo offLineTxInfo;
+        RawTxInfo rawTxInfo;
         if (request.getMethod().equals("GET")) {
-            offLineTxInfo = parseUrlParamsToOffLineRequestData(request, response);
-            if (offLineTxInfo == null){
+            rawTxInfo = parseUrlParamsToOffLineRequestData(request, response);
+            if (rawTxInfo == null){
                 replier.replyHttp(CodeMessage.Code1012BadQuery, null, response);
                 return;
             }
         } else {
             // Handle POST request as before
             String json = other.get(DATA_FOR_OFF_LINE_TX);
-            offLineTxInfo = parseDataForOffLineTxFromOther(json);
+            rawTxInfo = parseDataForOffLineTxFromOther(json);
         }
 
         //Check API
-        if(offLineTxInfo ==null) {
+        if(rawTxInfo ==null) {
             replier.replyHttp(CodeMessage.Code1012BadQuery,null,response);
             return;
         }
 
-        String fromFid = offLineTxInfo.getSender();
-        Long cd = offLineTxInfo.getCd();
-        List<SendTo> sendToList = offLineTxInfo.getOutputs();
+        String fromFid = rawTxInfo.getSender();
+        Long cd = rawTxInfo.getCd();
+        List<SendTo> sendToList = rawTxInfo.getOutputs();
         int outputSize=0;
         if(sendToList!=null)outputSize=sendToList.size();
-        String msg = offLineTxInfo.getMsg();
+        String msg = rawTxInfo.getOpReturn();
         int msgSize=0;
         if(msg!=null)msgSize = msg.getBytes().length;
 
         long amount = 0;
-        if(offLineTxInfo.getOutputs()!=null && !offLineTxInfo.getOutputs().isEmpty()) {
-            for (SendTo sendTo : offLineTxInfo.getOutputs()) {
+        if(rawTxInfo.getOutputs()!=null && !rawTxInfo.getOutputs().isEmpty()) {
+            for (SendTo sendTo : rawTxInfo.getOutputs()) {
                 if (sendTo.getAmount() < Dust) {
                     replier.replyOtherErrorHttp("The amount must be more than "+Dust+"fch.", response);
                     return;
@@ -101,8 +101,8 @@ public class OffLineTx extends HttpServlet {
         SearchResult<Cash> cashListReturn=null;
 
         if(cd!=null) {
-            MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
-            cashListReturn = CashHandler.getValidCashes(fromFid,amount, cd, null, outputSize, msgSize,null,esClient, mempoolHandler);
+            MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
+            cashListReturn = CashManager.getValidCashes(fromFid,amount, cd, null, outputSize, msgSize,null,esClient, mempoolHandler);
         }
         if(cashListReturn==null){
             replier.replyOtherErrorHttp("Can't get cashes. Check ES.", response);
@@ -124,14 +124,14 @@ public class OffLineTx extends HttpServlet {
             return;
         }
 
-        String rawTxForCs = TxCreator. makeOffLineTxRequiredJson(offLineTxInfo,meetList);
+        String rawTxForCs = TxCreator. makeOffLineTxRequiredJson(rawTxInfo,meetList);
 
         replier.replyHttp(CodeMessage.Code0Success, rawTxForCs, response);
     }
 
     @Nullable
-    public OffLineTxInfo parseUrlParamsToOffLineRequestData(HttpServletRequest request, HttpServletResponse response) {
-        OffLineTxInfo dataForSignInCs;
+    public RawTxInfo parseUrlParamsToOffLineRequestData(HttpServletRequest request, HttpServletResponse response) {
+        RawTxInfo dataForSignInCs;
         // Parse URL parameters for GET request
         String fromFid = request.getParameter("fromFid");
         String toFidsStr = request.getParameter("toFids");
@@ -144,7 +144,7 @@ public class OffLineTx extends HttpServlet {
             return null;
         }
 
-        dataForSignInCs = new OffLineTxInfo();
+        dataForSignInCs = new RawTxInfo();
         dataForSignInCs.setSender(fromFid);
 
         // Parse sendToList from toFids and amounts
@@ -166,7 +166,7 @@ public class OffLineTx extends HttpServlet {
         }
 
         if (msg != null) {
-            dataForSignInCs.setMsg(msg);
+            dataForSignInCs.setOpReturn(msg);
         }
 
         if (cdStr != null) {

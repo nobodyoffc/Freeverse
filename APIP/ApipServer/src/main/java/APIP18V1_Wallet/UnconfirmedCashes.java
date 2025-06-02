@@ -6,7 +6,7 @@ import data.fchData.Cash;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
-import handlers.MempoolHandler;
+import handlers.MempoolManager;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import config.Settings;
-import handlers.Handler.HandlerType;
+import handlers.Manager.ManagerType;
 
 @WebServlet(name = ApipApiNames.UNCONFIRMED_CASHES, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.UNCONFIRMED_CASHES)
 public class UnconfirmedCashes extends HttpServlet {
@@ -43,7 +43,7 @@ public class UnconfirmedCashes extends HttpServlet {
         }
         Map<String,List<Cash>> meetList = new HashMap<>();
 
-        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+        MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
         meetList = mempoolHandler.checkUnconfirmedCash(fidList);
         
         replier.replySingleDataSuccessHttp(meetList,response);

@@ -3,8 +3,8 @@ package api;
 
 import data.apipData.Fcdsl;
 import config.Settings;
-import handlers.DiskHandler;
-import handlers.Handler;
+import handlers.DiskManager;
+import handlers.Manager;
 import server.ApipApiNames;
 import constants.CodeMessage;
 import initial.Initiator;
@@ -32,7 +32,7 @@ import static constants.UpStrings.CODE;
 public class Get extends HttpServlet {
 
     private final Settings settings = Initiator.settings;
-    private final DiskHandler diskHandler = (DiskHandler) Initiator.settings.getHandler(Handler.HandlerType.DISK);
+    private final DiskManager diskHandler = (DiskManager) Initiator.settings.getManager(Manager.ManagerType.DISK);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -82,10 +82,12 @@ public class Get extends HttpServlet {
     private void doPostRequest(HttpServletResponse response, ReplyBody replier, String did) throws IOException {
         if (did == null) return;
 
-        String path = DiskHandler.makeDataPath(did,settings);
+        DiskManager diskManager = (DiskManager) settings.getManager(Manager.ManagerType.DISK);
+
+        String path = diskManager.getDataPath(did);
         File file = new File(path);
         if (!file.exists()) {
-            replier.replyHttp(CodeMessage.Code1020OtherError, response);
+            replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
             return;
         }
         Long balance = replier.updateBalance(DiskApiNames.CHECK, file.length());

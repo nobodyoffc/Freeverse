@@ -4,14 +4,14 @@ import data.apipData.Fcdsl;
 import config.ApiAccount;
 import config.ApiProvider;
 import core.crypto.Encryptor;
+import handlers.DiskManager;
+import handlers.HatManager;
 import server.ApipApiNames;
 import constants.Constants;
 import constants.CodeMessage;
 import core.crypto.Hash;
 import data.fcData.DiskItem;
 import data.fcData.Hat;
-import handlers.DiskHandler;
-import handlers.HatHandler;
 import server.DiskApiNames;
 import utils.ObjectUtils;
 import utils.http.AuthType;
@@ -126,7 +126,7 @@ public class DiskClient extends FcClient {
         }
     }
 
-    public static byte[] getData(String did, DiskClient diskClient, DiskHandler diskHandler, HatHandler hatHandler) {
+    public static byte[] getData(String did, DiskClient diskClient, DiskManager diskHandler, HatManager hatHandler) {
         if (did == null) return null;
         
         // 1. Try getting data from diskHandler first
@@ -187,7 +187,7 @@ public class DiskClient extends FcClient {
         return null;
     }
 
-    public static String encryptAndSaveData(String dataFilePath, DiskClient diskClient, byte[] dataBytes, HatHandler hatHandler) {
+    public static String encryptAndSaveData(String dataFilePath, DiskClient diskClient, byte[] dataBytes, HatManager hatHandler) {
         try {
             // 1. Encrypt the data
             String encryptedFilePath = Encryptor.encryptFile(dataFilePath, diskClient.getApiAccount().getUserPubkey());

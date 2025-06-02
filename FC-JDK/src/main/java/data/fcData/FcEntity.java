@@ -28,6 +28,7 @@ public abstract class FcEntity {
     public static int BOOLEAN_DEFAULT_SHOW_SIZE = 5;
 
     protected String id;
+    protected Meta meta;
     public static  <T extends FcEntity> int updateIntoListById(T item, List<T> itemList) {
         if(itemList==null)return -1;
         for (int i = 0; i < itemList.size(); i++) {
@@ -198,5 +199,13 @@ public abstract class FcEntity {
     }
 
     public record ShowingRules(LinkedHashMap<String, Integer> fieldWidthMap, List<String> timestampFieldList, List<String> satoshiField, Map<String, String> heightToTimeFieldMap, Map<String, String> showFieldNameAsMap,List<String> replaceWithMeFieldList) {
+    }
+
+    public Meta getMeta() {
+        return meta;
+    }
+
+    public void setMeta(Meta meta) {
+        this.meta = meta;
     }
 }

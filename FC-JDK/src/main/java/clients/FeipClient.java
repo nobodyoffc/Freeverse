@@ -16,7 +16,7 @@ import data.fchData.SendTo;
 import utils.FeipUtils;
 import data.feipData.Feip.ProtocolName;
 import data.feipData.serviceParams.Params;
-import handlers.MailHandler;
+import handlers.MailManager;
 import utils.Hex;
 import utils.JsonUtils;
 import utils.http.AuthType;
@@ -233,6 +233,26 @@ public class FeipClient {
         return sendFeip(prikey, offLineFid, sendToList, null, data, CodeOpData.class, ProtocolName.CODE, apipClient, nasaClient, br, CodeOpData.Op.class, CodeOpData.OP_FIELDS);
     }
 
+    public static String book(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+                              @Nullable BookOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, BookOpData.class, ProtocolName.BOOK, apipClient, nasaClient, br, BookOpData.Op.class, BookOpData.OP_FIELDS);
+    }
+
+    public static String paper(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+                              @Nullable PaperOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, PaperOpData.class, ProtocolName.PAPER, apipClient, nasaClient, br, PaperOpData.Op.class, PaperOpData.OP_FIELDS);
+    }
+
+    public static String report(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+                              @Nullable ReportOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ReportOpData.class, ProtocolName.REPORT, apipClient, nasaClient, br, ReportOpData.Op.class, ReportOpData.OP_FIELDS);
+    }
+    
+    public static String essay(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+                              @Nullable EssayOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, EssayOpData.class, ProtocolName.ESSAY, apipClient, nasaClient, br, EssayOpData.Op.class, EssayOpData.OP_FIELDS);
+    }
+
     /**
      * The method is similar to protocol.
      */
@@ -313,7 +333,7 @@ public class FeipClient {
      */
     public static String mail(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
                               @Nullable MailOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, MailOpData.class, ProtocolName.MAIL, apipClient, nasaClient, br, MailHandler.MailOp.class, MailOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, MailOpData.class, ProtocolName.MAIL, apipClient, nasaClient, br, MailManager.MailOp.class, MailOpData.OP_FIELDS);
     }
 
     /**

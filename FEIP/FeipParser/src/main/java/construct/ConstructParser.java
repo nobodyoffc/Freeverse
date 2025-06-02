@@ -463,7 +463,6 @@ public class ConstructParser {
 					protocol.setTitle(protocolHist.getType() + protocolHist.getSn() + "V" + protocolHist.getVer() + "_" + protocolHist.getName() + "(" + protocolHist.getLang() + ")");
 					protocol.setOwner(protocolHist.getSigner());
 
-					protocol.setBirthTxId(protocolHist.getId());
 					protocol.setBirthTime(protocolHist.getTime());
 					protocol.setBirthHeight(protocolHist.getHeight());
 
@@ -616,8 +615,6 @@ public class ConstructParser {
 
 		return isValid;
 	}
-
-
 
 	public boolean parseService(ElasticsearchClient esClient, ServiceHistory serviceHist) throws Exception {
 		

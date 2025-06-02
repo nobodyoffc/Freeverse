@@ -1,7 +1,7 @@
 package data.fchData;
 
 import core.crypto.KeyTools;
-import core.fch.OffLineTxInfo;
+import core.fch.RawTxInfo;
 import utils.FchUtils;
 
 import java.util.ArrayList;
@@ -47,8 +47,8 @@ public class RawTxForCsV1 {
         return rawTxForCsV1;
     }
 
-    public static List<RawTxForCsV1> fromV2(OffLineTxInfo offLineTxInfo) {
-        return makeRawTxForCsList(offLineTxInfo.getSender(),offLineTxInfo.getInputs(),offLineTxInfo.getOutputs(),offLineTxInfo.getMsg());
+    public static List<RawTxForCsV1> fromV2(RawTxInfo rawTxInfo) {
+        return makeRawTxForCsList(rawTxInfo.getSender(), rawTxInfo.getInputs(), rawTxInfo.getOutputs(), rawTxInfo.getOpReturn());
     }
 
     public static List<RawTxForCsV1> makeRawTxForCsList(String sender, List<Cash> cashList, List<SendTo> outputs, String opReturn) {

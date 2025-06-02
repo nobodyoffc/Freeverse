@@ -43,7 +43,11 @@ public class Feip {
 		SECRET("17","3", "Secret"),
 		TEAM("18","1", "Team"),
 		GROUP("19","3", "Group"),
-		TOKEN("20","1", "Token");
+		TOKEN("20","1", "Token"),
+		BOOK("21","1", "Book"),
+		PAPER("22","1", "Paper"),
+		REPORT("23","1", "Report"),
+		ESSAY("24","1", "Essay");
 
 		private final String sn;
 		private final String ver;

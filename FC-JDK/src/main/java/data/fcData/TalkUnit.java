@@ -7,9 +7,9 @@ import clients.ApipClient;
 import com.fasterxml.jackson.core.util.ByteArrayBuilder;
 import com.google.gson.Gson;
 import constants.CodeMessage;
-import handlers.ContactHandler;
-import handlers.SessionHandler;
-import handlers.TalkIdHandler;
+import handlers.ContactManager;
+import handlers.SessionManager;
+import handlers.TalkIdManager;
 import org.slf4j.LoggerFactory;
 import utils.*;
 import org.bitcoinj.core.ECKey;
@@ -307,7 +307,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         this.code = code;
         this.message = CodeMessage.getMsg(code);
     }
-    public static TalkUnit parseTalkUnitData(final TalkUnit talkUnit, byte[] priKey, SessionHandler sessionHandler) {
+    public static TalkUnit parseTalkUnitData(final TalkUnit talkUnit, byte[] priKey, SessionManager sessionHandler) {
         if (talkUnit.getData()== null) {
             log.debug("Data is null in parseTalkUnitData.");
             return null;
@@ -1173,7 +1173,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         return cryptoDataByte;
     }
 
-    public static FcSession prepareSession(String fid, SessionHandler sessionHandler, TalkIdHandler talkIdHandler, ContactHandler contactHandler, ApipClient apipClient) {
+    public static FcSession prepareSession(String fid, SessionManager sessionHandler, TalkIdManager talkIdHandler, ContactManager contactHandler, ApipClient apipClient) {
         FcSession fcSession;
         fcSession = sessionHandler.getSessionByUserId(fid);
         if(fcSession==null){
@@ -1183,7 +1183,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         return fcSession;
     }
 
-    public static FcSession prepareSession(CryptoDataByte cryptoDataByte,SessionHandler sessionHandler) {
+    public static FcSession prepareSession(CryptoDataByte cryptoDataByte, SessionManager sessionHandler) {
         FcSession session;
         String pubKeyHex=null;
         if(cryptoDataByte.getKeyName()!=null)
@@ -1205,7 +1205,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         session = sessionHandler.addNewSession(fid,pubKeyHex);
         return session;
     }
-    public static TalkUnit decryptUnit(byte[] bundle, byte[] priKey, FcSession bySession, SessionHandler fcSessionHandler) {
+    public static TalkUnit decryptUnit(byte[] bundle, byte[] priKey, FcSession bySession, SessionManager fcSessionHandler) {
         CryptoDataByte cryptoDataByte = CryptoDataByte.fromBundle(bundle);
         if(cryptoDataByte==null){
             log.debug("Failed to get cryptoDataByte from bundle.");
@@ -1215,7 +1215,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
     }
 
     @Nullable
-    public static TalkUnit decryptUnit(CryptoDataByte cryptoDataByte, byte[] priKey, @Nullable FcSession bySession, @Nullable SessionHandler fcSessionHandler) {
+    public static TalkUnit decryptUnit(CryptoDataByte cryptoDataByte, byte[] priKey, @Nullable FcSession bySession, @Nullable SessionManager fcSessionHandler) {
         if (cryptoDataByte == null) return null;
         FcSession session = bySession;
         if(bySession==null && fcSessionHandler!=null)
@@ -1391,7 +1391,7 @@ public class TalkUnit extends FcObject implements Comparable<TalkUnit> {
         return cryptoDataByte.toBundle();
     }
 
-    private static byte[] decryptData(TalkUnit decryptedUnit, SessionHandler sessionHandler, byte[] priKey) {
+    private static byte[] decryptData(TalkUnit decryptedUnit, SessionManager sessionHandler, byte[] priKey) {
         if(!(decryptedUnit.getData() instanceof CryptoDataByte cryptoDataByte))return null;
         FcSession session = prepareSession(cryptoDataByte,sessionHandler);
         decrypt(priKey, cryptoDataByte, session);

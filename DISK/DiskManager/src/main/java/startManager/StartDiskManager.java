@@ -6,15 +6,16 @@ import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
 import constants.FieldNames;
 import data.fcData.AutoTask;
+import data.fcData.Module;
 import data.feipData.Service;
 import data.feipData.serviceParams.DiskParams;
+import handlers.AccountManager;
+import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import data.fcData.DiskItem;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import config.Configure;
-import handlers.AccountHandler;
-import handlers.Handler;
 import server.DiskApiNames;
 import utils.EsUtils;
 import utils.JsonUtils;
@@ -50,29 +51,33 @@ public class StartDiskManager {
     public static String sid;
     public static final Service.ServiceType serverType = Service.ServiceType.DISK;
 
-    public static final Object[] modules = new Object[]{
-        Service.ServiceType.REDIS,
-        Service.ServiceType.ES,
-        Service.ServiceType.APIP,
-        Handler.HandlerType.CASH,
-        Handler.HandlerType.SESSION,
-        Handler.HandlerType.ACCOUNT
-    };
+
 
 
     public static void main(String[] args) throws IOException {
+         List<Module> modules = new ArrayList<>();
+         modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
+         modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+         modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+         modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.CASH.name()));
+         modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.SESSION.name()));
+         modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.NONCE.name()));
+         modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.ACCOUNT.name()));
+         modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.DISK.name()));
+
         Map<String,Object>  settingMap = new HashMap<> ();
         settingMap.put(Settings.FORBID_FREE_API, false);
         settingMap.put(Settings.WINDOW_TIME, DEFAULT_WINDOW_TIME);
         settingMap.put(FieldNames.DISK_DIR, DISK_DATA_PATH);
-        settingMap.put(AccountHandler.DISTRIBUTE_DAYS,AccountHandler.DEFAULT_DISTRIBUTE_DAYS);
-        settingMap.put(AccountHandler.MIN_DISTRIBUTE_BALANCE,AccountHandler.DEFAULT_MIN_DISTRIBUTE_BALANCE);
-        settingMap.put(AccountHandler.DEALER_MIN_BALANCE,AccountHandler.DEFAULT_DEALER_MIN_BALANCE);
+        settingMap.put(AccountManager.DISTRIBUTE_DAYS, AccountManager.DEFAULT_DISTRIBUTE_DAYS);
+        settingMap.put(AccountManager.MIN_DISTRIBUTE_BALANCE, AccountManager.DEFAULT_MIN_DISTRIBUTE_BALANCE);
+        settingMap.put(AccountManager.DEALER_MIN_BALANCE, AccountManager.DEFAULT_DEALER_MIN_BALANCE);
 
         List<AutoTask> autoTaskList = new ArrayList<>();
-        autoTaskList.add(new AutoTask(Handler.HandlerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.DISK,"deleteExpiredFiles",SEC_PER_DAY));
 
         Menu.welcome("DISK Manager");
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
@@ -96,7 +101,7 @@ public class StartDiskManager {
         //Check indices in ES
         checkEsIndices(esClient);
 
-        AccountHandler accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
+        AccountManager accountHandler = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
 
         //Show the main menu
         Menu menu = new Menu();
@@ -104,6 +109,7 @@ public class StartDiskManager {
 
         menu.add("Manage the service");
         menu.add("Manage account");
+        menu.add("Manage Rewards");
         menu.add("Reset the price multipliers(nPrice)");
         menu.add("Manage ES indices");
         menu.add("Settings");

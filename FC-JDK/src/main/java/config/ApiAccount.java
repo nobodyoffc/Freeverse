@@ -5,13 +5,13 @@ import data.fcData.CidInfo;
 import clients.*;
 import data.fcData.FcSession;
 import data.apipData.RequestBody;
-import handlers.AccountHandler;
+import handlers.AccountManager;
 import ui.Inputer;
 import ui.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import data.fcData.ReplyBody;
-import handlers.CashHandler;
+import handlers.CashManager;
 import org.bitcoinj.fch.FchMainNetwork;
 import utils.IdNameUtils;
 import core.fch.TxCreator;
@@ -48,6 +48,7 @@ import static data.fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 
 public class ApiAccount {
     private static final Logger log = LoggerFactory.getLogger(ApiAccount.class);
+    public static final String DEFAULT_APIP_SERVER = "https://apip.cash/APIP";
     public static long minRequestTimes = 100;
     public static long orderRequestTimes = 10000;
     private transient byte[] password;
@@ -576,7 +577,9 @@ public class ApiAccount {
                     if(providerId ==null)inputSid(br);
 
                     userPrikeyCipher = fidInfoMap.get(userFid).getPrikeyCipher();
-
+                    if(userPrikeyCipher!=null && this.userPubkey==null){
+                        this.userPubkey = makePubkey(this.userPrikeyCipher,symkey);
+                    }
                     while(userName==null) {
                         if(userId!=null)userName= userFid;
                         else{
@@ -787,7 +790,7 @@ public class ApiAccount {
 
         byte[] prikey = decryptUserPrikey(userPrikeyCipher, symkey);
         Long minPay = utils.FchUtils.coinStrToSatoshi(serviceParams.getMinPayment());
-        if(minPay==null)minPay= AccountHandler.DEFAULT_MIN_PAYMENT;
+        if(minPay==null)minPay= AccountManager.DEFAULT_MIN_PAYMENT;
 
         Long price;
         price = FchUtils.coinStrToSatoshi(serviceParams.getPricePerKBytes());
@@ -812,7 +815,7 @@ public class ApiAccount {
         String signedTx;
 
         if(prikey==null){
-            signedTx = CashHandler.makeOffLineTx(this.userId, cashList,sendToList, 0L, TxCreator.DEFAULT_FEE_RATE,null, "2", br);
+            signedTx = CashManager.makeOffLineTx(this.userId, cashList,sendToList, 0L, TxCreator.DEFAULT_FEE_RATE,null, "2", br);
         }else {
             signedTx = TxCreator.createTxFch(cashList, prikey, sendToList, null, FchMainNetwork.MAINNETWORK);
         }
@@ -941,14 +944,17 @@ public class ApiAccount {
         FcClient fcClient1 = (FcClient) client;
 
         fcClient1.setSessionKey(sessionKey);
-        boolean allowFreeRequest = (boolean) fcClient1.ping(VERSION_1, RequestMethod.GET,AuthType.FREE, type);
-        if(Settings.freeApiListMap!=null) ((FcClient) client).setAllowFreeRequest(allowFreeRequest);
-        Object rest = fcClient1.ping(VERSION_1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
-        if(rest!=null){
-            System.out.println((Long)rest+" KB/requests are available on "+ apiUrl);
-            return sessionKey;
+        try {
+            boolean allowFreeRequest = (boolean) fcClient1.ping(VERSION_1, RequestMethod.GET, AuthType.FREE, type);
+            if (Settings.freeApiListMap != null) ((FcClient) client).setAllowFreeRequest(allowFreeRequest);
+            Object rest = fcClient1.ping(VERSION_1, RequestMethod.POST, AuthType.FC_SIGN_BODY, null);
+            if (rest != null) {
+                System.out.println((Long) rest + " KB/requests are available on " + apiUrl);
+                return sessionKey;
+            } else return null;
+        }catch (Exception e){
+            return null;
         }
-        else return null;
     }
 
     public byte[] freshSessionKey(byte[] symkey, Service.ServiceType type, RequestBody.SignInMode mode, BufferedReader br) {
@@ -985,11 +991,11 @@ public class ApiAccount {
     }
 
     public void inputApiUrl(BufferedReader br) {
-        System.out.println("Input the urlHead of the APIP service. Enter to set as 'https://cid.cash/APIP':");
+        System.out.println("Input the urlHead of the APIP service. Enter to set as '" + DEFAULT_APIP_SERVER + "':");
         String input = core.fch.Inputer.inputString(br);
         if (input.endsWith("/")) input = input.substring(0, input.length() - 1);
         if ("".equals(input)) {
-            this.apiUrl = "https://cid.cash/APIP";
+            this.apiUrl = DEFAULT_APIP_SERVER;
         } else this.apiUrl = input;
     }
 

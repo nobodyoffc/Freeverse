@@ -9,10 +9,9 @@ import data.fcData.FcSession;
 import data.fcData.ReplyBody;
 import data.fcData.Signature;
 import data.feipData.serviceParams.Params;
-import handlers.AccountHandler;
-import handlers.Handler;
-import handlers.NonceHandler;
-import handlers.SessionHandler;
+import handlers.*;
+import handlers.Manager;
+import handlers.SessionManager;
 import org.bitcoinj.core.ECKey;
 import org.jetbrains.annotations.Nullable;
 import utils.Hex;
@@ -49,9 +48,9 @@ public class HttpRequestChecker {
     private Integer nonce;
     private final Settings settings;
     private final Params params;
-    private final AccountHandler accountHandler;
-    private final SessionHandler sessionHandler;
-    private final NonceHandler  nonceHandler;
+    private final AccountManager accountHandler;
+    private final SessionManager sessionHandler;
+    private final NonceManager nonceHandler;
     private final long windowTime;
 
     /*
@@ -72,9 +71,9 @@ public class HttpRequestChecker {
             this.replyBody =new ReplyBody(settings);
         else this.replyBody = replyBody;
 
-        this.accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
-        this.sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
-        this.nonceHandler = (NonceHandler)settings.getHandler(Handler.HandlerType.NONCE);
+        this.accountHandler = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
+        this.sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
+        this.nonceHandler = (NonceManager)settings.getManager(Manager.ManagerType.NONCE);
         this.params = ObjectUtils.objectToClass(settings.getService().getParams(),Params.class) ;
         Object windowTimeRaw = settings.getSettingMap().get(Settings.WINDOW_TIME);
         this.windowTime = ((Number) windowTimeRaw).longValue();
@@ -165,7 +164,7 @@ public class HttpRequestChecker {
             return false;
         }
 
-        if (NonceHandler.isBadTime(requestBody.getTime(), windowTime)) {
+        if (NonceManager.isBadTime(requestBody.getTime(), windowTime)) {
             Map<String, String> dataMap = new HashMap<>();
             dataMap.put(WINDOW_TIME, String.valueOf(windowTime));
             replyBody.replyHttp(CodeMessage.Code1006RequestTimeExpired, dataMap, response);
@@ -294,7 +293,7 @@ public class HttpRequestChecker {
             }
         }
 
-        if (NonceHandler.isBadTime(signInfo.time, windowTime)) {
+        if (NonceManager.isBadTime(signInfo.time, windowTime)) {
             Map<String, String> dataMap = new HashMap<>();
             dataMap.put(WINDOW_TIME, String.valueOf(windowTime));
             replyBody.replyHttp(CodeMessage.Code1006RequestTimeExpired, dataMap, response);

@@ -14,7 +14,7 @@ import core.crypto.KeyTools;
 import utils.Hex;
 import core.crypto.Hash;
 import data.fchData.Cash;
-import data.fchData.P2SH;
+import data.fchData.Multisign;
 import data.fcData.Signature;
 import utils.BytesUtils;
 import utils.JsonUtils;
@@ -77,9 +77,9 @@ public class TxTest {
         pubKeyList.add(HexFormat.of().parseHex(pubkeyB));
         pubKeyList.add(HexFormat.of().parseHex(pubkeyC));
 
-        P2SH p2SH = createP2sh(pubKeyList, 2);
-        if(p2SH==null)return;
-        String mFid = p2SH.getId();
+        Multisign multisign = createMultisign(pubKeyList, 2);
+        if(multisign ==null)return;
+        String mFid = multisign.getId();
 
         System.out.println("Multisig address:" + mFid);
         //Get multisig address information
@@ -89,10 +89,10 @@ public class TxTest {
         apipClient.setUrlHead(urlHead);
         apipClient.setSessionKey(sessionKey);
         String id = mFid;
-        Map<String, P2SH> p2SHMap = apipClient.p2shByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,mFid);
+        Map<String, Multisign> p2SHMap = apipClient.multisignByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,mFid);
         if(p2SHMap==null)return;
-        P2SH p2sh = p2SHMap.get(mFid);
-        JsonUtils.printJson(p2sh);
+        multisign = p2SHMap.get(mFid);
+        JsonUtils.printJson(multisign);
 
         //Get cashes of the multisig address
 
@@ -115,27 +115,27 @@ public class TxTest {
         JsonUtils.printJson(cashList);
 
         //Make raw tx
-        Transaction transaction = createUnsignedTx(cashList, sendToList, msg, p2sh, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
+        Transaction transaction = createUnsignedTx(cashList, sendToList, msg, multisign, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
         byte[] txBytes = transaction.bitcoinSerialize();
         System.out.println(HexFormat.of().formatHex(txBytes));
         Shower.printUnderline(10);
         //Sign raw tx
-        byte[] redeemScript = HexFormat.of().parseHex(p2sh.getRedeemScript());
-        MultiSigData multiSignData = new MultiSigData(txBytes, p2sh, cashList);
+        byte[] redeemScript = HexFormat.of().parseHex(multisign.getRedeemScript());
+        RawTxInfo multiSignData = new RawTxInfo(txBytes, multisign, cashList);
 
-        MultiSigData multiSignDataA = signSchnorrMultiSignTx(multiSignData, priKeyBytesA, FchMainNetwork.MAINNETWORK);
-        MultiSigData multiSignDataB = signSchnorrMultiSignTx(multiSignData, priKeyBytesB, FchMainNetwork.MAINNETWORK);
-        MultiSigData multiSignDataC = signSchnorrMultiSignTx(multiSignData, priKeyBytesC, FchMainNetwork.MAINNETWORK);
+        RawTxInfo multiSignDataA = signSchnorrMultiSignTx(multiSignData, priKeyBytesA, FchMainNetwork.MAINNETWORK);
+        RawTxInfo multiSignDataB = signSchnorrMultiSignTx(multiSignData, priKeyBytesB, FchMainNetwork.MAINNETWORK);
+        RawTxInfo multiSignDataC = signSchnorrMultiSignTx(multiSignData, priKeyBytesC, FchMainNetwork.MAINNETWORK);
 
-        Map<String, List<byte[]>> sig1 = multiSignDataA.getFidSigMap();
-        Map<String, List<byte[]>> sig2 = multiSignDataB.getFidSigMap();
-        Map<String, List<byte[]>> sig3 = multiSignDataC.getFidSigMap();
+        Map<String, List<String>> sig1 = multiSignDataA.getFidSigMap();
+        Map<String, List<String>> sig2 = multiSignDataB.getFidSigMap();
+        Map<String, List<String>> sig3 = multiSignDataC.getFidSigMap();
 
-        System.out.println("Verify sig3:" + rawTxSigVerify(txBytes, ecKeyC.getPubKey(), sig3.get(fidC).get(0), 0, cashList.get(0).getValue(), redeemScript, FchMainNetwork.MAINNETWORK));
+        System.out.println("Verify sig3:" + rawTxSigVerify(txBytes, ecKeyC.getPubKey(), Hex.fromHex(sig3.get(fidC).get(0)), 0, cashList.get(0).getValue(), redeemScript, FchMainNetwork.MAINNETWORK));
 
         Map<String, List<byte[]>> sigAll = new HashMap<>();
-        sigAll.putAll(sig1);
-        sigAll.putAll(sig2);
+        sigAll.putAll(TxCreator.getStringListMap(sig1));
+        sigAll.putAll(TxCreator.getStringListMap(sig2));
 
         for (String fid : sigAll.keySet()) {
             System.out.println(fid + ":");
@@ -146,13 +146,13 @@ public class TxTest {
         }
         Shower.printUnderline(10);
         //build signed tx
-        String signedTx = buildSchnorrMultiSignTx(txBytes, sigAll, p2sh, FchMainNetwork.MAINNETWORK);
+        String signedTx = buildSchnorrMultiSignTx(txBytes, sigAll, multisign, FchMainNetwork.MAINNETWORK);
 
         System.out.println(signedTx);
 
         String msC = multiSignDataC.toJson();
         System.out.println(msC);
-        MultiSigData multiSignDataD = MultiSigData.fromJson(msC);
+        RawTxInfo multiSignDataD = RawTxInfo .fromJson(msC,RawTxInfo.class);
         System.out.println("New:" + multiSignDataD.toJson());
     }
 

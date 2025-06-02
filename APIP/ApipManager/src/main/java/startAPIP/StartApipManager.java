@@ -3,13 +3,13 @@ package startAPIP;
 
 import data.apipData.WebhookInfo;
 import config.Starter;
+import handlers.AccountManager;
+import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import constants.FieldNames;
 import data.fcData.AutoTask;
 import data.fchData.Cid;
-import handlers.AccountHandler;
-import handlers.Handler;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
@@ -64,36 +64,37 @@ public class StartApipManager {
 	private static Settings settings;
 	public static final Service.ServiceType serverType = Service.ServiceType.APIP;
 
-	public static final Object[] modules = new Object[]{
-			Service.ServiceType.REDIS,
-			Service.ServiceType.NASA_RPC,
-			Service.ServiceType.ES,
-			Handler.HandlerType.MEMPOOL,
-			Handler.HandlerType.CASH,
-			Handler.HandlerType.ACCOUNT,
-			Handler.HandlerType.NONCE,
-			Handler.HandlerType.SESSION,
-			Handler.HandlerType.WEBHOOK
-    };
+
 
 	public static void main(String[] args) {
+		List<data.fcData.Module> modules = new ArrayList<>();
+		modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
+		modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.NASA_RPC.name()));
+		modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.MEMPOOL.name()));
+		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.CASH.name()));
+		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.ACCOUNT.name()));
+		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.NONCE.name()));
+		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.SESSION.name()));
+		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.WEBHOOK.name()));
+
 		Map<String,Object>  settingMap = new HashMap<> ();
 		settingMap.put(Settings.FORBID_FREE_API,false);
 		settingMap.put(Settings.WINDOW_TIME,DEFAULT_WINDOW_TIME);
 		settingMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 		settingMap.put(AVATAR_ELEMENTS_PATH,System.getProperty(UserDir)+"/avatar/elements");
 		settingMap.put(AVATAR_PNG_PATH,System.getProperty(UserDir)+"/avatar/png");
-		settingMap.put(AccountHandler.DISTRIBUTE_DAYS,AccountHandler.DEFAULT_DISTRIBUTE_DAYS);
-		settingMap.put(AccountHandler.MIN_DISTRIBUTE_BALANCE,AccountHandler.DEFAULT_MIN_DISTRIBUTE_BALANCE);
-		settingMap.put(AccountHandler.DEALER_MIN_BALANCE,AccountHandler.DEFAULT_DEALER_MIN_BALANCE);
+		settingMap.put(AccountManager.DISTRIBUTE_DAYS, AccountManager.DEFAULT_DISTRIBUTE_DAYS);
+		settingMap.put(AccountManager.MIN_DISTRIBUTE_BALANCE, AccountManager.DEFAULT_MIN_DISTRIBUTE_BALANCE);
+		settingMap.put(AccountManager.DEALER_MIN_BALANCE, AccountManager.DEFAULT_DEALER_MIN_BALANCE);
 
 		List<AutoTask> autoTaskList = new ArrayList<>();
-		autoTaskList.add(new AutoTask(Handler.HandlerType.MEMPOOL, "checkMempool", (String)settingMap.get(LISTEN_PATH)));
-		autoTaskList.add(new AutoTask(Handler.HandlerType.WEBHOOK, "pushWebhookData", (String)settingMap.get(LISTEN_PATH)));
-		autoTaskList.add(new AutoTask(Handler.HandlerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
-		autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
-		autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
-		autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+		autoTaskList.add(new AutoTask(Manager.ManagerType.MEMPOOL, "checkMempool", (String)settingMap.get(LISTEN_PATH)));
+		autoTaskList.add(new AutoTask(Manager.ManagerType.WEBHOOK, "pushWebhookData", (String)settingMap.get(LISTEN_PATH)));
+		autoTaskList.add(new AutoTask(Manager.ManagerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
+		autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
+		autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+		autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
 
 		Menu.welcome("APIP Manager");
 
@@ -117,7 +118,7 @@ public class StartApipManager {
 		checkApipIndices(esClient);
 		checkSwapIndices(esClient);
 
-		AccountHandler accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
+		AccountManager accountHandler = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
 
 		while(true) {
 			Menu menu = new Menu("APIP Manager", () -> close(br));

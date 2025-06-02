@@ -9,8 +9,8 @@ import data.fcData.Hat;
 import data.fcData.ReplyBody;
 import data.feipData.Service;
 import data.feipData.serviceParams.DiskParams;
-import handlers.DiskHandler;
-import handlers.Handler;
+import handlers.DiskManager;
+import handlers.Manager;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.DiskApiNames;
@@ -35,7 +35,6 @@ import static constants.Strings.DATA;
 public class Put extends HttpServlet {
 
     private final Settings settings = Initiator.settings;
-    private final DiskHandler diskHandler = (DiskHandler) Initiator.settings.getHandler(Handler.HandlerType.DISK);
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
@@ -54,10 +53,14 @@ public class Put extends HttpServlet {
         //Check authorization
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
         httpRequestChecker.checkRequestHttp(request, response, authType);
-        DiskParams diskParams = (DiskParams) settings.getService().getParams();
+        DiskParams diskParams  = DiskParams.fromObject(settings.getService().getParams());
+
+        if(diskParams==null)return;
+
         dataLifeDays = Long.parseLong(diskParams.getDataLifeDays());
         //Do request
         InputStream inputStream = request.getInputStream();
+        DiskManager diskHandler = (DiskManager)settings.getManager(Manager.ManagerType.DISK);
         Hat hat = diskHandler.put(inputStream);
 
         Map<String,String> dataMap = new HashMap<>();
@@ -65,9 +68,6 @@ public class Put extends HttpServlet {
         String result = updateDataInfoToEs(dataLifeDays, hat.getSize(), hat.getId(),settings);
         dataMap.put(RESULT,result);
         replier.reply0SuccessHttp(dataMap,response);
-    }
-
-    public static record Result(long bytesLength, String did) {
     }
 
     public static String updateDataInfoToEs(long dataLifeDays, long bytesLength, String did, Settings settings) throws IOException {

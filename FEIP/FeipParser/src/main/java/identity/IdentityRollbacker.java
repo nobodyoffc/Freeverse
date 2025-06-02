@@ -23,9 +23,22 @@ public class IdentityRollbacker {
 	
 		error = rollbackCid(esClient,height);
 		
-		error = rollbackRepu(esClient,height);
+		error = error || rollbackRepu(esClient,height);
+		error = error || rollbackNid(esClient,height);
+
 
 		return error;
+	}
+
+	public boolean rollbackNid(ElasticsearchClient esClient, long lastHeight) throws Exception {
+		List<String> indexList = new ArrayList<String>();
+		indexList.add(IndicesNames.NID);
+
+		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
+
+		TimeUnit.SECONDS.sleep(3);
+
+		return false;
 	}
 
 	private boolean rollbackCid(ElasticsearchClient esClient, long height) throws Exception {

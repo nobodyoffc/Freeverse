@@ -2,9 +2,9 @@ package api;
 
 import data.apipData.WebhookPushBody;
 import config.Settings;
-import handlers.AccountHandler;
-import handlers.Handler;
-import handlers.SessionHandler;
+import handlers.AccountManager;
+import handlers.Manager;
+import handlers.SessionManager;
 import server.ApipApiNames;
 import initial.Initiator;
 
@@ -26,7 +26,7 @@ public class NewOrder extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        SessionHandler sessionHandler = (SessionHandler)settings.getHandler(Handler.HandlerType.SESSION);
+        SessionManager sessionHandler = (SessionManager)settings.getManager(Manager.ManagerType.SESSION);
         byte[] requestBodyBytes = request.getInputStream().readAllBytes();
 
         WebhookPushBody webhookPushBody = WebhookPushBody.checkWebhookPushBody(sessionHandler, requestBodyBytes);
@@ -35,7 +35,7 @@ public class NewOrder extends HttpServlet {
         String method = webhookPushBody.getMethod();
 
         if(method.equals(ApipApiNames.NEW_CASH_BY_FIDS)) {
-            AccountHandler accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
+            AccountManager accountHandler = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
             accountHandler.updateAll();
         }
     }

@@ -2,6 +2,7 @@ package config;
 
 import core.crypto.*;
 import data.fcData.CidInfo;
+import data.fcData.Module;
 import ui.Inputer;
 import ui.Menu;
 import clients.ApipClient;
@@ -29,7 +30,6 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.FreeApi;
 import server.serviceManagers.ApipManager;
-import server.serviceManagers.DiskManager;
 import server.serviceManagers.SwapHallManager;
 import server.serviceManagers.TalkManager;
 import utils.*;
@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
+import static data.fcData.Module.ModuleType.MANAGER;
 import static ui.Inputer.askIfYes;
 import static config.Configure.*;
 import static constants.Constants.UserDir;
@@ -65,7 +66,7 @@ public class Settings {
     public static final String AVATAR_ELEMENTS_PATH = "avatarElementsPath";
     public static final String AVATAR_PNG_PATH = "avatarPngPath";
     public static final Long DEFAULT_WINDOW_TIME = 300000L;
-    public static final String DISK_DATA_PATH = Constants.UserHome+".diskData";
+    public static final String DISK_DATA_PATH = System.getProperty(Constants.UserHome)+"/diskData";
 
     public static Map<Service.ServiceType,List<FreeApi>> freeApiListMap;
     private static String fileName;
@@ -76,7 +77,7 @@ public class Settings {
 
     private transient List<ApiAccount> paidAccountList;
     private transient byte[] symkey;
-    private transient Map<Handler.HandlerType, Handler<?>> handlers;
+    private transient Map<Manager.ManagerType, Manager<?>> handlers;
 
     private Map<Service.ServiceType, ClientGroup> clientGroups;
     private Service.ServiceType serverType;
@@ -94,14 +95,14 @@ public class Settings {
     //Settings
     private Map<String,Object> settingMap;
 
-    private Object[] modules;
+    private List<Module> modules;
 //    private Object[] runningModules;
     private List<String> apiList;
     private String dbDir;
     private LocalDB.DbType localDBType;
     private List<AutoTask> autoTaskList;
 
-    public Settings(Configure configure, String clientName, Object[] modules, Map<String, Object> settingMap, List<AutoTask> autoTaskList) {
+    public Settings(Configure configure, String clientName, List<Module> modules, Map<String, Object> settingMap, List<AutoTask> autoTaskList) {
         if(configure!=null) {
             this.config = configure;
             this.br = configure.getBr();
@@ -116,7 +117,7 @@ public class Settings {
             addShutdownHook();
         }
     }
-    public Settings(Configure configure, Service.ServiceType serverType, Map<String,Object> settingMap, Object[] modules, List<AutoTask> autoTaskList) {
+    public Settings(Configure configure, Service.ServiceType serverType, Map<String,Object> settingMap, List<Module> modules, List<AutoTask> autoTaskList) {
         if(configure!=null) {
             this.config = configure;
             this.br =configure.getBr();
@@ -132,7 +133,7 @@ public class Settings {
         }
     }
 
-    public Settings(Configure configure, Map<String,Object> settingMap, Object[] modules) {
+    public Settings(Configure configure, Map<String,Object> settingMap, List<Module> modules) {
         if(configure!=null) {
             this.config = configure;
             this.br = configure.getBr();
@@ -383,7 +384,7 @@ public class Settings {
         this.mainFid = fid;
         this.myPrikeyCipher = config.getMainCidInfoMap().get(fid).getPrikeyCipher();
         if(this.config==null)this.config = config;
-
+        this.myPubkey = ApiAccount.makePubkey(myPrikeyCipher,symkey);
         if(clientGroups==null)clientGroups = new HashMap<>();
 
         freeApiListMap = config.getFreeApiListMap();
@@ -427,13 +428,13 @@ public class Settings {
             // Close all handlers first to ensure LevelDB instances are properly closed
             if (handlers != null) {
                 log.info("Closing {} handlers...", handlers.size());
-                for (Handler<?> handler : handlers.values()) {
-                    if (handler != null) {
+                for (Manager<?> manager : handlers.values()) {
+                    if (manager != null) {
                         try {
-                            log.debug("Closing handler: {}", handler.getHandlerType());
-                            handler.close();
+                            log.debug("Closing handler: {}", manager.getHandlerType());
+                            manager.close();
                         } catch (Exception e) {
-                            log.error("Error closing handler {}: {}", handler.getHandlerType(), e.getMessage(), e);
+                            log.error("Error closing handler {}: {}", manager.getHandlerType(), e.getMessage(), e);
                         }
                     }
                 }
@@ -450,6 +451,7 @@ public class Settings {
             if (clientGroups != null) {
                 log.info("Closing client groups...");
                 for (ClientGroup group : clientGroups.values()) {
+                    if(group.getClientMap()==null)continue;
                     for (Object client : group.getClientMap().values()) {
                         try {
                             switch (group.getGroupType()) {
@@ -675,12 +677,15 @@ public class Settings {
 
         group = new ClientGroup(groupType);
         while(true){
-            ApipClient freeApipClient;
-            switch (groupType){
-                case ES,REDIS,NASA_RPC ->freeApipClient = null;
-                default -> freeApipClient = getFreeApipClient();
+            ApipClient apipClient =null;
+            switch (groupType) {
+                case ES, REDIS, NASA_RPC -> {}
+                default -> {
+                    apipClient = (ApipClient) getClient(APIP);
+                   if(apipClient==null) apipClient = getFreeApipClient();
+                }
             }
-            ApiAccount apiAccount = config.getApiAccount(symkey, mainFid, groupType, freeApipClient);
+            ApiAccount apiAccount = config.getApiAccount(symkey, mainFid, groupType, apipClient);
             if(apiAccount==null){
                 System.out.println(groupType+" module is ignored.");
                 return;
@@ -688,7 +693,7 @@ public class Settings {
             group.addApiAccount(apiAccount);
             group.getAccountIds().add(apiAccount.getId());
             if(apiAccount.getClient()!=null)group.getClientMap().put(apiAccount.getId(),apiAccount.getClient());
-            if(br !=null && !askIfYes(br,"Add more "+groupType + " account?"))break;
+            if(br !=null && !askIfYes(br,"\nAdd more "+groupType + " account?"))break;
         }
         if(group.getAccountIds().size()>1){
             ClientGroup.GroupStrategy strategy = Inputer.chooseOne(ClientGroup.GroupStrategy.values(),null,"Chose the strategy",br);
@@ -757,7 +762,7 @@ public class Settings {
         if(askIfYes(br,"Publish a new service?")) {
             switch (serviceType) {
                 case APIP -> new ApipManager(null, null, br, symkey, ApipParams.class).publishService();
-                case DISK -> new DiskManager(null, null, br, symkey, DiskParams.class).publishService();
+                case DISK -> new server.serviceManagers.DiskManager(null, null, br, symkey, DiskParams.class).publishService();
                 case TALK -> new TalkManager(null, null, br, symkey, TalkParams.class).publishService();
                 case SWAP_HALL -> new SwapHallManager(null, null, br, symkey, SwapHallParams.class).publishService();
                 default -> {
@@ -1127,14 +1132,9 @@ public class Settings {
     public void resetApi(byte[] symkey, ApipClient apipClient) {
         System.out.println("Reset default API service...");
         List<Service.ServiceType> requiredBasicServices = new ArrayList<>();
-        for(Object model: modules){
-            if(model instanceof String str){
-                try{
-                    requiredBasicServices.add(Service.ServiceType.fromString(str));
-                }catch (Exception ignore){}
-            }else if(model instanceof Service.ServiceType type){
-                requiredBasicServices.add(type);
-            }
+        for(Module module: modules){
+            if(module.getType().equals(Module.ModuleType.SERVICE))
+                requiredBasicServices.add(Service.ServiceType.fromString(module.getName()));
         }
         Service.ServiceType type = Inputer.chooseOne(requiredBasicServices.toArray(new Service.ServiceType[0]),null,"Choose the Service:",br);
 
@@ -1150,7 +1150,8 @@ public class Settings {
             System.out.println("Failed to get the apiAccount.");
             return;
         }
-        addAccountToGroup(type,apiAccount);
+        addAccountToGroup(apiProvider.getType(),apiAccount);
+
         saveConfig();
         saveSettings();
     }
@@ -1187,6 +1188,7 @@ public class Settings {
                 clientGroup.addClient(apiAccount.getId(),apiAccount.getClient());
                 break;
         }
+
     }
 
     public String getSid() {
@@ -1357,41 +1359,6 @@ public class Settings {
     public void setMyPrikeyCipher(String myPrikeyCipher) {
         this.myPrikeyCipher = myPrikeyCipher;
     }
-//
-//    public Map<String, KeyInfo> getWatchFidMap() {
-//        return watchFidMap;
-//    }
-//
-//    public void setWatchFidMap(Map<String, KeyInfo> watchFidMap) {
-//        this.watchFidMap = watchFidMap;
-//    }
-//
-//    public String addWatchingFids(BufferedReader br2, ApipClient apipClient, String clientName) {
-//        if(watchFidMap == null) watchFidMap = new HashMap<>();
-//        String fid = Inputer.inputFid(br2, "Input the watching FID:");
-//        if(fid == null) return null;
-//        String pubkey = null;
-//        if(apipClient != null) {
-//            pubkey = apipClient.getPubkey(fid, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-//        }
-//        if(pubkey == null) pubkey = Inputer.inputString(br2, "Input the watching FID's public key:", null);
-//        KeyInfo keyInfo = new KeyInfo(null,pubkey);
-//        watchFidMap.put(fid, keyInfo);
-//        saveClientSettings(this.mainFid,clientName);
-//        return fid;
-//    }
-
-//    private void initializeClientGroups() {
-//        if (serviceTypeList != null) {
-//            for (Service.ServiceType groupType : serviceTypeList) {
-//                clientGroups.put(groupType, new ClientGroup(groupType));
-//            }
-//        }
-//    }
-//
-//    public void setClientGroupTypeList(List<Service.ServiceType> types) {
-//        serviceTypeList = types;
-//    }
 
     public ClientGroup getClientGroup(Service.ServiceType type) {
         return clientGroups.get(type);
@@ -1408,30 +1375,42 @@ public class Settings {
     public void initModulesMute() {
         if(clientGroups==null)clientGroups = new HashMap<>();
         if(handlers==null)handlers = new HashMap<>();
-        int total = modules.length;
+        int total = modules.size();
         System.out.println("\nThere are "+ total +" modules to be loaded.");
         int count = 1;
-        for (Object model : modules) {
-            System.out.println("Loading module "+(count++) + "/"+ total +"...");
-            if (model instanceof String strModel) {
-                try {
-                    // Try to parse as ServiceType
-                    Service.ServiceType serviceType = Service.ServiceType.valueOf(strModel);
-                    initClientGroupMute(serviceType);
-                } catch (IllegalArgumentException e) {
-                    // Not a ServiceType, try HandlerType
-                    Handler.HandlerType handlerType = Handler.HandlerType.valueOf(strModel);
-                    try {
-                        initHandler(handlerType);
-                    }catch (Exception e1){
-                        e1.printStackTrace();
-                    }
-                }
-            } else if (model instanceof Service.ServiceType type) {
-                initClientGroupMute(type);
-            } else if (model instanceof Handler.HandlerType type) {
-                initHandler(type);
+
+//        for (Object model : modules) {
+//            System.out.println("Loading module "+(count++) + "/"+ total +"...");
+//            if (model instanceof String strModel) {
+//                try {
+//                    // Try to parse as ServiceType
+//                    Service.ServiceType serviceType = Service.ServiceType.valueOf(strModel);
+//                    initClientGroupMute(serviceType);
+//                } catch (IllegalArgumentException e) {
+//                    // Not a ServiceType, try HandlerType
+//                    Manager.ManagerType managerType = Manager.ManagerType.valueOf(strModel);
+//                    try {
+//                        initManager(managerType);
+//                    }catch (Exception e1){
+//                        e1.printStackTrace();
+//                    }
+//                }
+//            } else if (model instanceof Service.ServiceType type) {
+//                initClientGroupMute(type);
+//            } else if (model instanceof Manager.ManagerType type) {
+//                initManager(type);
+//            }
+//        }
+
+        for (Module module : modules) {
+            System.out.println("Load module "+(count++) + "/"+ total +"...");
+
+            switch (module.getType()) {
+                case SERVICE -> initClientGroupMute(Service.ServiceType.valueOf(module.getName()));
+                case MANAGER -> initManager(Manager.ManagerType.valueOf(module.getName()));
+                default -> log.warn("Unknown module type: " + module.getName());
             }
+
         }
         System.out.println("Nice! All the "+ total +" modules are loaded.\n");
     }
@@ -1440,67 +1419,52 @@ public class Settings {
         if(modules==null)return;
         if(clientGroups==null)clientGroups = new HashMap<>();
         handlers = new HashMap<>();
-        int total = modules.length;
+        int total = modules.size();
         System.out.println("\nThere are "+ total +" modules to be loaded.");
         int count = 1;
-        for (Object model : modules) {
+        for (Module module : modules) {
             System.out.println("Load module "+(count++) + "/"+ total +"...");
-            if (model instanceof String strModel) {
-                try {
-                    // Try to parse as ServiceType
-                    try {
-                        Service.ServiceType type = Service.ServiceType.valueOf(strModel);
-                        initClientGroup(type);
-                        continue;
-                    } catch (IllegalArgumentException ignored) {
-                        // Not a ServiceType, try HandlerType
-                    }
-                    
-                    // Try to parse as HandlerType
-                    Handler.HandlerType type = Handler.HandlerType.valueOf(strModel);
-                    initHandler(type);
-                } catch (IllegalArgumentException e) {
-                    log.warn("Unknown module type: " + strModel);
-                }
-            } else if (model instanceof Service.ServiceType type) {
-                initClientGroup(type);
-            } else if (model instanceof Handler.HandlerType type) {
-                initHandler(type);
+
+            switch (module.getType()) {
+                case SERVICE -> initClientGroup(Service.ServiceType.valueOf(module.getName()));
+                case MANAGER -> initManager(Manager.ManagerType.valueOf(module.getName()));
+                default -> log.warn("Unknown module type: " + module.getName());
             }
+
         }
         System.out.println("All the "+ total +" modules are loaded.\n");
     }
 
 
-    public Handler<?> initHandler(Handler.HandlerType type) {
+    public Manager<?> initManager(Manager.ManagerType type) {
         if(handlers==null)handlers = new HashMap<>();
-        Handler<?> handler = handlers.get(type);
-        if(handler!=null)return handler;
+        Manager<?> manager = handlers.get(type);
+        if(manager !=null)return manager;
 
         switch (type) {
-            case CID -> handlers.put(type, new CidHandler(this));
-            case CASH -> handlers.put(type, new CashHandler(this));
-            case SESSION -> handlers.put(type, new SessionHandler(this));
-            case NONCE -> handlers.put(type, new NonceHandler(this));
-            case MAIL -> handlers.put(type, new MailHandler(this));
-            case CONTACT -> handlers.put(type, new ContactHandler(this));
-            case GROUP -> handlers.put(type, new GroupHandler(this));
-            case TEAM -> handlers.put(type, new TeamHandler(this));
-            case HAT -> handlers.put(type, new HatHandler(this));
-            case DISK -> handlers.put(type, new DiskHandler(this)); 
-            case TALK_ID -> handlers.put(type, new TalkIdHandler(this));
-            case TALK_UNIT -> handlers.put(type, new TalkUnitHandler(this));
-            case ACCOUNT -> handlers.put(type, new AccountHandler(this));
-            case SECRET -> handlers.put(type,new SecretHandler(this));
-            case MEMPOOL -> handlers.put(type,new MempoolHandler(this));
-            case WEBHOOK -> handlers.put(type,new WebhookHandler(this));
+            case CID -> handlers.put(type, new CidManager(this));
+            case CASH -> handlers.put(type, new CashManager(this));
+            case SESSION -> handlers.put(type, new SessionManager(this));
+            case NONCE -> handlers.put(type, new NonceManager(this));
+            case MAIL -> handlers.put(type, new MailManager(this));
+            case CONTACT -> handlers.put(type, new ContactManager(this));
+            case GROUP -> handlers.put(type, new GroupManager(this));
+            case TEAM -> handlers.put(type, new TeamManager(this));
+            case HAT -> handlers.put(type, new HatManager(this));
+            case DISK -> handlers.put(type, new DiskManager(this));
+            case TALK_ID -> handlers.put(type, new TalkIdManager(this));
+            case TALK_UNIT -> handlers.put(type, new TalkUnitManager(this));
+            case ACCOUNT -> handlers.put(type, new AccountManager(this));
+            case SECRET -> handlers.put(type,new SecretManager(this));
+            case MEMPOOL -> handlers.put(type,new MempoolManager(this));
+            case WEBHOOK -> handlers.put(type,new WebhookManager(this));
             default -> throw new IllegalArgumentException("Unexpected handler type: " + type);
         }
         System.out.println(type + " handler initiated.\n");
         return handlers.get(type);
     }
 
-    public Handler<?> getHandler(Handler.HandlerType type) {
+    public Manager<?> getManager(Manager.ManagerType type) {
         return handlers != null ? handlers.get(type) : null;
     }
 
@@ -1513,16 +1477,16 @@ public class Settings {
         this.clientGroups = clientGroups;
     }
 
-    public Map<Handler.HandlerType, Handler<?>> getHandlers() {
+    public Map<Manager.ManagerType, Manager<?>> getManagers() {
         return handlers;
     }
 
-    public void addHandler(Handler<?> handler){
-        if(this.getHandlers()==null)this.handlers = new HashMap<>();
-        this.handlers.put(handler.getHandlerType(),handler);
+    public void addManager(Manager<?> manager){
+        if(this.getManagers()==null)this.handlers = new HashMap<>();
+        this.handlers.put(manager.getHandlerType(), manager);
     }
 
-    public void setHandlers(Map<Handler.HandlerType, Handler<?>> handlers) {
+    public void setManager(Map<Manager.ManagerType, Manager<?>> handlers) {
         this.handlers = handlers;
     }
 
@@ -1542,11 +1506,11 @@ public class Settings {
         this.dbDir = dbDir;
     }
 
-    public Object[] getModules() {
+    public List<Module> getModules() {
         return modules;
     }
 
-    public void setModules(Object[] modules) {
+    public void setModules(List<Module> modules) {
         this.modules = modules;
     }
 

@@ -3,9 +3,12 @@ package identity;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import com.google.gson.Gson;
+import constants.IndicesNames;
+import core.crypto.Hash;
 import core.crypto.KeyTools;
 import data.feipData.*;
 import core.fch.Weight;
@@ -13,6 +16,8 @@ import data.fchData.Cid;
 import data.fchData.Nobody;
 import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
+import utils.EsUtils;
+
 import java.io.IOException;
 import java.util.*;
 
@@ -69,7 +74,8 @@ public class IdentityParser {
 			return null;
 		}
 		if(nobodyRaw==null)return null;
-		if(! addrFromPriKey(nobodyRaw.getPrikey()).equals(opre.getSigner()))return null;
+		if(nobodyRaw.getPrikey()==null)return null;
+		if(! addrFromPrikey(nobodyRaw.getPrikey()).equals(opre.getSigner()))return null;
 
 		CidHist cidHist = new CidHist();
 
@@ -85,7 +91,7 @@ public class IdentityParser {
 		return cidHist;
 	}
 
-	private String addrFromPriKey(String priKey) {
+	private String addrFromPrikey(String priKey) {
 
 		return KeyTools.pubkeyToFchAddr(KeyTools.prikeyToPubkey(priKey));
 	}
@@ -479,6 +485,108 @@ public class IdentityParser {
 			esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(addr));
 		}
 		esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(cid));
+		return isValid;
+	}
+
+	public boolean parseNid(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
+
+		boolean isValid = false;
+
+		Gson gson = new Gson();
+
+		NidOpData nidRaw = new NidOpData();
+
+		try {
+			nidRaw = gson.fromJson(gson.toJson(feip.getData()), NidOpData.class);
+			if(nidRaw==null)return false;
+		}catch(com.google.gson.JsonSyntaxException e) {
+			return false;
+		}
+
+		Nid nid = new Nid();
+
+		long height;
+		if(nidRaw.getOp()==null)return isValid;
+		switch(nidRaw.getOp()) {
+
+			case "add":
+				if(nidRaw.getName()==null)return false;
+				if(nidRaw.getOid()==null) return false;
+
+				nid.setId(Hash.sha256x2(nidRaw.getName()+opre.getSigner()));
+				nid.setName(nidRaw.getName());
+				nid.setDesc(nidRaw.getDesc());
+				nid.setOid(nidRaw.getOid());
+
+				nid.setNamer(opre.getSigner());
+				nid.setBirthTime(opre.getTime());
+				nid.setBirthHeight(opre.getHeight());
+				nid.setLastTime(opre.getTime());
+				nid.setLastHeight(opre.getHeight());
+				nid.setActive(true);
+
+				Nid nid0 = nid;
+
+				esClient.index(i->i.index(IndicesNames.NID).id(nid0.getId()).document(nid0));
+				isValid = true;
+				break;
+
+			case "stop","recover":
+				if(nidRaw.getNames()==null || nidRaw.getNames().isEmpty())return false;
+				List<String> nameIds = new ArrayList<>();
+				for(String name:nidRaw.getNames()){
+					String nameId = Hash.sha256x2(name+opre.getSigner());
+					nameIds.add(nameId);
+				}
+				height = opre.getHeight();
+
+				EsUtils.MgetResult<Nid> result = EsUtils.getMultiByIdList(esClient, IndicesNames.NID, nameIds, Nid.class);
+				if(result==null||result.getResultList()==null||result.getResultList().isEmpty())return false;
+				BulkRequest.Builder br = new BulkRequest.Builder();
+				for(Nid nid1:result.getResultList()){
+					if(!nid1.getNamer().equals(opre.getSigner()))continue;
+					if(nidRaw.getOp().equals("stop")) nid1.setActive(false);
+					else if(nidRaw.getOp().equals("recover")) nid1.setActive(true);
+					nid1.setLastTime(opre.getTime());
+					nid1.setLastHeight(height);
+
+					br.operations(op -> op
+							.index(idx -> idx
+									.index(IndicesNames.NID)
+									.id(nid1.getId())
+									.document(nid1)
+							)
+					);
+				}
+				esClient.bulk(br.build());
+				isValid = true;
+				break;
+
+			// case "recover":
+			//     if(nidRaw.getName()==null)return false;
+			//     String nameId1 = Hash.sha256x2(nidRaw.getName()+opre.getSigner());
+			//     height = opre.getHeight();
+
+			//     GetResponse<Nid> result1 = esClient.get(g->g.index(IndicesNames.NID).id(nameId1), Nid.class);
+
+			//     if(!result1.found())return false;
+
+			//     nid = result1.source();
+
+			//     if(!nid.getNamer().equals(opre.getSigner()))return false;
+
+			//     nid.setActive(true);
+			//     nid.setLastTime(opre.getTime());
+			//     nid.setLastHeight(height);
+
+			//     Nid nid3 = nid;
+			//     esClient.index(i->i.index(IndicesNames.NID).id(nid3.getNid()).document(nid3));
+
+			//     isValid = true;
+			//     break;
+			default:
+				break;
+		}
 		return isValid;
 	}
 }

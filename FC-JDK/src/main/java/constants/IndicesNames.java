@@ -11,7 +11,7 @@ public class IndicesNames {
     public static final String CASH = "cash";
     public static final String OPRETURN = "opreturn";
     public static final String ADDRESS = "address";
-    public static final String P2SH = "p2sh";
+    public static final String MULTISIGN = "multisign";
     public static final String BLOCK_MARK = "block_mark";
     public static final String CID = "cid";
     public static final String CID_HISTORY = "cid_history";
@@ -34,6 +34,11 @@ public class IndicesNames {
     public static final String GROUP_HISTORY = "group_history";
     public static final String TEAM_HISTORY = "team_history";
     public static final String STATEMENT = "statement";
+    public static final String ESSAY = "essay";
+    public static final String REPORT = "report";
+    public static final String PAPER = "paper";
+    public static final String BOOK = "book";
+
     public static final String PROOF = "proof";
     public static final String PROOF_HISTORY = "proof_history";
     public static final String FEIP_MARK = "feip_mark";
@@ -50,6 +55,10 @@ public class IndicesNames {
     public static final String TOKEN_HISTORY = "token_history";
     public static final String TOKEN = "token";
     public static final String TOKEN_HOLDER = "token_holder";
+    public static final String ESSAY_HISTORY = "essay_history";
+    public static final String REPORT_HISTORY = "report_history";
+    public static final String PAPER_HISTORY = "paper_history";
+    public static final String BOOK_HISTORY = "book_history";
 
     public static void printIndices() {
         Indices indices = Indices.CID;
@@ -69,7 +78,7 @@ public class IndicesNames {
         CASH(IndicesNames.CASH,5),
         OPRETURN(IndicesNames.OPRETURN,6),
         ADDRESS(IndicesNames.CID,7),
-        P2SH(IndicesNames.P2SH,8),
+        MULTISIGN(IndicesNames.MULTISIGN,8),
         BLOCK_MARK(IndicesNames.BLOCK_MARK,9),
 
         CID(IndicesNames.CID,10),

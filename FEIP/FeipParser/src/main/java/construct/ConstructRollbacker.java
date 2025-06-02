@@ -17,23 +17,20 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import static constants.OpNames.PUBLISH;
+
 public class ConstructRollbacker {
 
 	public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		// TODO Auto-generated method stub
-		boolean error = false;
-		error = rollbackFreeProtocol(esClient,lastHeight);
-		error = rollbackService(esClient,lastHeight);
-		error = rollbackApp(esClient,lastHeight);
-		error = rollbackCode(esClient,lastHeight);
-		
-		return error;
+		return rollbackProtocol(esClient,lastHeight) 
+				|| rollbackService(esClient,lastHeight)
+				|| rollbackApp(esClient,lastHeight)
+				|| rollbackCode(esClient,lastHeight);
 	}
 
-	private boolean rollbackFreeProtocol(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		// TODO Auto-generated method stub
+	private boolean rollbackProtocol(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = false;
-		Map<String, ArrayList<String>> resultMap = getEffectedFreeProtocols(esClient,lastHeight);
+		Map<String, ArrayList<String>> resultMap = getEffectedProtocols(esClient,lastHeight);
 		ArrayList<String> itemIdList = resultMap.get("itemIdList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 		
@@ -48,13 +45,12 @@ public class ConstructRollbacker {
 		
 		List<ProtocolHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROTOCOL_HISTORY,"pid",itemIdList, ProtocolHistory.class);
 
-		reparseFreeProtocol(esClient,reparseHistList);
+		reparseProtocol(esClient,reparseHistList);
 		
 		return error;
 	}
 
-	private Map<String, ArrayList<String>> getEffectedFreeProtocols(ElasticsearchClient esClient,long height) throws ElasticsearchException, IOException {
-		// TODO Auto-generated method stub
+	private Map<String, ArrayList<String>> getEffectedProtocols(ElasticsearchClient esClient, long height) throws ElasticsearchException, IOException {
 		SearchResponse<ProtocolHistory> resultSearch = esClient.search(s->s
 				.index(IndicesNames.PROTOCOL_HISTORY)
 				.query(q->q
@@ -62,13 +58,13 @@ public class ConstructRollbacker {
 								.field("height")
 								.gt(JsonData.of(height)))), ProtocolHistory.class);
 		
-		Set<String> itemSet = new HashSet<String>();
-		ArrayList<String> histList = new ArrayList<String>();
+		Set<String> itemSet = new HashSet<>();
+		ArrayList<String> histList = new ArrayList<>();
 
 		for(Hit<ProtocolHistory> hit: resultSearch.hits().hits()) {
 			
 			ProtocolHistory item = hit.source();
-			if(item.getOp().equals("publish")) {
+			if(item.getOp().equals(PUBLISH)) {
 				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getPid());
@@ -77,9 +73,9 @@ public class ConstructRollbacker {
 		}
 		
 
-		ArrayList<String> itemList = new ArrayList<String>(itemSet);
+		ArrayList<String> itemList = new ArrayList<>(itemSet);
 		
-		Map<String,ArrayList<String>> resultMap = new HashMap<String,ArrayList<String>>();
+		Map<String,ArrayList<String>> resultMap = new HashMap<>();
 		resultMap.put("itemIdList", itemList);
 		resultMap.put("histIdList", histList);
 		
@@ -87,17 +83,17 @@ public class ConstructRollbacker {
 	}
 
 	private void deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {
-		// TODO Auto-generated method stub
+		
 		EsUtils.bulkDeleteList(esClient, index, itemIdList);
 	}
 
 	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
-		// TODO Auto-generated method stub
+		
 		EsUtils.bulkDeleteList(esClient, index, histIdList);
 	}
 	
-	private void reparseFreeProtocol(ElasticsearchClient esClient, List<ProtocolHistory> reparseHistList) throws Exception {
-		// TODO Auto-generated method stub
+	private void reparseProtocol(ElasticsearchClient esClient, List<ProtocolHistory> reparseHistList) throws Exception {
+		
 		if(reparseHistList==null)return;
 		for(ProtocolHistory freeProtocolHist: reparseHistList) {
 			new ConstructParser().parseProtocol(esClient, freeProtocolHist);
@@ -105,7 +101,7 @@ public class ConstructRollbacker {
 	}
 
 	private boolean rollbackService(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		// TODO Auto-generated method stub
+		
 		boolean error = false;
 		Map<String, ArrayList<String>> resultMap = getEffectedServices(esClient,lastHeight);
 		ArrayList<String> itemIdList = resultMap.get("itemIdList");
@@ -127,7 +123,7 @@ public class ConstructRollbacker {
 	}
 
 	private Map<String, ArrayList<String>> getEffectedServices(ElasticsearchClient esClient, long lastHeight) throws ElasticsearchException, IOException {
-		// TODO Auto-generated method stub
+		
 		SearchResponse<ServiceHistory> resultSearch = esClient.search(s->s
 				.index(IndicesNames.SERVICE_HISTORY)
 				.query(q->q
@@ -141,7 +137,7 @@ public class ConstructRollbacker {
 		for(Hit<ServiceHistory> hit: resultSearch.hits().hits()) {
 			
 			ServiceHistory item = hit.source();
-			if(item.getOp().equals("publish")) {
+			if(item.getOp().equals(PUBLISH)) {
 				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getSid());
@@ -150,9 +146,9 @@ public class ConstructRollbacker {
 		}
 		
 
-		ArrayList<String> itemList = new ArrayList<String>(itemSet);
+		ArrayList<String> itemList = new ArrayList<>(itemSet);
 		
-		Map<String,ArrayList<String>> resultMap = new HashMap<String,ArrayList<String>>();
+		Map<String,ArrayList<String>> resultMap = new HashMap<>();
 		resultMap.put("itemIdList", itemList);
 		resultMap.put("histIdList", histList);
 		
@@ -167,7 +163,7 @@ public class ConstructRollbacker {
 	}
 
 	private boolean rollbackApp(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		// TODO Auto-generated method stub
+		
 		boolean error = false;
 		Map<String, ArrayList<String>> resultMap = getEffectedApps(esClient,lastHeight);
 		ArrayList<String> itemIdList = resultMap.get("itemIdList");
@@ -202,7 +198,7 @@ public class ConstructRollbacker {
 		for(Hit<AppHistory> hit: resultSearch.hits().hits()) {
 			
 			AppHistory item = hit.source();
-			if(item.getOp().equals("publish")) {
+			if(item.getOp().equals(PUBLISH)) {
 				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getAid());
@@ -228,7 +224,7 @@ public class ConstructRollbacker {
 	}
 
 	private boolean rollbackCode(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		// TODO Auto-generated method stub
+		
 		boolean error = false;
 		Map<String, ArrayList<String>> resultMap = getEffectedCodes(esClient,lastHeight);
 		ArrayList<String> itemIdList = resultMap.get("itemIdList");
@@ -263,7 +259,7 @@ public class ConstructRollbacker {
 		for(Hit<CodeHistory> hit: resultSearch.hits().hits()) {
 			
 			CodeHistory item = hit.source();
-			if(item.getOp().equals("publish")) {
+			if(item.getOp().equals(PUBLISH)) {
 				itemSet.add(item.getId());
 			}else {
 				itemSet.add(item.getCodeId());

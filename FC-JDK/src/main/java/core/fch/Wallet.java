@@ -6,7 +6,7 @@ import data.fchData.Block;
 import data.fchData.Cash;
 import data.fchData.RawTxForCsV1;
 import data.fchData.SendTo;
-import handlers.CashHandler;
+import handlers.CashManager;
 import data.fcData.ReplyBody;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.fch.FchMainNetwork;
@@ -36,7 +36,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.*;
 
-import static handlers.CashHandler.*;
+import static handlers.CashManager.*;
 import static server.ApipApiNames.VERSION_1;
 import static constants.Constants.*;
 import static constants.FieldNames.*;
@@ -92,7 +92,7 @@ public class Wallet {
         System.out.println(TxCreator.decodeTxFch(signedTx, FchMainNetwork.MAINNETWORK));
     }
 
-    public static String carve(String myFid, byte[] priKey, String opReturnStr, long cd, ApipClient apipClient, CashHandler cashHandler, BufferedReader br) {
+    public static String carve(String myFid, byte[] priKey, String opReturnStr, long cd, ApipClient apipClient, CashManager cashHandler, BufferedReader br) {
         String txSigned;
         String sendResult;
         if(cashHandler !=null) sendResult = cashHandler.send(null,null, CD_REQUIRED,null, opReturnStr, null, null, null, core.fch.FchMainNetwork.MAINNETWORK, br);
@@ -145,7 +145,7 @@ public class Wallet {
     }
 
     public static String makeTx(BufferedReader br,byte[] priKey, String fidForOfflineSign, List<SendTo> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient, ElasticsearchClient esClient){
-        if(sendToList!=null && !sendToList.isEmpty())if (CashHandler.checkNobodys(br, sendToList, apipClient, esClient)) return null;
+        if(sendToList!=null && !sendToList.isEmpty())if (CashManager.checkNobodys(br, sendToList, apipClient, esClient)) return null;
         return makeTx(priKey,fidForOfflineSign,sendToList,opReturnStr,cd,maxCashes,apipClient,esClient, null);
     }
 

@@ -24,15 +24,15 @@ import java.util.Set;
 
 import static data.fcData.TalkUnit.IdType.FID;
 
-public class TalkUnitSender extends Handler {
+public class TalkUnitSender extends Manager {
     private byte[] myPrikey;
 
-    private AccountHandler accountHandler=null;
-    private SessionHandler sessionHandler;
-    private TalkIdHandler talkIdHandler;
-    private ContactHandler contactHandler;
+    private AccountManager accountHandler=null;
+    private SessionManager sessionHandler;
+    private TalkIdManager talkIdHandler;
+    private ContactManager contactHandler;
     private ApipClient apipClient;
-    private TalkUnitHandler talkUnitHandler;
+    private TalkUnitManager talkUnitHandler;
 
 
     public TalkUnitSender(TalkServer talkServer) {
@@ -156,7 +156,7 @@ public class TalkUnitSender extends Handler {
     }
 
     public static Long updateSenderBalance(String userFid,
-                                           AccountHandler accountHandler, String chargeType, int length) {
+                                           AccountManager accountHandler, String chargeType, int length) {
         Long newBalance = null;
         long cost;
         Long price = accountHandler.getPriceBase();

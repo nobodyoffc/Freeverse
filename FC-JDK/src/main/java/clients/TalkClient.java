@@ -55,21 +55,21 @@ public class TalkClient extends FcClient {
     private byte[] myPrikey;
     private String dealer;
     private String dealerPubkey;
-    private TalkIdHandler talkIdHandler;
+    private TalkIdManager talkIdHandler;
     private Displayer displayer;
 
     private final ConcurrentLinkedQueue<TalkUnit> receivedQueue = new ConcurrentLinkedQueue<>();
 
-    private TalkUnitHandler talkUnitHandler;
-    private CidHandler cidHandler;
-    private CashHandler cashHandler;
-    private SessionHandler sessionHandler;
-    private MailHandler mailHandler;
-    private ContactHandler contactHandler;
-    private GroupHandler groupHandler;
-    private TeamHandler teamHandler;
-    private HatHandler hatHandler;
-    private DiskHandler diskHandler;
+    private TalkUnitManager talkUnitHandler;
+    private CidManager cidHandler;
+    private CashManager cashHandler;
+    private SessionManager sessionHandler;
+    private MailManager mailHandler;
+    private ContactManager contactHandler;
+    private GroupManager groupHandler;
+    private TeamManager teamHandler;
+    private HatManager hatHandler;
+    private DiskManager diskHandler;
 
     private volatile boolean running = false;
     private transient EventLoopGroup group;
@@ -81,23 +81,23 @@ public class TalkClient extends FcClient {
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
     private static final int RECONNECT_DELAY_MS = 2000;
 
-    public TalkClient(String url, BufferedReader br, Map<Handler.HandlerType, Handler> handlers) {
+    public TalkClient(String url, BufferedReader br, Map<Manager.ManagerType, Manager> handlers) {
         this.urlHead = url;
         this.br = br;
         this.displayer = new Displayer(this);
         if(handlers!=null && !handlers.isEmpty()) {
             // Cast handlers to specific types
-            this.cidHandler = (CidHandler) handlers.get(Handler.HandlerType.CID);
-            this.cashHandler = (CashHandler) handlers.get(Handler.HandlerType.CASH);
-            this.sessionHandler = (SessionHandler) handlers.get(Handler.HandlerType.SESSION);
-            this.mailHandler = (MailHandler) handlers.get(Handler.HandlerType.MAIL);
-            this.contactHandler = (ContactHandler) handlers.get(Handler.HandlerType.CONTACT);
-            this.groupHandler = (GroupHandler) handlers.get(Handler.HandlerType.GROUP);
-            this.teamHandler = (TeamHandler) handlers.get(Handler.HandlerType.TEAM);
-            this.hatHandler = (HatHandler) handlers.get(Handler.HandlerType.HAT);
-            this.diskHandler = (DiskHandler) handlers.get(Handler.HandlerType.DISK);
-            this.talkIdHandler = (TalkIdHandler) handlers.get(Handler.HandlerType.TALK_ID);
-            this.talkUnitHandler = (TalkUnitHandler) handlers.get(Handler.HandlerType.TALK_UNIT);
+            this.cidHandler = (CidManager) handlers.get(Manager.ManagerType.CID);
+            this.cashHandler = (CashManager) handlers.get(Manager.ManagerType.CASH);
+            this.sessionHandler = (SessionManager) handlers.get(Manager.ManagerType.SESSION);
+            this.mailHandler = (MailManager) handlers.get(Manager.ManagerType.MAIL);
+            this.contactHandler = (ContactManager) handlers.get(Manager.ManagerType.CONTACT);
+            this.groupHandler = (GroupManager) handlers.get(Manager.ManagerType.GROUP);
+            this.teamHandler = (TeamManager) handlers.get(Manager.ManagerType.TEAM);
+            this.hatHandler = (HatManager) handlers.get(Manager.ManagerType.HAT);
+            this.diskHandler = (DiskManager) handlers.get(Manager.ManagerType.DISK);
+            this.talkIdHandler = (TalkIdManager) handlers.get(Manager.ManagerType.TALK_ID);
+            this.talkUnitHandler = (TalkUnitManager) handlers.get(Manager.ManagerType.TALK_UNIT);
         }
     }
 
@@ -109,24 +109,24 @@ public class TalkClient extends FcClient {
         this.displayer = new Displayer(this);
         this.dealer = ((TalkParams)apiProvider.getService().getParams()).getDealer();
         this.dealerPubkey = apiProvider.getDealerPubkey();
-        this.talkIdHandler = new TalkIdHandler(apiAccount.getUserId(),null, null);
-        this.diskHandler = new DiskHandler(apiAccount.getUserId(), null);
-        this.hatHandler = new HatHandler(settings);
-        this.talkUnitHandler = new TalkUnitHandler(settings);
+        this.talkIdHandler = new TalkIdManager(apiAccount.getUserId(),null, null);
+        this.diskHandler = new DiskManager(apiAccount.getUserId(), null);
+        this.hatHandler = new HatManager(settings);
+        this.talkUnitHandler = new TalkUnitManager(settings);
     }
 
     private void checkHandlers() {
-        if(this.cidHandler == null) this.cidHandler = (CidHandler) settings.getHandler(Handler.HandlerType.CID);
-        if(this.cashHandler == null) this.cashHandler = (CashHandler) settings.getHandler(Handler.HandlerType.CASH);
-        if(this.sessionHandler == null) this.sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
-        if(this.mailHandler == null) this.mailHandler = (MailHandler) settings.getHandler(Handler.HandlerType.MAIL);
-        if(this.contactHandler == null) this.contactHandler = (ContactHandler) settings.getHandler(Handler.HandlerType.CONTACT);
-        if(this.groupHandler == null) this.groupHandler = (GroupHandler) settings.getHandler(Handler.HandlerType.GROUP);
-        if(this.teamHandler == null) this.teamHandler = (TeamHandler) settings.getHandler(Handler.HandlerType.TEAM);
-        if(this.hatHandler == null) this.hatHandler = (HatHandler) settings.getHandler(Handler.HandlerType.HAT);
-        if(this.diskHandler == null) this.diskHandler = (DiskHandler) settings.getHandler(Handler.HandlerType.DISK);
-        if(this.talkIdHandler == null) this.talkIdHandler = (TalkIdHandler) settings.getHandler(Handler.HandlerType.TALK_ID);
-        if(this.talkUnitHandler == null) this.talkUnitHandler = (TalkUnitHandler) settings.getHandler(Handler.HandlerType.TALK_UNIT);
+        if(this.cidHandler == null) this.cidHandler = (CidManager) settings.getManager(Manager.ManagerType.CID);
+        if(this.cashHandler == null) this.cashHandler = (CashManager) settings.getManager(Manager.ManagerType.CASH);
+        if(this.sessionHandler == null) this.sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
+        if(this.mailHandler == null) this.mailHandler = (MailManager) settings.getManager(Manager.ManagerType.MAIL);
+        if(this.contactHandler == null) this.contactHandler = (ContactManager) settings.getManager(Manager.ManagerType.CONTACT);
+        if(this.groupHandler == null) this.groupHandler = (GroupManager) settings.getManager(Manager.ManagerType.GROUP);
+        if(this.teamHandler == null) this.teamHandler = (TeamManager) settings.getManager(Manager.ManagerType.TEAM);
+        if(this.hatHandler == null) this.hatHandler = (HatManager) settings.getManager(Manager.ManagerType.HAT);
+        if(this.diskHandler == null) this.diskHandler = (DiskManager) settings.getManager(Manager.ManagerType.DISK);
+        if(this.talkIdHandler == null) this.talkIdHandler = (TalkIdManager) settings.getManager(Manager.ManagerType.TALK_ID);
+        if(this.talkUnitHandler == null) this.talkUnitHandler = (TalkUnitManager) settings.getManager(Manager.ManagerType.TALK_UNIT);
     }
 
     public void start() throws Exception {
@@ -1145,59 +1145,59 @@ public class TalkClient extends FcClient {
     }
 
 
-    public CidHandler getCidHandler() {
+    public CidManager getCidHandler() {
         return cidHandler;
     }
 
-    public void setCidHandler(CidHandler cidHandler) {
+    public void setCidHandler(CidManager cidHandler) {
         this.cidHandler = cidHandler;
     }
 
-    public CashHandler getCashHandler() {
+    public CashManager getCashHandler() {
         return cashHandler;
     }
 
-    public void setCashHandler(CashHandler cashHandler) {
+    public void setCashHandler(CashManager cashHandler) {
         this.cashHandler = cashHandler;
     }
 
-    public SessionHandler getSessionHandler() {
+    public SessionManager getSessionHandler() {
         return sessionHandler;
     }
 
-    public void setSessionHandler(SessionHandler sessionHandler) {
+    public void setSessionHandler(SessionManager sessionHandler) {
         this.sessionHandler = sessionHandler;
     }
 
-    public MailHandler getMailHandler() {
+    public MailManager getMailHandler() {
         return mailHandler;
     }
 
-    public void setMailHandler(MailHandler mailHandler) {
+    public void setMailHandler(MailManager mailHandler) {
         this.mailHandler = mailHandler;
     }
 
-    public ContactHandler getContactHandler() {
+    public ContactManager getContactHandler() {
         return contactHandler;
     }
 
-    public void setContactHandler(ContactHandler contactHandler) {
+    public void setContactHandler(ContactManager contactHandler) {
         this.contactHandler = contactHandler;
     }
 
-    public GroupHandler getGroupHandler() {
+    public GroupManager getGroupHandler() {
         return groupHandler;
     }
 
-    public void setGroupHandler(GroupHandler groupHandler) {
+    public void setGroupHandler(GroupManager groupHandler) {
         this.groupHandler = groupHandler;
     }
 
-    public TeamHandler getTeamHandler() {
+    public TeamManager getTeamHandler() {
         return teamHandler;
     }
 
-    public void setTeamHandler(TeamHandler teamHandler) {
+    public void setTeamHandler(TeamManager teamHandler) {
         this.teamHandler = teamHandler;
     }
 
@@ -1245,11 +1245,11 @@ public class TalkClient extends FcClient {
         this.dealer = dealer;
     }
 
-    public TalkIdHandler getTalkIdHandler() {
+    public TalkIdManager getTalkIdHandler() {
         return talkIdHandler;
     }
 
-    public TalkUnitHandler getTalkUnitHandler() {
+    public TalkUnitManager getTalkUnitHandler() {
         return talkUnitHandler;
     }
 
@@ -1596,19 +1596,19 @@ public class TalkClient extends FcClient {
         this.dealerPubkey = dealerPubkey;
     }
 
-    public HatHandler getHatHandler() {
+    public HatManager getHatHandler() {
         return hatHandler;
     }
 
-    public void setHatHandler(HatHandler hatHandler) {
+    public void setHatHandler(HatManager hatHandler) {
         this.hatHandler = hatHandler;
     }
 
-    public DiskHandler getDiskHandler() {
+    public DiskManager getDiskHandler() {
         return diskHandler;
     }
 
-    public void setDiskHandler(DiskHandler diskHandler) {
+    public void setDiskHandler(DiskManager diskHandler) {
         this.diskHandler = diskHandler;
     }
 }

@@ -3,7 +3,7 @@ package utils;
 import data.apipData.RequestBody;
 import ch.qos.logback.classic.Logger;
 import data.fcData.*;
-import handlers.AccountHandler;
+import handlers.AccountManager;
 import clients.ApipClient;
 import clients.DiskClient;
 import clients.TalkClient;
@@ -32,15 +32,15 @@ public class TalkUnitExecutor {
 
 
     private final DiskClient diskClient;
-    private final DiskHandler diskHandler;
-    private final HatHandler hatHandler;
-    private final SessionHandler sessionHandler;
-    private final TalkUnitHandler talkUnitHandler;
-    private final TeamHandler teamHandler;
-    private final GroupHandler groupHandler;
+    private final DiskManager diskHandler;
+    private final HatManager hatHandler;
+    private final SessionManager sessionHandler;
+    private final TalkUnitManager talkUnitHandler;
+    private final TeamManager teamHandler;
+    private final GroupManager groupHandler;
     private final ApipClient apipClient;
-    private TalkIdHandler talkIdHandler;
-    private AccountHandler accountHandler;
+    private TalkIdManager talkIdHandler;
+    private AccountManager accountHandler;
 
 
 
@@ -91,7 +91,7 @@ public class TalkUnitExecutor {
 //        talkUnitHandler.putPending(talkUnit);
 //    }
 
-    private static void closeRequestUnit(TalkUnitHandler talkUnitHandler, TalkUnit parsedTalkUnit, ReplyBody replyBody) {
+    private static void closeRequestUnit(TalkUnitManager talkUnitHandler, TalkUnit parsedTalkUnit, ReplyBody replyBody) {
         TalkUnit requestTalkUnit = talkUnitHandler.get(replyBody.getRequestId(),parsedTalkUnit);
         if(requestTalkUnit==null) return;
         requestTalkUnit.setStata(State.DONE);
@@ -137,7 +137,7 @@ public class TalkUnitExecutor {
         return  reply(CodeMessage.Code1020OtherError,message,data,op);
     }
 
-    public static Boolean checkGotOrRelay(TalkUnit decryptedTalkUnit, TalkUnitHandler talkUnitHandler) {
+    public static Boolean checkGotOrRelay(TalkUnit decryptedTalkUnit, TalkUnitManager talkUnitHandler) {
         if(decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_GOT && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_RELAYED && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_SIGNED_GOT && decryptedTalkUnit.getDataType()!= DataType.ENCRYPTED_SIGNED_RELAYED)return false;
         if(!(decryptedTalkUnit.getData() instanceof String id))return false;
 
@@ -247,7 +247,7 @@ public class TalkUnitExecutor {
         sendTalkUnitList.clear();
     }
 
-    private boolean executeAffair(TalkUnit parsedTalkUnit,HatHandler hatHandler, TalkIdHandler talkIdHandler) {
+    private boolean executeAffair(TalkUnit parsedTalkUnit, HatManager hatHandler, TalkIdManager talkIdHandler) {
         Affair affair = (Affair) parsedTalkUnit.getData();
         String title = makeTitle(parsedTalkUnit,talkIdHandler);
         boolean done = false;
@@ -266,7 +266,7 @@ public class TalkUnitExecutor {
         return done;
     }
 
-    private boolean executeRequestBody(TalkUnit parsedTalkUnit, HatHandler hatHandler, TalkIdHandler talkIdHandler) {
+    private boolean executeRequestBody(TalkUnit parsedTalkUnit, HatManager hatHandler, TalkIdManager talkIdHandler) {
         RequestBody requestBody = (RequestBody) parsedTalkUnit.getData();
         String title = makeTitle(parsedTalkUnit,talkIdHandler);
         boolean done;
@@ -286,7 +286,7 @@ public class TalkUnitExecutor {
         return done;
     }
 
-    private boolean executeReplyBody(TalkUnit parsedTalkUnit, HatHandler hatHandler, TalkIdHandler talkIdHandler) {
+    private boolean executeReplyBody(TalkUnit parsedTalkUnit, HatManager hatHandler, TalkIdManager talkIdHandler) {
         if(talkUnitHandler==null)return false;
         ReplyBody replyBody = (ReplyBody) parsedTalkUnit.getData();
         String requestId = replyBody.getRequestId();
@@ -365,7 +365,7 @@ public class TalkUnitExecutor {
         this.message = CodeMessage.getMsg(code);
     }
 
-    private boolean executeBytes(TalkUnit parsedTalkUnit, DiskHandler diskHandler, TalkIdHandler talkIdHandler) {
+    private boolean executeBytes(TalkUnit parsedTalkUnit, DiskManager diskHandler, TalkIdManager talkIdHandler) {
         String title = makeTitle(parsedTalkUnit,talkIdHandler);
         boolean done;
         try {
@@ -388,7 +388,7 @@ public class TalkUnitExecutor {
         return done;
     }
 
-    private boolean executeText(TalkUnit parsedTalkUnit, TalkIdHandler talkIdHandler) {
+    private boolean executeText(TalkUnit parsedTalkUnit, TalkIdManager talkIdHandler) {
         String title = makeTitle(parsedTalkUnit,talkIdHandler);
         boolean done;
         try {
@@ -410,7 +410,7 @@ public class TalkUnitExecutor {
     }
 
     @Nullable
-    private String makeTitle(TalkUnit talkUnit, TalkIdHandler talkIdHandler) {
+    private String makeTitle(TalkUnit talkUnit, TalkIdManager talkIdHandler) {
         StringBuilder sb = new StringBuilder();
         sb.append("[")
                 .append(talkUnit.getFrom());
@@ -436,7 +436,7 @@ public class TalkUnitExecutor {
         sb.append("]: ");
         return sb.toString();
     }
-    private void addShowName(TalkUnit talkUnit, TalkIdHandler talkIdHandler, StringBuilder sb) {
+    private void addShowName(TalkUnit talkUnit, TalkIdManager talkIdHandler, StringBuilder sb) {
         if(talkIdHandler!=null){
             TalkIdInfo talkIdInfo = talkIdHandler.get(talkUnit.getTo());
             String showName = talkIdInfo.getShowName();
@@ -447,7 +447,7 @@ public class TalkUnitExecutor {
         }
         sb.append(talkUnit.getTo());
     }
-    private boolean executeHat(TalkUnit parsedTalkUnit, HatHandler hatHandler, TalkIdHandler talkIdHandler) {
+    private boolean executeHat(TalkUnit parsedTalkUnit, HatManager hatHandler, TalkIdManager talkIdHandler) {
         String title = makeTitle(parsedTalkUnit,talkIdHandler);
         boolean done;
         try {
@@ -527,7 +527,7 @@ public class TalkUnitExecutor {
         }
     }
 
-    private static boolean isMemberOfTeamOrGroup(String fid, String id, GroupHandler groupHandler, TeamHandler teamHandler, ApipClient apipClient) {
+    private static boolean isMemberOfTeamOrGroup(String fid, String id, GroupManager groupHandler, TeamManager teamHandler, ApipClient apipClient) {
         boolean isMember = groupHandler.isMemberOf(fid, id,apipClient);
         if(!isMember)
             isMember = teamHandler.isMemberOf(fid, id,apipClient);
@@ -558,7 +558,7 @@ public class TalkUnitExecutor {
         }
     }
 
-    private boolean shareHat(TalkUnit parsedTalkUnit, HatHandler hatHandler) {
+    private boolean shareHat(TalkUnit parsedTalkUnit, HatManager hatHandler) {
         try {
             RequestBody requestBody = (RequestBody) parsedTalkUnit.getData();
             String did = (String) requestBody.getData();
@@ -643,7 +643,7 @@ public class TalkUnitExecutor {
     //     }
     // }
 
-    private boolean saveData(TalkUnit parsedTalkUnit, DiskHandler diskHandler, DiskClient diskClient, HatHandler hatHandler) {
+    private boolean saveData(TalkUnit parsedTalkUnit, DiskManager diskHandler, DiskClient diskClient, HatManager hatHandler) {
         if (parsedTalkUnit == null || diskHandler == null) return false;
         String did = null;
         try {
@@ -682,7 +682,7 @@ public class TalkUnitExecutor {
         }
     }
 
-    private boolean saveHat(TalkUnit parsedTalkUnit, HatHandler hatHandler) {
+    private boolean saveHat(TalkUnit parsedTalkUnit, HatManager hatHandler) {
         try {
             ReplyBody replyBody = (ReplyBody) parsedTalkUnit.getData();
             Hat hat = (Hat) replyBody.getData();
@@ -705,7 +705,7 @@ public class TalkUnitExecutor {
         }
     }
 
-    private void showNotify(TalkUnit parsedTalkUnit, TalkIdHandler talkIdHandler) {
+    private void showNotify(TalkUnit parsedTalkUnit, TalkIdManager talkIdHandler) {
         if (!(parsedTalkUnit.getData() instanceof Affair affair)) {
             setCodeMsg(CodeMessage.Code3010FailedToHandleData);
             return;

@@ -116,8 +116,8 @@ public class ApiNames {
     public static final String NoticeFeeHistory = "noticeFeeHistory";
     public static final String ReputationHistory = "reputationHistory";
     public static final String NobodySearch = "nobodySearch";
-    public static final String P2shByIds = "p2shByIds";
-    public static final String P2shSearch = "p2shSearch";
+    public static final String MultisignByIds = "multisignByIds";
+    public static final String MultisignSearch = "multisignSearch";
     public static final String ProtocolByIds = "protocolByIds";
     public static final String ProtocolSearch = "protocolSearch";
     public static final String ProtocolOpHistory = "protocolOpHistory";
@@ -250,7 +250,7 @@ public class ApiNames {
                 CashSearch,CashByIds,
                 FidSearch,FidByIds,
                 OpReturnSearch,OpReturnByIds,
-                P2shSearch,P2shByIds,
+                MultisignSearch, MultisignByIds,
                 TxSearch,TxByIds, TxByFid,
                 ChainInfo, BlockTimeHistory, DifficultyHistory, HashRateHistory
         };
@@ -391,8 +391,8 @@ public class ApiNames {
         ApiNames.apiList.add(ApiNames.OpReturnSearch);
         ApiNames.apiList.add(ApiNames.FidByIds);
         ApiNames.apiList.add(ApiNames.FidSearch);
-        ApiNames.apiList.add(ApiNames.P2shByIds);
-        ApiNames.apiList.add(ApiNames.P2shSearch);
+        ApiNames.apiList.add(ApiNames.MultisignByIds);
+        ApiNames.apiList.add(ApiNames.MultisignSearch);
 
         ApiNames.apiList.add(ApiNames.CidInfoByIds);
         ApiNames.apiList.add(ApiNames.FidCidSeek);

@@ -1,13 +1,10 @@
 package APIP18V1_Wallet;
 
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import clients.NaSaClient.NaSaRpcClient;
-import handlers.CashHandler;
-import handlers.Handler;
+import handlers.CashManager;
+import handlers.Manager;
 import server.ApipApiNames;
 import data.fcData.ReplyBody;
-import core.fch.Wallet;
 import initial.Initiator;
 import utils.NumberUtils;
 import utils.http.AuthType;
@@ -19,7 +16,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import config.Settings;
-import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.FEE_RATE, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.FEE_RATE)
 public class FeeRate extends HttpServlet {
@@ -40,7 +36,7 @@ public class FeeRate extends HttpServlet {
         //Check authorization
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
         httpRequestChecker.checkRequestHttp(request, response, authType);
-        CashHandler cashHandler = (CashHandler)settings.getHandler(Handler.HandlerType.CASH);
+        CashManager cashHandler = (CashManager)settings.getManager(Manager.ManagerType.CASH);
         Double feeRate = cashHandler.getFeeRate();
         if(feeRate==null){
             replier.replyOtherErrorHttp("Calculating fee rate wrong.", response);

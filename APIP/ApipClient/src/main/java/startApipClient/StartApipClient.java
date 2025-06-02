@@ -5,6 +5,7 @@ import data.apipData.BlockInfo;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
 import data.apipData.TxInfo;
+import data.fcData.Module;
 import data.fchData.*;
 import config.Starter;
 import ui.Inputer;
@@ -53,15 +54,16 @@ public class StartApipClient {
     public static BufferedReader br ;
     public static String clientName= ServiceType.APIP.name();
 
-    public static final Object[] modules = new Object[]{
-            Service.ServiceType.APIP,
-    };
+
     public static 	Map<String,Object> settingMap = new HashMap<>();
 
     public static void main(String[] args) {
         Menu.welcome(clientName);
 
         br = new BufferedReader(new InputStreamReader(System.in));
+        List<Module> modules = new ArrayList<>();
+        modules.add(new Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
+
         settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
         byte[] symKey = settings.getSymkey();
@@ -108,6 +110,7 @@ public class StartApipClient {
                 case 13 -> {
                     settings.setting(br, null);
                     symKey = settings.getSymkey();
+                    apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
                 }
                 case 0 -> {
                     BytesUtils.clearByteArray(symKey);
@@ -300,8 +303,8 @@ public class StartApipClient {
                 case 8 -> fidByIds();
                 case 9 -> opReturnSearch(DEFAULT_SIZE, "height:desc->txIndex:desc->id:asc");
                 case 10 -> opReturnByIds();
-                case 11 -> p2shSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
-                case 12 -> p2shByIds();
+                case 11 -> multisignSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 12 -> multisignByIds();
                 case 13 -> txSearch(DEFAULT_SIZE, "height:desc->id:asc");
                 case 14 -> txByIds();
                 case 15 -> txByFid();
@@ -428,21 +431,21 @@ public class StartApipClient {
         Menu.anyKeyToContinue(br);
     }
 
-    public static void p2shByIds( ) {
+    public static void multisignByIds( ) {
         String[] ids = Inputer.inputStringArray(br, "Input p2shIds:", 0);
         System.out.println("Requesting p2shByIds...");
-        Map<String, P2SH> result = apipClient.p2shByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Multisign> result = apipClient.multisignByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
-    public static void p2shSearch(int defaultSize, String defaultSort) {
+    public static void multisignSearch(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting p2shSearch...");
-        List<P2SH> result = apipClient.p2shSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Multisign> result = apipClient.multisignSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());

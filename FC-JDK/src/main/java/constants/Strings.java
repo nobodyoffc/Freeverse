@@ -68,6 +68,7 @@ public class Strings {
     public static final String TYPE = "type";
     public static final String CLOSED = "closed";
     public static final String ACTIVE = "active";
+    public static final String DELETED = "deleted";
     public static final String TYPES = "types";
     public static final String HOOK_USER_ID = "hookUserId";
 

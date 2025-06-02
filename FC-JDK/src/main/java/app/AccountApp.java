@@ -1,13 +1,13 @@
 package app;
 
+import handlers.AccountManager;
+import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
 import config.Starter;
 import data.fcData.AutoTask;
 import data.feipData.Service;
-import handlers.AccountHandler;
-import handlers.Handler;
 import server.ApipApiNames;
 
 import java.io.BufferedReader;
@@ -29,31 +29,32 @@ public class AccountApp {
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-        Object[] modules = new Object[]{
-                Service.ServiceType.REDIS,
-                Service.ServiceType.NASA_RPC,
-                Service.ServiceType.ES,
-                Handler.HandlerType.CASH,
-                Handler.HandlerType.ACCOUNT
-        };
 
         Map<String,Object>  settingMap = new HashMap<> ();
         settingMap.put(Settings.LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
-        settingMap.put(AccountHandler.DISTRIBUTE_DAYS,AccountHandler.DEFAULT_DISTRIBUTE_DAYS);
-        settingMap.put(AccountHandler.MIN_DISTRIBUTE_BALANCE,AccountHandler.DEFAULT_MIN_DISTRIBUTE_BALANCE);
-        settingMap.put(AccountHandler.DEALER_MIN_BALANCE,AccountHandler.DEFAULT_DEALER_MIN_BALANCE);
+        settingMap.put(AccountManager.DISTRIBUTE_DAYS, AccountManager.DEFAULT_DISTRIBUTE_DAYS);
+        settingMap.put(AccountManager.MIN_DISTRIBUTE_BALANCE, AccountManager.DEFAULT_MIN_DISTRIBUTE_BALANCE);
+        settingMap.put(AccountManager.DEALER_MIN_BALANCE, AccountManager.DEFAULT_DEALER_MIN_BALANCE);
 
         List<AutoTask> autoTaskList = new ArrayList<>();
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", 5));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "saveMapsToLocalDB", 5));
+
+        List<data.fcData.Module> modules = new ArrayList<>();
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.NASA_RPC.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.ACCOUNT.name()));
+
 
         while(true) {
             Settings settings = Starter.startServer(Service.ServiceType.APIP, settingMap, ApipApiNames.apiList,modules, br, autoTaskList);
 
             if (settings == null) return;
 
-            AccountHandler accountHandler = (AccountHandler)settings.getHandler(Handler.HandlerType.ACCOUNT);
+            AccountManager accountHandler = (AccountManager)settings.getManager(Manager.ManagerType.ACCOUNT);
             accountHandler.menu(br, true);
             if (!Inputer.askIfYes(br, "Switch to another FID relevant to "+settings.getMainFid()+"?")) break;
             if (!Inputer.askIfYes(br, "Switch to another FID?")) {

@@ -3,7 +3,7 @@ package webhook;
 import data.apipData.WebhookPushBody;
 import data.fchData.Cash;
 import data.fchData.OpReturn;
-import handlers.WebhookHandler;
+import handlers.WebhookManager;
 import server.ApipApiNames;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -37,7 +37,7 @@ public class Pusher implements Runnable{
     private volatile AtomicBoolean running = new AtomicBoolean(true);
     private final String listenDir;
     private final ElasticsearchClient esClient;
-    private Map<String,Map<String, WebhookHandler.WebhookRequestBody>> methodFidEndpointInfoMapMap = new HashMap<>();
+    private Map<String,Map<String, WebhookManager.WebhookRequestBody>> methodFidEndpointInfoMapMap = new HashMap<>();
     private final String sid;
 
     public Pusher(String sid,String listenDir, ElasticsearchClient esClient) {
@@ -79,7 +79,7 @@ public class Pusher implements Runnable{
     }
 
     private void checkSubscriptions(Jedis jedis) {
-        List<WebhookHandler.WebhookRequestBody> webhookInfoList;
+        List<WebhookManager.WebhookRequestBody> webhookInfoList;
         jedis.select(Constants.RedisDb4Webhook);
         Map<String, String> newCashByFidsSubscriptionMap = jedis.hgetAll(Settings.addSidBriefToName(sid, ApipApiNames.NEW_CASH_BY_FIDS));
         if(newCashByFidsSubscriptionMap ==null) {
@@ -99,31 +99,31 @@ public class Pusher implements Runnable{
         //Method: newCashByFids
         Map<String, String> newCashByFidsHookInfoStrMap = jedis.hgetAll(Settings.addSidBriefToName(sid, ApipApiNames.NEW_CASH_BY_FIDS));
         if(newCashByFidsHookInfoStrMap==null||newCashByFidsHookInfoStrMap.isEmpty())return;
-        Map<String, WebhookHandler.WebhookRequestBody> newCashByFidsHookInfoMap = new HashMap<>();
+        Map<String, WebhookManager.WebhookRequestBody> newCashByFidsHookInfoMap = new HashMap<>();
         for(String owner: newCashByFidsHookInfoStrMap.keySet()){
             String webhookInfoStr = newCashByFidsHookInfoStrMap.get(owner);
-            newCashByFidsHookInfoMap.put(owner,gson.fromJson(webhookInfoStr, WebhookHandler.WebhookRequestBody.class));
+            newCashByFidsHookInfoMap.put(owner,gson.fromJson(webhookInfoStr, WebhookManager.WebhookRequestBody.class));
         }
         methodFidEndpointInfoMapMap.put(ApipApiNames.NEW_CASH_BY_FIDS,newCashByFidsHookInfoMap);
         //More method:
     }
 
-    private void setWebhookSubscriptionIntoRedis(Map<String, Map<String, WebhookHandler.WebhookRequestBody>> methodFidEndpointInfoMapMap, Jedis jedis) {
+    private void setWebhookSubscriptionIntoRedis(Map<String, Map<String, WebhookManager.WebhookRequestBody>> methodFidEndpointInfoMapMap, Jedis jedis) {
         if(methodFidEndpointInfoMapMap==null||methodFidEndpointInfoMapMap.size()==0)return;
         Gson gson = new Gson();
         for(String method:methodFidEndpointInfoMapMap.keySet()){
-            Map<String, WebhookHandler.WebhookRequestBody> ownerWebhookInfoMap = methodFidEndpointInfoMapMap.get(method);
+            Map<String, WebhookManager.WebhookRequestBody> ownerWebhookInfoMap = methodFidEndpointInfoMapMap.get(method);
             for(String userId:ownerWebhookInfoMap.keySet()){
-                WebhookHandler.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(userId);
+                WebhookManager.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(userId);
                 jedis.hset(method,userId,gson.toJson(webhookInfo));
             }
         }
     }
 
-    private void makeMethodFidEndpointMapMap(List<WebhookHandler.WebhookRequestBody> webhookInfoList) {
+    private void makeMethodFidEndpointMapMap(List<WebhookManager.WebhookRequestBody> webhookInfoList) {
         if(webhookInfoList==null || webhookInfoList.size()==0)return;
-        Map<String, WebhookHandler.WebhookRequestBody> newCashByFidsWebhookInfoMap = new HashMap<>();
-        for (WebhookHandler.WebhookRequestBody webhookInfo : webhookInfoList) {
+        Map<String, WebhookManager.WebhookRequestBody> newCashByFidsWebhookInfoMap = new HashMap<>();
+        for (WebhookManager.WebhookRequestBody webhookInfo : webhookInfoList) {
             switch (webhookInfo.getMethod()) {
                 case ApipApiNames.NEW_CASH_BY_FIDS -> newCashByFidsWebhookInfoMap.put(webhookInfo.getUserId(), webhookInfo);
             }
@@ -131,9 +131,9 @@ public class Pusher implements Runnable{
         methodFidEndpointInfoMapMap.put(ApipApiNames.NEW_CASH_BY_FIDS, newCashByFidsWebhookInfoMap);
     }
 
-    private List<WebhookHandler.WebhookRequestBody> getWebhookInfoListFromEs(ElasticsearchClient esClient) {
+    private List<WebhookManager.WebhookRequestBody> getWebhookInfoListFromEs(ElasticsearchClient esClient) {
         try {
-            return EsUtils.getAllList(esClient, Settings.addSidBriefToName(sid,IndicesNames.WEBHOOK), Strings.HOOK_USER_ID,SortOrder.Asc, WebhookHandler.WebhookRequestBody.class);
+            return EsUtils.getAllList(esClient, Settings.addSidBriefToName(sid,IndicesNames.WEBHOOK), Strings.HOOK_USER_ID,SortOrder.Asc, WebhookManager.WebhookRequestBody.class);
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Read webhook info failed.");
@@ -141,7 +141,7 @@ public class Pusher implements Runnable{
         }
     }
 
-    private void pushWebhooks(Map<String, Map<String, WebhookHandler.WebhookRequestBody>> methodFidWatchedFidsMapMap, long sinceHeight) {
+    private void pushWebhooks(Map<String, Map<String, WebhookManager.WebhookRequestBody>> methodFidWatchedFidsMapMap, long sinceHeight) {
 
         for(String method: methodFidWatchedFidsMapMap.keySet()){
             switch (method){
@@ -152,25 +152,25 @@ public class Pusher implements Runnable{
         }
     }
 
-    private void putNewCashByFids(Map<String, WebhookHandler.WebhookRequestBody> ownerWebhookInfoMap, long sinceHeight) {
+    private void putNewCashByFids(Map<String, WebhookManager.WebhookRequestBody> ownerWebhookInfoMap, long sinceHeight) {
         for(String owner:ownerWebhookInfoMap.keySet()){
-            WebhookHandler.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(owner);
+            WebhookManager.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(owner);
             ArrayList<Cash> newCashList = getNewCashList(webhookInfo,sinceHeight);
             if(newCashList==null)return;
             pushDataList(webhookInfo, ApipApiNames.NEW_CASH_BY_FIDS,newCashList);
         }
     }
 
-    private void putNewOpReturnByFids(Map<String, WebhookHandler.WebhookRequestBody> ownerWebhookInfoMap, long sinceHeight) {
+    private void putNewOpReturnByFids(Map<String, WebhookManager.WebhookRequestBody> ownerWebhookInfoMap, long sinceHeight) {
         for(String owner:ownerWebhookInfoMap.keySet()){
-            WebhookHandler.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(owner);
+            WebhookManager.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(owner);
             ArrayList<OpReturn> newOpReturnList = getNewOpReturnList(webhookInfo,sinceHeight);
             if(newOpReturnList==null)return;
             pushDataList(webhookInfo, ApipApiNames.NEW_OP_RETURN_BY_FIDS,newOpReturnList);
         }
     }
 
-    private <T> void pushDataList(WebhookHandler.WebhookRequestBody webhookRequestBody, String method, ArrayList<T> dataList) {
+    private <T> void pushDataList(WebhookManager.WebhookRequestBody webhookRequestBody, String method, ArrayList<T> dataList) {
         Gson gson = new Gson();
         String sessionName ;
         String sessionKey;
@@ -244,7 +244,7 @@ public class Pusher implements Runnable{
         else System.out.println("Failed to push new cashes.");
     }
 
-    private ArrayList<Cash> getNewCashList(WebhookHandler.WebhookRequestBody webhookInfo, long sinceHeight) {
+    private ArrayList<Cash> getNewCashList(WebhookManager.WebhookRequestBody webhookInfo, long sinceHeight) {
 
         Map<String,Object> dataMap = ObjectUtils.objectToMap(webhookInfo.getData(),String.class, Object.class);
         if(dataMap==null)return null;
@@ -259,7 +259,7 @@ public class Pusher implements Runnable{
         }
     }
 
-    private ArrayList<OpReturn> getNewOpReturnList(WebhookHandler.WebhookRequestBody webhookInfo, long sinceHeight) {
+    private ArrayList<OpReturn> getNewOpReturnList(WebhookManager.WebhookRequestBody webhookInfo, long sinceHeight) {
         Object ids = webhookInfo.getData();
         List<String> idList = ObjectUtils.objectToList(ids,String.class);
         if(idList==null)return null;

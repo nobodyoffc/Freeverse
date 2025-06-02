@@ -1,9 +1,10 @@
 package clients;
 
+import core.fch.RawTxInfo;
 import data.apipData.*;
 import data.fchData.*;
 import data.feipData.*;
-import core.fch.OffLineTxInfo;
+import handlers.WebhookManager;
 import ui.Menu;
 import constants.*;
 import core.crypto.Decryptor;
@@ -14,7 +15,6 @@ import data.fcData.FidTxMask;
 import core.fch.Inputer;
 import config.ApiAccount;
 import config.ApiProvider;
-import handlers.WebhookHandler;
 import server.ApipApiNames;
 import utils.Hex;
 import utils.JsonUtils;
@@ -61,10 +61,10 @@ public class ApipClient extends FcClient {
         super(apiProvider,apiAccount,symKey);
     }
 
-    public List<P2SH> myP2SHs(String fid) {
+    public List<Multisign> myMultisigns(String fid) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(FIDS).addNewValues(fid);
-        return p2shSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return multisignSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
     }
 
     public void checkMaster(String prikeyCipher,byte[] symKey,BufferedReader br) {
@@ -244,13 +244,13 @@ public class ApipClient extends FcClient {
         return objectToList(data,OpReturn.class);
     }
 
-    public Map<String, P2SH> p2shByIds(RequestMethod requestMethod, AuthType authType, String... ids){
-        Object data = requestByIds(requestMethod, SN_2, VERSION_1, P_2_SH_BY_IDS, authType, ids);
-        return objectToMap(data,String.class,P2SH.class);
+    public Map<String, Multisign> multisignByIds(RequestMethod requestMethod, AuthType authType, String... ids){
+        Object data = requestByIds(requestMethod, SN_2, VERSION_1, MULTISIGN_BY_IDS, authType, ids);
+        return objectToMap(data,String.class, Multisign.class);
     }
-    public List<P2SH> p2shSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(SN_2, VERSION_1, P_2_SH_SEARCH,fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,P2SH.class);
+    public List<Multisign> multisignSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_2, VERSION_1, MULTISIGN_SEARCH,fcdsl, authType,sessionKey, requestMethod);
+        return objectToList(data, Multisign.class);
     }
 
     public Map<String, TxInfo> txByIds(RequestMethod requestMethod, AuthType authType, String... ids){
@@ -1078,13 +1078,13 @@ public class ApipClient extends FcClient {
     public String offLineTx(String fromFid, List<SendTo> sendToList, String msg, Long cd, String ver, RequestMethod requestMethod, AuthType authType){
         if(requestMethod.equals(RequestMethod.POST)) {
             Fcdsl fcdsl = new Fcdsl();
-            OffLineTxInfo offLineTxInfo = new OffLineTxInfo();
-            offLineTxInfo.setSender(fromFid);
-            offLineTxInfo.setMsg(msg);
-            offLineTxInfo.setOutputs(sendToList);
-            offLineTxInfo.setCd(cd);
-            offLineTxInfo.setVer(ver);
-            Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.DATA_FOR_OFF_LINE_TX, JsonUtils.toJson(offLineTxInfo));
+            RawTxInfo rawTxInfo = new RawTxInfo();
+            rawTxInfo.setSender(fromFid);
+            rawTxInfo.setOpReturn(msg);
+            rawTxInfo.setOutputs(sendToList);
+            rawTxInfo.setCd(cd);
+            rawTxInfo.setVer(ver);
+            Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.DATA_FOR_OFF_LINE_TX, JsonUtils.toJson(rawTxInfo));
             Object data = requestJsonByFcdsl(SN_18, VERSION_1, OFF_LINE_TX, fcdsl, authType, sessionKey, requestMethod);
             return (String) data;
         }
@@ -1200,7 +1200,7 @@ public class ApipClient extends FcClient {
 //    }
     //Webhook APIs
     public Map<String, String> checkSubscription(String method, String endpoint) {
-        WebhookHandler.WebhookRequestBody webhookRequestBody = new WebhookHandler.WebhookRequestBody();
+        WebhookManager.WebhookRequestBody webhookRequestBody = new WebhookManager.WebhookRequestBody();
         webhookRequestBody.setEndpoint(endpoint);
         webhookRequestBody.setOp(CHECK);
 //    webhookRequestBody.setMethod(method);
@@ -1215,7 +1215,7 @@ public class ApipClient extends FcClient {
     }
     //
     public String subscribeWebhook(String method, Object data, String endpoint) {
-        WebhookHandler.WebhookRequestBody webhookRequestBody = new WebhookHandler.WebhookRequestBody();
+        WebhookManager.WebhookRequestBody webhookRequestBody = new WebhookManager.WebhookRequestBody();
         webhookRequestBody.setEndpoint(endpoint);
         webhookRequestBody.setMethod(method);
 //        webhookRequestBody.setUserId(apiAccount.getUserId());
@@ -1230,7 +1230,7 @@ public class ApipClient extends FcClient {
         return dataMap.get(HOOK_USER_ID);
     }
 
-    public Map<String, String> newCashListByIds(WebhookHandler.WebhookRequestBody webhookRequestBody){
+    public Map<String, String> newCashListByIds(WebhookManager.WebhookRequestBody webhookRequestBody){
         Fcdsl fcdsl = new Fcdsl();
         Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonUtils.toJson(webhookRequestBody));
         Object data = requestJsonByFcdsl(SN_20, VERSION_1, ApipApiNames.NEW_CASH_BY_FIDS, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, RequestMethod.POST);
@@ -1238,7 +1238,7 @@ public class ApipClient extends FcClient {
         return objectToMap(data,String.class,String.class);
     }
 
-    public Map<String, String> newOpReturnListByIds(WebhookHandler.WebhookRequestBody webhookRequestBody){
+    public Map<String, String> newOpReturnListByIds(WebhookManager.WebhookRequestBody webhookRequestBody){
         Fcdsl fcdsl = new Fcdsl();
         Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonUtils.toJson(webhookRequestBody));
         Object data = requestJsonByFcdsl(SN_20, VERSION_1, NEW_OP_RETURN_BY_FIDS, fcdsl, AuthType.FC_SIGN_BODY, sessionKey, RequestMethod.POST);
@@ -1335,5 +1335,153 @@ public class ApipClient extends FcClient {
             }
         }
         return resultMap;
+    }
+
+    public Map<String, Essay> essayByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_21, VERSION_1, ESSAY_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class,Essay.class);
+    }
+
+    public Essay essayById(String id){
+        Map<String, Essay> map = essayByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY , id);
+        if(map==null)return null;
+        try {
+            return map.get(id);
+        }catch (Exception ignore){
+            return null;
+        }
+    }
+
+    public List<Essay> essaySearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_21, VERSION_1, ESSAY_SEARCH, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,Essay.class);
+    }
+
+    public List<EssayHistory> essayOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsExcept(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_21, VERSION_1, ESSAY_OP_HISTORY, fcdsl,authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,EssayHistory.class);
+    }
+
+    public List<EssayHistory> essayRateHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsFilter(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_21, VERSION_1, ESSAY_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,EssayHistory.class);
+    }
+
+    public Map<String, Report> reportByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_22, VERSION_1, REPORT_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class,Report.class);
+    }
+
+    public Report reportById(String id){
+        Map<String, Report> map = reportByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY , id);
+        if(map==null)return null;
+        try {
+            return map.get(id);
+        }catch (Exception ignore){
+            return null;
+        }
+    }
+
+    public List<Report> reportSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_22, VERSION_1, REPORT_SEARCH, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,Report.class);
+    }
+
+    public List<ReportHistory> reportOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsExcept(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_22, VERSION_1, REPORT_OP_HISTORY, fcdsl,authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,ReportHistory.class);
+    }
+
+    public List<ReportHistory> reportRateHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsFilter(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_22, VERSION_1, REPORT_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,ReportHistory.class);
+    }
+
+    public Map<String, Paper> paperByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_23, VERSION_1, PAPER_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class,Paper.class);
+    }
+
+    public Paper paperById(String id){
+        Map<String, Paper> map = paperByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY , id);
+        if(map==null)return null;
+        try {
+            return map.get(id);
+        }catch (Exception ignore){
+            return null;
+        }
+    }
+
+    public List<Paper> paperSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_23, VERSION_1, PAPER_SEARCH, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,Paper.class);
+    }
+
+    public List<PaperHistory> paperOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsExcept(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_23, VERSION_1, PAPER_OP_HISTORY, fcdsl,authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,PaperHistory.class);
+    }
+
+    public List<PaperHistory> paperRateHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsFilter(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_23, VERSION_1, PAPER_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,PaperHistory.class);
+    }
+
+    public Map<String, Book> bookByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_24, VERSION_1, BOOK_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class,Book.class);
+    }
+
+    public Book bookById(String id){
+        Map<String, Book> map = bookByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY , id);
+        if(map==null)return null;
+        try {
+            return map.get(id);
+        }catch (Exception ignore){
+            return null;
+        }
+    }
+
+    public List<Book> bookSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_24, VERSION_1, BOOK_SEARCH, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,Book.class);
+    }
+
+    public List<BookHistory> bookOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsExcept(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_24, VERSION_1, BOOK_OP_HISTORY, fcdsl,authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,BookHistory.class);
+    }
+
+    public List<BookHistory> bookRateHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsFilter(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_24, VERSION_1, BOOK_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,BookHistory.class);
     }
 }

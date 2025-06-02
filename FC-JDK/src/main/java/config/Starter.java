@@ -9,6 +9,7 @@ import core.fch.Inputer;
 import data.fcData.CidInfo;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.fcData.AutoTask;
+import data.fcData.Module;
 import data.fchData.Cid;
 import clients.ApipClient;
 import data.feipData.Service;
@@ -21,7 +22,7 @@ public class Starter {
 
 
     public static Settings startClient(String clientName,
-                                       Map<String, Object> settingMap, BufferedReader br, Object[] modules, List<AutoTask> autoTaskList) {
+                                       Map<String, Object> settingMap, BufferedReader br, List<Module> modules, List<AutoTask> autoTaskList) {
         // Load config info from the file of config.json
 
         Configure.loadConfig(br);
@@ -81,7 +82,7 @@ public class Starter {
 
 
     public static Settings startTool(String toolName,
-                                     Map<String, Object> settingMap, BufferedReader br, Object[] modules, List<AutoTask> autoTaskList) {
+                                     Map<String, Object> settingMap, BufferedReader br, List<Module> modules, List<AutoTask> autoTaskList) {
         Configure.loadConfig(br);
         Configure configure = Configure.checkPassword(br);
         if(configure == null) return null;
@@ -97,7 +98,7 @@ public class Starter {
     }
 
     public static Settings startServer(Service.ServiceType serverType,
-                                       Map<String, Object> settingMap, List<String> apiList, Object[] modules, BufferedReader br, List<AutoTask> autoTaskList) {
+                                       Map<String, Object> settingMap, List<String> apiList, List<Module> modules, BufferedReader br, List<AutoTask> autoTaskList) {
         // Load config info from the file of config.json
         Configure.loadConfig(br);
         Configure configure = Configure.checkPassword(br);
@@ -119,7 +120,7 @@ public class Starter {
             System.out.println("Try again.");
         }
     }
-    public static Settings startMuteServer(String serverName, Map<String,Object> settingMap, BufferedReader br, Object[] modules, List<AutoTask> autoTaskList) {
+    public static Settings startMuteServer(String serverName, Map<String,Object> settingMap, BufferedReader br, List<Module> modules, List<AutoTask> autoTaskList) {
         Configure.loadConfig(br);
 
         Configure configure = Configure.checkPassword(br);

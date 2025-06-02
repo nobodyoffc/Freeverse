@@ -2,8 +2,8 @@ package APIP18V1_Wallet;
 
 import data.apipData.UnconfirmedInfo;
 import config.Settings;
-import handlers.Handler.HandlerType;
-import handlers.MempoolHandler;
+import handlers.Manager.ManagerType;
+import handlers.MempoolManager;
 import server.ApipApiNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
@@ -44,7 +44,7 @@ public class Unconfirmed extends HttpServlet {
             replier.replyHttp(CodeMessage.Code1015FidMissed,null,response);
             return;
         }
-        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+        MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
 
         Map<String, UnconfirmedInfo> resultMap = mempoolHandler.getUnconfirmedInfo(httpRequestChecker.getRequestBody().getFcdsl().getIds());
         replier.replySingleDataSuccessHttp(resultMap,response);

@@ -2,7 +2,7 @@ package data.apipData;
 
 import com.google.gson.Gson;
 import data.fcData.FcSession;
-import handlers.SessionHandler;
+import handlers.SessionManager;
 import org.jetbrains.annotations.Nullable;
 
 import static data.fcData.Signature.symSign;
@@ -16,7 +16,7 @@ public class WebhookPushBody {
     private Long bestHeight;
 
     @Nullable
-    public static WebhookPushBody checkWebhookPushBody(SessionHandler sessionHandler, byte[] requestBodyBytes) {
+    public static WebhookPushBody checkWebhookPushBody(SessionManager sessionHandler, byte[] requestBodyBytes) {
         WebhookPushBody webhookPushBody;
 
         try {

@@ -14,15 +14,15 @@ public class IndicesFEIP {
 	static final Logger log = LoggerFactory.getLogger(IndicesFEIP.class);
 
 
-	public static void createAllIndices(ElasticsearchClient esClient) throws ElasticsearchException, IOException {
+	public static void createAllIndices(ElasticsearchClient esClient) throws ElasticsearchException {
 
 		if (esClient == null) {
 			System.out.println("Create a Java client for ES first.");
 			return;
 		}
 
-		String cidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"balance\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"btcAddr\":{\"type\":\"wildcard\"},\"cd\":{\"type\":\"long\"},\"cdd\":{\"type\":\"long\"},\"weight\":{\"type\":\"long\"},\"dogeAddr\":{\"type\":\"wildcard\"},\"ethAddr\":{\"type\":\"wildcard\"},\"expend\":{\"type\":\"long\"},\"guide\":{\"type\":\"wildcard\"},\"income\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"ltcAddr\":{\"type\":\"wildcard\"},\"pubKey\":{\"type\":\"wildcard\"},\"trxAddr\":{\"type\":\"wildcard\"},\"cash\":{\"type\":\"long\"}\"cid\":{\"type\":\"wildcard\"},\"height\":{\"type\":\"long\"},\"homepages\":{\"type\":\"text\"},\"hot\":{\"type\":\"long\"},\"priKey\":{\"type\":\"keyword\"},\"lastHeight\":{\"type\":\"long\"},\"master\":{\"type\":\"wildcard\"},\"nameTime\":{\"type\":\"long\"},\"noticeFee\":{\"type\":\"float\"},\"reputation\":{\"type\":\"long\"},\"usedCids\":{\"type\":\"wildcard\"}}}}";
-		String cidHistJsonStr = "{\"mappings\":{\"properties\":{\"homepages\":{\"type\":\"text\"},\"master\":{\"type\":\"wildcard\"},\"cipherPriKey\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"height\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"name\":{\"type\":\"wildcard\"},\"noticeFee\":{\"type\":\"text\"},\"op\":{\"type\":\"wildcard\"},\"priKey\":{\"type\":\"keyword\"},\"signer\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"ver\":{\"type\":\"short\"}}}}";
+//		String cidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"balance\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"btcAddr\":{\"type\":\"wildcard\"},\"cd\":{\"type\":\"long\"},\"cdd\":{\"type\":\"long\"},\"weight\":{\"type\":\"long\"},\"dogeAddr\":{\"type\":\"wildcard\"},\"ethAddr\":{\"type\":\"wildcard\"},\"expend\":{\"type\":\"long\"},\"guide\":{\"type\":\"wildcard\"},\"income\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"ltcAddr\":{\"type\":\"wildcard\"},\"pubkey\":{\"type\":\"wildcard\"},\"trxAddr\":{\"type\":\"wildcard\"},\"cash\":{\"type\":\"long\"}\"cid\":{\"type\":\"wildcard\"},\"height\":{\"type\":\"long\"},\"homepages\":{\"type\":\"text\"},\"hot\":{\"type\":\"long\"},\"prikey\":{\"type\":\"keyword\"},\"lastHeight\":{\"type\":\"long\"},\"master\":{\"type\":\"wildcard\"},\"nameTime\":{\"type\":\"long\"},\"noticeFee\":{\"type\":\"float\"},\"reputation\":{\"type\":\"long\"},\"usedCids\":{\"type\":\"wildcard\"}}}}";
+		String cidHistJsonStr = "{\"mappings\":{\"properties\":{\"homepages\":{\"type\":\"text\"},\"master\":{\"type\":\"wildcard\"},\"cipherPrikey\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"height\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"name\":{\"type\":\"wildcard\"},\"noticeFee\":{\"type\":\"text\"},\"op\":{\"type\":\"wildcard\"},\"prikey\":{\"type\":\"keyword\"},\"signer\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"ver\":{\"type\":\"short\"}}}}";
 		String repuHistJsonStr = "{\"mappings\":{\"properties\":{\"cause\":{\"type\":\"text\"},\"height\":{\"type\":\"long\"},\"hot\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"ratee\":{\"type\":\"wildcard\"},\"rater\":{\"type\":\"wildcard\"},\"reputation\":{\"type\":\"long\"},\"time\":{\"type\":\"long\"}}}}";
 		String parseMarkJsonStr = "{\"mappings\":{\"properties\":{\"fileName\":{\"type\":\"wildcard\"},\"lastHeight\":{\"type\":\"long\"},\"lastId\":{\"type\":\"keyword\"},\"lastIndex\":{\"type\":\"long\"},\"length\":{\"type\":\"short\"},\"pointer\":{\"type\":\"long\"}}}}";
 
@@ -86,7 +86,7 @@ public class IndicesFEIP {
 		String nidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"oid\":{\"type\":\"wildcard\"},\"active\":{\"type\":\"boolean\"},\"namer\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		EsUtils.createIndex(esClient, IndicesNames.NID, nidJsonStr);
 
-		String nobodyJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"priKey\":{\"type\":\"keyword\"},\"deathTime\":{\"type\":\"long\"},\"deathTxIndex\":{\"type\":\"integer\"},\"deathTxId\":{\"type\":\"keyword\"}}}}";
+		String nobodyJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"prikey\":{\"type\":\"keyword\"},\"deathTime\":{\"type\":\"long\"},\"deathTxIndex\":{\"type\":\"integer\"},\"deathTxId\":{\"type\":\"keyword\"}}}}";
 		EsUtils.createIndex(esClient, IndicesNames.NOBODY, nobodyJsonStr);
 	}
 

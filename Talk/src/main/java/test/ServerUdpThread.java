@@ -4,7 +4,7 @@ import data.apipData.RequestBody;
 import config.Settings;
 import clients.ApipClient;
 import constants.FieldNames;
-import handlers.NonceHandler;
+import handlers.NonceManager;
 import utils.*;
 import constants.CodeMessage;
 import core.crypto.CryptoDataByte;
@@ -311,7 +311,7 @@ class ServerUdpThread extends Thread {
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
                 } else if (isBadNonce(requestBody.getNonce(), windowTime, jedis)) {
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1007UsedNonce, null, null, nonce, false);
-                } else if (NonceHandler.isBadTime(requestBody.getTime(), windowTime)) {
+                } else if (NonceManager.isBadTime(requestBody.getTime(), windowTime)) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("windowTime", String.valueOf(windowTime));
                     replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1006RequestTimeExpired, JsonUtils.toJson(dataMap), null, nonce, false);

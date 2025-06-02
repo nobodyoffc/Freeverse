@@ -3,14 +3,14 @@ package APIP18V1_Wallet;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
 import data.apipData.Sort;
-import handlers.CashHandler;
-import handlers.MempoolHandler;
+import handlers.CashManager;
+import handlers.MempoolManager;
 import server.ApipApiNames;
 import constants.FieldNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
-import handlers.CashHandler.SearchResult;
-import handlers.Handler.HandlerType;
+import handlers.CashManager.SearchResult;
+import handlers.Manager.ManagerType;
 import data.fchData.Cash;
 import initial.Initiator;
 import utils.ObjectUtils;
@@ -103,7 +103,7 @@ public class CashValid extends HttpServlet {
                         return;
                     }
                 }
-                MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
+                MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
                 mempoolHandler.updateUnconfirmedValidCash(meetList, fid);
                 replier.reply0SuccessHttp(meetList,response);
                 return;
@@ -142,8 +142,8 @@ public class CashValid extends HttpServlet {
             if (sinceHeightStr != null) sinceHeight = Long.parseLong(sinceHeightStr);
         } catch (Exception ignore) {
         }
-        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
-        SearchResult<Cash> searchResult = CashHandler.getValidCashes(fid, amount, cd, sinceHeight, outputSize, msgSize, null, esClient, mempoolHandler);
+        MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
+        SearchResult<Cash> searchResult = CashManager.getValidCashes(fid, amount, cd, sinceHeight, outputSize, msgSize, null, esClient, mempoolHandler);
         if (searchResult.hasError()) {
             replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(),response);
             return;

@@ -1,6 +1,8 @@
 package startFEIP;
 
 import data.feipData.*;
+import publish.PublishParser;
+import publish.PublishRollbacker;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
@@ -26,8 +28,8 @@ import organize.OrganizationRollbacker;
 
 import personal.PersonalParser;
 import personal.PersonalRollbacker;
-import publish.PublishParser;
-import publish.PublishRollbacker;
+import finance.FinanceParser;
+import finance.FinanceRollbacker;
 import utils.FchUtils;
 
 import java.io.File;
@@ -40,6 +42,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static constants.IndicesNames.*;
 
 public class FileParser {
 
@@ -66,7 +70,7 @@ public class FileParser {
 	}
 
 	enum FEIP_NAME{
-		CID,NOBODY,MASTER,HOMEPAGE,NOTICE_FEE,REPUTATION,SERVICE,PROTOCOL,APP,CODE,NID, CONTACT,MAIL, SECRET,STATEMENT,GROUP,TEAM, BOX, TOKEN, PROOF
+		CID,NOBODY,MASTER,HOMEPAGE,NOTICE_FEE,REPUTATION,SERVICE,PROTOCOL,APP,CODE,NID, CONTACT,MAIL, SECRET,STATEMENT,GROUP,TEAM, BOX, TOKEN, PROOF,ESSAY,REPORT,PAPER,BOOK
 	}
 
 	private static final Logger log = LoggerFactory.getLogger(FileParser.class);
@@ -74,7 +78,7 @@ public class FileParser {
 	public boolean parseFile(ElasticsearchClient esClient, boolean isRollback) throws Exception {
 
 		IdentityRollbacker cidRollbacker = new IdentityRollbacker();
-		IdentityParser cidParser = new IdentityParser();
+		IdentityParser identityParser = new IdentityParser();
 
 		ConstructParser constructParser = new ConstructParser();
 		ConstructRollbacker constructRollbacker = new ConstructRollbacker();
@@ -85,6 +89,9 @@ public class FileParser {
 		PublishParser publishParser = new PublishParser();
 		PublishRollbacker publishRollbacker = new PublishRollbacker();
 
+		FinanceParser financeParser = new FinanceParser();
+		FinanceRollbacker financeRollbacker = new FinanceRollbacker();
+
 		OrganizationParser organizationParser = new OrganizationParser();
 		OrganizationRollbacker organizationRollbacker = new OrganizationRollbacker();
 
@@ -92,8 +99,9 @@ public class FileParser {
 			cidRollbacker.rollback(esClient, lastHeight);
 			constructRollbacker.rollback(esClient, lastHeight);
 			personalRollbacker.rollback(esClient, lastHeight);
+			publishRollbacker.rollback(esClient,lastHeight);
 			organizationRollbacker.rollback(esClient, lastHeight);
-			publishRollbacker.rollback(esClient, lastHeight);
+			financeRollbacker.rollback(esClient, lastHeight);
 		}
 
 		FileInputStream fis;
@@ -167,54 +175,54 @@ public class FileParser {
 			switch (feipName) {
 				case CID -> {
 					System.out.println("Cid @"+opre.getHeight()+"."+opre.getId());
-					CidHist identityHist = cidParser.makeCid(opre, feip);
+					CidHist identityHist = identityParser.makeCid(opre, feip);
 					if (identityHist == null) break;
-					isValid = cidParser.parseCidInfo(esClient, identityHist);
+					isValid = identityParser.parseCidInfo(esClient, identityHist);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist.getId()).document(identityHist));
 					System.out.println(isValid);
 				}
 				case NOBODY -> {
 					System.out.println("Nobody @"+opre.getHeight()+"."+opre.getId());
-					CidHist identityHist4 = cidParser.makeNobody(opre, feip);
+					CidHist identityHist4 = identityParser.makeNobody(opre, feip);
 					if (identityHist4 == null) break;
-					isValid = cidParser.parseCidInfo(esClient, identityHist4);
+					isValid = identityParser.parseCidInfo(esClient, identityHist4);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist4.getId()).document(identityHist4));
 					System.out.println(isValid);
 				}
 				case MASTER -> {
 					System.out.println("Master @"+opre.getHeight()+"."+opre.getId());
-					CidHist identityHist1 = cidParser.makeMaster(opre, feip);
+					CidHist identityHist1 = identityParser.makeMaster(opre, feip);
 					if (identityHist1 == null) break;
-					isValid = cidParser.parseCidInfo(esClient, identityHist1);
+					isValid = identityParser.parseCidInfo(esClient, identityHist1);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist1.getId()).document(identityHist1));
 					System.out.println(isValid);
 				}
 				case HOMEPAGE -> {
 					System.out.println("Homepage @"+opre.getHeight()+"."+opre.getId());
-					CidHist identityHist2 = cidParser.makeHomepage(opre, feip);
+					CidHist identityHist2 = identityParser.makeHomepage(opre, feip);
 					if (identityHist2 == null) break;
-					isValid = cidParser.parseCidInfo(esClient, identityHist2);
+					isValid = identityParser.parseCidInfo(esClient, identityHist2);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist2.getId()).document(identityHist2));
 					System.out.println(isValid);
 				}
 				case NOTICE_FEE -> {
 					System.out.println("Notice fee @"+opre.getHeight()+"."+opre.getId());
-					CidHist identityHist3 = cidParser.makeNoticeFee(opre, feip);
+					CidHist identityHist3 = identityParser.makeNoticeFee(opre, feip);
 					if (identityHist3 == null) break;
-					isValid = cidParser.parseCidInfo(esClient, identityHist3);
+					isValid = identityParser.parseCidInfo(esClient, identityHist3);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.CID_HISTORY).id(identityHist3.getId()).document(identityHist3));
 					System.out.println(isValid);
 				}
 				case REPUTATION -> {
 					System.out.println("Reputation @"+opre.getHeight()+"."+opre.getId());
-					RepuHist repuHist = cidParser.makeReputation(opre, feip);
+					RepuHist repuHist = identityParser.makeReputation(opre, feip);
 					if (repuHist == null) break;
-					isValid = cidParser.parseReputation(esClient, repuHist);
+					isValid = identityParser.parseReputation(esClient, repuHist);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.REPUTATION_HISTORY).id(repuHist.getId()).document(repuHist));
 					System.out.println(isValid);
@@ -257,7 +265,7 @@ public class FileParser {
 				}
 				case NID -> {
 					System.out.println("Nid @"+opre.getHeight()+"."+opre.getId());
-					isValid = publishParser.parseNid(esClient, opre, feip);
+					isValid = identityParser.parseNid(esClient, opre, feip);
 					System.out.println(isValid);
 				}
 				case CONTACT -> {
@@ -278,6 +286,42 @@ public class FileParser {
 				case STATEMENT -> {
 					System.out.println("Statement @"+opre.getHeight()+"."+opre.getId());
 					isValid = publishParser.parseStatement(esClient, opre, feip);
+					System.out.println(isValid);
+				}
+				case ESSAY -> {
+					System.out.println("Essay @"+opre.getHeight()+"."+opre.getId());
+					EssayHistory essayHist = publishParser.makeEssay(opre, feip);
+					if (essayHist == null) break;
+					isValid = publishParser.parseEssay(esClient, essayHist);
+					if (isValid)
+						esClient.index(i -> i.index(IndicesNames.ESSAY_HISTORY).id(essayHist.getId()).document(essayHist));
+					System.out.println(isValid);
+				}
+				case REPORT -> {
+					System.out.println("Report @"+opre.getHeight()+"."+opre.getId());
+					ReportHistory reportHist = publishParser.makeReport(opre, feip);
+					if (reportHist == null) break;
+					isValid = publishParser.parseReport(esClient, reportHist);
+					if (isValid)
+						esClient.index(i -> i.index(IndicesNames.REPORT_HISTORY).id(reportHist.getId()).document(reportHist));
+					System.out.println(isValid);
+				}
+				case PAPER -> {
+					System.out.println("Paper @"+opre.getHeight()+"."+opre.getId());
+					PaperHistory paperHist = publishParser.makePaper(opre, feip);
+					if (paperHist == null) break;
+					isValid = publishParser.parsePaper(esClient, paperHist);
+					if (isValid)
+						esClient.index(i -> i.index(IndicesNames.PAPER_HISTORY).id(paperHist.getId()).document(paperHist));
+					System.out.println(isValid);
+				}
+				case BOOK -> {
+					System.out.println("Book @"+opre.getHeight()+"."+opre.getId());
+					BookHistory bookHist = publishParser.makeBook(opre, feip);
+					if (bookHist == null) break;
+					isValid = publishParser.parseBook(esClient, bookHist);
+					if (isValid)
+						esClient.index(i -> i.index(IndicesNames.BOOK_HISTORY).id(bookHist.getId()).document(bookHist));
 					System.out.println(isValid);
 				}
 				case GROUP -> {
@@ -309,19 +353,19 @@ public class FileParser {
 				}
 				case PROOF -> {
 					System.out.println("Proof @"+opre.getHeight()+"."+opre.getId());
-					ProofHistory proofHist = publishParser.makeProof(opre, feip);
+					ProofHistory proofHist = financeParser.makeProof(opre, feip);
 					if (proofHist == null) break;
-					isValid = publishParser.parseProof(esClient, proofHist);
+					isValid = financeParser.parseProof(esClient, proofHist);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.PROOF_HISTORY).id(proofHist.getId()).document(proofHist));
 					System.out.println(isValid);
 				}
 				case TOKEN -> {
 					System.out.println("Token @"+opre.getHeight()+"."+opre.getId());
-					TokenHistory tokenHist = publishParser.makeToken(opre, feip);
+					TokenHistory tokenHist = financeParser.makeToken(opre, feip);
 					if (tokenHist == null) break;
 					try {
-						isValid = publishParser.parseToken(esClient, tokenHist);
+						isValid = financeParser.parseToken(esClient, tokenHist);
 					}catch (NumberFormatException ignore) {}
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.TOKEN_HISTORY).id(tokenHist.getId()).document(tokenHist));
@@ -380,6 +424,10 @@ public class FileParser {
 		if(sn.equals("19"))return FEIP_NAME.GROUP;
 		if(sn.equals("20"))return FEIP_NAME.TOKEN;
 
+		if(sn.equals("21"))return FEIP_NAME.ESSAY;
+		if(sn.equals("22"))return FEIP_NAME.REPORT;
+		if(sn.equals("23"))return FEIP_NAME.PAPER;
+		if(sn.equals("24"))return FEIP_NAME.BOOK;
 
 		return null;
 	}

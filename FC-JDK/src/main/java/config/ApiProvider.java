@@ -57,10 +57,10 @@ public class ApiProvider {
         this.owner=service.getOwner();
         for(String type : service.getTypes()){
             try{
-                this.type= Service.ServiceType.valueOf(type);
+                this.type= Service.ServiceType.valueOf(type.toUpperCase());
                 break;
             }catch (Exception ignore){
-                log.error("Failed to get the type of the service:"+service.getStdName());
+                log.error("Failed to get the type of the service "+service.getStdName()+" : "+type);
             }
         }
         if(service.getUrls().length>0)this.orgUrl=service.getUrls()[0];
@@ -285,7 +285,7 @@ public class ApiProvider {
             switch (this.type){
                 case APIP, DISK ->{
                     if(Inputer.askIfYes(br,"The apiUrl is "+apiUrl+". Update it?")) {
-                        apiUrl = Inputer.inputString(br, "Input the urlHead of the APIP service:");
+                        apiUrl = Inputer.inputString(br, "Input the urlHead of the API service:");
                     }
                     if(apiUrl==null)return;
                     ReplyBody replier = ApipClient.getService(apiUrl, ApipApiNames.VERSION_1, ApipParams.class);//OpenAPIs.getService(apiUrl);

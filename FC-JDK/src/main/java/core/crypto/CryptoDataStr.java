@@ -59,7 +59,7 @@ public class CryptoDataStr {
         fromJson(eccAesDataJson);
         switch (this.type) {
             case AsyOneWay -> prikeyB = key;
-            case AsyTwoWay -> checkKeyPairAndSetPriKey(this, key);
+            case AsyTwoWay -> checkKeyPairAndSetPrikey(this, key);
             case Symkey -> symkey = key;
             case Password -> password = key;
         }
@@ -147,11 +147,11 @@ public class CryptoDataStr {
     /**
      * For AsyOneWay or AsyTwoWay decrypt
      */
-    public CryptoDataStr(EncryptType asyOneWayOrAsyTwoWayType, String pubkeyA, String pubkeyB, String iv, String cipher, @Nullable String sum, char[] priKey) {
+    public CryptoDataStr(EncryptType asyOneWayOrAsyTwoWayType, String pubkeyA, String pubkeyB, String iv, String cipher, @Nullable String sum, char[] prikey) {
         if (asyOneWayOrAsyTwoWayType == EncryptType.AsyOneWay || asyOneWayOrAsyTwoWayType == EncryptType.AsyTwoWay) {
-            byte[] pubKeyBytesA = HexFormat.of().parseHex(pubkeyA);
-            byte[] pubKeyBytesB = HexFormat.of().parseHex(pubkeyB);
-            byte[] priKeyBytes = BytesUtils.hexCharArrayToByteArray(priKey);
+            byte[] pubkeyBytesA = HexFormat.of().parseHex(pubkeyA);
+            byte[] pubkeyBytesB = HexFormat.of().parseHex(pubkeyB);
+            byte[] prikeyBytes = BytesUtils.hexCharArrayToByteArray(prikey);
             this.alg = AlgorithmId.EccAes256K1P7_No1_NrC7;
             this.type = asyOneWayOrAsyTwoWayType;
             this.iv = iv;
@@ -159,20 +159,20 @@ public class CryptoDataStr {
             this.sum = sum;
             this.pubkeyA = pubkeyA;
             this.pubkeyB = pubkeyB;
-            if (EccAes256K1P7.isTheKeyPair(pubKeyBytesA, priKeyBytes)) {
-                this.prikeyA = priKey;
-            } else if (EccAes256K1P7.isTheKeyPair(pubKeyBytesB, priKeyBytes)) {
-                this.prikeyB = priKey;
-            } else this.message = "The priKey doesn't match pubKeyA or pubKeyB.";
+            if (EccAes256K1P7.isTheKeyPair(pubkeyBytesA, prikeyBytes)) {
+                this.prikeyA = prikey;
+            } else if (EccAes256K1P7.isTheKeyPair(pubkeyBytesB, prikeyBytes)) {
+                this.prikeyB = prikey;
+            } else this.message = "The prikey doesn't match pubkeyA or pubkeyB.";
         } else
             this.message = "Constructing wrong. " + EncryptType.AsyOneWay + " or" + EncryptType.AsyTwoWay + " is required for this constructor. ";
 
     }
-    public CryptoDataStr(AlgorithmId alg, EncryptType asyOneWayOrAsyTwoWayType, String pubkeyA, String pubkeyB, String iv, String cipher, @Nullable String sum, char[] priKey) {
+    public CryptoDataStr(AlgorithmId alg, EncryptType asyOneWayOrAsyTwoWayType, String pubkeyA, String pubkeyB, String iv, String cipher, @Nullable String sum, char[] prikey) {
         if (asyOneWayOrAsyTwoWayType == EncryptType.AsyOneWay || asyOneWayOrAsyTwoWayType == EncryptType.AsyTwoWay) {
-            byte[] pubKeyBytesA = HexFormat.of().parseHex(pubkeyA);
-            byte[] pubKeyBytesB = HexFormat.of().parseHex(pubkeyB);
-            byte[] priKeyBytes = BytesUtils.hexCharArrayToByteArray(priKey);
+            byte[] pubkeyBytesA = HexFormat.of().parseHex(pubkeyA);
+            byte[] pubkeyBytesB = HexFormat.of().parseHex(pubkeyB);
+            byte[] prikeyBytes = BytesUtils.hexCharArrayToByteArray(prikey);
             if(alg!=null)this.alg=alg;
             else this.alg = AlgorithmId.EccAes256K1P7_No1_NrC7;
             this.type = asyOneWayOrAsyTwoWayType;
@@ -181,11 +181,11 @@ public class CryptoDataStr {
             this.sum = sum;
             this.pubkeyA = pubkeyA;
             this.pubkeyB = pubkeyB;
-            if (EccAes256K1P7.isTheKeyPair(pubKeyBytesA, priKeyBytes)) {
-                this.prikeyA = priKey;
-            } else if (EccAes256K1P7.isTheKeyPair(pubKeyBytesB, priKeyBytes)) {
-                this.prikeyB = priKey;
-            } else this.message = "The priKey doesn't match pubKeyA or pubKeyB.";
+            if (EccAes256K1P7.isTheKeyPair(pubkeyBytesA, prikeyBytes)) {
+                this.prikeyA = prikey;
+            } else if (EccAes256K1P7.isTheKeyPair(pubkeyBytesB, prikeyBytes)) {
+                this.prikeyB = prikey;
+            } else this.message = "The prikey doesn't match pubkeyA or pubkeyB.";
         } else
             this.message = "Constructing wrong. " + EncryptType.AsyOneWay + " or" + EncryptType.AsyTwoWay + " is required for this constructor. ";
 
@@ -280,23 +280,23 @@ public class CryptoDataStr {
         return cryptoDataStr;
     }
 
-    private void checkKeyPairAndSetPriKey(CryptoDataStr cryptoDataStr, char[] key) {
+    private void checkKeyPairAndSetPrikey(CryptoDataStr cryptoDataStr, char[] key) {
         byte[] keyBytes = BytesUtils.hexCharArrayToByteArray(key);
         if (cryptoDataStr.getPubkeyA() != null) {
-            byte[] pubKey = HexFormat.of().parseHex(cryptoDataStr.getPubkeyA());
-            if (EccAes256K1P7.isTheKeyPair(pubKey, keyBytes)) {
+            byte[] pubkey = HexFormat.of().parseHex(cryptoDataStr.getPubkeyA());
+            if (EccAes256K1P7.isTheKeyPair(pubkey, keyBytes)) {
                 cryptoDataStr.setPrikeyA(key);
                 return;
             } else cryptoDataStr.setPrikeyB(key);
         }
         if (cryptoDataStr.getPubkeyB() != null) {
-            byte[] pubKey = HexFormat.of().parseHex(cryptoDataStr.getPubkeyB());
-            if (EccAes256K1P7.isTheKeyPair(pubKey, keyBytes)) {
+            byte[] pubkey = HexFormat.of().parseHex(cryptoDataStr.getPubkeyB());
+            if (EccAes256K1P7.isTheKeyPair(pubkey, keyBytes)) {
                 cryptoDataStr.setPrikeyB(key);
                 return;
             } else cryptoDataStr.setPrikeyA(key);
         }
-        cryptoDataStr.setMessage("No pubKeyA or pubKeyB.");
+        cryptoDataStr.setMessage("No pubkeyA or pubkeyB.");
     }
 
     public void fromJson1(String json) {
@@ -306,7 +306,7 @@ public class CryptoDataStr {
         this.data = cryptoDataStr.getData();
         this.cipher = cryptoDataStr.getCipher();
         this.pubkeyA = cryptoDataStr.getPubkeyA();
-//        this.pubKeyB = cryptoData.getPubKeyB();
+//        this.pubkeyB = cryptoData.getPubkeyB();
         this.sum = cryptoDataStr.getSum();
 //        this.badSum = cryptoData.isBadSum();
         this.iv = cryptoDataStr.getIv();
@@ -358,14 +358,14 @@ public class CryptoDataStr {
     public void clearAllSensitiveData() {
         clearPassword();
         clearSymkey();
-        clearPriKeyA();
-        clearPriKeyB();
+        clearPrikeyA();
+        clearPrikeyB();
     }
 
     public void clearAllSensitiveDataButSymkey() {
         clearPassword();
-        clearPriKeyA();
-        clearPriKeyB();
+        clearPrikeyA();
+        clearPrikeyB();
     }
 
     public EncryptType getType() {
@@ -474,12 +474,12 @@ public class CryptoDataStr {
         this.symkey = null;
     }
 
-    public void clearPriKeyA() {
+    public void clearPrikeyA() {
         clearCharArray(prikeyA);
         this.prikeyA = null;
     }
 
-    public void clearPriKeyB() {
+    public void clearPrikeyB() {
         clearCharArray(prikeyB);
         this.prikeyB = null;
     }

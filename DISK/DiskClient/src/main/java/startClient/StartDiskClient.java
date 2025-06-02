@@ -1,5 +1,6 @@
 package startClient;
 
+import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import ui.Shower;
@@ -12,7 +13,6 @@ import data.apipData.RequestBody;
 import clients.ApipClient;
 import clients.DiskClient;
 import data.fcData.DiskItem;
-import handlers.Handler;
 import server.ApipApiNames;
 import core.crypto.CryptoDataStr;
 import core.crypto.Hash;
@@ -43,37 +43,42 @@ public class StartDiskClient {
     public static DiskClient diskClient;
     private static Settings settings;
     public static String clientName= Service.ServiceType.DISK.name();
-    public static final Object[] modules = new Object[]{
-            Service.ServiceType.APIP,
-            Service.ServiceType.DISK,
-            Handler.HandlerType.HAT,
-            Handler.HandlerType.DISK
-    };
+
 //    public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP, Service.ServiceType.DISK};
     public static Map<String,Object> settingMap = new HashMap<>();
 
     public static final String MY_DATA_DIR = System.getProperty("user.home")+"/myData";
-//    public static HandlerType[] requiredHandlers = new HandlerType[]{
-//            HandlerType.HAT,
-//            HandlerType.DISK
-//    };
+
     public static void main(String[] args) {
         br = new BufferedReader(new InputStreamReader(System.in));
         Menu.welcome(clientName);
+
+        List<data.fcData.Module> modules = new ArrayList<>();
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.DISK.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.HAT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.DISK.name()));
 
         settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
         apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);//settings.getApipAccount().getClient();
         diskClient = (DiskClient) settings.getClient(Service.ServiceType.DISK);//settings.getDiskAccount().getClient();
         byte[] symkey = settings.getSymkey();
-
-        disk(symkey);
+        while(true) {
+            try {
+                disk(symkey);
+                return;
+            } catch (Exception e) {
+                if(diskClient==null)
+                    System.out.println("Please setup the DISK API.");
+            }
+        }
     }
 
     private static void disk(byte[] symkey) {
         Menu menu = new Menu();
         menu.setTitle("Disk Client");
-        menu.add("getService","Ping free","Ping","Put","Get","Get by POST","Check","Check by POST","List","List by POST","Carve","SignIn","SignIn encrypted","Settings");
+        menu.add("getService","Ping free","Ping","Put","Get","Get by POST","Check","Check by POST","List","List by POST","Carve","SignIn","Settings");
         while (true) {
             menu.show();
             int choice = menu.choose(br);
@@ -89,9 +94,9 @@ public class StartDiskClient {
                 case 9 -> list(RequestMethod.GET, AuthType.FREE, br);
                 case 10 -> list(RequestMethod.POST, AuthType.FC_SIGN_BODY, br);
                 case 11 -> carve(br);
-                case 12 -> signIn(symkey);
-                case 13 -> signInEcc(symkey);
-                case 14 -> settings.setting(br, null);
+//                case 12 -> signIn(symkey);
+                case 12 -> signInEcc(symkey);
+                case 13 -> settings.setting(br, null);
                 case 0 -> {
                     return;
                 }
@@ -137,23 +142,118 @@ public class StartDiskClient {
     }
 
     public static void put(BufferedReader br){
-        String fileName = getFileName(br);
-        String dataResponse = diskClient.put(fileName);
-        showPutResult(dataResponse, DiskApiNames.PUT);
+        String fileName = Inputer.inputPath(br, "Input the file path and name, or directory path:");
+
+        boolean isEncrypt = Inputer.askIfYes(br, "Encrypt the files?");
+
+        File file = new File(fileName);
+        
+        if (file.isDirectory()) {
+            System.out.println("Processing directory: " + fileName);
+            putDirectory(file, isEncrypt);
+        } else {
+            putFile(fileName, isEncrypt);
+        }
         Menu.anyKeyToContinue(br);
+    }
+
+    private static void putDirectory(File directory, boolean isEncrypt) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.getName().startsWith(".")) {
+                    continue;
+                }
+                if (file.isDirectory()) {
+                    putDirectory(file, isEncrypt);
+                } else {
+                    putFile(file.getAbsolutePath(), isEncrypt);
+                }
+            }
+        }
+    }
+
+    private static void putFile(String fileName, boolean isEncrypt) {
+        File file = new File(fileName);
+        if(!file.exists()) {
+            System.out.println("File does not exist: " + fileName);
+            return;
+        }
+        if (isEncrypt) {
+            try {
+                String rawHash = Hash.sha256x2(file);
+                System.out.println("The DID is:" + rawHash);
+            } catch (IOException e) {
+                System.out.println("Failed to hash file:" + fileName);
+            }
+            fileName = Encryptor.encryptFile(fileName, diskClient.getApiAccount().getUserPubkey());
+            System.out.println("Encrypted to: " + fileName);
+        }
+        String dataResponse = diskClient.put(fileName);
+        if(Hex.isHex32(dataResponse)){
+            if(isEncrypt)System.out.println(file.getName()+" is encrypted and saved as:\n\t"+dataResponse);
+            else System.out.println(file.getName()+" is saved as:\n\t"+dataResponse);
+        }
+        else System.out.println(dataResponse);
+        System.out.println();
     }
 
     public static void carve(BufferedReader br){
-        String fileName = getFileName(br);
-        String dataResponse = diskClient.carve(fileName);
-        showPutResult(dataResponse, ApipApiNames.Carve);
+        String fileName = Inputer.inputPath(br, "Input the file path and name, or directory path:");
+        
+        boolean isEncrypt = Inputer.askIfYes(br, "Encrypt the files?");
+
+        File file = new File(fileName);
+        
+        if (file.isDirectory()) {
+            System.out.println("Processing directory: " + fileName);
+            carveDirectory(file, isEncrypt);
+        } else {
+            carveFile(fileName, isEncrypt);
+        }
         Menu.anyKeyToContinue(br);
     }
 
-    private static void showPutResult(String dataResponse, String apiName) {
-        if(Hex.isHexString(dataResponse)) {
-            System.out.println("Done to "+apiName+":" + dataResponse);
-        }else System.out.println(dataResponse);
+    private static void carveDirectory(File directory, boolean isEncrypt) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                // Skip files and directories that start with '.'
+                if (file.getName().startsWith(".")) {
+                    continue;
+                }
+                if (file.isDirectory()) {
+                    carveDirectory(file, isEncrypt);
+                } else {
+                    carveFile(file.getAbsolutePath(), isEncrypt);
+                }
+            }
+        }
+    }
+
+    private static void carveFile(String fileName, boolean isEncrypt) {
+        File file = new File(fileName);
+        if(!file.exists()) {
+            System.out.println("File does not exist: " + fileName);
+            return;
+        }
+        if (isEncrypt) {
+            try {
+                String rawHash = Hash.sha256x2(file);
+                System.out.println("The DID is:" + rawHash);
+            } catch (IOException e) {
+                System.out.println("Failed to hash file:" + fileName);
+            }
+            fileName = Encryptor.encryptFile(fileName, diskClient.getApiAccount().getUserPubkey());
+            System.out.println("Encrypted to: " + fileName);
+        }
+        String dataResponse = diskClient.carve(fileName);
+        if(Hex.isHex32(dataResponse)){
+            if(isEncrypt)System.out.println(file.getName()+" is encrypted and carved as:\n\t"+dataResponse);
+            else System.out.println(file.getName()+" is carved as:\n\t"+dataResponse);
+        }
+        else System.out.println(dataResponse);
+        System.out.println();
     }
 
     @Nullable
@@ -186,6 +286,10 @@ public class StartDiskClient {
         String path = Inputer.inputString(br,"Input the destination path. Default:"+MY_DATA_DIR);
         if("".equals(path))path = MY_DATA_DIR;
         String gotFileId = diskClient.get(method,authType,filename,path);
+        if(gotFileId==null){
+            System.out.println(diskClient.getFcClientEvent().getResponseBody().getMessage());
+            return;
+        }
         System.out.println("Got:"+Path.of(path,gotFileId));
         if(!Hex.isHexString(gotFileId))return;
         tryToDecryptFile(path, gotFileId,symkey);
@@ -194,7 +298,8 @@ public class StartDiskClient {
 
     private static void tryToDecryptFile(String path, String gotFileId,byte[] symkey) {
         try {
-            JsonUtils.readOneJsonFromFile(path, gotFileId, CryptoDataStr.class);
+            CryptoDataStr cryptoDataStr = JsonUtils.readOneJsonFromFile(path, gotFileId, CryptoDataStr.class);
+            if(cryptoDataStr==null)return;
             String did = Decryptor.decryptFile(path, gotFileId,symkey, diskClient.getApiAccount().getUserPrikeyCipher());
             if(did!= null) System.out.println("Decrypted to:"+Path.of(path,did));
         } catch (IOException ignore) {}

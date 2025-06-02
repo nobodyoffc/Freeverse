@@ -44,9 +44,9 @@ public class HandlerTest {
     private static void testHandler(Settings settings, LocalDB.SortType sortType) {
         System.out.println("\nTesting Handler with " + sortType + " sort type using LevelDB...");
 
-        Handler<TestEntity> handler = createHandlerWithLevelDB(
+        Manager<TestEntity> manager = createHandlerWithLevelDB(
             settings,
-            Handler.HandlerType.TEST,
+            Manager.ManagerType.TEST,
             sortType,
             TestEntity.class
         );
@@ -59,8 +59,8 @@ public class HandlerTest {
             // Add timeout protection for potentially problematic operations
             Thread operationThread = new Thread(() -> {
                 try {
-                    handler.localDB.put("1", entity1);
-                    TestEntity retrieved = handler.localDB.get("1");
+                    manager.localDB.put("1", entity1);
+                    TestEntity retrieved = manager.localDB.get("1");
                     System.out.println("Retrieved entity: " + retrieved);
                 } catch (Exception e) {
                     System.err.println("Error during put/get operations: " + e.getMessage());
@@ -90,8 +90,8 @@ public class HandlerTest {
             
             Thread putAllThread = new Thread(() -> {
                 try {
-                    handler.localDB.putAll(testData);
-                    Map<String, TestEntity> allEntities = handler.localDB.getAll();
+                    manager.localDB.putAll(testData);
+                    Map<String, TestEntity> allEntities = manager.localDB.getAll();
                     System.out.println("All entities: " + allEntities);
                 } catch (Exception e) {
                     System.err.println("Error during putAll/getAll operations: " + e.getMessage());
@@ -115,20 +115,20 @@ public class HandlerTest {
 
             // Test search functionality
             System.out.println("\n3. Testing search functionality");
-            List<TestEntity> searchResults = handler.searchInValue("Test1");
+            List<TestEntity> searchResults = manager.searchInValue("Test1");
             System.out.println("Search results for 'Test1': " + searchResults);
 
             // Test map operations
             System.out.println("\n4. Testing map operations");
-            handler.createMap("test_map");
-            handler.localDB.putInMap("test_map", "key1", "value1");
-            String mapValue = handler.localDB.getFromMap("test_map", "key1");
+            manager.createMap("test_map");
+            manager.localDB.putInMap("test_map", "key1", "value1");
+            String mapValue = manager.localDB.getFromMap("test_map", "key1");
             System.out.println("Retrieved map value: " + mapValue);
 
             // Test list operations
             System.out.println("\n5. Testing list operations");
             try {
-                List<TestEntity> itemList = handler.localDB.getList(10, null, null, false, null, null, true, false);
+                List<TestEntity> itemList = manager.localDB.getList(10, null, null, false, null, null, true, false);
                 if (itemList != null && !itemList.isEmpty()) {
                     System.out.println("Retrieved items: " + itemList);
                 } else {
@@ -141,21 +141,21 @@ public class HandlerTest {
 
             // Test removal operations
             System.out.println("\n6. Testing removal operations");
-            handler.remove("1");
-            TestEntity removedEntity = handler.localDB.get("1");
+            manager.remove("1");
+            TestEntity removedEntity = manager.localDB.get("1");
             System.out.println("Entity after removal: " + removedEntity);
 
             // Test metadata operations
             System.out.println("\n7. Testing metadata operations");
-            handler.localDB.putState("test_meta", "meta_value");
-            Object metaValue = handler.localDB.getState("test_meta");
+            manager.localDB.putState("test_meta", "meta_value");
+            Object metaValue = manager.localDB.getState("test_meta");
             System.out.println("Retrieved metadata: " + metaValue);
 
             // Test index operations (if applicable)
             if (sortType != LocalDB.SortType.NO_SORT) {
                 System.out.println("\n8. Testing index operations");
-                Long index = handler.localDB.getIndexById("2");
-                String id = handler.localDB.getIdByIndex(index);
+                Long index = manager.localDB.getIndexById("2");
+                String id = manager.localDB.getIdByIndex(index);
                 System.out.println("Index for id '2': " + index);
                 System.out.println("Id for index " + index + ": " + id);
             }
@@ -163,17 +163,17 @@ public class HandlerTest {
             // Test removal tracking
             System.out.println("\n9. Testing removal tracking");
             List<String> idsToRemove = Arrays.asList("2", "3");
-            handler.markAsLocallyRemoved(idsToRemove);
-            handler.markAsOnChainDeleted(idsToRemove);
+            manager.markAsLocallyRemoved(idsToRemove);
+            manager.markAsOnChainDeleted(idsToRemove);
 
             // Clean up
             System.out.println("\n10. Testing cleanup operations");
-            handler.clearDB();
-            Map<String, TestEntity> afterClear = handler.localDB.getAll();
+            manager.clearDB();
+            Map<String, TestEntity> afterClear = manager.localDB.getAll();
             System.out.println("Entities after clear: " + afterClear);
 
         } finally {
-            handler.close();
+            manager.close();
             System.out.println("\nHandler test with " + sortType + " completed.");
         }
     }
@@ -181,14 +181,14 @@ public class HandlerTest {
     /**
      * Create a Handler with LevelDB backing store
      */
-    private static <T extends FcEntity> Handler<T> createHandlerWithLevelDB(
+    private static <T extends FcEntity> Manager<T> createHandlerWithLevelDB(
             Settings settings,
-            Handler.HandlerType handlerType,
+            Manager.ManagerType managerType,
             LocalDB.SortType sortType,
             Class<T> itemClass) {
             
         // Create a custom Handler constructor that uses LevelDB
-        return new Handler<T>(settings, handlerType, sortType, itemClass, true, true) {
+        return new Manager<T>(settings, managerType, sortType, itemClass, true, true) {
             @Override
             protected void initializeDB(String fid, String sid, String dbPath, String dbName, 
                                         LocalDB.SortType sortType,

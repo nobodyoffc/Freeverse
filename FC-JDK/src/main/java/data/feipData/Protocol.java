@@ -16,7 +16,6 @@ public class Protocol extends FcObject {
 	private String title;
 	private String owner;
 	private String[] waiters;
-	private String birthTxId;
 	private Long birthTime;
 	private Long birthHeight;
 	private String lastTxId;
@@ -87,12 +86,6 @@ public class Protocol extends FcObject {
 	}
 	public void setOwner(String owner) {
 		this.owner = owner;
-	}
-	public String getBirthTxId() {
-		return birthTxId;
-	}
-	public void setBirthTxId(String birthTxId) {
-		this.birthTxId = birthTxId;
 	}
 	public Long getBirthTime() {
 		return birthTime;

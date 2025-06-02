@@ -1,5 +1,6 @@
 package startFEIP;
 
+import data.fcData.Module;
 import ui.Menu;
 import config.Settings;
 import config.Starter;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,9 +38,7 @@ public class StartFEIP {
 
 	private final static String serverName = "FEIP";
 
-	public static final Object[] modules = new Object[]{
-			Service.ServiceType.ES
-	};
+
 
 	public static void main(String[] args) {
 		Menu.welcome(serverName);
@@ -47,6 +47,9 @@ public class StartFEIP {
 		Map<String,Object>  settingMap = new HashMap<> ();
 		settingMap.put(Settings.OP_RETURN_PATH, FileUtils.getUserDir()+"/opreturn");
 		settingMap.put(Settings.LISTEN_PATH,settingMap.get(Settings.OP_RETURN_PATH));
+
+		List<Module> modules = new ArrayList<>();
+		modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
 
 		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules,null);
 		if(settings ==null)return;

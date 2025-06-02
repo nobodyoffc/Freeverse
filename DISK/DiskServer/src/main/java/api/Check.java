@@ -1,7 +1,8 @@
 package api;
 
 import config.Settings;
-import handlers.DiskHandler;
+import handlers.DiskManager;
+import handlers.Manager;
 import server.ApipApiNames;
 import initial.Initiator;
 import server.DiskApiNames;
@@ -58,8 +59,8 @@ public class Check extends HttpServlet {
             replier.replyOtherErrorHttp("It is not a hex string of a 32 byte array.", did, response);
             return;
         }
-        String path = DiskHandler.makeDataPath(did,settings);
-        Boolean isFileExists = Boolean.TRUE.equals(DiskHandler.checkFileOfDisk(path, did));
+        DiskManager diskManager = (DiskManager) settings.getManager(Manager.ManagerType.DISK);
+        Boolean isFileExists = Boolean.TRUE.equals(diskManager.checkFileOfDisk( did));
         replier.reply0SuccessHttp(isFileExists,response);
     }
 }

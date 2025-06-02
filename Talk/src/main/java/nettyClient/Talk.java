@@ -5,11 +5,13 @@ import config.Starter;
 import clients.DiskClient;
 import clients.TalkClient;
 import data.feipData.Service;
-import handlers.Handler;
+import handlers.Manager;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Talk{
@@ -18,27 +20,27 @@ public class Talk{
 
     private String clientName= Service.ServiceType.TALK.name();
     private Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP, Service.ServiceType.TALK};
-    public static final Object[] modules = new Object[]{
-            Service.ServiceType.APIP,
-            Service.ServiceType.TALK,
-            Handler.HandlerType.CID,
-            Handler.HandlerType.CASH,
-            Handler.HandlerType.SESSION,
-            Handler.HandlerType.MAIL,
-            Handler.HandlerType.CONTACT,
-            Handler.HandlerType.GROUP,
-            Handler.HandlerType.TEAM,
-            Handler.HandlerType.HAT,
-            Handler.HandlerType.DISK,
-            Handler.HandlerType.TALK_ID,
-            Handler.HandlerType.TALK_UNIT
-    };
 
     private Map<String,Object> settingMap = new HashMap<>();
 
     public static void main(String[] args) {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
         Talk talk = new Talk();
+
+        List<data.fcData.Module> modules = new ArrayList<>();
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.TALK.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CID.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.SESSION.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.MAIL.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CONTACT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.GROUP.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.TEAM.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.HAT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.DISK.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.TALK_ID.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.TALK_UNIT.name()));
 
         talk.settings = Starter.startClient(talk.clientName,
                 talk.getSettingMap(), br, modules, null);

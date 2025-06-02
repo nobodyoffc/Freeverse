@@ -12,6 +12,9 @@ import config.ApiAccount;
 import config.Configure;
 import data.feipData.Service;
 
+import static config.Settings.getFreeApipClient;
+import static data.feipData.Service.ServiceType.APIP;
+
 public class ClientGroup implements Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
@@ -61,9 +64,7 @@ public class ClientGroup implements Serializable {
     }
 
     public void addToFirstClient(String accountId, Object client) {
-        if (accountIds.isEmpty()) {
-            accountIds.add(0, accountId);
-        }
+        accountIds.add(0,accountId);
         if(clientMap==null)clientMap = new HashMap<>();
         clientMap.put(accountId, client);
     }
@@ -87,6 +88,17 @@ public class ClientGroup implements Serializable {
                 System.out.println("Failed to get ApiAccount "+accountId+". Check the apiAccount in config file.");
                 System.exit(-1);
             }
+
+            ApipClient apipClient;
+            switch (groupType) {
+                case ES, REDIS, NASA_RPC,APIP -> {}
+                default -> {
+                    apipClient = (ApipClient) settings.getClient(APIP);
+                    if(apipClient==null) apipClient = getFreeApipClient();
+                    apiAccount.setApipClient(apipClient);
+                }
+            }
+
             addApiAccount(apiAccount);
             Object client = apiAccount.connectApi(configure.getApiProviderMap().get(apiAccount.getProviderId()), symKey, br);
             if(client==null)break;

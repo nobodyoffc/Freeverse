@@ -6,8 +6,8 @@ import data.fchData.*;
 import config.Settings;
 import data.feipData.Service;
 import data.feipData.serviceParams.ApipParams;
-import handlers.Handler;
-import handlers.SessionHandler;
+import handlers.Manager;
+import handlers.SessionManager;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -118,7 +118,7 @@ public class FcHttpRequestHandler {
         try {
             FcSession fcSession;
             String pubKey;
-            SessionHandler sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
+            SessionManager sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
             if (sessionHandler == null) {
                 System.out.println("Failed to get session handler.");
                 replier.replyOtherErrorHttp("Failed to get session handler.", response);

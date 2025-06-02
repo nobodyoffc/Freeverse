@@ -11,8 +11,8 @@ import java.util.concurrent.ExecutorService;
 
 import config.Settings;
 import constants.Constants;
-import handlers.AccountHandler;
-import handlers.Handler;
+import handlers.AccountManager;
+import handlers.Manager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,12 +21,12 @@ import utils.NumberUtils;
 
 public class AutoTask {
     private AutoTaskType type;
-    private Handler.HandlerType handlerType;
+    private Manager.ManagerType managerType;
     private String methodName;
     private Integer interval;
     private String listenFile;
     private String listenDir;
-    final static Logger log = LoggerFactory.getLogger(AccountHandler.class);
+    final static Logger log = LoggerFactory.getLogger(AccountManager.class);
 
     private transient Settings settings;
     private static ScheduledExecutorService intervalExecutor;
@@ -38,8 +38,8 @@ public class AutoTask {
         NULL, LISTEN_DIR
     }
 
-    public AutoTask(Handler.HandlerType handlerType, String methodName, Integer interval, String listenFile, String listenDir) {
-        this.handlerType = handlerType;
+    public AutoTask(Manager.ManagerType managerType, String methodName, Integer interval, String listenFile, String listenDir) {
+        this.managerType = managerType;
         this.methodName = methodName;
         this.interval = interval;
         this.listenFile = listenFile;
@@ -53,12 +53,12 @@ public class AutoTask {
         }else this.type = AutoTaskType.NULL;
     }
 
-    public AutoTask(Handler.HandlerType handlerType, String methodName, String listenDir) {
-        this(handlerType, methodName, null, null, listenDir);
+    public AutoTask(Manager.ManagerType managerType, String methodName, String listenDir) {
+        this(managerType, methodName, null, null, listenDir);
     }
 
-    public AutoTask(Handler.HandlerType handlerType, String methodName, Integer intervalSec) {
-        this(handlerType, methodName, intervalSec, null, null);
+    public AutoTask(Manager.ManagerType managerType, String methodName, Integer intervalSec) {
+        this(managerType, methodName, intervalSec, null, null);
     }
     
     public AutoTaskType getType() {
@@ -101,12 +101,12 @@ public class AutoTask {
         this.listenDir = listenDir;
     }
 
-    public Handler.HandlerType getHandlerType() {
-        return handlerType;
+    public Manager.ManagerType getHandlerType() {
+        return managerType;
     }
 
-    public void setHandlerType(Handler.HandlerType handlerType) {
-        this.handlerType = handlerType;
+    public void setHandlerType(Manager.ManagerType managerType) {
+        this.managerType = managerType;
     }
 
     public Settings getSettings() {
@@ -166,14 +166,14 @@ public class AutoTask {
     private static void scheduleIntervalTask(AutoTask task, ScheduledExecutorService executor) {
         try {
             // Get the handler from settings
-            Handler<?> handler = task.getSettings().getHandler(task.getHandlerType());
-            if (handler == null) {
+            Manager<?> manager = task.getSettings().getManager(task.getHandlerType());
+            if (manager == null) {
                 log.info("Handler not found for type: " + task.getHandlerType());
                 return;
             }
             
             // Get the method to invoke
-            Method method = handler.getClass().getMethod(task.getMethodName());
+            Method method = manager.getClass().getMethod(task.getMethodName());
             
             // Calculate the interval in milliseconds
             long intervalMillis = task.getInterval() * 1000L;
@@ -181,7 +181,7 @@ public class AutoTask {
             // Schedule the task to run at the specified interval
             executor.scheduleAtFixedRate(() -> {
                 try {
-                    method.invoke(handler); // Invoke the method on the handler instance
+                    method.invoke(manager); // Invoke the method on the handler instance
                 } catch (Exception e) {
                     log.info("Error executing interval task: " + task.getMethodName(), e);
                 }
@@ -205,14 +205,14 @@ public class AutoTask {
             }
             
             // Get the handler from settings
-            Handler<?> handler = task.getSettings().getHandler(task.getHandlerType());
-            if (handler == null) {
+            Manager<?> manager = task.getSettings().getManager(task.getHandlerType());
+            if (manager == null) {
                 log.info("Handler not found for type: " + task.getHandlerType());
                 return;
             }
             
             // Get the method to invoke
-            Method method = handler.getClass().getMethod(task.getMethodName());
+            Method method = manager.getClass().getMethod(task.getMethodName());
             
             // Create a watch service
             WatchService watchService = FileSystems.getDefault().newWatchService();
@@ -229,7 +229,7 @@ public class AutoTask {
                         Path changedFile = (Path) event.context();
                         if (changedFile.equals(filePath.getFileName())) {
                             // File has changed, invoke the method
-                            method.invoke(handler); // Invoke the method on the handler instance
+                            method.invoke(manager); // Invoke the method on the handler instance
 //                            log.info("File changed, executed: " + task.getMethodName());
                         }
                     }
@@ -261,14 +261,14 @@ public class AutoTask {
             }
             
             // Get the handler from settings
-            Handler<?> handler = task.getSettings().getHandler(task.getHandlerType());
-            if (handler == null) {
+            Manager<?> manager = task.getSettings().getManager(task.getHandlerType());
+            if (manager == null) {
                 log.info("Handler not found for type: " + task.getHandlerType());
                 return;
             }
             
             // Get the method to invoke
-            Method method = handler.getClass().getMethod(task.getMethodName());
+            Method method = manager.getClass().getMethod(task.getMethodName());
             
             // Create a watch service
             WatchService watchService = FileSystems.getDefault().newWatchService();
@@ -285,7 +285,7 @@ public class AutoTask {
                     WatchKey key = watchService.take();
                     for (WatchEvent<?> event : key.pollEvents()) {
                         // Directory has changed, invoke the method
-                        method.invoke(handler); // Invoke the method on the handler instance
+                        method.invoke(manager); // Invoke the method on the handler instance
 //                        log.info("Directory changed, executed: " + task.getMethodName());
                     }
                     key.reset();
@@ -352,17 +352,17 @@ public class AutoTask {
     public void checkTrigger(BufferedReader br) {
         switch (type) {
             case INTERVAL_SEC -> {
-                if (Inputer.askIfYes(br, this.handlerType.name() + "Handler." + this.methodName + " will auto run every " + this.interval + " seconds(" + NumberUtils.roundDouble2((double) this.interval / Constants.SEC_PER_DAY) + " days). Change it?")) {
+                if (Inputer.askIfYes(br, this.managerType.name() + "Handler." + this.methodName + " will auto run every " + this.interval + " seconds(" + NumberUtils.roundDouble2((double) this.interval / Constants.SEC_PER_DAY) + " days). Change it?")) {
                     interval = Inputer.inputInteger(br, "Input the interval seconds", 0, 0);
                 }
             }
             case LISTEN_FILE -> {
-                if (Inputer.askIfYes(br, this.handlerType.name() + "Handler." + this.methodName + " will auto run when the file " + this.listenFile + " is modified. Change it?")) {
+                if (Inputer.askIfYes(br, this.managerType.name() + "Handler." + this.methodName + " will auto run when the file " + this.listenFile + " is modified. Change it?")) {
                     listenFile = Inputer.inputString(br, "Input the file path", listenFile);
                 }
             }
             case LISTEN_DIR -> {
-                if (Inputer.askIfYes(br, this.handlerType.name() + "Handler." + this.methodName + " will auto run when the directory " + this.listenDir + " is modified. Change it?")) {
+                if (Inputer.askIfYes(br, this.managerType.name() + "Handler." + this.methodName + " will auto run when the directory " + this.listenDir + " is modified. Change it?")) {
                     listenDir = Inputer.inputString(br, "Input the directory path", listenDir);
                 }
             }

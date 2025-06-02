@@ -33,6 +33,14 @@ public class ApipApiNames {
     public static final String SN_19 = "sn19";
     public static final String SN_20 = "sn20";
     public static final String SN_21 = "sn21";
+    public static final String SN_22 = "sn22";
+    public static final String SN_23 = "sn23";
+    public static final String SN_24 = "sn24";
+    public static final String SN_25 = "sn25";
+    public static final String SN_26 = "sn26";
+    public static final String SN_27 = "sn27";
+    public static final String SN_28 = "sn28";
+    public static final String SN_29 = "sn29";
     public static final String Carve = "carve";
 
     public static String[] openAPIs;
@@ -45,35 +53,11 @@ public class ApipApiNames {
     public static String[] constructAPIs;
     public static String[] personalAPIs;
     public static String[] publishAPIs;
+    public static String[] financeAPIs;
     public static String[] walletAPIs;
     public static String[] cryptoAPIs;
     public static String[] endpointAPIs;
-    //APIP path
-//    public static final String APIP0V1Path = "/apip0/v1/";
-//    public static final String APIP1V1Path = "/apip1/v1/";
-//    public static final String APIP2V1Path = "/apip2/v1/";
-//    public static final String APIP3V1Path = "/apip3/v1/";
-//    public static final String APIP4V1Path = "/apip4/v1/";
-//    public static final String APIP5V1Path = "/apip5/v1/";
-//    public static final String APIP6V1Path = "/apip6/v1/";
-//    public static final String APIP7V1Path = "/apip7/v1/";
-//    public static final String APIP8V1Path = "/apip8/v1/";
-//    public static final String APIP9V1Path = "/apip9/v1/";
-//    public static final String APIP10V1Path = "/apip10/v1/";
-//    public static final String APIP11V1Path = "/apip11/v1/";
-//    public static final String APIP12V1Path = "/apip12/v1/";
-//    public static final String APIP13V1Path = "/apip13/v1/";
-//    public static final String APIP14V1Path = "/apip14/v1/";
-//    public static final String APIP15V1Path = "/apip15/v1/";
-//    public static final String APIP16V1Path = "/apip16/v1/";
-//    public static final String APIP17V1Path = "/apip17/v1/";
-//    public static final String APIP18V1Path = "/apip18/v1/";
-//    public static final String APIP19V1Path = "/apip19/v1/";
-//    public static final String APIP20V1Path = "/apip20/v1/";
-//    public static final String APIP21V1Path = "/apip21/v1/";
-//    public static final String FreeGetPath = "/freeGet/v1/";
-//    public static final String SwapHallPath = "/swapHall/v1/";
-//    public static final String ToolsPath = "/tools/";
+
     public static final String SIGN_IN = "signIn";
     public static final String PING = "ping";
     public static final String SIGN_IN_ECC = "signInEcc";
@@ -113,8 +97,8 @@ public class ApipApiNames {
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
     public static final String REPUTATION_HISTORY = "reputationHistory";
     public static final String NOBODY_SEARCH = "nobodySearch";
-    public static final String P_2_SH_BY_IDS = "p2shByIds";
-    public static final String P_2_SH_SEARCH = "p2shSearch";
+    public static final String MULTISIGN_BY_IDS = "p2shByIds";
+    public static final String MULTISIGN_SEARCH = "p2shSearch";
     public static final String PROTOCOL_BY_IDS = "protocolByIds";
     public static final String PROTOCOL_SEARCH = "protocolSearch";
     public static final String PROTOCOL_OP_HISTORY = "protocolOpHistory";
@@ -123,6 +107,7 @@ public class ApipApiNames {
     public static final String CODE_SEARCH = "codeSearch";
     public static final String CODE_OP_HISTORY = "codeOpHistory";
     public static final String CODE_RATE_HISTORY = "codeRateHistory";
+
     public static final String SERVICE_BY_IDS = "serviceByIds";
     public static final String GET_BEST_BLOCK = "getBestBlock";
     public static final String GET_SERVICES = "getServices";
@@ -162,6 +147,22 @@ public class ApipApiNames {
     public static final String MAIL_THREAD = "mailThread";
     public static final String STATEMENT_BY_IDS = "statementByIds";
     public static final String STATEMENT_SEARCH = "statementSearch";
+    public static final String ESSAY_BY_IDS = "essayByIds";
+    public static final String ESSAY_SEARCH = "essaySearch";
+    public static final String ESSAY_OP_HISTORY = "essayOpHistory";
+    public static final String ESSAY_RATE_HISTORY = "essayRateHistory";
+    public static final String REPORT_BY_IDS = "reportByIds";
+    public static final String REPORT_SEARCH = "reportSearch";
+    public static final String REPORT_OP_HISTORY = "reportOpHistory";
+    public static final String REPORT_RATE_HISTORY = "reportRateHistory";
+    public static final String PAPER_BY_IDS = "paperByIds";
+    public static final String PAPER_SEARCH = "paperSearch";
+    public static final String PAPER_OP_HISTORY = "paperOpHistory";
+    public static final String PAPER_RATE_HISTORY = "paperRateHistory";
+    public static final String BOOK_BY_IDS = "bookByIds";
+    public static final String BOOK_SEARCH = "bookSearch";
+    public static final String BOOK_OP_HISTORY = "bookOpHistory";
+    public static final String BOOK_RATE_HISTORY = "bookRateHistory";
     public static final String PROOF_BY_IDS = "proofByIds";
     public static final String PROOF_SEARCH = "proofSearch";
     public static final String PROOF_HISTORY = "proofHistory";
@@ -232,16 +233,17 @@ public class ApipApiNames {
                 CASH_SEARCH, CASH_BY_IDS,
                 FID_SEARCH, FID_BY_IDS,
                 OP_RETURN_SEARCH, OP_RETURN_BY_IDS,
-                P_2_SH_SEARCH, P_2_SH_BY_IDS,
+                MULTISIGN_SEARCH, MULTISIGN_BY_IDS,
                 TX_SEARCH, TX_BY_IDS, TX_BY_FID,
                 CHAIN_INFO, BLOCK_TIME_HISTORY, DIFFICULTY_HISTORY, HASH_RATE_HISTORY
         };
 
         identityAPIs = new String[]{
                 CID_SEARCH, CID_BY_IDS, CID_HISTORY,
-                FID_CID_SEEK, GET_FID_CID,
+                 FID_CID_SEEK, GET_FID_CID,
                 NOBODY_SEARCH, NOBODY_BY_IDS,
                 HOMEPAGE_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
+                NID_SEARCH,
                 GET_AVATAR, AVATARS
         };
 
@@ -265,11 +267,18 @@ public class ApipApiNames {
                 MAIL_SEARCH, MAIL_BY_IDS, MAILS_DELETED, MAIL_THREAD
         };
 
-        publishAPIs = new String[]{
+        financeAPIs = new String[]{
                 PROOF_SEARCH, PROOF_BY_IDS, PROOF_HISTORY,
-                STATEMENT_SEARCH, STATEMENT_BY_IDS, NID_SEARCH,
                 TOKEN_SEARCH, TOKEN_BY_IDS, TOKEN_HISTORY,
                 TOKEN_HOLDER_SEARCH, TOKEN_HOLDERS_BY_IDS, MY_TOKENS
+        };
+
+        publishAPIs = new String[]{
+                STATEMENT_SEARCH, STATEMENT_BY_IDS,
+                ESSAY_SEARCH, ESSAY_BY_IDS, ESSAY_OP_HISTORY, ESSAY_RATE_HISTORY,
+                REPORT_SEARCH, REPORT_BY_IDS, REPORT_OP_HISTORY, REPORT_RATE_HISTORY,
+                PAPER_SEARCH, PAPER_BY_IDS, PAPER_OP_HISTORY, PAPER_RATE_HISTORY,
+                BOOK_SEARCH, BOOK_BY_IDS, BOOK_OP_HISTORY, BOOK_RATE_HISTORY
         };
 
         walletAPIs = new String[]{
@@ -298,6 +307,7 @@ public class ApipApiNames {
         apiList.addAll(java.util.List.of(constructAPIs));
         apiList.addAll(java.util.List.of(personalAPIs));
         apiList.addAll(java.util.List.of(publishAPIs));
+        apiList.addAll(java.util.List.of(financeAPIs));
         apiList.addAll(java.util.List.of(walletAPIs));
         apiList.addAll(java.util.List.of(cryptoAPIs));
         apiList.addAll(java.util.List.of(endpointAPIs));

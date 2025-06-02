@@ -7,13 +7,12 @@ import core.crypto.Decryptor;
 import core.crypto.EncryptType;
 import core.crypto.KeyTools;
 import data.fcData.*;
-import handlers.AccountHandler;
+import handlers.*;
+import handlers.AccountManager;
 
 import constants.IndicesNames;
 import constants.CodeMessage;
-import handlers.SessionHandler;
-import handlers.TalkUnitHandler;
-import handlers.TalkUnitSender;
+import handlers.SessionManager;
 import io.netty.channel.*;
 import io.netty.handler.timeout.IdleStateEvent;
 
@@ -87,7 +86,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
             }
 
             TalkUnit decryptedTalkUnit;
-            SessionHandler fcSessionHandler = talkServer.getFcSessionHandler();
+            SessionManager fcSessionHandler = talkServer.getFcSessionHandler();
 
 
             byte[] dealerPrikey = talkServer.getDealerPrikey();
@@ -116,9 +115,9 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     }
 
-    private boolean handleDealerTalkUnit(ChannelHandlerContext ctx, TalkUnit decryptedTalkUnit, SessionHandler fcSessionHandler, byte[] dealerPrikey) {
+    private boolean handleDealerTalkUnit(ChannelHandlerContext ctx, TalkUnit decryptedTalkUnit, SessionManager fcSessionHandler, byte[] dealerPrikey) {
         TalkUnit parsedTalkUnit;
-        TalkUnitHandler talkUnitHandler = talkServer.getTalkUnitHandler();
+        TalkUnitManager talkUnitHandler = talkServer.getTalkUnitHandler();
         parsedTalkUnit = parseTalkUnitData(decryptedTalkUnit, dealerPrikey, fcSessionHandler);
         if(parsedTalkUnit==null) return true;
 
@@ -182,7 +181,7 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
         }
     }
 
-    private boolean sendToAll(String fromFid, TalkUnit talkUnit, List<String> toFidList, SessionHandler sessionHandler, Map<String,Set<Channel>> fidChannelsMap, Long price, AccountHandler accountHandler) {
+    private boolean sendToAll(String fromFid, TalkUnit talkUnit, List<String> toFidList, SessionManager sessionHandler, Map<String,Set<Channel>> fidChannelsMap, Long price, AccountManager accountHandler) {
         if(talkUnit==null)return false;
         List<String> sentFidList = new ArrayList<>();
         byte[] bytes=null;

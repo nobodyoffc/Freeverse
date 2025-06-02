@@ -1,11 +1,11 @@
 package server.reward;
 
-import handlers.CashHandler;
+import handlers.CashManager;
 import data.fcData.Affair;
 import data.fcData.DataSignTx;
 import data.fcData.Op;
 import core.fch.*;
-import handlers.CashHandler.SearchResult;
+import handlers.CashManager.SearchResult;
 import data.fchData.Cash;
 import data.fchData.SendTo;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -30,7 +30,7 @@ public class AffairMaker {
 
     private RewardInfo rewardInfo;
     private String account;
-    private OffLineTxInfo offLineTxInfo;
+    private RawTxInfo rawTxInfo;
     private List<Cash> meetCashList;
     private String msg;
     private final String sid;
@@ -84,7 +84,7 @@ public class AffairMaker {
 
         HashMap<String, SendTo> sendToMap = makeSendToMap(rewardInfo);
 
-        SearchResult<Cash> cashListReturn = CashHandler.getValidCashes(account,rewardT, null, null, sendToMap.size(), msg.getBytes().length,null,esClient, null);
+        SearchResult<Cash> cashListReturn = CashManager.getValidCashes(account,rewardT, null, null, sendToMap.size(), msg.getBytes().length,null,esClient, null);
 
         if(cashListReturn.hasError()){
             log.debug(cashListReturn.getMessage());
@@ -100,12 +100,12 @@ public class AffairMaker {
 
         addQualifiedPendingToPay(sendToMap);
 
-        OffLineTxInfo offLineTxInfo = new OffLineTxInfo();
-        offLineTxInfo.setSender(account);
-        offLineTxInfo.setOutputs(new ArrayList<>(sendToMap.values()));
-        offLineTxInfo.setMsg(msg);
+        RawTxInfo rawTxInfo = new RawTxInfo();
+        rawTxInfo.setSender(account);
+        rawTxInfo.setOutputs(new ArrayList<>(sendToMap.values()));
+        rawTxInfo.setOpReturn(msg);
 
-        String rawTxStr = TxCreator.makeCsTxRequiredJsonV1(offLineTxInfo,cashList);
+        String rawTxStr = TxCreator.makeCsTxRequiredJsonV1(rawTxInfo,cashList);
 
         dataSignTx.setUnsignedTxCs(rawTxStr);
         dataSignTx.setAlg(ALG_SIGN_TX_BY_CRYPTO_SIGN);
@@ -224,12 +224,12 @@ public class AffairMaker {
         this.account = account;
     }
 
-    public OffLineTxInfo getDataForOffLineTx() {
-        return offLineTxInfo;
+    public RawTxInfo getDataForOffLineTx() {
+        return rawTxInfo;
     }
 
-    public void setDataForOffLineTx(OffLineTxInfo offLineTxInfo) {
-        this.offLineTxInfo = offLineTxInfo;
+    public void setDataForOffLineTx(RawTxInfo rawTxInfo) {
+        this.rawTxInfo = rawTxInfo;
     }
 
     public List<Cash> getMeetCashList() {

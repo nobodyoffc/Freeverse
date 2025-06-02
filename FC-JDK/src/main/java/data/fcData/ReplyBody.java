@@ -3,9 +3,9 @@ package data.fcData;
 import config.Settings;
 import constants.CodeMessage;
 import data.fchData.Block;
-import handlers.AccountHandler;
-import handlers.Handler;
-import handlers.SessionHandler;
+import handlers.AccountManager;
+import handlers.Manager;
+import handlers.SessionManager;
 import server.HttpRequestChecker;
 import utils.FchUtils;
 
@@ -28,8 +28,8 @@ public class ReplyBody extends FcObject {
     protected Long bestHeight;
     protected String bestBlockId; //For rollback checking
     protected transient String sid;
-    protected transient AccountHandler accountHandler;
-    protected transient SessionHandler sessionHandler;
+    protected transient AccountManager accountHandler;
+    protected transient SessionManager sessionHandler;
     protected transient HttpRequestChecker httpRequestChecker;
     protected transient Settings settings;
     protected transient String finalJson;
@@ -40,10 +40,10 @@ public class ReplyBody extends FcObject {
     public ReplyBody(Settings settings) {
         this.sid = settings.getSid();
         this.settings = settings;
-        if (settings.getHandler(Handler.HandlerType.ACCOUNT) != null)
-            accountHandler = (AccountHandler) settings.getHandler(Handler.HandlerType.ACCOUNT);
-        if (settings.getHandler(Handler.HandlerType.SESSION) != null)
-            sessionHandler = (SessionHandler) settings.getHandler(Handler.HandlerType.SESSION);
+        if (settings.getManager(Manager.ManagerType.ACCOUNT) != null)
+            accountHandler = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
+        if (settings.getManager(Manager.ManagerType.SESSION) != null)
+            sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
     }
     public String replyError(int code){
         return reply(code,null,null);

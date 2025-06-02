@@ -1,7 +1,7 @@
 package data.fcData;
 
 public class Affair extends FcObject {
-    private String meta = "FC";
+    private Meta meta;
     private Op op; // For operating affairs.
     private Relation rela; //For description affairs.
     private String fid; //Subject
@@ -14,7 +14,6 @@ public class Affair extends FcObject {
     public static Affair makeNotifyAffair(String fromFid, String recipientFid, String message) {
         // Create payment notice affair
         Affair affair = new Affair();
-        affair.setMeta("FC");
         affair.setOp(Op.NOTIFY);
         affair.setFid(fromFid);
         affair.setFidB(recipientFid);
@@ -72,13 +71,6 @@ public class Affair extends FcObject {
         this.oidB = oidB;
     }
 
-    public String getMeta() {
-        return meta;
-    }
-
-    public void setMeta(String meta) {
-        this.meta = meta;
-    }
 
     public Op getOp() {
         return op;

@@ -5,8 +5,8 @@ import co.elastic.clients.elasticsearch.core.IndexResponse;
 import data.fcData.DiskItem;
 import data.fcData.Hat;
 import data.feipData.Service;
-import handlers.DiskHandler;
-import handlers.Handler;
+import handlers.DiskManager;
+import handlers.Manager;
 import server.ApipApiNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
@@ -28,7 +28,6 @@ import static constants.Strings.*;
 @WebServlet(name = ApipApiNames.Carve, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.Carve)
 public class Carve extends HttpServlet {
     private final Settings settings = Initiator.settings;
-    private final DiskHandler diskHandler = (DiskHandler) Initiator.settings.getHandler(Handler.HandlerType.DISK);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -48,6 +47,7 @@ public class Carve extends HttpServlet {
 
         //Do request
         InputStream inputStream = request.getInputStream();
+        DiskManager diskHandler = (DiskManager)settings.getManager(Manager.ManagerType.DISK);
         Hat hat = diskHandler.put(inputStream);
 
         Map<String,String> dataMap = new HashMap<>();

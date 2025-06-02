@@ -1,191 +1,280 @@
 package publish;
 
-import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import data.feipData.ProofHistory;
-import data.feipData.TokenHistory;
+import data.feipData.*;
+import utils.EsUtils;
 import utils.JsonUtils;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import static constants.OpNames.PUBLISH;
+
 public class PublishRollbacker {
 
-	public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		boolean error = false;
-		error = rollbackStatementAndNid(esClient,lastHeight);
-		error = rollbackProof(esClient,lastHeight);
-		error = rollbackToken(esClient,lastHeight);
+    public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
+        return rollbackEssay(esClient, lastHeight)
+				|| rollbackStatement(esClient, lastHeight)
+                || rollbackReport(esClient, lastHeight)
+                || rollbackPaper(esClient, lastHeight)
+                || rollbackBook(esClient, lastHeight);
+    }
 
-		return error;
-	}
-
-	public boolean rollbackStatementAndNid(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		List<String> indexList = new ArrayList<String>();
+	public boolean rollbackStatement(ElasticsearchClient esClient, long lastHeight) throws Exception {
+		List<String> indexList = new ArrayList<>();
 		indexList.add(IndicesNames.STATEMENT);
-		indexList.add(IndicesNames.NID);
-
 		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
-		
-		TimeUnit.SECONDS.sleep(3);
-		
+		TimeUnit.SECONDS.sleep(2);
 		return false;
 	}
-	
-	private boolean rollbackProof(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		boolean error = false;
-		Map<String, ArrayList<String>> resultMap = getEffectedProofs(esClient,lastHeight);
-		ArrayList<String> itemIdList = resultMap.get("itemIdList");
-		ArrayList<String> histIdList = resultMap.get("histIdList");
 
+    private boolean rollbackEssay(ElasticsearchClient esClient, long lastHeight) throws Exception {
+        boolean error = false;
+        Map<String, ArrayList<String>> resultMap = getEffectedEssays(esClient, lastHeight);
+        ArrayList<String> itemIdList = resultMap.get("itemIdList");
+        ArrayList<String> histIdList = resultMap.get("histIdList");
 
-		if(itemIdList==null||itemIdList.isEmpty())return error;
-		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'proof': ");
-		JsonUtils.printJson(itemIdList);
-		deleteEffectedItems(esClient, IndicesNames.PROOF, itemIdList);
-		if(histIdList==null||histIdList.isEmpty())return error;
-		deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY,histIdList);
+        if (itemIdList == null || itemIdList.isEmpty()) return error;
+        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'essay': ");
+        JsonUtils.printJson(itemIdList);
+        deleteEffectedItems(esClient, IndicesNames.ESSAY, itemIdList);
+        if (histIdList == null || histIdList.isEmpty()) return error;
+        deleteRolledHists(esClient, IndicesNames.ESSAY_HISTORY, histIdList);
 
-		TimeUnit.SECONDS.sleep(3);
+        TimeUnit.SECONDS.sleep(2);
 
-		List<ProofHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,"gid",itemIdList, ProofHistory.class);
+        List<EssayHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.ESSAY_HISTORY, "essayId", itemIdList, EssayHistory.class);
 
-		reparseProof(esClient,reparseHistList);
+        reparseEssay(esClient, reparseHistList);
 
-		return error;
-	}
+        return error;
+    }
 
-	private Map<String, ArrayList<String>> getEffectedProofs(ElasticsearchClient esClient,long height) throws Exception {
-		SearchResponse<ProofHistory> resultSearch = esClient.search(s->s
-				.index(IndicesNames.PROOF_HISTORY)
-				.query(q->q
-						.range(r->r
-								.field("height")
-								.gt(JsonData.of(height)))),ProofHistory.class);
+    private Map<String, ArrayList<String>> getEffectedEssays(ElasticsearchClient esClient, long height) throws ElasticsearchException, IOException {
+        SearchResponse<EssayHistory> resultSearch = esClient.search(s -> s
+                .index(IndicesNames.ESSAY_HISTORY)
+                .query(q -> q
+                        .range(r -> r
+                                .field("height")
+                                .gt(JsonData.of(height)))), EssayHistory.class);
 
-		Set<String> itemSet = new HashSet<String>();
-		ArrayList<String> histList = new ArrayList<String>();
+        Set<String> itemSet = new HashSet<>();
+        ArrayList<String> histList = new ArrayList<>();
 
-		for(Hit<ProofHistory> hit: resultSearch.hits().hits()) {
+        for (Hit<EssayHistory> hit : resultSearch.hits().hits()) {
+            EssayHistory item = hit.source();
+            if (item.getOp().equals(PUBLISH)) {
+                itemSet.add(item.getId());
+            } else {
+                itemSet.add(item.getEssayId());
+            }
+            histList.add(hit.id());
+        }
 
-			ProofHistory item = hit.source();
-			if(item.getOp().equals("create")) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getProofId());
-			}
-			histList.add(hit.id());
-		}
+        ArrayList<String> itemList = new ArrayList<>(itemSet);
 
+        Map<String, ArrayList<String>> resultMap = new HashMap<>();
+        resultMap.put("itemIdList", itemList);
+        resultMap.put("histIdList", histList);
 
-		ArrayList<String> itemList = new ArrayList<String>(itemSet);
+        return resultMap;
+    }
 
-		Map<String,ArrayList<String>> resultMap = new HashMap<String,ArrayList<String>>();
-		resultMap.put("itemIdList", itemList);
-		resultMap.put("histIdList", histList);
+    private void deleteEffectedItems(ElasticsearchClient esClient, String index, ArrayList<String> itemIdList) throws Exception {
+        EsUtils.bulkDeleteList(esClient, index, itemIdList);
+    }
 
-		return resultMap;
-	}
+    private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
+        EsUtils.bulkDeleteList(esClient, index, histIdList);
+    }
 
-	private void reparseProof(ElasticsearchClient esClient, List<ProofHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
-		for(ProofHistory proofHist: reparseHistList) {
-			new PublishParser().parseProof(esClient, proofHist);
-		}
-	}
+    private void reparseEssay(ElasticsearchClient esClient, List<EssayHistory> reparseHistList) throws Exception {
+        if (reparseHistList == null) return;
+        for (EssayHistory essayHist : reparseHistList) {
+            new PublishParser().parseEssay(esClient, essayHist);
+        }
+    }
 
-	private boolean rollbackToken(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		boolean error = false;
-		Map<String, ArrayList<String>> resultMap = getEffectedTokens(esClient,lastHeight);
-		ArrayList<String> tokenIdList = resultMap.get("itemIdList");
-		ArrayList<String> histIdList = resultMap.get("histIdList");
+    private boolean rollbackReport(ElasticsearchClient esClient, long lastHeight) throws Exception {
+        boolean error = false;
+        Map<String, ArrayList<String>> resultMap = getEffectedReports(esClient, lastHeight);
+        ArrayList<String> itemIdList = resultMap.get("itemIdList");
+        ArrayList<String> histIdList = resultMap.get("histIdList");
 
+        if (itemIdList == null || itemIdList.isEmpty()) return error;
+        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'report': ");
+        JsonUtils.printJson(itemIdList);
+        deleteEffectedItems(esClient, IndicesNames.REPORT, itemIdList);
+        if (histIdList == null || histIdList.isEmpty()) return error;
+        deleteRolledHists(esClient, IndicesNames.REPORT_HISTORY, histIdList);
 
-		if(tokenIdList==null||tokenIdList.isEmpty())return error;
-		System.out.println("If Rollback is interrupted, reparse all effected ids of index 'token': ");
-		JsonUtils.printJson(tokenIdList);
-		deleteEffectedItems(esClient, IndicesNames.TOKEN, tokenIdList);
+        TimeUnit.SECONDS.sleep(2);
 
-		if(histIdList==null||histIdList.isEmpty())return error;
+        List<ReportHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.REPORT_HISTORY, "reportId", itemIdList, ReportHistory.class);
 
-		deleteRolledHists(esClient, IndicesNames.TOKEN_HISTORY,histIdList);
+        reparseReport(esClient, reparseHistList);
 
-		TimeUnit.SECONDS.sleep(3);
+        return error;
+    }
 
-		List<TokenHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY,"tokenId",tokenIdList, TokenHistory.class);
+    private Map<String, ArrayList<String>> getEffectedReports(ElasticsearchClient esClient, long lastHeight) throws ElasticsearchException, IOException {
+        SearchResponse<ReportHistory> resultSearch = esClient.search(s -> s
+                .index(IndicesNames.REPORT_HISTORY)
+                .query(q -> q
+                        .range(r -> r
+                                .field("height")
+                                .gt(JsonData.of(lastHeight)))), ReportHistory.class);
 
-		deleteEffectedTokenHolders(esClient,tokenIdList);
+        Set<String> itemSet = new HashSet<>();
+        ArrayList<String> histList = new ArrayList<>();
 
-		TimeUnit.SECONDS.sleep(3);
+        for (Hit<ReportHistory> hit : resultSearch.hits().hits()) {
+            ReportHistory item = hit.source();
+            if (item.getOp().equals(PUBLISH)) {
+                itemSet.add(item.getId());
+            } else {
+                itemSet.add(item.getReportId());
+            }
+            histList.add(hit.id());
+        }
 
-		reparseToken(esClient,reparseHistList);
+        ArrayList<String> itemList = new ArrayList<>(itemSet);
 
-		return error;
-	}
+        Map<String, ArrayList<String>> resultMap = new HashMap<>();
+        resultMap.put("itemIdList", itemList);
+        resultMap.put("histIdList", histList);
 
-	private Map<String, ArrayList<String>> getEffectedTokens(ElasticsearchClient esClient,long height) throws Exception {
-		SearchResponse<TokenHistory> resultSearch = esClient.search(s->s
-				.index(IndicesNames.TOKEN_HISTORY)
-				.query(q->q
-						.range(r->r
-								.field("height")
-								.gt(JsonData.of(height)))),TokenHistory.class);
+        return resultMap;
+    }
 
-		Set<String> tokenIdSet = new HashSet<String>();
-		ArrayList<String> histList = new ArrayList<String>();
+    private void reparseReport(ElasticsearchClient esClient, List<ReportHistory> reparseHistList) throws Exception {
+        if (reparseHistList == null) return;
+        for (ReportHistory reportHist : reparseHistList) {
+            new PublishParser().parseReport(esClient, reportHist);
+        }
+    }
 
-		for(Hit<TokenHistory> hit: resultSearch.hits().hits()) {
+    private boolean rollbackPaper(ElasticsearchClient esClient, long lastHeight) throws Exception {
+        boolean error = false;
+        Map<String, ArrayList<String>> resultMap = getEffectedPapers(esClient, lastHeight);
+        ArrayList<String> itemIdList = resultMap.get("itemIdList");
+        ArrayList<String> histIdList = resultMap.get("histIdList");
 
-			TokenHistory item = hit.source();
-			if(item.getOp().equals("deploy")) {
-				tokenIdSet.add(item.getId());
-			}else {
-				tokenIdSet.add(item.getTokenId());
-			}
-			histList.add(hit.id());
-		}
+        if (itemIdList == null || itemIdList.isEmpty()) return error;
+        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'paper': ");
+        JsonUtils.printJson(itemIdList);
+        deleteEffectedItems(esClient, IndicesNames.PAPER, itemIdList);
+        if (histIdList == null || histIdList.isEmpty()) return error;
+        deleteRolledHists(esClient, IndicesNames.PAPER_HISTORY, histIdList);
 
+        TimeUnit.SECONDS.sleep(2);
 
-		ArrayList<String> itemList = new ArrayList<String>(tokenIdSet);
+        List<PaperHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PAPER_HISTORY, "paperId", itemIdList, PaperHistory.class);
 
-		Map<String,ArrayList<String>> resultMap = new HashMap<String,ArrayList<String>>();
-		resultMap.put("itemIdList", itemList);
-		resultMap.put("histIdList", histList);
+        reparsePaper(esClient, reparseHistList);
 
-		return resultMap;
-	}
+        return error;
+    }
 
-	private void deleteEffectedTokenHolders(ElasticsearchClient esClient,List<String> tokenIdList) throws Exception {
-		List<FieldValue> fieldValueList = new ArrayList<>();
-		tokenIdList.forEach(tokenId->fieldValueList.add(FieldValue.of(tokenId)));
+    private Map<String, ArrayList<String>> getEffectedPapers(ElasticsearchClient esClient, long lastHeight) throws ElasticsearchException, IOException {
+        SearchResponse<PaperHistory> resultSearch = esClient.search(s -> s
+                .index(IndicesNames.PAPER_HISTORY)
+                .query(q -> q
+                        .range(r -> r
+                                .field("height")
+                                .gt(JsonData.of(lastHeight)))), PaperHistory.class);
 
-		esClient.deleteByQuery(d->d.index(IndicesNames.TOKEN_HOLDER)
-				.query(q->q
-						.terms(t->t
-								.field("tokenId")
-								.terms(ts->ts.value(fieldValueList))
-						)));
-	}
+        Set<String> itemSet = new HashSet<>();
+        ArrayList<String> histList = new ArrayList<>();
 
-	private void reparseToken(ElasticsearchClient esClient, List<TokenHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
-		for(TokenHistory tokenHist: reparseHistList) {
-			try {
-				new PublishParser().parseToken(esClient, tokenHist);
-			}catch (NumberFormatException ignore){}
-		}
-	}
+        for (Hit<PaperHistory> hit : resultSearch.hits().hits()) {
+            PaperHistory item = hit.source();
+            if (item.getOp().equals(PUBLISH)) {
+                itemSet.add(item.getId());
+            } else {
+                itemSet.add(item.getPaperId());
+            }
+            histList.add(hit.id());
+        }
 
-	private void deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {
-		EsUtils.bulkDeleteList(esClient, index, itemIdList);
-	}
+        ArrayList<String> itemList = new ArrayList<>(itemSet);
 
-	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
-		EsUtils.bulkDeleteList(esClient, index, histIdList);
-	}
+        Map<String, ArrayList<String>> resultMap = new HashMap<>();
+        resultMap.put("itemIdList", itemList);
+        resultMap.put("histIdList", histList);
+
+        return resultMap;
+    }
+
+    private void reparsePaper(ElasticsearchClient esClient, List<PaperHistory> reparseHistList) throws Exception {
+        if (reparseHistList == null) return;
+        for (PaperHistory paperHist : reparseHistList) {
+            new PublishParser().parsePaper(esClient, paperHist);
+        }
+    }
+
+    private boolean rollbackBook(ElasticsearchClient esClient, long lastHeight) throws Exception {
+        boolean error = false;
+        Map<String, ArrayList<String>> resultMap = getEffectedBooks(esClient, lastHeight);
+        ArrayList<String> itemIdList = resultMap.get("itemIdList");
+        ArrayList<String> histIdList = resultMap.get("histIdList");
+
+        if (itemIdList == null || itemIdList.isEmpty()) return error;
+        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'book': ");
+        JsonUtils.printJson(itemIdList);
+        deleteEffectedItems(esClient, IndicesNames.BOOK, itemIdList);
+        if (histIdList == null || histIdList.isEmpty()) return error;
+        deleteRolledHists(esClient, IndicesNames.BOOK_HISTORY, histIdList);
+
+        TimeUnit.SECONDS.sleep(2);
+
+        List<BookHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOOK_HISTORY, "bookId", itemIdList, BookHistory.class);
+
+        reparseBook(esClient, reparseHistList);
+
+        return error;
+    }
+
+    private Map<String, ArrayList<String>> getEffectedBooks(ElasticsearchClient esClient, long lastHeight) throws ElasticsearchException, IOException {
+        SearchResponse<BookHistory> resultSearch = esClient.search(s -> s
+                .index(IndicesNames.BOOK_HISTORY)
+                .query(q -> q
+                        .range(r -> r
+                                .field("height")
+                                .gt(JsonData.of(lastHeight)))), BookHistory.class);
+
+        Set<String> itemSet = new HashSet<>();
+        ArrayList<String> histList = new ArrayList<>();
+
+        for (Hit<BookHistory> hit : resultSearch.hits().hits()) {
+            BookHistory item = hit.source();
+            if (item.getOp().equals(PUBLISH)) {
+                itemSet.add(item.getId());
+            } else {
+                itemSet.add(item.getBookId());
+            }
+            histList.add(hit.id());
+        }
+
+        ArrayList<String> itemList = new ArrayList<>(itemSet);
+
+        Map<String, ArrayList<String>> resultMap = new HashMap<>();
+        resultMap.put("itemIdList", itemList);
+        resultMap.put("histIdList", histList);
+
+        return resultMap;
+    }
+
+    private void reparseBook(ElasticsearchClient esClient, List<BookHistory> reparseHistList) throws Exception {
+        if (reparseHistList == null) return;
+        for (BookHistory bookHist : reparseHistList) {
+            new PublishParser().parseBook(esClient, bookHist);
+        }
+    }
 }

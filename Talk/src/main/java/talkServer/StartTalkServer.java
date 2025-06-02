@@ -1,5 +1,6 @@
 package talkServer;
 
+import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -13,7 +14,6 @@ import data.feipData.Service;
 import data.feipData.serviceParams.Params;
 import data.feipData.serviceParams.TalkParams;
 
-import handlers.Handler;
 import redis.clients.jedis.JedisPool;
 import server.Counter;
 import server.TalkServer;
@@ -32,7 +32,7 @@ import java.util.*;
 import static config.Settings.DEFAULT_WINDOW_TIME;
 import static constants.Constants.SEC_PER_DAY;
 import static constants.Strings.*;
-import static handlers.AccountHandler.DEFAULT_DEALER_MIN_BALANCE;
+import static handlers.AccountManager.DEFAULT_DEALER_MIN_BALANCE;
 
 public class StartTalkServer {
     private static Settings settings;
@@ -45,21 +45,6 @@ public class StartTalkServer {
     public static double price;
     public static final Service.ServiceType serverType = Service.ServiceType.TALK;
 
-    public static final Object[] modules = new Object[]{
-            Service.ServiceType.APIP,
-            Service.ServiceType.DISK,
-            Service.ServiceType.ES,
-            Service.ServiceType.REDIS,
-            Handler.HandlerType.SESSION,
-            Handler.HandlerType.CASH,
-            Handler.HandlerType.ACCOUNT,
-            Handler.HandlerType.HAT,
-            Handler.HandlerType.DISK,
-            Handler.HandlerType.TALK_UNIT,
-            Handler.HandlerType.TEAM,
-            Handler.HandlerType.GROUP
-    };
-
     public static void main(String[] args) throws IOException {
 
         Map<String,Object>  settingMap = new HashMap<> ();
@@ -67,12 +52,27 @@ public class StartTalkServer {
         settingMap.put(Settings.DEALER_MIN_BALANCE, DEFAULT_DEALER_MIN_BALANCE);
 
         List<AutoTask> autoTaskList = new ArrayList<>();
-        autoTaskList.add(new AutoTask(Handler.HandlerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
-        autoTaskList.add(new AutoTask(Handler.HandlerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.NONCE, "removeTimeOutNonce", SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "updateIncome", (String)settingMap.get(Settings.LISTEN_PATH)));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
+        autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+        List<data.fcData.Module> modules = new ArrayList<>();
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.DISK.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.SESSION.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.ACCOUNT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.HAT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.DISK.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.TALK_UNIT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.TEAM.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.GROUP.name()));
+
         settings = Starter.startServer(serverType, settingMap, Arrays.stream(TalkServer.chargeType).toList(), modules, br, autoTaskList);
         if(settings==null)return;
 

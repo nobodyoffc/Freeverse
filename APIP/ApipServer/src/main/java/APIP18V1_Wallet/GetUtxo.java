@@ -4,19 +4,19 @@ import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.apipData.Utxo;
 import data.feipData.Service;
-import handlers.CashHandler;
+import handlers.CashManager;
 import constants.*;
 import core.crypto.KeyTools;
 import data.fcData.ReplyBody;
-import handlers.CashHandler.SearchResult;
-import handlers.Handler.HandlerType;
+import handlers.CashManager.SearchResult;
+import handlers.Manager.ManagerType;
 import data.fchData.Cash;
 import initial.Initiator;
 import server.ApipApiNames;
 import utils.FchUtils;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
-import handlers.MempoolHandler;
+import handlers.MempoolManager;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -69,8 +69,8 @@ public class GetUtxo extends HttpServlet {
             cd=0L;
         }
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-        MempoolHandler mempoolHandler = (MempoolHandler) settings.getHandler(HandlerType.MEMPOOL);
-        SearchResult<Cash> searchResult = CashHandler.getValidCashes(idRequested,amount,cd,null,0,0,null,esClient, mempoolHandler);
+        MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
+        SearchResult<Cash> searchResult = CashManager.getValidCashes(idRequested,amount,cd,null,0,0,null,esClient, mempoolHandler);
         if (searchResult.hasError()) {
             replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(),response);
             return;

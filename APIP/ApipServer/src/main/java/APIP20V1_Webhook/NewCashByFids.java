@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import constants.*;
 import data.fcData.ReplyBody;
-import handlers.Handler;
-import handlers.WebhookHandler;
+import handlers.Manager;
+import handlers.WebhookManager;
 import initial.Initiator;
 import server.ApipApiNames;
 import server.HttpRequestChecker;
@@ -51,14 +51,14 @@ public class NewCashByFids extends HttpServlet {
         String addr =replier.getRequestChecker().getFid();
 
         Gson gson = new Gson();
-        WebhookHandler.WebhookRequestBody webhookRequestBody;
+        WebhookManager.WebhookRequestBody webhookRequestBody;
 
         String hookUserId=null;
 
-        WebhookHandler webhookHandler = (WebhookHandler)settings.getHandler(Handler.HandlerType.WEBHOOK);
+        WebhookManager webhookHandler = (WebhookManager)settings.getManager(Manager.ManagerType.WEBHOOK);
 
         try {
-            webhookRequestBody = gson.fromJson(otherMap.get(FieldNames.WEBHOOK_REQUEST_BODY), WebhookHandler.WebhookRequestBody.class);
+            webhookRequestBody = gson.fromJson(otherMap.get(FieldNames.WEBHOOK_REQUEST_BODY), WebhookManager.WebhookRequestBody.class);
             webhookRequestBody.setUserId(addr);
             webhookRequestBody.setMethod(ApipApiNames.NEW_CASH_BY_FIDS);
             webhookRequestBody.makeHookUserId(settings.getSid());
@@ -82,7 +82,7 @@ public class NewCashByFids extends HttpServlet {
                 }
                 case Strings.CHECK -> {
 //                    String subscription = getWebhookFromRedis(webhookRequestBody.getUserId());
-                    WebhookHandler.WebhookRequestBody subscription = webhookHandler.getWebhookRequestBody(webhookRequestBody.getUserId());
+                    WebhookManager.WebhookRequestBody subscription = webhookHandler.getWebhookRequestBody(webhookRequestBody.getUserId());
                     dataMap.put(Strings.OP, Strings.CHECK);
                     if (subscription == null) {
                         dataMap.put(Strings.FOUND, Values.FALSE);

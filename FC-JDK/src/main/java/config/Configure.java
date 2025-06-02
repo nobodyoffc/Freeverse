@@ -239,9 +239,9 @@ public class Configure {
                     fid = cidInfo.getId();
                     break;
             }
-            if(!fid.equals(cidInfo.getId())) {
-                System.out.println("The cipher is of " + cidInfo.getId() + " instead of " + fid + ". \nTry again.");
-            }
+            if(fid.equals(cidInfo.getId()))break;
+
+            System.out.println("The cipher is of " + cidInfo.getId() + " instead of " + fid + ". \nTry again.");
         }
 
         mainCidInfoMap.put(fid, cidInfo);
@@ -347,10 +347,11 @@ public class Configure {
             List<Object> valueList = new ArrayList<>();
             valueList.add(service.getStdName());
             StringBuilder sb = new StringBuilder();
-            for(String type:service.getTypes()){
-                sb.append(type);
-                sb.append(",");
-            }
+            if(service.getTypes()!=null)
+                for(String type:service.getTypes()){
+                    sb.append(type);
+                    sb.append(",");
+                }
             if(sb.length()>1)sb.deleteCharAt(sb.lastIndexOf(","));
             valueList.add(sb.toString());
             valueList.add(service.getId());
@@ -369,8 +370,8 @@ public class Configure {
 //        return apiAccount;
 //    }
     public ApiAccount addApiAccount(@NotNull ApiProvider apiProvider, String userFid, byte[] symkey, ApipClient initApipClient) {
-        System.out.println("Adding new account...");
-        if(askIfYes(br,"Stop adding API account for provider "+ apiProvider.getId()+"?"))return null;
+        System.out.println("Adding new "+apiProvider.getType()+" account...");
+//        if(askIfYes(br,"Stop adding API account for provider "+ apiProvider.getId()+"?"))return null;
         if(apiAccountMap==null)apiAccountMap = new HashMap<>();
         ApiAccount apiAccount;
         while(true) {
@@ -380,15 +381,19 @@ public class Configure {
             try {
                 Object client = apiAccount.connectApi(apiProvider, symkey, br, initApipClient, mainCidInfoMap);
                 if(client==null) {
-                    if(askIfYes(br,"Failed to connect "+apiAccount.getApiUrl()+". Reset?")) continue;
+                    if(askIfYes(br,"Failed to connect "+apiAccount.getApiUrl()+". Reset API provider?")){
+                        apiProvider = changeApiProvider(apiProvider);
+                        if(apiProvider==null)return null;
+                        continue;
+                    }
                     else return null;
                 }
             }catch (Exception e){
-                e.printStackTrace();
+//                e.printStackTrace();
                 System.out.println("Can't connect the API provider of "+apiProvider.getId());
                 if(Inputer.askIfYes(br,"Do you want to revise the API provider?")){
-                    apiProvider.updateAll(br);
-                    saveConfig();
+                    apiProvider = changeApiProvider(apiProvider);
+                    if(apiProvider==null)return null;
                     continue;
                 }else return null;
             }
@@ -397,6 +402,16 @@ public class Configure {
             break;
         }
         return apiAccount;
+    }
+
+    private ApiProvider changeApiProvider(@NotNull ApiProvider apiProvider) {
+        ApiProvider newApiProvider = new ApiProvider();
+        newApiProvider.setType(apiProvider.getType());
+        newApiProvider.updateAll(br);
+        if(newApiProvider.getId() == null)return null;
+        apiProviderMap.put(newApiProvider.getId(),newApiProvider);
+        saveConfig();
+        return newApiProvider;
     }
 
     public void showApiProviders(Map<String, ApiProvider> apiProviderMap) {
@@ -506,11 +521,11 @@ public class Configure {
     public ApiProvider addApiProvider(Service.ServiceType serviceType, ApipClient apipClient) {
         String ask;
         System.out.println("Adding a new API provider...");
-        if(serviceType==null)
-            ask = "Stop to add new provider?";
-        else ask = "Stop to add new "+ serviceType +" provider?";
+//        if(serviceType==null)
+//            ask = "Stop adding new provider?";
+//        else ask = "Stop adding new "+ serviceType +" provider?";
 
-        if(askIfYes(br,ask))return null;
+//        if(askIfYes(br,ask))return null;
 
         ApiProvider apiProvider = new ApiProvider();
         if(!apiProvider.makeApiProvider(br, serviceType,apipClient))return null;
@@ -661,6 +676,10 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
 
 
     public ApiAccount getAccountForTheProvider(ApiProvider apiProvider, String userFid, byte[] symkey, ApipClient initApipClient) {
+        if(apiProvider==null || apiProvider.getId()==null){
+            System.out.println("The API provider or its ID is null.");
+            return null;
+        }
         System.out.println("Get account for "+apiProvider.getName()+"...");
         ApiAccount apiAccount;
         if (apiAccountMap == null) setApiAccountMap(new HashMap<>());
@@ -851,6 +870,15 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         }else {
             configure = verifyPassword(br);
             if(configure==null)return null;
+            Map<String, ApiProvider> providerMap = configure.getApiProviderMap();
+            if(providerMap !=null && !providerMap.isEmpty()){
+                providerMap.entrySet().removeIf(entry -> entry.getKey() == null);
+            }
+
+            Map<String, ApiAccount> accountMap = configure.getApiAccountMap();
+            if(accountMap !=null && !accountMap.isEmpty()){
+                accountMap.entrySet().removeIf(entry -> entry.getKey() == null);
+            }
         }
         initConfigure(br, configure);
         return configure;

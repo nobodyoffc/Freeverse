@@ -17,51 +17,51 @@ import java.util.Iterator;
 import java.util.List;
 
 public class PersonalParser {
-
-	public enum Operation {
-		PUBLISH("publish"),
-		UPDATE("update"),
-		STOP("stop"),
-		RECOVER("recover"),
-		CLOSE("close"),
-		RATE("rate"),
-		REGISTER("register"),
-		UNREGISTER("unregister"),
-		CREATE("create"),
-		JOIN("join"),
-		LEAVE("leave"),
-		TRANSFER("transfer"),
-		TAKE_OVER("take over"),
-		AGREE_CONSENSUS("agree consensus"),
-		INVITE("invite"),
-		WITHDRAW_INVITATION("withdraw invitation"),
-		DISMISS("dismiss"),
-		APPOINT("appoint"),
-		CANCEL_APPOINTMENT("cancel appointment"),
-		DISBAND("disband"),
-		ADD("add"),
-		DELETE("delete"),
-		SEND("send");
-
-		private final String value;
-
-		Operation(String value) {
-			this.value = value;
-		}
-
-		public String getValue() {
-			return value;
-		}
-
-		public static Operation fromString(String text) {
-			for (Operation op : Operation.values()) {
-				if (op.value.equalsIgnoreCase(text)) {
-					return op;
-				}
-			}
-			throw new IllegalArgumentException("No constant with text " + text + " found");
-		}
-	}
+//
+//	public enum Operation {
+//		PUBLISH("publish"),
+//		UPDATE("update"),
+//		STOP("stop"),
+//		RECOVER("recover"),
+//		CLOSE("close"),
+//		RATE("rate"),
+//		REGISTER("register"),
+//		UNREGISTER("unregister"),
+//		CREATE("create"),
+//		JOIN("join"),
+//		LEAVE("leave"),
+//		TRANSFER("transfer"),
+//		TAKE_OVER("take over"),
+//		AGREE_CONSENSUS("agree consensus"),
+//		INVITE("invite"),
+//		WITHDRAW_INVITATION("withdraw invitation"),
+//		DISMISS("dismiss"),
+//		APPOINT("appoint"),
+//		CANCEL_APPOINTMENT("cancel appointment"),
+//		DISBAND("disband"),
+//		ADD("add"),
+//		DELETE("delete"),
+//		SEND("send");
+//
+//		private final String value;
+//
+//		Operation(String value) {
+//			this.value = value;
+//		}
+//
+//		public String getValue() {
+//			return value;
+//		}
+//
+//		public static Operation fromString(String text) {
+//			for (Operation op : Operation.values()) {
+//				if (op.value.equalsIgnoreCase(text)) {
+//					return op;
+//				}
+//			}
+//			throw new IllegalArgumentException("No constant with text " + text + " found");
+//		}
+//	}
 
 	public boolean parseContact(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
 

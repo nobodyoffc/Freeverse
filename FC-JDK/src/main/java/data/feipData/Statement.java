@@ -7,7 +7,7 @@ public class Statement extends FcObject {
 	private String title;
 	private String content;
 	
-	private String owner;
+	private String publisher;
 	private Long birthTime;
 	private Long birthHeight;
 
@@ -23,11 +23,11 @@ public class Statement extends FcObject {
 	public void setContent(String content) {
 		this.content = content;
 	}
-	public String getOwner() {
-		return owner;
+	public String getPublisher() {
+		return publisher;
 	}
-	public void setOwner(String owner) {
-		this.owner = owner;
+	public void setPublisher(String publisher) {
+		this.publisher = publisher;
 	}
 	public Long getBirthTime() {
 		return birthTime;

@@ -3,11 +3,12 @@ package app;
 import constants.*;
 import core.crypto.*;
 import core.crypto.old.StartTools;
-import core.fch.MultiSigData;
+import core.fch.RawTxInfo;
 import core.fch.RawTxParser;
 import core.fch.TxCreator;
 import core.fch.Wallet;
 import data.fchData.Cid;
+import data.fchData.Multisign;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -19,7 +20,6 @@ import data.fcData.AlgorithmId;
 import data.fcData.FidTxMask;
 import data.fcData.Signature;
 import data.fchData.Cash;
-import data.fchData.P2SH;
 import data.fchData.SendTo;
 import data.feipData.Service;
 import handlers.*;
@@ -60,22 +60,14 @@ public class HomeApp extends FcApp {
     private final String myPrikeyCipher;
     private final Settings settings;
     private final ApipClient apipClient;
-    private CashHandler cashHandler;
-    private SecretHandler secretHandler;
-    private ContactHandler contactHandler;
-    private MailHandler mailHandler;
+    private CashManager cashHandler;
+    private SecretManager secretHandler;
+    private ContactManager contactHandler;
+    private MailManager mailHandler;
     private final BufferedReader br;
 
     // These could remain static if they're truly application-wide constants
     private static final String CLIENT_NAME = "HOME";
-
-    public static final Object[] modules = new Object[]{
-            Service.ServiceType.APIP,
-            Handler.HandlerType.CASH,
-            Handler.HandlerType.SECRET,
-            Handler.HandlerType.CONTACT,
-            Handler.HandlerType.MAIL
-    };
     private static final Map<String, Object> SETTING_MAP = new HashMap<>();
 
     public HomeApp(Settings settings, BufferedReader br) {
@@ -92,6 +84,13 @@ public class HomeApp extends FcApp {
         Menu.welcome(CLIENT_NAME);
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+        List<data.fcData.Module> modules = new ArrayList<>();
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.SECRET.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CONTACT.name()));
+        modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.MAIL.name()));
 
         while (true) {
             Settings settings = Starter.startClient(CLIENT_NAME, SETTING_MAP, br, modules, null);
@@ -1114,8 +1113,8 @@ public class HomeApp extends FcApp {
     }
 
     public static void myMultiFids(String fid, ApipClient apipClient, BufferedReader br) {
-        List<P2SH> p2shList = apipClient.myP2SHs(fid);
-        if (p2shList == null || p2shList.isEmpty()) {
+        List<Multisign> multisignList = apipClient.myMultisigns(fid);
+        if (multisignList == null || multisignList.isEmpty()) {
             System.out.println("No multiSign address yet.");
             Menu.anyKeyToContinue(br);
             return;
@@ -1123,17 +1122,17 @@ public class HomeApp extends FcApp {
         System.out.println("\nMultisig addresses associated with your FID:");
         System.out.println("----------------------------------------------");
         
-        for (int i = 0; i < p2shList.size(); i++) {
-            P2SH p2sh = p2shList.get(i);
-            System.out.printf("%d. ID: %s\n", (i + 1), p2sh.getId());
+        for (int i = 0; i < multisignList.size(); i++) {
+            Multisign multisign = multisignList.get(i);
+            System.out.printf("%d. ID: %s\n", (i + 1), multisign.getId());
             
             // Display additional information if available
-            if (p2sh.getM() != null && p2sh.getN() != null) {
-                System.out.printf("   M of N: %d of %d\n", p2sh.getM(), p2sh.getN());
+            if (multisign.getM() != null && multisign.getN() != null) {
+                System.out.printf("   M of N: %d of %d\n", multisign.getM(), multisign.getN());
             }
             
-            if (p2sh.getFids() != null && !p2sh.getFids().isEmpty()) {
-                System.out.println("   Members: " + String.join(", ", p2sh.getFids()));
+            if (multisign.getFids() != null && !multisign.getFids().isEmpty()) {
+                System.out.println("   Members: " + String.join(", ", multisign.getFids()));
             }
             
             System.out.println();
@@ -1197,7 +1196,7 @@ public class HomeApp extends FcApp {
     }
 
     public static void showRawMultiSignTxInfo(String multiSignDataJson, BufferedReader br) {
-        MultiSigData multiSigData = MultiSigData.fromJson(multiSignDataJson);
+        RawTxInfo multiSigData = RawTxInfo.fromJson(multiSignDataJson,RawTxInfo.class);
 
         byte[] rawTx = multiSigData.getRawTx();
         Map<String, Object> result;
@@ -1212,7 +1211,7 @@ public class HomeApp extends FcApp {
         String msg = (String) result.get(Strings.OPRETURN);
 
         Map<String, Cash> spendCashMap = new HashMap<>();
-        for (Cash cash : multiSigData.getCashList()) {
+        for (Cash cash : multiSigData.getInputs()) {
             if (cash.getId() == null && cash.getBirthTxId() != null && cash.getBirthIndex() != null)
                 cash.makeId(cash.getBirthTxId(), cash.getBirthIndex());
             spendCashMap.put(cash.getId(), cash);
@@ -1259,25 +1258,25 @@ public class HomeApp extends FcApp {
     public static void createTx(ApipClient apipClient, BufferedReader br) {
 
         String fid = inputGoodFid(br, "Input the multisig fid:");
-        P2SH p2sh;
-        Map<String, P2SH> p2shMap = apipClient.p2shByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fid);
+        Multisign multisign;
+        Map<String, Multisign> p2shMap = apipClient.multisignByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fid);
         if (p2shMap == null || p2shMap.get(fid)==null) {
             System.out.println(fid + " is not found.");
             if(Inputer.askIfYes(br,"Input the P2SH or the redeem script?")){
                 String redeem = Inputer.inputStringMultiLine(br);
                 try {
                     if (Hex.isHexString(redeem)) {
-                        p2sh = P2SH.parseP2shRedeemScript(redeem);
-                    } else p2sh = P2SH.fromJson(redeem, P2SH.class);
+                        multisign = Multisign.parseMultisignRedeemScript(redeem);
+                    } else multisign = Multisign.fromJson(redeem, Multisign.class);
                 }catch (Exception e){
                     System.out.println("Failed to import multisig FID information:"+e.getMessage());
                     Menu.anyKeyToContinue(br);
                     return;
                 }
             }else return;
-        }else p2sh = p2shMap.get(fid);
+        }else multisign = p2shMap.get(fid);
 
-        System.out.println(JsonUtils.toNiceJson(p2sh));
+        System.out.println(JsonUtils.toNiceJson(multisign));
 
         List<SendTo> sendToList = SendTo.inputSendToList(br);
         String msg = Inputer.inputString(br, "Input the message for OpReturn. Enter to ignore:");
@@ -1300,15 +1299,15 @@ public class HomeApp extends FcApp {
             Menu.anyKeyToContinue(br);
             return;
         }
-        Transaction transaction = TxCreator.createUnsignedTx(cashList, sendToList, msg, p2sh, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
+        Transaction transaction = TxCreator.createUnsignedTx(cashList, sendToList, msg, multisign, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
         if(transaction==null){
             System.out.println("Failed to create unsigned TX.");
             Menu.anyKeyToContinue(br);
             return;
         }
-        MultiSigData multiSignData = new MultiSigData(transaction.bitcoinSerialize(), p2sh, cashList);
+        RawTxInfo multiSignData = new RawTxInfo(transaction.bitcoinSerialize(), multisign, cashList);
 
-        CryptoSign.showMultiUnsignedResult(br, p2sh, multiSignData);
+        CryptoSign.showMultiUnsignedResult(br, multisign, multiSignData);
     }
 
     public static void createFid(ApipClient apipClient, BufferedReader br) {
@@ -1336,14 +1335,14 @@ public class HomeApp extends FcApp {
             pubkeyList.add(HexFormat.of().parseHex(pubkey));
         }
 
-        P2SH p2SH = TxCreator.createP2sh(pubkeyList, m);
+        Multisign multisign = TxCreator.createMultisign(pubkeyList, m);
 
         Shower.printUnderline(10);
-        System.out.println("The multisig information is: \n" + JsonUtils.toNiceJson(p2SH));
+        System.out.println("The multisig information is: \n" + JsonUtils.toNiceJson(multisign));
 
         Shower.printUnderline(10);
-        if (p2SH == null) return;
-        String fid = p2SH.getId();
+        if (multisign == null) return;
+        String fid = multisign.getId();
         System.out.println("Your multisig FID: \n" + fid);
         Shower.printUnderline(10);
         Menu.anyKeyToContinue(br);
@@ -1357,24 +1356,24 @@ public class HomeApp extends FcApp {
             return;
         }
         System.out.println("Requesting APIP from " + apipClient.getUrlHead());
-        Map<String, P2SH> p2shMap = apipClient.p2shByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fid);
+        Map<String, Multisign> p2shMap = apipClient.multisignByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fid);
         if(p2shMap==null || p2shMap.isEmpty()){
             System.out.println("The redeem script of this multisig FID hasn't been shown on chain.");
             return;
         }
-        P2SH p2sh = p2shMap.get(fid);
+        Multisign multisign = p2shMap.get(fid);
 
-        if (p2sh == null) {
+        if (multisign == null) {
             System.out.println(fid + " is not found.");
             return;
         }
         Shower.printUnderline(10);
         System.out.println("Multisig:");
-        System.out.println(JsonUtils.toNiceJson(p2sh));
+        System.out.println(JsonUtils.toNiceJson(multisign));
         Shower.printUnderline(10);
         System.out.println("The members:");
 
-        Map<String, Cid> cidInfoMap = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, p2sh.getFids().toArray(new String[0]));
+        Map<String, Cid> cidInfoMap = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, multisign.getFids().toArray(new String[0]));
         if (cidInfoMap == null) {
             return;
         }

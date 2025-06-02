@@ -115,13 +115,13 @@ public abstract class FcClient {
         try {
             Map<String, Long> lastTimeMap1 = JsonUtils.readMapFromJsonFile(null, fileName, String.class, Long.class);
             if (lastTimeMap1 == null) {
-                log.debug("Failed to read " + fileName + ".");
+//                log.debug("Failed to read " + fileName + ".");
                 return lastTimeMap1;
             }
             // Clear the existing map and put all entries from lastTimeMap1
             return lastTimeMap1;
         } catch (IOException e) {
-            log.debug("Failed to read " + fileName + ".");
+//            log.debug("Failed to read " + fileName + ".");
         }
         return null;
     }
