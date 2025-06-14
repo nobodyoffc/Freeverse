@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static constants.Values.DESC;
 import static data.apipData.FcQuery.PART;
 import static server.ApipApiNames.*;
 import static constants.FieldNames.*;
@@ -1483,5 +1484,79 @@ public class ApipClient extends FcClient {
         Object data = requestJsonByFcdsl(SN_24, VERSION_1, BOOK_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
         return objectToList(data,BookHistory.class);
+    }
+
+    public Map<String, Remark> remarkByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_25, VERSION_1, REMARK_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class,Remark.class);
+    }
+
+    public Remark remarkById(String id){
+        Map<String, Remark> map = remarkByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY , id);
+        if(map==null)return null;
+        try {
+            return map.get(id);
+        }catch (Exception ignore){
+            return null;
+        }
+    }
+
+    public List<Remark> remarkSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_25, VERSION_1, REMARK_SEARCH, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,Remark.class);
+    }
+
+    public List<RemarkHistory> remarkOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsExcept(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_25, VERSION_1, REMARK_OP_HISTORY, fcdsl,authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,RemarkHistory.class);
+    }
+
+    public List<RemarkHistory> remarkRateHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsFilter(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_25, VERSION_1, REMARK_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,RemarkHistory.class);
+    }
+
+    public Map<String, Artwork> artworkByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_25, VERSION_1, ARTWORK_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class,Artwork.class);
+    }
+
+    public Artwork artworkById(String id){
+        Map<String, Artwork> map = artworkByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY , id);
+        if(map==null)return null;
+        try {
+            return map.get(id);
+        }catch (Exception ignore){
+            return null;
+        }
+    }
+
+    public List<Artwork> artworkSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SN_25, VERSION_1, ARTWORK_SEARCH, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,Artwork.class);
+    }
+
+    public List<ArtworkHistory> artworkOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsExcept(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_25, VERSION_1, ARTWORK_OP_HISTORY, fcdsl,authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,ArtworkHistory.class);
+    }
+
+    public List<ArtworkHistory> artworkRateHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        fcdsl = Fcdsl.makeTermsFilter(fcdsl, OP, RATE);
+        if (fcdsl == null) return null;
+        Object data = requestJsonByFcdsl(SN_25, VERSION_1, ARTWORK_RATE_HISTORY, fcdsl, authType, sessionKey, requestMethod);
+        if(data==null)return null;
+        return objectToList(data,ArtworkHistory.class);
     }
 }

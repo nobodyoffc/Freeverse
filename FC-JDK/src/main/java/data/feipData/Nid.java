@@ -2,6 +2,10 @@ package data.feipData;
 
 import data.fcData.FcObject;
 
+import java.util.*;
+
+import static constants.FieldNames.*;
+
 public class Nid extends FcObject {
 	//nid
     private String name;
@@ -14,6 +18,42 @@ public class Nid extends FcObject {
 	private Long lastTime;
 	private Long lastHeight;
 	private Boolean active;
+
+
+	public static LinkedHashMap<String,Integer> getFieldWidthMap(){
+		LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+		map.put(NAMER, DEFAULT_ID_LENGTH);
+		map.put(NAME, DEFAULT_ID_LENGTH);
+		map.put(OID, DEFAULT_ID_LENGTH);
+		map.put(BIRTH_TIME, DEFAULT_TIME_LENGTH);
+		map.put(ID, DEFAULT_ID_LENGTH);
+		return map;
+	}
+	public static List<String> getTimestampFieldList(){
+		return List.of(BIRTH_TIME);
+	}
+
+	public static List<String> getSatoshiFieldList(){
+		return new ArrayList<>();
+	}
+	public static Map<String, String> getHeightToTimeFieldMap() {
+		return new HashMap<>();
+	}
+
+	public static Map<String, String> getShowFieldNameAsMap() {
+		Map<String,String> map = new HashMap<>();
+		map.put(OID,"Object ID");
+		return map;
+	}
+	public static List<String> getReplaceWithMeFieldList() {
+		return new ArrayList<>();
+	}
+
+	//For create with user input
+	public static Map<String, Object> getInputFieldDefaultValueMap() {
+		return new HashMap<>();
+	}
+
 
 	public String getName() {
 		return name;

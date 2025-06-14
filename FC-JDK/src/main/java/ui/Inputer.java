@@ -980,7 +980,27 @@ private static String formatTimestamp(Object value) {
             opField.setAccessible(true);
 
             // Get the Op enum from the correct class
-            Class<?> enumClass = Class.forName(tClass.getName() + "");
+            Class<?> enumClass = null;
+            try {
+                // First try to get the inner enum class
+                enumClass = Class.forName(tClass.getName() + "$Op");
+            } catch (ClassNotFoundException e) {
+                // If inner enum not found, try to get the enum class from the same package
+                try {
+                    String packageName = tClass.getPackage().getName();
+                    String className = tClass.getSimpleName();
+                    enumClass = Class.forName(packageName + "." + className + "Op");
+                } catch (ClassNotFoundException ex) {
+                    System.out.println("Could not find enum class for " + tClass.getName());
+                    return null;
+                }
+            }
+            
+            if (enumClass == null || !enumClass.isEnum()) {
+                System.out.println("No valid enum class found for " + tClass.getName());
+                return null;
+            }
+            
             Object[] operations = enumClass.getEnumConstants();
             
             // Use Inputer.chooseOne with the correct enum type

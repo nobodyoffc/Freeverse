@@ -25,8 +25,9 @@ public class IndicesFEIP {
 		String cidHistJsonStr = "{\"mappings\":{\"properties\":{\"homepages\":{\"type\":\"text\"},\"master\":{\"type\":\"wildcard\"},\"cipherPrikey\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"height\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"name\":{\"type\":\"wildcard\"},\"noticeFee\":{\"type\":\"text\"},\"op\":{\"type\":\"wildcard\"},\"prikey\":{\"type\":\"keyword\"},\"signer\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"ver\":{\"type\":\"short\"}}}}";
 		String repuHistJsonStr = "{\"mappings\":{\"properties\":{\"cause\":{\"type\":\"text\"},\"height\":{\"type\":\"long\"},\"hot\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"ratee\":{\"type\":\"wildcard\"},\"rater\":{\"type\":\"wildcard\"},\"reputation\":{\"type\":\"long\"},\"time\":{\"type\":\"long\"}}}}";
 		String parseMarkJsonStr = "{\"mappings\":{\"properties\":{\"fileName\":{\"type\":\"wildcard\"},\"lastHeight\":{\"type\":\"long\"},\"lastId\":{\"type\":\"keyword\"},\"lastIndex\":{\"type\":\"long\"},\"length\":{\"type\":\"short\"},\"pointer\":{\"type\":\"long\"}}}}";
-
-		// EsTools.createIndex(esClient, IndicesNames.CID, cidJsonStr);
+		String nidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"oid\":{\"type\":\"wildcard\"},\"active\":{\"type\":\"boolean\"},\"namer\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
+		
+		EsUtils.createIndex(esClient, IndicesNames.NID, nidJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.CID_HISTORY, cidHistJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.REPUTATION_HISTORY, repuHistJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.FEIP_MARK, parseMarkJsonStr);
@@ -71,22 +72,51 @@ public class IndicesFEIP {
 		EsUtils.createIndex(esClient, IndicesNames.BOX_HISTORY, boxHistJsonStr);
 
 		String statementJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
+		
+		EsUtils.createIndex(esClient, IndicesNames.STATEMENT, statementJsonStr);
+
+		String essayJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
+		String reportJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
+		String paperJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"keywords\":{\"type\":\"keyword\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
+		String bookJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
+		String artworkJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
+		String remarkJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"onDid\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
+
+		EsUtils.createIndex(esClient, IndicesNames.ESSAY, essayJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.REPORT, reportJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.ARTWORK, artworkJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.PAPER, paperJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BOOK, bookJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.REMARK, remarkJsonStr);
+
+		String essayHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"essayId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
+		String reportHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"reportId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
+		String paperHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"paperId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"keywords\":{\"type\":\"keyword\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
+		String bookHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"bookId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
+		String artworkHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"artworkId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
+		String remarkHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"remarkId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"onDid\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
+
+		EsUtils.createIndex(esClient, IndicesNames.ESSAY_HISTORY, essayHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.REPORT_HISTORY, reportHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.ARTWORK_HISTORY, artworkHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.PAPER_HISTORY, paperHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.BOOK_HISTORY, bookHistJsonStr);
+		EsUtils.createIndex(esClient, IndicesNames.REMARK_HISTORY, remarkHistJsonStr);
+
 		String proofJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"cosignersInvited\":{\"type\":\"wildcard\"},\"cosignersSigned\":{\"type\":\"wildcard\"},\"isTransferable\":{\"type\":\"boolean\"},\"active\":{\"type\":\"boolean\"},\"issuer\":{\"type\":\"wildcard\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String proofHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"},\"proofId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"cosignersInvited\":{\"type\":\"wildcard\"},\"isTransferable\":{\"type\":\"boolean\"},\"allSignsRequired\":{\"type\":\"boolean\"}}}}";
 		String tokenJsonStr ="{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"capacity\":{\"type\":\"keyword\"},\"decimal\":{\"type\":\"keyword\"},\"transferable\":{\"type\":\"keyword\"},\"closable\":{\"type\":\"keyword\"},\"openIssue\":{\"type\":\"keyword\"},\"maxAmtPerIssue\":{\"type\":\"keyword\"},\"minCddPerIssue\":{\"type\":\"keyword\"},\"maxIssuesPerAddr\":{\"type\":\"keyword\"},\"closed\":{\"type\":\"keyword\"},\"deployer\":{\"type\":\"keyword\"},\"circulating\":{\"type\":\"double\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String tokenHolderJsonStr ="{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"fid\":{\"type\":\"keyword\"},\"tokenId\":{\"type\":\"keyword\"},\"balance\":{\"type\":\"double\"},\"firstHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
 		String tokenHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"integer\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"keyword\"},\"recipient\":{\"type\":\"keyword\"},\"cdd\":{\"type\":\"long\"},\"tokenId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"capacity\":{\"type\":\"keyword\"},\"decimal\":{\"type\":\"keyword\"},\"transferable\":{\"type\":\"keyword\"},\"closable\":{\"type\":\"keyword\"},\"openIssue\":{\"type\":\"keyword\"},\"maxAmtPerIssue\":{\"type\":\"keyword\"},\"minCddPerIssue\":{\"type\":\"keyword\"},\"maxIssuesPerAddr\":{\"type\":\"keyword\"},\"issueTo\":{\"type\":\"nested\",\"properties\":{\"fid\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"double\"}}},\"transferTo\":{\"type\":\"nested\",\"properties\":{\"fid\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"double\"}}}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.STATEMENT, statementJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.PROOF, proofJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.PROOF_HISTORY, proofHistJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.TOKEN, tokenJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderJsonStr);
 		EsUtils.createIndex(esClient, IndicesNames.TOKEN_HISTORY, tokenHistJsonStr);
+	
 
-		String nidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"oid\":{\"type\":\"wildcard\"},\"active\":{\"type\":\"boolean\"},\"namer\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.NID, nidJsonStr);
 
-		String nobodyJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"prikey\":{\"type\":\"keyword\"},\"deathTime\":{\"type\":\"long\"},\"deathTxIndex\":{\"type\":\"integer\"},\"deathTxId\":{\"type\":\"keyword\"}}}}";
+		String nobodyJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"prikey\":{\"type\":\"keyword\"},\"leakTime\":{\"type\":\"long\"},\"leakTxIndex\":{\"type\":\"integer\"},\"leakTxId\":{\"type\":\"keyword\"}}}}";
 		EsUtils.createIndex(esClient, IndicesNames.NOBODY, nobodyJsonStr);
 	}
 
@@ -123,6 +153,18 @@ public class IndicesFEIP {
 		EsUtils.deleteIndex(esClient, IndicesNames.BOX_HISTORY);
 
 		EsUtils.deleteIndex(esClient, IndicesNames.STATEMENT);
+		EsUtils.deleteIndex(esClient, IndicesNames.ESSAY);
+		EsUtils.deleteIndex(esClient, IndicesNames.REPORT);
+		EsUtils.deleteIndex(esClient, IndicesNames.PAPER);
+		EsUtils.deleteIndex(esClient, IndicesNames.BOOK);
+		EsUtils.deleteIndex(esClient, IndicesNames.ARTWORK);
+		EsUtils.deleteIndex(esClient, IndicesNames.REMARK);
+		EsUtils.deleteIndex(esClient, IndicesNames.ESSAY_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.REPORT_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.ARTWORK_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.PAPER_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.BOOK_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.REMARK_HISTORY);
 		EsUtils.deleteIndex(esClient, IndicesNames.PROOF);
 		EsUtils.deleteIndex(esClient, IndicesNames.PROOF_HISTORY);
 		EsUtils.deleteIndex(esClient, IndicesNames.NID);

@@ -2,12 +2,51 @@ package data.fchData;
 
 import data.fcData.FcObject;
 
+import java.util.*;
+
+import static constants.FieldNames.*;
+
 public class Nobody extends FcObject {
     private String prikey;
-    private Long deathTime;
-    private Long deathHeight;
-    private String deathTxId;
-    private Integer deathTxIndex;
+    private Long leakTime;
+    private Long leakHeight;
+    private String leakTxId;
+    private Integer leakTxIndex;
+
+
+    public static LinkedHashMap<String,Integer> getFieldWidthMap(){
+        LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+        map.put(ID, DEFAULT_ID_LENGTH);
+        map.put(PRIKEY, DEFAULT_ID_LENGTH);
+        map.put(LEAK_TIME, DEFAULT_TIME_LENGTH);
+        map.put(LEAK_TX_ID, DEFAULT_ID_LENGTH);
+        return map;
+    }
+    public static List<String> getTimestampFieldList(){
+        return List.of(LEAK_TIME);
+    }
+
+    public static List<String> getSatoshiFieldList(){
+        return new ArrayList<>();
+    }
+    public static Map<String, String> getHeightToTimeFieldMap() {
+        return new HashMap<>();
+    }
+
+    public static Map<String, String> getShowFieldNameAsMap() {
+        Map<String,String> map = new HashMap<>();
+        map.put(ID,FID);
+        return map;
+    }
+    public static List<String> getReplaceWithMeFieldList() {
+        return List.of(OWNER,ISSUER);
+    }
+
+    //For create with user input
+    public static Map<String, Object> getInputFieldDefaultValueMap() {
+        return new HashMap<>();
+    }
+
 
     public String getPrikey() {
         return prikey;
@@ -17,35 +56,35 @@ public class Nobody extends FcObject {
         this.prikey = prikey;
     }
 
-    public Long getDeathTime() {
-        return deathTime;
+    public Long getLeakTime() {
+        return leakTime;
     }
 
-    public void setDeathTime(Long deathTime) {
-        this.deathTime = deathTime;
+    public void setLeakTime(Long leakTime) {
+        this.leakTime = leakTime;
     }
 
-    public Long getDeathHeight() {
-        return deathHeight;
+    public Long getLeakHeight() {
+        return leakHeight;
     }
 
-    public void setDeathHeight(Long deathHeight) {
-        this.deathHeight = deathHeight;
+    public void setLeakHeight(Long leakHeight) {
+        this.leakHeight = leakHeight;
     }
 
-    public String getDeathTxId() {
-        return deathTxId;
+    public String getLeakTxId() {
+        return leakTxId;
     }
 
-    public void setDeathTxId(String deathTxId) {
-        this.deathTxId = deathTxId;
+    public void setLeakTxId(String leakTxId) {
+        this.leakTxId = leakTxId;
     }
 
-    public Integer getDeathTxIndex() {
-        return deathTxIndex;
+    public Integer getLeakTxIndex() {
+        return leakTxIndex;
     }
 
-    public void setDeathTxIndex(Integer deathTxIndex) {
-        this.deathTxIndex = deathTxIndex;
+    public void setLeakTxIndex(Integer leakTxIndex) {
+        this.leakTxIndex = leakTxIndex;
     }
 }

@@ -31,8 +31,8 @@ public class CidInfo extends Cid {
 
     public static LinkedHashMap<String,Integer> getFieldWidthMap(){
         LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-        map.put(ID,ID_DEFAULT_SHOW_SIZE);
-        map.put(LABEL,ID_DEFAULT_SHOW_SIZE);
+        map.put(ID, DEFAULT_ID_LENGTH);
+        map.put(LABEL, DEFAULT_ID_LENGTH);
         map.put(IS_NOBODY,IS_NOBODY.length());
         map.put(WATCH_ONLY,WATCH_ONLY.length());
         return map;

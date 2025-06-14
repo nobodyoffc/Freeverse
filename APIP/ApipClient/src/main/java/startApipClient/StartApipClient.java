@@ -83,6 +83,7 @@ public class StartApipClient {
         menuItemList.add("Construct");
         menuItemList.add("Personal");
         menuItemList.add("Publish");
+        menuItemList.add("Finance");
         menuItemList.add("Wallet");
         menuItemList.add("Crypto");
         menuItemList.add("Endpoint");
@@ -104,10 +105,11 @@ public class StartApipClient {
                 case 7 -> construct();
                 case 8 -> personal();
                 case 9 -> publish();
-                case 10 -> wallet();
-                case 11 -> crypto();
-                case 12 -> endpoint();
-                case 13 -> {
+                case 10 -> finance();
+                case 11 -> wallet();
+                case 12 -> crypto();
+                case 13 -> endpoint();
+                case 14 -> {
                     settings.setting(br, null);
                     symKey = settings.getSymkey();
                     apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
@@ -567,8 +569,9 @@ public class StartApipClient {
                 case 8 -> homepageHistory(DEFAULT_SIZE, "height:desc->index:desc");
                 case 9 -> noticeFeeHistory(DEFAULT_SIZE, "height:desc->index:desc");
                 case 10 -> reputationHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 11 -> getAvatar();
-                case 12 -> avatars();
+                case 11 -> nidSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 12 -> getAvatar();
+                case 13 -> avatars();
                 case 0 -> {
                     return;
                 }
@@ -883,6 +886,22 @@ public class StartApipClient {
                 case 14 -> appByIds();
                 case 15 -> appOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
                 case 16 -> appRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 17 -> remarkSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 18 -> remarkByIds();
+                case 19 -> remarkOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 20 -> remarkRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 21 -> paperSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 22 -> paperByIds();
+                case 23 -> paperOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 24 -> paperRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 25 -> bookSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 26 -> bookByIds();
+                case 27 -> bookOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 28 -> bookRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 29 -> artworkSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 30 -> artworkByIds();
+                case 31 -> artworkOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 32 -> artworkRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
                 case 0 -> {
                     return;
                 }
@@ -1367,18 +1386,32 @@ public class StartApipClient {
             int choice = menu.choose(br);
 
             switch (choice) {
-                case 1 -> proofSearch(DEFAULT_SIZE, "lastHeight:desc->id:asc");
-                case 2 -> proofByIds();
-                case 3 -> proofHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 4 -> statementSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
-                case 5 -> statementByIds();
-                case 6 -> nidSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
-                case 7 -> tokenSearch(DEFAULT_SIZE, "lastHeight:desc->id:asc");
-                case 8 -> tokenByIds();
-                case 9 -> tokenHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 10 -> tokenHolderSearch(DEFAULT_SIZE, "lastHeight:desc->id:asc");
-                case 11 -> tokenHoldersByIds();
-                case 12 -> myTokens();
+                case 1 -> statementSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 2 -> statementByIds();
+                case 3 -> essaySearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 4 -> essayByIds();
+                case 5 -> essayOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 6 -> essayRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 7 -> reportSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 8 -> reportByIds();
+                case 9 -> reportOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 10 -> reportRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 11 -> paperSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 12 -> paperByIds();
+                case 13 -> paperOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 14 -> paperRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 15 -> bookSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 16 -> bookByIds();
+                case 17 -> bookOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 18 -> bookRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 19 -> artworkSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 20 -> artworkByIds();
+                case 21 -> artworkOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 22 -> artworkRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 23 -> remarkSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 24 -> remarkByIds();
+                case 25 -> remarkOpHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 26 -> remarkRateHistory(DEFAULT_SIZE, "height:desc->index:desc");
                 case 0 -> {
                     return;
                 }
@@ -1386,6 +1419,289 @@ public class StartApipClient {
         }
     }
 
+    public static void essayByIds() {
+        String[] ids = Inputer.inputStringArray(br, "Input Essay_Ids:", 0);
+        System.out.println("Requesting essayByIds...");
+        Map<String, Essay> result = apipClient.essayByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void essaySearch(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting essaySearch...");
+        List<Essay> result = apipClient.essaySearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void essayOpHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting essayOpHistory...");
+        List<EssayHistory> result = apipClient.essayOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void essayRateHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting essayRateHistory...");
+        List<EssayHistory> result = apipClient.essayRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void reportByIds( ) {
+        String[] ids = Inputer.inputStringArray(br, "Input Report_Ids:", 0);
+        System.out.println("Requesting reportByIds...");
+        Map<String, Report> result = apipClient.reportByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void reportSearch(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting reportSearch...");
+        List<Report> result = apipClient.reportSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void reportOpHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting reportOpHistory...");
+        List<ReportHistory> result = apipClient.reportOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void reportRateHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting reportRateHistory...");
+        List<ReportHistory> result = apipClient.reportRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void paperByIds( ) {
+        String[] ids = Inputer.inputStringArray(br, "Input Paper_Ids:", 0);
+        System.out.println("Requesting paperByIds...");
+        Map<String, Paper> result = apipClient.paperByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void paperSearch(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting paperSearch...");
+        List<Paper> result = apipClient.paperSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void paperOpHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting paperOpHistory...");
+        List<PaperHistory> result = apipClient.paperOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void paperRateHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting paperRateHistory...");
+        List<PaperHistory> result = apipClient.paperRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void bookByIds( ) {
+        String[] ids = Inputer.inputStringArray(br, "Input Book_Ids:", 0);
+        System.out.println("Requesting bookByIds...");
+        Map<String, Book> result = apipClient.bookByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void bookSearch(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting bookSearch...");
+        List<Book> result = apipClient.bookSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void bookOpHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting bookOpHistory...");
+        List<BookHistory> result = apipClient.bookOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void bookRateHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting bookRateHistory...");
+        List<BookHistory> result = apipClient.bookRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void remarkByIds( ) {
+        String[] ids = Inputer.inputStringArray(br, "Input Remark_Ids:", 0);
+        System.out.println("Requesting remarkByIds...");
+        Map<String, Remark> result = apipClient.remarkByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void remarkSearch(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting remarkSearch...");
+        List<Remark> result = apipClient.remarkSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void remarkOpHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting remarkOpHistory...");
+        List<RemarkHistory> result = apipClient.remarkOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void remarkRateHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting remarkRateHistory...");
+        List<RemarkHistory> result = apipClient.remarkRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void artworkByIds( ) {
+        String[] ids = Inputer.inputStringArray(br, "Input Artwork_Ids:", 0);
+        System.out.println("Requesting artworkByIds...");
+        Map<String, Artwork> result = apipClient.artworkByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void artworkSearch(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting artworkSearch...");
+        List<Artwork> result = apipClient.artworkSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void artworkOpHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting artworkOpHistory...");
+        List<ArtworkHistory> result = apipClient.artworkOpHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void artworkRateHistory(int defaultSize, String defaultSort) {
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+        System.out.println("Requesting artworkRateHistory...");
+        List<ArtworkHistory> result = apipClient.artworkRateHistory(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void finance( ) {
+        System.out.println("Finance...");
+        while (true) {
+            Menu menu = new Menu();
+            menu.setTitle("Finance");
+            menu.add(ApipApiNames.financeAPIs);
+            menu.show();
+            int choice = menu.choose(br);
+
+            switch (choice) {
+                case 1 -> proofSearch(DEFAULT_SIZE, "lastHeight:desc->id:asc");
+                case 2 -> proofByIds();
+                case 3 -> proofHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 4 -> tokenSearch(DEFAULT_SIZE, "lastHeight:desc->id:asc");
+                case 5 -> tokenByIds();
+                case 6 -> tokenHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 7 -> tokenHolderSearch(DEFAULT_SIZE, "lastHeight:desc->id:asc");
+                case 8 -> tokenHoldersByIds();
+                case 9 -> myTokens();
+                case 0 -> {
+                    return;
+                }
+            }
+        }
+    }
 
     public static void wallet( ) {
         System.out.println("Wallet...");
@@ -1399,7 +1715,7 @@ public class StartApipClient {
                 "Unconfirmed",
                 "Fee Rate",
                 "Get offLine Tx",
-                    "Balance by FIDs"
+                "Balance by FIDs"
             );
             menu.show();
             int choice = menu.choose(br);

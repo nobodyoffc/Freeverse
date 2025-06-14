@@ -39,19 +39,19 @@ public class CidInfo extends Cid {
     };
 
     public static Integer[] DefaultShowWidth = {
-        ID_DEFAULT_SHOW_SIZE,
-        TEXT_DEFAULT_SHOW_SIZE,
-        BOOLEAN_DEFAULT_SHOW_SIZE,
-        BOOLEAN_DEFAULT_SHOW_SIZE
+            DEFAULT_ID_LENGTH,
+            DEFAULT_TEXT_LENGTH,
+            DEFAULT_BOOLEAN_LENGTH,
+            DEFAULT_BOOLEAN_LENGTH
     };
 
 
     public static LinkedHashMap<String,Integer> getFieldWidthMap(){
         LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-        map.put(ID,ID_DEFAULT_SHOW_SIZE);
-        map.put(LABEL,ID_DEFAULT_SHOW_SIZE);
-        map.put(IS_NOBODY,BOOLEAN_DEFAULT_SHOW_SIZE);
-        map.put(WATCH_ONLY,BOOLEAN_DEFAULT_SHOW_SIZE);
+        map.put(ID, DEFAULT_ID_LENGTH);
+        map.put(LABEL, DEFAULT_ID_LENGTH);
+        map.put(IS_NOBODY, DEFAULT_BOOLEAN_LENGTH);
+        map.put(WATCH_ONLY, DEFAULT_BOOLEAN_LENGTH);
         return map;
     }
     public static List<String> getTimestampFieldList(){

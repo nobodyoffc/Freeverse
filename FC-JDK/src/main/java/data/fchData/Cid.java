@@ -49,16 +49,17 @@ public class Cid extends FcSubject {
 
     public static LinkedHashMap<String,Integer> getFieldWidthMap(){
         LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-        map.put(ID,ID_DEFAULT_SHOW_SIZE);
-        map.put(CID,ID_DEFAULT_SHOW_SIZE);
-        map.put(CASH,AMOUNT_DEFAULT_SHOW_SIZE);
-        map.put(BALANCE,AMOUNT_DEFAULT_SHOW_SIZE);
-        map.put(CDD,CD_DEFAULT_SHOW_SIZE);
-        map.put(LAST_HEIGHT,TIME_DEFAULT_SHOW_SIZE);
+        map.put(ID, DEFAULT_ID_LENGTH);
+        map.put(CID, DEFAULT_ID_LENGTH);
+        map.put(BALANCE, DEFAULT_AMOUNT_LENGTH);
+        map.put(CASH, DEFAULT_AMOUNT_LENGTH);
+        map.put(CD, DEFAULT_CD_LENGTH);
+        map.put(CDD, DEFAULT_CD_LENGTH);
+        map.put(NAME_TIME, DEFAULT_TIME_LENGTH);
         return map;
     }
     public static List<String> getTimestampFieldList(){
-        return new ArrayList<>();
+        return List.of(NAME_TIME);
     }
 
     public static List<String> getSatoshiFieldList(){
@@ -71,7 +72,11 @@ public class Cid extends FcSubject {
     }
 
     public static Map<String, String> getShowFieldNameAsMap() {
-        return new HashMap<>();
+        Map<String,String> map = new HashMap<>();
+        map.put(ID,FID);
+        map.put(CD,"CD");
+        map.put(CDD,"CDD");
+        return map;
     }
 
     public static Map<String, Object> getInputFieldDefaultValueMap() {

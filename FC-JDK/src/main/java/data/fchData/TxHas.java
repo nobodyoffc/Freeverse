@@ -5,7 +5,6 @@ import data.fcData.FcObject;
 import java.util.ArrayList;
 
 public class TxHas extends FcObject {
-	private String id;			//txid
 	private String rawTx;
 	private Long height;		//height
 	private ArrayList<CashMark> inMarks;

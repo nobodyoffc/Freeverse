@@ -13,7 +13,6 @@ import utils.JsonUtils;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class OrganizationRollbacker {
 
@@ -39,8 +38,6 @@ public class OrganizationRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.GROUP, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.GROUP_HISTORY,histIdList);
-		
-		TimeUnit.SECONDS.sleep(3);
 		
 		List<GroupHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.GROUP_HISTORY,"gid",itemIdList, GroupHistory.class);
 		
@@ -98,14 +95,10 @@ public class OrganizationRollbacker {
 		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'team': ");
 		JsonUtils.printJson(itemIdList);
 		
-		TimeUnit.SECONDS.sleep(10);
-		
 		deleteEffectedItems(esClient, IndicesNames.TEAM, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.TEAM_HISTORY,histIdList);
 
-		TimeUnit.SECONDS.sleep(3);
-		
 		List<TeamHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEAM_HISTORY,"tid",itemIdList, TeamHistory.class);
 		
 		reparseTeam(esClient,reparseHistList);

@@ -113,6 +113,8 @@ public class StartFeipClient {
                         case REPORT -> FeipClient.report(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case PAPER -> FeipClient.paper(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case BOOK -> FeipClient.book(priKey, watchFid, sendToList, null, apipClient, null, br);
+                        case REMARK -> FeipClient.remark(priKey, watchFid, sendToList, null, apipClient, null, br);
+                        case ARTWORK -> FeipClient.artwork(priKey, watchFid, sendToList, null, apipClient, null, br);
                         
                         case TEAM -> FeipClient.team(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case GROUP -> FeipClient.group(priKey, watchFid, sendToList, null, null, apipClient, null, br);

@@ -1091,4 +1091,492 @@ public class PublishParser {
 		return isValid;
 	}
 
+	public RemarkHistory makeRemark(OpReturn opre, Feip feip) {
+
+		Gson gson = new Gson();
+
+		RemarkOpData remarkRaw = new RemarkOpData();
+		try {
+			remarkRaw = gson.fromJson(gson.toJson(feip.getData()), RemarkOpData.class);
+			if(remarkRaw==null)return null;
+		}catch(Exception e) {
+			e.printStackTrace();
+			try {
+				TimeUnit.SECONDS.sleep(5);
+			} catch (InterruptedException ex) {
+				throw new RuntimeException(ex);
+			}
+			return null;
+		}
+
+		RemarkHistory remarkHist = new RemarkHistory();
+
+		if(remarkRaw.getOp()==null)return null;
+
+		remarkHist.setOp(remarkRaw.getOp());
+
+		switch(remarkRaw.getOp()) {
+
+			case PUBLISH:
+				if(remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle())) return null;
+            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+				remarkHist.setId(opre.getId());
+
+				remarkHist.setRemarkId(opre.getId());
+				remarkHist.setHeight(opre.getHeight());
+				remarkHist.setIndex(opre.getTxIndex());
+				remarkHist.setTime(opre.getTime());
+				remarkHist.setSigner(opre.getSigner());
+
+				if(remarkRaw.getDid()!=null)remarkHist.setDid(remarkRaw.getDid());
+				if(remarkRaw.getTitle()!=null)remarkHist.setTitle(remarkRaw.getTitle());
+				if(remarkRaw.getLang()!=null)remarkHist.setLang(remarkRaw.getLang());
+				if(remarkRaw.getAuthors()!=null)remarkHist.setAuthors(remarkRaw.getAuthors());
+				if(remarkRaw.getSummary()!=null)remarkHist.setSummary(remarkRaw.getSummary());
+				if(remarkRaw.getOnDid()!=null)remarkHist.setOnDid(remarkRaw.getOnDid());
+
+				break;
+
+			case UPDATE:
+				if(remarkRaw.getRemarkId()==null|| remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle()))
+					return null;
+				remarkHist.setId(opre.getId());
+				remarkHist.setHeight(opre.getHeight());
+				remarkHist.setIndex(opre.getTxIndex());
+				remarkHist.setTime(opre.getTime());
+				remarkHist.setSigner(opre.getSigner());
+
+				remarkHist.setRemarkId(remarkRaw.getRemarkId());
+
+				if(remarkRaw.getDid()!=null)remarkHist.setDid(remarkRaw.getDid());
+				if(remarkRaw.getTitle()!=null)remarkHist.setTitle(remarkRaw.getTitle());
+				if(remarkRaw.getLang()!=null)remarkHist.setLang(remarkRaw.getLang());
+				if(remarkRaw.getAuthors()!=null)remarkHist.setAuthors(remarkRaw.getAuthors());
+				if(remarkRaw.getSummary()!=null)remarkHist.setSummary(remarkRaw.getSummary());
+				if(remarkRaw.getOnDid()!=null)remarkHist.setOnDid(remarkRaw.getOnDid());
+
+				break;
+			case RECOVER:
+			case DELETE:
+				if (remarkRaw.getRemarkIds() == null || remarkRaw.getRemarkIds().length == 0) {
+					return null;
+				}
+				remarkHist.setRemarkIds(remarkRaw.getRemarkIds());
+				remarkHist.setId(opre.getId());
+				remarkHist.setHeight(opre.getHeight());
+				remarkHist.setIndex(opre.getTxIndex());
+				remarkHist.setTime(opre.getTime());
+				remarkHist.setSigner(opre.getSigner());
+
+				break;
+
+			case RATE:
+				if(remarkRaw.getRemarkId()==null)return null;
+				if (opre.getCdd() < StartFEIP.CddRequired) return null;
+				remarkHist.setRemarkId(remarkRaw.getRemarkId());
+				remarkHist.setRate(remarkRaw.getRate());
+				remarkHist.setCdd(opre.getCdd());
+
+				remarkHist.setId(opre.getId());
+				remarkHist.setHeight(opre.getHeight());
+				remarkHist.setIndex(opre.getTxIndex());
+				remarkHist.setTime(opre.getTime());
+				remarkHist.setSigner(opre.getSigner());
+				break;
+			default:
+				return null;
+		}
+		return remarkHist;
+	}
+
+	public boolean parseRemark(ElasticsearchClient esClient, RemarkHistory remarkHist) throws Exception {
+
+		boolean isValid = false;
+		if(remarkHist==null)return false;
+		Remark remark;
+		switch (remarkHist.getOp()) {
+			case PUBLISH -> {
+				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
+				if (remark == null) {
+					remark = new Remark();
+
+					remark.setId(remarkHist.getRemarkId());
+					remark.setVer("1");
+					remark.setDid(remarkHist.getDid());
+
+					remark.setLang(remarkHist.getLang());
+					remark.setTitle(remarkHist.getTitle());
+					remark.setAuthors(remarkHist.getAuthors());
+					remark.setSummary(remarkHist.getSummary());
+					remark.setOnDid(remarkHist.getOnDid());
+
+					remark.setPublisher(remarkHist.getSigner());
+
+					remark.setBirthTime(remarkHist.getTime());
+					remark.setBirthHeight(remarkHist.getHeight());
+					remark.setLastTxId(remarkHist.getId());
+					remark.setLastTime(remarkHist.getTime());
+					remark.setLastHeight(remarkHist.getHeight());
+
+					remark.setDeleted(false);
+
+					Remark remark1 = remark;
+
+					esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark1));
+					isValid = true;
+				} else {
+					isValid = false;
+				}
+			}
+			case UPDATE -> {
+				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
+				if (remark == null) {
+					isValid = false;
+					break;
+				}
+				if (Boolean.TRUE.equals(remark.isDeleted())) {
+					isValid = false;
+					break;
+				}
+				if (!remark.getPublisher().equals(remarkHist.getSigner())) {
+					isValid = false;
+					break;
+				}
+				remark.setVer(String.valueOf(Integer.parseInt(remark.getVer())+1));
+				remark.setDid(remarkHist.getDid());
+				remark.setTitle(remarkHist.getTitle());
+				remark.setLang(remarkHist.getLang());
+				remark.setAuthors(remarkHist.getAuthors());
+				remark.setSummary(remarkHist.getSummary());
+				remark.setOnDid(remarkHist.getOnDid());
+
+				remark.setLastTxId(remarkHist.getId());
+				remark.setLastTime(remarkHist.getTime());
+				remark.setLastHeight(remarkHist.getHeight());
+				Remark remark2 = remark;
+				esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark2));
+				isValid = true;
+			}
+
+			case DELETE, RECOVER -> {
+				List<String> idList = new ArrayList<>();
+				if (remarkHist.getRemarkIds() != null && remarkHist.getRemarkIds().length > 0) {
+					idList.addAll(Arrays.asList(remarkHist.getRemarkIds()));
+				} else {
+					isValid = false;
+					break;
+				}
+
+				EsUtils.MgetResult<Remark> result = EsUtils.getMultiByIdList(esClient, IndicesNames.REMARK, idList, Remark.class);
+				List<Remark> remarks = result.getResultList();
+
+				List<Remark> updatedRemarks = new ArrayList<>();
+				for (Remark remarkItem : remarks) {
+
+					if (!remarkItem.getPublisher().equals(remarkHist.getSigner())) {
+						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, remarkHist.getSigner(), Cid.class);
+						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(remarkHist.getSigner())) {
+							continue;
+						}
+					}
+
+					switch (remarkHist.getOp()) {
+						case DELETE:
+							remarkItem.setDeleted(true);
+							break;
+						case RECOVER:
+							remarkItem.setDeleted(false);
+							break;
+					}
+
+					remarkItem.setLastTxId(remarkHist.getId());
+					remarkItem.setLastTime(remarkHist.getTime());
+					remarkItem.setLastHeight(remarkHist.getHeight());
+
+					updatedRemarks.add(remarkItem);
+				}
+
+				if (!updatedRemarks.isEmpty()) {
+					BulkRequest.Builder br = new BulkRequest.Builder();
+					for (Remark updatedRemark : updatedRemarks) {
+						br.operations(op -> op
+								.index(idx -> idx
+										.index(IndicesNames.REMARK)
+										.id(updatedRemark.getId())
+										.document(updatedRemark)
+								)
+						);
+					}
+					esClient.bulk(br.build());
+					isValid = true;
+				}
+			}
+
+			case RATE -> {
+				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
+				if (remark == null) {
+					isValid = false;
+					break;
+				}
+				if (remark.getPublisher().equals(remarkHist.getSigner())) {
+					isValid = false;
+					break;
+				}
+
+				if((remarkHist.getCdd()==null || remarkHist.getRate()==null)){
+					isValid=false;
+					break;
+				}
+
+				if(remark.gettCdd()==null||remark.gettRate()==null){
+					remark.settRate(Float.valueOf(remarkHist.getRate()));
+					remark.settCdd(remarkHist.getCdd());
+				}else{
+					remark.settRate(
+							(remark.gettRate()*remark.gettCdd()+remarkHist.getRate()*remarkHist.getCdd())
+									/(remark.gettCdd()+remarkHist.getCdd())
+					);
+					remark.settCdd(remark.gettCdd() + remarkHist.getCdd());
+				}
+
+				remark.setLastTxId(remarkHist.getId());
+				remark.setLastTime(remarkHist.getTime());
+				remark.setLastHeight(remarkHist.getHeight());
+				Remark remark3 = remark;
+				esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark3));
+				isValid = true;
+			}
+		}
+
+		return isValid;
+	}
+
+	public ArtworkHistory makeArtwork(OpReturn opre, Feip feip) {
+
+		Gson gson = new Gson();
+
+		ArtworkOpData artworkRaw = new ArtworkOpData();
+		try {
+			artworkRaw = gson.fromJson(gson.toJson(feip.getData()), ArtworkOpData.class);
+			if(artworkRaw==null)return null;
+		}catch(Exception e) {
+			e.printStackTrace();
+			try {
+				TimeUnit.SECONDS.sleep(5);
+			} catch (InterruptedException ex) {
+				throw new RuntimeException(ex);
+			}
+			return null;
+		}
+
+		ArtworkHistory artworkHist = new ArtworkHistory();
+
+		if(artworkRaw.getOp()==null)return null;
+
+		artworkHist.setOp(artworkRaw.getOp());
+
+		switch(artworkRaw.getOp()) {
+
+			case PUBLISH:
+				if(artworkRaw.getTitle()==null||"".equals(artworkRaw.getTitle())) return null;
+            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+				artworkHist.setId(opre.getId());
+
+				artworkHist.setArtworkId(opre.getId());
+				artworkHist.setHeight(opre.getHeight());
+				artworkHist.setIndex(opre.getTxIndex());
+				artworkHist.setTime(opre.getTime());
+				artworkHist.setSigner(opre.getSigner());
+
+				if(artworkRaw.getDid()!=null)artworkHist.setDid(artworkRaw.getDid());
+				if(artworkRaw.getTitle()!=null)artworkHist.setTitle(artworkRaw.getTitle());
+				if(artworkRaw.getLang()!=null)artworkHist.setLang(artworkRaw.getLang());
+				if(artworkRaw.getAuthors()!=null)artworkHist.setAuthors(artworkRaw.getAuthors());
+				if(artworkRaw.getSummary()!=null)artworkHist.setSummary(artworkRaw.getSummary());
+
+				break;
+			case UPDATE:
+				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())) return null;
+				artworkHist.setId(opre.getId());
+
+				artworkHist.setArtworkId(artworkRaw.getArtworkId());
+				artworkHist.setHeight(opre.getHeight());
+				artworkHist.setIndex(opre.getTxIndex());
+				artworkHist.setTime(opre.getTime());
+				artworkHist.setSigner(opre.getSigner());
+
+				if(artworkRaw.getDid()!=null)artworkHist.setDid(artworkRaw.getDid());
+				if(artworkRaw.getTitle()!=null)artworkHist.setTitle(artworkRaw.getTitle());
+				if(artworkRaw.getLang()!=null)artworkHist.setLang(artworkRaw.getLang());
+				if(artworkRaw.getAuthors()!=null)artworkHist.setAuthors(artworkRaw.getAuthors());
+				if(artworkRaw.getSummary()!=null)artworkHist.setSummary(artworkRaw.getSummary());
+
+				break;
+			case DELETE:
+			case RECOVER:
+				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())) return null;
+				artworkHist.setId(opre.getId());
+
+				artworkHist.setArtworkId(artworkRaw.getArtworkId());
+				artworkHist.setHeight(opre.getHeight());
+				artworkHist.setIndex(opre.getTxIndex());
+				artworkHist.setTime(opre.getTime());
+				artworkHist.setSigner(opre.getSigner());
+
+				break;
+			case RATE:
+				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())) return null;
+				if(artworkRaw.getRate()==null) return null;
+				artworkHist.setId(opre.getId());
+
+				artworkHist.setArtworkId(artworkRaw.getArtworkId());
+				artworkHist.setHeight(opre.getHeight());
+				artworkHist.setIndex(opre.getTxIndex());
+				artworkHist.setTime(opre.getTime());
+				artworkHist.setSigner(opre.getSigner());
+				artworkHist.setRate(artworkRaw.getRate());
+				artworkHist.setCdd(opre.getCdd());
+
+				break;
+			default:
+				return null;
+		}
+
+		return artworkHist;
+	}
+
+	public boolean parseArtwork(ElasticsearchClient esClient, ArtworkHistory artworkHist) throws Exception {
+
+		boolean isValid = false;
+		if(artworkHist==null)return false;
+		Artwork artwork;
+		switch (artworkHist.getOp()) {
+			case PUBLISH -> {
+				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
+				if (artwork == null) {
+					artwork = new Artwork();
+
+					artwork.setId(artworkHist.getArtworkId());
+					artwork.setVer("1");
+					artwork.setDid(artworkHist.getDid());
+
+					artwork.setLang(artworkHist.getLang());
+					artwork.setTitle(artworkHist.getTitle());
+					artwork.setAuthors(artworkHist.getAuthors());
+					artwork.setSummary(artworkHist.getSummary());
+
+					artwork.setPublisher(artworkHist.getSigner());
+
+					artwork.setBirthTime(artworkHist.getTime());
+					artwork.setBirthHeight(artworkHist.getHeight());
+					artwork.setLastTxId(artworkHist.getId());
+					artwork.setLastTime(artworkHist.getTime());
+					artwork.setLastHeight(artworkHist.getHeight());
+
+					artwork.setDeleted(false);
+
+					Artwork artwork1 = artwork;
+
+					esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork1));
+					isValid = true;
+				} else {
+					isValid = false;
+				}
+			}
+			case UPDATE -> {
+				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
+				if (artwork == null) {
+					isValid = false;
+					break;
+				}
+				if (Boolean.TRUE.equals(artwork.isDeleted())) {
+					isValid = false;
+					break;
+				}
+				if (!artwork.getPublisher().equals(artworkHist.getSigner())) {
+					isValid = false;
+					break;
+				}
+				artwork.setVer(String.valueOf(Integer.parseInt(artwork.getVer())+1));
+				artwork.setDid(artworkHist.getDid());
+				artwork.setTitle(artworkHist.getTitle());
+				artwork.setLang(artworkHist.getLang());
+				artwork.setAuthors(artworkHist.getAuthors());
+				artwork.setSummary(artworkHist.getSummary());
+
+				artwork.setLastTxId(artworkHist.getId());
+				artwork.setLastTime(artworkHist.getTime());
+				artwork.setLastHeight(artworkHist.getHeight());
+				Artwork artwork2 = artwork;
+				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork2));
+				isValid = true;
+			}
+			case DELETE -> {
+				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
+				if (artwork == null) {
+					isValid = false;
+					break;
+				}
+				if (Boolean.TRUE.equals(artwork.isDeleted())) {
+					isValid = false;
+					break;
+				}
+				if (!artwork.getPublisher().equals(artworkHist.getSigner())) {
+					isValid = false;
+					break;
+				}
+				artwork.setDeleted(true);
+				artwork.setLastTxId(artworkHist.getId());
+				artwork.setLastTime(artworkHist.getTime());
+				artwork.setLastHeight(artworkHist.getHeight());
+				Artwork artwork3 = artwork;
+				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork3));
+				isValid = true;
+			}
+			case RECOVER -> {
+				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
+				if (artwork == null) {
+					isValid = false;
+					break;
+				}
+				if (!Boolean.TRUE.equals(artwork.isDeleted())) {
+					isValid = false;
+					break;
+				}
+				if (!artwork.getPublisher().equals(artworkHist.getSigner())) {
+					isValid = false;
+					break;
+				}
+				artwork.setDeleted(false);
+				artwork.setLastTxId(artworkHist.getId());
+				artwork.setLastTime(artworkHist.getTime());
+				artwork.setLastHeight(artworkHist.getHeight());
+				Artwork artwork4 = artwork;
+				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork4));
+				isValid = true;
+			}
+			case RATE -> {
+				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
+				if (artwork == null) {
+					isValid = false;
+					break;
+				}
+				if (Boolean.TRUE.equals(artwork.isDeleted())) {
+					isValid = false;
+					break;
+				}
+				artwork.settCdd(artwork.gettCdd() + artworkHist.getCdd());
+				artwork.settRate((artwork.gettRate() * artwork.gettCdd() + artworkHist.getRate() * artworkHist.getCdd()) / (artwork.gettCdd() + artworkHist.getCdd()));
+				artwork.setLastTxId(artworkHist.getId());
+				artwork.setLastTime(artworkHist.getTime());
+				artwork.setLastHeight(artworkHist.getHeight());
+				Artwork artwork5 = artwork;
+				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork5));
+				isValid = true;
+			}
+		}
+
+		return isValid;
+	}
+
 }

@@ -11,9 +11,10 @@ import utils.BytesUtils;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+
+import static constants.FieldNames.*;
 
 public class Multisign extends FcObject {
 	private String redeemScript;
@@ -25,6 +26,41 @@ public class Multisign extends FcObject {
 	private Long birthHeight;
 	private Long birthTime;
 	private String birthTxId;
+
+
+	public static LinkedHashMap<String,Integer> getFieldWidthMap(){
+		LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+		map.put(ID, DEFAULT_ID_LENGTH);
+		map.put("m", DEFAULT_BOOLEAN_LENGTH);
+		map.put("n", DEFAULT_BOOLEAN_LENGTH);
+		map.put(BIRTH_TIME, DEFAULT_TIME_LENGTH);
+		return map;
+	}
+	public static List<String> getTimestampFieldList(){
+		return List.of(BIRTH_TIME);
+	}
+
+	public static List<String> getSatoshiFieldList(){
+		return List.of(BALANCE);
+	}
+	public static Map<String, String> getHeightToTimeFieldMap() {
+		Map<String, String> map = new HashMap<>();
+		map.put(BIRTH_HEIGHT,BIRTH_TIME);
+		return map;
+	}
+
+	public static Map<String, String> getShowFieldNameAsMap() {
+		Map<String,String> map = new HashMap<>();
+		map.put(ID,FID);
+		map.put("m","Required");
+		map.put("n","Members");
+		return map;
+	}
+
+	public static Map<String, Object> getInputFieldDefaultValueMap() {
+		return new HashMap<>();
+	}
+
 
 	public void parseMultisign(ElasticsearchClient esClient, Cash input) throws ElasticsearchException, IOException {
         /* Example of multiSig input unlocking script:

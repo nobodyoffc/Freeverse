@@ -1,7 +1,6 @@
 package data.feipData;
 
 import constants.FieldNames;
-import constants.Values;
 
 import java.util.HashMap;
 import java.util.List;
@@ -15,6 +14,8 @@ public class PaperOpData {
 	private String op;
 
 	private String title;
+	private String summary;
+	private List<String> keywords;
 	private String did;
 	private String ver;
 	private List<String> authors;
@@ -56,11 +57,11 @@ public class PaperOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.URLS, FieldNames.PROTOCOLS, FieldNames.WAITERS});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.URLS, FieldNames.PROTOCOLS, FieldNames.WAITERS});
-		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.CODE_IDS});
-		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.CODE_IDS});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.RATE});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.TITLE, FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.KEYWORDS, FieldNames.SUMMARY});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.PAPER_ID, FieldNames.TITLE, FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.KEYWORDS, FieldNames.SUMMARY});
+		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.PAPER_IDS});
+		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.PAPER_IDS});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.PAPER_ID, FieldNames.RATE});
 	}
 
 	// Factory methods
@@ -173,9 +174,6 @@ public class PaperOpData {
 	public void setRate(Integer rate) {
 		this.rate = rate;
 	}
-
-	private String summary;
-	private List<String> keywords;
 
 	public List<String> getKeywords() {
 		return keywords;

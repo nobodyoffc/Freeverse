@@ -12,7 +12,6 @@ import data.feipData.TokenHistory;
 import utils.JsonUtils;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class FinanceRollbacker {
 
@@ -37,8 +36,6 @@ public class FinanceRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.PROOF, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY,histIdList);
-
-		TimeUnit.SECONDS.sleep(3);
 
 		List<ProofHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,"gid",itemIdList, ProofHistory.class);
 
@@ -102,13 +99,9 @@ public class FinanceRollbacker {
 
 		deleteRolledHists(esClient, IndicesNames.TOKEN_HISTORY,histIdList);
 
-		TimeUnit.SECONDS.sleep(3);
-
 		List<TokenHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY,"tokenId",tokenIdList, TokenHistory.class);
 
 		deleteEffectedTokenHolders(esClient,tokenIdList);
-
-		TimeUnit.SECONDS.sleep(3);
 
 		reparseToken(esClient,reparseHistList);
 

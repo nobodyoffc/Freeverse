@@ -38,6 +38,9 @@ public class IndicesNames {
     public static final String REPORT = "report";
     public static final String PAPER = "paper";
     public static final String BOOK = "book";
+    public static final String REMARK = "remark";
+    public static final String BOOK_HISTORY = "book_history";
+    public static final String REMARK_HISTORY = "remark_history";
 
     public static final String PROOF = "proof";
     public static final String PROOF_HISTORY = "proof_history";
@@ -58,7 +61,9 @@ public class IndicesNames {
     public static final String ESSAY_HISTORY = "essay_history";
     public static final String REPORT_HISTORY = "report_history";
     public static final String PAPER_HISTORY = "paper_history";
-    public static final String BOOK_HISTORY = "book_history";
+
+    public static final String ARTWORK = "artwork";
+    public static final String ARTWORK_HISTORY = "artwork_history";
 
     public static void printIndices() {
         Indices indices = Indices.CID;
@@ -110,7 +115,20 @@ public class IndicesNames {
         PROOF_HISTORY(IndicesNames.PROOF_HISTORY,32),
 
         FEIP_MARK(IndicesNames.FEIP_MARK,33),
-        NID(IndicesNames.NID,34);
+        NID(IndicesNames.NID,34),
+
+        ESSAY(IndicesNames.ESSAY,35),
+        REPORT(IndicesNames.REPORT,36),
+        PAPER(IndicesNames.PAPER,37),
+        BOOK(IndicesNames.BOOK,38),
+        REMARK(IndicesNames.REMARK,39),
+        ESSAY_HISTORY(IndicesNames.ESSAY_HISTORY,40),
+        REPORT_HISTORY(IndicesNames.REPORT_HISTORY,41),
+        PAPER_HISTORY(IndicesNames.PAPER_HISTORY,42),
+        BOOK_HISTORY(IndicesNames.BOOK_HISTORY,43),
+        REMARK_HISTORY(IndicesNames.REMARK_HISTORY,44),
+        ARTWORK(IndicesNames.ARTWORK,45),
+        ARTWORK_HISTORY(IndicesNames.ARTWORK_HISTORY,46);
 
         private int sn;
 

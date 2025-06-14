@@ -195,7 +195,7 @@ public class FcQuery {
 
         while (true) {
             Menu menu = new Menu();
-            menu.add("gt", "lt", "gte", "lte");
+            menu.add("great than", "less than", "great than and equal", "less than and equal");
             menu.show();
             int choice = menu.choose(br);
             switch (choice) {

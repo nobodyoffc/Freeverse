@@ -30,13 +30,13 @@ public class NobodySearch extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_BODY;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(DEATH_HEIGHT,false, DEATH_TX_INDEX,true,ID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LEAK_HEIGHT,false, LEAK_TX_INDEX,true,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.NOBODY, Nobody.class, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
-        ArrayList<Sort> defaultSort = Sort.makeSortList(DEATH_HEIGHT,false, DEATH_TX_INDEX,true,ID,true);
+        ArrayList<Sort> defaultSort = Sort.makeSortList(LEAK_HEIGHT,false, LEAK_TX_INDEX,true,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.NOBODY, Nobody.class, defaultSort, request,response,authType);
     }
 }

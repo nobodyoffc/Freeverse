@@ -44,10 +44,12 @@ public class Feip {
 		TEAM("18","1", "Team"),
 		GROUP("19","3", "Group"),
 		TOKEN("20","1", "Token"),
-		BOOK("21","1", "Book"),
-		PAPER("22","1", "Paper"),
-		REPORT("23","1", "Report"),
-		ESSAY("24","1", "Essay");
+		ESSAY("21","1", "Essay"),
+		REPORT("22","1", "Report"),
+		PAPER("23","1", "Paper"),
+		BOOK("24","1", "Book"),
+		REMARK("25","1", "Remark"),
+		ARTWORK("26","1", "Artwork");
 
 		private final String sn;
 		private final String ver;

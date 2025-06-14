@@ -486,22 +486,35 @@ public class EsUtils {
         if (idList == null || idList.isEmpty()) return null;
 
         BulkResponse response = null;
+        int totalSize = idList.size();
 
-        BulkRequest.Builder br = new BulkRequest.Builder();
-        br.timeout(t -> t.time("600s"));
+        for (int i = 0; i < totalSize; i += WRITE_MAX) {
+            BulkRequest.Builder br = new BulkRequest.Builder();
+            br.timeout(t -> t.time("600s"));
 
-        for (int i = 0; i < idList.size(); i++) {
-            String id = idList.get(i);
-            br.operations(op -> op.delete(in -> in
-                    .index(index)
-                    .id(id)));
+            // Process up to WRITE_MAX items in this batch
+            int endIndex = Math.min(i + WRITE_MAX, totalSize);
+            for (int j = i; j < endIndex; j++) {
+                String id = idList.get(j);
+                if(id ==null)continue;
+                br.operations(op -> op.delete(in -> in
+                        .index(index)
+                        .id(id)));
+            }
 
-            if (i != 0 && i % WRITE_MAX == 0) {
-                response = esClient.bulk(br.build());
+            // Execute the batch
+            BulkResponse batchResponse = esClient.bulk(br.build());
+            
+            // If this is the first batch, use its response
+            if (response == null) {
+                response = batchResponse;
+            }
+            
+            // If any batch has errors, return that response
+            if (batchResponse.errors()) {
+                return batchResponse;
             }
         }
-
-        response = esClient.bulk(br.build());
 
         return response;
     }

@@ -403,49 +403,50 @@ public class FcHttpRequestHandler {
             ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, ID, true, null, null);
 
             //Request
-            String index = IndicesNames.BLOCK_HAS;
+            String index = IndicesNames.BLOCK;
 
-            List<BlockHas> blockHasList = doRequest(index, defaultSortList, BlockHas.class);
-            if (blockHasList == null || blockHasList.size() == 0) {
-                return;
-            }
-
-            List<String> idList = new ArrayList<>();
-            for (BlockHas blockHas : blockHasList) {
-                idList.add(blockHas.getId());
-            }
-
-            List<Block> blockList;
-            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-            if(esClient == null) {
-                replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
-                return;
-            }
-            blockList = EsUtils.getMultiByIdList(esClient, IndicesNames.BLOCK, idList, Block.class).getResultList();
-            if (blockList == null ) {
-                replyBody.replyOtherErrorHttp("Failed to get block info.", response);
-                return;
-            }
-            if (blockList.size()==0 ) {
+            List<Block> blockList = doRequest(index, defaultSortList, Block.class);
+            if (blockList == null || blockList.size() == 0) {
                 replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
+//
+//            List<String> idList = new ArrayList<>();
+//            for (BlockHas blockHas : blockList) {
+//                idList.add(blockHas.getId());
+//            }
+//
+//            List<Block> blockList;
+//            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+//            if(esClient == null) {
+//                replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
+//                return;
+//            }
+//            blockList = EsUtils.getMultiByIdList(esClient, IndicesNames.BLOCK, idList, Block.class).getResultList();
+//            if (blockList == null ) {
+//                replyBody.replyOtherErrorHttp("Failed to get block info.", response);
+//                return;
+//            }
+//            if (blockList.size()==0 ) {
+//                replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
+//                return;
+//            }
+//
+//            List<BlockInfo> meetList = BlockInfo.mergeBlockAndBlockHas(blockList, blockList);
+//
 
-            List<BlockInfo> meetList = BlockInfo.mergeBlockAndBlockHas(blockList, blockHasList);
-
-
-            Map<String, BlockInfo> meetMap = null;
+            Map<String, Block> meetMap = null;
 
             if(isForMap){
-                meetMap= ObjectUtils.listToMap(meetList,idFieldName);
+                meetMap= ObjectUtils.listToMap(blockList,idFieldName);
                 replyBody.setLast(null);
             }
 
             //response
-            replyBody.setGot((long) meetList.size());
-            replyBody.setTotal((long) meetList.size());
+            replyBody.setGot((long) blockList.size());
+            replyBody.setTotal((long) blockList.size());
             if(isForMap)replyBody.replySingleDataSuccessHttp(meetMap, response);
-            else replyBody.replySingleDataSuccessHttp(meetList, response);
+            else replyBody.replySingleDataSuccessHttp(blockList, response);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -677,45 +678,47 @@ public class FcHttpRequestHandler {
             requestBody = httpRequestChecker.getRequestBody();
             if (ifForMapWithoutIds(isForMap, replier, response, httpRequestChecker)) return;
             //Set default sort.
-            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, ID, true, null, null);
+            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, TX_INDEX, false, ID, true);
 
             //Request
-            String index = IndicesNames.TX_HAS;
+            String index = IndicesNames.TX;
 
             FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
-            List<TxHas> txHasList = fcHttpRequestHandler.doRequest(index, defaultSortList, TxHas.class);
-            if (txHasList == null || txHasList.size() == 0) {
-                return;
-            }
-
-            List<String> idList = new ArrayList<>();
-            for (TxHas txHas : txHasList) {
-                idList.add(txHas.getId());
-            }
-
-            List<Tx> txList;
-
-            txList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
-            if (txList == null ) {
-                replier.replyOtherErrorHttp("Failed to get TX info.", response);
-                return;
-            }
-            if (txList.size()==0 ) {
+            List<Tx> txList = fcHttpRequestHandler.doRequest(index, defaultSortList, Tx.class);
+            if (txList == null || txList.size() == 0) {
                 replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
+//
+//            List<String> idList = new ArrayList<>();
+//            for (Tx tx : txList) {
+//                idList.add(tx.getId());
+//            }
+//
+//            List<TxHas> txHasList;
+//
+//            txHasList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX_HAS, idList, TxHas.class).getResultList();
+//            if (txHasList == null ) {
+//                replier.replyOtherErrorHttp("Failed to get TX info.", response);
+//                return;
+//            }
+//            if (txHasList.size()==0 ) {
+//                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+//                return;
+//            }
+//
+//            List<TxInfo> meetList = TxInfo.mergeTxAndTxHas(txList, txHasList);
 
-            List<TxInfo> meetList = TxInfo.mergeTxAndTxHas(txList, txHasList);
 
 
-            Map<String, TxInfo> meetMap = null;
-            if(isForMap)meetMap= ObjectUtils.listToMap(meetList,idFieldName);
+            Map<String, Tx> meetMap = null;
+            if(isForMap)meetMap= ObjectUtils.listToMap(txList,idFieldName);
 
             //response
-            replier.setGot((long) meetList.size());
-            replier.setTotal((long) meetList.size());
+            replier.setGot((long) txList.size());
+            replier.setTotal((long) txList.size());
             if(isForMap)replier.replySingleDataSuccessHttp(meetMap, response);
-            else replier.replySingleDataSuccessHttp(meetList, response);
+            else replier.replySingleDataSuccessHttp(txList, response);
 
         } catch (Exception e) {
             replier.replyOtherErrorHttp(e.getMessage(), response);
@@ -827,7 +830,9 @@ public class FcHttpRequestHandler {
             if(field.isBlank())continue;
             MatchQuery.Builder mBuilder = new MatchQuery.Builder();
             mBuilder.field(field);
-            mBuilder.query(match.getValue());
+            // Decode the search value
+            String decodedValue = java.net.URLDecoder.decode(match.getValue(), java.nio.charset.StandardCharsets.UTF_8);
+            mBuilder.query(decodedValue);
 
             queryList.add(new Query.Builder().match(mBuilder.build()).build());
         }
@@ -869,18 +874,20 @@ public class FcHttpRequestHandler {
         List<FieldValue> valueList = new ArrayList<>();
         for(String str: equals.getValues()){
             if(str.isBlank())continue;
-            if(str.contains(".")){
+            // Decode the search value
+            String decodedValue = java.net.URLDecoder.decode(str, java.nio.charset.StandardCharsets.UTF_8);
+            if(decodedValue.contains(".")){
                 try {
-                    valueList.add(FieldValue.of(Double.parseDouble(str)));
+                    valueList.add(FieldValue.of(Double.parseDouble(decodedValue)));
                 }catch(Exception e){
-                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",str);
+                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",decodedValue);
                     return null;
                 }
             }else{
                 try {
-                    valueList.add(FieldValue.of(Long.parseLong(str)));
+                    valueList.add(FieldValue.of(Long.parseLong(decodedValue)));
                 }catch(Exception e){
-                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",str);
+                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",decodedValue);
                     return null;
                 }
             }
@@ -948,10 +955,12 @@ public class FcHttpRequestHandler {
         List<Query> queryList = new ArrayList<>();
         for(String field:part.getFields()){
             if(field.isBlank())continue;
+            // Decode the search value to handle Chinese characters
+            String decodedValue = java.net.URLDecoder.decode(part.getValue(), java.nio.charset.StandardCharsets.UTF_8);
             WildcardQuery wQuery = WildcardQuery.of(w -> w
                     .field(field)
                     .caseInsensitive(isCaseInSensitive)
-                    .value("*"+part.getValue()+"*"));
+                    .value("*"+decodedValue+"*"));
             queryList.add(new Query.Builder().wildcard(wQuery).build());
         }
         partBoolBuilder.should(queryList);
@@ -965,7 +974,9 @@ public class FcHttpRequestHandler {
         List<FieldValue> valueList = new ArrayList<>();
         for(String value : terms.getValues()){
             if(value.isBlank())continue;
-            valueList.add(FieldValue.of(value));
+            // Decode the search value
+            String decodedValue = java.net.URLDecoder.decode(value, java.nio.charset.StandardCharsets.UTF_8);
+            valueList.add(FieldValue.of(decodedValue));
         }
 
         termsBoolBuilder = makeBoolShouldTermsQuery(terms.getFields(),valueList);

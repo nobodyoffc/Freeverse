@@ -38,12 +38,12 @@ public class ContactDetail extends FcEntity {
 
 	public static LinkedHashMap<String,Integer>getFieldWidthMap(){
 		LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-        map.put(CID,ID_DEFAULT_SHOW_SIZE);
-        map.put(FID,ID_DEFAULT_SHOW_SIZE);
-        map.put(TITLES,TEXT_DEFAULT_SHOW_SIZE);
-        map.put(MEMO,TEXT_DEFAULT_SHOW_SIZE);
-        map.put(NOTICE_FEE,AMOUNT_DEFAULT_SHOW_SIZE);
-        map.put(UPDATE_HEIGHT,TIME_DEFAULT_SHOW_SIZE);
+        map.put(CID, DEFAULT_ID_LENGTH);
+        map.put(FID, DEFAULT_ID_LENGTH);
+        map.put(TITLES, DEFAULT_TEXT_LENGTH);
+        map.put(MEMO, DEFAULT_TEXT_LENGTH);
+        map.put(NOTICE_FEE, DEFAULT_AMOUNT_LENGTH);
+        map.put(UPDATE_HEIGHT, DEFAULT_TIME_LENGTH);
 		return map;
 	}
 	public static List<String> getTimestampFieldList(){

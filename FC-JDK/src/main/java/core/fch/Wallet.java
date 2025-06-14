@@ -36,6 +36,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.*;
 
+import static constants.FieldNames.COINBASE;
 import static handlers.CashManager.*;
 import static server.ApipApiNames.VERSION_1;
 import static constants.Constants.*;

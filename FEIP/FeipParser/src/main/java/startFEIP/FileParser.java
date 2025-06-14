@@ -70,7 +70,7 @@ public class FileParser {
 	}
 
 	enum FEIP_NAME{
-		CID,NOBODY,MASTER,HOMEPAGE,NOTICE_FEE,REPUTATION,SERVICE,PROTOCOL,APP,CODE,NID, CONTACT,MAIL, SECRET,STATEMENT,GROUP,TEAM, BOX, TOKEN, PROOF,ESSAY,REPORT,PAPER,BOOK
+		CID,NOBODY,MASTER,HOMEPAGE,NOTICE_FEE,REPUTATION,SERVICE,PROTOCOL,APP,CODE,NID, CONTACT,MAIL, SECRET,STATEMENT,GROUP,TEAM, BOX, TOKEN, PROOF,ESSAY,REPORT,PAPER,BOOK,REMARK,ARTWORK
 	}
 
 	private static final Logger log = LoggerFactory.getLogger(FileParser.class);
@@ -306,6 +306,7 @@ public class FileParser {
 						esClient.index(i -> i.index(IndicesNames.REPORT_HISTORY).id(reportHist.getId()).document(reportHist));
 					System.out.println(isValid);
 				}
+
 				case PAPER -> {
 					System.out.println("Paper @"+opre.getHeight()+"."+opre.getId());
 					PaperHistory paperHist = publishParser.makePaper(opre, feip);
@@ -322,6 +323,24 @@ public class FileParser {
 					isValid = publishParser.parseBook(esClient, bookHist);
 					if (isValid)
 						esClient.index(i -> i.index(IndicesNames.BOOK_HISTORY).id(bookHist.getId()).document(bookHist));
+					System.out.println(isValid);
+				}
+				case ARTWORK -> {
+					System.out.println("Artwork @"+opre.getHeight()+"."+opre.getId());
+					ArtworkHistory artworkHist = publishParser.makeArtwork(opre, feip);
+					if (artworkHist == null) break;
+					isValid = publishParser.parseArtwork(esClient, artworkHist);
+					if (isValid)
+						esClient.index(i -> i.index(IndicesNames.ARTWORK_HISTORY).id(artworkHist.getId()).document(artworkHist));
+					System.out.println(isValid);
+				}
+				case REMARK -> {
+					System.out.println("Remark @"+opre.getHeight()+"."+opre.getId());
+					RemarkHistory remarkHist = publishParser.makeRemark(opre, feip);
+					if (remarkHist == null) break;
+					isValid = publishParser.parseRemark(esClient, remarkHist);
+					if (isValid)
+						esClient.index(i -> i.index(IndicesNames.REMARK_HISTORY).id(remarkHist.getId()).document(remarkHist));
 					System.out.println(isValid);
 				}
 				case GROUP -> {
@@ -428,6 +447,8 @@ public class FileParser {
 		if(sn.equals("22"))return FEIP_NAME.REPORT;
 		if(sn.equals("23"))return FEIP_NAME.PAPER;
 		if(sn.equals("24"))return FEIP_NAME.BOOK;
+		if(sn.equals("25"))return FEIP_NAME.ARTWORK;
+		if(sn.equals("26"))return FEIP_NAME.REMARK;
 
 		return null;
 	}

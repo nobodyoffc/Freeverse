@@ -19,13 +19,13 @@ public abstract class FcEntity {
     public static final String METHOD_GET_SHOW_FIELD_NAME_AS_MAP = "getShowFieldNameAsMap";
     public static final String METHOD_GET_INPUT_FIELD_DEFAULT_VALUE_MAP = "getInputFieldDefaultValueMap";
     public static final String METHOD_GET_REPLACE_WITH_ME_FIELD_LIST = "getReplaceWithMeFieldList";
-    public static int ID_DEFAULT_SHOW_SIZE = 13;
-    public static int TEXT_DEFAULT_SHOW_SIZE = 33;
-    public static int TEXT_SHORT_DEFAULT_SHOW_SIZE = 9;
-    public static int TIME_DEFAULT_SHOW_SIZE = 15;
-    public static int AMOUNT_DEFAULT_SHOW_SIZE = 10;
-    public static int CD_DEFAULT_SHOW_SIZE = 5;
-    public static int BOOLEAN_DEFAULT_SHOW_SIZE = 5;
+    public static int DEFAULT_ID_LENGTH = 13;
+    public static int DEFAULT_TEXT_LENGTH = 33;
+    public static int DEFAULT_SHORT_TEXT_LENGTH = 9;
+    public static int DEFAULT_TIME_LENGTH = 15;
+    public static int DEFAULT_AMOUNT_LENGTH = 10;
+    public static int DEFAULT_CD_LENGTH = 5;
+    public static int DEFAULT_BOOLEAN_LENGTH = 5;
 
     protected String id;
     protected Meta meta;

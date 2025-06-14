@@ -97,8 +97,8 @@ public class ApipApiNames {
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
     public static final String REPUTATION_HISTORY = "reputationHistory";
     public static final String NOBODY_SEARCH = "nobodySearch";
-    public static final String MULTISIGN_BY_IDS = "p2shByIds";
-    public static final String MULTISIGN_SEARCH = "p2shSearch";
+    public static final String MULTISIGN_BY_IDS = "multisignByIds";
+    public static final String MULTISIGN_SEARCH = "multisignSearch";
     public static final String PROTOCOL_BY_IDS = "protocolByIds";
     public static final String PROTOCOL_SEARCH = "protocolSearch";
     public static final String PROTOCOL_OP_HISTORY = "protocolOpHistory";
@@ -163,6 +163,10 @@ public class ApipApiNames {
     public static final String BOOK_SEARCH = "bookSearch";
     public static final String BOOK_OP_HISTORY = "bookOpHistory";
     public static final String BOOK_RATE_HISTORY = "bookRateHistory";
+    public static final String REMARK_BY_IDS = "remarkByIds";
+    public static final String REMARK_SEARCH = "remarkSearch";
+    public static final String REMARK_OP_HISTORY = "remarkOpHistory";
+    public static final String REMARK_RATE_HISTORY = "remarkRateHistory";
     public static final String PROOF_BY_IDS = "proofByIds";
     public static final String PROOF_SEARCH = "proofSearch";
     public static final String PROOF_HISTORY = "proofHistory";
@@ -221,6 +225,10 @@ public class ApipApiNames {
     public static final String BLOCK_TIME_HISTORY ="blockTimeHistory";
     public static final String NEW_ORDER = "newOrder";
 
+    public static final String ARTWORK_BY_IDS = "artworkByIds";
+    public static final String ARTWORK_SEARCH = "artworkSearch";
+    public static final String ARTWORK_OP_HISTORY = "artworkOpHistory";
+    public static final String ARTWORK_RATE_HISTORY = "artworkRateHistory";
 
     static {
         openAPIs = new String[]{
@@ -278,7 +286,9 @@ public class ApipApiNames {
                 ESSAY_SEARCH, ESSAY_BY_IDS, ESSAY_OP_HISTORY, ESSAY_RATE_HISTORY,
                 REPORT_SEARCH, REPORT_BY_IDS, REPORT_OP_HISTORY, REPORT_RATE_HISTORY,
                 PAPER_SEARCH, PAPER_BY_IDS, PAPER_OP_HISTORY, PAPER_RATE_HISTORY,
-                BOOK_SEARCH, BOOK_BY_IDS, BOOK_OP_HISTORY, BOOK_RATE_HISTORY
+                BOOK_SEARCH, BOOK_BY_IDS, BOOK_OP_HISTORY, BOOK_RATE_HISTORY,
+                REMARK_SEARCH, REMARK_BY_IDS, REMARK_OP_HISTORY, REMARK_RATE_HISTORY,
+                ARTWORK_SEARCH, ARTWORK_BY_IDS, ARTWORK_OP_HISTORY, ARTWORK_RATE_HISTORY
         };
 
         walletAPIs = new String[]{

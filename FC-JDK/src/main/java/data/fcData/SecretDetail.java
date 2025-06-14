@@ -35,11 +35,11 @@ public class SecretDetail extends FcObject {
 
     public static LinkedHashMap<String,Integer> getFieldWidthMap(){
         LinkedHashMap<String,Integer> fieldWidthMap = new LinkedHashMap<>();
-        fieldWidthMap.put(TITLE, TEXT_DEFAULT_SHOW_SIZE);
-        fieldWidthMap.put(TYPE, TEXT_SHORT_DEFAULT_SHOW_SIZE);
-        fieldWidthMap.put(UPDATE_HEIGHT, TIME_DEFAULT_SHOW_SIZE);
-        fieldWidthMap.put(MEMO, TEXT_DEFAULT_SHOW_SIZE);
-        fieldWidthMap.put(ID, ID_DEFAULT_SHOW_SIZE);
+        fieldWidthMap.put(TITLE, DEFAULT_TEXT_LENGTH);
+        fieldWidthMap.put(TYPE, DEFAULT_SHORT_TEXT_LENGTH);
+        fieldWidthMap.put(UPDATE_HEIGHT, DEFAULT_TIME_LENGTH);
+        fieldWidthMap.put(MEMO, DEFAULT_TEXT_LENGTH);
+        fieldWidthMap.put(ID, DEFAULT_ID_LENGTH);
         return fieldWidthMap;
     }
 

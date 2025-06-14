@@ -233,6 +233,9 @@ public class IdentityParser {
 		boolean isValid = false;
 		GetResponse<Cid> resultGetCid;
 		try {
+			GetResponse<Nobody> result = esClient.get(g -> g.index(NOBODY).id(cidHist.getSigner()), Nobody.class);
+			if(result.found())return false;
+
 			resultGetCid = esClient.get(g->g.index(CID).id(cidHist.getSigner()), Cid.class);
 			if(resultGetCid==null)return false;
 		}catch(Exception e) {
@@ -242,21 +245,20 @@ public class IdentityParser {
 		if(resultGetCid.found()) {
 			Cid cid  = resultGetCid.source();
 			if(cid==null)return false;
-			if(cid.getPrikey()==null) {
-				cid.setPrikey(cidHist.getPrikey());
-				cid.setLastHeight(cidHist.getHeight());
-				esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
 
-				Nobody nobody = new Nobody();
-				nobody.setId(cidHist.getSigner());
-				nobody.setDeathTime(cidHist.getTime());
-				nobody.setDeathHeight(cidHist.getHeight());
-				nobody.setPrikey(cidHist.getPrikey());
-				nobody.setDeathTxId(cidHist.getId());
-				nobody.setDeathTxIndex(cidHist.getIndex());
-				esClient.index(i->i.index(NOBODY).id(cidHist.getSigner()).document(nobody));
-				isValid = true;
-			}
+			cid.setPrikey(cidHist.getPrikey());
+			cid.setLastHeight(cidHist.getHeight());
+			esClient.index(i->i.index(CID).id(cidHist.getSigner()).document(cid));
+
+			Nobody nobody = new Nobody();
+			nobody.setId(cidHist.getSigner());
+			nobody.setLeakTime(cidHist.getTime());
+			nobody.setLeakHeight(cidHist.getHeight());
+			nobody.setPrikey(cidHist.getPrikey());
+			nobody.setLeakTxId(cidHist.getId());
+			nobody.setLeakTxIndex(cidHist.getIndex());
+			esClient.index(i->i.index(NOBODY).id(cidHist.getSigner()).document(nobody));
+			isValid = true;
 		}
 		return isValid;
 	}
@@ -481,7 +483,10 @@ public class IdentityParser {
 		Cid addr;
 		if(resultAddr!=null && resultAddr.source()!=null) {
 			addr = resultAddr.source();
-			addr.setWeight(addr.getWeight()+(repuHist.getReputation()* Weight.reputationPercentInWeight)/100);
+			if(addr.getWeight()==null)
+				addr.reCalcWeight();
+
+			addr.setWeight(addr.getWeight() +(repuHist.getReputation() * Weight.reputationPercentInWeight)/100);
 			esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(addr));
 		}
 		esClient.index(i -> i.index(CID).id(repuHist.getRatee()).document(cid));

@@ -57,11 +57,11 @@ public class BookOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.URLS, FieldNames.PROTOCOLS, FieldNames.WAITERS});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.URLS, FieldNames.PROTOCOLS, FieldNames.WAITERS});
-		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.CODE_IDS});
-		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.CODE_IDS});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.RATE});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.BOOK_ID, FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
+		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.BOOK_IDS});
+		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.BOOK_IDS});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.BOOK_ID, FieldNames.RATE});
 	}
 
 	// Factory methods

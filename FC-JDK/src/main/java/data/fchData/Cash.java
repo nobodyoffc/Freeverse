@@ -50,20 +50,20 @@ public class Cash extends FcObject {
 	private Long lastTime;
 	private Long lastHeight;
 
+	//Static display methods
+
 	public static LinkedHashMap<String,Integer>getFieldWidthMap(){
 		LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-		map.put(BIRTH_TIME,TIME_DEFAULT_SHOW_SIZE);
-		map.put(VALID,BOOLEAN_DEFAULT_SHOW_SIZE);
-		map.put(ISSUER,ID_DEFAULT_SHOW_SIZE);
-		map.put(OWNER,ID_DEFAULT_SHOW_SIZE);
-		map.put(VALUE,AMOUNT_DEFAULT_SHOW_SIZE);
-		map.put(CD,CD_DEFAULT_SHOW_SIZE);
-		map.put(CDD,CD_DEFAULT_SHOW_SIZE);
-		map.put(ID,ID_DEFAULT_SHOW_SIZE);
+		map.put(OWNER, DEFAULT_ID_LENGTH);
+		map.put(VALID, DEFAULT_BOOLEAN_LENGTH);
+		map.put(VALUE, DEFAULT_AMOUNT_LENGTH);
+		map.put(LAST_TIME, DEFAULT_TIME_LENGTH);
+		map.put(CDD, DEFAULT_CD_LENGTH);
+		map.put(ID, DEFAULT_ID_LENGTH);
 		return map;
 	}
 	public static List<String> getTimestampFieldList(){
-		return List.of(BIRTH_TIME);
+		return List.of(BIRTH_TIME,LAST_TIME,SPEND_TIME);
 	}
 
 	public static List<String> getSatoshiFieldList(){
@@ -76,6 +76,7 @@ public class Cash extends FcObject {
 	public static Map<String, String> getShowFieldNameAsMap() {
 		Map<String,String> map = new HashMap<>();
 		map.put(ID,CASH_ID);
+		map.put(CDD,"CDD");
 		return map;
 	}
 	public static List<String> getReplaceWithMeFieldList() {
@@ -90,6 +91,8 @@ public class Cash extends FcObject {
 	public Cash() {
 		// default constructor
 	}
+
+	//Static Cash methods
 
 	public static String makeCashId(byte[] b36PreTxIdAndIndex) {
 		return BytesUtils.bytesToHexStringLE(Hash.sha256x2(b36PreTxIdAndIndex));

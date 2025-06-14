@@ -238,6 +238,11 @@ public class FeipClient {
         return sendFeip(prikey, offLineFid, sendToList, null, data, BookOpData.class, ProtocolName.BOOK, apipClient, nasaClient, br, BookOpData.Op.class, BookOpData.OP_FIELDS);
     }
 
+    public static String remark(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+                              @Nullable RemarkOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, RemarkOpData.class, ProtocolName.REMARK, apipClient, nasaClient, br, RemarkOpData.Op.class, RemarkOpData.OP_FIELDS);
+    }
+
     public static String paper(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
                               @Nullable PaperOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
         return sendFeip(prikey, offLineFid, sendToList, null, data, PaperOpData.class, ProtocolName.PAPER, apipClient, nasaClient, br, PaperOpData.Op.class, PaperOpData.OP_FIELDS);
@@ -438,6 +443,11 @@ public class FeipClient {
     public static String token(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
                                @Nullable TokenOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
         return sendFeip(prikey, offLineFid, sendToList, null, data, TokenOpData.class, ProtocolName.TOKEN, apipClient, nasaClient, br, TokenOpData.Op.class, TokenOpData.OP_FIELDS);
+    }
+
+    public static String artwork(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+                              @Nullable ArtworkOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ArtworkOpData.class, ProtocolName.ARTWORK, apipClient, nasaClient, br, ArtworkOpData.Op.class, ArtworkOpData.OP_FIELDS);
     }
 
     // Add more protocol-specific methods as needed...

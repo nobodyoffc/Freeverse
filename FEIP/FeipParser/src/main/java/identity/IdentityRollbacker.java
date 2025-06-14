@@ -14,7 +14,6 @@ import data.feipData.RepuHist;
 import utils.JsonUtils;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class IdentityRollbacker {
 
@@ -36,8 +35,6 @@ public class IdentityRollbacker {
 
 		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
 
-		TimeUnit.SECONDS.sleep(3);
-
 		return false;
 	}
 
@@ -55,8 +52,6 @@ public class IdentityRollbacker {
 		deleteEffectedCids(esClient, signerList);
 		
 		deleteRolledHists(esClient, IndicesNames.CID_HISTORY,histIdList);
-		
-		TimeUnit.SECONDS.sleep(3);
 		
 		List<CidHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.CID_HISTORY,"signer",signerList, CidHist.class);
 		
@@ -121,8 +116,6 @@ public class IdentityRollbacker {
 		deleteRolledHists(esClient, IndicesNames.REPUTATION_HISTORY, histIdList);
 		
 		reviseCidRepuAndHot(esClient,rateeList);
-		
-		TimeUnit.SECONDS.sleep(3);
 		
 		return error;
 

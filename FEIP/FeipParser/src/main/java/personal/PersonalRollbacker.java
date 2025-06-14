@@ -10,7 +10,6 @@ import data.feipData.BoxHistory;
 import utils.JsonUtils;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class PersonalRollbacker {
 
@@ -22,9 +21,6 @@ public class PersonalRollbacker {
 		indexList.add(IndicesNames.MAIL);
 		indexList.add(IndicesNames.SECRET);
 		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
-		
-		TimeUnit.SECONDS.sleep(3);
-
 	}
 
 
@@ -39,7 +35,6 @@ public class PersonalRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.BOX,itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return false;
 		deleteRolledHists(esClient, IndicesNames.BOX_HISTORY,histIdList);
-		TimeUnit.SECONDS.sleep(2);
 
 		List<BoxHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY,"bid",itemIdList,BoxHistory.class);
 

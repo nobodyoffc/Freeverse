@@ -15,7 +15,6 @@ import utils.JsonUtils;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 import static constants.OpNames.PUBLISH;
 
@@ -40,8 +39,6 @@ public class ConstructRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.PROTOCOL, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.PROTOCOL_HISTORY,histIdList);
-		
-		TimeUnit.SECONDS.sleep(2);
 		
 		List<ProtocolHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROTOCOL_HISTORY,"pid",itemIdList, ProtocolHistory.class);
 
@@ -113,7 +110,6 @@ public class ConstructRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.SERVICE,itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.SERVICE_HISTORY,histIdList);
-		TimeUnit.SECONDS.sleep(2);
 		
 		List<ServiceHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SERVICE_HISTORY,"sid",itemIdList,ServiceHistory.class);
 
@@ -175,7 +171,6 @@ public class ConstructRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.APP,itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.APP_HISTORY,histIdList);
-		TimeUnit.SECONDS.sleep(2);
 		
 		List<AppHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.APP_HISTORY,"aid",itemIdList,AppHistory.class);
 
@@ -236,7 +231,6 @@ public class ConstructRollbacker {
 		deleteEffectedItems(esClient, IndicesNames.CODE,itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.CODE_HISTORY,histIdList);
-		TimeUnit.SECONDS.sleep(2);
 		
 		List<CodeHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.CODE_HISTORY,"codeId",itemIdList,CodeHistory.class);
 

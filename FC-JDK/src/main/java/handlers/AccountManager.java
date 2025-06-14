@@ -757,11 +757,11 @@ public class AccountManager extends Manager<FcEntity> {
         }
         public static LinkedHashMap<String,Integer>getFieldWidthMap(){
             LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-            map.put(ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
-            map.put(FROM,FcEntity.ID_DEFAULT_SHOW_SIZE);
-            map.put(VALUE,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
-            map.put(TIME,FcEntity.TIME_DEFAULT_SHOW_SIZE);
-            map.put(HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            map.put(ID,FcEntity.DEFAULT_ID_LENGTH);
+            map.put(FROM,FcEntity.DEFAULT_ID_LENGTH);
+            map.put(VALUE,FcEntity.DEFAULT_AMOUNT_LENGTH);
+            map.put(TIME,FcEntity.DEFAULT_TIME_LENGTH);
+            map.put(HEIGHT,FcEntity.DEFAULT_AMOUNT_LENGTH);
             return map;
         }
 
@@ -838,11 +838,11 @@ public class AccountManager extends Manager<FcEntity> {
         }
         public static LinkedHashMap<String,Integer>getFieldWidthMap(){
             LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-            map.put(ID,FcEntity.ID_DEFAULT_SHOW_SIZE);
-            map.put(TO,FcEntity.ID_DEFAULT_SHOW_SIZE);
-            map.put(VALUE,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
-            map.put(TIME,FcEntity.TIME_DEFAULT_SHOW_SIZE);
-            map.put(HEIGHT,FcEntity.AMOUNT_DEFAULT_SHOW_SIZE);
+            map.put(ID,FcEntity.DEFAULT_ID_LENGTH);
+            map.put(TO,FcEntity.DEFAULT_ID_LENGTH);
+            map.put(VALUE,FcEntity.DEFAULT_AMOUNT_LENGTH);
+            map.put(TIME,FcEntity.DEFAULT_TIME_LENGTH);
+            map.put(HEIGHT,FcEntity.DEFAULT_AMOUNT_LENGTH);
             return map;
         }
 

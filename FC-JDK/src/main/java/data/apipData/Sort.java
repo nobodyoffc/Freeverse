@@ -53,16 +53,15 @@ public class Sort {
         try {
             while (true) {
                 Sort sort = new Sort();
-                System.out.println("Input the field name. 'q' to finish: ");
+                System.out.println("Input the field name. Enter to finish: ");
                 input = br.readLine();
-                if ("q".equals(input)) break;
+                if ("".equals(input)) break;
                 sort.setField(input);
 
                 while (true) {
-                    System.out.println("Input the order. " + Values.DESC + " or " + Values.ASC + ": ");
+                    System.out.println("Input the order. " + Values.DESC + " or " + Values.ASC + ". Enter to set desc: ");
                     input = br.readLine();
-                    if ("q".equals(input)) break;
-                    if ("desc".equals(input)) {
+                    if ("".equals(input)||"desc".equals(input)) {
                         sort.setOrder(input);
                         break;
                     }

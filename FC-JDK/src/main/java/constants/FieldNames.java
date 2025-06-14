@@ -31,6 +31,10 @@ public class FieldNames {
     public static final String CONTENT = "content";
     public static final String HEIGHT = "height";
     public static final String LAST_TIME = "lastTime";
+    public static final String LEAK_TX_ID = "leakTxId";
+    public static final String LEAK_TIME = "leakTime";
+    public static final String SPEND_TIME = "spendTime";
+
     public static final String VALUE = "value";
     public static final String SUM = "sum";
     public static final String SPEND_CASHES = "spendCashes";
@@ -78,6 +82,7 @@ public class FieldNames {
     public static final String ORDER = "order";
     public static final String LAST = "last";
     public static final String DID = "did";
+    public static final String ON_DID = "onDid";
     public static final String RESULT = "result";
     public static final String HAT = "hat";
     public static final String INDEX = "index";
@@ -97,8 +102,8 @@ public class FieldNames {
 
     public static final String BLOCK_ID = "blockId";
     public static final String TX_INDEX = "txIndex";
-    public static final String DEATH_HEIGHT = "deathHeight";
-    public static final String DEATH_TX_INDEX = "deathTxIndex";
+    public static final String LEAK_HEIGHT = "leakHeight";
+    public static final String LEAK_TX_INDEX = "leakTxIndex";
     public static final String START_TIME = "startTime";
     public static final String END_TIME = "endTime";
     public static final String COUNT = "count";
@@ -147,6 +152,8 @@ public class FieldNames {
     public static final String URLS = "urls";
     public static final String VER = "ver";
     public static final String NAME = "name";
+    public static final String NAMER = "namer";
+    public static final String DESC = "desc";
     public static final String LOCAL_NAMES = "localNames";
     public static final String NUMBER = "number";
     public static final String SING_IN_MODE = "signInMode";
@@ -203,6 +210,21 @@ public class FieldNames {
     public static final String RATE = "rate";
 
     public static final String CODE_IDS = "codeIds";
+    public static final String BOOK_ID = "bookId";
+    public static final String BOOK_IDS = "bookIds";
+    public static final String REMARK_ID = "remarkId";
+    public static final String REMARK_IDS = "remarkIds";
+    public static final String ESSAY_ID = "essayId";
+    public static final String ESSAY_IDS = "essayIds";
+    public static final String PAPER_ID = "paperId";
+    public static final String PAPER_IDS = "paperIds";
+    public static final String REPORT_ID = "reportId";
+    public static final String REPORT_IDS = "reportIds";
+    public static final String ARTWORK_ID = "artworkId";
+    public static final String ARTWORK_IDS = "artworkIds";
+    public static final String AUTHORS = "authors";
+    public static final String KEYWORDS = "keywords";
+    public static final String SUMMARY = "summary";
 
     public static final String GIDS = "gids";
 
@@ -304,5 +326,27 @@ public class FieldNames {
 
     public static final String COST_MAP = "costMap";
     public static final String DISK_DIR = "diskDir";
+
+    public static final String VERSION = "version";
+    public static final String LOCK_TIME = "lockTime";
+    public static final String BLOCK_TIME = "blockTime";
+    public static final String IN_VALUE_T = "inValueT";
+    public static final String OUT_VALUE_T = "outValueT";
+    public static final String FEE = "fee";
+    public static final String OP_RE_BRIEF = "opReBrief";
+    public static final String IN_COUNT = "inCount";
+    public static final String OUT_COUNT = "outCount";
+    public static final String COINBASE = "coinbase";
+
+    public static final String OP_RETURN = "opReturn";
+    public static final String TIME = "time";
+    public static final String OP_RETURN_ID = "opReturnId";
+
+    public static final String TX_COUNT = "txCount";
+    public static final String PRE_ID = "preId";
+    public static final String MERKLE_ROOT = "merkleRoot";
+    public static final String BITS = "bits";
+    public static final String NONCE = "nonce";
+
 }
 

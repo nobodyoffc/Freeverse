@@ -47,6 +47,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static constants.FieldNames.COINBASE;
+import static constants.FieldNames.OP_RETURN;
 import static ui.Inputer.askIfYes;
 import static constants.Constants.*;
 import static constants.FieldNames.*;

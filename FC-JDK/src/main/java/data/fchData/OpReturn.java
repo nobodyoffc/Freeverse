@@ -2,6 +2,10 @@ package data.fchData;
 
 import data.fcData.FcObject;
 
+import java.util.*;
+
+import static constants.FieldNames.*;
+
 public class OpReturn extends FcObject {
 
 	private Long height;		//block height
@@ -11,6 +15,42 @@ public class OpReturn extends FcObject {
 	private String signer;	//address of the first input.
 	private String recipient;	//address of the first output, but the first input address and opReturn output.
 	private Long cdd;
+
+	//Static display methods
+
+	public static LinkedHashMap<String,Integer> getFieldWidthMap(){
+		LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
+		map.put(ID, DEFAULT_ID_LENGTH);
+		map.put(SIGNER, DEFAULT_ID_LENGTH);
+		map.put(OP_RETURN, DEFAULT_ID_LENGTH);
+		map.put(CDD, DEFAULT_CD_LENGTH);
+		return map;
+	}
+	public static List<String> getTimestampFieldList(){
+		return List.of(TIME);
+	}
+
+	public static List<String> getSatoshiFieldList(){
+		return new ArrayList<>();
+	}
+	public static Map<String, String> getHeightToTimeFieldMap() {
+		return new HashMap<>();
+	}
+
+	public static Map<String, String> getShowFieldNameAsMap() {
+		Map<String,String> map = new HashMap<>();
+		map.put(ID,OP_RETURN_ID);
+		return map;
+	}
+	public static List<String> getReplaceWithMeFieldList() {
+		return new ArrayList<>();
+	}
+
+	//For create with user input
+	public static Map<String, Object> getInputFieldDefaultValueMap() {
+		return new HashMap<>();
+	}
+
 
 	public Long getHeight() {
 		return height;
