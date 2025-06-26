@@ -321,7 +321,7 @@ public class StartApipClient {
         }
     }
     public static void blockByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input blockIds:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input blockIds,separated by ',':", ",");
         System.out.println("Requesting blockByIds...");
         Map<String, BlockInfo> result = apipClient.blockByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,ids);
         if(result==null)return;
@@ -342,7 +342,7 @@ public class StartApipClient {
     }
 
     public static void blockByHeights( ) {
-        String[] heights = Inputer.inputStringArray(br, "Input block heights:", 0);
+        String[] heights = Inputer.inputStringArrayWithSeparator(br, "Input block heights,separated by ',':", ",");
         System.out.println("Requesting blockByHeights...");
         Map<String, BlockInfo> result = apipClient.blockByHeights(RequestMethod.POST,AuthType.FC_SIGN_BODY,heights);
         if(result==null)return;
@@ -360,7 +360,7 @@ public class StartApipClient {
     }
 
     public static void cashByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input cashIds:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input cashIds,separated by ',':", ",");
         System.out.println("Requesting cashByIds...");
         Map<String, Cash> result = apipClient.cashByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,ids);
         if(result==null)return;
@@ -392,7 +392,7 @@ public class StartApipClient {
     }
 
     public static void fidByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting fidByIds...");
         Map<String, Cid> result = apipClient.fidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -413,7 +413,7 @@ public class StartApipClient {
     }
 
     public static void opReturnByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input opReturnIds:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input opReturnIds,separated by ',':", ",");
         System.out.println("Requesting opReturnByIds...");
         Map<String, OpReturn> result = apipClient.opReturnByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -434,7 +434,7 @@ public class StartApipClient {
     }
 
     public static void multisignByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input p2shIds:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input p2shIds,separated by ',':", ",");
         System.out.println("Requesting p2shByIds...");
         Map<String, Multisign> result = apipClient.multisignByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -455,7 +455,7 @@ public class StartApipClient {
     }
 
     public static void txByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input txIds:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input txIds,separated by ',':", ",");
         System.out.println("Requesting txByIds...");
         Map<String, TxInfo> result = apipClient.txByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -561,17 +561,20 @@ public class StartApipClient {
             switch (choice) {
                 case 1 -> cidSearch(DEFAULT_SIZE, "nameTime:desc->id:asc");
                 case 2 -> cidByIds();
-                case 3 -> cidHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 4 -> fidCidSeek();
-                case 5 -> getFidCid();
-                case 6 -> nobodySearch(DEFAULT_SIZE, "deathHeight:desc->deathTxIndex:desc");
-                case 7 -> nobodyByIds();
-                case 8 -> homepageHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 9 -> noticeFeeHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 10 -> reputationHistory(DEFAULT_SIZE, "height:desc->index:desc");
-                case 11 -> nidSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
-                case 12 -> getAvatar();
-                case 13 -> avatars();
+                case 3 -> cidInfoByIds();
+                case 4 -> cidHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 5 -> fidCidSeek();
+                case 6 -> getFidCid();
+                case 7 -> nobodySearch(DEFAULT_SIZE, "deathHeight:desc->deathTxIndex:desc");
+                case 8 -> nobodyByIds();
+                case 9 -> homepageHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 10 -> noticeFeeHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 11 -> reputationHistory(DEFAULT_SIZE, "height:desc->index:desc");
+                case 12 -> nidSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc");
+                case 13 -> didByNids();
+                case 14 -> getAvatar();
+                case 15 -> avatars();
+                case 16 -> cidAvatarByIds();
                 case 0 -> {
                     return;
                 }
@@ -579,13 +582,39 @@ public class StartApipClient {
         }
     }
 
-    public static void cidByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
+    public static void cidInfoByIds( ) {
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting cidByIds...");
-        Map<String, Cid> result = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        Map<String, Cid> result = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void cidByIds( ) {
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
+        System.out.println("Requesting cidByIds...");
+        Map<String, String> result = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void cidAvatarByIds() {
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
+        System.out.println("Requesting cidAvatarByIds...");
+        Map<String, String> result = apipClient.cidAvatarByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
+        if (result != null && !result.isEmpty()) {
+            System.out.println("Found " + result.size() + " avatars:");
+            for (Map.Entry<String, String> entry : result.entrySet()) {
+                System.out.println("CID: " + entry.getKey());
+                System.out.println("Avatar (base64): " + entry.getValue().substring(0, Math.min(50, entry.getValue().length())) + "...");
+            }
+        } else {
+            System.out.println("No avatars found.");
+        }
         Menu.anyKeyToContinue(br);
     }
 
@@ -622,7 +651,7 @@ public class StartApipClient {
     }
 
     public static void nobodyByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting nobodyByIds...");
         Map<String, Nobody> result = apipClient.nobodyByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -748,7 +777,7 @@ public class StartApipClient {
     }
 
     public static void groupByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input GIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input GIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         apipClient.groupByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -765,7 +794,7 @@ public class StartApipClient {
     }
 
     public static void groupMembers( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input GIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input GIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         apipClient.groupMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -792,7 +821,7 @@ public class StartApipClient {
     }
 
     public static void teamByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input TIDs,separated by ',':", ",");
         apipClient.teamByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
@@ -808,14 +837,14 @@ public class StartApipClient {
     }
 
     public static void teamMembers( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input TIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         apipClient.teamMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
     public static void teamExMembers( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input TIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         apipClient.teamExMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY,ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -841,7 +870,7 @@ public class StartApipClient {
     }
 
     public static void teamOtherPersons( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input TIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input TIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         apipClient.teamOtherPersons(RequestMethod.POST, AuthType.FC_SIGN_BODY,ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -910,7 +939,7 @@ public class StartApipClient {
     }
 
     public static void protocolByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input PIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input PIDs,separated by ',':", ",");
         System.out.println("Requesting protocolByIds...");
         Map<String, Protocol> result = apipClient.protocolByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -951,7 +980,7 @@ public class StartApipClient {
     }
 
     public static void codeByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Code_IDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Code_IDs,separated by ',':", ",");
         System.out.println("Requesting codeByIds...");
         Map<String, Code> result = apipClient.codeByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -993,7 +1022,7 @@ public class StartApipClient {
         Menu.anyKeyToContinue(br);
     }
     public static void serviceByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input SIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input SIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         Map<String, Service> result = apipClient.serviceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1035,7 +1064,7 @@ public class StartApipClient {
     }
 
     public static void appByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input AIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input AIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         Map<String, App> result = apipClient.appByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1109,7 +1138,7 @@ public class StartApipClient {
     }
 
     public static void boxByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input BIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input BIDs,separated by ',':", ",");
         System.out.println("Requesting boxByIds...");
         Map<String, Box> result = apipClient.boxByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1142,7 +1171,7 @@ public class StartApipClient {
 
 
     public static void contactByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Contact_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Contact_Ids,separated by ',':", ",");
         System.out.println("Requesting contactByIds...");
         Map<String, Contact> result = apipClient.contactByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1174,7 +1203,7 @@ public class StartApipClient {
 
 
     public static void secretByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Secret_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Secret_Ids,separated by ',':", ",");
         System.out.println("Requesting secretByIds...");
         Map<String, Secret> result = apipClient.secretByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1206,7 +1235,7 @@ public class StartApipClient {
 
 
     public static void mailByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Mail_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Mail_Ids,separated by ',':", ",");
         System.out.println("Requesting mailByIds...");
         Map<String, Mail> result = apipClient.mailByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1253,7 +1282,7 @@ public class StartApipClient {
 
 
     public static void proofByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Proof_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Proof_Ids,separated by ',':", ",");
         System.out.println("Requesting proofByIds...");
         Map<String, Proof> result = apipClient.proofByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1284,7 +1313,7 @@ public class StartApipClient {
     }
 
     public static void statementByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Statement_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Statement_Ids,separated by ',':", ",");
         System.out.println("Requesting statementByIds...");
         Map<String, Statement> result = apipClient.statementByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1313,8 +1342,34 @@ public class StartApipClient {
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
+
+    public static void didByNids() {
+        System.out.println("Input nids (JSON array of strings):");
+
+        try {
+            List<String>nids = Inputer.inputStringListWithSeparator(br, "Input nids,separated by ',':", ",");
+
+            if (nids.isEmpty()) {
+                System.out.println("Invalid nids format");
+                return;
+            }
+            Map<String, String> nidDidMap = apipClient.didByNids(nids, RequestMethod.POST, AuthType.FREE);
+            if (nidDidMap == null || nidDidMap.isEmpty()) {
+                System.out.println("No results found");
+                return;
+            }
+            System.out.println("Results:");
+            for (Map.Entry<String, String> entry : nidDidMap.entrySet()) {
+                System.out.println(entry.getKey() + " -> " + entry.getValue());
+            }
+            Menu.anyKeyToContinue(br);
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
     public static void tokenByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Token_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Token_Ids,separated by ',':", ",");
         System.out.println("Requesting tokenByIds...");
         Map<String, Token> result = apipClient.tokenByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1356,7 +1411,7 @@ public class StartApipClient {
         Menu.anyKeyToContinue(br);
     }
     public static void tokenHoldersByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Token_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Token_Ids,separated by ',':", ",");
         System.out.println("Requesting tokenHoldersByIds...");
         Map<String, TokenHolder> result = apipClient.tokenHoldersByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1420,7 +1475,7 @@ public class StartApipClient {
     }
 
     public static void essayByIds() {
-        String[] ids = Inputer.inputStringArray(br, "Input Essay_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Essay_Ids,separated by ',':", ",");
         System.out.println("Requesting essayByIds...");
         Map<String, Essay> result = apipClient.essayByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1463,7 +1518,7 @@ public class StartApipClient {
     }
 
     public static void reportByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Report_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Report_Ids,separated by ',':", ",");
         System.out.println("Requesting reportByIds...");
         Map<String, Report> result = apipClient.reportByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1506,7 +1561,7 @@ public class StartApipClient {
     }
 
     public static void paperByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Paper_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Paper_Ids,separated by ',':", ",");
         System.out.println("Requesting paperByIds...");
         Map<String, Paper> result = apipClient.paperByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1549,7 +1604,7 @@ public class StartApipClient {
     }
 
     public static void bookByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Book_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Book_Ids,separated by ',':", ",");
         System.out.println("Requesting bookByIds...");
         Map<String, Book> result = apipClient.bookByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1592,7 +1647,7 @@ public class StartApipClient {
     }
 
     public static void remarkByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Remark_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Remark_Ids,separated by ',':", ",");
         System.out.println("Requesting remarkByIds...");
         Map<String, Remark> result = apipClient.remarkByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1635,7 +1690,7 @@ public class StartApipClient {
     }
 
     public static void artworkByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input Artwork_Ids:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Artwork_Ids,separated by ',':", ",");
         System.out.println("Requesting artworkByIds...");
         Map<String, Artwork> result = apipClient.artworkByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1736,7 +1791,7 @@ public class StartApipClient {
     }
 
     public static void balanceByIds( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting fidByIds...");
         Map<String, Long> result = apipClient.balanceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, ids);
         if(result==null)return;
@@ -1794,7 +1849,7 @@ public class StartApipClient {
     }
 
     public static void unconfirmed( ) {
-        String[] ids = Inputer.inputStringArray(br, "Input FIDs:", 0);
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
         apipClient.unconfirmed(RequestMethod.POST,  AuthType.FC_SIGN_BODY,ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());

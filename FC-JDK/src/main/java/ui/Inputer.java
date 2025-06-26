@@ -234,6 +234,12 @@ public class Inputer {
         return itemList.toArray(new String[itemList.size()]);
     }
 
+    public static String[] inputStringArrayWithSeparator(BufferedReader br, String ask, String separator) {
+        ArrayList<String> itemList = inputStringListWithSeparator(br, ask, separator);
+        if (itemList.isEmpty()) return new String[0];
+        return itemList.toArray(new String[itemList.size()]);
+    }
+
     public static String[] inputMultiLineStringArray(BufferedReader br, String ask) {
         ArrayList<String> itemList = inputMultiLineStringList(br, ask);
         if (itemList.isEmpty()) return new String[0];
@@ -249,6 +255,21 @@ public class Inputer {
             if ("".equals(item)) break;
             itemList.add(item);
             System.out.println("Input next item if you want or enter to end:");
+        }
+        return itemList;
+    }
+
+    @NotNull
+    public static ArrayList<String> inputStringListWithSeparator(BufferedReader br, String ask, String separator) {
+        ArrayList<String> itemList = new ArrayList<>();
+        System.out.println(ask);
+        String input = Inputer.inputString(br);
+        if (input == null || input.isEmpty()) return itemList;
+        String[] items = input.split(separator);
+        for (String item : items) {
+            if (!item.isEmpty()) {
+                itemList.add(item);
+            }
         }
         return itemList;
     }

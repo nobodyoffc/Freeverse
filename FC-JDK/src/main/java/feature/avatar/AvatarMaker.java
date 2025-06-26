@@ -82,6 +82,7 @@ public class AvatarMaker {
         String[] pngFilePaths = new String[addrArray.length];
         for (int i = 0; i < addrArray.length; i++) {
             String addr = addrArray[i];
+            if(addr.length()!=34)continue;
             pngFilePaths[i] = getAvatar(addr, basePath, filePath + addr + ".png");
         }
         return pngFilePaths;

@@ -46,7 +46,7 @@ public class FchChainInfo extends FcObject {
     private final String daysPerYear = Constants.DAYS_PER_YEAR_STR;
     private final String blockTimeMinute = Constants.BLOCK_TIME_MINUTE;
     private final String genesisBlockId = Constants.GENESIS_BLOCK_ID;
-    private final String startTime = String.valueOf(Constants.START_TIME);
+    private final String startTime = DateUtils.longToTime((Constants.START_TIME) *1000,DateUtils.LONG_FORMAT);
     private String year;
     private String daysToNextYear;
     private String heightOfNextYear;

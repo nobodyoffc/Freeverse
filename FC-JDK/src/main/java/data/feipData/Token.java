@@ -8,13 +8,13 @@ public class Token extends FcObject {
 	private String consensusId;
 	private String capacity;
 	private String decimal;
-	private String transferable;
-	private String closable;
-	private String openIssue;
+	private Boolean transferable;
+	private Boolean closable;
+	private Boolean openIssue;
 	private String maxAmtPerIssue;
 	private String minCddPerIssue;
 	private String maxIssuesPerAddr;
-	private String closed;
+	private Boolean closed;
 	
 	private String deployer;
 	private Double circulating;
@@ -64,27 +64,27 @@ public class Token extends FcObject {
 		this.decimal = decimal;
 	}
 
-	public String getTransferable() {
+	public Boolean getTransferable() {
 		return transferable;
 	}
 
-	public void setTransferable(String transferable) {
+	public void setTransferable(Boolean transferable) {
 		this.transferable = transferable;
 	}
 
-	public String getClosable() {
+	public Boolean getClosable() {
 		return closable;
 	}
 
-	public void setClosable(String closable) {
+	public void setClosable(Boolean closable) {
 		this.closable = closable;
 	}
 
-	public String getOpenIssue() {
+	public Boolean getOpenIssue() {
 		return openIssue;
 	}
 
-	public void setOpenIssue(String openIssue) {
+	public void setOpenIssue(Boolean openIssue) {
 		this.openIssue = openIssue;
 	}
 
@@ -112,11 +112,11 @@ public class Token extends FcObject {
 		this.maxIssuesPerAddr = maxIssuesPerAddr;
 	}
 
-	public String getClosed() {
+	public Boolean getClosed() {
 		return closed;
 	}
 
-	public void setClosed(String closed) {
+	public void setClosed(Boolean closed) {
 		this.closed = closed;
 	}
 

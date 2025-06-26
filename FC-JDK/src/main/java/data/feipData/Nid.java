@@ -8,6 +8,7 @@ import static constants.FieldNames.*;
 
 public class Nid extends FcObject {
 	//nid
+	private String nid;
     private String name;
 	private String desc;
 	private String oid;
@@ -125,5 +126,13 @@ public class Nid extends FcObject {
 
 	public void setOid(String oid) {
 		this.oid = oid;
+	}
+
+	public String getNid() {
+		return nid;
+	}
+
+	public void setNid(String nid) {
+		this.nid = nid;
 	}
 }

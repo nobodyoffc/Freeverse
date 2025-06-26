@@ -67,7 +67,7 @@ public class CidManager extends Manager<Cid> {
         }
 
         // Query API
-        Map<String, Cid> cidInfoMap = apipClient.cidByIds(utils.http.RequestMethod.POST,
+        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(utils.http.RequestMethod.POST,
                                                                  utils.http.AuthType.FC_SIGN_BODY, fid);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
             Cid cidInfo = cidInfoMap.get(fid);

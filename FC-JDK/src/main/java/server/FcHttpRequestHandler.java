@@ -410,35 +410,39 @@ public class FcHttpRequestHandler {
                 replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
-//
-//            List<String> idList = new ArrayList<>();
-//            for (BlockHas blockHas : blockList) {
-//                idList.add(blockHas.getId());
-//            }
-//
-//            List<Block> blockList;
-//            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-//            if(esClient == null) {
-//                replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
-//                return;
-//            }
-//            blockList = EsUtils.getMultiByIdList(esClient, IndicesNames.BLOCK, idList, Block.class).getResultList();
-//            if (blockList == null ) {
-//                replyBody.replyOtherErrorHttp("Failed to get block info.", response);
-//                return;
-//            }
-//            if (blockList.size()==0 ) {
-//                replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
-//                return;
-//            }
-//
-//            List<BlockInfo> meetList = BlockInfo.mergeBlockAndBlockHas(blockList, blockList);
-//
 
-            Map<String, Block> meetMap = null;
+            List<BlockHas> blockHasList;
+            List<BlockInfo> meetList = new ArrayList<>();
 
             if(isForMap){
-                meetMap= ObjectUtils.listToMap(blockList,idFieldName);
+
+                List<String> idList = new ArrayList<>();
+                for (Block block : blockList) {
+                    idList.add(block.getId());
+                }
+
+                ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+                if(esClient == null) {
+                    replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
+                    return;
+                }
+                blockHasList = EsUtils.getMultiByIdList(esClient, IndicesNames.BLOCK_HAS, idList, BlockHas.class).getResultList();
+                if (blockHasList == null ) {
+                    replyBody.replyOtherErrorHttp("Failed to get block info.", response);
+                    return;
+                }
+                if (blockHasList.size()==0 ) {
+                    replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
+                    return;
+                }
+
+                meetList = BlockInfo.mergeBlockAndBlockHas(blockList, blockHasList);
+            }
+
+            Map<String, BlockInfo> meetMap = null;
+
+            if(isForMap && !meetList.isEmpty()){
+                meetMap= ObjectUtils.listToMap(meetList,idFieldName);
                 replyBody.setLast(null);
             }
 
@@ -667,7 +671,6 @@ public class FcHttpRequestHandler {
     public void doTxInfoRequest(boolean isForMap, String idFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType) {
 
         ReplyBody replier = new ReplyBody(settings);
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
         try {
             HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
             boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
@@ -689,30 +692,33 @@ public class FcHttpRequestHandler {
                 replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
-//
-//            List<String> idList = new ArrayList<>();
-//            for (Tx tx : txList) {
-//                idList.add(tx.getId());
-//            }
-//
-//            List<TxHas> txHasList;
-//
-//            txHasList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX_HAS, idList, TxHas.class).getResultList();
-//            if (txHasList == null ) {
-//                replier.replyOtherErrorHttp("Failed to get TX info.", response);
-//                return;
-//            }
-//            if (txHasList.size()==0 ) {
-//                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-//                return;
-//            }
-//
-//            List<TxInfo> meetList = TxInfo.mergeTxAndTxHas(txList, txHasList);
+
+            List<TxInfo> meetList = new ArrayList<>();
+
+            if(isForMap) {
+
+                List<String> idList = new ArrayList<>();
+                for (Tx tx : txList) {
+                    idList.add(tx.getId());
+                }
+
+                List<TxHas> txHasList;
+
+                txHasList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX_HAS, idList, TxHas.class).getResultList();
+                if (txHasList == null ) {
+                    replier.replyOtherErrorHttp("Failed to get TX info.", response);
+                    return;
+                }
+                if (txHasList.size()==0 ) {
+                    replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+                    return;
+                }
+                meetList = TxInfo.mergeTxAndTxHas(txList, txHasList);
+            }
 
 
-
-            Map<String, Tx> meetMap = null;
-            if(isForMap)meetMap= ObjectUtils.listToMap(txList,idFieldName);
+            Map<String, TxInfo> meetMap = null;
+            if(isForMap && !meetList.isEmpty())meetMap= ObjectUtils.listToMap(meetList,idFieldName);
 
             //response
             replier.setGot((long) txList.size());
@@ -733,6 +739,7 @@ public class FcHttpRequestHandler {
         BoolQuery existsQuery;
         BoolQuery unexistsQuery;
         BoolQuery equalsQuery;
+        BoolQuery unequalsQuery;
 
         List<Query> queryList = new ArrayList<>();
         if(query.getTerms()!=null){
@@ -768,7 +775,14 @@ public class FcHttpRequestHandler {
 
         if(query.getEquals()!=null){
             equalsQuery = getEqualQuery(query.getEquals());
+            if(equalsQuery==null)return null;
             Query q = new Query.Builder().bool(equalsQuery).build();
+            if(q!=null)queryList.add(q);
+        }
+
+        if(query.getUnequals()!=null){
+            unequalsQuery = getUnequalQuery(query.getUnequals());
+            Query q = new Query.Builder().bool(unequalsQuery).build();
             if(q!=null)queryList.add(q);
         }
 
@@ -876,21 +890,7 @@ public class FcHttpRequestHandler {
             if(str.isBlank())continue;
             // Decode the search value
             String decodedValue = java.net.URLDecoder.decode(str, java.nio.charset.StandardCharsets.UTF_8);
-            if(decodedValue.contains(".")){
-                try {
-                    valueList.add(FieldValue.of(Double.parseDouble(decodedValue)));
-                }catch(Exception e){
-                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",decodedValue);
-                    return null;
-                }
-            }else{
-                try {
-                    valueList.add(FieldValue.of(Long.parseLong(decodedValue)));
-                }catch(Exception e){
-                    replyBody.reply(CodeMessage.Code1012BadQuery, "Equals is only apply for number.",decodedValue);
-                    return null;
-                }
-            }
+            valueList.add(FieldValue.of(decodedValue));
         }
 
         boolBuilder = makeBoolShouldTermsQuery(equals.getFields(), valueList);
@@ -1005,6 +1005,42 @@ public class FcHttpRequestHandler {
         MatchAllQuery.Builder queryBuilder = new MatchAllQuery.Builder();
         queryBuilder.queryName("all");
         return queryBuilder.build();
+    }
+
+    private BoolQuery getUnequalQuery(Equals unequals) {
+        if(unequals.getValues()==null|| unequals.getFields()==null)return null;
+
+        BoolQuery.Builder boolBuilder;
+
+        List<FieldValue> valueList = new ArrayList<>();
+        for(String str: unequals.getValues()){
+            if(str.isBlank())continue;
+            // Decode the search value
+            String decodedValue = java.net.URLDecoder.decode(str, java.nio.charset.StandardCharsets.UTF_8);
+            valueList.add(FieldValue.of(decodedValue));
+        }
+
+        boolBuilder = makeBoolMustNotTermsQuery(unequals.getFields(), valueList);
+        boolBuilder.queryName("unequal");
+
+        return  boolBuilder.build();
+    }
+
+    private BoolQuery.Builder makeBoolMustNotTermsQuery(String[] fields, List<FieldValue> valueList) {
+        BoolQuery.Builder termsBoolBuilder = new BoolQuery.Builder();
+
+        List<Query> queryList = new ArrayList<>();
+        for(String field:fields){
+            TermsQuery tQuery = TermsQuery.of(t -> t
+                    .field(field)
+                    .terms(t1 -> t1
+                            .value(valueList)
+                    ));
+
+            queryList.add(new Query.Builder().terms(tQuery).build());
+        }
+        termsBoolBuilder.mustNot(queryList);
+        return termsBoolBuilder;
     }
 
     public void updateAddressBalances(Map<String, Long> fidBalanceMap, ElasticsearchClient esClient) {

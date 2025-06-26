@@ -6,7 +6,6 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import constants.IndicesNames;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import com.google.gson.Gson;
 
 import core.crypto.KeyTools;
@@ -62,17 +61,17 @@ public class FinanceParser {
                 }
 
                 if(tokenRaw.getTransferable()!=null){
-                    if (!NumberUtils.isBoolean(tokenRaw.getTransferable(), true)) return null;
+                    if (tokenRaw.getTransferable()==null) return null;
                     tokenHist.setTransferable(tokenRaw.getTransferable());
                 }
 
                 if(tokenRaw.getClosable()!=null){
-                    if (!NumberUtils.isBoolean(tokenRaw.getClosable(), true)) return null;
+                    if (tokenRaw.getClosable()==null) return null;
                     tokenHist.setClosable(tokenRaw.getClosable());
                 }
 
                 if(tokenRaw.getOpenIssue()!=null){
-                    if (!NumberUtils.isBoolean(tokenRaw.getOpenIssue(), true)) return null;
+                    if (tokenRaw.getOpenIssue()==null) return null;
                     tokenHist.setOpenIssue(tokenRaw.getOpenIssue());
                 }
 
@@ -250,12 +249,12 @@ public class FinanceParser {
                 if(tokenHist.getDecimal()!=null) token.setDecimal(tokenHist.getDecimal());
                 else token.setDecimal("0");
                 if(tokenHist.getTransferable()!=null)token.setTransferable(tokenHist.getTransferable());
-                else token.setTransferable(FALSE);
+                else token.setTransferable(Boolean.FALSE);
                 if(tokenHist.getClosable()!=null)token.setClosable(tokenHist.getClosable());
-                else token.setClosable(FALSE);
+                else token.setClosable(Boolean.FALSE);
                 if(tokenHist.getOpenIssue()!=null) {
                     token.setOpenIssue(tokenHist.getOpenIssue());
-                    if (token.getOpenIssue().equals(TRUE)) {
+                    if (token.getOpenIssue().equals(Boolean.TRUE)) {
                         if (tokenHist.getMaxAmtPerIssue() != null)
                             token.setMaxAmtPerIssue(tokenHist.getMaxAmtPerIssue());
                         if (tokenHist.getMinCddPerIssue() != null)
@@ -263,9 +262,9 @@ public class FinanceParser {
                         if (tokenHist.getMaxIssuesPerAddr() != null)
                             token.setMaxIssuesPerAddr(tokenHist.getMaxIssuesPerAddr());
                     }
-                }else token.setOpenIssue(FALSE);
+                }else token.setOpenIssue(Boolean.FALSE);
 
-                token.setClosed(FALSE);
+                token.setClosed(Boolean.FALSE);
 
                 token.setDeployer(tokenHist.getSigner());
 
@@ -281,7 +280,7 @@ public class FinanceParser {
 
             case "issue":
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(TRUE))return false;
+                if(token==null || token.getClosed().equals(Boolean.TRUE))return false;
                 if(token.getOpenIssue().equals(FALSE) && !tokenHist.getSigner().equals(token.getDeployer()))return false;
 
                 ArrayList<String> tokenRecipientIdListIssue = new ArrayList<>();
@@ -301,7 +300,7 @@ public class FinanceParser {
                     tokenRecipientIdListIssue.add(tokenHolderId);
                 }
 
-                if(token.getOpenIssue().equals(TRUE)){
+                if(token.getOpenIssue().equals(Boolean.TRUE)){
                     if(token.getMaxAmtPerIssue()!=null){
                         if(amount>Double.parseDouble(token.getMaxAmtPerIssue()))return false;
                     }
@@ -370,7 +369,7 @@ public class FinanceParser {
 
             case "transfer":
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(TRUE))return false;
+                if(token==null || token.getClosed().equals(Boolean.TRUE))return false;
                 int decimal = Integer.parseInt(token.getDecimal());
                 String fromFid = tokenHist.getSigner();
                 String tokenHolderId = TokenHolder.getTokenHolderId(fromFid, tokenHist.getTokenId());
@@ -434,7 +433,7 @@ public class FinanceParser {
             case "destroy":
 
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(TRUE))return false;
+                if(token==null || token.getClosed().equals(Boolean.TRUE))return false;
                 decimal = Integer.parseInt(token.getDecimal());
                 String tokenReceiverId= TokenHolder.getTokenHolderId(tokenHist.getSigner(), tokenHist.getTokenId());
                 TokenHolder tokenHolderDestroy = EsUtils.getById(esClient, IndicesNames.TOKEN_HOLDER, tokenReceiverId, TokenHolder.class);
@@ -460,11 +459,11 @@ public class FinanceParser {
             case "close":
 
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(TRUE))return false;
+                if(token==null || token.getClosed().equals(Boolean.TRUE))return false;
 
                 if(!tokenHist.getSigner().equals(token.getDeployer()))return false;
 
-                token.setClosed(TRUE);
+                token.setClosed(Boolean.TRUE);
                 updateTokenLastInfo(tokenHist, token);
 
                 Token finalToken = token;

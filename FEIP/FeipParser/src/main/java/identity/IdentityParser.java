@@ -524,6 +524,7 @@ public class IdentityParser {
 				nid.setOid(nidRaw.getOid());
 
 				nid.setNamer(opre.getSigner());
+				nid.setNid(nid.getName()+"@"+nid.getNamer());
 				nid.setBirthTime(opre.getTime());
 				nid.setBirthHeight(opre.getHeight());
 				nid.setLastTime(opre.getTime());

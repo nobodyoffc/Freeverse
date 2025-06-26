@@ -13,9 +13,10 @@ public class FcQuery {
     public static final String MATCH = "match";
     public static final String RANGE = "range";
     public static final String EQUALS = "equals";
+    public static final String UNEQUALS = "unequals";
     public static final String EXISTS = "exists";
     public static final String UNEXISTS = "unexists";
-    public static final String[] QUERY_FIELDS = new String[]{TERMS, PART, MATCH, RANGE, EQUALS, EXISTS, UNEXISTS};
+    public static final String[] QUERY_FIELDS = new String[]{TERMS, PART, MATCH, RANGE, EQUALS, UNEQUALS, EXISTS, UNEXISTS};
     protected String[] exists;
     protected String[] unexists;
     protected Terms terms;
@@ -23,6 +24,7 @@ public class FcQuery {
     protected Match match;
     protected Range range;
     protected Equals equals;
+    protected Equals unequals;
 
     public Terms addNewTerms() {
         Terms newOne = new Terms();
@@ -51,6 +53,12 @@ public class FcQuery {
     public Equals addNewEquals() {
         Equals newOne = new Equals();
         this.setEquals(newOne);
+        return newOne;
+    }
+
+    public Equals addNewUnequals() {
+        Equals newOne = new Equals();
+        this.setUnequals(newOne);
         return newOne;
     }
 
@@ -135,6 +143,14 @@ public class FcQuery {
         this.equals = equals;
     }
 
+    public Equals getUnequals() {
+        return unequals;
+    }
+
+    public void setUnequals(Equals unequals) {
+        this.unequals = unequals;
+    }
+
     public void promoteInput(String name, BufferedReader br) {
         while (true) {
             Menu menu = new Menu();
@@ -148,8 +164,9 @@ public class FcQuery {
                 case 3 -> inputMatch(br);
                 case 4 -> inputRange(br);
                 case 5 -> inputEquals(br);
-                case 6 -> inputExists(br);
-                case 7 -> inputUnexists(br);
+                case 6 -> inputUnequals(br);
+                case 7 -> inputExists(br);
+                case 8 -> inputUnexists(br);
                 case 0 -> {
                     return;
                 }
@@ -233,6 +250,16 @@ public class FcQuery {
             equals = new Equals();
             equals.setFields(fields);
             equals.setValues(values);
+        }
+    }
+
+    private void inputUnequals(BufferedReader br) {
+        String[] fields = Inputer.inputStringArray(br, "Input the fields. Enter to end:", 0);
+        String[] values = Inputer.inputStringArray(br, "Input the values. Enter to end:", 0);
+        if (fields.length > 0 && values.length > 0) {
+            unequals = new Equals();
+            unequals.setFields(fields);
+            unequals.setValues(values);
         }
     }
 

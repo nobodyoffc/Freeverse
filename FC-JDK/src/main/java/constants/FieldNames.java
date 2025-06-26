@@ -348,5 +348,7 @@ public class FieldNames {
     public static final String BITS = "bits";
     public static final String NONCE = "nonce";
 
+    public static final String NIDS = "nids";
+
 }
 

@@ -21,9 +21,9 @@ public class TokenOpData {
     private String consensusId;
     private String capacity;
     private String decimal;
-    private String transferable;
-    private String closable;
-    private String openIssue;
+    private Boolean transferable;
+    private Boolean closable;
+    private Boolean openIssue;
     private String maxAmtPerIssue;
     private String minCddPerIssue;
     private String maxIssuesPerAddr;
@@ -69,7 +69,7 @@ public class TokenOpData {
     }
 
     public static TokenOpData makeRegister(String tokenId, String name, String desc, String consensusId,
-                                           String capacity, String decimal, String transferable, String closable, String openIssue,
+                                           String capacity, String decimal, Boolean transferable, Boolean closable, Boolean openIssue,
                                            String maxAmtPerIssue, String minCddPerIssue, String maxIssuesPerAddr) {
         TokenOpData data = new TokenOpData();
         data.setOp(Op.REGISTER.toLowerCase());
@@ -173,27 +173,27 @@ public class TokenOpData {
         this.decimal = decimal;
     }
 
-    public String getTransferable() {
+    public Boolean getTransferable() {
         return transferable;
     }
 
-    public void setTransferable(String transferable) {
+    public void setTransferable(Boolean transferable) {
         this.transferable = transferable;
     }
 
-    public String getClosable() {
+    public Boolean getClosable() {
         return closable;
     }
 
-    public void setClosable(String closable) {
+    public void setClosable(Boolean closable) {
         this.closable = closable;
     }
 
-    public String getOpenIssue() {
+    public Boolean getOpenIssue() {
         return openIssue;
     }
 
-    public void setOpenIssue(String openIssue) {
+    public void setOpenIssue(Boolean openIssue) {
         this.openIssue = openIssue;
     }
 

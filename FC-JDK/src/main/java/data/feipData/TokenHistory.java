@@ -22,9 +22,9 @@ public class TokenHistory extends FcObject {
 	private String consensusId;
 	private String capacity;
 	private String decimal;
-	private String transferable;
-	private String closable;
-	private String openIssue;
+	private Boolean transferable;
+	private Boolean closable;
+	private Boolean openIssue;
 	private String maxAmtPerIssue;
 	private String minCddPerIssue;
 	private String maxIssuesPerAddr;
@@ -115,6 +115,22 @@ public class TokenHistory extends FcObject {
 		return capacity;
 	}
 
+	public List<String> getTokenIds() {
+		return tokenIds;
+	}
+
+	public void setTokenIds(List<String> tokenIds) {
+		this.tokenIds = tokenIds;
+	}
+
+	public Long getCdd() {
+		return cdd;
+	}
+
+	public void setCdd(Long cdd) {
+		this.cdd = cdd;
+	}
+
 	public void setCapacity(String capacity) {
 		this.capacity = capacity;
 	}
@@ -127,27 +143,27 @@ public class TokenHistory extends FcObject {
 		this.decimal = decimal;
 	}
 
-	public String getTransferable() {
+	public Boolean getTransferable() {
 		return transferable;
 	}
 
-	public void setTransferable(String transferable) {
+	public void setTransferable(Boolean transferable) {
 		this.transferable = transferable;
 	}
 
-	public String getClosable() {
+	public Boolean getClosable() {
 		return closable;
 	}
 
-	public void setClosable(String closable) {
+	public void setClosable(Boolean closable) {
 		this.closable = closable;
 	}
 
-	public String getOpenIssue() {
+	public Boolean getOpenIssue() {
 		return openIssue;
 	}
 
-	public void setOpenIssue(String openIssue) {
+	public void setOpenIssue(Boolean openIssue) {
 		this.openIssue = openIssue;
 	}
 
@@ -190,21 +206,4 @@ public class TokenHistory extends FcObject {
 	public void setTransferTo(List<SendTo> transferTo) {
 		this.transferTo = transferTo;
 	}
-
-	public Long getCdd() {
-		return cdd;
-	}
-
-	public void setCdd(Long cdd) {
-		this.cdd = cdd;
-	}
-
-    public List<String> getTokenIds() {
-        return tokenIds;
-    }
-
-    public void setTokenIds(List<String> tokenIds) {
-        this.tokenIds = tokenIds;
-    }
-	
 }

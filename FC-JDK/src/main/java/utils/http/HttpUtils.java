@@ -153,7 +153,11 @@ public class HttpUtils {
         if(paramMap !=null&& paramMap.size()>0){
             stringBuilder.append("?");
             for(String key: paramMap.keySet()){
-                stringBuilder.append(key).append("=").append(paramMap.get(key)).append("&");
+                String value = paramMap.get(key);
+                stringBuilder.append(key)
+                           .append("=")
+                           .append(java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8))
+                           .append("&");
             }
             stringBuilder.deleteCharAt(stringBuilder.lastIndexOf("&"));
         }

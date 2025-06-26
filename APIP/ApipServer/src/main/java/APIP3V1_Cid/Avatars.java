@@ -74,6 +74,7 @@ public class Avatars extends HttpServlet {
         if(!avatarPngPath.endsWith("/"))avatarPngPath=avatarPngPath+"/";
 
         for (String addr1 : addrs) {
+            if(addr1.length()!=34)continue;
             File file = new File(avatarPngPath + addr1 + ".png");
             FileInputStream fis = new FileInputStream(file);
             String pngStr = encoder.encodeToString(fis.readAllBytes());

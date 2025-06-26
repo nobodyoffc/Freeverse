@@ -30,6 +30,8 @@ import java.util.Map;
 
 import static config.Settings.log;
 import static constants.Strings.*;
+import static constants.Values.FALSE;
+import static constants.Values.TRUE;
 import static core.crypto.KeyTools.pubkeyToFchAddr;
 import static utils.http.AuthType.*;
 import static utils.http.HttpUtils.getApiNameFromUrl;
@@ -213,11 +215,13 @@ public class HttpRequestChecker {
         if (authType.equals(FC_SIGN_URL)) {
             signInfo = parseUrlSignInfo(request);
             try {
-                Fcdsl fcdsl = Fcdsl.urlParamsToFcdsl(url);
+                Fcdsl fcdsl = Fcdsl.urlParamsToFcdsl(  url);
                 RequestBody requestBody = new RequestBody();
                 requestBody.setFcdsl(fcdsl);
                 setRequestBody(requestBody);
-            } catch (Exception ignore) {
+            } catch (Exception e) {
+                replyBody.replyOtherErrorHttp(e.getMessage(), response);
+                return false;
             }
         } else if (authType.equals(FC_SIGN_BODY)) {
             signInfo = parseBodySignInfo(request);
@@ -252,8 +256,11 @@ public class HttpRequestChecker {
         }
         FcSession fcSession = sessionHandler.getSessionByName(signInfo.sessionName);
         if (fcSession == null) {
-            replyBody.replyHttp(CodeMessage.Code1009SessionTimeExpired, response);
-            return false;
+            if(isForbidFreeApi){
+                replyBody.replyHttp(CodeMessage.Code1009SessionTimeExpired, response);
+                return false;
+            }
+            return true;
         }
 
         String fid = fcSession.getUserId();
@@ -393,9 +400,10 @@ public class HttpRequestChecker {
         if(requestBody.getNonce()==null)return new SignInfo(CodeMessage.Code1018NonceMissed, null, 0,0,null,null, null, null, null);
         if(requestBody.getTime()==null)return new SignInfo(CodeMessage.Code1019TimeMissed, null, 0,0,null,null, null, null, null);
         if(requestBody.getUrl()==null)return new SignInfo(CodeMessage.Code1024UrlMissed, null, 0,0,null,null, null, null, null);
-        if(request.getHeader(SIGN)==null)
+        boolean forbidFreeRequest = String.valueOf(settings.getSettingMap().get(Settings.FORBID_FREE_API)).equalsIgnoreCase(TRUE);
+        if(request.getHeader(SIGN)==null && forbidFreeRequest)
             return new SignInfo(CodeMessage.Code1000SignMissed, null, 0,0,null,null, null, null, null);
-        if(request.getHeader(SESSION_NAME)==null)
+        if(request.getHeader(SESSION_NAME)==null && forbidFreeRequest)
             return new SignInfo(CodeMessage.Code1002SessionNameMissed, null, 0,0,null,null, null, null, null);
         return new SignInfo(CodeMessage.Code0Success, requestBody.getUrl(),requestBody.getNonce(), requestBody.getTime(), requestBody.getVia(), request.getHeader(SIGN),request.getHeader(SESSION_NAME), requestBodyBytes, requestBody);
     }

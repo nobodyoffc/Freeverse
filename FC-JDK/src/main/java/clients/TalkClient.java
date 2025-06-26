@@ -1109,7 +1109,7 @@ public class TalkClient extends FcClient {
         }
 
         // 6. Check apipClient.cidInfoByIds as last resort
-        Map<String, Cid> cidInfoMap = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
+        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
             Cid cid = cidInfoMap.get(talkId);
             if (cid != null) {

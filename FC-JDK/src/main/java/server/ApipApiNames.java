@@ -90,9 +90,11 @@ public class ApipApiNames {
     public static final String NEW_OP_RETURN_BY_FIDS ="newOpReturnByFids";
 
     public static final String GET_FID_CID = "getFidCid";
+    public static final String CID_INFO_BY_IDS = "cidInfoByIds";
     public static final String CID_BY_IDS = "cidByIds";
     public static final String CID_SEARCH = "cidSearch";
     public static final String CID_HISTORY = "cidHistory";
+    public static final String CID_AVATAR_BY_IDS = "cidAvatarByIds";
     public static final String HOMEPAGE_HISTORY = "homepageHistory";
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
     public static final String REPUTATION_HISTORY = "reputationHistory";
@@ -182,6 +184,7 @@ public class ApipApiNames {
     public static final String GET_TOTALS = "getTotals";
     public static final String GET_PRICES = "getPrices";
     public static final String NID_SEARCH = "nidSearch";
+    public static final String OID_BY_NIDS = "oidByNids";
     public static final String ENCRYPT = "encrypt";
     public static final String SHA_256 = "sha256";
     public static final String HEX_TO_BASE_58 = "hexToBase58";
@@ -247,12 +250,12 @@ public class ApipApiNames {
         };
 
         identityAPIs = new String[]{
-                CID_SEARCH, CID_BY_IDS, CID_HISTORY,
+                CID_SEARCH,CID_BY_IDS, CID_INFO_BY_IDS, CID_HISTORY,
                  FID_CID_SEEK, GET_FID_CID,
                 NOBODY_SEARCH, NOBODY_BY_IDS,
                 HOMEPAGE_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
-                NID_SEARCH,
-                GET_AVATAR, AVATARS
+                NID_SEARCH, OID_BY_NIDS,
+                GET_AVATAR, AVATARS, CID_AVATAR_BY_IDS
         };
 
         organizeAPIs = new String[]{

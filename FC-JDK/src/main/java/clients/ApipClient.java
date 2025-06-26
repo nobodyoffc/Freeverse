@@ -350,12 +350,23 @@ public class ApipClient extends FcClient {
     }
 
     //Identity APIs
-    public Map<String, Cid> cidByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
-        Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_BY_IDS, authType, ids);
+    public Map<String, Cid> cidInfoByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_INFO_BY_IDS, authType, ids);
         return ObjectUtils.objectToMap(data,String.class, Cid.class);
     }
+
+    public Map<String, String> cidByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class, String.class);
+    }
+
+    public Map<String, String> cidAvatarByIds(RequestMethod requestMethod, AuthType authType, String... ids) {
+        Object data = requestByIds(requestMethod,SN_3, VERSION_1, CID_AVATAR_BY_IDS, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class, String.class);
+    }
+
     public Cid cidInfoById(String id) {
-        Map<String, Cid> map = cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
+        Map<String, Cid> map = cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
         try {
             return map.get(id);
         }catch (Exception e){
@@ -372,7 +383,7 @@ public class ApipClient extends FcClient {
 
     public Map<String, String> getFidCidMap(List<String> fidList) {
         fidList.remove(null);
-        Map<String, Cid> cidInfoMap = this.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fidList.toArray(new String[0]));
+        Map<String, Cid> cidInfoMap = this.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, fidList.toArray(new String[0]));
         if (cidInfoMap == null) return null;
         Map<String, String> fidCidMap = new HashMap<>();
         for (String fid:cidInfoMap.keySet()) {
@@ -922,6 +933,13 @@ public class ApipClient extends FcClient {
         Object data = requestJsonByFcdsl(SN_19, VERSION_1, NID_SEARCH, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
         return objectToList(data,Nid.class);
+    }
+
+    public Map<String, String> didByNids(List<String> nids, RequestMethod requestMethod, AuthType authType) {
+        Fcdsl fcdsl = new Fcdsl();
+        Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.NIDS,JsonUtils.toJson(nids));
+        Object data = requestJsonByFcdsl(SN_19, VERSION_1, OID_BY_NIDS, fcdsl, authType, sessionKey, requestMethod);
+        return ObjectUtils.objectToMap(data,String.class,String.class);
     }
 
     public Map<String, Token> tokenByIds(RequestMethod requestMethod, AuthType authType, String... ids){

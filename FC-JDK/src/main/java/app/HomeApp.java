@@ -1373,7 +1373,7 @@ public class HomeApp extends FcApp {
         Shower.printUnderline(10);
         System.out.println("The members:");
 
-        Map<String, Cid> cidInfoMap = apipClient.cidByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, multisign.getFids().toArray(new String[0]));
+        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, multisign.getFids().toArray(new String[0]));
         if (cidInfoMap == null) {
             return;
         }

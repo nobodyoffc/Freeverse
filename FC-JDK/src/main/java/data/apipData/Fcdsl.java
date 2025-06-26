@@ -61,7 +61,9 @@ public class Fcdsl {
         if("".equals(urlParams))return null;
         Fcdsl fcdsl = new Fcdsl();
         int i = urlParams.indexOf("?");
-        if(i!=-1) urlParams = urlParams.substring(i +1);
+        if(i!=-1) {
+            urlParams = urlParams.substring(i +1);
+        }else if(urlParams.startsWith("http"))return null;
 
         urlParams = urlParams.replaceAll(" ", "");
         String[] params = urlParams.split("&");
@@ -69,7 +71,7 @@ public class Fcdsl {
         for(String param : params){
             int splitIndex = param.indexOf("=");
             String method = param.substring(0, splitIndex);
-            String valueStr = param.substring(splitIndex+1);
+            String valueStr = java.net.URLDecoder.decode(param.substring(splitIndex+1), java.nio.charset.StandardCharsets.UTF_8);
             if("".equals(method)||"".equals(valueStr)) {
                 System.out.println("Bad url.");
                 return null;
@@ -156,6 +158,14 @@ public class Fcdsl {
                     System.arraycopy(values, 1, newValues, 0, values.length - 1);
                     fcdsl.getQuery().getEquals().addNewValues(newValues);
                 }
+                case FcQuery.UNEQUALS-> {
+                    if(fcdsl.getQuery()==null)fcdsl.addNewQuery();
+                    String[] values = valueStr.split(",");
+                    fcdsl.getQuery().addNewUnequals().addNewFields(values[0]);
+                    String[] newValues = new String[values.length-1];
+                    System.arraycopy(values, 1, newValues, 0, values.length - 1);
+                    fcdsl.getQuery().getUnequals().addNewValues(newValues);
+                }
                 case SORT-> {
                     String[] values = valueStr.split(",");
                     Iterator<String> iter = Arrays.stream(values).iterator();
@@ -164,7 +174,7 @@ public class Fcdsl {
                         String order = iter.next();
                         if(!order.equals(DESC) && !order.equals(ASC)){
                             System.out.println("Wrong order. It should be 'desc' or 'asc'.");
-                            return null;
+                            throw new RuntimeException("Wrong order. It should be 'desc' or 'asc'.");
                         }
                         fcdsl.addSort(field,order);
                     }
@@ -497,14 +507,6 @@ public class Fcdsl {
             }
             if (sort != null) {
                 System.out.println("With Ids search, there can't be a sort.");
-                return true;
-            }
-        }
-
-        //2. 没有query就不能有filter，except
-        if (filter != null || except != null) {
-            if (query == null) {
-                System.out.println("Filter and except have to be used with a query.");
                 return true;
             }
         }
