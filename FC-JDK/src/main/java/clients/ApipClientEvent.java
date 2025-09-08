@@ -6,6 +6,8 @@ import data.fcData.ReplyBody;
 import data.fcData.Signature;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
+import data.apipData.SignInMode;
+import data.fcData.AlgorithmId;
 import core.fch.FchMainNetwork;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
@@ -47,6 +49,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
+import static constants.FieldNames.ALG;
+import static constants.FieldNames.MODE;
 import static data.fcData.Signature.isGoodSha256Sign;
 import static clients.ApipClientEvent.RequestBodyType.*;
 import static constants.UpStrings.*;
@@ -250,8 +254,12 @@ public class ApipClientEvent {
         return 0;
     }
 
-    public void signInPost(@Nullable String via, byte[] priKey, @Nullable RequestBody.SignInMode mode){
-        makeSignInRequest(via, mode);
+    public void signInPost(@Nullable String via, byte[] priKey, @Nullable SignInMode mode){
+        this.signInPost(via, priKey, mode, null);
+    }
+    
+    public void signInPost(@Nullable String via, byte[] priKey, @Nullable SignInMode mode, @Nullable AlgorithmId algorithmId){
+        makeSignInRequest(via, mode, algorithmId);
         makeHeaderAsySign(priKey);
         post();
         if(responseBody!=null){
@@ -756,8 +764,29 @@ public class ApipClientEvent {
         requestBodyBytes = this.requestBodyStr.getBytes(StandardCharsets.UTF_8);
     }
 
-    protected void makeSignInRequest(@Nullable String via, @Nullable RequestBody.SignInMode mode) {
-        requestBody = new RequestBody(apiUrl.getUrl(), via, mode);
+    protected void makeSignInRequest(@Nullable String via, @Nullable SignInMode mode) {
+        makeSignInRequest(via, mode, null);
+    }
+    
+    protected void makeSignInRequest(@Nullable String via, @Nullable SignInMode mode, @Nullable AlgorithmId algorithmId) {
+        requestBody = new RequestBody(apiUrl.getUrl(), via);
+        
+        // Add mode and algorithm to fcdsl.other if specified
+        if (mode != null || algorithmId != null) {
+            Fcdsl fcdsl = new Fcdsl();
+            Map<String, String> otherMap = new HashMap<>();
+            
+            if (mode != null) {
+                otherMap.put(MODE, mode.name());
+            }
+            if (algorithmId != null) {
+                otherMap.put(ALG, algorithmId.getDisplayName());
+            }
+            
+            fcdsl.setOther(otherMap);
+            requestBody.setFcdsl(fcdsl);
+        }
+        
         makeRequestBodyBytes();
         requestHeaderMap = new HashMap<>();
         requestHeaderMap.put("Content-Type", "application/json");

@@ -30,6 +30,7 @@ public class FcSession extends FcObject {
     private String pubkey;
     private String keyCipher;
     private String userId;
+    private AlgorithmId alg;
     private transient byte[] keyBytes;
 
 
@@ -226,5 +227,13 @@ public class FcSession extends FcObject {
 
     public void setUserId(String userId) {
         this.userId = userId;
+    }
+
+    public AlgorithmId getAlg() {
+        return alg;
+    }
+
+    public void setAlg(AlgorithmId alg) {
+        this.alg = alg;
     }
 }

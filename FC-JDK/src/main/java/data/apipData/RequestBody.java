@@ -13,16 +13,12 @@ public class RequestBody extends FcEntity {
     private String via;
     private Object data;
     private Fcdsl fcdsl;
-    private SignInMode mode;
 
     public void renew() {
         this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
         this.time = System.currentTimeMillis();
     }
 
-    public enum SignInMode{
-        REFRESH,NORMAL
-    }
 
     public RequestBody() {
         this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
@@ -43,13 +39,6 @@ public class RequestBody extends FcEntity {
         setUrl(url);
     }
 
-    public RequestBody(String url, String via, SignInMode mode) {
-        setTime(System.currentTimeMillis());
-        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
-        setVia(via);
-        setUrl(url);
-        setMode(mode);
-    }
 
     // public String toJson() {
     //     Gson gson = new Gson();
@@ -68,13 +57,6 @@ public class RequestBody extends FcEntity {
         setUrl(url);
     }
 
-    public void makeRequestBody(String url, String via, SignInMode mode) {
-        setTime(System.currentTimeMillis());
-        this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
-        setVia(via);
-        setUrl(url);
-        if (mode != null) setMode(mode);
-    }
 
     public String getUrl() {
         return url;
@@ -116,13 +98,6 @@ public class RequestBody extends FcEntity {
         this.fcdsl = fcdsl;
     }
 
-    public SignInMode getMode() {
-        return mode;
-    }
-
-    public void setMode(SignInMode mode) {
-        this.mode = mode;
-    }
 
     public Object getData() {
         return data;

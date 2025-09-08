@@ -29,6 +29,8 @@ public class Strings {
     public static final String HEIGHT = "height";
     public static final String N_PRICE = "nPrice";
     public static final String PRICE = "price";
+    public static final String PENDING = "pending";
+    public static final String FINISHED = "finished";
     public static final String IS_PRICE_PER_REQUEST = "isPricePerRequest";
 
     public static final String BEST_BLOCK_ID = "bestBlockId";

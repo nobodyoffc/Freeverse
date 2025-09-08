@@ -144,14 +144,14 @@ public class CashValid extends HttpServlet {
         }
         MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
         SearchResult<Cash> searchResult = CashManager.getValidCashes(fid, amount, cd, sinceHeight, outputSize, msgSize, null, esClient, mempoolHandler);
-        if (searchResult.hasError()) {
-            replier.replyHttp(CodeMessage.Code1020OtherError, searchResult.getMessage(),response);
+        if (searchResult.hasError()||searchResult.getData().isEmpty()) {
+            replier.replyHttp(CodeMessage.Code2007CashNoFound, null,response);
             return;
         }
         replier.setGot(searchResult.getGot());
         replier.setTotal(searchResult.getTotal());
         List<Cash> cashList = searchResult.getData();
-        replier.replySingleDataSuccessHttp(cashList,response);
+        replier.reply0SuccessHttp(cashList,response);
     }
 
 

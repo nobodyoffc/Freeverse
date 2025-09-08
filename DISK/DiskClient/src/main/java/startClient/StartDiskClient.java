@@ -1,5 +1,7 @@
 package startClient;
 
+import data.apipData.SignInMode;
+import data.fcData.AlgorithmId;
 import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
@@ -9,17 +11,14 @@ import config.Starter;
 import core.crypto.Decryptor;
 import core.crypto.Encryptor;
 import data.fcData.FcSession;
-import data.apipData.RequestBody;
 import clients.ApipClient;
 import clients.DiskClient;
 import data.fcData.DiskItem;
-import server.ApipApiNames;
 import core.crypto.CryptoDataStr;
 import core.crypto.Hash;
 import data.fcData.ReplyBody;
 import data.feipData.Service;
 import data.feipData.serviceParams.ApipParams;
-import server.DiskApiNames;
 import utils.Hex;
 import utils.JsonUtils;
 import utils.http.AuthType;
@@ -94,7 +93,6 @@ public class StartDiskClient {
                 case 9 -> list(RequestMethod.GET, AuthType.FREE, br);
                 case 10 -> list(RequestMethod.POST, AuthType.FC_SIGN_BODY, br);
                 case 11 -> carve(br);
-//                case 12 -> signIn(symkey);
                 case 12 -> signInEcc(symkey);
                 case 13 -> settings.setting(br, null);
                 case 0 -> {
@@ -105,14 +103,7 @@ public class StartDiskClient {
     }
 
     private static void signInEcc(byte[] symkey) {
-        FcSession fcSession = diskClient.signInEcc(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL, symkey, null);
-        JsonUtils.printJson(fcSession);
-        saveConfig();
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static void signIn(byte[] symkey) {
-        FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), RequestBody.SignInMode.NORMAL,symkey);
+        FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), SignInMode.NORMAL, symkey, AlgorithmId.FC_EccK1AesCbc256_No1_NrC7, null);
         JsonUtils.printJson(fcSession);
         saveConfig();
         Menu.anyKeyToContinue(br);

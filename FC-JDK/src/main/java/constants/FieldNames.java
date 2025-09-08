@@ -349,6 +349,7 @@ public class FieldNames {
     public static final String NONCE = "nonce";
 
     public static final String NIDS = "nids";
+    public static final String GET_TIME = "getTime";
 
 }
 

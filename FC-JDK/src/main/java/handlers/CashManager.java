@@ -1859,7 +1859,8 @@ public class CashManager extends Manager<Cash> {
             Fcdsl fcdsl = createFcdslForValidCashes(sinceHeight, myFid);
             cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST,AuthType.FC_SIGN_BODY);
             if(cashList==null || cashList.isEmpty()){
-                searchResult.setMessage("Can't get cashes. Check APIP.");
+                searchResult.setCode(apipClient.getFcClientEvent().getCode());
+                searchResult.setMessage(apipClient.getFcClientEvent().getMessage());
                 return searchResult;
             }
 
@@ -1900,19 +1901,22 @@ public class CashManager extends Manager<Cash> {
                 searchBuilder.query(q -> q.bool(boolQueryBuilder.build()));
                 result = esClient.search(searchBuilder.build(), Cash.class);
             } catch (IOException e) {
-                searchResult.setMessage("Can't get cashes. Check ES.");
+                searchResult.setCode(CodeMessage.Code1020OtherError);
+                searchResult.setMessage("Get cash from ES wrong:"+e.getMessage());
                 return searchResult;
             }
 
             if (result == null) {
-                searchResult.setMessage("Can't get cashes. Check ES.");
+                searchResult.setCode(CodeMessage.Code1020OtherError);
+                searchResult.setMessage("The server failed to get cash from ES.");
                 return searchResult;
             }
 
 
             List<Hit<Cash>> hitList = result.hits().hits();
             if (hitList.size() == 0) {
-                searchResult.setMessage("No cashes found.");
+                searchResult.setCode(CodeMessage.Code2007CashNoFound);
+                searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
                 return searchResult;
             }
 
@@ -1930,9 +1934,15 @@ public class CashManager extends Manager<Cash> {
             }
         }
 
-        if(cashList==null || cashList.isEmpty()){
+        if(cashList==null){
+            searchResult.setCode(CodeMessage.Code1020OtherError);
             searchResult.setMessage("Can't get cashes. Check APIP.");
             return searchResult;
+        }
+
+        if(cashList.isEmpty()){
+            searchResult.setCode(CodeMessage.Code2007CashNoFound);
+            searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
         }
 
         checkUnconfirmed(cashList,myFid, mempoolHandler, apipClient);
@@ -1972,6 +1982,7 @@ public class CashManager extends Manager<Cash> {
 
     // Helper Classes
     public static class SearchResult<T> {
+        private int code;
         private List<T> data;
         private String message;
         private Long got;
@@ -1984,6 +1995,15 @@ public class CashManager extends Manager<Cash> {
         }
 
         // Getters and setters
+
+        public int getCode() {
+            return code;
+        }
+
+        public void setCode(int code) {
+            this.code = code;
+        }
+
         public List<T> getData() { return data; }
         public void setData(List<T> data) { this.data = data; }
         public String getMessage() { return message; }
@@ -2175,6 +2195,7 @@ public class CashManager extends Manager<Cash> {
             return localDB.getList(batchSize, startId, null, false, null, null, true, true);
         }
     }
+
 
 //    @Override
 //    public List<Cash> showOrChooseItemList(String promote, @Nullable List<Cash> itemList, Integer sizeInPage, @Nullable BufferedReader br, boolean isFromEnd, boolean choose) {

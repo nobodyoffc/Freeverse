@@ -58,7 +58,15 @@ public class Addresses extends HttpServlet {
             replier.replyOtherErrorHttp("FID or Public Key are needed.", response);
             return;
         }
-        replier.replySingleDataSuccessHttp(addrMap,response);
+
+        if(addrMap==null){
+            replier.replyOtherErrorHttp("Failed to make addresses.", response);
+            return;
+        }
+
+        replier.setGot((long) addrMap.size());
+        replier.setTotal((long) addrMap.size());
+        replier.reply0SuccessHttp(addrMap,response);
     
     }
 }

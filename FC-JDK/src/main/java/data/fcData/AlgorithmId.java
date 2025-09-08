@@ -12,7 +12,8 @@ public enum AlgorithmId {
     FC_Sha256SymSignMsg_No1_NrC7(Constants.FC_SHA256SYM_SIGNMSG_NO1_NRC7),
     FC_SchnorrSignTx_No1_NrC7(Constants.FC_SCHNORR_SIGNTX_NO1_NRC7),
     FC_SchnorrSignMsg_No1_NrC7(Constants.FC_SCHNORR_SIGNMSG_NO1_NRC7),
-    FC_AesCbc256_No1_NrC7(Constants.FC_AES_CBC_256_NO_1_NR_C_7);
+    FC_AesCbc256_No1_NrC7(Constants.FC_AES_CBC_256_NO_1_NR_C_7),
+    NONE("NONE");
 
     private final String displayName;
 

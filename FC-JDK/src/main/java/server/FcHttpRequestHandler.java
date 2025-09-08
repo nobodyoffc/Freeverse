@@ -1,6 +1,8 @@
 package server;
 
 import data.apipData.*;
+import data.apipData.SignInMode;
+import data.fcData.AlgorithmId;
 import data.fcData.FcSession;
 import data.fchData.*;
 import config.Settings;
@@ -130,9 +132,58 @@ public class FcHttpRequestHandler {
             }
             pubKey = httpRequestChecker.getPubkey();
             String fid = httpRequestChecker.getFid();
-            RequestBody.SignInMode mode = httpRequestChecker.getRequestBody().getMode();
 
-            if (sessionHandler.getSessionByUserId(fid) == null || RequestBody.SignInMode.REFRESH.equals(mode)) {
+            // Get mode from fcdsl.other
+            SignInMode mode = SignInMode.NORMAL; // default
+            if (httpRequestChecker.getRequestBody().getFcdsl() != null &&
+                httpRequestChecker.getRequestBody().getFcdsl().getOther() != null) {
+                
+                String modeStr = httpRequestChecker.getRequestBody().getFcdsl().getOther().get("mode");
+                if (modeStr != null) {
+                    try {
+                        mode = SignInMode.valueOf(modeStr.toUpperCase());
+                    } catch (IllegalArgumentException e) {
+                        // Keep default NORMAL mode
+                    }
+                }
+            }
+            AlgorithmId algorithmId = null;
+            String algStr = httpRequestChecker.getRequestBody().getFcdsl().getOther().get("alg");
+            if (algStr != null) {
+                try {
+                    algorithmId = AlgorithmId.fromDisplayName(algStr);
+                } catch (IllegalArgumentException e) {
+                    replier.replyHttp(CodeMessage.Code4002NoSuchAlgorithm, response);
+                    return;
+                }
+            }
+
+            if(algorithmId!=null && algorithmId.equals(AlgorithmId.NONE)) {
+                // Original sign-in path for unencrypted sessions
+                if (sessionHandler.getSessionByUserId(fid) == null || SignInMode.REFRESH.equals(mode)) {
+                    try {
+                        fcSession = sessionHandler.addNewSession(fid, null);
+                    } catch (Exception e) {
+                        replier.replyOtherErrorHttp("Something wrong when making sessionKey.\n" + e.getMessage(), response);
+                        return;
+                    }
+                } else {
+                    fcSession = sessionHandler.getSessionByUserId(fid);
+                    if (fcSession == null) {
+                        try {
+                            fcSession = sessionHandler.addNewSession(fid, null);
+                        } catch (Exception e) {
+                            replier.replyOtherErrorHttp("Something wrong when making sessionKey.\n" + e.getMessage(), response);
+                            return;
+                        }
+                    }
+                }
+                fcSession.setKeyCipher(null);
+                replier.reply0SuccessHttp(fcSession, response);
+                return;
+            }
+
+            if (sessionHandler.getSessionByUserId(fid) == null || SignInMode.REFRESH.equals(mode)) {
                 fcSession = sessionHandler.addNewSession(fid, pubKey);
             } else {
                 fcSession = sessionHandler.getSessionByUserId(fid);
@@ -303,7 +354,7 @@ public class FcHttpRequestHandler {
             replyBody.responseFinalJsonHttp(response);
             return;
         }
-        replyBody.replySingleDataSuccessHttp(meetMap, response);
+        replyBody.reply0SuccessHttp(meetMap, response);
     }
 
     @Nullable
@@ -449,8 +500,8 @@ public class FcHttpRequestHandler {
             //response
             replyBody.setGot((long) blockList.size());
             replyBody.setTotal((long) blockList.size());
-            if(isForMap)replyBody.replySingleDataSuccessHttp(meetMap, response);
-            else replyBody.replySingleDataSuccessHttp(blockList, response);
+            if(isForMap)replyBody.reply0SuccessHttp(meetMap, response);
+            else replyBody.reply0SuccessHttp(blockList, response);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -493,7 +544,7 @@ public class FcHttpRequestHandler {
         meetMap= ObjectUtils.listToMap(meetAddrList,ID);
         replyBody.setGot((long) meetAddrList.size());
         replyBody.setTotal((long) meetAddrList.size());
-        replyBody.replySingleDataSuccessHttp(meetMap, response);
+        replyBody.reply0SuccessHttp(meetMap, response);
     }
 
     public Map<String, Long> sumCashValueByOwners(List<String> idList, ElasticsearchClient esClient) {
@@ -629,6 +680,7 @@ public class FcHttpRequestHandler {
             FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
             List<TxHas> txHasList = fcHttpRequestHandler.doRequest(index, defaultSortList, TxHas.class);
             if (txHasList == null || txHasList.size() == 0) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
 
@@ -659,8 +711,7 @@ public class FcHttpRequestHandler {
             }
             //response
             replier.setGot((long) fidTxMaskList.size());
-            replier.setTotal((long) fidTxMaskList.size());
-            replier.replySingleDataSuccessHttp(fidTxMaskList, response);
+            replier.reply0SuccessHttp(fidTxMaskList, response);
 
         } catch (Exception e) {
             replier.replyOtherErrorHttp(e.getMessage(), response);
@@ -723,8 +774,8 @@ public class FcHttpRequestHandler {
             //response
             replier.setGot((long) txList.size());
             replier.setTotal((long) txList.size());
-            if(isForMap)replier.replySingleDataSuccessHttp(meetMap, response);
-            else replier.replySingleDataSuccessHttp(txList, response);
+            if(isForMap)replier.reply0SuccessHttp(meetMap, response);
+            else replier.reply0SuccessHttp(txList, response);
 
         } catch (Exception e) {
             replier.replyOtherErrorHttp(e.getMessage(), response);

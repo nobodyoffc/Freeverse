@@ -45,7 +45,8 @@ public class UnconfirmedCashes extends HttpServlet {
 
         MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
         meetList = mempoolHandler.checkUnconfirmedCash(fidList);
-        
-        replier.replySingleDataSuccessHttp(meetList,response);
+        replier.setGot((long) meetList.size());
+        replier.setTotal((long) meetList.size());
+        replier.reply0SuccessHttp(meetList,response);
     }
 }

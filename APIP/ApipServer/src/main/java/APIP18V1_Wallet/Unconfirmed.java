@@ -47,6 +47,8 @@ public class Unconfirmed extends HttpServlet {
         MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
 
         Map<String, UnconfirmedInfo> resultMap = mempoolHandler.getUnconfirmedInfo(httpRequestChecker.getRequestBody().getFcdsl().getIds());
-        replier.replySingleDataSuccessHttp(resultMap,response);
+        replier.setGot((long) resultMap.size());
+        replier.setTotal((long) resultMap.size());
+        replier.reply0SuccessHttp(resultMap,response);
     }
 }

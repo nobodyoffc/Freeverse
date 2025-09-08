@@ -1,0 +1,74 @@
+package SwapHall;
+
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.core.GetResponse;
+import config.Settings;
+import constants.ApiNames;
+import constants.CodeMessage;
+import constants.Strings;
+import data.fcData.ReplyBody;
+import data.feipData.Service;
+import feature.swap.SwapLpData;
+import initial.Initiator;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import utils.Hex;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+
+import static constants.IndicesNames.SWAP_LP;
+
+@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapLp)
+public class SwapLp extends HttpServlet {
+    private final Settings settings = Initiator.settings;
+
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        ReplyBody replier = new ReplyBody();
+
+        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        try(Jedis jedis = jedisPool.getResource()) {
+            replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
+        }
+
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        String sid = request.getParameter(Strings.SID);
+        if(sid==null){
+            replier.replyOtherErrorHttp("SID is required.",response);
+            return;
+        }
+
+        if(!Hex.isHexString(sid)||sid.length()!=64){
+            replier.replyOtherErrorHttp("It's not a SID.",response);
+            return;
+        }
+
+        String finalSid = sid.toLowerCase();
+
+        try {
+            GetResponse<SwapLpData> response1 = esClient.get(b -> b
+                    .index(SWAP_LP)
+                    .id(finalSid)
+            , SwapLpData.class);
+
+            if (response1.found()) {
+                SwapLpData swapLpData = response1.source();
+                replier.setData(swapLpData);
+                replier.setTotal(1L);
+                replier.setGot(1L);
+                replier.reply0SuccessHttp(swapLpData,response);
+            } else {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+            }
+        } catch (Exception e) {
+            replier.replyOtherErrorHttp(e.getMessage(),response);
+        }
+    }
+}

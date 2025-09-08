@@ -593,6 +593,7 @@ public class EsUtils {
     public static class MgetResult<E> {
         private List<String> missList;
         private List<E> resultList;
+        private Long total;
 
         public List<String> getMissList() {
             return missList;
@@ -608,6 +609,14 @@ public class EsUtils {
 
         public void setResultList(List<E> resultList) {
             this.resultList = resultList;
+        }
+
+        public Long getTotal() {
+            return total;
+        }
+
+        public void setTotal(Long total) {
+            this.total = total;
         }
     }
 
@@ -631,4 +640,5 @@ public class EsUtils {
         }
         return resultMap;
     }
+
 }

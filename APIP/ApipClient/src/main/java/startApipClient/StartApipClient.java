@@ -1,10 +1,8 @@
 package startApipClient;
 
 
-import data.apipData.BlockInfo;
-import data.apipData.Fcdsl;
-import data.apipData.RequestBody;
-import data.apipData.TxInfo;
+import data.apipData.*;
+import data.fcData.*;
 import data.fcData.Module;
 import data.fchData.*;
 import config.Starter;
@@ -19,9 +17,6 @@ import config.Configure;
 import server.ApipApiNames;
 import core.crypto.EncryptType;
 import core.crypto.KeyTools;
-import data.fcData.ReplyBody;
-import data.fcData.FcSession;
-import data.fcData.FidTxMask;
 
 import data.feipData.serviceParams.ApipParams;
 import utils.BytesUtils;
@@ -41,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static data.fcData.AlgorithmId.EccAes256K1P7_No1_NrC7;
 import static ui.Inputer.inputString;
 import static server.ApipApiNames.*;
 import static core.fch.Inputer.inputGoodFid;
@@ -55,7 +51,7 @@ public class StartApipClient {
     public static String clientName= ServiceType.APIP.name();
 
 
-    public static 	Map<String,Object> settingMap = new HashMap<>();
+    public static Map<String,Object> settingMap = new HashMap<>();
 
     public static void main(String[] args) {
         Menu.welcome(clientName);
@@ -202,8 +198,8 @@ public class StartApipClient {
         ArrayList<String> menuItemList = new ArrayList<>();
         menu.setTitle("OpenAPI");
         menuItemList.add("getService");
-        menuItemList.add("SignInPost");
-        menuItemList.add("SignInEccPost");
+        menuItemList.add("SignIn");
+        menuItemList.add("SignIn without encrypting");
         menuItemList.add("TotalsGet");
         menuItemList.add("TotalsPost");
         menuItemList.add("generalPost");
@@ -217,8 +213,8 @@ public class StartApipClient {
             int choice = menu.choose(br);
             switch (choice) {
                 case 1 -> getService();
-                case 2 -> signInPost(symKey, RequestBody.SignInMode.NORMAL);
-                case 3 -> signInEccPost(symKey, RequestBody.SignInMode.NORMAL);
+                case 2 -> signInPost(symKey, SignInMode.NORMAL);
+                case 3 -> signInPost(symKey, SignInMode.NORMAL, AlgorithmId.NONE);
                 case 4 -> totalsGet();
                 case 5 -> totalsPost();
                 case 6 -> generalPost();
@@ -269,19 +265,15 @@ public class StartApipClient {
         Menu.anyKeyToContinue(br);
     }
 
-    public static byte[] signInEccPost(byte[] symKey, RequestBody.SignInMode mode) {
-        System.out.println("Post request for signInEcc...");
-        FcSession fcSession = apipClient.signInEcc(apipClient.getApiAccount(), mode, symKey, null);
-        JsonUtils.printJson(fcSession);
-        Menu.anyKeyToContinue(br);
-        return Hex.fromHex(fcSession.getKey());
+    public static byte[] signInPost(byte[] symKey, SignInMode mode) {
+        return signInPost(symKey,mode,null);
     }
-
-    public static byte[] signInPost(byte[] symKey, RequestBody.SignInMode mode) {
+    public static byte[] signInPost(byte[] symKey, SignInMode mode, AlgorithmId algorithmId) {
         System.out.println("Post request for signIn...");
-        FcSession fcSession = apipClient.signIn(apipClient.getApiAccount(), mode, symKey);
+        FcSession fcSession = apipClient.signIn(apipClient.getApiAccount(), mode, symKey,algorithmId, null);
         JsonUtils.printJson(fcSession);
         Menu.anyKeyToContinue(br);
+        if(fcSession==null)return null;
         return Hex.fromHex(fcSession.getKey());
     }
 
@@ -1810,6 +1802,7 @@ public class StartApipClient {
         }
         System.out.println("Requesting ...");
         apipClient.broadcastTx(txHex, requestMethod, authType);
+        System.out.println(apipClient.getFcClientEvent().getRequestBody().toNiceJson());
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -2254,7 +2247,7 @@ public class StartApipClient {
 //
 //    public static byte[] refreshSessionKey(byte[] symKey) {
 //        System.out.println("Refreshing ...");
-//        return signInEccPost(symKey, RequestBody.SignInMode.REFRESH);
+//        return signInEccPost(symKey, SignInMode.REFRESH);
 //    }
 //
 //    public static void checkApip(ApiAccount initApiAccount) {

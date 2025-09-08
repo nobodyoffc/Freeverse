@@ -59,6 +59,7 @@ public class TokenHoldersByIds extends HttpServlet {
             fidBalanceMap.put(tokenHolder.getFid(),tokenHolder.getBalance());
             meetMap.put(tokenHolder.getTokenId(), fidBalanceMap);
         }
-        replier.replySingleDataSuccessHttp(meetMap,response);
+
+        replier.reply0SuccessHttp(meetMap,response);
     }
 }

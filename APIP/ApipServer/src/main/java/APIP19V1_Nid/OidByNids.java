@@ -166,7 +166,10 @@ public class OidByNids extends HttpServlet {
                 }
             });
 
-            replier.replySingleDataSuccessHttp(nidOidMap, response);
+            replier.setGot((long) nidOidMap.size());
+            if(nidResult.hits().total()!=null)
+                replier.setTotal(nidResult.hits().total().value());
+            replier.reply0SuccessHttp(nidOidMap, response);
 
         } catch (Exception e) {
             replier.replyOtherErrorHttp("Error processing request: " + e.getMessage(), response);

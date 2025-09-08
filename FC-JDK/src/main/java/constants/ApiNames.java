@@ -215,6 +215,7 @@ public class ApiNames {
 
     public static final String Circulating = "circulating";
     public static final String Richlist = "richlist";
+    public static final String REGISTERED_SWAP = "registered_Swap";
     public static final String FreecashInfo = "freecashInfo";
     public static final String TotalSupply = "totalSupply";
     public static final String Put = "put";

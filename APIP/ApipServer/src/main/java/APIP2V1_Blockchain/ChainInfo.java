@@ -67,8 +67,6 @@ public class ChainInfo extends HttpServlet {
             } else {
                 ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
                 freecashInfo.infoByHeight(Long.parseLong(height), esClient);
-                replier.setGot(1L);
-                replier.setTotal(1L);
                 replier.setBestBlock();
             }
             replier.replySingleDataSuccessHttp(freecashInfo, response);

@@ -205,11 +205,12 @@ public class HttpRequestChecker {
 
         boolean isForbidFreeApi = checkForbidFree();
 
-        SignInfo signInfo = null;
 
         if (authType.equals(FREE)) {
             return checkFreeRequest(request, replyBody, url, response);
         }
+
+        SignInfo signInfo = null;
 
         setFreeRequest(false);
         if (authType.equals(FC_SIGN_URL)) {
@@ -330,6 +331,12 @@ public class HttpRequestChecker {
                 RequestBody requestBody = new RequestBody();
                 requestBody.setFcdsl(fcdsl);
                 setRequestBody(requestBody);
+            }else if(request.getInputStream()!=null){
+                requestBodyBytes = request.getInputStream().readAllBytes();
+                if (requestBodyBytes != null) {
+                    RequestBody requestBody = getRequestBody(requestBodyBytes, replier, response);
+                    setRequestBody(requestBody);
+                }
             }
         }catch (Exception ignore){}
 
@@ -396,11 +403,13 @@ public class HttpRequestChecker {
                 requestBody = new Gson().fromJson(requestDataJson, RequestBody.class);
             }catch(Exception ignore){}
         }
-        if(requestBody == null)return new SignInfo(CodeMessage.Code1003BodyMissed, null, 0,0,null,null, null, null, null);
-        if(requestBody.getNonce()==null)return new SignInfo(CodeMessage.Code1018NonceMissed, null, 0,0,null,null, null, null, null);
-        if(requestBody.getTime()==null)return new SignInfo(CodeMessage.Code1019TimeMissed, null, 0,0,null,null, null, null, null);
-        if(requestBody.getUrl()==null)return new SignInfo(CodeMessage.Code1024UrlMissed, null, 0,0,null,null, null, null, null);
+
         boolean forbidFreeRequest = String.valueOf(settings.getSettingMap().get(Settings.FORBID_FREE_API)).equalsIgnoreCase(TRUE);
+
+        if(requestBody == null)return new SignInfo(CodeMessage.Code1003BodyMissed, null, 0,0,null,null, null, null, null);
+        if(requestBody.getNonce()==null&& forbidFreeRequest)return new SignInfo(CodeMessage.Code1018NonceMissed, null, 0,0,null,null, null, null,null);
+        if(requestBody.getTime()==null&& forbidFreeRequest)return new SignInfo(CodeMessage.Code1019TimeMissed, null, 0,0,null,null, null, null,null);
+        if(requestBody.getUrl()==null&& forbidFreeRequest)return new SignInfo(CodeMessage.Code1024UrlMissed, null, 0,0,null,null, null, null,null);
         if(request.getHeader(SIGN)==null && forbidFreeRequest)
             return new SignInfo(CodeMessage.Code1000SignMissed, null, 0,0,null,null, null, null, null);
         if(request.getHeader(SESSION_NAME)==null && forbidFreeRequest)

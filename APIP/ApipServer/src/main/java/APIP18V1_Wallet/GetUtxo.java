@@ -82,6 +82,6 @@ public class GetUtxo extends HttpServlet {
 
         replier.setGot((long) utxoList.size());
         replier.setTotal(searchResult.getTotal());
-        replier.replySingleDataSuccessHttp(utxoList,response);
+        replier.reply0SuccessHttp(utxoList,response);
     }
 }

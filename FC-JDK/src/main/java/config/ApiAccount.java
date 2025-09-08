@@ -1,10 +1,11 @@
 package config;
 
 import core.crypto.*;
+import data.fcData.AlgorithmId;
 import data.fcData.CidInfo;
 import clients.*;
 import data.fcData.FcSession;
-import data.apipData.RequestBody;
+import data.apipData.SignInMode;
 import handlers.AccountManager;
 import ui.Inputer;
 import ui.Menu;
@@ -444,7 +445,7 @@ public class ApiAccount {
         }
 
         if (apiAccount.fcSession.getKeyCipher() == null) {
-            sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL, null);
+            sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, SignInMode.NORMAL, null);
             if (sessionKey == null) return null;
             revised = true;
         }
@@ -487,7 +488,7 @@ public class ApiAccount {
         System.out.println();
         System.out.println("Set the APIP service buyer(requester)...");
         apiAccount.inputPrikeyCipher(br, symkey);
-        sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, RequestBody.SignInMode.NORMAL, null);
+        sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, SignInMode.NORMAL, null);
         if (sessionKey == null) return null;
 
         writeApipParamsToFile(apiAccount, APIP_Account_JSON);
@@ -928,12 +929,12 @@ public class ApiAccount {
     private byte[] checkSessionKey(byte[] symkey, Service.ServiceType type, BufferedReader br) {
         if(this.fcSession ==null)this.fcSession = new FcSession();
         if (this.fcSession.getKeyCipher()== null) {
-            this.sessionKey=freshSessionKey(symkey, type, RequestBody.SignInMode.NORMAL, br);
+            this.sessionKey=freshSessionKey(symkey, type, SignInMode.NORMAL, br);
         } else {
             this.sessionKey =decryptSessionKey(fcSession.getKeyCipher(),symkey);
         }
         if (this.sessionKey==null || this.sessionKey.length==0) {
-            this.sessionKey=freshSessionKey(symkey, type, RequestBody.SignInMode.NORMAL, br);
+            this.sessionKey=freshSessionKey(symkey, type, SignInMode.NORMAL, br);
             if(this.sessionKey==null){
                 log.debug("Failed to get sessionKey for "+type+" service.");
                 System.out.println("Failed to get sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
@@ -957,18 +958,18 @@ public class ApiAccount {
         }
     }
 
-    public byte[] freshSessionKey(byte[] symkey, Service.ServiceType type, RequestBody.SignInMode mode, BufferedReader br) {
+    public byte[] freshSessionKey(byte[] symkey, Service.ServiceType type, SignInMode mode, BufferedReader br) {
         System.out.println("Fresh the sessionKey of the "+type+" service...");
 
         FcSession fcSession;
         switch (type){
             case APIP -> {
                 ApipClient apipClient = (ApipClient) client;
-                fcSession = apipClient.signInEcc(this, mode,symkey, br);
+                fcSession = apipClient.signIn(this, mode,symkey, AlgorithmId.EccAes256K1P7_No1_NrC7, br);
             }
             case DISK -> {
                 DiskClient diskClient = (DiskClient) client;
-                fcSession = diskClient.signInEcc(this, mode,symkey, br);
+                fcSession = diskClient.signIn(this, mode,symkey, AlgorithmId.EccAes256K1P7_No1_NrC7, br);
             }
 //            case TALK -> {
 //                ClientTalk clientTalk = (ClientTalk) client;
@@ -978,7 +979,7 @@ public class ApiAccount {
                 byte[] prikey = decryptUserPrikey(userPrikeyCipher,symkey);
                 if(prikey==null)return null;
                 FcClient fcClient1 = (FcClient)client;
-                fcSession = fcClient1.signInEcc(this, mode,symkey, null);
+                fcSession = fcClient1.signIn(this, mode,symkey, FC_EccK1AesCbc256_No1_NrC7, null);
                 BytesUtils.clearByteArray(prikey);
             }
         }

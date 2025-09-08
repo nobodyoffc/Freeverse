@@ -54,6 +54,8 @@ public class BalanceByIds extends HttpServlet {
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
         Map<String,Long> balanceMap = fcHttpRequestHandler.sumCashValueByOwners(fids, esClient);
         fcHttpRequestHandler.updateAddressBalances(balanceMap, esClient);
-        replier.replySingleDataSuccessHttp(balanceMap,response);
+        replier.setGot((long) balanceMap.size());
+        replier.setGot((long) balanceMap.size());
+        replier.reply0SuccessHttp(balanceMap,response);
     }
 }

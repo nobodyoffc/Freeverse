@@ -7,6 +7,7 @@ import db.LocalDB;
 import data.fcData.AlgorithmId;
 import data.fcData.FcSession;
 import data.feipData.Service;
+import org.jetbrains.annotations.NotNull;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import utils.Hex;
@@ -227,6 +228,12 @@ public class SessionManager extends Manager<FcSession> {
     }
 
     public FcSession addNewSession(String fid, String userPubKey) {
+        AlgorithmId alg = AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
+        return addNewSession(fid, userPubKey, alg);
+    }
+
+    @NotNull
+    private FcSession addNewSession(String fid, String userPubKey, AlgorithmId alg) {
         byte[] sessionKey = IdNameUtils.genNew32BytesKey();
         String sessionName = IdNameUtils.makeKeyName(sessionKey);
 
@@ -237,7 +244,8 @@ public class SessionManager extends Manager<FcSession> {
         session.setUserId(fid);
         session.setId(sessionName);
         session.setPubkey(userPubKey);
-        session.setKeyCipher(makeKeyCipher(sessionKey, userPubKey));
+        session.setKeyCipher(makeKeyCipher(sessionKey, userPubKey, alg));
+        session.setAlg(alg);
 
         if (!useRedis) {
             String oldSessionName = localDB.getFromMap(USER_ID_SESSION_NAME_MAP, fid);
@@ -262,9 +270,9 @@ public class SessionManager extends Manager<FcSession> {
         return session;
     }
 
-    private String makeKeyCipher(byte[] sessionKey, String userPubKey) {
+    private String makeKeyCipher(byte[] sessionKey, String userPubKey, AlgorithmId algorithmId) {
         if (sessionKey == null || userPubKey == null) return null;
-        Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+        Encryptor encryptor = new Encryptor(algorithmId);
         CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(sessionKey, Hex.fromHex(userPubKey));
         if (cryptoDataByte == null) return null;
         return cryptoDataByte.toJson();
