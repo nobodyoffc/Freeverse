@@ -2,8 +2,8 @@
 package APIP14V1_Proof;
 
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 
 import javax.servlet.ServletException;
@@ -25,7 +25,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 
-@WebServlet(name = ApipApiNames.PROOF_SEARCH, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROOF_SEARCH)
+@WebServlet(name = ApipApiNames.PROOF_SEARCH, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.PROOF_SEARCH +"/"+ ApipApiNames.VER_1)
 public class ProofSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -35,7 +35,7 @@ public class ProofSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.PROOF, Proof.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }

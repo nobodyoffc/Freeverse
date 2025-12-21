@@ -1,6 +1,6 @@
 package APIP2V1_Blockchain;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 
 import initial.Initiator;
 import utils.http.AuthType;
@@ -17,7 +17,7 @@ import config.Settings;
 
 import static constants.FieldNames.ID;
 
-@WebServlet(name = ApipApiNames.TX_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TX_BY_IDS)
+@WebServlet(name = ApipApiNames.TX_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.TX_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class TxByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -27,7 +27,7 @@ public class TxByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doTxInfoRequest(true,ID,request, response, authType);
     }
 

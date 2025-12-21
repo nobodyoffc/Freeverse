@@ -11,6 +11,7 @@ public class Remark extends FcObject {
 	private String onDid;
 	private List<String> authors;
 	private String lang;
+	private String format;
 	private String summary;
 
 	private String publisher;
@@ -114,6 +115,12 @@ public class Remark extends FcObject {
 	}
 	public void setLang(String lang) {
 		this.lang = lang;
+	}
+	public String getFormat() {
+		return format;
+	}
+	public void setFormat(String format) {
+		this.format = format;
 	}
 	public String getSummary() {
 		return summary;

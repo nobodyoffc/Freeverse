@@ -28,17 +28,6 @@ public class AesCbc256 {
         return encrypt(inputStream,outputStream,key,iv,null);
     }
 
-    /*
-    Decrypt
-     */
-
-//    public static CryptoDataByte decrypt(InputStream inputStream, OutputStream outputStream, byte[] key, byte[] iv, @Nullable CryptoDataByte cryptoDataByte) {
-//
-//        String algorithm = "AES";
-//        String transformation = "AES/CBC/PKCS7Padding";
-//        String provider = "BC";
-//        return DecryptorSym.decryptBase(algorithm,transformation,provider,inputStream,outputStream,key,iv,cryptoDataByte);
-//    }
 
     public static void decryptStream(InputStream inputStream, OutputStream outputStream, CryptoDataByte cryptoDataByte) {
 

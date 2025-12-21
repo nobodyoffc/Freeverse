@@ -1,17 +1,16 @@
 package APIP18V1_Wallet;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import constants.ApipApiNames;
 import core.fch.RawTxInfo;
 import core.fch.TxCreator;
+import data.fchData.Cash;
 import handlers.CashManager;
 import handlers.MempoolManager;
 import org.jetbrains.annotations.Nullable;
-import server.ApipApiNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
 import handlers.CashManager.SearchResult;
-import data.fchData.Cash;
-import data.fchData.SendTo;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.FchUtils;
@@ -33,7 +32,7 @@ import static core.fch.TxCreator.parseDataForOffLineTxFromOther;
 import config.Settings;
 import data.feipData.Service;
 
-@WebServlet(name = ApipApiNames.OFF_LINE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OFF_LINE_TX)
+@WebServlet(name = ApipApiNames.OFF_LINE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.OFF_LINE_TX +"/"+ ApipApiNames.VER_1)
 public class OffLineTx extends HttpServlet {
     private final Settings settings = Initiator.settings;
     private final ReplyBody replier = new ReplyBody(settings);
@@ -44,7 +43,7 @@ public class OffLineTx extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -81,7 +80,7 @@ public class OffLineTx extends HttpServlet {
 
         String fromFid = rawTxInfo.getSender();
         Long cd = rawTxInfo.getCd();
-        List<SendTo> sendToList = rawTxInfo.getOutputs();
+        List<Cash> sendToList = rawTxInfo.getOutputs();
         int outputSize=0;
         if(sendToList!=null)outputSize=sendToList.size();
         String msg = rawTxInfo.getOpReturn();
@@ -90,7 +89,7 @@ public class OffLineTx extends HttpServlet {
 
         long amount = 0;
         if(rawTxInfo.getOutputs()!=null && !rawTxInfo.getOutputs().isEmpty()) {
-            for (SendTo sendTo : rawTxInfo.getOutputs()) {
+            for (Cash sendTo : rawTxInfo.getOutputs()) {
                 if (sendTo.getAmount() < Dust) {
                     replier.replyOtherErrorHttp("The amount must be more than "+Dust+"fch.", response);
                     return;
@@ -155,10 +154,10 @@ public class OffLineTx extends HttpServlet {
                 return null;
             }
 
-            List<SendTo> sendToList = new ArrayList<>();
+            List<Cash> sendToList = new ArrayList<>();
             for (int i = 0; i < toFids.length; i++) {
-                SendTo sendTo = new SendTo();
-                sendTo.setFid(toFids[i]);
+                Cash sendTo = new Cash();
+                sendTo.setOwner(toFids[i]);
                 sendTo.setAmount(Double.parseDouble(amounts[i]));
                 sendToList.add(sendTo);
             }

@@ -1,8 +1,9 @@
 package APIP1V1_FCDSL;
 
+import constants.ApipApiNames;
+import constants.CodeMessage;
 import data.apipData.Sort;
 import config.Settings;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -19,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 
-@WebServlet(name = ApipApiNames.GENERAL, value = "/"+ ApipApiNames.SN_1+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GENERAL)
+@WebServlet(name = ApipApiNames.GENERAL, value = "/"+ ApipApiNames.SN_1+"/" + ApipApiNames.GENERAL+"/"+ ApipApiNames.VER_1)
 public class General extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;
@@ -32,7 +33,7 @@ public class General extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 
@@ -53,10 +54,7 @@ public class General extends HttpServlet {
         String index = httpRequestChecker.getRequestBody().getFcdsl().getIndex();
         meetList = fcHttpRequestHandler.doRequest(index, defaultSortList, Object.class);
         if(meetList==null){
-            try {
-                response.getWriter().write(fcHttpRequestHandler.getFinalReplyJson());
-            } catch (IOException ignore) {
-            }
+            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
             return;
         }
         replier.setGot((long) meetList.size());

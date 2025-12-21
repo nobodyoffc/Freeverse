@@ -1,7 +1,7 @@
 package APIP8V1_Group;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.GroupHistory;
 import initial.Initiator;
@@ -23,7 +23,7 @@ import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApipApiNames.GROUP_OP_HISTORY, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GROUP_OP_HISTORY)
+@WebServlet(name = ApipApiNames.GROUP_OP_HISTORY, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.GROUP_OP_HISTORY +"/"+ ApipApiNames.VER_1)
 
 public class GroupOpHistory extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
@@ -34,7 +34,7 @@ public class GroupOpHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.GROUP_HISTORY, GroupHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }

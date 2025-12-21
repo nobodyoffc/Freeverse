@@ -2,9 +2,8 @@ package core.fch;
 
 import data.fcData.FcEntity;
 import data.fchData.Cash;
-import data.fchData.P2SH;
+import data.fchData.Multisig;
 import data.fchData.RawTxForCsV1;
-import data.fchData.SendTo;
 import utils.FchUtils;
 import utils.JsonUtils;
 
@@ -17,12 +16,12 @@ public class OffLineTxInfo extends FcEntity {
     private String sender;
     private Double feeRate;
     private List<Cash> inputs;
-    private List<SendTo> outputs;
+    private List<Cash> outputs;
     private String msg;
     private String changeTo;
     private Long lockTime;
     private Long cd;
-    private P2SH p2sh;
+    private Multisig p2sh;
     private String ver;
 
     public OffLineTxInfo() {
@@ -30,7 +29,7 @@ public class OffLineTxInfo extends FcEntity {
         this.outputs = new ArrayList<>();
     }
 
-    public OffLineTxInfo(String sender, List<Cash> cashList, List<SendTo> sendToList, String msg, Long cd, Double feeRate, P2SH p2sh, String ver) {
+    public OffLineTxInfo(String sender, List<Cash> cashList, List<Cash> sendToList, String msg, Long cd, Double feeRate, Multisig p2sh, String ver) {
         super();
         this.sender = sender;
         this.setOutputs(sendToList);
@@ -68,11 +67,11 @@ public class OffLineTxInfo extends FcEntity {
         this.inputs = inputs;
     }
 
-    public List<SendTo> getOutputs() {
+    public List<Cash> getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(List<SendTo> outputs) {
+    public void setOutputs(List<Cash> outputs) {
         this.outputs = outputs;
     }
 
@@ -84,11 +83,11 @@ public class OffLineTxInfo extends FcEntity {
         this.msg = msg;
     }
 
-    public P2SH getP2sh() {
+    public Multisig getP2sh() {
         return p2sh;
     }
 
-    public void setP2sh(P2SH p2sh) {
+    public void setP2sh(Multisig p2sh) {
         this.p2sh = p2sh;
     }
 
@@ -107,8 +106,8 @@ public class OffLineTxInfo extends FcEntity {
         } while (Inputer.askIfYes(br, "Input another input?"));
 
         do {
-            SendTo sendTo = new SendTo();
-            sendTo.setFid(Inputer.inputString(br, "Input the fid you paying to:"));
+            Cash sendTo = new Cash();
+            sendTo.setOwner(Inputer.inputString(br, "Input the fid you paying to:"));
             sendTo.setAmount(Inputer.inputDouble(br, "Input the amount:"));
             offLineTxInfo.getOutputs().add(sendTo);
         } while (Inputer.askIfYes(br, "Input another output?"));
@@ -136,7 +135,7 @@ public class OffLineTxInfo extends FcEntity {
         List<Cash> inputs = new ArrayList<>();
 
         // Process outputs
-        List<SendTo> outputs = new ArrayList<>();
+        List<Cash> outputs = new ArrayList<>();
 
         // Process message
         String msg = null;
@@ -152,8 +151,8 @@ public class OffLineTxInfo extends FcEntity {
                     inputs.add(cash);
                 }
                 case 2 -> {
-                    SendTo sendTo = new SendTo();
-                    sendTo.setFid(rawTx.getAddress());
+                    Cash sendTo = new Cash();
+                    sendTo.setOwner(rawTx.getAddress());
                     sendTo.setAmount(rawTx.getAmount());
                     outputs.add(sendTo);
                 }
@@ -194,9 +193,9 @@ public class OffLineTxInfo extends FcEntity {
         int j = 0;
         if (outputs != null) {
             for (j = 0; j < outputs.size(); j++) {
-                SendTo sendTo = outputs.get(j);
+                Cash sendTo = outputs.get(j);
                 RawTxForCsV1 rawTx = RawTxForCsV1.newOutput(
-                        sendTo.getFid(),
+                        sendTo.getOwner(),
                         sendTo.getAmount(),
                         j
                 );

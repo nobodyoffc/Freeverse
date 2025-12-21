@@ -12,7 +12,7 @@ import java.util.HashMap;
 public class AppOpData{
 
 	private String aid;
-	private List<String> aids;
+	private String[] aids;
 	private String op;
 	private String ver;
 	private String stdName;
@@ -183,13 +183,11 @@ public class AppOpData{
 		this.downloads = downloads;
 	}
 
-
-
-	public List<String> getAids() {
+	public String[] getAids() {
 		return aids;
 	}
 
-	public void setAids(List<String> aids) {
+	public void setAids(String[] aids) {
 		this.aids = aids;
 	}
 
@@ -234,7 +232,7 @@ public class AppOpData{
 	}
 
 	// Factory method for STOP operation
-	public static AppOpData makeStop(List<String> aids) {
+	public static AppOpData makeStop(String[] aids) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.STOP.toLowerCase());
 		data.setAids(aids);
@@ -242,7 +240,7 @@ public class AppOpData{
 	}
 
 	// Factory method for CLOSE operation
-	public static AppOpData makeClose(List<String> aids, String closeStatement) {
+	public static AppOpData makeClose(String[] aids, String closeStatement) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.CLOSE.toLowerCase());
 		data.setAids(aids);
@@ -251,7 +249,7 @@ public class AppOpData{
 	}
 
 	// Factory method for RECOVER operation
-	public static AppOpData makeRecover(List<String> aids) {
+	public static AppOpData makeRecover(String[] aids) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.RECOVER.toLowerCase());
 		data.setAids(aids);

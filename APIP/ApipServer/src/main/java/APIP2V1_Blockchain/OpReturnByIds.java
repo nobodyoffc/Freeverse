@@ -1,6 +1,6 @@
 package APIP2V1_Blockchain;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.fchData.OpReturn;
 import initial.Initiator;
@@ -18,7 +18,7 @@ import server.FcHttpRequestHandler;
 
 import static constants.FieldNames.ID;
 
-@WebServlet(name = ApipApiNames.OP_RETURN_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OP_RETURN_BY_IDS)
+@WebServlet(name = ApipApiNames.OP_RETURN_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.OP_RETURN_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class OpReturnByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -28,7 +28,7 @@ public class OpReturnByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, ID, request,response,authType);
     }
     @Override

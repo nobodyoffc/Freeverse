@@ -2,8 +2,8 @@
 package APIP19V1_Nid;
 
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
 
@@ -23,7 +23,7 @@ import config.Settings;
 import static constants.FieldNames.*;
 
 
-@WebServlet(name = ApipApiNames.NID_SEARCH, value = "/"+ ApipApiNames.SN_19+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NID_SEARCH)
+@WebServlet(name = ApipApiNames.NID_SEARCH, value = "/"+ ApipApiNames.SN_19+"/"+ ApipApiNames.NID_SEARCH +"/"+ ApipApiNames.VER_1)
 public class NidSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -33,7 +33,7 @@ public class NidSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false, FieldNames.ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.NID, Nid.class,defaultSort, request,response,authType);
     }

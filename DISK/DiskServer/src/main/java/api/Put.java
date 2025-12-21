@@ -12,7 +12,6 @@ import data.feipData.serviceParams.DiskParams;
 import handlers.DiskManager;
 import handlers.Manager;
 import initial.Initiator;
-import server.ApipApiNames;
 import server.DiskApiNames;
 import server.HttpRequestChecker;
 import utils.DateUtils;
@@ -31,16 +30,14 @@ import static constants.FieldNames.DID;
 import static constants.FieldNames.RESULT;
 import static constants.Strings.DATA;
 
-@WebServlet(name = DiskApiNames.PUT, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.PUT)
+@WebServlet(name = DiskApiNames.PUT, value = "/"+ DiskApiNames.PUT+"/"+ DiskApiNames.VER_1)
 public class Put extends HttpServlet {
 
     private final Settings settings = Initiator.settings;
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
-        replier.setCode(CodeMessage.Code1017MethodNotAvailable);
-        replier.setMessage(CodeMessage.Msg1017MethodNotAvailable);
-        response.getWriter().write(replier.toNiceJson());
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,response);
     }
 
     @Override

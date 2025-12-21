@@ -3,7 +3,7 @@ package SwapHall;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.IndicesNames;
 import constants.Strings;
@@ -14,7 +14,6 @@ import feature.swap.SwapPendingData;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import utils.BytesUtils;
 import utils.Hex;
 
 import javax.servlet.ServletException;
@@ -23,10 +22,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.List;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapPending)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapPending)
 public class SwapPending extends HttpServlet {
     private final Settings settings = Initiator.settings;
 

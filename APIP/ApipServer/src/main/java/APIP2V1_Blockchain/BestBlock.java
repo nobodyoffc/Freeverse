@@ -1,8 +1,8 @@
 package APIP2V1_Blockchain;
 
 import config.Settings;
+import constants.ApipApiNames;
 import data.feipData.Service;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.Block;
 import initial.Initiator;
@@ -20,7 +20,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 
 import java.io.IOException;
 
-@WebServlet(name = ApipApiNames.BEST_BLOCK, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BEST_BLOCK)
+@WebServlet(name = ApipApiNames.BEST_BLOCK, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.BEST_BLOCK +"/"+ ApipApiNames.VER_1)
 public class BestBlock extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;
@@ -33,7 +33,7 @@ public class BestBlock extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

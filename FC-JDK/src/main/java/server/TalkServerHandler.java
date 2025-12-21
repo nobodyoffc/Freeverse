@@ -240,13 +240,13 @@ public class TalkServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
     }
 
     private List<String> getGroupMemberList(String gid) {
-        Map<String, String[]> result = talkServer.getApipClient().groupMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, gid);
+        Map<String, String[]> result = talkServer.getApipClient().groupMembers(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, gid);
         if(result==null || result.isEmpty() || result.get(gid)==null)return null;
         return Arrays.stream(result.get(gid)).toList();
     }
 
     private List<String> getTeamMemberList(String tid) {
-        Map<String, String[]> result = talkServer.getApipClient().teamMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, tid);
+        Map<String, String[]> result = talkServer.getApipClient().teamMembers(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, tid);
         if(result==null || result.isEmpty() || result.get(tid)==null)return null;
         return Arrays.stream(result.get(tid)).toList();
     }

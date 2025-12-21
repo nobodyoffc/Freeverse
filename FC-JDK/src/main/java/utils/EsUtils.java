@@ -30,6 +30,8 @@ import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import static constants.FieldNames.HEIGHT;
+import static constants.FieldNames.INDEX;
 import static constants.IndicesNames.BLOCK;
 
 public class EsUtils {
@@ -524,27 +526,38 @@ public class EsUtils {
         return esClient.bulk(br.build());
     }
 
-    public static <T> List<T> getHistsForReparse(ElasticsearchClient esClient, String index, String termsField, ArrayList<String> itemIdList, Class<T> clazz) throws ElasticsearchException, IOException {
+    public static <T> List<T> getHistsForReparse(ElasticsearchClient esClient, String index, String termsField1, String termField2, ArrayList<String> itemIdList, Class<T> clazz) throws ElasticsearchException, IOException {
         List<FieldValue> itemValueList = new ArrayList<FieldValue>();
         for (String v : itemIdList) {
             itemValueList.add(FieldValue.of(v));
         }
 
         List<SortOptions> soList = new ArrayList<>();
-        FieldSort fs1 = FieldSort.of(f -> f.field("height").order(SortOrder.Asc));
+        FieldSort fs1 = FieldSort.of(f -> f.field(HEIGHT).order(SortOrder.Asc));
         SortOptions so1 = SortOptions.of(s -> s.field(fs1));
         soList.add(so1);
 
-        FieldSort fs2 = FieldSort.of(f -> f.field("index").order(SortOrder.Asc));
+        FieldSort fs2 = FieldSort.of(f -> f.field(INDEX).order(SortOrder.Asc));
         SortOptions so2 = SortOptions.of(s -> s.field(fs2));
         soList.add(so2);
 
-        List<String> lastSort = new ArrayList<String>();
+        List<String> lastSort;
 
-        SearchResponse<T> result = esClient.search(s -> s.index(index)
-                .query(q -> q.terms(t -> t.field(termsField).terms(t1 -> t1.value(itemValueList))))
+        SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
+                .index(index)
                 .size(EsUtils.READ_MAX)
-                .sort(soList), clazz);
+                .sort(soList);
+
+        // Build bool query with conditional termField2
+        searchBuilder.query(q -> q.bool(b -> {
+            b.should(s1 -> s1.terms(t -> t.field(termsField1).terms(t1 -> t1.value(itemValueList))));
+            if (termField2 != null && !termField2.isEmpty()) {
+                b.should(s2 -> s2.terms(t -> t.field(termField2).terms(t1 -> t1.value(itemValueList))));
+            }
+            return b;
+        }));
+
+        SearchResponse<T> result = esClient.search(searchBuilder.build(), clazz);
 
         if (result.hits().hits().isEmpty()) return null;
 
@@ -561,7 +574,7 @@ public class EsUtils {
                 List<String> lastSort1 = lastSort;
 
                 result = esClient.search(s -> s.index(index)
-                        .query(q -> q.terms(t -> t.field(termsField).terms(t1 -> t1.value(itemValueList))))
+                        .query(q -> q.terms(t -> t.field(termsField1).terms(t1 -> t1.value(itemValueList))))
                         .size(EsUtils.READ_MAX)
                         .sort(soList)
                         .searchAfter(lastSort1), clazz);

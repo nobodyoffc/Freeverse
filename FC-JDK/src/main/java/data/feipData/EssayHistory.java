@@ -24,6 +24,7 @@ public class EssayHistory extends FcObject {
 
 	private List<String> authors;
 	private String lang;
+	private String format;
 	private Integer rate;
 	
 	private Long cdd;
@@ -139,5 +140,13 @@ public class EssayHistory extends FcObject {
 
 	public void setLang(String lang) {
 		this.lang = lang;
+	}
+
+	public String getFormat() {
+		return format;
+	}
+
+	public void setFormat(String format) {
+		this.format = format;
 	}
 }

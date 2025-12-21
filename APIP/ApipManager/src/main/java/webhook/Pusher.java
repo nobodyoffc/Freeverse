@@ -4,7 +4,7 @@ import data.apipData.WebhookPushBody;
 import data.fchData.Cash;
 import data.fchData.OpReturn;
 import handlers.WebhookManager;
-import server.ApipApiNames;
+import server.ApipApi;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
@@ -81,7 +81,7 @@ public class Pusher implements Runnable{
     private void checkSubscriptions(Jedis jedis) {
         List<WebhookManager.WebhookRequestBody> webhookInfoList;
         jedis.select(Constants.RedisDb4Webhook);
-        Map<String, String> newCashByFidsSubscriptionMap = jedis.hgetAll(Settings.addSidBriefToName(sid, ApipApiNames.NEW_CASH_BY_FIDS));
+        Map<String, String> newCashByFidsSubscriptionMap = jedis.hgetAll(Settings.addSidBriefToName(sid, ApipApi.HOOK_NEW_CASH_BY_FIDS.getName()));
         if(newCashByFidsSubscriptionMap ==null) {
             webhookInfoList = getWebhookInfoListFromEs(esClient);
             makeMethodFidEndpointMapMap(webhookInfoList);
@@ -97,14 +97,14 @@ public class Pusher implements Runnable{
         Gson gson = new Gson();
         methodFidEndpointInfoMapMap = new HashMap<>();
         //Method: newCashByFids
-        Map<String, String> newCashByFidsHookInfoStrMap = jedis.hgetAll(Settings.addSidBriefToName(sid, ApipApiNames.NEW_CASH_BY_FIDS));
+        Map<String, String> newCashByFidsHookInfoStrMap = jedis.hgetAll(Settings.addSidBriefToName(sid, ApipApi.HOOK_NEW_CASH_BY_FIDS.getName()));
         if(newCashByFidsHookInfoStrMap==null||newCashByFidsHookInfoStrMap.isEmpty())return;
         Map<String, WebhookManager.WebhookRequestBody> newCashByFidsHookInfoMap = new HashMap<>();
         for(String owner: newCashByFidsHookInfoStrMap.keySet()){
             String webhookInfoStr = newCashByFidsHookInfoStrMap.get(owner);
             newCashByFidsHookInfoMap.put(owner,gson.fromJson(webhookInfoStr, WebhookManager.WebhookRequestBody.class));
         }
-        methodFidEndpointInfoMapMap.put(ApipApiNames.NEW_CASH_BY_FIDS,newCashByFidsHookInfoMap);
+        methodFidEndpointInfoMapMap.put(ApipApi.HOOK_NEW_CASH_BY_FIDS.getName(),newCashByFidsHookInfoMap);
         //More method:
     }
 
@@ -125,10 +125,10 @@ public class Pusher implements Runnable{
         Map<String, WebhookManager.WebhookRequestBody> newCashByFidsWebhookInfoMap = new HashMap<>();
         for (WebhookManager.WebhookRequestBody webhookInfo : webhookInfoList) {
             switch (webhookInfo.getMethod()) {
-                case ApipApiNames.NEW_CASH_BY_FIDS -> newCashByFidsWebhookInfoMap.put(webhookInfo.getUserId(), webhookInfo);
+                case ApipApiNames.HOOK_NEW_CASH_BY_FIDS -> newCashByFidsWebhookInfoMap.put(webhookInfo.getUserId(), webhookInfo);
             }
         }
-        methodFidEndpointInfoMapMap.put(ApipApiNames.NEW_CASH_BY_FIDS, newCashByFidsWebhookInfoMap);
+        methodFidEndpointInfoMapMap.put(ApipApi.HOOK_NEW_CASH_BY_FIDS.getName(), newCashByFidsWebhookInfoMap);
     }
 
     private List<WebhookManager.WebhookRequestBody> getWebhookInfoListFromEs(ElasticsearchClient esClient) {
@@ -145,9 +145,9 @@ public class Pusher implements Runnable{
 
         for(String method: methodFidWatchedFidsMapMap.keySet()){
             switch (method){
-                case ApipApiNames.NEW_CASH_BY_FIDS -> putNewCashByFids(methodFidWatchedFidsMapMap.get(method),sinceHeight);
+                case ApipApiNames.HOOK_NEW_CASH_BY_FIDS -> putNewCashByFids(methodFidWatchedFidsMapMap.get(method),sinceHeight);
                 //TODO untested
-                case ApipApiNames.NEW_OP_RETURN_BY_FIDS -> putNewOpReturnByFids(methodFidWatchedFidsMapMap.get(method),sinceHeight);
+                case ApipApiNames.HOOK_NEW_OP_RETURN_BY_FIDS -> putNewOpReturnByFids(methodFidWatchedFidsMapMap.get(method),sinceHeight);
             }
         }
     }
@@ -157,7 +157,7 @@ public class Pusher implements Runnable{
             WebhookManager.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(owner);
             ArrayList<Cash> newCashList = getNewCashList(webhookInfo,sinceHeight);
             if(newCashList==null)return;
-            pushDataList(webhookInfo, ApipApiNames.NEW_CASH_BY_FIDS,newCashList);
+            pushDataList(webhookInfo, ApipApi.HOOK_NEW_CASH_BY_FIDS.getName(),newCashList);
         }
     }
 
@@ -166,7 +166,7 @@ public class Pusher implements Runnable{
             WebhookManager.WebhookRequestBody webhookInfo = ownerWebhookInfoMap.get(owner);
             ArrayList<OpReturn> newOpReturnList = getNewOpReturnList(webhookInfo,sinceHeight);
             if(newOpReturnList==null)return;
-            pushDataList(webhookInfo, ApipApiNames.NEW_OP_RETURN_BY_FIDS,newOpReturnList);
+            pushDataList(webhookInfo, ApipApi.NEW_OP_RETURN_HOOK_BY_FIDS.getName(),newOpReturnList);
         }
     }
 
@@ -184,7 +184,7 @@ public class Pusher implements Runnable{
             String nPrice = jedis.hget(Settings.addSidBriefToName(sid,Strings.N_PRICE), method);
             double nPriceF = Double.parseDouble(nPrice);
 
-            String pricePerKB = jedis.hget(Settings.addSidBriefToName(sid,PARAMS), FieldNames.PRICE_PER_K_BYTES);
+            String pricePerKB = jedis.hget(Settings.addSidBriefToName(sid,PARAMS), FieldNames.PRICE_PER_K_Bytes);
             Long price = FchUtils.coinStrToSatoshi(pricePerKB);
             if(price==null)price=0L;
 
@@ -254,7 +254,7 @@ public class Pusher implements Runnable{
         try {
             return EsUtils.getListByTermsSinceHeight(esClient,IndicesNames.CASH, FieldNames.OWNER,idList,sinceHeight, FieldNames.ID,SortOrder.Asc,Cash.class, null);
         } catch (IOException e) {
-            log.error("Get new cash list for "+ ApipApiNames.NEW_CASH_BY_FIDS +" from ES wrong.",e);
+            log.error("Get new cash list for "+ ApipApi.HOOK_NEW_CASH_BY_FIDS +" from ES wrong.",e);
             return null;
         }
     }
@@ -266,7 +266,7 @@ public class Pusher implements Runnable{
         try {
             return EsUtils.getListByTermsSinceHeight(esClient,IndicesNames.OPRETURN, FieldNames.RECIPIENT,idList,sinceHeight, FieldNames.ID,SortOrder.Asc, OpReturn.class, null);
         } catch (IOException e) {
-            log.error("Get new OpReturn list for "+ ApipApiNames.NEW_OP_RETURN_BY_FIDS +" from ES wrong.",e);
+            log.error("Get new OpReturn list for "+ ApipApi.NEW_OP_RETURN_HOOK_BY_FIDS +" from ES wrong.",e);
             return null;
         }
     }

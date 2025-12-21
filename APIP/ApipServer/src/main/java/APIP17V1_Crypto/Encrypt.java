@@ -1,11 +1,11 @@
 package APIP17V1_Crypto;
 
+import constants.ApipApiNames;
 import data.apipData.EncryptIn;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import com.google.gson.Gson;
-import data.fchData.Cid;
-import server.ApipApiNames;
+import data.fchData.Freer;
 import constants.FieldNames;
 import constants.IndicesNames;
 import core.crypto.CryptoDataByte;
@@ -25,7 +25,7 @@ import java.util.Map;
 import config.Settings;
 import data.feipData.Service;
 
-@WebServlet(name = ApipApiNames.ENCRYPT, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.ENCRYPT)
+@WebServlet(name = ApipApiNames.ENCRYPT, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.ENCRYPT +"/"+ ApipApiNames.VER_1)
 public class Encrypt extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -33,7 +33,7 @@ public class Encrypt extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -69,8 +69,8 @@ public class Encrypt extends HttpServlet {
                             cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getPubkey()));
                         else if(encryptInput.getFid()!=null){
                             ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-                            GetResponse<Cid> result = esClient.get(g -> g.index(IndicesNames.CID).id(encryptInput.getFid()), Cid.class);
-                            Cid cid = result.source();
+                            GetResponse<Freer> result = esClient.get(g -> g.index(IndicesNames.FREER).id(encryptInput.getFid()), Freer.class);
+                            Freer cid = result.source();
                             if(cid ==null|| cid.getPubkey()==null){
                                 replier.replyOtherErrorHttp("Failed to get pubkey.", response);
                                 return;

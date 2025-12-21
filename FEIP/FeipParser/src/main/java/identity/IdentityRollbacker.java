@@ -15,6 +15,8 @@ import utils.JsonUtils;
 
 import java.util.*;
 
+import static constants.FieldNames.SIGNER;
+
 public class IdentityRollbacker {
 
 	public boolean rollback(ElasticsearchClient esClient, long height) throws Exception {
@@ -51,9 +53,9 @@ public class IdentityRollbacker {
 		
 		deleteEffectedCids(esClient, signerList);
 		
-		deleteRolledHists(esClient, IndicesNames.CID_HISTORY,histIdList);
+		deleteRolledHists(esClient, IndicesNames.FREER_HISTORY,histIdList);
 		
-		List<CidHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.CID_HISTORY,"signer",signerList, CidHist.class);
+		List<CidHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY,SIGNER, null, signerList, CidHist.class);
 		
 		reparse(esClient,reparseList);
 		
@@ -63,7 +65,7 @@ public class IdentityRollbacker {
 	private Map<String, ArrayList<String>> getEffectedCidAndHistory(ElasticsearchClient esClient, long height) throws Exception {
 	
 		SearchResponse<CidHist> resultSearch = esClient.search(s->s
-				.index(IndicesNames.CID_HISTORY)
+				.index(IndicesNames.FREER_HISTORY)
 				.query(q->q
 						.range(r->r
 								.field("height")
@@ -73,6 +75,10 @@ public class IdentityRollbacker {
 		ArrayList<String> idList = new ArrayList<String>();
 
 		for(Hit<CidHist> hit: resultSearch.hits().hits()) {
+			if(hit.source()==null){
+				System.out.println("Cid hist is null");
+				continue;
+			}
 			signerSet.add(hit.source().getSigner());
 			idList.add(hit.id());
 		}
@@ -88,7 +94,7 @@ public class IdentityRollbacker {
 	}
 
 	private void deleteEffectedCids(ElasticsearchClient esClient, ArrayList<String> signerList) throws Exception {
-		EsUtils.bulkDeleteList(esClient, IndicesNames.CID, signerList);
+		EsUtils.bulkDeleteList(esClient, IndicesNames.FREER, signerList);
 		
 	}
 
@@ -134,6 +140,10 @@ public class IdentityRollbacker {
 		ArrayList<String> idList = new ArrayList<String>();
 
 		for(Hit<RepuHist> hit: resultSearch.hits().hits()) {
+			if(hit.source()==null){
+				System.out.println("Repu hist is null");
+				continue;
+			}
 			rateeSet.add(hit.source().getRatee());
 			idList.add(hit.id());
 		}
@@ -217,7 +227,7 @@ public class IdentityRollbacker {
 		for(String ratee:rateeSet) {
 			br.operations(o->o
 					.update(u->u
-							.index(IndicesNames.CID)
+							.index(IndicesNames.FREER)
 							.id(ratee)
 							.action(a->a
 									.doc(reviseMapMap.get(ratee)))));

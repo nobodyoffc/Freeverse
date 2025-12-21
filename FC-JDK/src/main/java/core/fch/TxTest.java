@@ -3,7 +3,8 @@ package core.fch;
 import clients.ApipClient;
 import config.ApiAccount;
 import data.fcData.AlgorithmId;
-import data.fchData.SendTo;
+import data.fchData.Cash;
+import data.fchData.Multisig;
 import org.bitcoinj.fch.FchMainNetwork;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
@@ -13,8 +14,6 @@ import constants.Constants;
 import core.crypto.KeyTools;
 import utils.Hex;
 import core.crypto.Hash;
-import data.fchData.Cash;
-import data.fchData.Multisign;
 import data.fcData.Signature;
 import utils.BytesUtils;
 import utils.JsonUtils;
@@ -77,9 +76,9 @@ public class TxTest {
         pubKeyList.add(HexFormat.of().parseHex(pubkeyB));
         pubKeyList.add(HexFormat.of().parseHex(pubkeyC));
 
-        Multisign multisign = createMultisign(pubKeyList, 2);
-        if(multisign ==null)return;
-        String mFid = multisign.getId();
+        Multisig multisig = createMultisig(pubKeyList, 2);
+        if(multisig ==null)return;
+        String mFid = multisig.getId();
 
         System.out.println("Multisig address:" + mFid);
         //Get multisig address information
@@ -89,43 +88,43 @@ public class TxTest {
         apipClient.setUrlHead(urlHead);
         apipClient.setSessionKey(sessionKey);
         String id = mFid;
-        Map<String, Multisign> p2SHMap = apipClient.multisignByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,mFid);
+        Map<String, Multisig> p2SHMap = apipClient.multisigByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,mFid);
         if(p2SHMap==null)return;
-        multisign = p2SHMap.get(mFid);
-        JsonUtils.printJson(multisign);
+        multisig = p2SHMap.get(mFid);
+        JsonUtils.printJson(multisig);
 
         //Get cashes of the multisig address
 
-        List<SendTo> sendToList = new ArrayList<>();
-        SendTo sendTo = new SendTo();
-        sendTo.setFid(mFid);
+        List<Cash> sendToList = new ArrayList<>();
+        Cash sendTo = new Cash();
+        sendTo.setOwner(mFid);
         sendTo.setAmount(0.1);
         sendToList.add(sendTo);
-        SendTo sendTo1 = new SendTo();
-        sendTo1.setFid(fidA);
+        Cash sendTo1 = new Cash();
+        sendTo1.setOwner(fidA);
         sendTo1.setAmount(0.2);
         sendToList.add(sendTo1);
 
         String msg = "hi";
 
-        List<Cash> cashList = apipClient.cashValid(mFid, 0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> cashList = apipClient.cashValid(mFid, 0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
         if(cashList==null)return;
 
         JsonUtils.printJson(cashList);
 
         //Make raw tx
-        Transaction transaction = createUnsignedTx(cashList, sendToList, msg, multisign, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
+        Transaction transaction = createUnsignedTx(cashList, sendToList, msg, multisig, DEFAULT_FEE_RATE, null, FchMainNetwork.MAINNETWORK);
         byte[] txBytes = transaction.bitcoinSerialize();
         System.out.println(HexFormat.of().formatHex(txBytes));
         Shower.printUnderline(10);
         //Sign raw tx
-        byte[] redeemScript = HexFormat.of().parseHex(multisign.getRedeemScript());
-        RawTxInfo multiSignData = new RawTxInfo(txBytes, multisign, cashList);
+        byte[] redeemScript = HexFormat.of().parseHex(multisig.getRedeemScript());
+        RawTxInfo multiSignData = new RawTxInfo(txBytes, multisig, cashList);
 
-        RawTxInfo multiSignDataA = signSchnorrMultiSignTx(multiSignData, priKeyBytesA, FchMainNetwork.MAINNETWORK);
-        RawTxInfo multiSignDataB = signSchnorrMultiSignTx(multiSignData, priKeyBytesB, FchMainNetwork.MAINNETWORK);
-        RawTxInfo multiSignDataC = signSchnorrMultiSignTx(multiSignData, priKeyBytesC, FchMainNetwork.MAINNETWORK);
+        RawTxInfo multiSignDataA = signSchnorrMultiSigTx(multiSignData, priKeyBytesA, FchMainNetwork.MAINNETWORK);
+        RawTxInfo multiSignDataB = signSchnorrMultiSigTx(multiSignData, priKeyBytesB, FchMainNetwork.MAINNETWORK);
+        RawTxInfo multiSignDataC = signSchnorrMultiSigTx(multiSignData, priKeyBytesC, FchMainNetwork.MAINNETWORK);
 
         Map<String, List<String>> sig1 = multiSignDataA.getFidSigMap();
         Map<String, List<String>> sig2 = multiSignDataB.getFidSigMap();
@@ -146,7 +145,7 @@ public class TxTest {
         }
         Shower.printUnderline(10);
         //build signed tx
-        String signedTx = buildSchnorrMultiSignTx(txBytes, sigAll, multisign, FchMainNetwork.MAINNETWORK);
+        String signedTx = buildSchnorrMultiSigTx(txBytes, sigAll, multisig, FchMainNetwork.MAINNETWORK);
 
         System.out.println(signedTx);
 
@@ -190,15 +189,15 @@ public class TxTest {
 
         String urlHead = Constants.UrlHead_CID_CASH;
 
-        List<SendTo> sendToList = new ArrayList<>();
-        SendTo sendTo = new SendTo();
-        sendTo.setFid(fid);
+        List<Cash> sendToList = new ArrayList<>();
+        Cash sendTo = new Cash();
+        sendTo.setOwner(fid);
         sendTo.setAmount(0.1);
         sendToList.add(sendTo);
 
         String msg = "hi";
 
-        List<Cash> cashList  = apipClient.cashValid(fid,0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Cash> cashList  = apipClient.cashValid(fid,0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
         String txSigned = createTimeLockedTransaction(cashList, priKeyBytes, sendToList, 1999900, msg, FchMainNetwork.MAINNETWORK);
         System.out.println(txSigned);

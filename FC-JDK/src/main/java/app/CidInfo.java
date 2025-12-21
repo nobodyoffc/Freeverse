@@ -5,7 +5,7 @@ import constants.FieldNames;
 import core.crypto.Decryptor;
 import core.crypto.Encryptor;
 import core.crypto.KeyTools;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import utils.Hex;
 
 import java.io.BufferedReader;
@@ -16,7 +16,7 @@ import static constants.Values.ASC;
 import static constants.Values.DESC;
 import static ui.Shower.DEFAULT_PAGE_SIZE;
 
-public class CidInfo extends Cid {
+public class CidInfo extends Freer {
     public static final String KEY_INFO_FILE_PATH = "keyInfo.json";
 
     private String prikeyCipher;
@@ -140,57 +140,6 @@ public class CidInfo extends Cid {
         return new CidInfo(label, pubkey);
     }
 
-    /**
-     * Converts a Cid object to a CidInfo object
-     * @param cid The Cid object to convert
-     * @return A new CidInfo object with all properties from the Cid object
-     */
-    public static CidInfo fromCid(Cid cid) {
-        if (cid == null) return null;
-        
-        CidInfo cidInfo = new CidInfo();
-        cidInfo.setId(cid.getId());
-        cidInfo.setCid(cid.getCid());
-        cidInfo.setPubkey(cid.getPubkey());
-        cidInfo.setMaster(cid.getMaster());
-        cidInfo.setBalance(cid.getBalance());
-        cidInfo.setCash(cid.getCash());
-        cidInfo.setIncome(cid.getIncome());
-        cidInfo.setExpend(cid.getExpend());
-        cidInfo.setCd(cid.getCd());
-        cidInfo.setCdd(cid.getCdd());
-        cidInfo.setReputation(cid.getReputation());
-        cidInfo.setHot(cid.getHot());
-        cidInfo.setWeight(cid.getWeight());
-        cidInfo.setGuide(cid.getGuide());
-        cidInfo.setNoticeFee(cid.getNoticeFee());
-        cidInfo.setHomepages(cid.getHomepages());
-        cidInfo.setBtcAddr(cid.getBtcAddr());
-        cidInfo.setEthAddr(cid.getEthAddr());
-        cidInfo.setLtcAddr(cid.getLtcAddr());
-        cidInfo.setDogeAddr(cid.getDogeAddr());
-        cidInfo.setTrxAddr(cid.getTrxAddr());
-        cidInfo.setBchAddr(cid.getBchAddr());
-        cidInfo.setBirthHeight(cid.getBirthHeight());
-        cidInfo.setNameTime(cid.getNameTime());
-        cidInfo.setLastHeight(cid.getLastHeight());
-        
-        return cidInfo;
-    }
-    
-    /**
-     * Converts a Cid object to a CidInfo object and sets the prikeyCipher
-     * @param cid The Cid object to convert
-     * @param prikeyCipher The encrypted private key
-     * @return A new CidInfo object with all properties from the Cid object and the provided prikeyCipher
-     */
-    public static CidInfo fromCid(Cid cid, String prikeyCipher) {
-        CidInfo cidInfo = fromCid(cid);
-        if (cidInfo != null) {
-            cidInfo.setPrikeyCipher(prikeyCipher);
-        }
-        return cidInfo;
-    }
     public String getPrikeyCipher() {
         return prikeyCipher;
     }

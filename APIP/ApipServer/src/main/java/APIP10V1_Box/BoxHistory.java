@@ -1,7 +1,7 @@
 package APIP10V1_Box;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -20,7 +20,7 @@ import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
 
-@WebServlet(name = ApipApiNames.BOX_HISTORY, value = "/"+ ApipApiNames.SN_10+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BOX_HISTORY)
+@WebServlet(name = ApipApiNames.BOX_HISTORY, value = "/"+ ApipApiNames.SN_10+"/"+ ApipApiNames.BOX_HISTORY +"/"+ ApipApiNames.VER_1)
 public class BoxHistory extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -30,7 +30,7 @@ public class BoxHistory extends HttpServlet {
     }   
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.BOX_HISTORY, data.feipData.BoxHistory.class, defaultSort, request,response,authType);
     }

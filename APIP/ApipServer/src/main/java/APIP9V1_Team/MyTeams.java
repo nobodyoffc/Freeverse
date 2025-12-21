@@ -1,8 +1,8 @@
 package APIP9V1_Team;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
 import config.Settings;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Team;
 import initial.Initiator;
@@ -20,7 +20,7 @@ import java.util.List;
 import static constants.FieldNames.*;
 import server.FcHttpRequestHandler;
 
-@WebServlet(name = ApipApiNames.MY_TEAMS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MY_TEAMS)
+@WebServlet(name = ApipApiNames.MY_TEAMS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.MY_TEAMS +"/"+ ApipApiNames.VER_1)
 public class MyTeams extends HttpServlet {
     private final Settings settings;
     private final FcHttpRequestHandler fcHttpRequestHandler;
@@ -31,7 +31,7 @@ public class MyTeams extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,false,null,null);
         doRequest(defaultSort,request,response,authType,settings);  }
     @Override

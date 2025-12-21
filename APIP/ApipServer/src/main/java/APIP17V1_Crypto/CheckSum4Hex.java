@@ -1,6 +1,6 @@
 package APIP17V1_Crypto;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import core.crypto.Hash;
 import data.fcData.ReplyBody;
@@ -17,7 +17,7 @@ import java.util.Map;
 
 import config.Settings;
 
-@WebServlet(name = ApipApiNames.CHECK_SUM_4_HEX, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CHECK_SUM_4_HEX)
+@WebServlet(name = ApipApiNames.CHECK_SUM_4_HEX, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.CHECK_SUM_4_HEX +"/"+ ApipApiNames.VER_1)
 public class CheckSum4Hex extends HttpServlet {
     private final Settings settings = Initiator.settings;
     
@@ -26,7 +26,7 @@ public class CheckSum4Hex extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

@@ -2,12 +2,12 @@ package data.feipData;
 
 
 import constants.Values;
-import data.fchData.SendTo;
 
 import java.util.List;
 import java.util.Map;
 
 import constants.FieldNames;
+import data.fchData.Cash;
 
 import java.util.HashMap;
 
@@ -27,11 +27,11 @@ public class TokenOpData {
     private String maxAmtPerIssue;
     private String minCddPerIssue;
     private String maxIssuesPerAddr;
-    private List<SendTo> issueTo;
-    private List<SendTo> transferTo;
+    private List<Cash> issueTo;
+    private List<Cash> transferTo;
 
     public enum Op {
-        REGISTER(FeipOp.REGISTER),
+        DEPLOY(FeipOp.DEPLOY),
         ISSUE(FeipOp.ISSUE),
         TRANSFER(FeipOp.TRANSFER),
         CLOSE(FeipOp.CLOSE);
@@ -61,7 +61,7 @@ public class TokenOpData {
 
     public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
     static {
-        OP_FIELDS.put(Op.REGISTER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.NAME, Values.DESC, FieldNames.CONSENSUS_ID, FieldNames.CAPACITY,
+        OP_FIELDS.put(Op.DEPLOY.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.NAME, Values.DESC, FieldNames.CONSENSUS_ID, FieldNames.CAPACITY,
             FieldNames.DECIMAL, FieldNames.TRANSFERABLE, FieldNames.CLOSABLE, FieldNames.OPEN_ISSUE, FieldNames.MAX_AMT_PER_ISSUE, FieldNames.MIN_CDD_PER_ISSUE, FieldNames.MAX_ISSUES_PER_ADDR});
         OP_FIELDS.put(Op.ISSUE.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.ISSUE_TO});
         OP_FIELDS.put(Op.TRANSFER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.TRANSFER_TO});
@@ -72,7 +72,7 @@ public class TokenOpData {
                                            String capacity, String decimal, Boolean transferable, Boolean closable, Boolean openIssue,
                                            String maxAmtPerIssue, String minCddPerIssue, String maxIssuesPerAddr) {
         TokenOpData data = new TokenOpData();
-        data.setOp(Op.REGISTER.toLowerCase());
+        data.setOp(Op.DEPLOY.toLowerCase());
         data.setTokenId(tokenId);
         data.setName(name);
         data.setDesc(desc);
@@ -88,7 +88,7 @@ public class TokenOpData {
         return data;
     }
 
-    public static TokenOpData makeIssue(String tokenId, List<SendTo> issueTo) {
+    public static TokenOpData makeIssue(String tokenId, List<Cash> issueTo) {
         TokenOpData data = new TokenOpData();
         data.setOp(Op.ISSUE.toLowerCase());
         data.setTokenId(tokenId);
@@ -96,7 +96,7 @@ public class TokenOpData {
         return data;
     }
 
-    public static TokenOpData makeTransfer(String tokenId, List<SendTo> transferTo) {
+    public static TokenOpData makeTransfer(String tokenId, List<Cash> transferTo) {
         TokenOpData data = new TokenOpData();
         data.setOp(Op.TRANSFER.toLowerCase());
         data.setTokenId(tokenId);
@@ -213,19 +213,19 @@ public class TokenOpData {
         this.minCddPerIssue = minCddPerIssue;
     }
 
-    public List<SendTo> getIssueTo() {
+    public List<Cash> getIssueTo() {
         return issueTo;
     }
 
-    public void setIssueTo(List<SendTo> issueTo) {
+    public void setIssueTo(List<Cash> issueTo) {
         this.issueTo = issueTo;
     }
 
-    public List<SendTo> getTransferTo() {
+    public List<Cash> getTransferTo() {
         return transferTo;
     }
 
-    public void setTransferTo(List<SendTo> transferTo) {
+    public void setTransferTo(List<Cash> transferTo) {
         this.transferTo = transferTo;
     }
 

@@ -10,7 +10,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.FieldNames;
 import constants.Strings;
@@ -29,7 +29,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,7 +37,7 @@ import static constants.FieldNames.*;
 import static constants.IndicesNames.SWAP_PRICE;
 import static constants.Values.ASC;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapPrice)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapPrice)
 public class SwapPrices extends HttpServlet {
     private final Settings settings = Initiator.settings;
 

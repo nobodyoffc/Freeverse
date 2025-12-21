@@ -4,7 +4,7 @@ import ui.Shower;
 import core.crypto.Decryptor;
 import core.crypto.Encryptor;
 import core.crypto.KeyTools;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import utils.Hex;
 
 import java.io.BufferedReader;
@@ -15,7 +15,7 @@ import static constants.Values.ASC;
 import static constants.Values.DESC;
 import static ui.Shower.DEFAULT_PAGE_SIZE;
 
-public class CidInfo extends Cid {
+public class CidInfo extends Freer {
     public static final String KEY_INFO_FILE_PATH = "keyInfo.json";
 
     private String prikeyCipher;
@@ -128,7 +128,7 @@ public class CidInfo extends Cid {
      * @param cid The Cid object to convert
      * @return A new CidInfo object with all properties from the Cid object
      */
-    public static CidInfo fromCid(Cid cid) {
+    public static CidInfo fromCid(Freer cid) {
         if (cid == null) return null;
         
         CidInfo cidInfo = new CidInfo();
@@ -167,7 +167,7 @@ public class CidInfo extends Cid {
      * @param priKeyCipher The encrypted private key
      * @return A new CidInfo object with all properties from the Cid object and the provided priKeyCipher
      */
-    public static CidInfo fromCid(Cid cid, String priKeyCipher) {
+    public static CidInfo fromCid(Freer cid, String priKeyCipher) {
         CidInfo cidInfo = fromCid(cid);
         if (cidInfo != null) {
             cidInfo.setPrikeyCipher(priKeyCipher);

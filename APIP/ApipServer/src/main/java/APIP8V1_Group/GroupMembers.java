@@ -1,10 +1,10 @@
 package APIP8V1_Group;
 
 import config.Settings;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Group;
 import initial.Initiator;
-import server.ApipApiNames;
 import server.FcHttpRequestHandler;
 import utils.http.AuthType;
 
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 
-@WebServlet(name = ApipApiNames.GROUP_MEMBERS, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GROUP_MEMBERS)
+@WebServlet(name = ApipApiNames.GROUP_MEMBERS, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.GROUP_MEMBERS +"/"+ ApipApiNames.VER_1)
 public class GroupMembers extends HttpServlet {
     private final Settings settings;
     private final FcHttpRequestHandler fcHttpRequestHandler;
@@ -30,7 +30,7 @@ public class GroupMembers extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request,response,authType);
     }
     @Override

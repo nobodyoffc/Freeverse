@@ -1,7 +1,7 @@
 package APIP5V1_Code;
 
 import data.apipData.Sort;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.CodeHistory;
 import initial.Initiator;
@@ -22,12 +22,12 @@ import static constants.Strings.OP;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApipApiNames.CODE_OP_HISTORY, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CODE_OP_HISTORY)
+@WebServlet(name = ApipApiNames.CODE_OP_HISTORY, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.CODE_OP_HISTORY +"/"+ ApipApiNames.VER_1)
 public class CodeOpHistory extends HttpServlet {
     private final Settings settings = Initiator.settings;
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.CODE_HISTORY, CodeHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);

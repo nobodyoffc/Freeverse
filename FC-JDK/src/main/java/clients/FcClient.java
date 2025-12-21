@@ -1,28 +1,23 @@
 package clients;
 
+import config.Configure;
 import core.crypto.*;
+import data.apipData.RequestBody;
 import data.apipData.SignInMode;
-import data.fcData.AlgorithmId;
+import data.fcData.*;
+import server.ApipApi;
 import ui.Shower;
-import data.fcData.FcSession;
 import data.apipData.Fcdsl;
 import constants.*;
-import data.fcData.ReplyBody;
-import data.fcData.Signature;
 import com.google.gson.Gson;
 import config.ApiAccount;
 import config.ApiProvider;
 import core.fch.Inputer;
-import data.fchData.SendTo;
 import data.feipData.Service;
-import data.feipData.serviceParams.ApipParams;
 import data.feipData.serviceParams.Params;
-import org.jetbrains.annotations.NotNull;
-import server.ApipApiNames;
 import utils.*;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
-import utils.http.HttpUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import server.FreeApi;
@@ -31,25 +26,21 @@ import config.Settings;
 import javax.annotation.Nullable;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-import static constants.UpStrings.SIGN;
-import static data.fcData.AlgorithmId.Constants.BTC_ECDSA_SIGNMSG_NO1_NRC7;
-import static data.fcData.AlgorithmId.NONE;
-import static server.ApipApiNames.*;
+import static constants.FieldNames.MODE;
+import static server.ApipApi.*;
 import static constants.FieldNames.LAST_TIME;
 import static constants.Strings.DOT_JSON;
 import static constants.Strings.URL_HEAD;
 import static constants.UpStrings.BALANCE;
-import static data.fcData.AlgorithmId.FC_AesCbc256_No1_NrC7;
 import static utils.ObjectUtils.listToMap;
-import static utils.ObjectUtils.objectToClass;
 
 public abstract class FcClient {
     protected static final Logger log = LoggerFactory.getLogger(FcClient.class);
     public static final int WAIT_CONFIRMATION_SECONDS = 10*60;
+    private static final String API_VER = "apiVer";
     protected ApiProvider apiProvider;
     protected ApiAccount apiAccount;
     protected String urlHead;
@@ -65,6 +56,7 @@ public abstract class FcClient {
     protected Gson gson = new Gson();
     protected boolean sessionFreshen=false;
     protected Long bestHeight;
+    protected String tryKey;
     public FcClient() {}
     public FcClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symkey) {
         this.apiAccount = apiAccount;
@@ -90,7 +82,7 @@ public abstract class FcClient {
     }
 
     public static ReplyBody getService(String urlHead, String apiVersion, Class<? extends Params> paramsClass){
-        ApiUrl apiUrl = new ApiUrl(urlHead,null, apiVersion, ApipApiNames.GET_SERVICE, null,false,null);
+        ApiUrl apiUrl = new ApiUrl(urlHead,null, apiVersion, ApipApi.GET_SERVICE.getName(), null,false,null);
         ApipClientEvent clientEvent = FcClient.get(apiUrl.getUrl());
         if(clientEvent.checkResponse()!=0){
             System.out.println("Failed to get the service from "+apiUrl.getUrl());
@@ -139,9 +131,9 @@ public abstract class FcClient {
     }
     public Object requestJsonByUrlParams(String sn, String ver, String apiName,
                                          @Nullable Map<String,String> paramMap, AuthType authType){
-        String urlTailPath = ApiUrl.makeUrlTailPath(sn, ver);
-        if(urlTailPath==null)urlTailPath="";
-        String urlTail = urlTailPath +apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
+        if(paramMap==null)paramMap = new HashMap<>();
+        paramMap.put(API_VER,ver);
         if(authType==null) {
             if (isAllowFreeRequest || sessionKey == null) authType = AuthType.FREE;
             else authType = AuthType.FC_SIGN_URL;
@@ -153,7 +145,7 @@ public abstract class FcClient {
         return requestFile(null,  ver, apiName,fcdsl,responseFileName, responseFilePath, authType, authKey, method);
     }
     public Object requestFile(String sn, String ver, String apiName, Fcdsl fcdsl, String responseFileName, @Nullable String responseFilePath, AuthType authType, byte[] authKey, RequestMethod method){
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
         requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, fcdsl, null, null, null, null, ApipClientEvent.ResponseBodyType.FILE, responseFileName, responseFilePath, authType, authKey, method);
         ReplyBody responseBody = apipClientEvent.getResponseBody();
         if(responseBody !=null)return responseBody.getData();
@@ -163,7 +155,7 @@ public abstract class FcClient {
         return requestJsonByFcdsl(null, ver, apiName, fcdsl, authType, authKey, method);
     }
     public Object requestJsonByFcdsl(String sn, String ver, String apiName, @Nullable Fcdsl fcdsl, AuthType authType, @Nullable byte[] authKey, RequestMethod method){
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
 
         if(authType==null || authKey==null)
             authType = AuthType.FREE;
@@ -173,7 +165,7 @@ public abstract class FcClient {
     }
 
     public Object requestFileByFcdsl(String sn, String ver, String apiName, @Nullable Fcdsl fcdsl, String responseFileName, @Nullable String responseFilePath, @Nullable byte[] authKey, RequestMethod method){
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
         AuthType authType;
         if(authKey!=null)authType=AuthType.FC_SIGN_BODY;
         else authType = AuthType.FREE;
@@ -191,7 +183,7 @@ public abstract class FcClient {
                                     @Nullable Map<String,String>  paramMap,
                                     @Nullable byte[] authKey,
                                     String requestFileName){
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
         AuthType authType;
         if(authKey!=null)authType=AuthType.FC_SIGN_URL;
         else authType = AuthType.FREE;
@@ -210,38 +202,76 @@ public abstract class FcClient {
             }
         }
 
-        apipClientEvent = new ApipClientEvent(urlHead,urlTail,requestBodyType,fcdsl,requestBodyStr,requestBodyBytes,paramMap,requestFileName, responseBodyType,responseFileName,responseFilePath,authType, authKey, via);
+        apipClientEvent = new ApipClientEvent(urlHead,urlTail, requestBodyType,fcdsl,requestBodyStr,requestBodyBytes,paramMap,requestFileName, responseBodyType,responseFileName,responseFilePath,authType, authKey, via);
+
+        byte[] myPrikey = null;
+        String itsPubkey = null;
+
+        if(authType.equals(AuthType.SYMKEY_ENCRYPT) && authKey==null){
+            authType = AuthType.ASY_TWO_WAY_ENCRYPT;
+            apipClientEvent.setAuthType(authType);
+            if(tryKey==null) addNewSessionKey();
+        }
+
+        if( authType.equals(AuthType.ASY_TWO_WAY_ENCRYPT)){
+            itsPubkey = getDealersPubkey();
+
+            if(itsPubkey==null){
+                System.out.println("Failed to get the pubkey of the dealer.");
+                return null;
+            }
+
+            myPrikey = Decryptor.decryptPrikey(apiAccount.getUserPrikeyCipher(),symkey);
+        }
+
         try {
             switch (httpMethod) {
                 case GET -> apipClientEvent.get(authKey);
-                case POST -> apipClientEvent.post(authKey);
+                case POST -> apipClientEvent.post(authKey, myPrikey, itsPubkey);
                 default -> apipClientEvent.setCode(CodeMessage.Code1022NoSuchMethod);
             }
         }catch (Exception e){
             log.debug("Failed to request. Error:{}",e.getMessage());
             return null;
         }
-        Object result = checkResult();
+        return checkResult();
+    }
 
-        String apiName = HttpUtils.getApiNameFromUrl(urlTail);
-        if(apiName==null||apiName.equals(SIGN_IN) )return result;
-        //If any request besides signIn or signInEcc got a session response, it means the client signed in again. So repeat the request.
-        try {
-            serverSession = (FcSession) result;
-            if (serverSession == null || serverSession.getId() == null) return result;
-            else return requestBase(urlTail, requestBodyType, fcdsl, requestBodyStr, requestBodyBytes, paramMap, requestFileName, responseBodyType, responseFileName, responseFilePath, authType, authKey, httpMethod);
-        }catch (ClassCastException e){
-            return result;
+    private void addNewSessionKey() {
+        RequestBody requestBody = RequestBody.fromJson(new String(apipClientEvent.getRequestBodyBytes()),RequestBody.class);
+        String newSessionKey = FcSession.genKey(32);
+        requestBody.setSymkey(newSessionKey);
+        apipClientEvent.setRequestBody(requestBody);
+        apipClientEvent.setRequestBodyStr(requestBody.toJson());
+        apipClientEvent.setRequestBodyBytes(apipClientEvent.requestBodyStr.getBytes());
+        this.tryKey = newSessionKey;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private String getDealersPubkey() {
+        String itsPubkey;
+        itsPubkey = apiProvider.getDealerPubkey();
+        String dealer = null;
+        if(itsPubkey==null){
+            ReplyBody replyBody = getService(this.urlHead, VER_1, Params.class);
+            if(replyBody!=null && replyBody.getCode()==0){
+                Service service = (Service) replyBody.getData();
+                dealer = service.getDealer();
+                itsPubkey = service.getDealerPubkey();
+            }
+            if(dealer!=null)apiProvider.setDealer(dealer);
+            if(itsPubkey!=null)apiProvider.setDealerPubkey(itsPubkey);
         }
+        return itsPubkey;
     }
 
     public Object request(String sn, String ver, String apiName, ApipClientEvent.RequestBodyType requestBodyType, @Nullable Fcdsl fcdsl, @Nullable String requestBodyStr, @Nullable byte[] requestBodyBytes, @Nullable Map<String,String> paramMap, String requestFileName, ApipClientEvent.ResponseBodyType responseBodyType, String responseFileName, String responseFilePath, AuthType authType, @Nullable byte[] authKey, RequestMethod httpMethod){
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
        return requestBase(urlTail, requestBodyType, fcdsl, requestBodyStr, requestBodyBytes, paramMap, requestFileName, responseBodyType, responseFileName, responseFilePath, authType, authKey, httpMethod);
     }
 
     public Object requestBytes(String sn, String ver, String apiName, ApipClientEvent.RequestBodyType requestBodyType, @Nullable Fcdsl fcdsl, @Nullable Map<String,String> paramMap, AuthType authType, @Nullable byte[] authKey, RequestMethod httpMethod){
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
+        String urlTail = ApiUrl.makeUrlTail(sn, apiName,ver);
         return requestBase(urlTail, requestBodyType, fcdsl, null, null, paramMap, null, ApipClientEvent.ResponseBodyType.BYTES, null, null, authType, authKey, httpMethod);
     }
 
@@ -283,35 +313,36 @@ public abstract class FcClient {
 
                 while(true){
                     waitSeconds(10);
-                    serverSession = checkSignIn();
-                    apiAccount.setSession(serverSession);
-                    apiAccount.setSessionKey(sessionKey);
-                    if (serverSession != null)return serverSession;
+                    Object result = ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, Service.ServiceType.APIP);
+                    if(result!=null) {
+                        System.out.println("OK! " + result + " KB/requests are available.");
+                        break;
+                    }
                 }
-            }
-
-            if (apipClientEvent.getCode() == CodeMessage.Code1002SessionNameMissed || apipClientEvent.getCode() == CodeMessage.Code1009SessionTimeExpired) {
-                sessionFreshen=false;
-                sessionKey = apiAccount.freshSessionKey(symkey, this.serviceType, SignInMode.NORMAL, null);
-                if (sessionKey != null) sessionFreshen=true;
             }
 
             return null;
         }
-        checkBalance(apiAccount, apipClientEvent, symkey,apipClient);
+//        checkBalance(apiAccount, apipClientEvent, symkey,apipClient);
+
         switch (apipClientEvent.getResponseBodyType()){
             case BYTES -> {
                 return apipClientEvent.getResponseBodyBytes();
             }
             case FC_REPLY -> {
                 if(apipClientEvent.getResponseBody()!=null) {
-                    if (apipClientEvent.getResponseBody().getData() == null && apipClientEvent.getCode() == 0)
-                        return true;
-                    if (apipClientEvent.getResponseBody().getBestHeight() != null) {
-                        bestHeight = apipClientEvent.getResponseBody().getBestHeight();
+                    ReplyBody responseBody = apipClientEvent.getResponseBody();
+
+                    if (responseBody.getBestHeight() != null) {
+                        bestHeight = responseBody.getBestHeight();
                         if(apiAccount!=null)apiAccount.setBestHeight(bestHeight);
                     }
 
+                    String confirmKey = responseBody.getSymkey();
+//TODO test
+                    if(confirmKey !=null){
+                        saveNewSession(confirmKey);
+                    }
                 }
                 return apipClientEvent.getResponseBody().getData();
             }
@@ -324,21 +355,25 @@ public abstract class FcClient {
         }
     }
 
-    @org.jetbrains.annotations.Nullable
-    private FcSession checkSignIn() {
-        Decryptor decryptor = new Decryptor();
-        CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymkey(apiAccount.getUserPrikeyCipher(),symkey);
-        if(cryptoDataByte.getCode()!=0) return null;
-        byte[] prikey = cryptoDataByte.getData();
-        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN);
-        apipClientEvent.signInPost(apiAccount.getVia(), prikey, SignInMode.NORMAL,AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        Object data = apipClientEvent.getResponseBody().getData();
-        try{
-            serverSession =gson.fromJson(gson.toJson(data), FcSession.class);
-            serverSession = makeSessionFromSignInEccResult(symkey, decryptor, prikey, serverSession);
-        } catch (Exception ignore){return null;}
-        return serverSession;
+    //TODO test
+    private void saveNewSession(String tryKey) {
+        FcSession fcSession = new FcSession(tryKey,apiProvider.getDealer(),apiProvider.getDealerPubkey());
+        if(fcSession.getKeyBytes()==null)
+            return;
+
+        String keyCipher = Encryptor.encryptBySymkeyToJson(fcSession.getKeyBytes(), symkey);
+        fcSession.setKeyCipher(keyCipher);
+        fcSession.setBirthTime(System.currentTimeMillis());
+
+        this.serverSession = fcSession;
+        this.sessionKey = fcSession.getKeyBytes();
+
+        apiAccount.setSessionKey(fcSession.getKeyBytes());
+        apiAccount.setSession(fcSession);
+        Configure.saveConfig();
+        this.tryKey = null;
     }
+
 
     private static void waitSeconds(int seconds) {
         try {
@@ -363,9 +398,9 @@ public abstract class FcClient {
             System.out.println("The service parameters is null in the API account.");
             return null;
         }
-        else if(apiAccount.getServiceParams().getPricePerKBytes()==null)
+        else if(apiAccount.getServiceParams().getPricePerKB()==null)
             priceStr=apiAccount.getApipParams().getPricePerRequest();
-        else priceStr =apiAccount.getApipParams().getPricePerKBytes();
+        else priceStr =apiAccount.getApipParams().getPricePerKB();
         Long price = FchUtils.coinStrToSatoshi(priceStr);
         if(price==null)price=0L;
 
@@ -383,15 +418,6 @@ public abstract class FcClient {
         return null;
     }
 
-    public static String getSessionKeySign(byte[] sessionKeyBytes, byte[] dataBytes) {
-        return HexFormat.of().formatHex(Hash.sha256x2(BytesUtils.bytesMerger(dataBytes, sessionKeyBytes)));
-    }
-
-    public static boolean checkSign(String msg, String sign, String symkey) {
-        byte[] msgBytes = msg.getBytes(StandardCharsets.UTF_8);
-        return checkSign(msgBytes, sign, HexFormat.of().parseHex(symkey));
-    }
-
     public static boolean checkSign(byte[] msgBytes, String sign, byte[] symkey) {
         if (sign == null || msgBytes == null) return false;
         byte[] signBytes = BytesUtils.bytesMerger(msgBytes, symkey);
@@ -404,24 +430,16 @@ public abstract class FcClient {
         return HexFormat.of().formatHex(Arrays.copyOf(sessionKey, 6));
     }
 
-//    public boolean pingFree(ApiType apiType) {
-//        Object data = ping(Version1,HttpRequestMethod.GET,AuthType.FREE, null);
-////        requestBase(Ping, FcClientEvent.RequestBodyType.NONE, null, null, null, null, null, FcClientEvent.ResponseBodyType.FC_REPLY, null, null, AuthType.FREE, null, HttpRequestMethod.GET);
-////        Object data = checkResult();
-//        setFreeApiState(data,apiType);
-//        return (boolean) data;
-//    }
-
     private void setFreeApiState(Object data, Service.ServiceType serviceType) {
         Map<String, FreeApi> freeApiMap = listToMap(Settings.freeApiListMap.get(serviceType),URL_HEAD);//listToMap(config.getFreeApipUrlList(),URL_HEAD);
 
         if(data ==null){
-            if(freeApiMap !=null && freeApiMap.get(this.urlHead)!=null ){
+            if(freeApiMap.get(this.urlHead) != null){
                 freeApiMap.get(this.urlHead).setActive(false);
             }
             return;
         }
-        if(freeApiMap==null)freeApiMap = new HashMap<>();
+
         if(freeApiMap.get(this.urlHead)==null){
             FreeApi freeApi = new FreeApi(this.urlHead,true, this.serviceType);
             freeApiMap.put(this.urlHead,freeApi);
@@ -429,8 +447,22 @@ public abstract class FcClient {
         freeApiMap.get(this.urlHead).setActive(true);
     }
 
-    public Object ping(String version, RequestMethod requestMethod, AuthType authType, Service.ServiceType serviceType) {
-        String urlTail = "/"+version+"/"+ PING;
+    public FcSession signIn(String ver, SignInMode mode) {
+        String urlTail = ApiUrl.makeUrlTail(null,SIGN_IN.getName(),ver);//"/"+ ver +"/"+ PING;
+        Map<String,String> paramMap = new HashMap<>();
+        paramMap.put(MODE,mode.name());
+        Fcdsl fcdsl = new Fcdsl();
+        fcdsl.setOther(paramMap);
+        Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, fcdsl, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, AuthType.ASY_TWO_WAY_ENCRYPT, null, RequestMethod.POST);
+        if(data==null)return null;
+        serverSession = gson.fromJson(gson.toJson(data), FcSession.class);
+        if(apipClientEvent.getResponseBody()!=null)
+            apipClientEvent.getResponseBody().setData(serverSession);
+        return serverSession;
+    }
+
+    public Object ping(String ver, RequestMethod requestMethod, AuthType authType, Service.ServiceType serviceType) {
+        String urlTail = ApiUrl.makeUrlTail(null,PING.getName(),ver);//"/"+ ver +"/"+ PING;
         Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, null, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, authType, sessionKey, requestMethod);
         if(requestMethod.equals(RequestMethod.POST)) {
             return checkBalance(apiAccount, apipClientEvent, symkey, apipClient);
@@ -438,51 +470,6 @@ public abstract class FcClient {
             if(serviceType !=null && Settings.freeApiListMap!=null)setFreeApiState(data, serviceType);
             return data;
         }
-    }
-
-//    private void signIn(byte[] prikey, @Nullable SignInMode mode) {
-//        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN);
-//        apipClientEvent.signInPost(apiAccount.getVia(), prikey, mode);
-//        int paymentsSize;
-//        if(apiAccount.getPayments()!=null) paymentsSize = apiAccount.getPayments().size();
-//        else paymentsSize=0;
-//        Object data = checkResult();
-//        if(data==null){
-//            if(apipClientEvent.getCode()==1004 && apiAccount.getPayments().size()>paymentsSize){
-//                apipClientEvent.signInPost(apiAccount.getVia(), prikey, mode);
-//                data = checkResult();
-//                if(data==null) return;
-//            } else return;
-//        }
-//        serverSession = gson.fromJson(gson.toJson(data), FcSession.class);
-//        apipClientEvent.getResponseBody().setData(serverSession);
-//    }
-
-//    private void signIn(byte[] prikey, @Nullable SignInMode mode) {
-//        this.signIn(prikey, mode, null);
-//    }
-    
-    private void signIn(byte[] prikey, @Nullable SignInMode mode, @Nullable data.fcData.AlgorithmId algorithmId) {
-        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN);
-        apipClientEvent.signInPost(apiAccount.getVia(), prikey, mode, algorithmId);
-        int paymentsSize;
-        if(apiAccount.getPayments()!=null)
-            paymentsSize= apiAccount.getPayments().size();
-        else paymentsSize=0;
-
-        Object data = checkResult();
-        if(data==null){
-            if(apipClientEvent.getCode()==1004 && apiAccount.getPayments().size()>paymentsSize){
-                apipClientEvent.signInPost(apiAccount.getVia(), prikey, mode, algorithmId);
-                data = checkResult();
-                if(data==null) return;
-            } else if(apipClientEvent.getCode()==1026){
-                return;
-            }
-        }
-         serverSession = gson.fromJson(gson.toJson(data), FcSession.class);
-        if(apipClientEvent.getResponseBody()==null)return;
-        apipClientEvent.getResponseBody().setData(serverSession);
     }
 
     public ApiProvider getApiProvider() {
@@ -533,114 +520,126 @@ public abstract class FcClient {
         this.apipClient = apipClient;
     }
 
-    public FcSession signIn(ApiAccount apiAccount, SignInMode mode, byte[] symkey, AlgorithmId algorithmId, BufferedReader br) {
+//    public FcSession signIn(SignInMode mode, BufferedReader br) {
+//
+//        if(apiAccount.getUserPrikeyCipher()==null)
+//            return signInOffLine(mode, br);
+//
+//        FcSession rawSession =  signIn(VER_1,mode);
+//
+//        if(rawSession ==null)return null;
+//
+//        apiAccount.setSession(rawSession);
+//        rawSession.makeKeyBytes();
+//        sessionKey = rawSession.getKeyBytes();
+//        apiAccount.setSessionKey(sessionKey);
+//
+//        return serverSession;
+//    }
 
-        Decryptor decryptor = new Decryptor();
-        if(apiAccount.getUserPrikeyCipher()==null)
-            return signInEccOffLine(apiAccount, mode, symkey, br);
+    public FcSession signInOffLine(SignInMode mode, BufferedReader br) {
+        FcSession fcSession;
 
-        CryptoDataByte cryptoDataByte = decryptor.decryptJsonBySymkey(apiAccount.getUserPrikeyCipher(),symkey);
-        if(cryptoDataByte.getCode()!=0)return null;
-        byte[] prikey = cryptoDataByte.getData();
+        Fcdsl fcdsl = new Fcdsl();
+        Map<String, String> paramMap = new HashMap<>();
+        paramMap.put(MODE,mode.name());
+        fcdsl.setOther(paramMap);
 
-        signIn(prikey, mode,algorithmId);
+        String urlTail = ApiUrl.makeUrlTail(null,ApipApiNames.SING_IN,VER_1);
+        apipClientEvent = new ApipClientEvent(urlHead,urlTail,fcdsl, via);
 
-        System.out.println("Request Header:\n"+ JsonUtils.toNiceJson(apipClientEvent.getRequestHeaderMap()));
-        System.out.println("Request Body:\n"+apipClientEvent.getRequestBody().toNiceJson());
+        RequestBody requestBody = new RequestBody(apipClientEvent.getApiUrl().getUrl(),via);
+        requestBody.setFcdsl(fcdsl);
 
-        if(apipClientEvent ==null|| apipClientEvent.getResponseBody()==null|| apipClientEvent.getResponseBody().getData()==null)
-            return null;
-        FcSession rawSession = (FcSession) apipClientEvent.getResponseBody().getData();
-        if(rawSession ==null)return null;
+        Affair signInAffair = new Affair();
+        signInAffair.setMeta(new Meta(Affair.NAME));
+        signInAffair.setOp(Op.ENCRYPT);
+        signInAffair.setOpType(EncryptType.AsyTwoWay.name());
+        signInAffair.setPubkey(apiAccount.getUserPubkey());
+        signInAffair.setPubkeyB(apiProvider.getDealerPubkey());
+        signInAffair.setDataStr(requestBody.toJson());
 
-        if(!(algorithmId.equals(NONE)))
-            serverSession = makeSessionFromSignInEccResult(symkey, decryptor, prikey, rawSession);
-        else serverSession = rawSession;
 
-        apiAccount.setSession(serverSession);
-        apiAccount.setSessionKey(sessionKey);
 
-        return serverSession;
-    }
-
-    private FcSession signInEccOffLine(ApiAccount apiAccount, SignInMode mode, byte[] symkey, BufferedReader br) {
-        apipClientEvent = new ApipClientEvent(apiAccount.getApiUrl(),null, VERSION_1, ApipApiNames.SIGN_IN);
-        apipClientEvent.makeSignInRequest(via, mode, null);
-        String myFid = apiAccount.getUserId();
-
-        serverSession = inputSession(symkey, br);
-        if(serverSession!=null)return serverSession;
-        Shower.showTextAndQR(apipClientEvent.getRequestBodyStr(),"No prikey to sign in. Please sign below request with the prikey with the algorithm "+BTC_ECDSA_SIGNMSG_NO1_NRC7+":");
+        Shower.showTextAndQR(signInAffair.toJson(),"No prikey to sign in. Please scan and create sign in request with Freer:");
 
         while (true) {
-            System.out.print("Input the signature. ");
-            String sign = Inputer.inputStringMultiLine(br);
-            Signature signature;
+            System.out.print("Input the encrypted request. ");
+            String encryptedRequest = Inputer.inputStringMultiLine(br);
             try {
-                if(sign==null || sign.equals("")){
+                if(encryptedRequest==null || encryptedRequest.equals("")){
                     if (Inputer.askIfYes(br, "Failed. Try again?")) continue;
                     else return null;
                 }
-                signature = Signature.parseSignature(sign.trim());//Signature.fromJson(sign);
-                if(signature==null ) {
+                try {
+                    CryptoDataByte.fromJson(encryptedRequest);//Signature.fromJson(encryptedRequest);
+                }catch (Exception e){
                     if (Inputer.askIfYes(br, "Failed. Try again?")) continue;
-                        else return null;
-                }
-                if(!myFid.equals(signature.getFid())) {
-                    if (Inputer.askIfYes(br, "The signer "+signature.getFid()+" is not "+myFid+". Try again?")) continue;
-                    else return null;
-                }
-                if(!signature.verify()) {
-                    if (Inputer.askIfYes(br, "Failed to be verified. Try again?")) continue;
-                    else return null;
-                }
-                if(! apipClientEvent.getRequestBodyStr().equals(signature.getMsg())){
-                    if(Inputer.askIfYes(br,"The signed message is not the original request. Try again?"))continue;
                     else return null;
                 }
 
-                apipClientEvent.requestHeaderMap.put(UpStrings.FID, myFid);
-                apipClientEvent.requestHeaderMap.put(SIGN, signature.getSign());
 
-                apipClientEvent.post();
+                byte[] sessionCipherBytes = apipClientEvent.postBytes(encryptedRequest.getBytes());
 
-                ReplyBody responseBody = apipClientEvent.responseBody;
-                if(responseBody !=null){
-                    apipClientEvent.code = responseBody.getCode();
-                    apipClientEvent.message = responseBody.getMessage();
-
+                if(sessionCipherBytes == null){
                     if(apipClientEvent.getResponseBody().getCode()==CodeMessage.Code1004InsufficientBalance){
-                        System.out.println(responseBody.getMessage());
+                        System.out.println(apipClientEvent.getResponseBody().getMessage());
 
                         Double paid = apiAccount.buyApi(symkey, apipClient, br);
                         if(paid!=null && paid>0){
-                            ApipClient apipClient1 = (ApipClient)apiAccount.getClient();
-                            FcSession rawSession;
-
-                            rawSession = trySignIn(apiAccount, symkey, br, apipClient1);
-
-                            return tryConvertSessionKey(symkey, br, apipClient1, rawSession);
+                            FcSession rawSession = signInOffLine(mode, br);
+                            if(rawSession==null){
+                                System.out.println(apipClientEvent.getMessage());
+                                return null;
+                            }
+                            return rawSession;
                         }
                         return null;
                     }
-                }else{
+
                     apipClientEvent.code = 1020;
                     apipClientEvent.message = "Failed to sign in.";
-                }
-                    if(apipClientEvent.getResponseBody()==null|| apipClientEvent.getResponseBody().getData()==null)
-                        return null;
-                Object data = apipClientEvent.getResponseBody().getData();
-
-                FcSession rawSession = objectToClass(data,FcSession.class);
-
-                if(rawSession ==null|| rawSession.getKeyCipher()==null){
-                    System.out.println("Got wrong session from the server.");
-                        return null;
-                }
-
-                return convertSession(rawSession, symkey, br);
-            }catch (Exception e){
                     return null;
+                }
+
+                Affair decryptAffair = new Affair();
+                decryptAffair.setMeta(new Meta(Affair.NAME));
+                decryptAffair.setOp(Op.DECRYPT);
+                decryptAffair.setDataStr(new String(sessionCipherBytes));
+                decryptAffair.setFid(apiAccount.getUserId());
+
+                Shower.showTextAndQR(decryptAffair.toJson(), "No prikey to decrypt the sessionKey. Please scan and decrypt it with Freer:");
+
+                System.out.print("Input the request. ");
+                String decryptedResponseBody = Inputer.inputStringMultiLine(br);
+
+                ReplyBody replyBody = ReplyBody.fromJson(decryptedResponseBody,ReplyBody.class);
+                if(replyBody==null) return null;
+                if(replyBody.getCode()!=0){
+                    System.out.println(replyBody.getMessage());
+                    return null;
+                }
+
+                fcSession = ObjectUtils.objectToClass(replyBody.getData(), FcSession.class);
+
+                try {
+                    if(fcSession == null){
+                        if(Inputer.askIfYes(br,"Failed. Try again?"))
+                            continue;
+                        return null;
+                    }
+
+                    return fcSession;
+
+                } catch (Exception e) {
+                    System.out.println(e.getMessage());
+                    if(Inputer.askIfYes(br,"Failed. Try again?"))
+                        continue;
+                    return null;
+                }
+            }catch (Exception e){
+                System.out.println(e.getMessage());
+                return null;
             }
         }
     }
@@ -665,92 +664,6 @@ public abstract class FcClient {
         }
     }
 
-    private FcSession tryConvertSessionKey(byte[] symkey, BufferedReader br, ApipClient apipClient1, FcSession rawSession) {
-        while(true) {
-            convertSession(rawSession, symkey, br);
-            Object result = apipClient1.ping(VERSION_1, RequestMethod.POST, AuthType.FC_SIGN_BODY, Service.ServiceType.APIP);
-            if (result != null) return serverSession;
-            System.out.println("Failed. Try again.");
-        }
-    }
-
-    @NotNull
-    private static FcSession trySignIn(ApiAccount apiAccount, byte[] symkey, BufferedReader br, ApipClient apipClient1) {
-        FcSession rawSession;
-        while(true) {
-            rawSession = apipClient1.signIn(apiAccount, SignInMode.NORMAL, symkey, AlgorithmId.EccAes256K1P7_No1_NrC7, br);
-            if (rawSession != null) break;
-            System.out.println("Failed. Wait a moment.");
-            waitSeconds(60);
-        }
-        return rawSession;
-    }
-
-    private FcSession convertSession(FcSession rawSession, byte[] symkey, BufferedReader br) {
-        String sessionKeyCipher1 = rawSession.getKeyCipher();
-
-        Shower.showTextAndQR(sessionKeyCipher1,"Got the cipher of the new sessionKey. Please decrypt with your prikey:");
-
-        while(true) {
-            String input = Inputer.inputString(br, "Input the decrypted session key:");
-            if(!Hex.isHexString(input)){
-                System.out.println("The sessionKey should be a hex.");
-                continue;
-            }
-
-            rawSession.setKey(input);
-            String newKeyCipher = Encryptor.encryptBySymkeyToJson(Hex.fromHex(input), symkey);
-            rawSession.setKeyCipher(newKeyCipher);
-            serverSession = rawSession;
-            apiAccount.setSession(serverSession);
-            return serverSession;
-        }
-    }
-
-    private void prepareOffLinePayment(ApiAccount apiAccount) {
-
-        try {
-            ApipParams params = (ApipParams) apiAccount.getApipParams();
-            ApipClient apipClient1 = (ApipClient) this;
-
-            List<SendTo> sendToList = new ArrayList<>();
-            SendTo sendTo = new SendTo();
-            sendTo.setFid(params.getDealer());
-            double amount = Double.parseDouble(params.getMinPayment());
-            sendTo.setAmount(amount);
-            sendToList.add(sendTo);
-
-
-            Double result = apiAccount.buyApi(symkey, apipClient1, null);
-
-        }catch (Exception e){
-            System.out.println();
-        }
-    }
-
-
-    public FcSession makeSessionFromSignInEccResult(byte[] symkey, Decryptor decryptor, byte[] prikey, FcSession fcSession) {
-        String sessionKeyCipher1 = fcSession.getKeyCipher();
-        String fid = KeyTools.prikeyToFid(prikey);
-        CryptoDataByte cryptoDataByte1 =
-                decryptor.decryptJsonByAsyOneWay(sessionKeyCipher1, prikey);
-        if (cryptoDataByte1.getCode() != 0) return null;
-        sessionKey = cryptoDataByte1.getData();
-
-        Encryptor encryptor = new Encryptor(FC_AesCbc256_No1_NrC7);
-        CryptoDataByte cryptoDataByte2 = encryptor.encryptBySymkey(sessionKey, symkey);
-        if (cryptoDataByte2.getCode() != 0) return null;
-        String newCipher = cryptoDataByte2.toJson();
-        fcSession.setKeyCipher(newCipher);
-
-        String sessionName = FcSession.makeSessionName(sessionKey);
-
-        fcSession.setKey(Hex.toHex(sessionKey));
-        fcSession.setId(sessionName);
-        fcSession.setUserId(fid);
-        return fcSession;
-    }
-
     public void close(){
     }
 
@@ -766,14 +679,6 @@ public abstract class FcClient {
     public void setClientEvent(ApipClientEvent apipClientEvent) {
         this.apipClientEvent = apipClientEvent;
     }
-
-//    public String getSignInUrlTailPath() {
-//        return signInUrlTailPath;
-//    }
-
-//    public void setSignInUrlTailPath(String signInUrlTailPath) {
-//        this.signInUrlTailPath = signInUrlTailPath;
-//    }
 
     public Service.ServiceType getApiType() {
         return serviceType;

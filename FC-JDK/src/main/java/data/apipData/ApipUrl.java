@@ -1,7 +1,7 @@
 package data.apipData;
 
-import static server.ApipApiNames.apiList;
-import static server.ApipApiNames.freeApiList;
+import static server.ApipApi.apiList;
+import static server.ApipApi.initApiList;
 
 public class ApipUrl {
     private String url;
@@ -33,7 +33,7 @@ public class ApipUrl {
         int lastSlashIndex = url.lastIndexOf('/');
         if (lastSlashIndex != -1 && lastSlashIndex != url.length() - 1) {
             String name = url.substring(lastSlashIndex + 1);
-            if (apiList.contains(name) || freeApiList.contains(name)) {
+            if (apiList.contains(name) || initApiList.contains(name)) {
                 return name;
             }
             return "";

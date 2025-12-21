@@ -56,13 +56,7 @@ public class RollBacker {
 			log.error("Error when deleting in rollback",e);
 			e.printStackTrace();
 		}
-		try {
-			System.out.println("Delete blockHas...");
-			deleteBlockHas(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
+
 		try {
 			System.out.println("Delete TX...");
 			deleteTxs(esClient, lastHeight);
@@ -70,13 +64,7 @@ public class RollBacker {
 			log.error("Error when deleting in rollback",e);
 			e.printStackTrace();
 		}
-		try {
-			System.out.println("Delete TxHas...");
-			deleteTxHas(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
+
 		try {
 			System.out.println("Delete OpReturn...");
 			deleteOpReturns(esClient, lastHeight);
@@ -221,7 +209,7 @@ public class RollBacker {
 			updateMap.put(LAST_HEIGHT,lastHeight);
 
 			br.operations(o1->o1.update(u->u
-					.index(IndicesNames.CID)
+					.index(IndicesNames.FREER)
 					.id(addr)
 					.action(a->a
 							.doc(updateMap)))
@@ -260,13 +248,6 @@ public class RollBacker {
 		deleteHigherThan(esClient, IndicesNames.BLOCK,"height",lastHeight);
 	}
 
-	private void deleteBlockHas(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		deleteHigherThan(esClient, IndicesNames.BLOCK_HAS,"height",lastHeight);
-	}
-
-	private void deleteTxHas(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		deleteHigherThan(esClient, IndicesNames.TX_HAS,"height",lastHeight);
-	}
 
 	private void deleteTxs(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		deleteHigherThan(esClient, IndicesNames.TX,"height",lastHeight);
@@ -277,11 +258,11 @@ public class RollBacker {
 	}
 
 	private void deleteNewAddresses(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		deleteHigherThan(esClient, IndicesNames.CID,"birthHeight",lastHeight);
+		deleteHigherThan(esClient, IndicesNames.FREER,"birthHeight",lastHeight);
 	}
 
 	private void deleteNewP2sh(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		deleteHigherThan(esClient, IndicesNames.MULTISIGN,"birthHeight",lastHeight);
+		deleteHigherThan(esClient, IndicesNames.MULTISIG,"birthHeight",lastHeight);
 	}
 
 	private void deleteBlockMarks(ElasticsearchClient esClient, long lastHeight) throws IOException {

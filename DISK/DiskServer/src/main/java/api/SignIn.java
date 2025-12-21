@@ -4,7 +4,7 @@ import config.Settings;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
 import initial.Initiator;
-import server.ApipApiNames;
+import server.DiskApiNames;
 import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 
@@ -14,7 +14,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApipApiNames.SIGN_IN, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SIGN_IN)
+@WebServlet(name = DiskApiNames.SIGN_IN, value = "/"+ DiskApiNames.SIGN_IN+"/"+ DiskApiNames.VER_1)
 public class SignIn extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;

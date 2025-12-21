@@ -1,6 +1,7 @@
 package start;
 
 import core.fch.Inputer;
+import data.fchData.Cash;
 import ui.Menu;
 import config.Settings;
 import config.Starter;
@@ -10,8 +11,7 @@ import clients.ApipClient;
 import config.ApiAccount;
 import config.Configure;
 import core.crypto.Decryptor;
-import data.fchData.SendTo;
-import data.feipData.Feip.ProtocolName;
+import data.feipData.Feip.FeipProtocol;
 import data.feipData.Service;
 import data.feipData.serviceParams.Params;
 import data.feipData.Service.ServiceType;
@@ -79,14 +79,14 @@ public class StartFeipClient {
         else watchFid = null;
 
 
-        List<SendTo> sendToList;
+        List<Cash> sendToList;
         System.out.println("Create new FEIP operation...");
 
-        if(askIfYes(br,"Does this FEIP need one or more recipient?"))sendToList = SendTo.inputSendToList(br);
+        if(askIfYes(br,"Does this FEIP need one or more recipient?"))sendToList = Cash.inputSendToList(br);
         else sendToList=null;
 
         // Add menu items for each protocol
-        for (ProtocolName protocol : ProtocolName.values()) {
+        for (FeipProtocol protocol : FeipProtocol.values()) {
             feipMenu.add(protocol.getName(), () -> {
                 try {
                     switch (protocol) {
@@ -109,18 +109,18 @@ public class StartFeipClient {
                         case BOX -> FeipClient.box(priKey, watchFid, sendToList, null, apipClient, null, br);
                         
                         case STATEMENT -> FeipClient.statement(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case ESSAY -> FeipClient.essay(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case REPORT -> FeipClient.report(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case PAPER -> FeipClient.paper(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case BOOK -> FeipClient.book(priKey, watchFid, sendToList, null, apipClient, null, br);
+
                         case REMARK -> FeipClient.remark(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case ARTWORK -> FeipClient.artwork(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        
+                        case SOUND -> FeipClient.sound(priKey, watchFid, sendToList, null, apipClient, null, br);
+                        case IMAGE -> FeipClient.image(priKey, watchFid, sendToList, null, apipClient, null, br);
+                        case VIDEO -> FeipClient.video(priKey, watchFid, sendToList, null, apipClient, null, br);
+
                         case TEAM -> FeipClient.team(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case GROUP -> FeipClient.group(priKey, watchFid, sendToList, null, null, apipClient, null, br);
-                        
+
                         case PROOF -> FeipClient.proof(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case TOKEN -> FeipClient.token(priKey, watchFid, sendToList, null, apipClient, null, br);
+                        case TEXT -> FeipClient.text(priKey, watchFid, sendToList, null, apipClient, null, br);
                     }
                 } catch (Exception e) {
                     System.out.println("Error executing " + protocol.getName() + ": " + e.getMessage());

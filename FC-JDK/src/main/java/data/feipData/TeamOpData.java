@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static constants.FieldNames.TID;
+import static constants.FieldNames.TIDS;
+
 public class TeamOpData {
 
 	private String tid;
@@ -63,19 +66,19 @@ public class TeamOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 	static {
 		OP_FIELDS.put(Op.CREATE.toLowerCase(), new String[]{"stdName", "consensusId"});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{"tid", "stdName", "consensusId"});
-		OP_FIELDS.put(Op.JOIN.toLowerCase(), new String[]{"tid", "consensusId", "confirm"});
-		OP_FIELDS.put(Op.LEAVE.toLowerCase(), new String[]{"tids"});
-		OP_FIELDS.put(Op.TRANSFER.toLowerCase(), new String[]{"tid", "transferee", "confirm"});
-		OP_FIELDS.put(Op.TAKE_OVER.toLowerCase(), new String[]{"tid", "confirm"});
-		OP_FIELDS.put(Op.DISBAND.toLowerCase(), new String[]{"tids"});
-		OP_FIELDS.put(Op.AGREE_CONSENSUS.toLowerCase(), new String[]{"tid", "consensusId", "confirm"});
-		OP_FIELDS.put(Op.INVITE.toLowerCase(), new String[]{"tid", "list"});
-		OP_FIELDS.put(Op.WITHDRAW_INVITATION.toLowerCase(), new String[]{"tid", "list"});
-		OP_FIELDS.put(Op.DISMISS.toLowerCase(), new String[]{"tid", "list"});
-		OP_FIELDS.put(Op.APPOINT.toLowerCase(), new String[]{"tid", "list"});
-		OP_FIELDS.put(Op.CANCEL_APPOINTMENT.toLowerCase(), new String[]{"tid", "list"});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{"tid", "rate"});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{TID, "stdName", "consensusId"});
+		OP_FIELDS.put(Op.JOIN.toLowerCase(), new String[]{TID, "consensusId", "confirm"});
+		OP_FIELDS.put(Op.LEAVE.toLowerCase(), new String[]{TIDS});
+		OP_FIELDS.put(Op.TRANSFER.toLowerCase(), new String[]{TID, "transferee", "confirm"});
+		OP_FIELDS.put(Op.TAKE_OVER.toLowerCase(), new String[]{TID, "confirm"});
+		OP_FIELDS.put(Op.DISBAND.toLowerCase(), new String[]{TIDS});
+		OP_FIELDS.put(Op.AGREE_CONSENSUS.toLowerCase(), new String[]{TID, "consensusId", "confirm"});
+		OP_FIELDS.put(Op.INVITE.toLowerCase(), new String[]{TID, "list"});
+		OP_FIELDS.put(Op.WITHDRAW_INVITATION.toLowerCase(), new String[]{TID, "list"});
+		OP_FIELDS.put(Op.DISMISS.toLowerCase(), new String[]{TID, "list"});
+		OP_FIELDS.put(Op.APPOINT.toLowerCase(), new String[]{TID, "list"});
+		OP_FIELDS.put(Op.CANCEL_APPOINTMENT.toLowerCase(), new String[]{TID, "list"});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{TID, "rate"});
 	}
 
 	public static TeamOpData makeCreate(String stdName, String consensusId, String[] localNames, String[] waiters, String[] accounts, String desc) {

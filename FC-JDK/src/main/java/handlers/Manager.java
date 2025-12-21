@@ -243,6 +243,7 @@ public abstract class Manager<T extends FcEntity>{
     public enum ManagerType {
             TEST,
             ACCOUNT,
+            BALANCE,
             CASH,
             CONTACT,
             CID,
@@ -638,7 +639,6 @@ public abstract class Manager<T extends FcEntity>{
     public void close() {
         if (localDB != null) {
             try {
-                log.debug("Closing LevelDB for handler: {}", managerType);
                 localDB.close();
                 localDB = null;
             } catch (Exception e) {

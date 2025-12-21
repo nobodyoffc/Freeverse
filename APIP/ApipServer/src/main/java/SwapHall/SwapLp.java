@@ -3,7 +3,7 @@ package SwapHall;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.Strings;
 import data.fcData.ReplyBody;
@@ -20,11 +20,10 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
 
 import static constants.IndicesNames.SWAP_LP;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapLp)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapLp)
 public class SwapLp extends HttpServlet {
     private final Settings settings = Initiator.settings;
 

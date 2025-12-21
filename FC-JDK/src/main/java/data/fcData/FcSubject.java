@@ -1,5 +1,7 @@
 package data.fcData;
 
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,9 +45,15 @@ public class FcSubject extends FcEntity {
     }
 
     public static FcSubject createNew() {
-        ECKey eckey = new ECKey();
-        byte[] priKey = eckey.getPrivKeyBytes();
-        return new FcSubject(priKey);
+        SecureRandom sr;
+        try {
+            sr = SecureRandom.getInstanceStrong();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+        ECKey eckey = new ECKey(sr);
+        byte[] prikey = eckey.getPrivKeyBytes();
+        return new FcSubject(prikey);
     }
 
     public static FcSubject getNew(String pubKey) {

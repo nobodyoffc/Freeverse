@@ -24,7 +24,7 @@ public class Block extends FcObject {
 	private Long fee;		//total amount of tx fee in satoshi
 	private Long cdd;		//total amount of coindays destroyed
 
-
+	private ArrayList<TxMask> txList;
 	//Static display methods
 
 	public static LinkedHashMap<String,Integer> getFieldWidthMap(){
@@ -141,5 +141,13 @@ public class Block extends FcObject {
 	}
 	public void setCdd(Long cdd) {
 		this.cdd = cdd;
+	}
+
+	public ArrayList<TxMask> getTxList() {
+		return txList;
+	}
+
+	public void setTxList(ArrayList<TxMask> txList) {
+		this.txList = txList;
 	}
 }

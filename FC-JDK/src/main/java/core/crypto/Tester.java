@@ -18,7 +18,7 @@ import static data.fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
 public class Tester {
 
     @Test
-    public void testSym() throws InterruptedException {
+    public void testSym() {
         System.out.println("\n# Info");
         byte[] key = BytesUtils.getRandomBytes(32);
         String keyHex = HexFormat.of().formatHex(key);

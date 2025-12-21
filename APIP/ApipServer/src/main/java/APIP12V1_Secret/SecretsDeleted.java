@@ -1,8 +1,8 @@
 
 package APIP12V1_Secret;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Secret;
 import initial.Initiator;
@@ -23,7 +23,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.TRUE;
 
 
-@WebServlet(name = ApipApiNames.SECRETS_DELETED, value = "/"+ ApipApiNames.SN_12+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SECRETS_DELETED)
+@WebServlet(name = ApipApiNames.SECRETS_DELETED, value = "/"+ ApipApiNames.SN_12+"/"+ ApipApiNames.SECRETS_DELETED +"/"+ ApipApiNames.VER_1)
 public class SecretsDeleted extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -33,7 +33,7 @@ public class SecretsDeleted extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.SECRET, Secret.class, null,null,ACTIVE,TRUE,defaultSort, request,response,authType);
     }

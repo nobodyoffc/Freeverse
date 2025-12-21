@@ -4,7 +4,7 @@ import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
 import initial.Initiator;
@@ -22,7 +22,7 @@ import java.util.Map;
 
 import static constants.FieldNames.HEIGHT;
 
-@WebServlet(name = ApipApiNames.CHAIN_INFO, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CHAIN_INFO)
+@WebServlet(name = ApipApiNames.CHAIN_INFO, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.CHAIN_INFO +"/"+ ApipApiNames.VER_1)
 public class ChainInfo extends HttpServlet {
     private final Settings settings;
 
@@ -32,7 +32,7 @@ public class ChainInfo extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

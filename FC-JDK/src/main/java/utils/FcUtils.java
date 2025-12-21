@@ -1,5 +1,6 @@
 package utils;
 
+import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
 import java.util.Date;
@@ -36,7 +37,7 @@ public class FcUtils {
     }
     @Test
     public void test(){
-        long height = 2500000;
+        long height = 2961246;
         Date date = heightToDate(height);
         System.out.println(DateUtils.getNiceDate(date));
 
@@ -44,6 +45,4 @@ public class FcUtils {
         System.out.println(dateToHeight(date));
         System.out.println(timeToHeight(date.getTime()));
     }
-
-
 }

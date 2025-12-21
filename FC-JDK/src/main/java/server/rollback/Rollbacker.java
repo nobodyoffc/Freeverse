@@ -1,7 +1,6 @@
 package server.rollback;
 
 import clients.ApipClient;
-import data.apipData.BlockInfo;
 import constants.FieldNames;
 import data.fchData.Block;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -34,11 +33,11 @@ public class Rollbacker {
 
         if (lastHeight==0 || lastBlockId ==null)return false;
 
-        Map<String, BlockInfo> heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.FC_SIGN_BODY, String.valueOf(lastHeight));
-        if(heightBlockInfoMap==null)heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.FC_SIGN_BODY, String.valueOf(lastHeight));
+        Map<String, Block> heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, String.valueOf(lastHeight));
+        if(heightBlockInfoMap==null)heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, String.valueOf(lastHeight));
         if(heightBlockInfoMap==null)throw new RuntimeException("Failed to get last block info. Check APIP service.");
 
-        BlockInfo blockInfo = heightBlockInfoMap.get(String.valueOf(lastHeight));
+        Block blockInfo = heightBlockInfoMap.get(String.valueOf(lastHeight));
         return !blockInfo.getId().equals(lastBlockId);
     }
 

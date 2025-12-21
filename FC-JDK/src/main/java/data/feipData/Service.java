@@ -10,6 +10,7 @@ import utils.StringUtils;
 import java.util.Map;
 
 import static constants.FieldNames.*;
+import static constants.FieldNames.ACTIVE;
 import static constants.FieldNames.BIRTH_HEIGHT;
 import static constants.Values.DESC;
 import static constants.FieldNames.TYPES;
@@ -22,6 +23,8 @@ public class Service extends FcObject {
 	protected String desc;
 	protected String[] types;
 	protected String ver;
+	protected String dealer;
+	protected String dealerPubkey;
 	protected String[] urls;
 	protected String[] waiters;
 	protected String[] protocols;
@@ -233,6 +236,8 @@ public class Service extends FcObject {
         NASA_RPC,
         APIP,
         FEIP,
+		FAPI,
+
         ES,
         REDIS,
         DISK,
@@ -259,4 +264,20 @@ public class Service extends FcObject {
             return null;
         }
     }
+
+	public String getDealerPubkey() {
+		return dealerPubkey;
+	}
+
+	public void setDealerPubkey(String dealerPubkey) {
+		this.dealerPubkey = dealerPubkey;
+	}
+
+	public String getDealer() {
+		return dealer;
+	}
+
+	public void setDealer(String dealer) {
+		this.dealer = dealer;
+	}
 }

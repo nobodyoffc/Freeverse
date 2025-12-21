@@ -1,7 +1,8 @@
 package endpoint;
 
 import clients.NaSaClient.NaSaRpcClient;
-import server.ApipApiNames;
+import constants.ApipApiNames;
+import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
 import initial.Initiator;
 import utils.JsonUtils;
@@ -25,7 +26,7 @@ public class FreecashInfo extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -34,9 +35,10 @@ public class FreecashInfo extends HttpServlet {
         NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
 
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
+        ReplyBody replier = httpRequestChecker.getReplyBody();
         httpRequestChecker.checkRequestHttp(request, response, authType);
         FchChainInfo freecashInfo = new FchChainInfo();
         freecashInfo.infoBest(naSaRpcClient);
-        response.getWriter().write(JsonUtils.toNiceJson(freecashInfo));
+        replier.replyHttp(JsonUtils.toNiceJson(freecashInfo),response);
     }
 }

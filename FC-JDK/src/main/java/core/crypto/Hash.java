@@ -180,6 +180,7 @@ public class Hash {
     }
 
     public static byte[] sha256hash160(byte[] input) {
+        if(input==null)return null;
         byte[] sha256 = sha256(input);
         RIPEMD160Digest digest = new RIPEMD160Digest();
         digest.update(sha256, 0, sha256.length);

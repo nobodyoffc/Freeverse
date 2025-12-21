@@ -4,7 +4,7 @@ import core.crypto.Hash;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import data.apipData.*;
-import server.ApipApiNames;
+import server.ApipApi;
 import ui.Inputer;
 import ui.Menu;
 
@@ -236,7 +236,7 @@ public class TestFcdsl {
         if (urlTail == null) return;
         Fcdsl fcdsl = new Fcdsl();
         dataRequestBody.setFcdsl(fcdsl);
-        if (urlTail.equals("/sn1/v1/" + ApipApiNames.GENERAL)) askIndex(dataRequestBody);
+        if (urlTail.equals("/sn1/v1/" + ApipApi.GENERAL)) askIndex(dataRequestBody);
         if (askByIds(dataRequestBody)) return;
         if (!askMatchAll()) {
             askQuery(dataRequestBody);

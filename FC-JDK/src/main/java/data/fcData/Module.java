@@ -7,7 +7,8 @@ public class Module {
     public enum ModuleType {
         SERVICE,
         MANAGER,
-        HANDLER
+        HANDLER,
+        NODE
     }
 
     public Module(String type, String name) {
@@ -31,5 +32,4 @@ public class Module {
         this.type = type;
     }
 }
-
 

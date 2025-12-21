@@ -4,8 +4,9 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import data.fchData.Cid;
-import server.ApipApiNames;
+import constants.ApipApiNames;
+import data.fcData.ReplyBody;
+import data.fchData.Freer;
 import constants.FieldNames;
 import constants.IndicesNames;
 import initial.Initiator;
@@ -33,7 +34,7 @@ public class Richlist extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -49,27 +50,29 @@ public class Richlist extends HttpServlet {
         try {
             HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
             httpRequestChecker.checkRequestHttp(request, response, authType);
+            ReplyBody replier = httpRequestChecker.getReplyBody();
+
             int finalNumber = number;
             ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-            SearchResponse<Cid> result = esClient.search(s -> s.index(IndicesNames.CID).size(finalNumber).sort(so -> so.field(f -> f.field(FieldNames.BALANCE).order(SortOrder.Desc))), Cid.class);
+            SearchResponse<Freer> result = esClient.search(s -> s.index(IndicesNames.FREER).size(finalNumber).sort(so -> so.field(f -> f.field(FieldNames.BALANCE).order(SortOrder.Desc))), Freer.class);
             if(result==null||result.hits()==null||result.hits().hits()==null){
-                response.getWriter().write("Failed to get data.");
+                replier.replyHttp("Failed to get data.",response);
                 return;
             }
             Map<String,Double> richMap = new LinkedHashMap<>();
-            for(Hit<Cid> hit : result.hits().hits()){
-                Cid cid = hit.source();
+            for(Hit<Freer> hit : result.hits().hits()){
+                Freer cid = hit.source();
                 if(cid ==null)continue;
                 richMap.put(cid.getId(), FchUtils.satoshiToCoin(cid.getBalance()));
             }
             if(richMap.isEmpty()) {
-                response.getWriter().write("Failed to get data.");
+                replier.replyHttp("Failed to get data.",response);
                 return;
             }
-            response.getWriter().write(JsonUtils.toNiceJson(richMap));
+
+            replier.replyHttp(JsonUtils.toNiceJson(richMap),response);
         }catch (Exception e){
             e.printStackTrace();
-            response.getWriter().write("Failed to get data.");
         }
     }
 }

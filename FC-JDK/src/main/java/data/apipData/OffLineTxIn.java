@@ -1,13 +1,13 @@
 package data.apipData;
 
-import data.fchData.SendTo;
+import data.fchData.Cash;
 
 public class OffLineTxIn {
     private String fid;
     private String amount;
     private String cd;
     private String msg;
-    private SendTo[] outputs;
+    private Cash[] outputs;
 
     public String getFid() {
         return fid;
@@ -41,11 +41,11 @@ public class OffLineTxIn {
         this.msg = msg;
     }
 
-    public SendTo[] getOutputs() {
+    public Cash[] getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(SendTo[] outputs) {
+    public void setOutputs(Cash[] outputs) {
         this.outputs = outputs;
     }
 }

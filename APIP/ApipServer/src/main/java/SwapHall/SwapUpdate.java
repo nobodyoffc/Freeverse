@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.gson.Gson;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import data.apipData.RequestBody;
 import data.fcData.ReplyBody;
 import data.feipData.Service;
@@ -27,12 +27,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static constants.ApiNames.REGISTERED_SWAP;
+import static SwapHall.SwapRegister.REGISTERED_SWAP;
 import static constants.FieldNames.SID;
 import static constants.IndicesNames.*;
 import static constants.Strings.*;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapUpdate)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapUpdate)
 public class SwapUpdate extends HttpServlet {
     private final Settings settings = Initiator.settings;
 
@@ -51,7 +51,7 @@ public class SwapUpdate extends HttpServlet {
 
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
 
-        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.FC_SIGN_BODY);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.SYMKEY_ENCRYPT);
         if (!isOk) {
             return;
         }

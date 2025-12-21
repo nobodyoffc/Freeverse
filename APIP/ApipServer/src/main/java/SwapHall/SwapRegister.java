@@ -4,7 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import com.google.gson.Gson;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.apipData.RequestBody;
 import data.fcData.ReplyBody;
@@ -30,14 +30,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-import static constants.ApiNames.REGISTERED_SWAP;
 import static constants.FieldNames.SID;
 import static constants.Strings.DOT_JSON;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapRegister)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapRegister)
 public class SwapRegister extends HttpServlet {
     private final Settings settings = Initiator.settings;
     public static String APIP_SWAP_SID_ADDR_KEY;
+    public static String REGISTERED_SWAP = "registeredSwap";
 
     public SwapRegister() {
         APIP_SWAP_SID_ADDR_KEY = settings.getService().getStdName() + "_" + REGISTERED_SWAP;
@@ -53,7 +53,7 @@ public class SwapRegister extends HttpServlet {
 
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
 
-        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.FC_SIGN_BODY);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.SYMKEY_ENCRYPT);
         if (!isOk) {
             return;
         }

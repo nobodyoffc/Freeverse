@@ -1,6 +1,6 @@
 package APIP2V1_Blockchain;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import server.FcHttpRequestHandler;
 import constants.IndicesNames;
 import data.fchData.Cash;
@@ -19,7 +19,7 @@ import java.io.IOException;
 
 import static constants.FieldNames.ID;
 
-@WebServlet(name = ApipApiNames.CASH_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_BY_IDS)
+@WebServlet(name = ApipApiNames.CASH_BY_IDS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.CASH_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class CashByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -30,7 +30,7 @@ public class CashByIds extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.CASH, Cash.class, ID, request,response,authType);
     }
     @Override

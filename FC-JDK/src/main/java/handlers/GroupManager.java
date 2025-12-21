@@ -1,6 +1,7 @@
 package handlers;
 
 import data.apipData.Fcdsl;
+import data.fchData.Cash;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -11,7 +12,6 @@ import constants.FieldNames;
 import constants.Values;
 import core.crypto.Decryptor;
 import db.LocalDB;
-import data.fchData.SendTo;
 import data.feipData.Group;
 import data.feipData.GroupOpData;
 import data.feipData.Service;
@@ -87,12 +87,12 @@ public class GroupManager extends Manager<Group> {
         System.out.println("Found " + groupList.size() + " updated groups.");
     }
     public Group getGroupInfo(String gid, ApipClient apipClient){
-        Map<String, Group> result = apipClient.groupByIds(RequestMethod.POST,AuthType.FC_SIGN_BODY,gid);
+        Map<String, Group> result = apipClient.groupByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,gid);
         if(result==null || result.isEmpty())return null;
         return result.get(gid);
     }
     public List<String> getGroupMembers(String gid,ApipClient apipClient){
-        Map<String, String[]> result = apipClient.groupMembers(RequestMethod.POST,AuthType.FC_SIGN_BODY,gid);
+        Map<String, String[]> result = apipClient.groupMembers(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,gid);
         if(result==null || result.isEmpty())return null;
         return Arrays.asList(result.get(gid));
     }
@@ -122,7 +122,7 @@ public class GroupManager extends Manager<Group> {
         List<Group> resultList;
         List<String> last = new ArrayList<>();
         while(true){
-            resultList = apipClient.myGroups(myFid,sinceHeight,size,last,RequestMethod.POST,AuthType.FC_SIGN_BODY);
+            resultList = apipClient.myGroups(myFid,sinceHeight,size,last,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
             if(resultList==null)return null;
             if(resultList.size()<size)break;
             if(br!=null && !Inputer.askIfYes(br,"Get more groups?"))break;
@@ -210,27 +210,27 @@ public class GroupManager extends Manager<Group> {
     }
 
     // 6. Group Operation Methods
-    public String createGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String createGroup(byte[] priKey, String offLineFid, List<Cash> sendToList,
             String name, String desc, ApipClient apipClient, NaSaRpcClient nasaClient) {
         GroupOpData data = GroupOpData.makeCreate(name, desc);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
-    public String updateGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String updateGroup(byte[] priKey, String offLineFid, List<Cash> sendToList,
                                      Long cd, NaSaRpcClient nasaClient, String gid, String name, String desc, ApipClient apipClient) {
         GroupOpData data = GroupOpData.makeUpdate(gid, name, desc);
         return FeipClient.group(priKey, offLineFid, sendToList, cd, data, apipClient, nasaClient, null);
     }
-    public String joinGroup(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String joinGroup(byte[] priKey, String offLineFid, List<Cash> sendToList,
             String gid, ApipClient apipClient, NaSaRpcClient nasaClient) {
         GroupOpData data = GroupOpData.makeJoin(gid);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
-    public String leaveGroups(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String leaveGroups(byte[] priKey, String offLineFid, List<Cash> sendToList,
             List<String> gids, ApipClient apipClient, NaSaRpcClient nasaClient) {
         GroupOpData data = GroupOpData.makeLeave(gids);
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, null);
     }
-    public String opItems(byte[] priKey, String offLineFid, List<SendTo> sendToList, GroupOpData data, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br){
+    public String opItems(byte[] priKey, String offLineFid, List<Cash> sendToList, GroupOpData data, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br){
         return FeipClient.group(priKey, offLineFid, sendToList, null, data, apipClient, nasaClient, br);
     }
 
@@ -329,7 +329,7 @@ public class GroupManager extends Manager<Group> {
                  .addNewPart()
                  .addNewFields(FieldNames.GID, FieldNames.NAME, Values.DESC,FieldNames.MEMBERS)
                  .addNewValue(searchTerm);
-        return apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
     }
     public List<Group> chooseGroupList(List<Group> groupList, BufferedReader br) {
         if(groupList==null || groupList.isEmpty())return null;

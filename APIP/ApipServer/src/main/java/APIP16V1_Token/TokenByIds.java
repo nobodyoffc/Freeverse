@@ -2,7 +2,7 @@
 package APIP16V1_Token;
 
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -19,7 +19,7 @@ import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.TOKEN_BY_IDS, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOKEN_BY_IDS)
+@WebServlet(name = ApipApiNames.TOKEN_BY_IDS, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.TOKEN_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class TokenByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -29,7 +29,7 @@ public class TokenByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.TOKEN, Token.class, ID, request,response,authType);
     }
     @Override

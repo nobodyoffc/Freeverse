@@ -2,8 +2,8 @@ package APIP2V1_Blockchain;
 
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import constants.ApipApiNames;
 import data.feipData.Service;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
 import initial.Initiator;
@@ -24,7 +24,7 @@ import static constants.FieldNames.END_TIME;
 import static constants.FieldNames.START_TIME;
 import static constants.FieldNames.COUNT;
 
-@WebServlet(name = ApipApiNames.HASH_RATE_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.HASH_RATE_HISTORY)
+@WebServlet(name = ApipApiNames.HASH_RATE_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.HASH_RATE_HISTORY +"/"+ ApipApiNames.VER_1)
 public class HashRateHistory extends HttpServlet {
     private final Settings settings;
 
@@ -34,7 +34,7 @@ public class HashRateHistory extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

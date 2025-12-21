@@ -1,5 +1,6 @@
 package construct;
 
+import constants.OpNames;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
@@ -16,7 +17,8 @@ import utils.JsonUtils;
 import java.io.IOException;
 import java.util.*;
 
-import static constants.OpNames.PUBLISH;
+import static constants.FieldNames.*;
+import static constants.OpNames.*;
 
 public class ConstructRollbacker {
 
@@ -30,17 +32,17 @@ public class ConstructRollbacker {
 	private boolean rollbackProtocol(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = false;
 		Map<String, ArrayList<String>> resultMap = getEffectedProtocols(esClient,lastHeight);
-		ArrayList<String> itemIdList = resultMap.get("itemIdList");
+		ArrayList<String> itemPidList = resultMap.get("itemPidList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 		
-		if(itemIdList==null||itemIdList.isEmpty())return error;
+		if(itemPidList==null||itemPidList.isEmpty())return error;
 		System.out.println("If rolling back is interrupted, reparse all effected ids of index 'protocol': ");
-		JsonUtils.printJson(itemIdList);
-		deleteEffectedItems(esClient, IndicesNames.PROTOCOL, itemIdList);
+		JsonUtils.printJson(itemPidList);
+		deleteEffectedItems(esClient, IndicesNames.PROTOCOL, itemPidList);
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.PROTOCOL_HISTORY,histIdList);
 		
-		List<ProtocolHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROTOCOL_HISTORY,"pid",itemIdList, ProtocolHistory.class);
+		List<ProtocolHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROTOCOL_HISTORY,PID, PIDS, itemPidList, ProtocolHistory.class);
 
 		reparseProtocol(esClient,reparseHistList);
 		
@@ -61,11 +63,35 @@ public class ConstructRollbacker {
 		for(Hit<ProtocolHistory> hit: resultSearch.hits().hits()) {
 			
 			ProtocolHistory item = hit.source();
-			if(item.getOp().equals(PUBLISH)) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getPid());
+			if(item==null || item.getOp()==null){
+				continue;
 			}
+			String op = item.getOp();
+			switch (op) {
+				case PUBLISH -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				case OpNames.STOP, RECOVER, CLOSE -> {
+					if (item.getPids() == null || item.getPids().length == 0) {
+						continue;
+					}
+					for(String pid: item.getPids()){
+						if(pid==null){
+							continue;
+						}
+						itemSet.add(pid);
+					}
+				}
+				default -> {
+					if(item.getPid()!=null){
+						itemSet.add(item.getPid());
+					}
+				}
+			}
+			
 			histList.add(hit.id());
 		}
 		
@@ -111,7 +137,7 @@ public class ConstructRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.SERVICE_HISTORY,histIdList);
 		
-		List<ServiceHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SERVICE_HISTORY,"sid",itemIdList,ServiceHistory.class);
+		List<ServiceHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SERVICE_HISTORY,SID, SIDS, itemIdList, ServiceHistory.class);
 
 		reparseService(esClient,reparseHistList);
 		
@@ -133,14 +159,36 @@ public class ConstructRollbacker {
 		for(Hit<ServiceHistory> hit: resultSearch.hits().hits()) {
 			
 			ServiceHistory item = hit.source();
-			if(item.getOp().equals(PUBLISH)) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getSid());
+			if(item==null || item.getOp()==null){
+				continue;
+			}
+			String op = item.getOp();
+			switch (op) {
+				case PUBLISH -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				case OpNames.STOP, RECOVER, CLOSE -> {
+					if (item.getSids() == null || item.getSids().length == 0) {
+						continue;
+					}
+					for(String sid: item.getSids()){
+						if(sid==null){
+							continue;
+						}
+						itemSet.add(sid);
+					}
+				}
+				default -> {
+					if(item.getSid()!=null){
+						itemSet.add(item.getSid());
+					}
+				}
 			}
 			histList.add(hit.id());
 		}
-		
 
 		ArrayList<String> itemList = new ArrayList<>(itemSet);
 		
@@ -172,7 +220,7 @@ public class ConstructRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.APP_HISTORY,histIdList);
 		
-		List<AppHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.APP_HISTORY,"aid",itemIdList,AppHistory.class);
+		List<AppHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.APP_HISTORY,AID, AIDS, itemIdList, AppHistory.class);
 
 		reparseApp(esClient,reparseHistList);
 		
@@ -193,10 +241,33 @@ public class ConstructRollbacker {
 		for(Hit<AppHistory> hit: resultSearch.hits().hits()) {
 			
 			AppHistory item = hit.source();
-			if(item.getOp().equals(PUBLISH)) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getAid());
+			if(item==null || item.getOp()==null){
+				continue;
+			}
+			String op = item.getOp();
+			switch (op) {
+				case PUBLISH -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				case OpNames.STOP, RECOVER, CLOSE -> {
+					if (item.getAids() == null || item.getAids().length == 0) {
+						continue;
+					}
+					for(String aid: item.getAids()){
+						if(aid==null){
+							continue;
+						}
+						itemSet.add(aid);
+					}
+				}
+				default -> {
+					if(item.getAid()!=null){
+						itemSet.add(item.getAid());
+					}
+				}
 			}
 			histList.add(hit.id());
 		}
@@ -232,7 +303,7 @@ public class ConstructRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.CODE_HISTORY,histIdList);
 		
-		List<CodeHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.CODE_HISTORY,"codeId",itemIdList,CodeHistory.class);
+		List<CodeHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.CODE_HISTORY,CODE_ID, CODE_IDS, itemIdList, CodeHistory.class);
 
 		reparseCode(esClient,reparseHistList);
 		
@@ -244,7 +315,7 @@ public class ConstructRollbacker {
 				.index(IndicesNames.CODE_HISTORY)
 				.query(q->q
 						.range(r->r
-								.field("height")
+								.field(HEIGHT)
 								.gt(JsonData.of(lastHeight)))),CodeHistory.class);
 		
 		Set<String> itemSet = new HashSet<String>();
@@ -253,10 +324,33 @@ public class ConstructRollbacker {
 		for(Hit<CodeHistory> hit: resultSearch.hits().hits()) {
 			
 			CodeHistory item = hit.source();
-			if(item.getOp().equals(PUBLISH)) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getCodeId());
+			if(item==null || item.getOp()==null){
+				continue;
+			}
+			String op = item.getOp();
+			switch (op) {
+				case PUBLISH -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				case OpNames.STOP, RECOVER, CLOSE -> {
+					if (item.getCodeIds() == null || item.getCodeIds().length == 0) {
+						continue;
+					}
+					for(String codeId: item.getCodeIds()){
+						if(codeId==null){
+							continue;
+						}
+						itemSet.add(codeId);
+					}
+				}
+				default -> {
+					if(item.getCodeId()!=null){
+						itemSet.add(item.getCodeId());
+					}
+				}
 			}
 			histList.add(hit.id());
 		}

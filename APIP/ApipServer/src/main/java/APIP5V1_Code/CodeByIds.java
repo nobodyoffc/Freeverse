@@ -1,6 +1,6 @@
 package APIP5V1_Code;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Code;
 import initial.Initiator;
@@ -18,7 +18,7 @@ import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.CODE_BY_IDS, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CODE_BY_IDS)
+@WebServlet(name = ApipApiNames.CODE_BY_IDS, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.CODE_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class CodeByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -28,7 +28,7 @@ public class CodeByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.CODE, Code.class, ID, request,response,authType);
     }
     @Override

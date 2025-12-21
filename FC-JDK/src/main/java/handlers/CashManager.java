@@ -53,7 +53,7 @@ import static ui.Inputer.askIfYes;
 import static constants.Constants.*;
 import static constants.FieldNames.*;
 import static constants.IndicesNames.CASH;
-import static constants.IndicesNames.CID;
+import static constants.IndicesNames.FREER;
 import static constants.Values.ASC;
 import static constants.Values.DESC;
 import static constants.Values.*;
@@ -77,7 +77,7 @@ public class CashManager extends Manager<Cash> {
     private ContactManager contactHandler;
     private final Settings settings;
 
-    private Cid cid;
+    private Freer cid;
     private final BufferedReader br;
     private long bestHeight;
     private Long lastFee;
@@ -120,7 +120,7 @@ public class CashManager extends Manager<Cash> {
         menu.add("Decode and Broadcast", this::broadcast);
         menu.add("Incomes", this::incomes);
         menu.add("Expense", this::expense);
-        menu.add("MultiSign",()-> HomeApp.multiSign(settings));
+        menu.add("MultiSign",()-> HomeApp.multiSig(settings));
         menu.add("Detail by ID", this::cashDetail);
         menu.add("Reload All", this::freshValidCashes);
         menu.add("Fresh", this::freshCashDB);
@@ -129,11 +129,11 @@ public class CashManager extends Manager<Cash> {
         menu.showAndSelect(this.br);
     }
 
-    public static String makeOffLineTx(String sender, List<Cash> cashList, List<SendTo> sendToList, Long cd, Double feeRate, Multisign multisign, String ver, @org.jetbrains.annotations.Nullable BufferedReader br) {
+    public static String makeOffLineTx(String sender, List<Cash> cashList, List<Cash> sendToList, Long cd, Double feeRate, Multisig multisig, String ver, @org.jetbrains.annotations.Nullable BufferedReader br) {
         String signedTx;
         if(cashList!=null) cashList = Cash.makeCashListForPay(cashList);
 
-        RawTxInfo txInfo = new RawTxInfo(sender, cashList, sendToList,null,cd, feeRate, multisign,ver);
+        RawTxInfo txInfo = new RawTxInfo(sender, cashList, sendToList,null,cd, feeRate, multisig,ver);
         String txJson = txInfo.toNiceJson();
         System.out.println("Unsigned TX: \n--------\n" + txJson + "\n--------");
         QRCodeUtils.generateQRCode(txJson);
@@ -169,12 +169,12 @@ public class CashManager extends Manager<Cash> {
         return contactHandler;
     }
 
-    public static boolean checkNobodys(BufferedReader br, List<SendTo> sendToList, ApipClient apipClient, ElasticsearchClient esClient) {
+    public static boolean checkNobodys(BufferedReader br, List<Cash> sendToList, ApipClient apipClient, ElasticsearchClient esClient) {
         System.out.println("Check nobodys...");
         List<String> recipientList = new ArrayList<>();
         if (sendToList != null && !sendToList.isEmpty()) {
-            for (SendTo sendTo : sendToList) {
-                recipientList.add(sendTo.getFid());
+            for (Cash sendTo : sendToList) {
+                recipientList.add(sendTo.getOwner());
             }
         }
         List<Nobody> nobodyList = checkNobodys(recipientList, apipClient, esClient);
@@ -205,7 +205,7 @@ public class CashManager extends Manager<Cash> {
     public static List<Nobody> checkNobodys(List<String> recipientList, ApipClient apipClient, ElasticsearchClient esClient) {
         List<Nobody> nobodyList = new ArrayList<>();
         if (apipClient != null) {
-            Map<String, Nobody> nobodyMap = apipClient.nobodyByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, recipientList.toArray(new String[0]));
+            Map<String, Nobody> nobodyMap = apipClient.nobodyByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, recipientList.toArray(new String[0]));
             if (nobodyMap != null && !nobodyMap.isEmpty()) nobodyList.addAll(nobodyMap.values());
         } else if (esClient != null) {
             List<FieldValue> valueList = recipientList.stream().map(FieldValue::of).collect(Collectors.toList());
@@ -279,7 +279,7 @@ public class CashManager extends Manager<Cash> {
         return bestHeight;
     }
 
-    public Cid getCidInfo() {
+    public Freer getCidInfo() {
         return cid;
     }
 
@@ -319,7 +319,7 @@ public class CashManager extends Manager<Cash> {
         System.out.println(decodedTx);
         if(askIfYes(br, "Do you want to broadcast the tx?")){
             if(apipClient!=null){
-                String result = apipClient.broadcastTx(rawTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+                String result = apipClient.broadcastTx(rawTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
                 System.out.println("Broadcasted tx: "+result);
             }else if(nasaClient!=null){
                 String result = nasaClient.broadcast(decodedTx);
@@ -335,7 +335,7 @@ public class CashManager extends Manager<Cash> {
         if(fid==null || fid.equals(""))fid = mainFid;
         Double amount = Inputer.inputDouble(br, "Input the amount of the each cash. Enter to stop:");
         if(amount==null || amount==0)return;
-        sendAndUpdate(null, amount, 0L, new ArrayList<>(List.of(new SendTo(fid, amount))), null, DEFAULT_FEE_RATE, br);
+        sendAndUpdate(null, amount, 0L, new ArrayList<>(List.of(new Cash(fid, amount))), null, DEFAULT_FEE_RATE, br);
         Menu.anyKeyToContinue(br);
     }
 
@@ -421,7 +421,7 @@ public class CashManager extends Manager<Cash> {
         }
         Cash cash = localDB.get(cashId);
         if(cash==null){
-            Map<String,Cash> cashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY,cashId);
+            Map<String, Cash> cashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT,cashId);
             if(cashMap==null || cashMap.isEmpty())return;
             cash = cashMap.get(cashId);
         }
@@ -455,7 +455,7 @@ public class CashManager extends Manager<Cash> {
         int currentPage = 1;
         while(true){
             if(!last.isEmpty()) fcdsl.addAfter(last);
-            List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.FC_SIGN_BODY);
+            List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
 
             if(totalPages==0) {
                 Long total = apipClient.getFcClientEvent().getResponseBody().getTotal();
@@ -557,7 +557,7 @@ public class CashManager extends Manager<Cash> {
     }
 
     public void sendAllTo(List<Cash> cashList, String fid, String words, BufferedReader br) {
-        List<SendTo> sendToList = new ArrayList<>();
+        List<Cash> sendToList = new ArrayList<>();
         int wordsLength = 0;
         if(words!=null&&!"".equals(words))wordsLength = words.getBytes().length;
         long feeLong = TxCreator.calcFee(cashList==null?0:cashList.size(), 1, wordsLength,DEFAULT_FEE_RATE,false,null);
@@ -566,7 +566,7 @@ public class CashManager extends Manager<Cash> {
 //        double sumCoin = utils.FchUtils.satoshiToCoin(sum);
         if(sum>=feeLong) {
             if (fid == null || fid.equals("")) fid = mainFid;
-            sendToList.add(new SendTo(fid, utils.FchUtils.satoshiToCoin(sum-feeLong)));
+            sendToList.add(new Cash(fid, utils.FchUtils.satoshiToCoin(sum-feeLong)));
         }
         sendAndUpdate(cashList, null, null, sendToList, words, DEFAULT_FEE_RATE, br);
         if(br!=null)Menu.anyKeyToContinue(br);
@@ -590,10 +590,10 @@ public class CashManager extends Manager<Cash> {
             count = (int)(cashAmountSum/amount)+1;
         }
 
-        List<SendTo> sendToList = new ArrayList<>();
+        List<Cash> sendToList = new ArrayList<>();
         double paid = 0;
         for(int i=0;i<count-1;i++){
-            sendToList.add(new SendTo(mainFid,amount));
+            sendToList.add(new Cash(mainFid,amount));
             paid+=amount;
         }
 
@@ -603,10 +603,10 @@ public class CashManager extends Manager<Cash> {
             System.out.println("The rest is not enough to pay the fee.");
             return;
         }
-        sendToList.add(new SendTo(mainFid,restAmount));
+        sendToList.add(new Cash(mainFid,restAmount));
         System.out.println("You are spending "+cashList.size()+" cashes and sending:");
-        for(SendTo sendTo :sendToList){
-            System.out.println("to "+sendTo.getFid()+" "+ sendTo.getAmount()+"f");
+        for(Cash sendTo :sendToList){
+            System.out.println("to "+sendTo.getOwner()+" "+ sendTo.getAmount()+"f");
         }
         System.out.println("with the fee: "+ FchUtils.satoshiToCash(lastFee)+"c (1c = 100 sats; 1f = 1,000,000c)");
         if(askIfYes(br,"Send it?")) {
@@ -618,7 +618,7 @@ public class CashManager extends Manager<Cash> {
     public void manualMerge(List<Cash> cashList, BufferedReader br) {
         if(exitWithoutValidCash(cashList))return;
         double cashSum = Cash.sumCashAmount(cashList);
-        List<SendTo> sendToList = new ArrayList<>();
+        List<Cash> sendToList = new ArrayList<>();
         double avaliable = cashSum;
         double rest = calcRestAmount(cashList.size(), avaliable, 0, 0, 0, DEFAULT_FEE_RATE, false, null);
 
@@ -633,7 +633,7 @@ public class CashManager extends Manager<Cash> {
                     System.out.println("The rest is not enough to pay the fee.");
                     return;
                 }
-                sendToList.add(new SendTo(mainFid,rest));
+                sendToList.add(new Cash(mainFid,rest));
                 break;
             }
 
@@ -647,7 +647,7 @@ public class CashManager extends Manager<Cash> {
                     System.out.println("Amount cannot be greater than remaining coins");
                     continue;
                 }
-                sendToList.add(new SendTo(mainFid,amount));
+                sendToList.add(new Cash(mainFid,amount));
 
                 avaliable -= amount;
 
@@ -660,8 +660,8 @@ public class CashManager extends Manager<Cash> {
             }
         }
 
-        for(SendTo sendTo :sendToList){
-            System.out.println("To "+sendTo.getFid()+" "+ sendTo.getAmount());
+        for(Cash sendTo :sendToList){
+            System.out.println("To "+sendTo.getOwner()+" "+ sendTo.getAmount());
         }
 
         if(askIfYes(br,"Send it?")) {
@@ -685,7 +685,7 @@ public class CashManager extends Manager<Cash> {
 
        System.out.println("Available sum:  "+ utils.FchUtils.satoshiToCoin(cashList.stream().mapToLong(Cash::getValue).sum()));
 
-       List<SendTo> sendToList=new ArrayList<>();
+       List<Cash> sendToList=new ArrayList<>();
         List<String> fidList = getContactHandler().inputOrSearchFidList(br);
         if (fidList == null || fidList.isEmpty()) {
             System.out.println("No receiver. Cancel.");
@@ -694,20 +694,20 @@ public class CashManager extends Manager<Cash> {
         for (String fid : fidList) {
             Double amount = Inputer.inputDouble(br, "Input the amount of the each cash. Enter to stop:");
             if (amount == null || amount == 0) continue;
-            sendToList.add(new SendTo(fid, amount));
+            sendToList.add(new Cash(fid, amount));
         }
 
        double sum = 0;
        if(!sendToList.isEmpty()){
-        for (SendTo sendTo : sendToList) sum += sendTo.getAmount();
+        for (Cash sendTo : sendToList) sum += sendTo.getAmount();
        }
 
        System.out.println("Input the message written on the blockchain. Enter to ignore:");
        String msg = Inputer.inputString(br);
         if(!sendToList.isEmpty()){
             System.out.println("\nSend to: ");
-            for(SendTo sendTo:sendToList){
-                System.out.println(sendTo.getFid()+" : "+sendTo.getAmount());
+            for(Cash sendTo:sendToList){
+                System.out.println(sendTo.getOwner()+" : "+sendTo.getAmount());
             }
             checkNobodys(br,sendToList,apipClient,null);
        }else System.out.println("No receiver.  All the change will be sent back to the sender.");
@@ -719,7 +719,7 @@ public class CashManager extends Manager<Cash> {
         Menu.anyKeyToContinue(br);
    }
 
-    private void sendAndUpdate(List<Cash> cashList, Double sum, Long cd, List<SendTo> sendToList, String msg, Double feeRate, BufferedReader br) {
+    private void sendAndUpdate(List<Cash> cashList, Double sum, Long cd, List<Cash> sendToList, String msg, Double feeRate, BufferedReader br) {
         String result = send(cashList, sum, cd, sendToList, msg, null, feeRate, null, core.fch.FchMainNetwork.MAINNETWORK, br);
         sendResult(br, result);
     }
@@ -763,18 +763,18 @@ public class CashManager extends Manager<Cash> {
      * @param br            if null, no input and prompt.
      * @return the sent txid, unsigned rawTx or null if failed.
      */
-    public String send(@Nullable List<Cash> cashList, @Nullable Double amount, @Nullable Long cd, @Nullable List<SendTo> sendToList, @Nullable String opReturn, Multisign multisign, Double feeRate, String changeTo, MainNetParams mainNetParams, @Nullable BufferedReader br){
+    public String send(@Nullable List<Cash> cashList, @Nullable Double amount, @Nullable Long cd, @Nullable List<Cash> sendToList, @Nullable String opReturn, Multisig multisig, Double feeRate, String changeTo, MainNetParams mainNetParams, @Nullable BufferedReader br){
         TxResultType resultType = TxResultType.NULL;
         if(feeRate==null)feeRate=DEFAULT_FEE_RATE;
         List<Cash> meetList;
         int opReturnSize = opReturn == null ? 0 : opReturn.getBytes().length;
         if(cashList!=null)meetList = cashList;
         else {
-            if(amount == null && sendToList!=null)amount = sendToList.stream().mapToDouble(SendTo::getAmount).sum();
+            if(amount == null && sendToList!=null)amount = sendToList.stream().mapToDouble(Cash::getAmount).sum();
             meetList = getCashesForSend(amount, cd, sendToList==null ? 0 : sendToList.size(), opReturnSize);
             if(meetList==null || meetList.isEmpty()){
                 System.out.println("Can't get the valid cash list to make the TX");
-                RawTxInfo rawTxInfo = new RawTxInfo(mainFid, null, sendToList, opReturn, cd, feeRate, multisign, "2");
+                RawTxInfo rawTxInfo = new RawTxInfo(mainFid, null, sendToList, opReturn, cd, feeRate, multisig, "2");
                 String result = rawTxInfo.toNiceJson();
                 resultType= TxResultType.TX_WITHOUT_INPUTS;
                 return resultType.addTypeAheadResult(result);
@@ -809,11 +809,11 @@ public class CashManager extends Manager<Cash> {
         String result;
         
         if(prikey ==null){
-            RawTxInfo rawTxInfo = new RawTxInfo(mainFid, meetList, sendToList,opReturn,cd,feeRate, multisign,"2");
+            RawTxInfo rawTxInfo = new RawTxInfo(mainFid, meetList, sendToList,opReturn,cd,feeRate, multisig,"2");
             resultType = TxResultType.UNSIGNED_JSON;
             result = rawTxInfo.toNiceJson();
         }else {
-            String signedTx = signTx(meetList, sendToList, opReturn, multisign, feeRate, changeTo, mainNetParams);
+            String signedTx = signTx(meetList, sendToList, opReturn, multisig, feeRate, changeTo, mainNetParams);
 
             if (nasaClient != null) {
                 result = nasaClient.sendRawTransaction(signedTx);
@@ -821,7 +821,7 @@ public class CashManager extends Manager<Cash> {
                 else resultType = TxResultType.ERROR_STRING;
             }
             else if (apipClient != null) {
-                result = apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+                result = apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
                 if(Hex.isHexString(result))resultType = TxResultType.TX_ID;
                 else resultType = TxResultType.ERROR_STRING;
             }
@@ -853,7 +853,7 @@ public class CashManager extends Manager<Cash> {
         return resultType.addTypeAheadResult(result);
     }
 
-    private void updateLocalInfo(List<Cash> meetList, @org.jetbrains.annotations.Nullable List<SendTo> sendToList, Integer maxJumpNum, String result, double restAmount) {
+    private void updateLocalInfo(List<Cash> meetList, @org.jetbrains.annotations.Nullable List<Cash> sendToList, Integer maxJumpNum, String result, double restAmount) {
         Long balance = cid.getBalance();
         if (balance == null) balance = localDB.getAll().values().stream().mapToLong(Cash::getValue).sum();
         Long cashCount = cid.getCash();
@@ -861,8 +861,8 @@ public class CashManager extends Manager<Cash> {
 
         if (sendToList != null && Hex.isHex32(result)) {
             for (int i = 0; i < sendToList.size(); i++) {
-                SendTo sendTo = sendToList.get(i);
-                if (sendTo.getFid().equals(mainFid)) {
+                Cash sendTo = sendToList.get(i);
+                if (sendTo.getOwner().equals(mainFid)) {
                     addNewSelfCash(result, i, sendTo.getAmount(), maxJumpNum);
                     cashCount++;
                 } else {
@@ -878,20 +878,20 @@ public class CashManager extends Manager<Cash> {
             cashCount++;
         }
         if (cid == null) {
-            cid = new Cid();
+            cid = new Freer();
             cid.setId(mainFid);
         }
         cid.setBalance(balance);
         cid.setCash(cashCount-meetList.size());
     }
 
-    public String signTx(@org.jetbrains.annotations.Nullable List<Cash> cashList, @org.jetbrains.annotations.Nullable List<SendTo> sendToList, @org.jetbrains.annotations.Nullable String opReturn, Multisign multisign, Double feeRate, String changeToFid, MainNetParams mainNetParams) {
-        Transaction transaction = TxCreator.createUnsignedTx(cashList, sendToList, opReturn, multisign, feeRate, changeToFid, mainNetParams);
+    public String signTx(@org.jetbrains.annotations.Nullable List<Cash> cashList, @org.jetbrains.annotations.Nullable List<Cash> sendToList, @org.jetbrains.annotations.Nullable String opReturn, Multisig multisig, Double feeRate, String changeToFid, MainNetParams mainNetParams) {
+        Transaction transaction = TxCreator.createUnsignedTx(cashList, sendToList, opReturn, multisig, feeRate, changeToFid, mainNetParams);
         if(transaction == null)return null;
         return TxCreator.signTx(prikey, transaction);
     }
 
-    public double calcRestAmount(List<Cash> cashList, List<SendTo> sendToList, int opReturnSize, Double feeRate, boolean isMultiSign, Multisign multisign){
+    public double calcRestAmount(List<Cash> cashList, List<Cash> sendToList, int opReturnSize, Double feeRate, boolean isMultiSign, Multisig multisig){
         if(feeRate==null)feeRate = DEFAULT_FEE_RATE;
         int sendSize=0;
         if(sendToList!=null)sendSize = sendToList.size();
@@ -899,16 +899,16 @@ public class CashManager extends Manager<Cash> {
         double cashAmountSum = Cash.sumCashAmount(cashList);
         double sendToAmountSum = 0;
         if(sendToList!=null){
-            for(SendTo sendTo : sendToList){
+            for(Cash sendTo : sendToList){
                 sendToAmountSum += sendTo.getAmount();
             }
         }
 
-        return calcRestAmount(cashList.size(), cashAmountSum, sendToAmountSum, sendSize, opReturnSize, feeRate, isMultiSign, multisign);
+        return calcRestAmount(cashList.size(), cashAmountSum, sendToAmountSum, sendSize, opReturnSize, feeRate, isMultiSign, multisig);
     }
 
-    public double calcRestAmount(int cashListSize, double cashAmountSum, double outPutSum, int sendToListSize, int opReturnSize, Double feeRate, boolean isMultiSign, Multisign multisign) {
-        this.lastFee = TxCreator.calcFee(cashListSize, sendToListSize, opReturnSize, feeRate, isMultiSign, multisign);
+    public double calcRestAmount(int cashListSize, double cashAmountSum, double outPutSum, int sendToListSize, int opReturnSize, Double feeRate, boolean isMultiSign, Multisig multisig) {
+        this.lastFee = TxCreator.calcFee(cashListSize, sendToListSize, opReturnSize, feeRate, isMultiSign, multisig);
         double feeCoin = utils.FchUtils.satoshiToCoin(lastFee);
         return NumberUtils.roundDouble8(cashAmountSum-feeCoin-outPutSum);
     }
@@ -933,12 +933,12 @@ public class CashManager extends Manager<Cash> {
 //        return NumberUtils.roundDouble8(cashAmountSum-feeCoin-sendToAmountSum);
 //    }
 
-    public long calcFee(List<Cash> cashList, List<SendTo> sendToList, int opReturnSize, Double feeRate, boolean isMultiSign, Multisign multisign){
+    public long calcFee(List<Cash> cashList, List<Cash> sendToList, int opReturnSize, Double feeRate, boolean isMultiSign, Multisig multisig){
         if(feeRate==null)feeRate = DEFAULT_FEE_RATE;
         int sendSize=0;
         if(sendToList!=null)sendSize = sendToList.size();
 
-        this.lastFee = TxCreator.calcFee(cashList.size(), sendSize, opReturnSize, feeRate, isMultiSign, multisign);
+        this.lastFee = TxCreator.calcFee(cashList.size(), sendSize, opReturnSize, feeRate, isMultiSign, multisig);
         return this.lastFee;
     }
 
@@ -1083,14 +1083,14 @@ public class CashManager extends Manager<Cash> {
 
         if(bestHeight>lastHeight){
             if(apipClient!=null){
-                cid = apipClient.cidInfoById(mainFid);
+                cid = apipClient.freerById(mainFid);
                 if(cid ==null){
                     log.error("Failed to get cidInfo from apipClient when checkValidCashes.");
                 }
                 freshCashDBByApip(lastHeight);
             }else if(esClient!=null){
                 try{    
-                    Cid cid = EsUtils.getById(esClient,CID, mainFid, Cid.class);
+                    Freer cid = EsUtils.getById(esClient, FREER, mainFid, Freer.class);
                     if(cid!=null) this.cid = cid;
                     freshCashDBByEs(lastHeight);
                 }catch (Exception e){
@@ -1223,7 +1223,7 @@ public class CashManager extends Manager<Cash> {
         ReplyBody result;
         while(true){
             if(last!=null)fcdsl.setAfter(last);
-            result = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            result = apipClient.general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
             if(result==null || result.getCode()!=0){
                 if(result==null)log.error("Failed to fresh cashes.");
                 else {
@@ -1233,7 +1233,7 @@ public class CashManager extends Manager<Cash> {
                 }
                 return;
             }
-            List<Cash> cashList = ObjectUtils.objectToList(result.getData(),Cash.class);
+            List<Cash> cashList = ObjectUtils.objectToList(result.getData(), Cash.class);
             if(exitWithoutValidCash(cashList))break;
             for (Cash cash : cashList) {
                 localDB.put(cash.getId(), cash);
@@ -1274,7 +1274,7 @@ public class CashManager extends Manager<Cash> {
             if (last != null) {
                 fcdsl.setAfter(last);
             }   
-            List<Cash> cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Cash> cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
             if (cashList != null && !cashList.isEmpty()) {
                 return cashList;
             }
@@ -1317,7 +1317,7 @@ public class CashManager extends Manager<Cash> {
         long sumCd=0;
         List<Cash> cashList;
         if(apipClient!=null){
-            cid = apipClient.cidInfoById(mainFid);
+            cid = apipClient.freerById(mainFid);
             if(cid ==null){
                 log.error("Failed to get cidInfo from apipClient when checkValidCashes.");
             }
@@ -1342,12 +1342,11 @@ public class CashManager extends Manager<Cash> {
                 log.error("Failed to get cash list from esClient:{}", replier.getMessage());
                 return;
             }
-
-            cashList = (List<Cash>) replier.getData();
-            if(cashList==null || cashList.isEmpty()){
-                log.error("Failed to get cash list from esClient.");
+            if(replier.getData() ==null || ((List<?>) replier.getData()).isEmpty() ){
+                log.error("No cash found.");
                 return;
             }
+            cashList = (List<Cash>) replier.getData();
 
             for (Cash cash : cashList) {
                 String id = cash.getId();  // Use the ID directly, don't convert with Hex.fromHex
@@ -1451,7 +1450,7 @@ public class CashManager extends Manager<Cash> {
                 }
             }
         }else if(apipClient!=null){
-            Map<String,List<Cash>> result = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.FC_SIGN_BODY, mainFid);
+            Map<String,List<Cash>> result = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, mainFid);
             if(result==null)return;
             List<Cash> unconfirmedCashes = result.get(mainFid);
             if(unconfirmedCashes!=null){
@@ -1481,7 +1480,7 @@ public class CashManager extends Manager<Cash> {
                 localDB.put(id, cash);
                 unsafeIdJumpNumMap.remove(id);
             }
-            cid = apipClient.cidInfoById(mainFid);
+            cid = apipClient.freerById(mainFid);
         }
     }
 
@@ -1569,22 +1568,10 @@ public class CashManager extends Manager<Cash> {
         return issuingCashList;
     }
 
-    public String[] getSpendingCashIdFromJedis(String addr, JedisPool jedisPool) {
-        Gson gson = new Gson();
-        try (Jedis jedis3Mempool = jedisPool.getResource()) {
-            jedis3Mempool.select(Constants.RedisDb3Mempool);
-            String spendCashIdStr = jedis3Mempool.hget(addr, FieldNames.SPEND_CASHES);
-            if (spendCashIdStr != null) {
-                return gson.fromJson(spendCashIdStr, String[].class);
-            }
-        }
-        return null;
-    }
-
 
     // Cash List Retrieval Methods
     public static List<Cash> getCashListFromApip(String fid, Boolean valid, int size,
-                                          ArrayList<Sort> sortList, final List<String> last, Long sinceHeight, ApipClient apipClient) {
+                                                 ArrayList<Sort> sortList, final List<String> last, Long sinceHeight, ApipClient apipClient) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addSize(size);
         if (sortList != null && !sortList.isEmpty())
@@ -1597,13 +1584,13 @@ public class CashManager extends Manager<Cash> {
 
         List<Cash> result;
         if(valid!=null ){
-            if(valid)result = apipClient.cashValid(fcdsl,RequestMethod.POST,AuthType.FC_SIGN_BODY);
+            if(valid)result = apipClient.cashValid(fcdsl,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
             else {
                 fcdsl.addNewFilter().addNewTerms().addNewFields(FieldNames.VALID).addNewValues(Values.FALSE);
-                result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+                result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
             }
         }else {
-            result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         }
         if(result!=null && !result.isEmpty()){
             if(last!=null){
@@ -1728,13 +1715,7 @@ public class CashManager extends Manager<Cash> {
         if(apipClient!=null)apipClient.updateUnconfirmedValidCash(meetList,fid);
     }
 
-    public static void checkUnconfirmedSpentByJedis(List<Cash> cashList, Jedis jedis) {
-        jedis.select(Constants.RedisDb3Mempool);
-        cashList.removeIf(cash -> jedis.hget(FieldNames.SPEND_CASHES, cash.getId()) != null);
-        jedis.select(0);
-    }
-
-    public static List<Cash> checkUnconfirmedNewCashesByJedis(String fid,Jedis jedis){
+    public static List<Cash> checkUnconfirmedNewCashesByJedis(String fid, Jedis jedis){
         Gson gson = new Gson();
         List<Cash> cashList = new ArrayList<>();
         String cashIdListStr = jedis.hget(fid, NEW_CASHES);
@@ -1770,7 +1751,7 @@ public class CashManager extends Manager<Cash> {
              if(last!=null){
                  fcdsl.setAfter(last);
              }
-             ReplyBody replyBody = apipClient.general(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+             ReplyBody replyBody = apipClient.general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
              if(replyBody ==null)break;
              last = replyBody.getLast();
              subCashList = ObjectUtils.objectToList(replyBody.getData(), Cash.class);
@@ -1857,7 +1838,7 @@ public class CashManager extends Manager<Cash> {
         }
         if(apipClient!=null){
             Fcdsl fcdsl = createFcdslForValidCashes(sinceHeight, myFid);
-            cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST,AuthType.FC_SIGN_BODY);
+            cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
             if(cashList==null || cashList.isEmpty()){
                 searchResult.setCode(apipClient.getFcClientEvent().getCode());
                 searchResult.setMessage(apipClient.getFcClientEvent().getMessage());
@@ -1869,7 +1850,8 @@ public class CashManager extends Manager<Cash> {
             }catch (Exception ignore){}
 
             if (amount == null && cd == null) {
-                checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
+                if(mempoolHandler!=null && apipClient!=null)
+                    checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
                 searchResult.setData(cashList);
                 searchResult.setGot((long) cashList.size());
                 return searchResult;
@@ -1924,7 +1906,6 @@ public class CashManager extends Manager<Cash> {
                 cashList.add(hit.source());
             }
             if (amount == null && cd == null) {
-                checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
                 searchResult.setData(cashList);
                 searchResult.setGot((long) cashList.size());
                 try{
@@ -1945,7 +1926,8 @@ public class CashManager extends Manager<Cash> {
             searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
         }
 
-        checkUnconfirmed(cashList,myFid, mempoolHandler, apipClient);
+        if(mempoolHandler!=null && apipClient!=null)
+            checkUnconfirmed(cashList,myFid, mempoolHandler, apipClient);
 
         amount = amount == null ? 0L : amount;
         cd = cd == null ? 0L : cd;
@@ -2114,7 +2096,7 @@ public class CashManager extends Manager<Cash> {
         String signedTx = TxCreator.signTx(priKey, unSignedTxBytes);
 
         // Broadcast the transaction
-        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
     }
 
     /**
@@ -2126,7 +2108,7 @@ public class CashManager extends Manager<Cash> {
      * @param esClient      Optional ES client for backup cash lookup
      * @return Transaction ID if successful, null if failed
      */
-    public static String send(byte[] priKey, List<SendTo> sendToList, ApipClient apipClient, @Nullable ElasticsearchClient esClient, NaSaRpcClient naSaRpcClient) {
+    public static String send(byte[] priKey, List<Cash> sendToList, ApipClient apipClient, @Nullable ElasticsearchClient esClient, NaSaRpcClient naSaRpcClient) {
         if (priKey == null || sendToList == null || sendToList.isEmpty()) {
             return null;
         }
@@ -2135,7 +2117,7 @@ public class CashManager extends Manager<Cash> {
 
         // Calculate total amount needed
         double totalAmount = sendToList.stream()
-                .mapToDouble(SendTo::getAmount)
+                .mapToDouble(Cash::getAmount)
                 .sum();
 
         // Get valid cashes that meet the amount requirement
@@ -2172,7 +2154,7 @@ public class CashManager extends Manager<Cash> {
 
         // Broadcast the transaction
         if(apipClient!=null)
-            return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         else if(naSaRpcClient!=null) {
             return naSaRpcClient.sendRawTransaction(signedTx);
         } else{

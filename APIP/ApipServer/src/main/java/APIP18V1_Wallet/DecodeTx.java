@@ -1,7 +1,7 @@
 package APIP18V1_Wallet;
 
 import clients.NaSaClient.NaSaRpcClient;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
@@ -18,7 +18,7 @@ import config.Settings;
 import data.feipData.Service;
 
 
-@WebServlet(name = ApipApiNames.DECODE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.DECODE_TX)
+@WebServlet(name = ApipApiNames.DECODE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.DECODE_TX +"/"+ ApipApiNames.VER_1)
 public class DecodeTx extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -26,7 +26,7 @@ public class DecodeTx extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

@@ -1,6 +1,7 @@
 package data.fcData;
 
-import data.fchData.Cid;
+import data.fchData.Freer;
+import data.feipData.Contact;
 import data.feipData.Group;
 import data.feipData.Team;
 import org.jetbrains.annotations.NotNull;
@@ -21,17 +22,17 @@ public class TalkIdInfo extends FcObject {
         return talkIdInfo;
     }
 
-    public static TalkIdInfo fromContact(ContactDetail contactDetail) {
+    public static TalkIdInfo fromContact(Contact contact) {
         TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(contactDetail.getFid());
-        talkIdInfo.setStdName(contactDetail.getCid());
+        talkIdInfo.setId(contact.getFid());
+        talkIdInfo.setStdName(contact.getCid());
         String showName;
-        String titleStr = contactDetail.getTitles()==null ? "":"("+contactDetail.getTitles()+")";
-        if(contactDetail.getCid()==null)showName= StringUtils.omitMiddle(contactDetail.getFid(),13)+titleStr;
-        else showName = contactDetail.getCid()+titleStr;
+        String titleStr = contact.getTitles()==null ? "":"("+ contact.getTitles()+")";
+        if(contact.getCid()==null)showName= StringUtils.omitMiddle(contact.getFid(),13)+titleStr;
+        else showName = contact.getCid()+titleStr;
         talkIdInfo.setShowName(showName);
         talkIdInfo.setIdType(TalkUnit.IdType.FID);
-        talkIdInfo.setPubkey(contactDetail.getPubkey());
+        talkIdInfo.setPubkey(contact.getPubkey());
         return talkIdInfo;
     }
 
@@ -122,7 +123,7 @@ public class TalkIdInfo extends FcObject {
         return talkIdInfo;
     }
 
-    public static TalkIdInfo fromCidInfo(Cid cid) {
+    public static TalkIdInfo fromCidInfo(Freer cid) {
         TalkIdInfo talkIdInfo = new TalkIdInfo();
         talkIdInfo.setId(cid.getId());
         talkIdInfo.setIdType(TalkUnit.IdType.FID);

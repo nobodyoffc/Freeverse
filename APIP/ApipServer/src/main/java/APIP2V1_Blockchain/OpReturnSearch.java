@@ -1,7 +1,7 @@
 package APIP2V1_Blockchain;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.fchData.OpReturn;
 import initial.Initiator;
@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import config.Settings;
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApipApiNames.OP_RETURN_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OP_RETURN_SEARCH)
+@WebServlet(name = ApipApiNames.OP_RETURN_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.OP_RETURN_SEARCH +"/"+ ApipApiNames.VER_1)
 public class OpReturnSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -29,7 +29,7 @@ public class OpReturnSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType);
     }

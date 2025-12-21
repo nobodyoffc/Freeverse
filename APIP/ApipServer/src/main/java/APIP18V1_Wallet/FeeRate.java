@@ -1,9 +1,9 @@
 package APIP18V1_Wallet;
 
 
+import constants.ApipApiNames;
 import handlers.CashManager;
 import handlers.Manager;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.NumberUtils;
@@ -17,12 +17,12 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import config.Settings;
 
-@WebServlet(name = ApipApiNames.FEE_RATE, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.FEE_RATE)
+@WebServlet(name = ApipApiNames.FEE_RATE, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.FEE_RATE +"/"+ ApipApiNames.VER_1)
 public class FeeRate extends HttpServlet {
     private final Settings settings = Initiator.settings;
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

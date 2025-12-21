@@ -1,7 +1,7 @@
 package handlers;
 
 import config.Configure;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import config.Settings;
 import data.fcData.TalkIdInfo;
 import data.feipData.Group;
@@ -84,7 +84,7 @@ public class TalkIdManager extends Manager<TalkIdInfo> {
         return tempName.toString();
     }
 
-    public TalkIdInfo fromCid(Cid cid) {
+    public TalkIdInfo fromCid(Freer cid) {
         String id = cid.getId();
         TalkIdInfo cached = talkIdInfoCache.get(id);
         if (cached != null) {

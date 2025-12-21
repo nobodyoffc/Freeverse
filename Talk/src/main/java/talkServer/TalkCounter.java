@@ -8,7 +8,7 @@ public class TalkCounter extends Counter {
 
 
     public TalkCounter(Settings settings, byte[] counterPriKey, Params params) {
-        super(settings, counterPriKey, params);
+        super(settings, counterPriKey, null,params);
     }
 
     @Override

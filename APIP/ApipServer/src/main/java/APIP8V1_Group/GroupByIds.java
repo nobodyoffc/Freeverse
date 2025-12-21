@@ -1,7 +1,7 @@
 package APIP8V1_Group;
 
 import config.Settings;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
 import data.feipData.Group;
@@ -19,7 +19,7 @@ import java.util.Map;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.GROUP_BY_IDS, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GROUP_BY_IDS)
+@WebServlet(name = ApipApiNames.GROUP_BY_IDS, value = "/"+ ApipApiNames.SN_8+"/"+ ApipApiNames.GROUP_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class GroupByIds extends HttpServlet {
     private final Settings settings;
 
@@ -28,7 +28,7 @@ public class GroupByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doGroupIdsRequest( FieldNames.ID, request,response,authType, settings);
     }
     @Override
@@ -40,7 +40,7 @@ public class GroupByIds extends HttpServlet {
     public static void doGroupIdsRequest(String keyFieldName, HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
         FcHttpRequestHandler fcHttpRequestHandler = FcHttpRequestHandler.checkRequest(request, response, authType, settings);
         if (fcHttpRequestHandler == null) return;
-        Map<String, Group> meetMap = fcHttpRequestHandler.doRequestForMap(IndicesNames.GROUP, Group.class, keyFieldName);
+        Map<String, Group> meetMap = fcHttpRequestHandler.doRequestForMap(IndicesNames.GROUP, Group.class, keyFieldName,response);
         if (meetMap == null) return;
 
         for(Group group :meetMap.values()){

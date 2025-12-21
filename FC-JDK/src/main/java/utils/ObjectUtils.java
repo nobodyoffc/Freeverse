@@ -3,7 +3,7 @@ package utils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import data.fcData.ReplyBody;
-import data.fchData.Cid;
+import data.fchData.Freer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -19,16 +19,16 @@ public class ObjectUtils {
     public static void main(String[] args) {
         ReplyBody replyBody = new ReplyBody();
 
-        Cid cid = new Cid();
+        Freer cid = new Freer();
         cid.setCid("liu");
         cid.setHot(13424L);
-        Map<String,Cid> map = new HashMap<>();
+        Map<String, Freer> map = new HashMap<>();
         map.put(cid.getCid(),cid);
         replyBody.setData(map);
         Gson gson = new Gson();
         String json = gson.toJson(replyBody);
         Object data = gson.fromJson(json, ReplyBody.class).getData();
-        Map<String, Cid> newMap = objectToMap(data, String.class, Cid.class);
+        Map<String, Freer> newMap = objectToMap(data, String.class, Freer.class);
         JsonUtils.printJson(newMap);
     }
 

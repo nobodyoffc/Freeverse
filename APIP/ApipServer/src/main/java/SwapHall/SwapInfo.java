@@ -7,7 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import com.google.gson.Gson;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.Strings;
 import data.apipData.Sort;
@@ -21,7 +21,6 @@ import org.jetbrains.annotations.Nullable;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import utils.EsUtils;
-import utils.FchUtils;
 import utils.NumberUtils;
 
 import javax.servlet.ServletException;
@@ -30,7 +29,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.*;
 
 import static constants.FieldNames.LAST;
@@ -39,7 +37,7 @@ import static constants.IndicesNames.SERVICE;
 import static constants.IndicesNames.SWAP_STATE;
 import static constants.Values.ASC;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapInfo)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapInfo)
 public class SwapInfo extends HttpServlet {
     private final Settings settings = Initiator.settings;
     

@@ -1,7 +1,8 @@
 package endpoint;
 
 import clients.NaSaClient.NaSaRpcClient;
-import server.ApipApiNames;
+import constants.ApipApiNames;
+import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -24,7 +25,7 @@ public class TotalSupply extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -33,8 +34,10 @@ public class TotalSupply extends HttpServlet {
 
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
         httpRequestChecker.checkRequestHttp(request, response, authType);
+        ReplyBody replier = httpRequestChecker.getReplyBody();
+
         FchChainInfo freecashInfo = new FchChainInfo();
         freecashInfo.infoBest(naSaRpcClient);
-        response.getWriter().write(freecashInfo.getTotalSupply());
+        replier.replyHttp(freecashInfo.getTotalSupply(),response);
     }
 }

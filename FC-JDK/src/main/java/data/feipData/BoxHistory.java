@@ -2,6 +2,8 @@ package data.feipData;
 
 import data.fcData.FcObject;
 
+import java.util.List;
+
 public class BoxHistory extends FcObject {
 	
 	private Long height;
@@ -10,6 +12,7 @@ public class BoxHistory extends FcObject {
 	private String signer;
 
 	private String bid;
+	private List<String> bids;
 	private String op;
 	private String name;
 	private String desc;
@@ -103,5 +106,13 @@ public class BoxHistory extends FcObject {
 
 	public void setContain(Object contain) {
 		this.contain = contain;
+	}
+
+	public List<String> getBids() {
+		return bids;
+	}
+
+	public void setBids(List<String> bids) {
+		this.bids = bids;
 	}
 }

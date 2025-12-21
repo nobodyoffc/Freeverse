@@ -1,5 +1,8 @@
 package data.fcData;
 
+import core.crypto.Hash;
+import utils.Hex;
+
 import java.util.List;
 
 public class Hat extends FcObject {
@@ -27,13 +30,7 @@ public class Hat extends FcObject {
 
     //crypto
     private String rawDid;
-    private String cAlg;
-    private String pubkeyA;
-    private String pubkeyB;
-    private String iv;
-    private String sum;
     private String kCipher;
-    private String kName;
     private Boolean Leaked;
 
     //manage
@@ -53,6 +50,12 @@ public class Hat extends FcObject {
         public final byte number;
         DataState(byte number){
             this.number = number;
+        }
+    }
+    public void checkIdWithCreate() {
+        if(id == null){
+            byte[] idBytes = Hash.sha256x2(this.toBytes());
+            id = Hex.toHex(idBytes);
         }
     }
     public String gethAlg() {
@@ -159,22 +162,6 @@ public class Hat extends FcObject {
         this.offset = offset;
     }
 
-    public String getcAlg() {
-        return cAlg;
-    }
-
-    public void setcAlg(String cAlg) {
-        this.cAlg = cAlg;
-    }
-
-    public String getPubkeyA() {
-        return pubkeyA;
-    }
-
-    public void setPubkeyA(String pKey) {
-        this.pubkeyA = pKey;
-    }
-
     public String getkCipher() {
         return kCipher;
     }
@@ -215,14 +202,6 @@ public class Hat extends FcObject {
         this.last = last;
     }
 
-    public String getkName() {
-        return kName;
-    }
-
-    public void setkName(String kName) {
-        this.kName = kName;
-    }
-
     public Boolean getLeaked() {
         return Leaked;
     }
@@ -239,27 +218,4 @@ public class Hat extends FcObject {
         this.rawDid = rawDid;
     }
 
-    public String getPubkeyB() {
-        return pubkeyB;
-    }
-
-    public void setPubkeyB(String pubkeyB) {
-        this.pubkeyB = pubkeyB;
-    }
-
-    public String getIv() {
-        return iv;
-    }
-
-    public void setIv(String iv) {
-        this.iv = iv;
-    }
-
-    public String getSum() {
-        return sum;
-    }
-
-    public void setSum(String sum) {
-        this.sum = sum;
-    }
 }

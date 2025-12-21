@@ -19,7 +19,10 @@ import static constants.Values.DESC;
 
 public class Fcdsl {
     private static final Logger log = LoggerFactory.getLogger(Fcdsl.class);
+    private String ver;
+    private String entity;
     private String index;
+    private String endpoint;  // For special API endpoints (e.g., "totals") that are not entity/index queries
     private List<String> ids;
     private FcQuery query;
     private Filter filter;
@@ -27,6 +30,8 @@ public class Fcdsl {
     private String size;
     private List<Sort> sort;
     private List<String> after;
+    private List<String> fields;
+    private List<String> noFields;
     private Map<String,String> other;
 
     public static final String MATCH_ALL = "matchAll";
@@ -37,8 +42,10 @@ public class Fcdsl {
     public static final String SIZE = "size";
     public static final String SORT = "sort";
     public static final String AFTER = "after";
+    public static final String FIELDS = "fields";
+    public static final String NO_FIELDS = "noFields";
     public static final String OTHER = "other";
-    public static final String[] FCDSL_FIELDS = new String[]{MATCH_ALL, IDS, QUERY, FILTER, EXCEPT, SIZE, SORT, AFTER, OTHER};
+    public static final String[] FCDSL_FIELDS = new String[]{MATCH_ALL, IDS, QUERY, FILTER, EXCEPT, SIZE, SORT, AFTER, FIELDS, NO_FIELDS, OTHER};
     /*
    Fcdsl to GET url parameters:
 
@@ -53,6 +60,8 @@ public class Fcdsl {
    sort = field1,order1,field2,order2
    size = <int in String>
    after = <List<String>>
+   fields = field1,field2,...
+   noFields = field1,field2,...
    other = String
 
    Filter and Except is forbidden.
@@ -181,6 +190,8 @@ public class Fcdsl {
                 }
                 case SIZE-> fcdsl.addSize(Integer.parseInt(valueStr));
                 case AFTER-> fcdsl.addAfter(List.of(valueStr.split(",")));
+                case FIELDS-> fcdsl.setFields(List.of(valueStr.split(",")));
+                case NO_FIELDS-> fcdsl.setNoFields(List.of(valueStr.split(",")));
 //                case OTHER-> fcdsl.addOther(valueStr);
                 default -> otherMap.put(method,valueStr);
             }
@@ -310,14 +321,26 @@ public class Fcdsl {
             started=true;
         }
 
-        if(fcdsl.getSize()!=null){
+        if(fcdsl.getSize()!=null && !fcdsl.getSize().isEmpty()){
             if(started)stringBuilder.append("&");
             stringBuilder.append(SIZE + "=").append(fcdsl.getSize());
             started=true;
         }
-        if(fcdsl.getAfter()!=null){
+        if(fcdsl.getAfter()!=null && !fcdsl.getAfter().isEmpty()){
             if(started)stringBuilder.append("&");
             stringBuilder.append(AFTER + "=").append(StringUtils.listToString(fcdsl.getAfter()));
+            started=true;
+        }
+
+        if(fcdsl.getFields()!=null && !fcdsl.getFields().isEmpty()){
+            if(started)stringBuilder.append("&");
+            stringBuilder.append(FIELDS + "=").append(StringUtils.listToString(fcdsl.getFields()));
+            started=true;
+        }
+
+        if(fcdsl.getNoFields()!=null && !fcdsl.getNoFields().isEmpty()){
+            if(started)stringBuilder.append("&");
+            stringBuilder.append(NO_FIELDS + "=").append(StringUtils.listToString(fcdsl.getNoFields()));
             started=true;
         }
 
@@ -576,6 +599,33 @@ public class Fcdsl {
     }
 
 
+    public Fcdsl addFields(List<String> values) {
+        this.fields = new ArrayList<>();
+        this.fields.addAll(values);
+        return this;
+    }
+
+    public Fcdsl addFields(String value) {
+        if(this.fields==null)
+            this.fields = new ArrayList<>();
+        this.fields.add(value);
+        return this;
+    }
+
+    public Fcdsl addNoFields(List<String> values) {
+        this.noFields = new ArrayList<>();
+        this.noFields.addAll(values);
+        return this;
+    }
+
+    public Fcdsl addNoFields(String value) {
+        if(this.noFields==null)
+            this.noFields = new ArrayList<>();
+        this.noFields.add(value);
+        return this;
+    }
+
+
     public void setQueryTerms(String field, String value) {
         FcQuery fcQuery = new FcQuery();
         Terms terms;
@@ -688,6 +738,22 @@ public class Fcdsl {
         this.except = except;
     }
 
+    public List<String> getFields() {
+        return fields;
+    }
+
+    public void setFields(List<String> fields) {
+        this.fields = fields;
+    }
+
+    public List<String> getNoFields() {
+        return noFields;
+    }
+
+    public void setNoFields(List<String> noFields) {
+        this.noFields = noFields;
+    }
+
     @Test
     public void test() {
         Fcdsl fcdsl = new Fcdsl();
@@ -714,7 +780,9 @@ public class Fcdsl {
                 case 6 -> inputSize(br);
                 case 7 -> inputSort(br);
                 case 8 -> inputAfter(br);
-                case 9 -> inputOther(br);
+                case 9 -> inputFields(br);
+                case 10 -> inputNoFields(br);
+                case 11 -> inputOther(br);
                 case 0 -> {
                     return;
                 }
@@ -781,5 +849,39 @@ public class Fcdsl {
     public void inputExcept(BufferedReader br) {
         except = new Except();
         except.promoteInput(EXCEPT, br);
+    }
+
+    public void inputFields(BufferedReader br) {
+        String[] inputs = Inputer.inputStringArray(br, "Input field names to include in response. Enter to end:", 0);
+        if (inputs.length > 0) fields = List.of(inputs);
+    }
+
+    public void inputNoFields(BufferedReader br) {
+        String[] inputs = Inputer.inputStringArray(br, "Input field names to exclude from response. Enter to end:", 0);
+        if (inputs.length > 0) noFields = List.of(inputs);
+    }
+
+    public String getVer() {
+        return ver;
+    }
+
+    public void setVer(String ver) {
+        this.ver = ver;
+    }
+
+    public String getEntity() {
+        return entity;
+    }
+
+    public void setEntity(String entity) {
+        this.entity = entity;
+    }
+
+    public String getEndpoint() {
+        return endpoint;
+    }
+
+    public void setEndpoint(String endpoint) {
+        this.endpoint = endpoint;
     }
 }

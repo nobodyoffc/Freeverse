@@ -1,6 +1,6 @@
 package APIP2V1_Blockchain;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import config.Settings;
 
-@WebServlet(name = ApipApiNames.TX_BY_FID, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TX_BY_FID)
+@WebServlet(name = ApipApiNames.TX_BY_FID, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.TX_BY_FID +"/"+ ApipApiNames.VER_1)
 public class TxByFid extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -24,7 +24,7 @@ public class TxByFid extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doFidTxMaskRequest(request, response, authType);
     }
 

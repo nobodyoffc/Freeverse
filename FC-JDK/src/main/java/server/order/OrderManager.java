@@ -255,7 +255,7 @@ public class OrderManager {
 
         Params params = (Params) service.getParams();
         Shower.printUnderline(20);
-        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +params.getDealer()+ " to buy the service. The price is " + NumberUtils.numberToPlainString(params.getPricePerKBytes(),"8")+"f/KB.");
+        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +service.getDealer()+ " to buy the service. The price is " + NumberUtils.numberToPlainString(params.getPricePerKB(),"8")+"f/KB.");
         System.out.println("If you want to set the 'via' FID, write below into the OP_RETURN of the TX:");
         Shower.printUnderline(20);
         System.out.println(JsonUtils.toNiceJson(Order.getJsonBuyOrder(sid)));

@@ -1,8 +1,8 @@
 package APIP0V1_OpenAPI;
 
 import config.Settings;
+import constants.ApipApiNames;
 import server.FcHttpRequestHandler;
-import server.ApipApiNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
 import initial.Initiator;
@@ -16,7 +16,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApipApiNames.GET_SERVICE, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_SERVICE)
+@WebServlet(name = ApipApiNames.GET_SERVICE, value = "/"+ ApipApiNames.GET_SERVICE +"/"+ ApipApiNames.VER_1)
 public class GetService extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;
@@ -29,6 +29,7 @@ public class GetService extends HttpServlet {
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
         AuthType authType = AuthType.FREE;
         FcHttpRequestHandler.doGetService(request, response, authType,httpRequestChecker,replier,settings);
     }

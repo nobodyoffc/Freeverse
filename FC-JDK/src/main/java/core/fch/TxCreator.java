@@ -93,11 +93,11 @@ public class TxCreator {
             throw new RuntimeException(errorString); // hack failed
     }
 
-    public static String createTxFch(List<Cash> inputs, byte[] priKey, List<SendTo> outputs, String opReturn, FchMainNetwork mainnetwork) {
+    public static String createTxFch(List<Cash> inputs, byte[] priKey, List<Cash> outputs, String opReturn, FchMainNetwork mainnetwork) {
         return createTxFch(inputs, priKey, outputs, opReturn, 0, mainnetwork);
     }
 
-    public static String createTxFch(List<Cash> inputs, byte[] priKey, List<SendTo> outputs, String opReturn, double feeRateDouble, MainNetParams mainnetwork) {
+    public static String createTxFch(List<Cash> inputs, byte[] priKey, List<Cash> outputs, String opReturn, double feeRateDouble, MainNetParams mainnetwork) {
         String changeToFid = inputs.get(0).getOwner();
         if(outputs==null)outputs = new ArrayList<>();
         long txSize = opReturn == null ? calcTxSize(inputs.size(), outputs.size(), 0) : calcTxSize(inputs.size(), outputs.size(), opReturn.getBytes().length);
@@ -111,10 +111,10 @@ public class TxCreator {
 
         ECKey eckey = ECKey.fromPrivate(priKey);
 
-        for (SendTo output : outputs) {
+        for (Cash output : outputs) {
             long value = utils.FchUtils.coinToSatoshi(output.getAmount());
             totalOutput += value;
-            transaction.addOutput(Coin.valueOf(value), Address.fromBase58(mainnetwork, output.getFid()));
+            transaction.addOutput(Coin.valueOf(value), Address.fromBase58(mainnetwork, output.getOwner()));
         }
 
         if (opReturn != null && !opReturn.isEmpty()) {
@@ -162,7 +162,7 @@ public class TxCreator {
             log.error("The sender is absent.");
             return null;
         }
-        return createUnsignedTx(rawTxInfo.getInputs(), rawTxInfo.getOutputs(), rawTxInfo.getOpReturn(), rawTxInfo.getMultisign(), rawTxInfo.getFeeRate(), null, mainnetwork);
+        return createUnsignedTx(rawTxInfo.getInputs(), rawTxInfo.getOutputs(), rawTxInfo.getOpReturn(), rawTxInfo.getMultisig(), rawTxInfo.getFeeRate(), null, mainnetwork);
     }
 
 //    public static Transaction createUnsignedTx(RawTxInfo rawTxInfo, MainNetParams mainnetwork) {
@@ -176,7 +176,7 @@ public class TxCreator {
 //        return createUnsignedTx(rawTxInfo.getInputs(), rawTxInfo.getOutputs(), rawTxInfo.getOpReturn(), rawTxInfo.getMultisign(), rawTxInfo.getFeeRate(), null, mainnetwork);
 //    }
 
-    public static Transaction createUnsignedTx(List<Cash> inputs, List<SendTo> outputs, String opReturn, Multisign multisignForMultiSign, Double feeRate, String changeToFid, MainNetParams mainnetwork) {
+    public static Transaction createUnsignedTx(List<Cash> inputs, List<Cash> outputs, String opReturn, Multisig multisigForMultiSign, Double feeRate, String changeToFid, MainNetParams mainnetwork) {
         byte[] opReturnBytes= null;
         if(opReturn!=null) opReturnBytes = opReturn.getBytes();
         if(changeToFid==null)
@@ -191,7 +191,7 @@ public class TxCreator {
         int outputSize = outputs ==null ? 0 : outputs.size();
         int opReturnBytesLen = opReturn ==null ? 0 : opReturnBytes.length;
 
-        fee = calcFee(inputSize, outputSize, opReturnBytesLen, feeRate, isMultiSign, multisignForMultiSign);
+        fee = calcFee(inputSize, outputSize, opReturnBytesLen, feeRate, isMultiSign, multisigForMultiSign);
 
         Transaction transaction = new Transaction(mainnetwork);
 
@@ -200,10 +200,10 @@ public class TxCreator {
         long totalMoney = addInputToTx(inputs, mainnetwork, transaction);
 
         if(outputs !=null && outputs.size()>0){
-            for (SendTo output : outputs) {
+            for (Cash output : outputs) {
                 long value = utils.FchUtils.coinToSatoshi(output.getAmount());
                 totalOutput += value;
-                transaction.addOutput(Coin.valueOf(value), Address.fromBase58(mainnetwork, output.getFid()));
+                transaction.addOutput(Coin.valueOf(value), Address.fromBase58(mainnetwork, output.getOwner()));
             }
         }
         long changeOutputFee = 34L * utils.FchUtils.coinToSatoshi(feeRate/ 1000);
@@ -301,11 +301,11 @@ public class TxCreator {
         return Hex.toHex(signResult);
     }
 
-    public static long calcFee(int inputSize, int outputSize, int opReturnBytesLen, double feeRate, boolean isMultiSign, Multisign multisignForMultiSign) {
+    public static long calcFee(int inputSize, int outputSize, int opReturnBytesLen, double feeRate, boolean isMultiSign, Multisig multisigForMultiSign) {
         long fee;
         if(isMultiSign) {
             long feeRateLong = (long) (feeRate / 1000 * COIN_TO_SATOSHI);
-            fee = feeRateLong * TxCreator.calcSizeMultiSign(inputSize, outputSize, opReturnBytesLen, multisignForMultiSign.getM(), multisignForMultiSign.getN());
+            fee = feeRateLong * TxCreator.calcSizeMultiSig(inputSize, outputSize, opReturnBytesLen, multisigForMultiSign.getM(), multisigForMultiSign.getN());
         }else {
             long txSize = calcTxSize(inputSize, outputSize, opReturnBytesLen);
             fee =calcFee(txSize, feeRate);
@@ -335,9 +335,9 @@ public class TxCreator {
      */
     public static Transaction parseOffLineTx(RawTxInfo rawTxInfo, MainNetParams mainnetwork) {
         List<Cash> cashList = rawTxInfo.getInputs();
-        List<SendTo> sendToList = rawTxInfo.getOutputs();
+        List<Cash> sendToList = rawTxInfo.getOutputs();
         String msg = rawTxInfo.getOpReturn();
-        return createUnsignedTx(cashList, sendToList, msg, rawTxInfo.getMultisign(), rawTxInfo.getFeeRate(), null, mainnetwork);
+        return createUnsignedTx(cashList, sendToList, msg, rawTxInfo.getMultisig(), rawTxInfo.getFeeRate(), null, mainnetwork);
     }
 //
 //    public static class OffLineTxInfo {
@@ -518,9 +518,9 @@ public class TxCreator {
         }
         int j = 0;
         if (sendRequestForCs.getOutputs() != null) {
-            for (SendTo sendTo : sendRequestForCs.getOutputs()) {
+            for (Cash sendTo : sendRequestForCs.getOutputs()) {
                 RawTxForCsV1 rawTxForCsV1 = new RawTxForCsV1();
-                rawTxForCsV1.setAddress(sendTo.getFid());
+                rawTxForCsV1.setAddress(sendTo.getOwner());
                 rawTxForCsV1.setAmount(sendTo.getAmount());
                 rawTxForCsV1.setSeq(j);
                 rawTxForCsV1.setDealType(RawTxForCsV1.DealType.OUTPUT);
@@ -544,7 +544,7 @@ public class TxCreator {
 
     public static Transaction parseOldCsRawTxToTx(String oldCsUnsignedTx, MainNetParams mainnetwork) {
         List<Cash> cashList = new ArrayList<>();
-        List<SendTo> sendToList = new ArrayList<>();
+        List<Cash> sendToList = new ArrayList<>();
         String msg = null;
 
         // Parse the JSON array
@@ -565,8 +565,8 @@ public class TxCreator {
                     break;
 
                 case 2: // SendTo entries
-                    SendTo sendTo = new SendTo();
-                    sendTo.setFid(element.getAddress());
+                    Cash sendTo = new Cash();
+                    sendTo.setOwner(element.getAddress());
                     sendTo.setAmount(element.getAmount());
                     sendToList.add(sendTo);
                     break;
@@ -585,15 +585,15 @@ public class TxCreator {
     }
 
 // Sign TX
-    public static String signSchnorrMultiSignTx(String multiSignDataJson, byte[] priKey, MainNetParams mainNetParams) {
+    public static String signSchnorrMultiSigTx(String multiSignDataJson, byte[] priKey, MainNetParams mainNetParams) {
         RawTxInfo  multiSignData = RawTxInfo .fromJson(multiSignDataJson,RawTxInfo.class);
-        return signSchnorrMultiSignTx(multiSignData, priKey, mainNetParams).toJson();
+        return signSchnorrMultiSigTx(multiSignData, priKey, mainNetParams).toJson();
     }
 
-    public static RawTxInfo  signSchnorrMultiSignTx(RawTxInfo multiSignData, byte[] priKey, MainNetParams mainnetwork) {
+    public static RawTxInfo signSchnorrMultiSigTx(RawTxInfo multiSignData, byte[] priKey, MainNetParams mainnetwork) {
 
         byte[] rawTx = multiSignData.getRawTx();
-        byte[] redeemScript = HexFormat.of().parseHex(multiSignData.getMultisign().getRedeemScript());
+        byte[] redeemScript = HexFormat.of().parseHex(multiSignData.getMultisig().getRedeemScript());
         List<Cash> cashList = multiSignData.getInputs();
 
         Transaction transaction = new Transaction(mainnetwork, rawTx);
@@ -625,17 +625,17 @@ public class TxCreator {
         return SchnorrSignature.schnorr_verify(hash.getBytes(), pubKey, sig);
     }
 
-    public static String buildSchnorrMultiSignTx(byte[] rawTx, Map<String, List<byte[]>> sigListMap, Multisign multisign, MainNetParams mainnetwork) {
+    public static String buildSchnorrMultiSigTx(byte[] rawTx, Map<String, List<byte[]>> sigListMap, Multisig multisig, MainNetParams mainnetwork) {
         if(sigListMap==null || sigListMap.isEmpty())return null;
 
-        if (sigListMap.size() > multisign.getM())
-            sigListMap = dropRedundantSigs(sigListMap, multisign.getM());
+        if (sigListMap.size() > multisig.getM())
+            sigListMap = dropRedundantSigs(sigListMap, multisig.getM());
 
         Transaction transaction = new Transaction(mainnetwork, rawTx);
 
         for (int i = 0; i < transaction.getInputs().size(); i++) {
             List<byte[]> sigListByTx = new ArrayList<>();
-            for (String fid : multisign.getFids()) {
+            for (String fid : multisig.getFids()) {
                 try {
                     byte[] sig = sigListMap.get(fid).get(i);
                     sigListByTx.add(sig);
@@ -643,7 +643,7 @@ public class TxCreator {
                 }
             }
 
-            Script inputScript = createSchnorrMultiSigInputScriptBytes(sigListByTx, HexFormat.of().parseHex(multisign.getRedeemScript())); // Include all required signatures
+            Script inputScript = createSchnorrMultiSigInputScriptBytes(sigListByTx, HexFormat.of().parseHex(multisig.getRedeemScript())); // Include all required signatures
 //            System.out.println(HexFormat.of().formatHex(inputScript.getProgram()));
             TransactionInput input = transaction.getInput(i);
             input.setScriptSig(inputScript);
@@ -683,7 +683,7 @@ public class TxCreator {
         return builder.build();
     }
 
-    public static String createTimeLockedTransaction(List<Cash> inputs, byte[] priKey, List<SendTo> outputs, long lockUntil, String opReturn, MainNetParams mainnetwork) {
+    public static String createTimeLockedTransaction(List<Cash> inputs, byte[] priKey, List<Cash> outputs, long lockUntil, String opReturn, MainNetParams mainnetwork) {
 
         String changeToFid = inputs.get(0).getOwner();
 
@@ -700,9 +700,9 @@ public class TxCreator {
 
         ECKey eckey = ECKey.fromPrivate(priKey);
 
-        for (SendTo output : outputs) {
+        for (Cash output : outputs) {
             long value = utils.FchUtils.coinToSatoshi(output.getAmount());
-            byte[] pubKeyHash = KeyTools.addrToHash160(output.getFid());
+            byte[] pubKeyHash = KeyTools.addrToHash160(output.getOwner());
             totalOutput += value;
 
             ScriptBuilder builder = new ScriptBuilder();
@@ -762,7 +762,7 @@ public class TxCreator {
     }
 
     //Tools
-    public static Multisign createMultisign(List<byte[]> pubKeyList, int m) {
+    public static Multisig createMultisig(List<byte[]> pubKeyList, int m) {
         List<ECKey> keys = new ArrayList<>();
         for (byte[] bytes : pubKeyList) {
             ECKey ecKey = ECKey.fromPublicOnly(bytes);
@@ -773,14 +773,14 @@ public class TxCreator {
 
         byte[] redeemScriptBytes = multiSigScript.getProgram();
 
-        Multisign multisign;
+        Multisig multisig;
         try {
-            multisign = Multisign.parseMultisignRedeemScript(HexFormat.of().formatHex(redeemScriptBytes));
+            multisig = Multisig.parseMultisigRedeemScript(HexFormat.of().formatHex(redeemScriptBytes));
         } catch (Exception e) {
             e.printStackTrace();
             return null;
         }
-        return multisign;
+        return multisig;
     }
 
     public static long calcTxSize(int inputNum, int outputNum, int opReturnBytesLen) {
@@ -932,7 +932,7 @@ public class TxCreator {
             return "nonstandard";
     }
 
-    public static long calcSizeMultiSign(int inputNum, int outputNum, int opReturnBytesLen, int m, int n) {
+    public static long calcSizeMultiSig(int inputNum, int outputNum, int opReturnBytesLen, int m, int n) {
 
         /*多签单个Input长度：
             基础字节40（preTxId 32，preIndex 4，sequence 4），
@@ -1000,7 +1000,7 @@ public class TxCreator {
     public static String buildSignedTx(String[] signedData, MainNetParams mainnetwork) {
         Map<String, List<String>> fidSigListMap = new HashMap<>();
         byte[] rawTx = null;
-        Multisign multisign = null;
+        Multisig multisig = null;
 
         for (String dataJson : signedData) {
             try {
@@ -1008,9 +1008,9 @@ public class TxCreator {
 
                 RawTxInfo multiSignData = RawTxInfo.fromJson(dataJson,RawTxInfo.class);
 
-                if (multisign == null
-                        && multiSignData.getMultisign() != null) {
-                    multisign = multiSignData.getMultisign();
+                if (multisig == null
+                        && multiSignData.getMultisig() != null) {
+                    multisig = multiSignData.getMultisig();
                 }
 
                 if (rawTx == null
@@ -1024,11 +1024,11 @@ public class TxCreator {
             } catch (Exception ignored) {
             }
         }
-        if (rawTx == null || multisign == null) return null;
+        if (rawTx == null || multisig == null) return null;
 
         Map<String, List<byte[]>> sigBytesListMap = getStringListMap(fidSigListMap);
 
-        return buildSchnorrMultiSignTx(rawTx, sigBytesListMap, multisign, mainnetwork);
+        return buildSchnorrMultiSigTx(rawTx, sigBytesListMap, multisig, mainnetwork);
     }
 
     @NotNull
@@ -1079,7 +1079,7 @@ public class TxCreator {
     @Test
     public void test(){
         int opReturnBytesLen = "hi".getBytes().length;
-        System.out.println(calcSizeMultiSign(1,1, opReturnBytesLen,2,3));
+        System.out.println(calcSizeMultiSig(1,1, opReturnBytesLen,2,3));
         String txHex= "020000000185231da3cc3a00496258f633d7e48442e51ffa51c9b0efe92d80a84eb61b43c103000000f0004151e694db47016366908a43f9900a00ab537e5fba8da4892e1db3ba4f00b893792d920c13d7fc3dafa88ec6bbc3027cfb308ef2264f470fdb819e90d16d956fec4141447743a23a589ecef0e30d05dc2957c8213127e66efeb6738142df035e5d1f21d2ed933a9e7eb00bef22af016b248ee34b9877f52bf0fcfd98714d4ecf4b218f414c695221030be1d7e633feb2338a74a860e76d893bac525f35a5813cb7b21e27ba1bc8312a2102536e4f3a6871831fa91089a5d5a950b96a31c861956f01459c0cd4f4374b2f672103f0145ddf5debc7169952b17b5c6a8a566b38742b6aa7b33b667c0a7fa73762e253aeffffffff03809698000000000017a914d86ffd4d1ade6ca5f19e8205bb4ddb0a05c92a72870000000000000000046a026869fe457f0f0000000017a914d86ffd4d1ade6ca5f19e8205bb4ddb0a05c92a728700000000";
         System.out.println(txHex.length()/2);
     }

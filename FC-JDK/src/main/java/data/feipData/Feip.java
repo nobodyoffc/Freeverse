@@ -23,7 +23,7 @@ public class Feip {
 		this.name = name;
 	}
 
-	public static enum ProtocolName {
+	public enum FeipProtocol {
 		PROTOCOL("1","7", "Protocol"),
 		CODE("2","1", "Code"),
 		CID("3","4", "CID"),
@@ -44,18 +44,17 @@ public class Feip {
 		TEAM("18","1", "Team"),
 		GROUP("19","3", "Group"),
 		TOKEN("20","1", "Token"),
-		ESSAY("21","1", "Essay"),
-		REPORT("22","1", "Report"),
-		PAPER("23","1", "Paper"),
-		BOOK("24","1", "Book"),
-		REMARK("25","1", "Remark"),
-		ARTWORK("26","1", "Artwork");
+		TEXT("21","1", "Text"),
+		REMARK("22","1", "Remark"),
+		SOUND("23","1", "Sound"),
+		IMAGE("24","1", "Image"),
+		VIDEO("25","1", "Video");
 
 		private final String sn;
 		private final String ver;
 		private final String name;
 
-		ProtocolName(String sn, String ver, String name) {
+		FeipProtocol(String sn, String ver, String name) {
 			this.sn = sn;
 			this.ver = ver;
 			this.name = name;
@@ -76,28 +75,52 @@ public class Feip {
 		public String getName() {
 			return name;
 		}
+
+		public static FeipProtocol fromName(String name) {
+			if (name == null) {
+				throw new IllegalArgumentException("Protocol name cannot be null");
+			}
+			for (FeipProtocol protocol : FeipProtocol.values()) {
+				if (protocol.getName().equalsIgnoreCase(name)) {
+					return protocol;
+				}
+			}
+			throw new IllegalArgumentException("No protocol found with name: " + name);
+		}
+
+		public static FeipProtocol fromSn(String sn) {
+			if (sn == null) {
+				return null;
+			}
+			for (FeipProtocol protocol : FeipProtocol.values()) {
+				if (protocol.getSn().equalsIgnoreCase(sn)) {
+					return protocol;
+				}
+			}
+			return null;
+		}
 	}
 
 	public static void main(String[] args) {
-		Feip feip = Feip.fromProtocolName(ProtocolName.APP);
+		Feip feip = Feip.fromProtocolName(FeipProtocol.APP);
 		System.out.println(feip.toJson());
 
 		Feip feip2 = Feip.fromName("APP");
 		System.out.println(feip2.toJson());
 
-		Feip feip3 = Feip.fromProtocolName(ProtocolName.TEAM);
+		Feip feip3 = Feip.fromProtocolName(FeipProtocol.TEAM);
 		System.out.println(feip3.toJson());
 
 		Feip feip4 = Feip.fromName("team");
 		System.out.println(feip4.toJson());
 	}
 
-	public static Feip fromProtocolName(ProtocolName protocolName) {
+	public static Feip fromProtocolName(FeipProtocol protocolName) {
 		return new Feip(protocolName.getSn(), protocolName.getVer(), protocolName.getName());
 	}
 
 	public static Feip fromName(String name) {
-		ProtocolName protocolName = ProtocolName.valueOf(name.toUpperCase());
+		FeipProtocol protocolName = FeipProtocol.valueOf(name.toUpperCase());
 		return new Feip(protocolName.getSn(), protocolName.getVer(), protocolName.getName());
 	}
 

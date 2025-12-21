@@ -1,12 +1,13 @@
 package server.order;
 
+import data.feipData.Service;
+import server.ApipApi;
 import ui.Shower;
 import constants.FieldNames;
 import data.feipData.serviceParams.Params;
 import ui.Inputer;
 import clients.ApipClient;
 import config.ApiAccount;
-import server.ApipApiNames;
 import constants.Strings;
 import utils.Hex;
 import utils.JsonUtils;
@@ -24,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 import static ui.Inputer.askIfYes;
-import static server.ApipApiNames.NEW_ORDER;
+import static server.ApipApi.NEW_ORDER;
 import static constants.Strings.*;
 
 public class Order {
@@ -59,11 +60,11 @@ public class Order {
         return orderOpReturn;
     }
 
-    public static boolean checkWebhook(String hookMethod, Params params, ApiAccount apipAccount, BufferedReader br, JedisPool jedisPool) {
+    public static boolean checkWebhook(String hookMethod, Service service, Params params, ApiAccount apipAccount, BufferedReader br, JedisPool jedisPool) {
         System.out.println("Check webhook...");
         String urlHead = params.getUrlHead();
         if(!urlHead.endsWith("/"))urlHead=urlHead+"/";
-        String endpoint = urlHead+ ApipApiNames.VERSION_1 +"/"+ NEW_ORDER;
+        String endpoint = urlHead+ ApipApi.VER_1 +"/"+ NEW_ORDER;
         ApipClient apipClient = (ApipClient) apipAccount.getClient();
 
         Map<String, String> dataMap = apipClient.checkSubscription(hookMethod, endpoint);
@@ -82,7 +83,7 @@ public class Order {
             }
         }
         List<String> fidList = new ArrayList<>();
-        fidList.add(params.getDealer());
+        fidList.add(service.getDealer());
         Map<String,Object> map = new HashMap<>();
         map.put(FieldNames.IDS,fidList);
         String hookUserId = apipClient.subscribeWebhook(hookMethod, map, endpoint);

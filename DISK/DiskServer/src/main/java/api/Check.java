@@ -1,9 +1,12 @@
 package api;
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch.core.GetResponse;
 import config.Settings;
+import data.fcData.DiskItem;
+import data.feipData.Service;
 import handlers.DiskManager;
 import handlers.Manager;
-import server.ApipApiNames;
 import initial.Initiator;
 import server.DiskApiNames;
 import utils.Hex;
@@ -18,8 +21,9 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 import static constants.FieldNames.DID;
+import static constants.Strings.DATA;
 
-@WebServlet(name = DiskApiNames.CHECK, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.CHECK)
+@WebServlet(name = DiskApiNames.CHECK, value = "/"+ DiskApiNames.CHECK+"/"+ DiskApiNames.VER_1 )
 public class Check extends HttpServlet {
 
     private final Settings settings = Initiator.settings;
@@ -61,6 +65,18 @@ public class Check extends HttpServlet {
         }
         DiskManager diskManager = (DiskManager) settings.getManager(Manager.ManagerType.DISK);
         Boolean isFileExists = Boolean.TRUE.equals(diskManager.checkFileOfDisk( did));
-        replier.reply0SuccessHttp(isFileExists,response);
+        if(isFileExists){
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            try {
+                GetResponse<DiskItem> result = esClient.get(g -> g.index(Settings.addSidBriefToName(settings.getSid(), DATA)).id(did), DiskItem.class);
+                if(result!=null && result.source()!=null)
+                    replier.reply0SuccessHttp(result.source(),response);
+                return;
+            } catch (IOException e) {
+                replier.replyOtherErrorHttp("Data exists. But failed to get data info.", did, response);
+                return;
+            }
+        }
+        replier.replyOtherErrorHttp("Data exists. But failed to get data info.", did, response);
     }
 }

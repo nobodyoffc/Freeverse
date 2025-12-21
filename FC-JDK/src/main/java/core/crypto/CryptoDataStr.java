@@ -34,7 +34,7 @@ public class CryptoDataStr {
     private String keyName;
     private transient char[] password;
     private String pubkeyA;
-    private transient String pubkeyB;
+    private String pubkeyB;
     private transient char[] prikeyA;
     private transient char[] prikeyB;
     private String iv;

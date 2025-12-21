@@ -33,6 +33,7 @@ import static constants.Constants.UserHome;
 public class StartFCH {
 
     private static final Logger log = LoggerFactory.getLogger(StartFCH.class);
+    public static final String COINBASE = "Coinbase";
 
     public static Map<String,Object> settingMap = new HashMap<>();
 

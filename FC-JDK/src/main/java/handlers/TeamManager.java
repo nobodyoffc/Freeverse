@@ -1,6 +1,7 @@
 package handlers;
 
 import data.apipData.Fcdsl;
+import data.fchData.Cash;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -11,7 +12,6 @@ import constants.FieldNames;
 import constants.Values;
 import core.crypto.Decryptor;
 import db.LocalDB;
-import data.fchData.SendTo;
 import data.feipData.Service;
 import data.feipData.Team;
 import data.feipData.TeamOpData;
@@ -101,20 +101,20 @@ public class TeamManager extends Manager<Team> {
     }
 
     // 5. Team Operation Methods
-    public String createTeam(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String createTeam(byte[] priKey, String offLineFid, List<Cash> sendToList,
             String stdName, String consensusId, String[] localNames, String[] waiters, 
             String[] accounts, String desc, ApipClient apipClient, NaSaRpcClient nasaClient) {
         TeamOpData data = TeamOpData.makeCreate(stdName, consensusId, localNames, waiters, accounts, desc);
         return FeipClient.team(priKey, offLineFid, sendToList,  data, apipClient, nasaClient, br);
     }
 
-    public String joinTeam(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String joinTeam(byte[] priKey, String offLineFid, List<Cash> sendToList,
             String tid, String consensusId, ApipClient apipClient, NaSaRpcClient nasaClient) {
         TeamOpData data = TeamOpData.makeJoin(tid, consensusId);
         return FeipClient.team(priKey, offLineFid, sendToList,  data, apipClient, nasaClient, br);
     }
 
-    public String leaveTeams(byte[] priKey, String offLineFid, List<SendTo> sendToList,
+    public String leaveTeams(byte[] priKey, String offLineFid, List<Cash> sendToList,
             List<String> tids, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br) {
         TeamOpData data = TeamOpData.makeLeave(tids);
         return FeipClient.team(priKey, offLineFid, sendToList,  data, apipClient, nasaClient, br);
@@ -358,7 +358,7 @@ public class TeamManager extends Manager<Team> {
                  .addNewPart()
                  .addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, FieldNames.ACCOUNTS, Values.DESC, FieldNames.MEMBERS)
                  .addNewValue(searchTerm);
-        return apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
     }
 
     public List<Team> chooseTeamList(List<Team> teamList, BufferedReader br) {
@@ -412,7 +412,7 @@ public class TeamManager extends Manager<Team> {
     }
 
     public List<String> getTeamMembers(String tid, ApipClient apipClient) {
-        Map<String, String[]> result = apipClient.teamMembers(RequestMethod.POST, AuthType.FC_SIGN_BODY, tid);
+        Map<String, String[]> result = apipClient.teamMembers(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, tid);
         if(result == null || result.isEmpty()) return null;
         return Arrays.asList(result.get(tid));
     }
@@ -433,7 +433,7 @@ public class TeamManager extends Manager<Team> {
         List<Team> resultList;
         List<String> last = new ArrayList<>();
         while(true) {
-            resultList = apipClient.myTeams(myFid, sinceHeight, size, last, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            resultList = apipClient.myTeams(myFid, sinceHeight, size, last, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
             if(resultList == null) return null;
             if(resultList.size() < size) break;
             if(br != null && !Inputer.askIfYes(br, "Get more teams?")) break;
@@ -578,7 +578,7 @@ public class TeamManager extends Manager<Team> {
         }
 
         // If not found locally, fetch from API
-        Map<String, Team> result = apipClient.teamByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, tid);
+        Map<String, Team> result = apipClient.teamByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, tid);
         if (result == null || result.isEmpty()) return null;
         
         // Cache the result before returning

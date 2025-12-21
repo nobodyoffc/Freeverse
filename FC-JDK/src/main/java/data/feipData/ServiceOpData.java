@@ -1,5 +1,6 @@
 package data.feipData;
 
+import core.crypto.KeyTools;
 import ui.Inputer;
 import clients.ApipClient;
 import constants.FieldNames;
@@ -14,12 +15,14 @@ import java.util.List;
 
 public class ServiceOpData {
 	private String sid;
-	private List<String> sids;
+	private String[] sids;
 	private String op;
 	private String stdName;
 	private String[] localNames;
 	private String desc;
 	private String ver;
+	protected String dealer;
+	protected String dealerPubkey;
 	private String[] types;
 	private String[] urls;
 	private String[] waiters;
@@ -65,8 +68,8 @@ public class ServiceOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.VER, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.SID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.VER, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.VER, FieldNames.DEALER,FieldNames.DEALER_PUBKEY,FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.SID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.VER,FieldNames.DEALER,FieldNames.DEALER_PUBKEY, FieldNames.URLS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES, FieldNames.PARAMS});
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.SIDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.SIDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.SIDS});
@@ -131,6 +134,7 @@ public class ServiceOpData {
 		updateVer(br);
 
 		updateUrls(br);
+		updateDealerPubkey(br);
 
 		updateWaiters(br,symKey,apipClient);
 
@@ -153,6 +157,12 @@ public class ServiceOpData {
 		System.out.println("Desc is: "+desc);
 		inputDesc(br);
 	}
+
+	private void updateDealerPubkey(BufferedReader br) {
+		System.out.println("Dealer is: "+ this.dealer);
+		inputDealerPubkey(br);
+	}
+
 	private void updateVer(BufferedReader br) {
 		System.out.println("The version is: "+ver);
 		inputVer(br);
@@ -190,7 +200,7 @@ public class ServiceOpData {
 	}
 
 	public void inputTypes(BufferedReader br)  {
-		String ask = "Input the types of your service if you want. Enter to end :";
+		String ask = "Input the types of your service one by one if you want. Enter to end :";
 		String[] types = Inputer.inputStringArray(br,ask,0);
 		if(types.length!=0) setTypes(types);
 	}
@@ -198,6 +208,16 @@ public class ServiceOpData {
 	public void updateTypes(BufferedReader br)  {
 		System.out.println("Types are: "+ Arrays.toString(types));
 		inputTypes(br);
+	}
+
+	public void inputDealerPubkey(BufferedReader br) {
+		System.out.println("Input the pubkey of the dealer. Enter to ignore:");
+		String input = Inputer.inputString(br);
+		if(!"".equals(input)){
+			setDealerPubkey(input);
+			String dealer = KeyTools.pubkeyToFchAddr(input);
+			setDealer(dealer);
+		}
 	}
 
 	private void inputStdName(BufferedReader br) {
@@ -417,13 +437,7 @@ public class ServiceOpData {
 		this.ver = ver;
 	}
 
-	public List<String> getSids() {
-		return sids;
-	}
 
-	public void setSids(List<String> sids) {
-		this.sids = sids;
-	}
 
 	public static ServiceOpData makePublish(String stdName, String[] localNames, String desc,
                                             String ver, String[] urls, String[] waiters, String[] protocols,
@@ -462,14 +476,14 @@ public class ServiceOpData {
 		return data;
 	}
 
-	public static ServiceOpData makeStop(List<String> sids) {
+	public static ServiceOpData makeStop(String[] sids) {
 		ServiceOpData data = new ServiceOpData();
 		data.setOp(Op.STOP.toLowerCase());
 		data.setSids(sids);
 		return data;
 	}
 
-	public static ServiceOpData makeClose(List<String> sids, String closeStatement) {
+	public static ServiceOpData makeClose(String[] sids, String closeStatement) {
 		ServiceOpData data = new ServiceOpData();
 		data.setOp(Op.CLOSE.toLowerCase());
 		data.setSids(sids);
@@ -477,7 +491,7 @@ public class ServiceOpData {
 		return data;
 	}
 
-	public static ServiceOpData makeRecover(List<String> sids) {
+	public static ServiceOpData makeRecover(String[] sids) {
 		ServiceOpData data = new ServiceOpData();
 		data.setOp(Op.RECOVER.toLowerCase());
 		data.setSids(sids);
@@ -490,5 +504,29 @@ public class ServiceOpData {
 		data.setSid(sid);
 		data.setRate(rate);
 		return data;
+	}
+
+	public String[] getSids() {
+		return sids;
+	}
+
+	public void setSids(String[] sids) {
+		this.sids = sids;
+	}
+
+	public String getDealer() {
+		return dealer;
+	}
+
+	public void setDealer(String dealer) {
+		this.dealer = dealer;
+	}
+
+	public String getDealerPubkey() {
+		return dealerPubkey;
+	}
+
+	public void setDealerPubkey(String dealerPubkey) {
+		this.dealerPubkey = dealerPubkey;
 	}
 }

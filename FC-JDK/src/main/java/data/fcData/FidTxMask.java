@@ -1,8 +1,8 @@
 package data.fcData;
 
-import data.apipData.TxInfo;
 import constants.Constants;
-import data.fchData.CashMark;
+import data.fchData.CashMask;
+import data.fchData.Tx;
 import org.jetbrains.annotations.NotNull;
 import utils.DateUtils;
 import ui.Shower;
@@ -13,25 +13,27 @@ import java.util.ArrayList;
 
 import static constants.IndicesNames.OPRETURN;
 
-public class FidTxMask {
+public class FidTxMask extends FcEntity{
     private String fid;
-    private String txId;
     private Long time;
     private Long height;
+    private Integer index;
     private Double balance;
     private Double fee;
     private String to;
     private String from;
+    private Integer in;
+    private Integer out;
 
     @NotNull
-    public static FidTxMask fromTxInfo(String fid, TxInfo txInfo) {
+    public static FidTxMask fromTxInfo(String fid, Tx txInfo) {
         FidTxMask fidTxMask = new FidTxMask();
         long sum = 0;
-        for(CashMark issuedCash : txInfo.getIssuedCashes()){
+        for(CashMask issuedCash : txInfo.getIssuedCashes()){
             if(issuedCash.getOwner().equals(fid))
                 sum += issuedCash.getValue();
         }
-        for(CashMark spentCash : txInfo.getSpentCashes()){
+        for(CashMask spentCash : txInfo.getSpentCashes()){
             if(spentCash.getOwner().equals(fid))
                 sum -= spentCash.getValue();
         }
@@ -39,32 +41,27 @@ public class FidTxMask {
         fidTxMask.setBalance(utils.FchUtils.satoshiToCoin(sum));
         if(txInfo.getFee()!=null)fidTxMask.setFee(FchUtils.satoshiToCoin(txInfo.getFee()));
         fidTxMask.setHeight(txInfo.getHeight());
+        fidTxMask.setIndex(txInfo.getTxIndex());
         fidTxMask.setTime(txInfo.getBlockTime());
-        fidTxMask.setTxId(txInfo.getId());
+        fidTxMask.setId(txInfo.getId());
+        fidTxMask.setIn(txInfo.getInCount());
+        fidTxMask.setOut(txInfo.getOutCount());
         fidTxMask.setFid(fid);
         if(sum>0){
             fidTxMask.setTo(fid);
             if(txInfo.getSpentCashes().size()>0) {
-                CashMark cashMark = txInfo.getSpentCashes().get(0);
-                if (cashMark != null) fidTxMask.setFrom(cashMark.getOwner());
+                CashMask cashMask = txInfo.getSpentCashes().get(0);
+                if (cashMask != null) fidTxMask.setFrom(cashMask.getOwner());
                 else fidTxMask.setFrom(Constants.COINBASE);
             }else fidTxMask.setFrom(Constants.COINBASE);
         }else{
             fidTxMask.setFrom(fid);
-            CashMark cashMark = txInfo.getIssuedCashes().get(0);
-            if(cashMark!=null && cashMark.getOwner().equals(OPRETURN))cashMark = txInfo.getIssuedCashes().get(1);
-            if(cashMark!=null)fidTxMask.setTo(cashMark.getOwner());
+            CashMask cashMask = txInfo.getIssuedCashes().get(0);
+            if(cashMask !=null && cashMask.getOwner().equals(OPRETURN)) cashMask = txInfo.getIssuedCashes().get(1);
+            if(cashMask !=null)fidTxMask.setTo(cashMask.getOwner());
             else fidTxMask.setTo(Constants.MINER);
         }
         return fidTxMask;
-    }
-
-    public String getTxId() {
-        return txId;
-    }
-
-    public void setTxId(String txId) {
-        this.txId = txId;
     }
 
     public Long getTime() {
@@ -121,6 +118,30 @@ public class FidTxMask {
 
     public void setFid(String fid) {
         this.fid = fid;
+    }
+
+    public Integer getIn() {
+        return in;
+    }
+
+    public void setIn(Integer in) {
+        this.in = in;
+    }
+
+    public Integer getOut() {
+        return out;
+    }
+
+    public void setOut(Integer out) {
+        this.out = out;
+    }
+
+    public Integer getIndex() {
+        return index;
+    }
+
+    public void setIndex(Integer index) {
+        this.index = index;
     }
 
     public static void showFidTxMaskList(List<FidTxMask> fidTxMaskList, String title, int totalDisplayed) {

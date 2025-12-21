@@ -5,6 +5,13 @@ public class Meta {
     private String v;//Version
     private String n;//Name
 
+    public Meta() {
+    }
+
+    public Meta(String n) {
+        this.n = n;
+    }
+
     public String getP() {
         return p;
     }

@@ -1,5 +1,6 @@
 package ui;
 
+import server.ApipApi;
 import utils.NumberUtils;
 
 import java.io.BufferedReader;
@@ -179,6 +180,18 @@ public class Menu {
             } catch (NumberFormatException e) {
                 System.out.println("Invalid input. Please enter a number.");
             }
+        }
+    }
+
+    public void add(ApipApi[] items) {
+        for (int i = 0; i < items.length; i++) {
+            this.itemMap.put(i, items[i].getName());
+        }
+    }
+
+    public void add(List<ApipApi> items) {
+        for (int i = 0; i < items.size(); i++) {
+            this.itemMap.put(i, items.get(i).getName());
         }
     }
 

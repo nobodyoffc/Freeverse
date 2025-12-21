@@ -3,27 +3,30 @@ package publish;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
+import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.gson.Gson;
 import constants.IndicesNames;
-import data.fchData.Cid;
+import data.fcData.News;
+import data.fchData.Freer;
 import data.fchData.OpReturn;
 import data.feipData.*;
 import startFEIP.StartFEIP;
 import utils.EsUtils;
 
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import static constants.OpNames.*;
+import static constants.Values.CREATED;
+import static constants.Values.UPDATED;
 
 public class PublishParser {
 
 	public boolean parseStatement(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws ElasticsearchException, IOException {
-
-		boolean isValid = false;
 
 		Gson gson = new Gson();
 
@@ -31,20 +34,33 @@ public class PublishParser {
 
 		try {
 			statementRaw = gson.fromJson(gson.toJson(feip.getData()), StatementOpData.class);
-			if(statementRaw==null)return isValid;
+			if(statementRaw==null){
+				System.out.println("Statement raw is null");
+				return false;
+			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			return isValid;
+			System.out.println("Statement raw is null");
+			return false;
 		}
 
 		Statement statement = new Statement();
 
 		statement.setId(opre.getId());
 
-		if(statementRaw.getConfirm()==null)return isValid;
+		if(statementRaw.getConfirm()==null){
+			System.out.println("Confirm is null");
+			return false;
+		}
 
-		if(!statementRaw.getConfirm().equals("This is a formal and irrevocable statement."))return isValid;
+		if(!statementRaw.getConfirm().equals("This is a formal and irrevocable statement.")){
+			System.out.println("Confirm is not a formal and irrevocable statement");
+			return false;
+		}
 
-		if(statementRaw.getTitle()==null && statementRaw.getContent()==null)return isValid;
+		if(statementRaw.getTitle()==null && statementRaw.getContent()==null){
+			System.out.println("Title and content are null");
+			return false;
+		}
 
 		if(statementRaw.getTitle()!=null) {
 			statement.setTitle(statementRaw.getTitle());
@@ -58,1037 +74,329 @@ public class PublishParser {
 		statement.setBirthTime(opre.getTime());
 		statement.setBirthHeight(opre.getHeight());
 
-		esClient.index(i->i.index(IndicesNames.STATEMENT).id(statement.getId()).document(statement));
-		isValid = true;
+		IndexResponse result = esClient.index(i -> i.index(IndicesNames.STATEMENT).id(statement.getId()).document(statement));
+		if(result==null||result.result()==null){
+			System.out.println("Failed to create statement");
+			return false;
+		}
+		if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
+			System.out.println("Failed to create statement");
+			return false;
+		}
+		System.out.println(result.result());
+		// Create news record for statement
+		News.createNews(esClient, opre.getId(), opre.getSigner(), Feip.FeipProtocol.STATEMENT.getName(),
+				Feip.FeipProtocol.STATEMENT.getName(), opre.getId(), statement.getTitle(), statement.getContent(),
+				opre.getHeight(), opre.getTime());
 
-		return isValid;
+		return true;
 	}
 
 
-	public EssayHistory makeEssay(OpReturn opre, Feip feip) {
+
+	public TextHistory makeText(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
 
-		EssayOpData essayRaw = new EssayOpData();
+		TextOpData textRaw = new TextOpData();
 		try {
-			essayRaw = gson.fromJson(gson.toJson(feip.getData()), EssayOpData.class);
-			if(essayRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
+			textRaw = gson.fromJson(gson.toJson(feip.getData()), TextOpData.class);
+			if(textRaw==null){
+				System.out.println("Text raw is null");
+				return null;
 			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse text");
 			return null;
 		}
 
-		EssayHistory essayHist = new EssayHistory();
+		TextHistory textHist = new TextHistory();
 
-		if(essayRaw.getOp()==null)return null;
+		if(textRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 
-		essayHist.setOp(essayRaw.getOp());
+		textHist.setOp(textRaw.getOp());
 
-		switch(essayRaw.getOp()) {
+		switch(textRaw.getOp()) {
 
 			case PUBLISH:
-				if(essayRaw.getTitle()==null||"".equals(essayRaw.getTitle())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				essayHist.setId(opre.getId());
+				if(textRaw.getTitle()==null||"".equals(textRaw.getTitle())){
+					System.out.println("Title is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
+				textHist.setId(opre.getId());
 
-				essayHist.setEssayId(opre.getId());
-				essayHist.setHeight(opre.getHeight());
-				essayHist.setIndex(opre.getTxIndex());
-				essayHist.setTime(opre.getTime());
-				essayHist.setSigner(opre.getSigner());
+				textHist.setTextId(opre.getId());
+				textHist.setHeight(opre.getHeight());
+				textHist.setIndex(opre.getTxIndex());
+				textHist.setTime(opre.getTime());
+				textHist.setSigner(opre.getSigner());
 
-				if(essayRaw.getDid()!=null)essayHist.setDid(essayRaw.getDid());
-				if(essayRaw.getTitle()!=null)essayHist.setTitle(essayRaw.getTitle());
-				if(essayRaw.getLang()!=null)essayHist.setLang(essayRaw.getLang());
-				if(essayRaw.getAuthors()!=null)essayHist.setAuthors(essayRaw.getAuthors());
-
+				if(textRaw.getType()!=null)textHist.setType(textRaw.getType());
+				if(textRaw.getDid()!=null)textHist.setDid(textRaw.getDid());
+				if(textRaw.getTitle()!=null)textHist.setTitle(textRaw.getTitle());
+				if(textRaw.getLang()!=null)textHist.setLang(textRaw.getLang());
+				if(textRaw.getAuthors()!=null)textHist.setAuthors(textRaw.getAuthors());
+				if(textRaw.getFormat()!=null)textHist.setFormat(textRaw.getFormat());
+				if(textRaw.getSummary()!=null)textHist.setSummary(textRaw.getSummary());
 				break;
 
 			case UPDATE:
-				if(essayRaw.getEssayId()==null|| essayRaw.getTitle()==null||"".equals(essayRaw.getTitle()))
+				if(textRaw.getTextId()==null|| textRaw.getTitle()==null||"".equals(textRaw.getTitle())){
+					System.out.println("TextId is null or title is null or empty");
 					return null;
-				essayHist.setId(opre.getId());
-				essayHist.setHeight(opre.getHeight());
-				essayHist.setIndex(opre.getTxIndex());
-				essayHist.setTime(opre.getTime());
-				essayHist.setSigner(opre.getSigner());
+				}
+				textHist.setId(opre.getId());
+				textHist.setHeight(opre.getHeight());
+				textHist.setIndex(opre.getTxIndex());
+				textHist.setTime(opre.getTime());
+				textHist.setSigner(opre.getSigner());
 
-				essayHist.setEssayId(essayRaw.getEssayId());
+				textHist.setTextId(textRaw.getTextId());
 
-				if(essayRaw.getDid()!=null)essayHist.setDid(essayRaw.getDid());
-				if(essayRaw.getTitle()!=null)essayHist.setTitle(essayRaw.getTitle());
-				if(essayRaw.getLang()!=null)essayHist.setLang(essayRaw.getLang());
-				if(essayRaw.getAuthors()!=null)essayHist.setAuthors(essayRaw.getAuthors());
-
+				if(textRaw.getType()!=null)textHist.setType(textRaw.getType());
+				if(textRaw.getDid()!=null)textHist.setDid(textRaw.getDid());
+				if(textRaw.getTitle()!=null)textHist.setTitle(textRaw.getTitle());
+				if(textRaw.getLang()!=null)textHist.setLang(textRaw.getLang());
+				if(textRaw.getAuthors()!=null)textHist.setAuthors(textRaw.getAuthors());
+				if(textRaw.getFormat()!=null)textHist.setFormat(textRaw.getFormat());
+				if(textRaw.getSummary()!=null)textHist.setSummary(textRaw.getSummary());
 				break;
 			case RECOVER:
 			case DELETE:
-				if (essayRaw.getEssayIds() == null || essayRaw.getEssayIds().length == 0) {
+				if (textRaw.getTextIds() == null || textRaw.getTextIds().length == 0) {
+					System.out.println("TextIds is null or empty");
 					return null;
 				}
-				essayHist.setEssayIds(essayRaw.getEssayIds());
-				essayHist.setId(opre.getId());
-				essayHist.setHeight(opre.getHeight());
-				essayHist.setIndex(opre.getTxIndex());
-				essayHist.setTime(opre.getTime());
-				essayHist.setSigner(opre.getSigner());
+				textHist.setTextIds(textRaw.getTextIds());
+				textHist.setId(opre.getId());
+				textHist.setHeight(opre.getHeight());
+				textHist.setIndex(opre.getTxIndex());
+				textHist.setTime(opre.getTime());
+				textHist.setSigner(opre.getSigner());
 
 				break;
 
 			case RATE:
-				if(essayRaw.getEssayId()==null)return null;
-				if (opre.getCdd() < StartFEIP.CddRequired) return null;
-				essayHist.setEssayId(essayRaw.getEssayId());
-				essayHist.setRate(essayRaw.getRate());
-				essayHist.setCdd(opre.getCdd());
+				if(textRaw.getTextId()==null){
+					System.out.println("TextId is null");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired) {
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
+				textHist.setTextId(textRaw.getTextId());
+				textHist.setRate(textRaw.getRate());
+				textHist.setCdd(opre.getCdd());
 
-				essayHist.setId(opre.getId());
-				essayHist.setHeight(opre.getHeight());
-				essayHist.setIndex(opre.getTxIndex());
-				essayHist.setTime(opre.getTime());
-				essayHist.setSigner(opre.getSigner());
+				textHist.setId(opre.getId());
+				textHist.setHeight(opre.getHeight());
+				textHist.setIndex(opre.getTxIndex());
+				textHist.setTime(opre.getTime());
+				textHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
-		return essayHist;
+		return textHist;
 	}
 
 
+	public boolean parseText(ElasticsearchClient esClient, TextHistory textHist) throws Exception {
 
-	public boolean parseEssay(ElasticsearchClient esClient, EssayHistory essayHist) throws Exception {
-
-		boolean isValid = false;
-		if(essayHist==null)return false;
-		Essay essay;
-		switch (essayHist.getOp()) {
+		if(textHist==null){
+			System.out.println("Text hist is null");
+			return false;
+		}
+		Text text;
+		switch (textHist.getOp()) {
 			case PUBLISH -> {
-				essay = EsUtils.getById(esClient, IndicesNames.ESSAY, essayHist.getEssayId(), Essay.class);
-				if (essay == null) {
-					essay = new Essay();
+				text = EsUtils.getById(esClient, IndicesNames.TEXT, textHist.getTextId(), Text.class);
+				if (text == null) {
+					text = new Text();
 
-					essay.setId(essayHist.getEssayId());
-					essay.setVer("1");
-					essay.setDid(essayHist.getDid());
+					text.setId(textHist.getTextId());
+					text.setVer("1");
+					text.setType(textHist.getType());
+					text.setDid(textHist.getDid());
 
-					essay.setLang(essayHist.getLang());
-					essay.setTitle(essayHist.getTitle());
-					essay.setAuthors(essayHist.getAuthors());
+					text.setLang(textHist.getLang());
+					text.setTitle(textHist.getTitle());
+					text.setAuthors(textHist.getAuthors());
+					text.setFormat(textHist.getFormat());
+					text.setSummary(textHist.getSummary());
+					text.setPublisher(textHist.getSigner());
 
-					essay.setPublisher(essayHist.getSigner());
+					text.setBirthTime(textHist.getTime());
+					text.setBirthHeight(textHist.getHeight());
+					text.setLastTxId(textHist.getId());
+					text.setLastTime(textHist.getTime());
+					text.setLastHeight(textHist.getHeight());
 
-					essay.setBirthTime(essayHist.getTime());
-					essay.setBirthHeight(essayHist.getHeight());
-					essay.setLastTxId(essayHist.getId());
-					essay.setLastTime(essayHist.getTime());
-					essay.setLastHeight(essayHist.getHeight());
+					text.setDeleted(false);
 
-					essay.setDeleted(false);
+					Text text1 = text;
 
-					Essay essay1 = essay;
+					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.TEXT).id(textHist.getTextId()).document(text1));
+					if(result1==null||result1.result()==null){
+						System.out.println("Failed to create text");
+						return false;
+					}
+					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
+						System.out.println("Failed to create text");
+						return false;
+					}
+					// Create news record for text publication
+					News.createNews(esClient, textHist.getId(), textHist.getSigner(), PUBLISH,
+							Feip.FeipProtocol.TEXT.getName(), textHist.getId(), textHist.getTitle(), null,
+							textHist.getHeight(), textHist.getTime());
 
-					esClient.index(i -> i.index(IndicesNames.ESSAY).id(essayHist.getEssayId()).document(essay1));
-					isValid = true;
+					return true;
 				} else {
-					isValid = false;
+					System.out.println("Text already exists");
+					return false;
 				}
 			}
 			case UPDATE -> {
-				essay = EsUtils.getById(esClient, IndicesNames.ESSAY, essayHist.getEssayId(), Essay.class);
-				if (essay == null) {
-					isValid = false;
-					break;
+				text = EsUtils.getById(esClient, IndicesNames.TEXT, textHist.getTextId(), Text.class);
+				if (text == null) {
+					System.out.println("Text not found");
+					return false;
 				}
-				if (Boolean.TRUE.equals(essay.isDeleted())) {
-					isValid = false;
-					break;
+				if (Boolean.TRUE.equals(text.isDeleted())) {
+					System.out.println("Text is deleted");
+					return false;
 				}
-				if (!essay.getPublisher().equals(essayHist.getSigner())) {
-					isValid = false;
-					break;
+				if (!text.getPublisher().equals(textHist.getSigner())) {
+					System.out.println("Text publisher is not the same as the signer");
+					return false;
 				}
-				essay.setVer(String.valueOf(Integer.parseInt(essay.getVer())+1));
-				essay.setDid(essayHist.getDid());
-				essay.setTitle(essayHist.getTitle());
-				essay.setLang(essayHist.getLang());
-				essay.setAuthors(essayHist.getAuthors());
-
-				essay.setLastTxId(essayHist.getId());
-				essay.setLastTime(essayHist.getTime());
-				essay.setLastHeight(essayHist.getHeight());
-				Essay essay2 = essay;
-				esClient.index(i -> i.index(IndicesNames.ESSAY).id(essayHist.getEssayId()).document(essay2));
-				isValid = true;
+				text.setVer(String.valueOf(Integer.parseInt(text.getVer())+1));
+				text.setType(textHist.getType());
+				text.setDid(textHist.getDid());
+				text.setTitle(textHist.getTitle());
+				text.setLang(textHist.getLang());
+				text.setAuthors(textHist.getAuthors());
+				text.setFormat(textHist.getFormat());
+				text.setSummary(textHist.getSummary());
+				text.setLastTxId(textHist.getId());
+				text.setLastTime(textHist.getTime());
+				text.setLastHeight(textHist.getHeight());
+				Text text2 = text;
+				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.TEXT).id(textHist.getTextId()).document(text2));
+				if(result2==null||result2.result()==null){
+					System.out.println("Failed to update text");
+					return false;
+				}
+				if(!CREATED.equals(result2.result().jsonValue()) && !UPDATED.equals(result2.result().jsonValue())){
+					System.out.println("Failed to update text");
+					return false;
+				}
+				return true;
 			}
 
 			case DELETE, RECOVER -> {
 				List<String> idList = new ArrayList<>();
-				if (essayHist.getEssayIds() != null && essayHist.getEssayIds().length > 0) {
-					idList.addAll(Arrays.asList(essayHist.getEssayIds()));
+				if (textHist.getTextIds() != null && textHist.getTextIds().length > 0) {
+					idList.addAll(Arrays.asList(textHist.getTextIds()));
 				} else {
-					isValid = false;
-					break;
+					System.out.println("TextIds is null or empty");
+					return false;
 				}
 
-				EsUtils.MgetResult<Essay> result = EsUtils.getMultiByIdList(esClient, IndicesNames.ESSAY, idList, Essay.class);
-				List<Essay> essays = result.getResultList();
+				EsUtils.MgetResult<Text> result = EsUtils.getMultiByIdList(esClient, IndicesNames.TEXT, idList, Text.class);
+				List<Text> texts = result.getResultList();
 
-				List<Essay> updatedEssays = new ArrayList<>();
-				for (Essay essayItem : essays) {
+				List<Text> updatedTexts = new ArrayList<>();
+				for (Text textItem : texts) {
 
-					if (!essayItem.getPublisher().equals(essayHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, essayHist.getSigner(), Cid.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(essayHist.getSigner())) {
+					if (!textItem.getPublisher().equals(textHist.getSigner())) {
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, textHist.getSigner(), Freer.class);
+						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(textHist.getSigner())) {
 							continue;
 						}
 					}
 
-					switch (essayHist.getOp()) {
+					switch (textHist.getOp()) {
 						case DELETE:
-							essayItem.setDeleted(true);
+							textItem.setDeleted(true);
 							break;
 						case RECOVER:
-							essayItem.setDeleted(false);
+							textItem.setDeleted(false);
 							break;
 					}
 
-					essayItem.setLastTxId(essayHist.getId());
-					essayItem.setLastTime(essayHist.getTime());
-					essayItem.setLastHeight(essayHist.getHeight());
+					textItem.setLastTxId(textHist.getId());
+					textItem.setLastTime(textHist.getTime());
+					textItem.setLastHeight(textHist.getHeight());
 
-					updatedEssays.add(essayItem);
+					updatedTexts.add(textItem);
 				}
 
-				if (!updatedEssays.isEmpty()) {
+				if (!updatedTexts.isEmpty()) {
 					BulkRequest.Builder br = new BulkRequest.Builder();
-					for (Essay updatedEssay : updatedEssays) {
+					for (Text updatedText : updatedTexts) {
 						br.operations(op -> op
 								.index(idx -> idx
-										.index(IndicesNames.ESSAY)
-										.id(updatedEssay.getId())
-										.document(updatedEssay)
+										.index(IndicesNames.TEXT)
+										.id(updatedText.getId())
+										.document(updatedText)
 								)
 						);
 					}
-					esClient.bulk(br.build());
-					isValid = true;
+					BulkResponse result3 = esClient.bulk(br.build());
+					if(result3.errors()){
+						System.out.println("Failed to bulk update text");
+						return false;
+					}
+					return true;
 				}
 			}
 
 			case RATE -> {
-				essay = EsUtils.getById(esClient, IndicesNames.ESSAY, essayHist.getEssayId(), Essay.class);
-				if (essay == null) {
-					isValid = false;
-					break;
+				text = EsUtils.getById(esClient, IndicesNames.TEXT, textHist.getTextId(), Text.class);
+				if (text == null) {
+					System.out.println("Text not found");
+					return false;
 				}
-				if (essay.getPublisher().equals(essayHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-
-				if((essayHist.getCdd()==null || essayHist.getRate()==null)){
-					isValid=false;
-					break;
+				if (text.getPublisher().equals(textHist.getSigner())) {
+					System.out.println("Text publisher is the same as the signer");
+					return false;
 				}
 
-				if(essay.gettCdd()==null||essay.gettRate()==null){
-					essay.settRate(Float.valueOf(essayHist.getRate()));
-					essay.settCdd(essayHist.getCdd());
+				if((textHist.getCdd()==null || textHist.getRate()==null)){
+					System.out.println("Cdd or rate is null");
+					return false;
+				}
+
+				if(text.gettCdd()==null||text.gettRate()==null){
+					text.settRate(Float.valueOf(textHist.getRate()));
+					text.settCdd(textHist.getCdd());
 				}else{
-					essay.settRate(
-							(essay.gettRate()*essay.gettCdd()+essayHist.getRate()*essayHist.getCdd())
-									/(essay.gettCdd()+essayHist.getCdd())
+					text.settRate(
+							(text.gettRate()*text.gettCdd()+textHist.getRate()*textHist.getCdd())
+									/(text.gettCdd()+textHist.getCdd())
 					);
-					essay.settCdd(essay.gettCdd() + essayHist.getCdd());
+					text.settCdd(text.gettCdd() + textHist.getCdd());
 				}
 
-				essay.setLastTxId(essayHist.getId());
-				essay.setLastTime(essayHist.getTime());
-				essay.setLastHeight(essayHist.getHeight());
-				Essay essay3 = essay;
-				esClient.index(i -> i.index(IndicesNames.ESSAY).id(essayHist.getEssayId()).document(essay3));
-				isValid = true;
+				text.setLastTxId(textHist.getId());
+				text.setLastTime(textHist.getTime());
+				text.setLastHeight(textHist.getHeight());
+				Text text3 = text;
+				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.TEXT).id(textHist.getTextId()).document(text3));
+				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}
-
-		return isValid;
-	}
-
-	public ReportHistory makeReport(OpReturn opre, Feip feip) {
-
-		Gson gson = new Gson();
-
-		ReportOpData reportRaw = new ReportOpData();
-		try {
-			reportRaw = gson.fromJson(gson.toJson(feip.getData()), ReportOpData.class);
-			if(reportRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
-			}
-			return null;
-		}
-
-		ReportHistory reportHist = new ReportHistory();
-
-		if(reportRaw.getOp()==null)return null;
-
-		reportHist.setOp(reportRaw.getOp());
-
-		switch(reportRaw.getOp()) {
-
-			case PUBLISH:
-				if(reportRaw.getTitle()==null||"".equals(reportRaw.getTitle())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				reportHist.setId(opre.getId());
-
-				reportHist.setReportId(opre.getId());
-				reportHist.setHeight(opre.getHeight());
-				reportHist.setIndex(opre.getTxIndex());
-				reportHist.setTime(opre.getTime());
-				reportHist.setSigner(opre.getSigner());
-
-				if(reportRaw.getDid()!=null)reportHist.setDid(reportRaw.getDid());
-				if(reportRaw.getTitle()!=null)reportHist.setTitle(reportRaw.getTitle());
-				if(reportRaw.getLang()!=null)reportHist.setLang(reportRaw.getLang());
-				if(reportRaw.getAuthors()!=null)reportHist.setAuthors(reportRaw.getAuthors());
-				if(reportRaw.getSummary()!=null)reportHist.setSummary(reportRaw.getSummary());
-
-				break;
-
-			case UPDATE:
-				if(reportRaw.getReportId()==null|| reportRaw.getTitle()==null||"".equals(reportRaw.getTitle()))
-					return null;
-				reportHist.setId(opre.getId());
-				reportHist.setHeight(opre.getHeight());
-				reportHist.setIndex(opre.getTxIndex());
-				reportHist.setTime(opre.getTime());
-				reportHist.setSigner(opre.getSigner());
-
-				reportHist.setReportId(reportRaw.getReportId());
-
-				if(reportRaw.getDid()!=null)reportHist.setDid(reportRaw.getDid());
-				if(reportRaw.getTitle()!=null)reportHist.setTitle(reportRaw.getTitle());
-				if(reportRaw.getLang()!=null)reportHist.setLang(reportRaw.getLang());
-				if(reportRaw.getAuthors()!=null)reportHist.setAuthors(reportRaw.getAuthors());
-				if(reportRaw.getSummary()!=null)reportHist.setSummary(reportRaw.getSummary());
-
-				break;
-			case RECOVER:
-			case DELETE:
-				if (reportRaw.getReportIds() == null || reportRaw.getReportIds().length == 0) {
-					return null;
-				}
-				reportHist.setReportIds(reportRaw.getReportIds());
-				reportHist.setId(opre.getId());
-				reportHist.setHeight(opre.getHeight());
-				reportHist.setIndex(opre.getTxIndex());
-				reportHist.setTime(opre.getTime());
-				reportHist.setSigner(opre.getSigner());
-
-				break;
-
-			case RATE:
-				if(reportRaw.getReportId()==null)return null;
-				if (opre.getCdd() < StartFEIP.CddRequired) return null;
-				reportHist.setReportId(reportRaw.getReportId());
-				reportHist.setRate(reportRaw.getRate());
-				reportHist.setCdd(opre.getCdd());
-
-				reportHist.setId(opre.getId());
-				reportHist.setHeight(opre.getHeight());
-				reportHist.setIndex(opre.getTxIndex());
-				reportHist.setTime(opre.getTime());
-				reportHist.setSigner(opre.getSigner());
-				break;
-			default:
-				return null;
-		}
-		return reportHist;
-	}
-
-	public boolean parseReport(ElasticsearchClient esClient, ReportHistory reportHist) throws Exception {
-
-		boolean isValid = false;
-		if(reportHist==null)return false;
-		Report report;
-		switch (reportHist.getOp()) {
-			case PUBLISH -> {
-				report = EsUtils.getById(esClient, IndicesNames.REPORT, reportHist.getReportId(), Report.class);
-				if (report == null) {
-					report = new Report();
-
-					report.setId(reportHist.getReportId());
-					report.setVer("1");
-					report.setDid(reportHist.getDid());
-
-					report.setLang(reportHist.getLang());
-					report.setTitle(reportHist.getTitle());
-					report.setAuthors(reportHist.getAuthors());
-					report.setSummary(reportHist.getSummary());
-
-					report.setPublisher(reportHist.getSigner());
-
-					report.setBirthTime(reportHist.getTime());
-					report.setBirthHeight(reportHist.getHeight());
-					report.setLastTxId(reportHist.getId());
-					report.setLastTime(reportHist.getTime());
-					report.setLastHeight(reportHist.getHeight());
-
-					report.setDeleted(false);
-
-					Report report1 = report;
-
-					esClient.index(i -> i.index(IndicesNames.REPORT).id(reportHist.getReportId()).document(report1));
-					isValid = true;
-				} else {
-					isValid = false;
-				}
-			}
-			case UPDATE -> {
-				report = EsUtils.getById(esClient, IndicesNames.REPORT, reportHist.getReportId(), Report.class);
-				if (report == null) {
-					isValid = false;
-					break;
-				}
-				if (Boolean.TRUE.equals(report.isDeleted())) {
-					isValid = false;
-					break;
-				}
-				if (!report.getPublisher().equals(reportHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-				report.setVer(String.valueOf(Integer.parseInt(report.getVer())+1));
-				report.setDid(reportHist.getDid());
-				report.setTitle(reportHist.getTitle());
-				report.setLang(reportHist.getLang());
-				report.setAuthors(reportHist.getAuthors());
-				report.setSummary(reportHist.getSummary());
-
-				report.setLastTxId(reportHist.getId());
-				report.setLastTime(reportHist.getTime());
-				report.setLastHeight(reportHist.getHeight());
-				Report report2 = report;
-				esClient.index(i -> i.index(IndicesNames.REPORT).id(reportHist.getReportId()).document(report2));
-				isValid = true;
-			}
-
-			case DELETE, RECOVER -> {
-				List<String> idList = new ArrayList<>();
-				if (reportHist.getReportIds() != null && reportHist.getReportIds().length > 0) {
-					idList.addAll(Arrays.asList(reportHist.getReportIds()));
-				} else {
-					isValid = false;
-					break;
-				}
-
-				EsUtils.MgetResult<Report> result = EsUtils.getMultiByIdList(esClient, IndicesNames.REPORT, idList, Report.class);
-				List<Report> reports = result.getResultList();
-
-				List<Report> updatedReports = new ArrayList<>();
-				for (Report reportItem : reports) {
-
-					if (!reportItem.getPublisher().equals(reportHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, reportHist.getSigner(), Cid.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(reportHist.getSigner())) {
-							continue;
-						}
-					}
-
-					switch (reportHist.getOp()) {
-						case DELETE:
-							reportItem.setDeleted(true);
-							break;
-						case RECOVER:
-							reportItem.setDeleted(false);
-							break;
-					}
-
-					reportItem.setLastTxId(reportHist.getId());
-					reportItem.setLastTime(reportHist.getTime());
-					reportItem.setLastHeight(reportHist.getHeight());
-
-					updatedReports.add(reportItem);
-				}
-
-				if (!updatedReports.isEmpty()) {
-					BulkRequest.Builder br = new BulkRequest.Builder();
-					for (Report updatedReport : updatedReports) {
-						br.operations(op -> op
-								.index(idx -> idx
-										.index(IndicesNames.REPORT)
-										.id(updatedReport.getId())
-										.document(updatedReport)
-								)
-						);
-					}
-					esClient.bulk(br.build());
-					isValid = true;
-				}
-			}
-
-			case RATE -> {
-				report = EsUtils.getById(esClient, IndicesNames.REPORT, reportHist.getReportId(), Report.class);
-				if (report == null) {
-					isValid = false;
-					break;
-				}
-				if (report.getPublisher().equals(reportHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-
-				if((reportHist.getCdd()==null || reportHist.getRate()==null)){
-					isValid=false;
-					break;
-				}
-
-				if(report.gettCdd()==null||report.gettRate()==null){
-					report.settRate(Float.valueOf(reportHist.getRate()));
-					report.settCdd(reportHist.getCdd());
-				}else{
-					report.settRate(
-							(report.gettRate()*report.gettCdd()+reportHist.getRate()*reportHist.getCdd())
-									/(report.gettCdd()+reportHist.getCdd())
-					);
-					report.settCdd(report.gettCdd() + reportHist.getCdd());
-				}
-
-				report.setLastTxId(reportHist.getId());
-				report.setLastTime(reportHist.getTime());
-				report.setLastHeight(reportHist.getHeight());
-				Report report3 = report;
-				esClient.index(i -> i.index(IndicesNames.REPORT).id(reportHist.getReportId()).document(report3));
-				isValid = true;
-			}
-		}
-
-		return isValid;
-	}
-
-	public BookHistory makeBook(OpReturn opre, Feip feip) {
-
-		Gson gson = new Gson();
-
-		BookOpData bookRaw = new BookOpData();
-		try {
-			bookRaw = gson.fromJson(gson.toJson(feip.getData()), BookOpData.class);
-			if(bookRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
-			}
-			return null;
-		}
-
-		BookHistory bookHist = new BookHistory();
-
-		if(bookRaw.getOp()==null)return null;
-
-		bookHist.setOp(bookRaw.getOp());
-
-		switch(bookRaw.getOp()) {
-
-			case PUBLISH:
-				if(bookRaw.getTitle()==null||"".equals(bookRaw.getTitle())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				bookHist.setId(opre.getId());
-
-				bookHist.setBookId(opre.getId());
-				bookHist.setHeight(opre.getHeight());
-				bookHist.setIndex(opre.getTxIndex());
-				bookHist.setTime(opre.getTime());
-				bookHist.setSigner(opre.getSigner());
-
-				if(bookRaw.getDid()!=null)bookHist.setDid(bookRaw.getDid());
-				if(bookRaw.getTitle()!=null)bookHist.setTitle(bookRaw.getTitle());
-				if(bookRaw.getLang()!=null)bookHist.setLang(bookRaw.getLang());
-				if(bookRaw.getAuthors()!=null)bookHist.setAuthors(bookRaw.getAuthors());
-				if(bookRaw.getSummary()!=null)bookHist.setSummary(bookRaw.getSummary());
-
-				break;
-
-			case UPDATE:
-				if(bookRaw.getBookId()==null|| bookRaw.getTitle()==null||"".equals(bookRaw.getTitle()))
-					return null;
-				bookHist.setId(opre.getId());
-				bookHist.setHeight(opre.getHeight());
-				bookHist.setIndex(opre.getTxIndex());
-				bookHist.setTime(opre.getTime());
-				bookHist.setSigner(opre.getSigner());
-
-				bookHist.setBookId(bookRaw.getBookId());
-
-				if(bookRaw.getDid()!=null)bookHist.setDid(bookRaw.getDid());
-				if(bookRaw.getTitle()!=null)bookHist.setTitle(bookRaw.getTitle());
-				if(bookRaw.getLang()!=null)bookHist.setLang(bookRaw.getLang());
-				if(bookRaw.getAuthors()!=null)bookHist.setAuthors(bookRaw.getAuthors());
-				if(bookRaw.getSummary()!=null)bookHist.setSummary(bookRaw.getSummary());
-
-				break;
-			case RECOVER:
-			case DELETE:
-				if (bookRaw.getBookIds() == null || bookRaw.getBookIds().length == 0) {
-					return null;
-				}
-				bookHist.setBookIds(bookRaw.getBookIds());
-				bookHist.setId(opre.getId());
-				bookHist.setHeight(opre.getHeight());
-				bookHist.setIndex(opre.getTxIndex());
-				bookHist.setTime(opre.getTime());
-				bookHist.setSigner(opre.getSigner());
-
-				break;
-
-			case RATE:
-				if(bookRaw.getBookId()==null)return null;
-				if (opre.getCdd() < StartFEIP.CddRequired) return null;
-				bookHist.setBookId(bookRaw.getBookId());
-				bookHist.setRate(bookRaw.getRate());
-				bookHist.setCdd(opre.getCdd());
-
-				bookHist.setId(opre.getId());
-				bookHist.setHeight(opre.getHeight());
-				bookHist.setIndex(opre.getTxIndex());
-				bookHist.setTime(opre.getTime());
-				bookHist.setSigner(opre.getSigner());
-				break;
-			default:
-				return null;
-		}
-		return bookHist;
-	}
-
-	public boolean parseBook(ElasticsearchClient esClient, BookHistory bookHist) throws Exception {
-
-		boolean isValid = false;
-		if(bookHist==null)return false;
-		Book book;
-		switch (bookHist.getOp()) {
-			case PUBLISH -> {
-				book = EsUtils.getById(esClient, IndicesNames.BOOK, bookHist.getBookId(), Book.class);
-				if (book == null) {
-					book = new Book();
-
-					book.setId(bookHist.getBookId());
-					book.setVer("1");
-					book.setDid(bookHist.getDid());
-
-					book.setLang(bookHist.getLang());
-					book.setTitle(bookHist.getTitle());
-					book.setAuthors(bookHist.getAuthors());
-					book.setSummary(bookHist.getSummary());
-
-					book.setPublisher(bookHist.getSigner());
-
-					book.setBirthTime(bookHist.getTime());
-					book.setBirthHeight(bookHist.getHeight());
-					book.setLastTxId(bookHist.getId());
-					book.setLastTime(bookHist.getTime());
-					book.setLastHeight(bookHist.getHeight());
-
-					book.setDeleted(false);
-
-					Book book1 = book;
-
-					esClient.index(i -> i.index(IndicesNames.BOOK).id(bookHist.getBookId()).document(book1));
-					isValid = true;
-				} else {
-					isValid = false;
-				}
-			}
-			case UPDATE -> {
-				book = EsUtils.getById(esClient, IndicesNames.BOOK, bookHist.getBookId(), Book.class);
-				if (book == null) {
-					isValid = false;
-					break;
-				}
-				if (Boolean.TRUE.equals(book.isDeleted())) {
-					isValid = false;
-					break;
-				}
-				if (!book.getPublisher().equals(bookHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-				book.setVer(String.valueOf(Integer.parseInt(book.getVer())+1));
-				book.setDid(bookHist.getDid());
-				book.setTitle(bookHist.getTitle());
-				book.setLang(bookHist.getLang());
-				book.setAuthors(bookHist.getAuthors());
-				book.setSummary(bookHist.getSummary());
-
-				book.setLastTxId(bookHist.getId());
-				book.setLastTime(bookHist.getTime());
-				book.setLastHeight(bookHist.getHeight());
-				Book book2 = book;
-				esClient.index(i -> i.index(IndicesNames.BOOK).id(bookHist.getBookId()).document(book2));
-				isValid = true;
-			}
-
-			case DELETE, RECOVER -> {
-				List<String> idList = new ArrayList<>();
-				if (bookHist.getBookIds() != null && bookHist.getBookIds().length > 0) {
-					idList.addAll(Arrays.asList(bookHist.getBookIds()));
-				} else {
-					isValid = false;
-					break;
-				}
-
-				EsUtils.MgetResult<Book> result = EsUtils.getMultiByIdList(esClient, IndicesNames.BOOK, idList, Book.class);
-				List<Book> books = result.getResultList();
-
-				List<Book> updatedBooks = new ArrayList<>();
-				for (Book bookItem : books) {
-
-					if (!bookItem.getPublisher().equals(bookHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, bookHist.getSigner(), Cid.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(bookHist.getSigner())) {
-							continue;
-						}
-					}
-
-					switch (bookHist.getOp()) {
-						case DELETE:
-							bookItem.setDeleted(true);
-							break;
-						case RECOVER:
-							bookItem.setDeleted(false);
-							break;
-					}
-
-					bookItem.setLastTxId(bookHist.getId());
-					bookItem.setLastTime(bookHist.getTime());
-					bookItem.setLastHeight(bookHist.getHeight());
-
-					updatedBooks.add(bookItem);
-				}
-
-				if (!updatedBooks.isEmpty()) {
-					BulkRequest.Builder br = new BulkRequest.Builder();
-					for (Book updatedBook : updatedBooks) {
-						br.operations(op -> op
-								.index(idx -> idx
-										.index(IndicesNames.BOOK)
-										.id(updatedBook.getId())
-										.document(updatedBook)
-								)
-						);
-					}
-					esClient.bulk(br.build());
-					isValid = true;
-				}
-			}
-
-			case RATE -> {
-				book = EsUtils.getById(esClient, IndicesNames.BOOK, bookHist.getBookId(), Book.class);
-				if (book == null) {
-					isValid = false;
-					break;
-				}
-				if (book.getPublisher().equals(bookHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-
-				if((bookHist.getCdd()==null || bookHist.getRate()==null)){
-					isValid=false;
-					break;
-				}
-
-				if(book.gettCdd()==null||book.gettRate()==null){
-					book.settRate(Float.valueOf(bookHist.getRate()));
-					book.settCdd(bookHist.getCdd());
-				}else{
-					book.settRate(
-							(book.gettRate()*book.gettCdd()+bookHist.getRate()*bookHist.getCdd())
-									/(book.gettCdd()+bookHist.getCdd())
-					);
-					book.settCdd(book.gettCdd() + bookHist.getCdd());
-				}
-
-				book.setLastTxId(bookHist.getId());
-				book.setLastTime(bookHist.getTime());
-				book.setLastHeight(bookHist.getHeight());
-				Book book3 = book;
-				esClient.index(i -> i.index(IndicesNames.BOOK).id(bookHist.getBookId()).document(book3));
-				isValid = true;
-			}
-		}
-
-		return isValid;
-	}
-
-	public PaperHistory makePaper(OpReturn opre, Feip feip) {
-
-		Gson gson = new Gson();
-
-		PaperOpData paperRaw = new PaperOpData();
-		try {
-			paperRaw = gson.fromJson(gson.toJson(feip.getData()), PaperOpData.class);
-			if(paperRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
-			}
-			return null;
-		}
-
-		PaperHistory paperHist = new PaperHistory();
-
-		if(paperRaw.getOp()==null)return null;
-
-		paperHist.setOp(paperRaw.getOp());
-
-		switch(paperRaw.getOp()) {
-
-			case PUBLISH:
-				if(paperRaw.getTitle()==null||"".equals(paperRaw.getTitle())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
-				paperHist.setId(opre.getId());
-
-				paperHist.setPaperId(opre.getId());
-				paperHist.setHeight(opre.getHeight());
-				paperHist.setIndex(opre.getTxIndex());
-				paperHist.setTime(opre.getTime());
-				paperHist.setSigner(opre.getSigner());
-
-				if(paperRaw.getDid()!=null)paperHist.setDid(paperRaw.getDid());
-				if(paperRaw.getTitle()!=null)paperHist.setTitle(paperRaw.getTitle());
-				if(paperRaw.getLang()!=null)paperHist.setLang(paperRaw.getLang());
-				if(paperRaw.getAuthors()!=null)paperHist.setAuthors(paperRaw.getAuthors());
-				if(paperRaw.getSummary()!=null)paperHist.setSummary(paperRaw.getSummary());
-				if(paperRaw.getKeywords()!=null)paperHist.setKeywords(paperRaw.getKeywords());
-
-				break;
-
-			case UPDATE:
-				if(paperRaw.getPaperId()==null|| paperRaw.getTitle()==null||"".equals(paperRaw.getTitle()))
-					return null;
-				paperHist.setId(opre.getId());
-				paperHist.setHeight(opre.getHeight());
-				paperHist.setIndex(opre.getTxIndex());
-				paperHist.setTime(opre.getTime());
-				paperHist.setSigner(opre.getSigner());
-
-				paperHist.setPaperId(paperRaw.getPaperId());
-
-				if(paperRaw.getDid()!=null)paperHist.setDid(paperRaw.getDid());
-				if(paperRaw.getTitle()!=null)paperHist.setTitle(paperRaw.getTitle());
-				if(paperRaw.getLang()!=null)paperHist.setLang(paperRaw.getLang());
-				if(paperRaw.getAuthors()!=null)paperHist.setAuthors(paperRaw.getAuthors());
-				if(paperRaw.getSummary()!=null)paperHist.setSummary(paperRaw.getSummary());
-				if(paperRaw.getKeywords()!=null)paperHist.setKeywords(paperRaw.getKeywords());
-
-				break;
-			case RECOVER:
-			case DELETE:
-				if (paperRaw.getPaperIds() == null || paperRaw.getPaperIds().length == 0) {
-					return null;
-				}
-				paperHist.setPaperIds(paperRaw.getPaperIds());
-				paperHist.setId(opre.getId());
-				paperHist.setHeight(opre.getHeight());
-				paperHist.setIndex(opre.getTxIndex());
-				paperHist.setTime(opre.getTime());
-				paperHist.setSigner(opre.getSigner());
-
-				break;
-
-			case RATE:
-				if(paperRaw.getPaperId()==null)return null;
-				if (opre.getCdd() < StartFEIP.CddRequired) return null;
-				paperHist.setPaperId(paperRaw.getPaperId());
-				paperHist.setRate(paperRaw.getRate());
-				paperHist.setCdd(opre.getCdd());
-
-				paperHist.setId(opre.getId());
-				paperHist.setHeight(opre.getHeight());
-				paperHist.setIndex(opre.getTxIndex());
-				paperHist.setTime(opre.getTime());
-				paperHist.setSigner(opre.getSigner());
-				break;
-			default:
-				return null;
-		}
-		return paperHist;
-	}
-
-	public boolean parsePaper(ElasticsearchClient esClient, PaperHistory paperHist) throws Exception {
-
-		boolean isValid = false;
-		if(paperHist==null)return false;
-		Paper paper;
-		switch (paperHist.getOp()) {
-			case PUBLISH -> {
-				paper = EsUtils.getById(esClient, IndicesNames.PAPER, paperHist.getPaperId(), Paper.class);
-				if (paper == null) {
-					paper = new Paper();
-
-					paper.setId(paperHist.getPaperId());
-					paper.setVer("1");
-					paper.setDid(paperHist.getDid());
-
-					paper.setLang(paperHist.getLang());
-					paper.setTitle(paperHist.getTitle());
-					paper.setAuthors(paperHist.getAuthors());
-					paper.setSummary(paperHist.getSummary());
-					paper.setKeywords(paperHist.getKeywords());
-
-					paper.setPublisher(paperHist.getSigner());
-
-					paper.setBirthTime(paperHist.getTime());
-					paper.setBirthHeight(paperHist.getHeight());
-					paper.setLastTxId(paperHist.getId());
-					paper.setLastTime(paperHist.getTime());
-					paper.setLastHeight(paperHist.getHeight());
-
-					paper.setDeleted(false);
-
-					Paper paper1 = paper;
-
-					esClient.index(i -> i.index(IndicesNames.PAPER).id(paperHist.getPaperId()).document(paper1));
-					isValid = true;
-				} else {
-					isValid = false;
-				}
-			}
-			case UPDATE -> {
-				paper = EsUtils.getById(esClient, IndicesNames.PAPER, paperHist.getPaperId(), Paper.class);
-				if (paper == null) {
-					isValid = false;
-					break;
-				}
-				if (Boolean.TRUE.equals(paper.isDeleted())) {
-					isValid = false;
-					break;
-				}
-				if (!paper.getPublisher().equals(paperHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-				paper.setVer(String.valueOf(Integer.parseInt(paper.getVer())+1));
-				paper.setDid(paperHist.getDid());
-				paper.setTitle(paperHist.getTitle());
-				paper.setLang(paperHist.getLang());
-				paper.setAuthors(paperHist.getAuthors());
-				paper.setSummary(paperHist.getSummary());
-				paper.setKeywords(paperHist.getKeywords());
-
-				paper.setLastTxId(paperHist.getId());
-				paper.setLastTime(paperHist.getTime());
-				paper.setLastHeight(paperHist.getHeight());
-				Paper paper2 = paper;
-				esClient.index(i -> i.index(IndicesNames.PAPER).id(paperHist.getPaperId()).document(paper2));
-				isValid = true;
-			}
-
-			case DELETE, RECOVER -> {
-				List<String> idList = new ArrayList<>();
-				if (paperHist.getPaperIds() != null && paperHist.getPaperIds().length > 0) {
-					idList.addAll(Arrays.asList(paperHist.getPaperIds()));
-				} else {
-					isValid = false;
-					break;
-				}
-
-				EsUtils.MgetResult<Paper> result = EsUtils.getMultiByIdList(esClient, IndicesNames.PAPER, idList, Paper.class);
-				List<Paper> papers = result.getResultList();
-
-				List<Paper> updatedPapers = new ArrayList<>();
-				for (Paper paperItem : papers) {
-
-					if (!paperItem.getPublisher().equals(paperHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, paperHist.getSigner(), Cid.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(paperHist.getSigner())) {
-							continue;
-						}
-					}
-
-					switch (paperHist.getOp()) {
-						case DELETE:
-							paperItem.setDeleted(true);
-							break;
-						case RECOVER:
-							paperItem.setDeleted(false);
-							break;
-					}
-
-					paperItem.setLastTxId(paperHist.getId());
-					paperItem.setLastTime(paperHist.getTime());
-					paperItem.setLastHeight(paperHist.getHeight());
-
-					updatedPapers.add(paperItem);
-				}
-
-				if (!updatedPapers.isEmpty()) {
-					BulkRequest.Builder br = new BulkRequest.Builder();
-					for (Paper updatedPaper : updatedPapers) {
-						br.operations(op -> op
-								.index(idx -> idx
-										.index(IndicesNames.PAPER)
-										.id(updatedPaper.getId())
-										.document(updatedPaper)
-								)
-						);
-					}
-					esClient.bulk(br.build());
-					isValid = true;
-				}
-			}
-
-			case RATE -> {
-				paper = EsUtils.getById(esClient, IndicesNames.PAPER, paperHist.getPaperId(), Paper.class);
-				if (paper == null) {
-					isValid = false;
-					break;
-				}
-				if (paper.getPublisher().equals(paperHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-
-				if((paperHist.getCdd()==null || paperHist.getRate()==null)){
-					isValid=false;
-					break;
-				}
-
-				if(paper.gettCdd()==null||paper.gettRate()==null){
-					paper.settRate(Float.valueOf(paperHist.getRate()));
-					paper.settCdd(paperHist.getCdd());
-				}else{
-					paper.settRate(
-							(paper.gettRate()*paper.gettCdd()+paperHist.getRate()*paperHist.getCdd())
-									/(paper.gettCdd()+paperHist.getCdd())
-					);
-					paper.settCdd(paper.gettCdd() + paperHist.getCdd());
-				}
-
-				paper.setLastTxId(paperHist.getId());
-				paper.setLastTime(paperHist.getTime());
-				paper.setLastHeight(paperHist.getHeight());
-				Paper paper3 = paper;
-				esClient.index(i -> i.index(IndicesNames.PAPER).id(paperHist.getPaperId()).document(paper3));
-				isValid = true;
-			}
-		}
-
-		return isValid;
+		return false;
 	}
 
 	public RemarkHistory makeRemark(OpReturn opre, Feip feip) {
@@ -1098,28 +406,35 @@ public class PublishParser {
 		RemarkOpData remarkRaw = new RemarkOpData();
 		try {
 			remarkRaw = gson.fromJson(gson.toJson(feip.getData()), RemarkOpData.class);
-			if(remarkRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
+			if(remarkRaw==null){
+				System.out.println("Remark raw is null");
+				return null;
 			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse remark");
 			return null;
 		}
 
 		RemarkHistory remarkHist = new RemarkHistory();
 
-		if(remarkRaw.getOp()==null)return null;
+		if(remarkRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 
 		remarkHist.setOp(remarkRaw.getOp());
 
 		switch(remarkRaw.getOp()) {
 
 			case PUBLISH:
-				if(remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+				if(remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle())){
+					System.out.println("Title is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) {
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
 				remarkHist.setId(opre.getId());
 
 				remarkHist.setRemarkId(opre.getId());
@@ -1132,14 +447,17 @@ public class PublishParser {
 				if(remarkRaw.getTitle()!=null)remarkHist.setTitle(remarkRaw.getTitle());
 				if(remarkRaw.getLang()!=null)remarkHist.setLang(remarkRaw.getLang());
 				if(remarkRaw.getAuthors()!=null)remarkHist.setAuthors(remarkRaw.getAuthors());
+				if(remarkRaw.getFormat()!=null)remarkHist.setFormat(remarkRaw.getFormat());
 				if(remarkRaw.getSummary()!=null)remarkHist.setSummary(remarkRaw.getSummary());
 				if(remarkRaw.getOnDid()!=null)remarkHist.setOnDid(remarkRaw.getOnDid());
 
 				break;
 
 			case UPDATE:
-				if(remarkRaw.getRemarkId()==null|| remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle()))
+				if(remarkRaw.getRemarkId()==null|| remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle())){
+					System.out.println("RemarkId is null or title is null or empty");
 					return null;
+				}
 				remarkHist.setId(opre.getId());
 				remarkHist.setHeight(opre.getHeight());
 				remarkHist.setIndex(opre.getTxIndex());
@@ -1152,6 +470,7 @@ public class PublishParser {
 				if(remarkRaw.getTitle()!=null)remarkHist.setTitle(remarkRaw.getTitle());
 				if(remarkRaw.getLang()!=null)remarkHist.setLang(remarkRaw.getLang());
 				if(remarkRaw.getAuthors()!=null)remarkHist.setAuthors(remarkRaw.getAuthors());
+				if(remarkRaw.getFormat()!=null)remarkHist.setFormat(remarkRaw.getFormat());
 				if(remarkRaw.getSummary()!=null)remarkHist.setSummary(remarkRaw.getSummary());
 				if(remarkRaw.getOnDid()!=null)remarkHist.setOnDid(remarkRaw.getOnDid());
 
@@ -1159,6 +478,7 @@ public class PublishParser {
 			case RECOVER:
 			case DELETE:
 				if (remarkRaw.getRemarkIds() == null || remarkRaw.getRemarkIds().length == 0) {
+					System.out.println("RemarkIds is null or empty");
 					return null;
 				}
 				remarkHist.setRemarkIds(remarkRaw.getRemarkIds());
@@ -1171,8 +491,14 @@ public class PublishParser {
 				break;
 
 			case RATE:
-				if(remarkRaw.getRemarkId()==null)return null;
-				if (opre.getCdd() < StartFEIP.CddRequired) return null;
+				if(remarkRaw.getRemarkId()==null){
+					System.out.println("RemarkId is null");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired) {
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
 				remarkHist.setRemarkId(remarkRaw.getRemarkId());
 				remarkHist.setRate(remarkRaw.getRate());
 				remarkHist.setCdd(opre.getCdd());
@@ -1184,6 +510,7 @@ public class PublishParser {
 				remarkHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return remarkHist;
@@ -1191,8 +518,10 @@ public class PublishParser {
 
 	public boolean parseRemark(ElasticsearchClient esClient, RemarkHistory remarkHist) throws Exception {
 
-		boolean isValid = false;
-		if(remarkHist==null)return false;
+		if(remarkHist==null){
+			System.out.println("Remark hist is null");
+			return false;
+		}
 		Remark remark;
 		switch (remarkHist.getOp()) {
 			case PUBLISH -> {
@@ -1207,6 +536,7 @@ public class PublishParser {
 					remark.setLang(remarkHist.getLang());
 					remark.setTitle(remarkHist.getTitle());
 					remark.setAuthors(remarkHist.getAuthors());
+					remark.setFormat(remarkHist.getFormat());
 					remark.setSummary(remarkHist.getSummary());
 					remark.setOnDid(remarkHist.getOnDid());
 
@@ -1222,31 +552,41 @@ public class PublishParser {
 
 					Remark remark1 = remark;
 
-					esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark1));
-					isValid = true;
+					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark1));
+					if(result1==null||result1.result()==null){
+						System.out.println("Failed to create remark");
+						return false;
+					}
+					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
+						System.out.println("Failed to create remark");
+						return false;
+					}
+					return true;
 				} else {
-					isValid = false;
+					System.out.println("Remark already exists");
+					return false;
 				}
 			}
 			case UPDATE -> {
 				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
 				if (remark == null) {
-					isValid = false;
-					break;
+					System.out.println("Remark not found");
+					return false;
 				}
 				if (Boolean.TRUE.equals(remark.isDeleted())) {
-					isValid = false;
-					break;
+					System.out.println("Remark is deleted");
+					return false;
 				}
 				if (!remark.getPublisher().equals(remarkHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Remark publisher is not the same as the signer");
+					return false;
 				}
 				remark.setVer(String.valueOf(Integer.parseInt(remark.getVer())+1));
 				remark.setDid(remarkHist.getDid());
 				remark.setTitle(remarkHist.getTitle());
 				remark.setLang(remarkHist.getLang());
 				remark.setAuthors(remarkHist.getAuthors());
+				remark.setFormat(remarkHist.getFormat());
 				remark.setSummary(remarkHist.getSummary());
 				remark.setOnDid(remarkHist.getOnDid());
 
@@ -1254,8 +594,8 @@ public class PublishParser {
 				remark.setLastTime(remarkHist.getTime());
 				remark.setLastHeight(remarkHist.getHeight());
 				Remark remark2 = remark;
-				esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark2));
-				isValid = true;
+				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark2));
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 			}
 
 			case DELETE, RECOVER -> {
@@ -1263,7 +603,7 @@ public class PublishParser {
 				if (remarkHist.getRemarkIds() != null && remarkHist.getRemarkIds().length > 0) {
 					idList.addAll(Arrays.asList(remarkHist.getRemarkIds()));
 				} else {
-					isValid = false;
+					System.out.println("RemarkIds is null or empty");
 					break;
 				}
 
@@ -1274,7 +614,7 @@ public class PublishParser {
 				for (Remark remarkItem : remarks) {
 
 					if (!remarkItem.getPublisher().equals(remarkHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, remarkHist.getSigner(), Cid.class);
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, remarkHist.getSigner(), Freer.class);
 						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(remarkHist.getSigner())) {
 							continue;
 						}
@@ -1307,25 +647,29 @@ public class PublishParser {
 								)
 						);
 					}
-					esClient.bulk(br.build());
-					isValid = true;
+					BulkResponse result3 = esClient.bulk(br.build());
+					if(result3.errors()){
+						System.out.println("Failed to bulk update remark");
+						return false;
+					}
+					return true;
 				}
 			}
 
 			case RATE -> {
 				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
 				if (remark == null) {
-					isValid = false;
-					break;
+					System.out.println("Remark not found");
+					return false;
 				}
 				if (remark.getPublisher().equals(remarkHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Remark publisher is the same as the signer");
+					return false;
 				}
 
 				if((remarkHist.getCdd()==null || remarkHist.getRate()==null)){
-					isValid=false;
-					break;
+					System.out.println("Cdd or rate is null");
+					return false;
 				}
 
 				if(remark.gettCdd()==null||remark.gettRate()==null){
@@ -1343,12 +687,13 @@ public class PublishParser {
 				remark.setLastTime(remarkHist.getTime());
 				remark.setLastHeight(remarkHist.getHeight());
 				Remark remark3 = remark;
-				esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark3));
-				isValid = true;
+				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark3));
+				System.out.println(result3.result());
+				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}
 
-		return isValid;
+		return false;
 	}
 
 	public ArtworkHistory makeArtwork(OpReturn opre, Feip feip) {
@@ -1358,28 +703,35 @@ public class PublishParser {
 		ArtworkOpData artworkRaw = new ArtworkOpData();
 		try {
 			artworkRaw = gson.fromJson(gson.toJson(feip.getData()), ArtworkOpData.class);
-			if(artworkRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
+			if(artworkRaw==null){
+				System.out.println("Artwork raw is null");
+				return null;
 			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse artwork");
 			return null;
 		}
 
 		ArtworkHistory artworkHist = new ArtworkHistory();
 
-		if(artworkRaw.getOp()==null)return null;
+		if(artworkRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 
 		artworkHist.setOp(artworkRaw.getOp());
 
 		switch(artworkRaw.getOp()) {
 
 			case PUBLISH:
-				if(artworkRaw.getTitle()==null||"".equals(artworkRaw.getTitle())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+				if(artworkRaw.getTitle()==null||"".equals(artworkRaw.getTitle())){
+					System.out.println("Title is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) {
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
 				artworkHist.setId(opre.getId());
 
 				artworkHist.setArtworkId(opre.getId());
@@ -1392,11 +744,15 @@ public class PublishParser {
 				if(artworkRaw.getTitle()!=null)artworkHist.setTitle(artworkRaw.getTitle());
 				if(artworkRaw.getLang()!=null)artworkHist.setLang(artworkRaw.getLang());
 				if(artworkRaw.getAuthors()!=null)artworkHist.setAuthors(artworkRaw.getAuthors());
+				if(artworkRaw.getFormat()!=null)artworkHist.setFormat(artworkRaw.getFormat());
 				if(artworkRaw.getSummary()!=null)artworkHist.setSummary(artworkRaw.getSummary());
 
 				break;
 			case UPDATE:
-				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())) return null;
+				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())){
+					System.out.println("ArtworkId is null or empty");
+					return null;
+				}
 				artworkHist.setId(opre.getId());
 
 				artworkHist.setArtworkId(artworkRaw.getArtworkId());
@@ -1409,12 +765,16 @@ public class PublishParser {
 				if(artworkRaw.getTitle()!=null)artworkHist.setTitle(artworkRaw.getTitle());
 				if(artworkRaw.getLang()!=null)artworkHist.setLang(artworkRaw.getLang());
 				if(artworkRaw.getAuthors()!=null)artworkHist.setAuthors(artworkRaw.getAuthors());
+				if(artworkRaw.getFormat()!=null)artworkHist.setFormat(artworkRaw.getFormat());
 				if(artworkRaw.getSummary()!=null)artworkHist.setSummary(artworkRaw.getSummary());
 
 				break;
 			case DELETE:
 			case RECOVER:
-				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())) return null;
+				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())){
+					System.out.println("ArtworkId is null or empty");
+					return null;
+				}
 				artworkHist.setId(opre.getId());
 
 				artworkHist.setArtworkId(artworkRaw.getArtworkId());
@@ -1425,8 +785,14 @@ public class PublishParser {
 
 				break;
 			case RATE:
-				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())) return null;
-				if(artworkRaw.getRate()==null) return null;
+				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())){
+					System.out.println("ArtworkId is null or empty");
+					return null;
+				}
+				if(artworkRaw.getRate()==null) {
+					System.out.println("Rate is null");
+					return null;
+				}
 				artworkHist.setId(opre.getId());
 
 				artworkHist.setArtworkId(artworkRaw.getArtworkId());
@@ -1439,144 +805,909 @@ public class PublishParser {
 
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 
 		return artworkHist;
 	}
 
-	public boolean parseArtwork(ElasticsearchClient esClient, ArtworkHistory artworkHist) throws Exception {
 
-		boolean isValid = false;
-		if(artworkHist==null)return false;
-		Artwork artwork;
-		switch (artworkHist.getOp()) {
+	public SoundHistory makeSound(OpReturn opre, Feip feip) {
+
+		Gson gson = new Gson();
+
+		SoundOpData soundRaw = new SoundOpData();
+		try {
+			soundRaw = gson.fromJson(gson.toJson(feip.getData()), SoundOpData.class);
+			if(soundRaw==null){
+				System.out.println("Sound raw is null");
+				return null;
+			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse sound");
+			return null;
+		}
+
+		SoundHistory soundHist = new SoundHistory();
+
+		if(soundRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
+
+		soundHist.setOp(soundRaw.getOp());
+
+		switch(soundRaw.getOp()) {
+
+			case PUBLISH:
+				if(soundRaw.getTitle()==null||"".equals(soundRaw.getTitle())){
+					System.out.println("Title is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired ){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
+				soundHist.setId(opre.getId());
+
+				soundHist.setSoundId(opre.getId());
+				soundHist.setHeight(opre.getHeight());
+				soundHist.setIndex(opre.getTxIndex());
+				soundHist.setTime(opre.getTime());
+				soundHist.setSigner(opre.getSigner());
+
+				if(soundRaw.getDid()!=null)soundHist.setDid(soundRaw.getDid());
+				if(soundRaw.getTitle()!=null)soundHist.setTitle(soundRaw.getTitle());
+				if(soundRaw.getLang()!=null)soundHist.setLang(soundRaw.getLang());
+				if(soundRaw.getAuthors()!=null)soundHist.setAuthors(soundRaw.getAuthors());
+				if(soundRaw.getFormat()!=null)soundHist.setFormat(soundRaw.getFormat());
+				if(soundRaw.getSummary()!=null)soundHist.setSummary(soundRaw.getSummary());
+
+				break;
+
+			case UPDATE:
+				if(soundRaw.getSoundId()==null|| soundRaw.getTitle()==null||"".equals(soundRaw.getTitle())){
+					System.out.println("SoundId is null or title is null or empty");
+					return null;
+				}
+				soundHist.setId(opre.getId());
+				soundHist.setHeight(opre.getHeight());
+				soundHist.setIndex(opre.getTxIndex());
+				soundHist.setTime(opre.getTime());
+				soundHist.setSigner(opre.getSigner());
+
+				soundHist.setSoundId(soundRaw.getSoundId());
+
+				if(soundRaw.getDid()!=null)soundHist.setDid(soundRaw.getDid());
+				if(soundRaw.getTitle()!=null)soundHist.setTitle(soundRaw.getTitle());
+				if(soundRaw.getLang()!=null)soundHist.setLang(soundRaw.getLang());
+				if(soundRaw.getAuthors()!=null)soundHist.setAuthors(soundRaw.getAuthors());
+				if(soundRaw.getFormat()!=null)soundHist.setFormat(soundRaw.getFormat());
+				if(soundRaw.getSummary()!=null)soundHist.setSummary(soundRaw.getSummary());
+
+				break;
+			case RECOVER:
+			case DELETE:
+				if (soundRaw.getSoundIds() == null || soundRaw.getSoundIds().length == 0) {
+					System.out.println("SoundIds is null or empty");
+					return null;
+				}
+				soundHist.setSoundIds(soundRaw.getSoundIds());
+				soundHist.setId(opre.getId());
+				soundHist.setHeight(opre.getHeight());
+				soundHist.setIndex(opre.getTxIndex());
+				soundHist.setTime(opre.getTime());
+				soundHist.setSigner(opre.getSigner());
+
+				break;
+
+			case RATE:
+				if(soundRaw.getSoundId()==null){
+					System.out.println("SoundId is null");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired) {
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
+				soundHist.setSoundId(soundRaw.getSoundId());
+				soundHist.setRate(soundRaw.getRate());
+				soundHist.setCdd(opre.getCdd());
+
+				soundHist.setId(opre.getId());
+				soundHist.setHeight(opre.getHeight());
+				soundHist.setIndex(opre.getTxIndex());
+				soundHist.setTime(opre.getTime());
+				soundHist.setSigner(opre.getSigner());
+				break;
+			default:
+				System.out.println("Invalid operation");
+				return null;
+		}
+		return soundHist;
+	}
+
+	public boolean parseSound(ElasticsearchClient esClient, SoundHistory soundHist) throws Exception {
+
+		if(soundHist==null){
+			System.out.println("Sound hist is null");
+			return false;
+		}
+		Sound sound;
+		switch (soundHist.getOp()) {
 			case PUBLISH -> {
-				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
-				if (artwork == null) {
-					artwork = new Artwork();
+				sound = EsUtils.getById(esClient, IndicesNames.SOUND, soundHist.getSoundId(), Sound.class);
+				if (sound == null) {
+					sound = new Sound();
 
-					artwork.setId(artworkHist.getArtworkId());
-					artwork.setVer("1");
-					artwork.setDid(artworkHist.getDid());
+					sound.setId(soundHist.getSoundId());
+					sound.setVer("1");
+					sound.setDid(soundHist.getDid());
 
-					artwork.setLang(artworkHist.getLang());
-					artwork.setTitle(artworkHist.getTitle());
-					artwork.setAuthors(artworkHist.getAuthors());
-					artwork.setSummary(artworkHist.getSummary());
+					sound.setLang(soundHist.getLang());
+					sound.setTitle(soundHist.getTitle());
+					sound.setAuthors(soundHist.getAuthors());
+					sound.setFormat(soundHist.getFormat());
+					sound.setSummary(soundHist.getSummary());
 
-					artwork.setPublisher(artworkHist.getSigner());
+					sound.setPublisher(soundHist.getSigner());
 
-					artwork.setBirthTime(artworkHist.getTime());
-					artwork.setBirthHeight(artworkHist.getHeight());
-					artwork.setLastTxId(artworkHist.getId());
-					artwork.setLastTime(artworkHist.getTime());
-					artwork.setLastHeight(artworkHist.getHeight());
+					sound.setBirthTime(soundHist.getTime());
+					sound.setBirthHeight(soundHist.getHeight());
+					sound.setLastTxId(soundHist.getId());
+					sound.setLastTime(soundHist.getTime());
+					sound.setLastHeight(soundHist.getHeight());
 
-					artwork.setDeleted(false);
+					sound.setDeleted(false);
 
-					Artwork artwork1 = artwork;
+					Sound sound1 = sound;
 
-					esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork1));
-					isValid = true;
+					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.SOUND).id(soundHist.getSoundId()).document(sound1));
+					if(result1==null||result1.result()==null){
+						System.out.println("Failed to create sound");
+						return false;
+					}
+					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
+						System.out.println("Failed to create sound");
+						return false;
+					}
+
+					// Create news
+					News.createNews(esClient, soundHist.getId(), soundHist.getSigner(), PUBLISH,
+					Feip.FeipProtocol.SOUND.getName(), soundHist.getId(), soundHist.getTitle(), soundHist.getSummary(),
+							soundHist.getHeight(), soundHist.getTime());
+
+					return true;
 				} else {
-					isValid = false;
+					System.out.println("Sound already exists");
+					return false;
 				}
 			}
 			case UPDATE -> {
-				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
-				if (artwork == null) {
-					isValid = false;
+				sound = EsUtils.getById(esClient, IndicesNames.SOUND, soundHist.getSoundId(), Sound.class);
+				if (sound == null) {
+					System.out.println("Sound not found");
 					break;
 				}
-				if (Boolean.TRUE.equals(artwork.isDeleted())) {
-					isValid = false;
+				if (Boolean.TRUE.equals(sound.isDeleted())) {
+					System.out.println("Sound is deleted");
 					break;
 				}
-				if (!artwork.getPublisher().equals(artworkHist.getSigner())) {
-					isValid = false;
+				if (!sound.getPublisher().equals(soundHist.getSigner())) {
+					System.out.println("Sound publisher is not the same as the signer");
 					break;
 				}
-				artwork.setVer(String.valueOf(Integer.parseInt(artwork.getVer())+1));
-				artwork.setDid(artworkHist.getDid());
-				artwork.setTitle(artworkHist.getTitle());
-				artwork.setLang(artworkHist.getLang());
-				artwork.setAuthors(artworkHist.getAuthors());
-				artwork.setSummary(artworkHist.getSummary());
+				sound.setVer(String.valueOf(Integer.parseInt(sound.getVer())+1));
+				sound.setDid(soundHist.getDid());
+				sound.setTitle(soundHist.getTitle());
+				sound.setLang(soundHist.getLang());
+				sound.setAuthors(soundHist.getAuthors());
+				sound.setFormat(soundHist.getFormat());
+				sound.setSummary(soundHist.getSummary());
+				sound.setLastTxId(soundHist.getId());
+				sound.setLastTime(soundHist.getTime());
+				sound.setLastHeight(soundHist.getHeight());
+				Sound sound2 = sound;
+				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.SOUND).id(soundHist.getSoundId()).document(sound2));
+				System.out.println(result2.result());
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
+			}
 
-				artwork.setLastTxId(artworkHist.getId());
-				artwork.setLastTime(artworkHist.getTime());
-				artwork.setLastHeight(artworkHist.getHeight());
-				Artwork artwork2 = artwork;
-				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork2));
-				isValid = true;
+			case DELETE, RECOVER -> {
+				List<String> idList = new ArrayList<>();
+				if (soundHist.getSoundIds() != null && soundHist.getSoundIds().length > 0) {
+					idList.addAll(Arrays.asList(soundHist.getSoundIds()));
+				} else {
+					System.out.println("SoundIds is null or empty");
+					break;
+				}
+
+				EsUtils.MgetResult<Sound> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SOUND, idList, Sound.class);
+				List<Sound> sounds = result.getResultList();
+				if(sounds==null||sounds.isEmpty()){
+					System.out.println("Sounds is null or empty");
+					return false;
+				}
+
+				List<Sound> updatedSounds = new ArrayList<>();
+				for (Sound soundItem : sounds) {
+
+					if (!soundItem.getPublisher().equals(soundHist.getSigner())) {
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, soundHist.getSigner(), Freer.class);
+						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(soundHist.getSigner())) {
+							continue;
+						}
+					}
+
+					switch (soundHist.getOp()) {
+						case DELETE:
+							soundItem.setDeleted(true);
+							break;
+						case RECOVER:
+							soundItem.setDeleted(false);
+							break;
+					}
+
+					soundItem.setLastTxId(soundHist.getId());
+					soundItem.setLastTime(soundHist.getTime());
+					soundItem.setLastHeight(soundHist.getHeight());
+
+					updatedSounds.add(soundItem);
+				}
+
+				if (!updatedSounds.isEmpty()) {
+					BulkRequest.Builder br = new BulkRequest.Builder();
+					for (Sound updatedSound : updatedSounds) {
+						br.operations(op -> op
+								.index(idx -> idx
+										.index(IndicesNames.SOUND)
+										.id(updatedSound.getId())
+										.document(updatedSound)
+								)
+						);
+					}
+					BulkResponse result3 = esClient.bulk(br.build());
+					if(result3.errors()){
+						System.out.println("Failed to bulk update sound");
+						return false;
+					}
+					return true;
+				}
 			}
-			case DELETE -> {
-				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
-				if (artwork == null) {
-					isValid = false;
-					break;
-				}
-				if (Boolean.TRUE.equals(artwork.isDeleted())) {
-					isValid = false;
-					break;
-				}
-				if (!artwork.getPublisher().equals(artworkHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-				artwork.setDeleted(true);
-				artwork.setLastTxId(artworkHist.getId());
-				artwork.setLastTime(artworkHist.getTime());
-				artwork.setLastHeight(artworkHist.getHeight());
-				Artwork artwork3 = artwork;
-				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork3));
-				isValid = true;
-			}
-			case RECOVER -> {
-				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
-				if (artwork == null) {
-					isValid = false;
-					break;
-				}
-				if (!Boolean.TRUE.equals(artwork.isDeleted())) {
-					isValid = false;
-					break;
-				}
-				if (!artwork.getPublisher().equals(artworkHist.getSigner())) {
-					isValid = false;
-					break;
-				}
-				artwork.setDeleted(false);
-				artwork.setLastTxId(artworkHist.getId());
-				artwork.setLastTime(artworkHist.getTime());
-				artwork.setLastHeight(artworkHist.getHeight());
-				Artwork artwork4 = artwork;
-				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork4));
-				isValid = true;
-			}
+
 			case RATE -> {
-				artwork = EsUtils.getById(esClient, IndicesNames.ARTWORK, artworkHist.getArtworkId(), Artwork.class);
-				if (artwork == null) {
-					isValid = false;
+				sound = EsUtils.getById(esClient, IndicesNames.SOUND, soundHist.getSoundId(), Sound.class);
+				if (sound == null) {
+					System.out.println("Sound not found");
+					return false;
+				}
+				if (sound.getPublisher().equals(soundHist.getSigner())) {
+					System.out.println("Sound publisher is the same as the signer");
+					return false;
+				}
+
+				if((soundHist.getCdd()==null || soundHist.getRate()==null)){
+					System.out.println("Cdd or rate is null");
+					return false;
+				}
+
+				if(sound.gettCdd()==null||sound.gettRate()==null){
+					sound.settRate(Float.valueOf(soundHist.getRate()));
+					sound.settCdd(soundHist.getCdd());
+				}else{
+					sound.settRate(
+							(sound.gettRate()*sound.gettCdd()+soundHist.getRate()*soundHist.getCdd())
+									/(sound.gettCdd()+soundHist.getCdd())
+					);
+					sound.settCdd(sound.gettCdd() + soundHist.getCdd());
+				}
+
+				sound.setLastTxId(soundHist.getId());
+				sound.setLastTime(soundHist.getTime());
+				sound.setLastHeight(soundHist.getHeight());
+				Sound sound3 = sound;
+				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.SOUND).id(soundHist.getSoundId()).document(sound3));
+				System.out.println(result3.result());
+				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
+			}
+		}
+		return false;
+	}
+
+	public ImageHistory makeImage(OpReturn opre, Feip feip) {
+
+		Gson gson = new Gson();
+
+		ImageOpData imageRaw = new ImageOpData();
+		try {
+			imageRaw = gson.fromJson(gson.toJson(feip.getData()), ImageOpData.class);
+			if(imageRaw==null){
+				System.out.println("Image raw is null");
+				return null;
+			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse image");
+			return null;
+		}
+
+		ImageHistory imageHist = new ImageHistory();
+
+		if(imageRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
+
+		imageHist.setOp(imageRaw.getOp());
+
+		switch(imageRaw.getOp()) {
+
+			case PUBLISH:
+				if(imageRaw.getTitle()==null||"".equals(imageRaw.getTitle())){
+					System.out.println("Title is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
+				imageHist.setId(opre.getId());
+
+				imageHist.setImageId(opre.getId());
+				imageHist.setHeight(opre.getHeight());
+				imageHist.setIndex(opre.getTxIndex());
+				imageHist.setTime(opre.getTime());
+				imageHist.setSigner(opre.getSigner());
+
+				if(imageRaw.getDid()!=null)imageHist.setDid(imageRaw.getDid());
+				if(imageRaw.getTitle()!=null)imageHist.setTitle(imageRaw.getTitle());
+				if(imageRaw.getLang()!=null)imageHist.setLang(imageRaw.getLang());
+				if(imageRaw.getAuthors()!=null)imageHist.setAuthors(imageRaw.getAuthors());
+				if(imageRaw.getFormat()!=null)imageHist.setFormat(imageRaw.getFormat());
+				if(imageRaw.getSummary()!=null)imageHist.setSummary(imageRaw.getSummary());
+
+				break;
+
+			case UPDATE:
+				if(imageRaw.getImageId()==null|| imageRaw.getTitle()==null||"".equals(imageRaw.getTitle())){
+					System.out.println("ImageId is null or title is null or empty");
+					return null;
+				}
+				imageHist.setId(opre.getId());
+				imageHist.setHeight(opre.getHeight());
+				imageHist.setIndex(opre.getTxIndex());
+				imageHist.setTime(opre.getTime());
+				imageHist.setSigner(opre.getSigner());
+
+				imageHist.setImageId(imageRaw.getImageId());
+
+				if(imageRaw.getDid()!=null)imageHist.setDid(imageRaw.getDid());
+				if(imageRaw.getTitle()!=null)imageHist.setTitle(imageRaw.getTitle());
+				if(imageRaw.getLang()!=null)imageHist.setLang(imageRaw.getLang());
+				if(imageRaw.getAuthors()!=null)imageHist.setAuthors(imageRaw.getAuthors());
+				if(imageRaw.getFormat()!=null)imageHist.setFormat(imageRaw.getFormat());
+				if(imageRaw.getSummary()!=null)imageHist.setSummary(imageRaw.getSummary());
+
+				break;
+			case RECOVER:
+			case DELETE:
+				if (imageRaw.getImageIds() == null || imageRaw.getImageIds().length == 0) {
+					System.out.println("ImageIds is null or empty");
+					return null;
+				}
+				imageHist.setImageIds(imageRaw.getImageIds());
+				imageHist.setId(opre.getId());
+				imageHist.setHeight(opre.getHeight());
+				imageHist.setIndex(opre.getTxIndex());
+				imageHist.setTime(opre.getTime());
+				imageHist.setSigner(opre.getSigner());
+
+				break;
+
+			case RATE:
+				if(imageRaw.getImageId()==null){
+					System.out.println("ImageId is null");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
+				imageHist.setImageId(imageRaw.getImageId());
+				imageHist.setRate(imageRaw.getRate());
+				imageHist.setCdd(opre.getCdd());
+
+				imageHist.setId(opre.getId());
+				imageHist.setHeight(opre.getHeight());
+				imageHist.setIndex(opre.getTxIndex());
+				imageHist.setTime(opre.getTime());
+				imageHist.setSigner(opre.getSigner());
+				break;
+			default:
+				System.out.println("Invalid operation");
+				return null;
+		}
+		return imageHist;
+	}
+
+	public boolean parseImage(ElasticsearchClient esClient, ImageHistory imageHist) throws Exception {
+
+		if(imageHist==null){
+			System.out.println("Image hist is null");
+			return false;
+		}
+		Image image;
+		switch (imageHist.getOp()) {
+			case PUBLISH -> {
+				image = EsUtils.getById(esClient, IndicesNames.IMAGE, imageHist.getImageId(), Image.class);
+				if (image == null) {
+					image = new Image();
+
+					image.setId(imageHist.getImageId());
+					image.setVer("1");
+					image.setDid(imageHist.getDid());
+
+					image.setLang(imageHist.getLang());
+					image.setTitle(imageHist.getTitle());
+					image.setAuthors(imageHist.getAuthors());
+					image.setFormat(imageHist.getFormat());
+					image.setSummary(imageHist.getSummary());
+
+					image.setPublisher(imageHist.getSigner());
+
+					image.setBirthTime(imageHist.getTime());
+					image.setBirthHeight(imageHist.getHeight());
+					image.setLastTxId(imageHist.getId());
+					image.setLastTime(imageHist.getTime());
+					image.setLastHeight(imageHist.getHeight());
+
+					image.setDeleted(false);
+
+					Image image1 = image;
+
+					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.IMAGE).id(imageHist.getImageId()).document(image1));
+					if(result1==null||result1.result()==null){
+						System.out.println("Failed to create image");
+						return false;
+					}
+					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
+						System.out.println("Failed to create image");
+						return false;
+					}
+
+					// Create news record for image publication
+					News.createNews(esClient, imageHist.getId(), imageHist.getSigner(), PUBLISH,
+					Feip.FeipProtocol.IMAGE.getName(), imageHist.getId(), imageHist.getTitle(), imageHist.getSummary(),
+							imageHist.getHeight(), imageHist.getTime());
+
+					return true;
+				} else {
+					System.out.println("Image already exists");
+					return false;
+				}
+			}
+			case UPDATE -> {
+				image = EsUtils.getById(esClient, IndicesNames.IMAGE, imageHist.getImageId(), Image.class);
+				if (image == null) {
+					System.out.println("Image not found");
+					return false;
+				}
+				if (Boolean.TRUE.equals(image.isDeleted())) {
+					System.out.println("Image is deleted");
+					return false;
+				}
+				if (!image.getPublisher().equals(imageHist.getSigner())) {
+					System.out.println("Image publisher is not the same as the signer");
+					return false;
+				}
+				image.setVer(String.valueOf(Integer.parseInt(image.getVer())+1));
+				image.setDid(imageHist.getDid());
+				image.setTitle(imageHist.getTitle());
+				image.setLang(imageHist.getLang());
+				image.setAuthors(imageHist.getAuthors());
+				image.setFormat(imageHist.getFormat());
+				image.setSummary(imageHist.getSummary());
+				image.setLastTxId(imageHist.getId());
+				image.setLastTime(imageHist.getTime());
+				image.setLastHeight(imageHist.getHeight());
+				Image image2 = image;
+				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.IMAGE).id(imageHist.getImageId()).document(image2));
+				System.out.println(result2.result());
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
+			}
+
+			case DELETE, RECOVER -> {
+				List<String> idList = new ArrayList<>();
+				if (imageHist.getImageIds() != null && imageHist.getImageIds().length > 0) {
+					idList.addAll(Arrays.asList(imageHist.getImageIds()));
+				} else {
+					System.out.println("ImageIds is null or empty");
+					return false;
+				}
+
+				EsUtils.MgetResult<Image> result = EsUtils.getMultiByIdList(esClient, IndicesNames.IMAGE, idList, Image.class);
+				List<Image> images = result.getResultList();
+
+				List<Image> updatedImages = new ArrayList<>();
+				for (Image imageItem : images) {
+
+					if (!imageItem.getPublisher().equals(imageHist.getSigner())) {
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, imageHist.getSigner(), Freer.class);
+						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(imageHist.getSigner())) {
+							continue;
+						}
+					}
+
+					switch (imageHist.getOp()) {
+						case DELETE:
+							imageItem.setDeleted(true);
+							break;
+						case RECOVER:
+							imageItem.setDeleted(false);
+							break;
+					}
+
+					imageItem.setLastTxId(imageHist.getId());
+					imageItem.setLastTime(imageHist.getTime());
+					imageItem.setLastHeight(imageHist.getHeight());
+
+					updatedImages.add(imageItem);
+				}
+
+				if (!updatedImages.isEmpty()) {
+					BulkRequest.Builder br = new BulkRequest.Builder();
+					for (Image updatedImage : updatedImages) {
+						br.operations(op -> op
+								.index(idx -> idx
+										.index(IndicesNames.IMAGE)
+										.id(updatedImage.getId())
+										.document(updatedImage)
+								)
+						);
+					}
+					BulkResponse result3 = esClient.bulk(br.build());
+					if(result3.errors()){
+						System.out.println("Failed to bulk update image");
+						return false;
+					}
+					return true;
+				}
+			}
+
+			case RATE -> {
+				image = EsUtils.getById(esClient, IndicesNames.IMAGE, imageHist.getImageId(), Image.class);
+				if (image == null) {
+					System.out.println("Image not found");
+					return false;
+				}
+				if (image.getPublisher().equals(imageHist.getSigner())) {
+					System.out.println("Image publisher is the same as the signer");
+					return false;
+				}
+
+				if((imageHist.getCdd()==null || imageHist.getRate()==null)){
+					System.out.println("Cdd or rate is null");
+					return false;
+				}
+
+				if(image.gettCdd()==null||image.gettRate()==null){
+					image.settRate(Float.valueOf(imageHist.getRate()));
+					image.settCdd(imageHist.getCdd());
+				}else{
+					image.settRate(
+							(image.gettRate()*image.gettCdd()+imageHist.getRate()*imageHist.getCdd())
+									/(image.gettCdd()+imageHist.getCdd())
+					);
+					image.settCdd(image.gettCdd() + imageHist.getCdd());
+				}
+
+				image.setLastTxId(imageHist.getId());
+				image.setLastTime(imageHist.getTime());
+				image.setLastHeight(imageHist.getHeight());
+				Image image3 = image;
+				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.IMAGE).id(imageHist.getImageId()).document(image3));
+				System.out.println(result3.result());
+				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
+			}
+		}
+		return false;
+	}
+
+	public VideoHistory makeVideo(OpReturn opre, Feip feip) {
+
+		Gson gson = new Gson();
+
+		VideoOpData videoRaw = new VideoOpData();
+		try {
+			videoRaw = gson.fromJson(gson.toJson(feip.getData()), VideoOpData.class);
+			if(videoRaw==null){
+				System.out.println("Video raw is null");
+				return null;
+			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse video");
+			return null;
+		}
+		VideoHistory videoHist = new VideoHistory();
+
+		if(videoRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
+
+		videoHist.setOp(videoRaw.getOp());
+
+		switch(videoRaw.getOp()) {
+
+			case PUBLISH:
+				if(videoRaw.getTitle()==null||"".equals(videoRaw.getTitle())){
+					System.out.println("Title is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
+				videoHist.setId(opre.getId());
+
+				videoHist.setVideoId(opre.getId());
+				videoHist.setHeight(opre.getHeight());
+				videoHist.setIndex(opre.getTxIndex());
+				videoHist.setTime(opre.getTime());
+				videoHist.setSigner(opre.getSigner());
+
+				if(videoRaw.getDid()!=null)videoHist.setDid(videoRaw.getDid());
+				if(videoRaw.getTitle()!=null)videoHist.setTitle(videoRaw.getTitle());
+				if(videoRaw.getLang()!=null)videoHist.setLang(videoRaw.getLang());
+				if(videoRaw.getAuthors()!=null)videoHist.setAuthors(videoRaw.getAuthors());
+				if(videoRaw.getFormat()!=null)videoHist.setFormat(videoRaw.getFormat());
+				if(videoRaw.getSummary()!=null)videoHist.setSummary(videoRaw.getSummary());
+
+				break;
+
+			case UPDATE:
+				if(videoRaw.getVideoId()==null|| videoRaw.getTitle()==null||"".equals(videoRaw.getTitle())){
+					System.out.println("VideoId is null or title is null or empty");
+					return null;
+				}
+				videoHist.setId(opre.getId());
+				videoHist.setHeight(opre.getHeight());
+				videoHist.setIndex(opre.getTxIndex());
+				videoHist.setTime(opre.getTime());
+				videoHist.setSigner(opre.getSigner());
+
+				videoHist.setVideoId(videoRaw.getVideoId());
+
+				if(videoRaw.getDid()!=null)videoHist.setDid(videoRaw.getDid());
+				if(videoRaw.getTitle()!=null)videoHist.setTitle(videoRaw.getTitle());
+				if(videoRaw.getLang()!=null)videoHist.setLang(videoRaw.getLang());
+				if(videoRaw.getAuthors()!=null)videoHist.setAuthors(videoRaw.getAuthors());
+				if(videoRaw.getFormat()!=null)videoHist.setFormat(videoRaw.getFormat());
+				if(videoRaw.getSummary()!=null)videoHist.setSummary(videoRaw.getSummary());
+
+				break;
+			case RECOVER:
+			case DELETE:
+				if (videoRaw.getVideoIds() == null || videoRaw.getVideoIds().length == 0) {
+					System.out.println("VideoIds is null or empty");
+					return null;
+				}
+				videoHist.setVideoIds(videoRaw.getVideoIds());
+				videoHist.setId(opre.getId());
+				videoHist.setHeight(opre.getHeight());
+				videoHist.setIndex(opre.getTxIndex());
+				videoHist.setTime(opre.getTime());
+				videoHist.setSigner(opre.getSigner());
+
+				break;
+
+			case RATE:
+				if(videoRaw.getVideoId()==null){
+					System.out.println("VideoId is null");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
+				videoHist.setVideoId(videoRaw.getVideoId());
+				videoHist.setRate(videoRaw.getRate());
+				videoHist.setCdd(opre.getCdd());
+
+				videoHist.setId(opre.getId());
+				videoHist.setHeight(opre.getHeight());
+				videoHist.setIndex(opre.getTxIndex());
+				videoHist.setTime(opre.getTime());
+				videoHist.setSigner(opre.getSigner());
+				break;
+			default:
+				return null;
+		}
+		return videoHist;
+	}
+
+	public boolean parseVideo(ElasticsearchClient esClient, VideoHistory videoHist) throws Exception {
+
+		if(videoHist==null){
+			System.out.println("Video hist is null");
+			return false;
+		}
+		Video video;
+		switch (videoHist.getOp()) {
+			case PUBLISH -> {
+				video = EsUtils.getById(esClient, IndicesNames.VIDEO, videoHist.getVideoId(), Video.class);
+				if (video == null) {
+					video = new Video();
+
+					video.setId(videoHist.getVideoId());
+					video.setVer("1");
+					video.setDid(videoHist.getDid());
+
+					video.setLang(videoHist.getLang());
+					video.setTitle(videoHist.getTitle());
+					video.setAuthors(videoHist.getAuthors());
+					video.setFormat(videoHist.getFormat());
+					video.setSummary(videoHist.getSummary());
+
+					video.setPublisher(videoHist.getSigner());
+
+					video.setBirthTime(videoHist.getTime());
+					video.setBirthHeight(videoHist.getHeight());
+					video.setLastTxId(videoHist.getId());
+					video.setLastTime(videoHist.getTime());
+					video.setLastHeight(videoHist.getHeight());
+
+					video.setDeleted(false);
+
+					Video video1 = video;
+
+					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.VIDEO).id(videoHist.getVideoId()).document(video1));
+					if(result1==null||result1.result()==null){
+						System.out.println("Failed to create video");
+						return false;
+					}
+					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
+						System.out.println("Failed to create video");
+						return false;
+					}
+
+					// Create news record for video publication
+					News.createNews(esClient, videoHist.getId(), videoHist.getSigner(), PUBLISH,
+					Feip.FeipProtocol.VIDEO.getName(), videoHist.getId(), videoHist.getTitle(), videoHist.getSummary(),
+							videoHist.getHeight(), videoHist.getTime());
+
+					return true;
+				} else {
+					System.out.println("Video already exists");
+					return false;
+				}
+			}
+			case UPDATE -> {
+				video = EsUtils.getById(esClient, IndicesNames.VIDEO, videoHist.getVideoId(), Video.class);
+				if (video == null) {
+					System.out.println("Video not found");
 					break;
 				}
-				if (Boolean.TRUE.equals(artwork.isDeleted())) {
-					isValid = false;
+				if (Boolean.TRUE.equals(video.isDeleted())) {
+					System.out.println("Video is deleted");
 					break;
 				}
-				artwork.settCdd(artwork.gettCdd() + artworkHist.getCdd());
-				artwork.settRate((artwork.gettRate() * artwork.gettCdd() + artworkHist.getRate() * artworkHist.getCdd()) / (artwork.gettCdd() + artworkHist.getCdd()));
-				artwork.setLastTxId(artworkHist.getId());
-				artwork.setLastTime(artworkHist.getTime());
-				artwork.setLastHeight(artworkHist.getHeight());
-				Artwork artwork5 = artwork;
-				esClient.index(i -> i.index(IndicesNames.ARTWORK).id(artworkHist.getArtworkId()).document(artwork5));
-				isValid = true;
+				if (!video.getPublisher().equals(videoHist.getSigner())) {
+					System.out.println("Video publisher is not the same as the signer");
+					break;
+				}
+				video.setVer(String.valueOf(Integer.parseInt(video.getVer())+1));
+				video.setDid(videoHist.getDid());
+				video.setTitle(videoHist.getTitle());
+				video.setLang(videoHist.getLang());
+				video.setAuthors(videoHist.getAuthors());
+				video.setFormat(videoHist.getFormat());
+				video.setSummary(videoHist.getSummary());
+				video.setLastTxId(videoHist.getId());
+				video.setLastTime(videoHist.getTime());
+				video.setLastHeight(videoHist.getHeight());
+				Video video2 = video;
+				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.VIDEO).id(videoHist.getVideoId()).document(video2));
+				System.out.println(result2.result());
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
+			}
+
+			case DELETE, RECOVER -> {
+				List<String> idList = new ArrayList<>();
+				if (videoHist.getVideoIds() != null && videoHist.getVideoIds().length > 0) {
+					idList.addAll(Arrays.asList(videoHist.getVideoIds()));
+				} else {
+					System.out.println("VideoIds is null or empty");
+					return false;
+				}
+
+				EsUtils.MgetResult<Video> result = EsUtils.getMultiByIdList(esClient, IndicesNames.VIDEO, idList, Video.class);
+				List<Video> videos = result.getResultList();
+
+				List<Video> updatedVideos = new ArrayList<>();
+				for (Video videoItem : videos) {
+
+					if (!videoItem.getPublisher().equals(videoHist.getSigner())) {
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, videoHist.getSigner(), Freer.class);
+						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(videoHist.getSigner())) {
+							continue;
+						}
+					}
+
+					switch (videoHist.getOp()) {
+						case DELETE:
+							videoItem.setDeleted(true);
+							break;
+						case RECOVER:
+							videoItem.setDeleted(false);
+							break;
+					}
+
+					videoItem.setLastTxId(videoHist.getId());
+					videoItem.setLastTime(videoHist.getTime());
+					videoItem.setLastHeight(videoHist.getHeight());
+
+					updatedVideos.add(videoItem);
+				}
+
+				if (!updatedVideos.isEmpty()) {
+					BulkRequest.Builder br = new BulkRequest.Builder();
+					for (Video updatedVideo : updatedVideos) {
+						br.operations(op -> op
+								.index(idx -> idx
+										.index(IndicesNames.VIDEO)
+										.id(updatedVideo.getId())
+										.document(updatedVideo)
+								)
+						);
+					}
+					BulkResponse result3 = esClient.bulk(br.build());
+					if(result3.errors()){
+						System.out.println("Failed to bulk update video");
+						return false;
+					}
+					return true;
+				}
+			}
+
+			case RATE -> {
+				video = EsUtils.getById(esClient, IndicesNames.VIDEO, videoHist.getVideoId(), Video.class);
+				if (video == null) {
+					System.out.println("Video not found");
+					return false;
+				}
+				if (video.getPublisher().equals(videoHist.getSigner())) {
+					System.out.println("Video publisher is the same as the signer");
+					return false;
+				}
+
+				if((videoHist.getCdd()==null || videoHist.getRate()==null)){
+					System.out.println("Cdd or rate is null");
+					return false;
+				}
+
+				if(video.gettCdd()==null||video.gettRate()==null){
+					video.settRate(Float.valueOf(videoHist.getRate()));
+					video.settCdd(videoHist.getCdd());
+				}else{
+					video.settRate(
+							(video.gettRate()*video.gettCdd()+videoHist.getRate()*videoHist.getCdd())
+									/(video.gettCdd()+videoHist.getCdd())
+					);
+					video.settCdd(video.gettCdd() + videoHist.getCdd());
+				}
+
+				video.setLastTxId(videoHist.getId());
+				video.setLastTime(videoHist.getTime());
+				video.setLastHeight(videoHist.getHeight());
+				Video video3 = video;
+				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.VIDEO).id(videoHist.getVideoId()).document(video3));
+				System.out.println(result3.result());
+				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}
 
-		return isValid;
+		return false;
 	}
 
 }

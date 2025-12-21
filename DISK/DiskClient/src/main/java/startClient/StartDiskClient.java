@@ -1,7 +1,6 @@
 package startClient;
 
 import data.apipData.SignInMode;
-import data.fcData.AlgorithmId;
 import handlers.Manager;
 import ui.Inputer;
 import ui.Menu;
@@ -10,7 +9,6 @@ import config.Settings;
 import config.Starter;
 import core.crypto.Decryptor;
 import core.crypto.Encryptor;
-import data.fcData.FcSession;
 import clients.ApipClient;
 import clients.DiskClient;
 import data.fcData.DiskItem;
@@ -34,7 +32,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 import static config.Configure.saveConfig;
-import static server.ApipApiNames.VERSION_1;
+import static server.ApipApi.VER_1;
 
 public class StartDiskClient {
     private static BufferedReader br;
@@ -87,13 +85,13 @@ public class StartDiskClient {
                 case 3 -> ping(br);
                 case 4 -> put(br);
                 case 5 -> get(RequestMethod.GET, AuthType.FREE, br,symkey);
-                case 6 -> get(RequestMethod.POST,AuthType.FC_SIGN_BODY, br,symkey);
+                case 6 -> get(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, br,symkey);
                 case 7 -> checkFree(br);
                 case 8 -> check(br);
                 case 9 -> list(RequestMethod.GET, AuthType.FREE, br);
-                case 10 -> list(RequestMethod.POST, AuthType.FC_SIGN_BODY, br);
+                case 10 -> list(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, br);
                 case 11 -> carve(br);
-                case 12 -> signInEcc(symkey);
+//                case 12 -> signInEcc();
                 case 13 -> settings.setting(br, null);
                 case 0 -> {
                     return;
@@ -102,30 +100,30 @@ public class StartDiskClient {
         }
     }
 
-    private static void signInEcc(byte[] symkey) {
-        FcSession fcSession = diskClient.signIn(settings.getApiAccount(Service.ServiceType.DISK), SignInMode.NORMAL, symkey, AlgorithmId.FC_EccK1AesCbc256_No1_NrC7, null);
-        JsonUtils.printJson(fcSession);
-        saveConfig();
-        Menu.anyKeyToContinue(br);
-    }
+//    private static void signInEcc() {
+//        FcSession fcSession = diskClient.signIn(SignInMode.NORMAL, null);
+//        JsonUtils.printJson(fcSession);
+//        saveConfig();
+//        Menu.anyKeyToContinue(br);
+//    }
 
     public static void getService() {
         System.out.println("Getting the service information...");
-        ReplyBody replier = DiskClient.getService(diskClient.getUrlHead(), VERSION_1, ApipParams.class);
+        ReplyBody replier = DiskClient.getService(diskClient.getUrlHead(), VER_1, ApipParams.class);
         if(replier!=null) JsonUtils.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
     }
 
     public static void pingFree(BufferedReader br){
-        boolean done = (boolean) diskClient.ping(VERSION_1, RequestMethod.GET,AuthType.FREE, Service.ServiceType.DISK);
+        boolean done = (boolean) diskClient.ping(VER_1, RequestMethod.GET,AuthType.FREE, Service.ServiceType.DISK);
         if(done) System.out.println("OK!");
         else System.out.println("Failed!");
         Menu.anyKeyToContinue(br);
     }
 
     public static void ping(BufferedReader br){
-        Object rest = diskClient.ping(VERSION_1, RequestMethod.POST,AuthType.FC_SIGN_BODY, null);
+        Object rest = diskClient.ping(VER_1, RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, null);
         if(rest!=null) System.out.println("OK! "+rest+" KB/requests are available.");
         else System.out.println("Failed!");
 
@@ -299,16 +297,16 @@ public class StartDiskClient {
     public static void check(BufferedReader br){
         System.out.println("Check...");
         String did = Inputer.inputString(br,"Input the DID of the file:");
-        String dataResponse = diskClient.check(did);
-        System.out.println("Got:"+dataResponse);
+        DiskItem dataResponse = diskClient.check(did);
+        System.out.println("Got:"+dataResponse.toNiceJson());
         Menu.anyKeyToContinue(br);
     }
 
     public static void checkFree(BufferedReader br){
         System.out.println("Check...");
         String did = Inputer.inputString(br,"Input the DID of the file:");
-        String dataResponse = diskClient.check(did);
-        System.out.println("Got:"+dataResponse);
+        DiskItem  dataResponse = diskClient.check(did);
+        System.out.println("Got:"+dataResponse.toNiceJson());
         Menu.anyKeyToContinue(br);
     }
 

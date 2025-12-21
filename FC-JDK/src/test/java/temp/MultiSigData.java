@@ -4,7 +4,7 @@
 //import com.google.gson.reflect.TypeToken;
 //import core.crypto.Hash;
 //import data.fchData.Cash;
-//import data.fchData.Multisign;
+//import data.fchData.Multisig;
 //import utils.BytesUtils;
 //import utils.JsonUtils;
 //import utils.ObjectUtils;
@@ -17,11 +17,11 @@
 //    private long nonce;
 //    private String rawTxId;
 //    private byte[] rawTx;
-//    private Multisign multisign;
+//    private Multisig multisign;
 //    private List<Cash> cashList;
 //    private Map<String, List<byte[]>> fidSigMap;
 //
-//    public MultiSigData(byte[] rawTx, Multisign multisign, List<Cash> cashList) {
+//    public MultiSigData(byte[] rawTx, Multisig multisign, List<Cash> cashList) {
 //        this.nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
 //        this.rawTx = rawTx;
 //        this.multisign = multisign;
@@ -32,7 +32,7 @@
 //    public MultiSigData(String rawTxHex, String multisignStr, String cashList) {
 //        this.nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
 //        this.rawTx = HexFormat.of().parseHex(rawTxHex);
-//        this.multisign = new Gson().fromJson(multisignStr, Multisign.class);
+//        this.multisign = new Gson().fromJson(multisignStr, Multisig.class);
 //        this.cashList = ObjectUtils.objectToList(cashList,Cash.class);//DataGetter.getCashList(cashList);
 //    }
 //
@@ -55,7 +55,7 @@
 //        if (dataMap.get("rawTx") != null)
 //            multiSignData.setRawTx(HexFormat.of().parseHex((String) dataMap.get("rawTx")));
 //        if (dataMap.get("p2SH") != null)
-//            multiSignData.setP2SH(gson.fromJson(gson.toJson(dataMap.get("p2SH")), Multisign.class));
+//            multiSignData.setP2SH(gson.fromJson(gson.toJson(dataMap.get("p2SH")), Multisig.class));
 //        if (dataMap.get("cashList") != null)
 //            multiSignData.setCashList(ObjectUtils.objectToList(dataMap.get("cashList"),Cash.class));//DataGetter.getCashList(dataMap.get("cashList")));
 //        if (dataMap.get("fidSigMap") != null) {
@@ -143,11 +143,11 @@
 //        this.rawTxId = HexFormat.of().formatHex(Hash.sha256x2(rawTx));
 //    }
 //
-//    public Multisign getMultisign() {
+//    public Multisig getMultisign() {
 //        return multisign;
 //    }
 //
-//    public void setP2SH(Multisign multisign) {
+//    public void setP2SH(Multisig multisign) {
 //        this.multisign = multisign;
 //    }
 //

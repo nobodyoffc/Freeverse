@@ -7,7 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import config.Settings;
-import constants.ApiNames;
+import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.FieldNames;
 import constants.Strings;
@@ -35,7 +35,7 @@ import static constants.FieldNames.SID;
 import static constants.IndicesNames.SWAP_FINISHED;
 import static constants.Values.ASC;
 
-@WebServlet(ApiNames.SwapHallPath + ApiNames.SwapFinished)
+@WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapFinished)
 public class SwapFinished extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {

@@ -2,7 +2,7 @@ package data.fcData;
 
 import core.crypto.Algorithm.Bitcore;
 
-import data.fchData.Cid;
+import data.fchData.Freer;
 import clients.ApipClient;
 import utils.FcUtils;
 import data.feipData.Contact;
@@ -72,7 +72,7 @@ public class ContactDetail extends FcEntity {
         return map;
     }
 
-    public static ContactDetail fromCidInfo(Cid cid) {
+    public static ContactDetail fromCidInfo(Freer cid) {
         ContactDetail contactDetail = new ContactDetail();
         contactDetail.setFid(cid.getId());
         contactDetail.setCid(cid.getCid());
@@ -169,7 +169,7 @@ public class ContactDetail extends FcEntity {
 
     private static ContactDetail makeContactDetail(ContactDetail contactDetail, ApipClient apipClient) {
         if (contactDetail == null) return null;
-        Cid cid = apipClient.getFidCid(contactDetail.getFid());
+        Freer cid = apipClient.getFidCid(contactDetail.getFid());
         if (cid == null) return null;
         contactDetail.setFid(cid.getId());
         contactDetail.setPubkey(cid.getPubkey());

@@ -3,11 +3,12 @@ package core.crypto;
 import clients.ApipClient;
 import constants.Constants;
 import core.crypto.old.EccAes256K1P7;
+import data.fcData.AlgorithmId;
 import handlers.ContactManager;
 import ui.Shower;
 
 
-import data.fcData.ContactDetail;
+import data.feipData.Contact;
 import data.fcData.FcSession;
 import data.fcData.TalkIdInfo;
 import handlers.SessionManager;
@@ -32,14 +33,15 @@ import utils.QRCodeUtils;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HexFormat;
-import java.util.Map;
+import java.util.*;
 
 public class KeyTools {
 
@@ -68,12 +70,12 @@ public class KeyTools {
             if(pubkey!=null)return pubkey;
         }
         if(contactHandler!=null){
-            ContactDetail contact = contactHandler.getContact(fid);
+            Contact contact = contactHandler.getContact(fid);
             if(contact!=null)pubkey = contact.getPubkey();
             if(pubkey!=null)return pubkey;
         }
         if(apipClient!=null){
-            pubkey = apipClient.getPubkey(fid, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            pubkey = apipClient.getPubkey(fid, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         }
         return pubkey;
     }
@@ -271,42 +273,60 @@ public class KeyTools {
         Address address = Address.fromKey(FchMainNetwork.MAINNETWORK, ecKey);
         System.out.println("New FID:" + address.toString());
         System.out.println();
-        char[] password = Inputer.inputPassword(br, "Input a password to encrypt it:");
-        byte[] prikey32 = ecKey.getPrivKeyBytes();
-        String cipher = EccAes256K1P7.encryptKeyWithPassword(prikey32, password);
-        password = Inputer.inputPassword(br, "Check the password:");
-        try {
-            prikey32 = EccAes256K1P7.decryptJsonBytes(cipher, BytesUtils.utf8CharArrayToByteArray(password));
-            if (prikey32 == null) {
-                System.out.println("Failed to generate new prikey.");
-                return null;
+        while(true) {
+            char[] password = Inputer.inputPassword(br, "Input a password to encrypt it:");
+            byte[] prikey32 = ecKey.getPrivKeyBytes();
+            CryptoDataByte cryptoDataByte = new Encryptor(AlgorithmId.FC_AesGcm256_No1_NrC7).encryptByPassword(prikey32, password);//EccAes256K1P7.encryptKeyWithPassword(prikey32, password);
+            String cipher;
+            if (cryptoDataByte != null && cryptoDataByte.getCode() == 0) {
+                cipher = cryptoDataByte.toNiceJson();
+            } else {
+                System.out.println("Failed to encrypt prikey. Try again.");
+                continue;
             }
-            ECKey ecKey1 = ECKey.fromPrivate(prikey32);
-            Address checkAddress = Address.fromKey(FchMainNetwork.MAINNETWORK, ecKey1);
+            password = Inputer.inputPassword(br, "Check the password:");
+            try {
+                CryptoDataByte cryptoDataByteD = new Decryptor().decryptJsonByPassword(cipher,password);//.decryptJsonBytes(cipher, BytesUtils.utf8CharArrayToByteArray(password));
+                if (cryptoDataByteD==null || cryptoDataByteD.getData()==null) {
+                    System.out.println("Failed to decrypt prikey. Try again.");
+                    continue;
+                }
+                ECKey ecKey1 = ECKey.fromPrivate(prikey32);
+                Address checkAddress = Address.fromKey(FchMainNetwork.MAINNETWORK, ecKey1);
 
-            if (!address.toString().equals(checkAddress.toString())) {
-                System.out.println("Failed to generate new prikey.");
-                return null;
+                if (!address.toString().equals(checkAddress.toString())) {
+                    System.out.println("Failed to generate new prikey. Try again");
+                    continue;
+                }
+                System.out.println("New prikey is ready:");
+                Shower.printUnderline(10);
+                System.out.println("Prikey:" + ecKey.getPrivateKeyAsWiF(FchMainNetwork.MAINNETWORK));
+                Shower.printUnderline(10);
+                System.out.println("FID:" + address);
+                System.out.println("Pubkey:" + publicKeyAsHex);
+                System.out.println("PrikeyCipher:\n" + cipher);
+                Shower.printUnderline(10);
+                System.out.println("* Keep the prikey cipher and the password carefully." +
+                        "\n* They are both required to recover the prikey.");
+                break;
+            } catch (Exception e) {
+                System.out.println("Failed to generate new prikey. Try again.");
             }
-            System.out.println("New prikey is ready:");
-            Shower.printUnderline(10);
-            System.out.println("Prikey:" + ecKey.getPrivateKeyAsWiF(FchMainNetwork.MAINNETWORK));
-            Shower.printUnderline(10);
-            System.out.println("FID:" + address);
-            System.out.println("Pubkey:" + publicKeyAsHex);
-            System.out.println("PrikeyCipher:" + cipher);
-            Shower.printUnderline(10);
-            System.out.println("* Keep the prikey cipher and the password carefully." +
-                    "\n* They are both required to recover the prikey.");
-        } catch (Exception e) {
-            System.out.println("Failed to generate new prikey.");
         }
         return ecKey;
     }
 
     public static ECKey genNewFid(BufferedReader br) {
         MainNetParams netParams = FchMainNetwork.MAINNETWORK;
-        ECKey ecKey = new ECKey();
+
+        SecureRandom sr;
+        try {
+            sr = SecureRandom.getInstanceStrong();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+        ECKey ecKey = new ECKey(sr);
+
         byte[] prikey32 = ecKey.getPrivKeyBytes();
         System.out.println("New FID generated:");
         Shower.printUnderline(60);
@@ -500,16 +520,64 @@ public class KeyTools {
         return pubkeyToAddresses(pubkeyStr);
     }
 
+    /**
+     * Parse public key from script hex (supports both P2PKH unlockScript and P2PK lockScript)
+     * @param scriptHex The script in hex format
+     * @return The public key in hex format, or null if parsing fails
+     */
+    public static String parsePkFromScript(String scriptHex) {
+        if (scriptHex == null || scriptHex.isEmpty()) {
+            return null;
+        }
+
+        try {
+            byte[] bScript = HexFormat.of().parseHex(scriptHex);
+
+            // Check for P2PK lockScript: <pubkey_length> <pubkey> OP_CHECKSIG (0xac)
+            // P2PK script structure: first byte is pubkey length (33 or 65), last byte is OP_CHECKSIG
+            if (bScript.length >= 35 && bScript[bScript.length - 1] == (byte) 0xac) {
+                int pubkeyLen = Byte.toUnsignedInt(bScript[0]);
+                // Validate pubkey length and script structure
+                if ((pubkeyLen == 33 || pubkeyLen == 65) && bScript.length == pubkeyLen + 2) {
+                    // Validate pubkey format
+                    byte[] pubkeyBytes = new byte[pubkeyLen];
+                    System.arraycopy(bScript, 1, pubkeyBytes, 0, pubkeyLen);
+
+                    // Check pubkey prefix
+                    if ((pubkeyLen == 33 && (pubkeyBytes[0] == 0x02 || pubkeyBytes[0] == 0x03)) ||
+                        (pubkeyLen == 65 && pubkeyBytes[0] == 0x04)) {
+                        return HexFormat.of().formatHex(pubkeyBytes);
+                    }
+                }
+            }
+
+            // Otherwise, try to parse as P2PKH unlockScript: <sig_length> <signature> <pubkey_length> <pubkey>
+            int sigLen = Byte.toUnsignedInt(bScript[0]); // Length of signature
+            if (bScript.length > sigLen + 2) {
+                // Skip signature, read pubkey
+                byte pubkeyLenB = bScript[sigLen + 1]; // 公钥长度
+                int pubkeyLen = Byte.toUnsignedInt(pubkeyLenB);
+
+                if (bScript.length >= sigLen + 2 + pubkeyLen) {
+                    byte[] pubkeyBytes = new byte[pubkeyLen];
+                    System.arraycopy(bScript, sigLen + 2, pubkeyBytes, 0, pubkeyLen);
+                    return HexFormat.of().formatHex(pubkeyBytes);
+                }
+            }
+        } catch (Exception e) {
+            // Return null if parsing fails
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @deprecated Use {@link #parsePkFromScript(String)} instead
+     */
+    @Deprecated
     public static String parsePkFromUnlockScript(String hexScript) {
-        byte[] bScript = HexFormat.of().parseHex(hexScript);//HexFormat.of().parseHex(hexScript);
-        int sigLen = Byte.toUnsignedInt(bScript[0]);//Length of signature;
-        //Skip signature/跳过签名。
-        //Read pubkey./读公钥
-        byte pubkeyLenB = bScript[sigLen + 1]; //公钥长度
-        int pubkeyLen = Byte.toUnsignedInt(pubkeyLenB);
-        byte[] pubkeyBytes = new byte[pubkeyLen];
-        System.arraycopy(bScript, sigLen + 2, pubkeyBytes, 0, pubkeyLen);
-        return HexFormat.of().formatHex(pubkeyBytes);//HexFormat.of().formatHex(pubkeyBytes);
+        return parsePkFromScript(hexScript);
     }
 
     public static String recoverPK33ToPK65(String PK33) {
@@ -1237,14 +1305,7 @@ public class KeyTools {
 
         return new ECPublicKeyParameters(Q, domainParameters);
     }
-//    public static Object getSessionKeyOrPubkey(String fid, SessionHandler sessionHandler, TalkIdHandler talkIdHandler, ContactHandler contactHandler, ApipClient apipClient) {
-//        FcSession session = sessionHandler.getSessionById(fid);
-//        if (session != null && session.getKeyBytes() != null) {
-//            return session.getKeyBytes();
-//        } else {
-//            return getPubkey(fid, sessionHandler, talkIdHandler,contactHandler, apipClient);
-//        }
-//    }
+
     public static boolean isPubkey(String owner) {
         return Hex.isHexString(owner) 
         && (
@@ -1253,8 +1314,398 @@ public class KeyTools {
         ) ;
     }
 
-//    public static String pubkeyToBchAddr(String a) {
-//        byte[] pubkey = Hex.decode(a);
-//        return CashAddress.createCashAddr(pubkey);
-//    }
+
+    // BIP39 Mnemonic support
+    private static List<String> bip39WordList = null;
+
+    /**
+     * Load BIP39 English wordlist from resources
+     */
+    private static List<String> loadBip39WordList() throws Exception {
+        if (bip39WordList != null) {
+            return bip39WordList;
+        }
+
+        bip39WordList = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(
+                new java.io.InputStreamReader(
+                        KeyTools.class.getResourceAsStream("/bip39-english.txt"),
+                        java.nio.charset.StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                bip39WordList.add(line.trim());
+            }
+        }
+
+        if (bip39WordList.size() != 2048) {
+            throw new IllegalStateException("BIP39 wordlist must contain exactly 2048 words, found: " + bip39WordList.size());
+        }
+
+        return bip39WordList;
+    }
+
+    /**
+     * Convert entropy bytes to BIP39 mnemonic phrase
+     * @param entropy 16 bytes (128 bits) for 12 words, or 32 bytes (256 bits) for 24 words
+     * @return BIP39 mnemonic phrase (space-separated words)
+     * @throws IllegalArgumentException if entropy is not 16 or 32 bytes
+     */
+    public static String bytesToMnemonic(byte[] entropy) throws Exception {
+        if (entropy == null) {
+            throw new IllegalArgumentException("Entropy cannot be null");
+        }
+        if (entropy.length != 16 && entropy.length != 32) {
+            throw new IllegalArgumentException("Entropy must be 16 bytes (128 bits) or 32 bytes (256 bits), got: " + entropy.length + " bytes");
+        }
+
+        List<String> wordList = loadBip39WordList();
+
+        // Calculate checksum
+        byte[] hash = Hash.sha256(entropy);
+        int checksumLengthBits = entropy.length / 4; // 4 bits for 16 bytes, 8 bits for 32 bytes
+
+        // Convert entropy + checksum to binary string
+        StringBuilder bits = new StringBuilder();
+
+        // Add entropy bits
+        for (byte b : entropy) {
+            bits.append(String.format("%8s", Integer.toBinaryString(b & 0xFF)).replace(' ', '0'));
+        }
+
+        // Add checksum bits
+        String checksumBits = String.format("%8s", Integer.toBinaryString(hash[0] & 0xFF)).replace(' ', '0');
+        bits.append(checksumBits.substring(0, checksumLengthBits));
+
+        // Split into 11-bit groups and convert to words
+        int numberOfWords = (entropy.length * 8 + checksumLengthBits) / 11;
+        String[] words = new String[numberOfWords];
+
+        for (int i = 0; i < numberOfWords; i++) {
+            int startIndex = i * 11;
+            String wordBits = bits.substring(startIndex, startIndex + 11);
+            int wordIndex = Integer.parseInt(wordBits, 2);
+            words[i] = wordList.get(wordIndex);
+        }
+
+        return String.join(" ", words);
+    }
+
+    /**
+     * Check if a string array is a valid BIP39 mnemonic
+     * Validates:
+     * 1. Word count (must be 12 or 24 words)
+     * 2. All words are in the BIP39 wordlist
+     * 3. Checksum is valid
+     *
+     * @param allList
+     * @param words   Array of mnemonic words
+     * @return true if the mnemonic is valid, false otherwise
+     */
+    public static boolean isValidMnemonic(List<String> allList, String[] words) {
+        if (words == null || (words.length != 12 && words.length != 24)) {
+            return false;
+        }
+
+        try {
+            // Try to convert to bytes - if it succeeds, all validation passed
+            mnemonicToBytes(allList,words);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if a mnemonic phrase string is valid BIP39
+     * Validates:
+     * 1. Word count (must be 12 or 24 words)
+     * 2. All words are in the BIP39 wordlist
+     * 3. Checksum is valid
+     *
+     * @param mnemonic BIP39 mnemonic phrase (space-separated words)
+     * @return true if the mnemonic is valid, false otherwise
+     */
+    public static boolean isValidMnemonic(String mnemonic) {
+        if (mnemonic == null || mnemonic.trim().isEmpty()) {
+            return false;
+        }
+
+        try {
+            mnemonicToBytes(mnemonic);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Convert BIP39 mnemonic phrase to entropy bytes
+     * @param mnemonic BIP39 mnemonic phrase (space-separated words)
+     * @return entropy bytes (16 or 32 bytes)
+     * @throws IllegalArgumentException if mnemonic is invalid
+     */
+    public static byte[] mnemonicToBytes(String mnemonic) throws Exception {
+        if (mnemonic == null || mnemonic.trim().isEmpty()) {
+            throw new IllegalArgumentException("Mnemonic cannot be null or empty");
+        }
+
+        List<String> wordList = loadBip39WordList();
+        String[] words = mnemonic.trim().toLowerCase().split("\\s+");
+
+        return mnemonicToBytes(wordList, words);
+    }
+
+    @NotNull
+    private static byte[] mnemonicToBytes(List<String> wordList, String[] words) {
+        if (words.length != 12 && words.length != 24) {
+            throw new IllegalArgumentException("Mnemonic must be 12 or 24 words, got: " + words.length + " words");
+        }
+
+        // Convert words to indices
+        int[] indices = new int[words.length];
+        for (int i = 0; i < words.length; i++) {
+            int index = wordList.indexOf(words[i]);
+            if (index == -1) {
+                throw new IllegalArgumentException("Invalid word in mnemonic: " + words[i]);
+            }
+            indices[i] = index;
+        }
+
+        // Convert indices to binary string
+        StringBuilder bits = new StringBuilder();
+        for (int index : indices) {
+            bits.append(String.format("%11s", Integer.toBinaryString(index)).replace(' ', '0'));
+        }
+
+        // Calculate expected entropy and checksum lengths
+        int entropyLengthBits = words.length == 12 ? 128 : 256;
+        int checksumLengthBits = entropyLengthBits / 32;
+
+        // Extract entropy bits
+        String entropyBits = bits.substring(0, entropyLengthBits);
+        String checksumBits = bits.substring(entropyLengthBits, entropyLengthBits + checksumLengthBits);
+
+        // Convert entropy bits to bytes
+        byte[] entropy = new byte[entropyLengthBits / 8];
+        for (int i = 0; i < entropy.length; i++) {
+            String byteBits = entropyBits.substring(i * 8, (i + 1) * 8);
+            entropy[i] = (byte) Integer.parseInt(byteBits, 2);
+        }
+
+        // Verify checksum
+        byte[] hash = Hash.sha256(entropy);
+        String expectedChecksumBits = String.format("%8s", Integer.toBinaryString(hash[0] & 0xFF)).replace(' ', '0')
+                .substring(0, checksumLengthBits);
+
+        if (!checksumBits.equals(expectedChecksumBits)) {
+            throw new IllegalArgumentException("Invalid mnemonic checksum");
+        }
+
+        return entropy;
+    }
+
+    /**
+     * Convert BIP39 mnemonic to seed using PBKDF2-HMAC-SHA512
+     * @param mnemonic BIP39 mnemonic phrase (space-separated words)
+     * @param passphrase Optional passphrase (can be empty string "")
+     * @return 64-byte seed
+     */
+    public static byte[] mnemonicToSeed(String mnemonic, String passphrase) throws Exception {
+        if (mnemonic == null || mnemonic.trim().isEmpty()) {
+            throw new IllegalArgumentException("Mnemonic cannot be null or empty");
+        }
+
+        String normalizedMnemonic = mnemonic.trim().toLowerCase();
+        String salt = "mnemonic" + (passphrase == null ? "" : passphrase);
+
+        return pbkdf2HmacSha512(normalizedMnemonic.getBytes(StandardCharsets.UTF_8),
+                salt.getBytes(StandardCharsets.UTF_8),
+                2048,
+                64);
+    }
+
+    /**
+     * Convert BIP39 mnemonic array to seed using PBKDF2-HMAC-SHA512
+     * @param mnemonic Array of BIP39 mnemonic words
+     * @param passphrase Optional passphrase (can be empty string "")
+     * @return 64-byte seed
+     */
+    public static byte[] mnemonicToSeed(String[] mnemonic, String passphrase) throws Exception {
+        if (mnemonic == null || mnemonic.length == 0) {
+            throw new IllegalArgumentException("Mnemonic cannot be null or empty");
+        }
+        return mnemonicToSeed(String.join(" ", mnemonic), passphrase);
+    }
+
+    /**
+     * PBKDF2-HMAC-SHA512 key derivation function
+     */
+    private static byte[] pbkdf2HmacSha512(byte[] password, byte[] salt, int iterations, int dkLen) throws Exception {
+        Mac hmac = Mac.getInstance("HmacSHA512");
+        hmac.init(new SecretKeySpec(password, "HmacSHA512"));
+
+        byte[] dk = new byte[dkLen];
+        int hLen = hmac.getMacLength();
+        int l = (int) Math.ceil((double) dkLen / hLen);
+
+        for (int i = 1; i <= l; i++) {
+            byte[] u = new byte[salt.length + 4];
+            System.arraycopy(salt, 0, u, 0, salt.length);
+            u[salt.length] = (byte) (i >>> 24);
+            u[salt.length + 1] = (byte) (i >>> 16);
+            u[salt.length + 2] = (byte) (i >>> 8);
+            u[salt.length + 3] = (byte) i;
+
+            u = hmac.doFinal(u);
+            byte[] t = u.clone();
+
+            for (int j = 1; j < iterations; j++) {
+                u = hmac.doFinal(u);
+                for (int k = 0; k < hLen; k++) {
+                    t[k] ^= u[k];
+                }
+            }
+
+            int destPos = (i - 1) * hLen;
+            int len = Math.min(hLen, dkLen - destPos);
+            System.arraycopy(t, 0, dk, destPos, len);
+        }
+
+        return dk;
+    }
+
+    /**
+     * Derive private keys from BIP39 mnemonic using BIP44 path: m/44'/0'/0'/0/i
+     * This uses the standard Bitcoin derivation path
+     *
+     * @param mnemonic Array of BIP39 mnemonic words (12 or 24 words)
+     * @param count Number of private keys to generate (generates keys from index 0 to count-1)
+     * @return Array of private key byte arrays (32 bytes each)
+     * @throws Exception if mnemonic is invalid or derivation fails
+     */
+    public static byte[][] priKeysFromMnemonic(String[] mnemonic, int count) throws Exception {
+        return priKeysFromMnemonic(mnemonic, "", count);
+    }
+
+    /**
+     * Derive private keys from BIP39 mnemonic using BIP44 path: m/44'/0'/0'/0/i
+     * This uses the standard Bitcoin derivation path
+     *
+     * @param mnemonic Array of BIP39 mnemonic words (12 or 24 words)
+     * @param passphrase BIP39 passphrase (can be empty string "")
+     * @param count Number of private keys to generate (generates keys from index 0 to count-1)
+     * @return Array of private key byte arrays (32 bytes each)
+     * @throws Exception if mnemonic is invalid or derivation fails
+     */
+    public static byte[][] priKeysFromMnemonic(String[] mnemonic, String passphrase, int count) throws Exception {
+        if (count <= 0) {
+            throw new IllegalArgumentException("Count must be positive");
+        }
+
+        // Convert mnemonic to seed
+        byte[] seed = mnemonicToSeed(mnemonic, passphrase);
+
+        // Derive master key from seed
+        byte[] masterKey = deriveMasterKey(seed);
+
+        // Derive keys using BIP44 path: m/44'/0'/0'/0/i
+        byte[][] privateKeys = new byte[count][];
+
+        for (int i = 0; i < count; i++) {
+            privateKeys[i] = deriveChildKey(masterKey, new int[]{
+                    0x8000002C, // 44' (hardened)
+                    0x80000000, // 0' (hardened) - Bitcoin coin type
+                    0x80000000, // 0' (hardened) - account
+                    0,          // 0 - external chain
+                    i           // i - address index
+            });
+        }
+
+        return privateKeys;
+    }
+
+    /**
+     * Derive master key from seed using HMAC-SHA512
+     */
+    private static byte[] deriveMasterKey(byte[] seed) throws Exception {
+        Mac hmac = Mac.getInstance("HmacSHA512");
+        hmac.init(new SecretKeySpec("Bitcoin seed".getBytes(StandardCharsets.UTF_8), "HmacSHA512"));
+        byte[] i = hmac.doFinal(seed);
+
+        // Left 32 bytes is the master private key, right 32 bytes is the chain code
+        // We'll return both as a 64-byte array
+        return i;
+    }
+
+    /**
+     * Derive child key using BIP32 hierarchical deterministic derivation
+     * @param extendedKey 64-byte extended key (32 bytes private key + 32 bytes chain code)
+     * @param path Derivation path indices (use 0x80000000 + index for hardened derivation)
+     * @return 32-byte derived private key
+     */
+    private static byte[] deriveChildKey(byte[] extendedKey, int[] path) throws Exception {
+        byte[] key = new byte[32];
+        byte[] chainCode = new byte[32];
+        System.arraycopy(extendedKey, 0, key, 0, 32);
+        System.arraycopy(extendedKey, 32, chainCode, 0, 32);
+
+        for (int index : path) {
+            byte[] data;
+
+            if ((index & 0x80000000) != 0) {
+                // Hardened derivation
+                data = new byte[37];
+                data[0] = 0;
+                System.arraycopy(key, 0, data, 1, 32);
+            } else {
+                // Normal derivation - need public key
+                ECKey ecKey = ECKey.fromPrivate(key);
+                byte[] pubKey = ecKey.getPubKey();
+                data = new byte[33 + 4];
+                System.arraycopy(pubKey, 0, data, 0, 33);
+            }
+
+            // Add index to data
+            int dataLen = data.length;
+            data[dataLen - 4] = (byte) (index >>> 24);
+            data[dataLen - 3] = (byte) (index >>> 16);
+            data[dataLen - 2] = (byte) (index >>> 8);
+            data[dataLen - 1] = (byte) index;
+
+            // Calculate I = HMAC-SHA512(chainCode, data)
+            Mac hmac = Mac.getInstance("HmacSHA512");
+            hmac.init(new SecretKeySpec(chainCode, "HmacSHA512"));
+            byte[] i = hmac.doFinal(data);
+
+            // Left 32 bytes is the tweak to add to parent key
+            byte[] iL = new byte[32];
+            System.arraycopy(i, 0, iL, 0, 32);
+
+            // Right 32 bytes is the new chain code
+            System.arraycopy(i, 32, chainCode, 0, 32);
+
+            // Parse iL as 256 bit number and add to parent key modulo curve order
+            BigInteger keyInt = new BigInteger(1, key);
+            BigInteger iLInt = new BigInteger(1, iL);
+            BigInteger n = new BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16);
+
+            BigInteger childKeyInt = iLInt.add(keyInt).mod(n);
+
+            // Convert back to bytes
+            byte[] childKeyBytes = childKeyInt.toByteArray();
+
+            // Ensure it's exactly 32 bytes (pad with zeros if needed, remove sign byte if present)
+            key = new byte[32];
+            if (childKeyBytes.length == 33 && childKeyBytes[0] == 0) {
+                System.arraycopy(childKeyBytes, 1, key, 0, 32);
+            } else if (childKeyBytes.length <= 32) {
+                System.arraycopy(childKeyBytes, 0, key, 32 - childKeyBytes.length, childKeyBytes.length);
+            } else {
+                System.arraycopy(childKeyBytes, childKeyBytes.length - 32, key, 0, 32);
+            }
+        }
+
+        return key;
+    }
+
 }

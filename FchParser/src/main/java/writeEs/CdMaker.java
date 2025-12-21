@@ -11,11 +11,9 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.UpdateByQueryResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import constants.FieldNames;
-import constants.Strings;
 import core.fch.Weight;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import data.fchData.Block;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,13 +81,13 @@ public class CdMaker {
 		long sum = 0;
 		long count = 0;
 
-		SearchResponse<Cid> response = esClient.search(
-				s -> s.index(CID).size(EsUtils.READ_MAX).sort(sort -> sort.field(f -> f.field(ID))),
-				Cid.class);
+		SearchResponse<Freer> response = esClient.search(
+				s -> s.index(FREER).size(EsUtils.READ_MAX).sort(sort -> sort.field(f -> f.field(ID))),
+				Freer.class);
 
-		ArrayList<Cid> addrOldList = getResultAddrList(response);
-		Map<String, Cid> addrOldMap = new HashMap<>();
-		for(Cid addr : addrOldList){
+		ArrayList<Freer> addrOldList = getResultAddrList(response);
+		Map<String, Freer> addrOldMap = new HashMap<>();
+		for(Freer addr : addrOldList){
 			addrOldMap.put(addr.getId(),addr);
 			sum+=addr.getBalance();
 		}
@@ -101,14 +99,14 @@ public class CdMaker {
 
 		while (response.hits().hits().size() >= EsUtils.READ_MAX) {
 
-			Hit<Cid> last = response.hits().hits().get(response.hits().hits().size() - 1);
+			Hit<Freer> last = response.hits().hits().get(response.hits().hits().size() - 1);
 			String lastId = last.id();
-			response = esClient.search(s -> s.index(CID).size(EsUtils.READ_MAX)
-					.sort(sort -> sort.field(f -> f.field(ID))).searchAfter(lastId), Cid.class);
+			response = esClient.search(s -> s.index(FREER).size(EsUtils.READ_MAX)
+					.sort(sort -> sort.field(f -> f.field(ID))).searchAfter(lastId), Freer.class);
 
 			addrOldList = getResultAddrList(response);
 			addrOldMap = new HashMap<>();
-			for (Cid addr : addrOldList) {
+			for (Freer addr : addrOldList) {
 				addrOldMap.put(addr.getId(), addr);
 			}
 
@@ -125,7 +123,7 @@ public class CdMaker {
 		System.out.println(time+": Made cd values of all "+count+" address.");
 	}
 
-	private Map<String, Long> makeWeight(Map<String, Long> addrNewCdMap, Map<String, Cid> addrOldMap) {
+	private Map<String, Long> makeWeight(Map<String, Long> addrNewCdMap, Map<String, Freer> addrOldMap) {
 		Map<String,Long> addrCdGrowMap = new HashMap<>();
 
 		for(String id: addrNewCdMap.keySet()){
@@ -137,36 +135,36 @@ public class CdMaker {
 		for(String id: addrNewCdMap.keySet()){
 			Long oldWeight = addrOldMap.get(id).getWeight();
 			if(oldWeight==null) oldWeight=0L;
-			long newWeight =oldWeight +(addrCdGrowMap.get(id)* Weight.cdPercentInWeight)/100;
+			long newWeight =oldWeight +(addrCdGrowMap.get(id)* Weight.CD_WEIGHT)/100;
 			addrWeightMap.put(id, newWeight);
 		}
 		return addrWeightMap;
 	}
 
-	private ArrayList<Cid> getResultAddrList(SearchResponse<Cid> response) {
-		ArrayList<Cid> addrList = new ArrayList<>();
-		for (Hit<Cid> hit : response.hits().hits()) {
+	private ArrayList<Freer> getResultAddrList(SearchResponse<Freer> response) {
+		ArrayList<Freer> addrList = new ArrayList<>();
+		for (Hit<Freer> hit : response.hits().hits()) {
 			addrList.add(hit.source());
 		}
 		return addrList;
 	}
 
-	private Map<String, Long> makeAddrCdMap(ElasticsearchClient esClient, ArrayList<Cid> addrOldList)
+	private Map<String, Long> makeAddrCdMap(ElasticsearchClient esClient, ArrayList<Freer> addrOldList)
 			throws ElasticsearchException, IOException {
 
 		List<FieldValue> fieldValueList = new ArrayList<>();
-		for (Cid addr : addrOldList) {
+		for (Freer addr : addrOldList) {
 			fieldValueList.add(FieldValue.of(addr.getId()));
 		}
 
-		SearchResponse<Cid> response = esClient.search(
+		SearchResponse<Freer> response = esClient.search(
 				s -> s.index(CASH).size(0).query(q -> q.term(t -> t.field("valid").value(true)))
 						.aggregations("filterByAddr",
 								a -> a.filter(f -> f.terms(t -> t.field(FieldNames.OWNER).terms(t1 -> t1.value(fieldValueList))))
 										.aggregations("termByAddr",
 												a1 -> a1.terms(t3 -> t3.field(FieldNames.OWNER).size(addrOldList.size()))
 														.aggregations("cdSum", a2 -> a2.sum(su -> su.field("cd"))))),
-				Cid.class);
+				Freer.class);
 
 		Map<String, Long> addrCdMap = new HashMap<>();
 
@@ -193,7 +191,7 @@ public class CdMaker {
 			long weight = addrNewWeightMap.get(addr);
 			updateMap.put("cd", cd);
 			updateMap.put("weight",weight);
-			br.operations(o -> o.update(u -> u.index(CID).id(addr).action(a -> a.doc(updateMap))));
+			br.operations(o -> o.update(u -> u.index(FREER).id(addr).action(a -> a.doc(updateMap))));
 		}
 
 		if(addrNewCdMap.size()>0)

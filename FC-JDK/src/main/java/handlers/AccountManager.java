@@ -1,6 +1,8 @@
 package handlers;
 
 import data.apipData.Fcdsl;
+import data.fcData.Income;
+import data.fchData.Cash;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -30,9 +32,7 @@ import org.jetbrains.annotations.NotNull;
 import utils.*;
 import core.fch.BlockFileUtils;
 import data.fchData.Block;
-import data.fchData.Cash;
 import data.fchData.OpReturn;
-import data.fchData.SendTo;
 import data.feipData.Service;
 import data.feipData.serviceParams.Params;
 import org.slf4j.Logger;
@@ -135,7 +135,7 @@ public class AccountManager extends Manager<FcEntity> {
         this.cashHandler = settings.getManager(ManagerType.CASH)!=null ?(CashManager) settings.getManager(ManagerType.CASH): new CashManager(settings);
         this.jedisPool =(JedisPool) settings.getClient(Service.ServiceType.REDIS);
         Params params = ObjectUtils.objectToClass(settings.getService().getParams(), Params.class);
-        String priceStr = params.getPricePerKBytes();
+        String priceStr = params.getPricePerKB();
         if(priceStr!=null) {
             double price = Double.parseDouble(priceStr);
             this.priceBase = utils.FchUtils.coinToSatoshi(price);
@@ -737,92 +737,6 @@ public class AccountManager extends Manager<FcEntity> {
         return nPriceMap.get(name);
     }
 
-    // Inner classes for Income and Expense
-    public static class Income extends FcObject {
-        private String from;
-        private Long value;
-        private Long time;
-        private Long height;
-
-
-
-        // Constructor and getters/setters
-        public Income(String id, String from, Long value, Long time, Long height) {
-            this.id= id;
-            this.from = from;
-            this.value = value;
-            this.time = time;
-            this.height = height;
-
-        }
-        public static LinkedHashMap<String,Integer>getFieldWidthMap(){
-            LinkedHashMap<String,Integer> map = new LinkedHashMap<>();
-            map.put(ID,FcEntity.DEFAULT_ID_LENGTH);
-            map.put(FROM,FcEntity.DEFAULT_ID_LENGTH);
-            map.put(VALUE,FcEntity.DEFAULT_AMOUNT_LENGTH);
-            map.put(TIME,FcEntity.DEFAULT_TIME_LENGTH);
-            map.put(HEIGHT,FcEntity.DEFAULT_AMOUNT_LENGTH);
-            return map;
-        }
-
-        public static List<String> getTimestampFieldList(){
-            return List.of(TIME);
-        }
-
-        public static List<String> getSatoshiFieldList(){
-            return List.of(VALUE);
-        }
-        public static Map<String, String> getHeightToTimeFieldMap() {
-            return  new HashMap<>();
-        }
-
-        public static Map<String, String> getShowFieldNameAsMap() {
-            Map<String,String> map = new HashMap<>();
-            map.put(ID,CASH_ID);
-            return map;
-        }
-
-        public static List<String> getReplaceWithMeFieldList() {
-            return List.of(OWNER,ISSUER);
-        }
-
-        public static Map<String, Object> getInputFieldDefaultValueMap() {
-            return new HashMap<>();
-        }
-
-        public String getFrom() {
-            return from;
-        }
-
-        public void setFrom(String from) {
-            this.from = from;
-        }
-
-        public Long getValue() {
-            return value;
-        }
-
-        public void setValue(Long value) {
-            this.value = value;
-        }
-
-        public Long getTime() {
-            return time;
-        }
-
-        public void setTime(Long time) {
-            this.time = time;
-        }
-
-        public Long getHeight() {
-            return height;
-        }
-
-        public void setHeight(Long height) {
-            this.height = height;
-        }   
-    }
-
     public static class Expense extends FcObject {
         private String to;
         private Long value;
@@ -915,7 +829,7 @@ public class AccountManager extends Manager<FcEntity> {
     public boolean updateMyBalance() {
         // Try APIP client first
         if (apipClient != null) {
-            Map<String, Long> balanceMap = apipClient.balanceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, mainFid);
+            Map<String, Long> balanceMap = apipClient.balanceByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, mainFid);
             if (balanceMap != null && !balanceMap.isEmpty()) {
                 myBalance = balanceMap.get(mainFid);
                 return true;
@@ -1317,7 +1231,7 @@ public class AccountManager extends Manager<FcEntity> {
                 if (lastIncome!=null && !lastIncome.isEmpty()) {
                     fcdsl.addAfter(lastIncome);
                 }
-                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
                 ReplyBody responseBody = apipClient.getFcClientEvent().getResponseBody();
                 if(responseBody!=null){
                     lastIncome = responseBody.getLast();
@@ -1471,7 +1385,7 @@ public class AccountManager extends Manager<FcEntity> {
         }
         Map<String, OpReturn> opReturnMap;
         if (apipClient != null) {
-            opReturnMap = apipClient.opReturnByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, txIdCashIdMap.keySet().toArray(new String[0]));
+            opReturnMap = apipClient.opReturnByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, txIdCashIdMap.keySet().toArray(new String[0]));
         } else if (esClient != null) {
             try {
                 opReturnMap = EsUtils.getOpReturnsByIds(esClient, txIdCashIdMap.keySet());
@@ -1529,7 +1443,7 @@ public class AccountManager extends Manager<FcEntity> {
                 if (lastExpense!=null && !lastExpense.isEmpty()) {
                     fcdsl.addAfter(lastExpense);
                 }
-                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
                 if(apipClient.getFcClientEvent().getResponseBody().getLast()!=null)
                     lastExpense = apipClient.getFcClientEvent().getResponseBody().getLast();
                 if (newCashes == null || newCashes.isEmpty()) {
@@ -1997,8 +1911,8 @@ public class AccountManager extends Manager<FcEntity> {
         System.out.println("Settle all payments...");
 
         // Convert payoffMap to SendTo list
-        List<SendTo> sendToList = payoffMap.entrySet().stream()
-            .map(entry -> new SendTo(entry.getKey(), utils.FchUtils.satoshiToCoin(entry.getValue())))
+        List<Cash> sendToList = payoffMap.entrySet().stream()
+            .map(entry -> new Cash(entry.getKey(), entry.getValue()))
             .collect(Collectors.toList());
 
         // Send payments using CashClient

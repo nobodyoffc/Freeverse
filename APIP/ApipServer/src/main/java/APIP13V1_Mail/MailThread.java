@@ -1,7 +1,7 @@
 package APIP13V1_Mail;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Mail;
 import initial.Initiator;
@@ -22,7 +22,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 import config.Settings;
-@WebServlet(name = ApipApiNames.MAIL_THREAD, value = "/"+ ApipApiNames.SN_13+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.MAIL_THREAD)
+@WebServlet(name = ApipApiNames.MAIL_THREAD, value = "/"+ ApipApiNames.SN_13+"/"+ ApipApiNames.MAIL_THREAD +"/"+ ApipApiNames.VER_1)
 public class MailThread extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -32,7 +32,7 @@ public class MailThread extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.MAIL, Mail.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }

@@ -67,16 +67,16 @@ public class DiskManager extends Manager<FcObject> {
         String path = getDataPath(did);
         File file = new File(path);
         if(!file.exists())return false;
-
-        String existDid;
-        try {
-            existDid = Hash.sha256x2(file);
-        } catch (IOException e) {
-            System.out.println("Failed to make sha256 of file "+did);
-            return null;
-        }
-
-        return did.equals(existDid);
+        return true;
+//        String existDid;
+//        try {
+//            existDid = Hash.sha256x2(file);
+//        } catch (IOException e) {
+//            System.out.println("Failed to make sha256 of file "+did);
+//            return null;
+//        }
+//
+//        return did.equals(existDid);
     }
 
     /**

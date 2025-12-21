@@ -12,9 +12,8 @@ import com.google.common.hash.Hashing;
 
 import constants.CodeMessage;
 import constants.Constants;
+import core.crypto.Algorithm.*;
 import core.crypto.old.EccAes256K1P7;
-import core.crypto.Algorithm.AesCbc256;
-import core.crypto.Algorithm.Ecc256K1;
 import core.crypto.Algorithm.aesCbc256.CipherInputStreamWithHash;
 import data.fcData.AlgorithmId;
 import org.slf4j.Logger;
@@ -29,14 +28,15 @@ import org.jetbrains.annotations.NotNull;
 import javax.annotation.Nullable;
 import javax.crypto.Cipher;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.spec.AlgorithmParameterSpec;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.*;
 import java.util.HexFormat;
-import java.util.Objects;
 
 import static data.fcData.AlgorithmId.*;
 
@@ -77,12 +77,22 @@ public class Encryptor {
     }
 
     public CryptoDataByte encryptByPassword(@NotNull byte[] msg, @NotNull char[] password){
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         byte[] symkey = passwordToSymkey(password, iv);
         CryptoDataByte cryptoDataByte = encryptBySymkey(msg,symkey,iv);
         cryptoDataByte.setType(EncryptType.Password);
         return cryptoDataByte;
     }
+
+    @NotNull
+    private byte[] generateRandomIv() {
+        int ivLength = switch (this.algorithmId){
+            case FC_AesGcm256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7 -> 12;
+            default -> 16;
+        };
+        return BytesUtils.getRandomBytes(ivLength);
+    }
+
     public CryptoDataByte encryptStrByPassword(@NotNull String msgStr, @NotNull char[] password){
         byte[] msg = msgStr.getBytes(StandardCharsets.UTF_8);
         return encryptByPassword(msg,password);
@@ -101,13 +111,13 @@ public class Encryptor {
         return encryptToJsonBySymkey(msg,key);
     }
     public String encryptToJsonBySymkey(@NotNull byte[] msg, @NotNull byte[] key){
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         CryptoDataByte cryptoDataByte = encryptBySymkey(msg,key, iv);
         return cryptoDataByte.toNiceJson();
     }
     public CryptoDataByte encryptFileByPassword(@NotNull String dataFileName, @NotNull String cipherFileName, @NotNull char[]password){
         FileUtils.createFileWithDirectories(cipherFileName);
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         byte[] key = passwordToSymkey(password, iv);
 
 
@@ -122,7 +132,7 @@ public class Encryptor {
     }
     public CryptoDataByte encryptFileBySymkey(@NotNull String dataFileName, @NotNull String cipherFileName, @NotNull byte[]key, byte[] iv){
         CryptoDataByte cryptoDataByte = new CryptoDataByte();
-        if(iv==null)iv = BytesUtils.getRandomBytes(16);
+        if(iv==null)iv = generateRandomIv();
         cryptoDataByte.setType(EncryptType.Symkey);
         cryptoDataByte.setAlg(algorithmId);
         cryptoDataByte.setIv(iv);
@@ -132,6 +142,8 @@ public class Encryptor {
         try (FileInputStream fis = new FileInputStream(dataFileName);
              FileOutputStream fos = new FileOutputStream(tempFile)) {
             switch (cryptoDataByte.getAlg()) {
+                case FC_AesGcm256_No1_NrC7 -> AesGcm256.encrypt(fis, fos, cryptoDataByte);
+                case FC_ChaCha20_No1_NrC7 -> ChaCha20.encrypt(fis, fos, cryptoDataByte.getSymkey(), cryptoDataByte.getIv(), cryptoDataByte);
                 default -> AesCbc256.encrypt(fis, fos, cryptoDataByte);
             }
         } catch (FileNotFoundException e) {
@@ -178,13 +190,13 @@ public class Encryptor {
         return encryptToBundleBySymkey(msg,key);
     }
     public byte[] encryptToBundleBySymkey(@NotNull byte[] msg, @NotNull byte[] key){
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         CryptoDataByte cryptoDataByte = encryptBySymkey(msg,key, iv);
         if(cryptoDataByte.getCode()!=0)return null;
         return cryptoDataByte.toBundle();
     }
     public byte[] encryptToBundleByPassword(@NotNull byte[] msg, @NotNull char[] password){
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         byte[] symkey = Encryptor.passwordToSymkey(password,iv);
         CryptoDataByte cryptoDataByte = encryptBySymkey(msg,symkey, iv);
         if(cryptoDataByte.getCode()!=0)return null;
@@ -192,7 +204,7 @@ public class Encryptor {
     }
 
     public CryptoDataByte encryptBySymkey(@NotNull byte[] msg, @NotNull byte[] symkey){
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         return encryptBySymkey(msg,symkey,iv,null);
     }
     public CryptoDataByte encryptBySymkey(@NotNull byte[] msg, @NotNull byte[] symkey, byte[] iv){
@@ -200,10 +212,15 @@ public class Encryptor {
     }
 
     private CryptoDataByte encryptBySymkey(@NotNull byte[] msg, @Nullable  byte[] key, @Nullable  byte[] iv, @Nullable CryptoDataByte cryptoDataByte){
+        // Adjust IV length based on algorithm type
+        byte[] adjustedIv = adjustIvLength(iv, algorithmId);
+
         try(ByteArrayInputStream bisMsg = new ByteArrayInputStream(msg);
             ByteArrayOutputStream bosCipher = new ByteArrayOutputStream()) {
             switch (algorithmId){
-                case FC_AesCbc256_No1_NrC7 ->  cryptoDataByte = AesCbc256.encrypt(bisMsg, bosCipher, key,iv, cryptoDataByte);
+                case FC_AesCbc256_No1_NrC7 ->  cryptoDataByte = AesCbc256.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
+                case FC_AesGcm256_No1_NrC7 ->  cryptoDataByte = AesGcm256.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
+                case FC_ChaCha20_No1_NrC7 ->  cryptoDataByte = ChaCha20.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
                 default -> {
                     System.out.println("The algorithm is not supported:"+algorithmId);
                     if(cryptoDataByte==null)cryptoDataByte = new CryptoDataByte();
@@ -232,9 +249,18 @@ public class Encryptor {
 
 
     public CryptoDataByte encryptStreamBySymkey(@NotNull InputStream inputStream, @NotNull OutputStream outputStream, byte[] key, byte[] iv, CryptoDataByte cryptoDataByte) {
+        // Adjust IV length based on algorithm type
+        byte[] adjustedIv = adjustIvLength(iv, algorithmId);
+
         switch (algorithmId){
             case FC_AesCbc256_No1_NrC7,FC_EccK1AesCbc256_No1_NrC7-> {
-                return AesCbc256.encrypt(inputStream,outputStream,key,iv,cryptoDataByte);
+                return AesCbc256.encrypt(inputStream,outputStream,key,adjustedIv,cryptoDataByte);
+            }
+            case FC_AesGcm256_No1_NrC7,FC_EccK1AesGcm256_No1_NrC7,FC_X25519AesGcm256_No1_NrC7-> {
+                return AesGcm256.encrypt(inputStream,outputStream,key,adjustedIv,cryptoDataByte);
+            }
+            case FC_ChaCha20_No1_NrC7,FC_EccK1ChaCha20_No1_NrC7-> {
+                return ChaCha20.encrypt(inputStream,outputStream,key,adjustedIv,cryptoDataByte);
             }
             default -> {
                 System.out.println("The algorithm is not supported:"+algorithmId);
@@ -261,14 +287,22 @@ public class Encryptor {
 
         SecretKeySpec keySpec = new SecretKeySpec(key, algo);
         byte[] iv=cryptoDataByte.getIv();
-        IvParameterSpec ivSpec = new IvParameterSpec(iv);
+
+        // Use GCMParameterSpec for GCM mode, IvParameterSpec for others
+        AlgorithmParameterSpec paramSpec;
+        if (transformation.contains("GCM")) {
+            paramSpec = new GCMParameterSpec(128, iv); // 128-bit auth tag
+        } else {
+            paramSpec = new IvParameterSpec(iv);
+        }
+
         Cipher cipher;
         var hashFunction = Hashing.sha256();
         var hasherIn = hashFunction.newHasher();
         var hasherOut = hashFunction.newHasher();
         try {
             cipher = Cipher.getInstance(transformation, provider);
-            cipher.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec, paramSpec);
             try (CipherInputStreamWithHash cis = new CipherInputStreamWithHash(inputStream, cipher)) {
                 byte[] buffer = new byte[4096];
                 int bytesRead;
@@ -304,7 +338,15 @@ public class Encryptor {
         cryptoDataByte.setSymkey(key);
         cryptoDataByte.setAlg(alg);
         cryptoDataByte.setIv(iv);
-        cryptoDataByte.makeSum4();
+
+        // Skip sum generation for AES-GCM algorithms (they have built-in authentication)
+        // ChaCha20 requires sum generation as it doesn't have built-in authentication
+        if(alg != FC_AesGcm256_No1_NrC7 &&
+           alg != FC_EccK1AesGcm256_No1_NrC7 &&
+           alg != FC_X25519AesGcm256_No1_NrC7) {
+            cryptoDataByte.makeSum4();
+        }
+
         cryptoDataByte.set0CodeMessage();
         return cryptoDataByte;
     }
@@ -315,9 +357,23 @@ public class Encryptor {
 
     public CryptoDataByte encryptByAsyOneWay(@NotNull byte[] data, @NotNull byte[] pubkeyB){
         byte[] prikeyA;
-        ECKey ecKey = new ECKey();
-        prikeyA = ecKey.getPrivKeyBytes();
-        return encryptByAsy(data, prikeyA, pubkeyB, EncryptType.AsyOneWay);
+
+        // Generate ephemeral key pair based on algorithm
+        if(algorithmId == AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+            // Generate X25519 ephemeral key pair
+            prikeyA = BytesUtils.getRandomBytes(32);
+        } else {
+            // Generate secp256k1 ephemeral key pair
+            ECKey ecKey = new ECKey();
+            prikeyA = ecKey.getPrivKeyBytes();
+        }
+
+        CryptoDataByte cryptoDataByte = encryptByAsy(data, prikeyA, pubkeyB, EncryptType.AsyOneWay);
+
+        cryptoDataByte.setAlg(algorithmId);
+        cryptoDataByte.setType(EncryptType.AsyOneWay);
+        cryptoDataByte.setPubkeyB(null);
+        return cryptoDataByte;
     }
     public byte[] encryptByAsyOneWayToBundle(@NotNull byte[] data, @NotNull byte[] pubkeyB){
         CryptoDataByte cryptoDataByte = encryptByAsyOneWay(data,pubkeyB);
@@ -325,9 +381,7 @@ public class Encryptor {
     }
 
     public CryptoDataByte encryptByAsyTwoWay(@NotNull byte[] data, @NotNull byte[]prikeyA, @NotNull byte[] pubkeyB){
-        CryptoDataByte cryptoDataByte = encryptByAsy(data, prikeyA, pubkeyB, EncryptType.AsyTwoWay);
-        cryptoDataByte.setPubkeyA(KeyTools.prikeyToPubkey(prikeyA));
-        return cryptoDataByte;
+        return encryptByAsy(data, prikeyA, pubkeyB, EncryptType.AsyTwoWay);
     }
     public byte[] encryptByAsyTwoWayToBundle(@NotNull byte[] data,@NotNull byte[]prikeyA, @NotNull byte[] pubkeyB){
         CryptoDataByte cryptoDataByte = encryptByAsyTwoWay(data,prikeyA,pubkeyB);
@@ -351,7 +405,16 @@ public class Encryptor {
             cryptoDataByte
                     = encryptStreamByAsyTwoWay(bis, bos, prikeyA, pubkeyB);
             cryptoDataByte.setCipher(bos.toByteArray());
-            cryptoDataByte.makeSum4();
+
+            // Skip sum generation for AES-GCM algorithms (they have built-in authentication)
+            // ChaCha20 requires sum generation as it doesn't have built-in authentication
+            AlgorithmId alg = cryptoDataByte.getAlg();
+            if(alg != FC_AesGcm256_No1_NrC7 &&
+               alg != FC_EccK1AesGcm256_No1_NrC7 &&
+               alg != FC_X25519AesGcm256_No1_NrC7) {
+                cryptoDataByte.makeSum4();
+            }
+
             cryptoDataByte.setType(encryptType);
             cryptoDataByte.setCodeMessage(CodeMessage.Code0Success);
 
@@ -377,7 +440,7 @@ public class Encryptor {
 
         checkKeysMakeType(pubkeyB, prikeyA, cryptoDataByte);
 
-        byte[] iv = BytesUtils.getRandomBytes(16);
+        byte[] iv = generateRandomIv();
         cryptoDataByte.setIv(iv);
 
         String tempFile = FileUtils.getTempFileName();
@@ -418,7 +481,10 @@ public class Encryptor {
         return encryptStreamByAsy(is,os,prikeyX,pubkeyY,null);
     }
     public CryptoDataByte encryptStreamByAsyOneWay(@NotNull InputStream is, @NotNull OutputStream os, @NotNull byte[]pubkeyY){
-        return encryptStreamByAsy(is,os,null,pubkeyY,null);
+        CryptoDataByte cryptoDataByte= encryptStreamByAsy(is,os,null,pubkeyY,null);
+        cryptoDataByte.setPubkeyB(null);
+        cryptoDataByte.setType(EncryptType.AsyOneWay);
+        return cryptoDataByte;
     }
 
     public CryptoDataByte encryptStreamByAsy(@NotNull InputStream is, @NotNull OutputStream os,@NotNull CryptoDataByte cryptoDataByte){
@@ -447,20 +513,71 @@ public class Encryptor {
         if(cryptoDataByte.getIv()!=null){
             iv = cryptoDataByte.getIv();
         }else {
-            iv = BytesUtils.getRandomBytes(16);
+            iv = generateRandomIv();
             cryptoDataByte.setIv(iv);
         }
 
         byte[] symkey;
-        if (Objects.requireNonNull(algorithmId) == EccAes256K1P7_No1_NrC7) {
-            symkey = EccAes256K1P7.asyKeyToSymkey(prikeyX, pubkeyY, cryptoDataByte.getIv());
-            cryptoDataByte.setSymkey(symkey);
-            EccAes256K1P7 ecc = new EccAes256K1P7();
-            ecc.aesEncrypt(cryptoDataByte);
-        } else {
-            symkey = Ecc256K1.asyKeyToSymkey(prikeyX, pubkeyY, iv);
-            cryptoDataByte.setSymkey(symkey);
-            encryptStreamBySymkey(is, os, symkey, iv, cryptoDataByte);
+        switch (algorithmId) {
+            case EccAes256K1P7_No1_NrC7 -> {
+                symkey = EccAes256K1P7.asyKeyToSymkey(prikeyX, pubkeyY, cryptoDataByte.getIv());
+                cryptoDataByte.setSymkey(symkey);
+                EccAes256K1P7 ecc = new EccAes256K1P7();
+                ecc.aesEncrypt(cryptoDataByte);
+            }
+            case FC_X25519AesGcm256_No1_NrC7 -> {
+                // Adjust IV to 12 bytes for AES-GCM before key derivation
+                byte[] adjustedIv = adjustIvLength(iv, algorithmId);
+                try {
+                    symkey = X25519AesGcm256.getInstance().asyKeyToSymkey(prikeyX, pubkeyY, adjustedIv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return cryptoDataByte;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setIv(adjustedIv);  // Store the adjusted IV
+                encryptStreamBySymkey(is, os, symkey, adjustedIv, cryptoDataByte);
+            }
+
+            case FC_EccK1AesGcm256_No1_NrC7-> {
+                // Adjust IV to 12 bytes for AES-GCM before key derivation
+                byte[] adjustedIv = adjustIvLength(iv, algorithmId);
+                try {
+                    symkey = Ecc256K1AesGcm256.getInstance().asyKeyToSymkey(prikeyX, pubkeyY, adjustedIv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return cryptoDataByte;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setIv(adjustedIv);  // Store the adjusted IV
+                encryptStreamBySymkey(is, os, symkey, adjustedIv, cryptoDataByte);
+            }
+            case FC_EccK1ChaCha20_No1_NrC7-> {
+                // Adjust IV to 12 bytes for ChaCha20 before key derivation
+                byte[] adjustedIv = adjustIvLength(iv, algorithmId);
+                try {
+                    symkey = Ecc256K1ChaCha20.getInstance().asyKeyToSymkey(prikeyX, pubkeyY, adjustedIv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return cryptoDataByte;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setIv(adjustedIv);  // Store the adjusted IV
+                encryptStreamBySymkey(is, os, symkey, adjustedIv, cryptoDataByte);
+            }
+            case FC_EccK1AesCbc256_No1_NrC7 -> {
+                symkey = Ecc256K1AesCbc256.getInstance().asyKeyToSymkey(prikeyX, pubkeyY, iv);
+                cryptoDataByte.setSymkey(symkey);
+                encryptStreamBySymkey(is, os, symkey, iv, cryptoDataByte);
+            }
+            default -> {
+                symkey = Ecc256K1.asyKeyToSymkey(prikeyX, pubkeyY, iv);
+                cryptoDataByte.setSymkey(symkey);
+                encryptStreamBySymkey(is, os, symkey, iv, cryptoDataByte);
+            }
         }
 
         cryptoDataByte.setAlg(algorithmId);
@@ -478,24 +595,85 @@ public class Encryptor {
         if(prikeyA !=null || cryptoDataByte.getPrikeyA()!=null){
             if(cryptoDataByte.getPrikeyA()==null)
                 cryptoDataByte.setPrikeyA(prikeyA);
+
+            // Generate public key based on algorithm type
+            if(algorithmId == AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+                cryptoDataByte.setPubkeyA(X25519.generatePublicKey(cryptoDataByte.getPrikeyA()));
+            } else {
+                cryptoDataByte.setPubkeyA(KeyTools.prikeyToPubkey(cryptoDataByte.getPrikeyA()));
+            }
+
             if(pubkeyB!=null)
                 cryptoDataByte.setPubkeyB(pubkeyB);
         }else {
             cryptoDataByte.setType(EncryptType.AsyOneWay);
-            ECKey ecKey = new ECKey();
-            prikeyA = ecKey.getPrivKeyBytes();
-            pubkeyA = ecKey.getPubKey();
+
+            // Generate ephemeral key pair based on algorithm type
+            if(algorithmId == AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+                prikeyA = BytesUtils.getRandomBytes(32);
+                pubkeyA = X25519.generatePublicKey(prikeyA);
+            } else {
+                ECKey ecKey = new ECKey();
+                prikeyA = ecKey.getPrivKeyBytes();
+                pubkeyA = ecKey.getPubKey();
+            }
+
             cryptoDataByte.setPubkeyA(pubkeyA);
             cryptoDataByte.setPrikeyA(prikeyA);
             if(pubkeyB!=null)
                 cryptoDataByte.setPubkeyB(pubkeyB);
         }
         if(cryptoDataByte.getPubkeyA()==null){
-            pubkeyA =KeyTools.prikeyToPubkey(prikeyA);
+            if(algorithmId == AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+                pubkeyA = X25519.generatePublicKey(prikeyA);
+            } else {
+                pubkeyA = KeyTools.prikeyToPubkey(prikeyA);
+            }
             cryptoDataByte.setPubkeyA(pubkeyA);
         }
     }
 
+
+    /**
+     * Adjust IV length based on algorithm type
+     * - AES-GCM uses 12 bytes (96-bit)
+     * - AES-CBC uses 16 bytes (128-bit)
+     * - ChaCha20 uses 12 bytes (96-bit)
+     * If a 16-byte IV is provided for GCM/ChaCha20, truncate to 12 bytes for backward compatibility
+     *
+     * @param iv The original IV
+     * @param algorithmId The encryption algorithm
+     * @return Adjusted IV with correct length
+     */
+    public static byte[] adjustIvLength(byte[] iv, AlgorithmId algorithmId) {
+        if (iv == null) return null;
+
+        boolean uses12ByteIv = (algorithmId == FC_AesGcm256_No1_NrC7 ||
+                                algorithmId == FC_EccK1AesGcm256_No1_NrC7 ||
+                                algorithmId == FC_X25519AesGcm256_No1_NrC7 ||
+                                algorithmId == FC_ChaCha20_No1_NrC7 ||
+                                algorithmId == FC_EccK1ChaCha20_No1_NrC7);
+
+        if (uses12ByteIv) {
+            // AES-GCM and ChaCha20 should use 12-byte IV
+            if (iv.length == 16) {
+                // Truncate 16-byte IV to 12 bytes for backward compatibility
+                byte[] adjustedIv = new byte[12];
+                System.arraycopy(iv, 0, adjustedIv, 0, 12);
+                return adjustedIv;
+            } else if (iv.length == 12) {
+                return iv;
+            }
+        } else {
+            // AES-CBC should use 16-byte IV
+            if (iv.length == 16) {
+                return iv;
+            }
+        }
+
+        // Return original if length is unexpected
+        return iv;
+    }
 
     public static byte[] passwordToSymkey(char[] password, byte[] iv) {
         byte[] passwordBytes = BytesUtils.charArrayToByteArray(password, StandardCharsets.UTF_8);

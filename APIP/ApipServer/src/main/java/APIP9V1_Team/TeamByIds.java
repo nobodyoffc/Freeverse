@@ -1,6 +1,6 @@
 package APIP9V1_Team;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Team;
 import initial.Initiator;
@@ -20,7 +20,7 @@ import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.TEAM_BY_IDS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_BY_IDS)
+@WebServlet(name = ApipApiNames.TEAM_BY_IDS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.TEAM_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class TeamByIds extends HttpServlet {
     private final Settings settings;
     private final FcHttpRequestHandler fcHttpRequestHandler;
@@ -31,7 +31,7 @@ public class TeamByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doTeamIdsRequest( request,response,authType,settings);
     }
     @Override
@@ -43,7 +43,7 @@ public class TeamByIds extends HttpServlet {
     public void doTeamIdsRequest( HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
         FcHttpRequestHandler fcHttpRequestHandler = FcHttpRequestHandler.checkRequest(request, response, authType, settings);
         if (fcHttpRequestHandler == null) return;
-        Map<String, Team> meetMap = fcHttpRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, ID);
+        Map<String, Team> meetMap = fcHttpRequestHandler.doRequestForMap(IndicesNames.TEAM, Team.class, ID, response);
         if (meetMap == null) return;
         for(Team team :meetMap.values()){
             team.setMembers(null);

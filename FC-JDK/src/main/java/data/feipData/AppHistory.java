@@ -25,7 +25,7 @@ public class AppHistory extends FcObject {
 	private String closeStatement;
 	
 	private String aid;
-	private List<String> aids;
+	private String[] aids;
 	private String op;
 	private Integer rate;
 	private Long cdd;
@@ -145,11 +145,11 @@ public class AppHistory extends FcObject {
 		this.downloads = downloads;
 	}
 
-	public List<String> getAids() {
+	public String[] getAids() {
 		return aids;
 	}
 
-	public void setAids(List<String> aids) {
+	public void setAids(String[] aids) {
 		this.aids = aids;
 	}
 

@@ -76,12 +76,12 @@ public class Counter implements Runnable {
     protected byte[] counterPriKey;
 
 
-    public Counter(Settings settings, byte[] counterPriKey, Params params) {
+    public Counter(Settings settings, byte[] counterPriKey, Service service,Params params) {
         this.sid = settings.getSid();
         this.listenPath = (String) settings.getSettingMap().get(LISTEN_PATH);
         if(settings.getSettingMap().get(FROM_WEBHOOK)!=null)
             this.fromWebhook = (Boolean) settings.getSettingMap().get(FROM_WEBHOOK);
-        this.account= params.getDealer();
+        this.account= service.getDealer();
         this.minPayment  = params.getMinPayment();
 
         this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
@@ -261,7 +261,7 @@ protected void waitNewOrder() {
 
     protected List<Cash> getNewCashListFromFile(long lastHeight,String listenPath) {
         long initLastHeight = lastHeight;
-        String method = ApipApiNames.NEW_CASH_BY_FIDS;
+        String method = ApipApi.HOOK_NEW_CASH_BY_FIDS.getName();
         long bestHeight = 0;
         List<Cash> allCashList = new ArrayList<>();
 
@@ -520,7 +520,7 @@ protected void waitNewOrder() {
         fcdsl.addNewFilter().addNewTerms().addNewFields(OWNER).addNewValues(account);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ACTIVE).addNewValues(FALSE);
         fcdsl.setSize(String.valueOf(3000));
-        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
     }
 
     protected List<Cash> getNewCashListFromEs(long lastHeight, String account, ElasticsearchClient esClient) {

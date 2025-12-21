@@ -1,28 +1,27 @@
 package parser;
 import core.crypto.Hash;
 import core.crypto.KeyTools;
+import data.fchData.Cash;
 import data.fchData.*;
 import utils.BytesUtils;
 import utils.FchUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HexFormat;
+import java.util.*;
 
 import static core.fch.RawTxParser.parseOpReturn;
 
 
 public class BlockParser {
-	public ReadyBlock parseBlock(byte[] blockBytes, BlockMark blockMark) throws IOException {
+	public ReadyBlock parseBlock(byte[] blockBytes, BlockMask blockMask) throws IOException {
 
 
 		Block block = new Block();
-		block.setId(blockMark.getId());
-		block.setPreId(blockMark.getPreBlockId());
-		block.setHeight(blockMark.getHeight());
-		block.setSize(blockMark.getSize());
+		block.setId(blockMask.getId());
+		block.setPreId(blockMask.getPreBlockId());
+		block.setHeight(blockMask.getHeight());
+		block.setSize(blockMask.getSize());
 
 		ByteArrayInputStream blockInputStream = new ByteArrayInputStream(blockBytes);
 
@@ -36,7 +35,7 @@ public class BlockParser {
 
 		ReadyBlock readyBlock = parseBlockBody(blockBodyBytes, block);
 
-		readyBlock.setBlockMark(blockMark);
+		readyBlock.setBlockMark(blockMask);
 
 		return readyBlock;
 	}
@@ -90,33 +89,32 @@ public class BlockParser {
 		long txCount = utils.FchUtils.parseVarint(blockInputStream).number;
 		block1.setTxCount((int) txCount);
 
-		ArrayList<Tx> txList = new ArrayList<>();
-		ArrayList<TxHas> txHasList = new ArrayList<>();
-		ArrayList<Cash> inList = new ArrayList<>();
-		ArrayList<OpReturn> opReturnList = new ArrayList<>();
+		LinkedHashMap<String, Tx> txMap = new LinkedHashMap<>();
+		LinkedHashMap<String, Cash> inMap = new LinkedHashMap<>();
+		LinkedHashMap<String, OpReturn> opReturnMap = new LinkedHashMap<>();
 
 		TxResult txResult;
 		txResult = parseCoinbase(blockInputStream, block1);
 
-		txList.add(txResult.tx);
-		ArrayList<Cash> outList = new ArrayList<>(txResult.outList);
+		txMap.put(txResult.tx.getId(),txResult.tx);
+
+		LinkedHashMap<String, Cash> outMap = new LinkedHashMap<>(txResult.outMap);
 
 		for (int i = 1; i < txCount; i++) {
 			txResult = parseTx(blockInputStream, block1, i);
 
-			txList.add(txResult.tx);
-			inList.addAll(txResult.inList);
-			outList.addAll(txResult.outList);
+			txMap.put(txResult.tx.getId(),txResult.tx);
+			inMap.putAll(txResult.inMap);
+			outMap.putAll(txResult.outMap);
 			if (txResult.opReturn != null)
-				opReturnList.add(txResult.opReturn);
+				opReturnMap.put(txResult.opReturn.getId(), txResult.opReturn);
 		}
 
 		readyBlock.setBlock(block1);
-		readyBlock.setTxList(txList);
-		readyBlock.setTxHasList(txHasList);
-		readyBlock.setInList(inList);
-		readyBlock.setOutList(outList);
-		readyBlock.setOpReturnList(opReturnList);
+		readyBlock.setTxLinkedMap(txMap);
+		readyBlock.setInMap(inMap);
+		readyBlock.setOutMap(outMap);
+		readyBlock.setOpReturnMap(opReturnMap);
 
 		return readyBlock;
 	}
@@ -172,19 +170,19 @@ public class BlockParser {
 
 		byte[] rawTxBytes = BytesUtils.bytesMerger(bytesList);
 		tx.setId(BytesUtils.bytesToHexStringLE(Hash.sha256x2(rawTxBytes)));
-		ArrayList<Cash> outList = makeOutList(tx.getId(), rawOutList);
+		LinkedHashMap<String,Cash> outList = makeOutList(tx.getId(), rawOutList);
 
 		tx.setRawTx(HexFormat.of().formatHex(rawTxBytes));
 		TxResult txResult = new TxResult();
 		txResult.tx = tx;
-		txResult.outList = outList;
+		txResult.outMap = outList;
 		return txResult;
 	}
 
 	private static class TxResult {
 		Tx tx;
-		ArrayList<Cash> inList;
-		ArrayList<Cash> outList;
+		LinkedHashMap<String, Cash> inMap;
+		LinkedHashMap<String,Cash> outMap;
 		OpReturn opReturn;
 	}
 
@@ -209,6 +207,7 @@ public class BlockParser {
 		final byte OP_DUP = (byte) 0x76;
 		final byte OP_HASH160 = (byte) 0xa9;
 		final byte OP_RETURN = (byte) 0x6a;
+		final byte OP_CHECKSIG = (byte) 0xac;
 		byte b1Script; // For get the first byte of output script./接收脚本中的第一个字节。
 
 		for (int j = 0; j < outputCount; j++) {
@@ -249,12 +248,14 @@ public class BlockParser {
 					out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
 					byte[] hash160Bytes = Arrays.copyOfRange(bScript, 3, 23);
 					out.setOwner(KeyTools.hash160ToFchAddr(hash160Bytes));
+					out.setType(Cash.CashType.P2PKH.name());
 				}
 				case OP_RETURN -> {
 					out.setType("OP_RETURN");
 					opReturnStr = parseOpReturn(bScript);//new String(Arrays.copyOfRange(bScript, 2, bScript.length));
 					out.setOwner("OpReturn");
 					out.setValid(false);
+					out.setType(Cash.CashType.OP_RETURN.name());
 					if (tx1.getTxIndex() != 0) {
 						if (opReturnStr!=null && opReturnStr.length() <= 30) {
 							tx1.setOpReBrief(opReturnStr);
@@ -268,11 +269,47 @@ public class BlockParser {
 					out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
 					byte[] hash160Bytes1 = Arrays.copyOfRange(bScript, 2, 22);
 					out.setOwner(KeyTools.hash160ToMultiAddr(hash160Bytes1));
+					out.setType(Cash.CashType.P2SH.name());
 				}
+
 				default -> {
-					out.setType("Unknown");
-					out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
-					out.setOwner("Unknown");
+					// Check for P2PK (Pay-to-Public-Key) script
+					// P2PK format: <pubkey_length> <pubkey> OP_CHECKSIG
+					// Pubkey can be 65 bytes (uncompressed) or 33 bytes (compressed)
+					if (scriptSize >= 35 && bScript[(int) scriptSize - 1] == OP_CHECKSIG) {
+						int pubkeyLen = Byte.toUnsignedInt(b1Script);
+						// Check for valid pubkey lengths: 33 (compressed) or 65 (uncompressed)
+						if ((pubkeyLen == 33 || pubkeyLen == 65) && scriptSize == pubkeyLen + 2) {
+							byte[] pubkeyBytes = Arrays.copyOfRange(bScript, 1, 1 + pubkeyLen);
+
+							// Validate pubkey format
+							if ((pubkeyLen == 33 && (pubkeyBytes[0] == 0x02 || pubkeyBytes[0] == 0x03)) ||
+								(pubkeyLen == 65 && pubkeyBytes[0] == 0x04)) {
+								out.setType("P2PK");
+								out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+								out.setOwner(KeyTools.pubkeyToFchAddr(pubkeyBytes));
+								out.setType(Cash.CashType.P2PK.name());
+							} else {
+								// Invalid pubkey format
+								out.setType("Unknown");
+								out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+								out.setOwner("Unknown");
+								out.setType(Cash.CashType.UNKNOWN.name());
+							}
+						} else {
+							// Unknown script type
+							out.setType("Unknown");
+							out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+							out.setOwner("Unknown");
+							out.setType(Cash.CashType.UNKNOWN.name());
+						}
+					} else {
+						// Unknown script type
+						out.setType("Unknown");
+						out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+						out.setOwner("Unknown");
+						out.setType(Cash.CashType.UNKNOWN.name());
+					}
 				}
 			}
 
@@ -293,7 +330,7 @@ public class BlockParser {
 		ParseTxOutResult parseTxOutResult = new ParseTxOutResult();
 		parseTxOutResult.rawBytes = rawBytes;
 		parseTxOutResult.rawOutList = rawOutList;
-		if (tx1.getTxIndex() != 0)
+		if (tx1.getTxIndex() != 0)  //Ignore opReturn in coinbase output because no one sign it
 			parseTxOutResult.opReturnStr = opReturnStr;
 		parseTxOutResult.tx = tx1;
 
@@ -307,12 +344,15 @@ public class BlockParser {
 		String opReturnStr;
 	}
 
-	private ArrayList<Cash> makeOutList(String txId, ArrayList<Cash> rawOutList1) {
+	private LinkedHashMap<String,Cash> makeOutList(String txId, ArrayList<Cash> rawOutList1) {
+		LinkedHashMap<String, Cash> cashMap = new LinkedHashMap<>();
 		for (int j = 0; j < rawOutList1.size(); j++) {
-			rawOutList1.get(j).setBirthTxId(txId);
-			rawOutList1.get(j).setId(Cash.makeCashId(txId, j));
+			Cash cash = rawOutList1.get(j);
+			cash.setBirthTxId(txId);
+			cash.setId(Cash.makeCashId(txId, j));
+			cashMap.put(cash.getId(),cash);
 		}
-		return rawOutList1;
+		return cashMap;
 	}
 
 	private TxResult parseTx(ByteArrayInputStream blockInputStream, Block block, int i) throws IOException {
@@ -357,8 +397,8 @@ public class BlockParser {
 		tx.setId(BytesUtils.bytesToHexStringLE(Hash.sha256x2(rawTxBytes)));
 		tx.setRawTx(HexFormat.of().formatHex(rawTxBytes));
 
-		ArrayList<Cash> inList = makeInList(tx.getId(), rawInList);
-		ArrayList<Cash> outList = makeOutList(tx.getId(), rawOutList);
+		LinkedHashMap<String,Cash> inMap = makeInList(tx.getId(), rawInList);
+		LinkedHashMap<String,Cash> outMap = makeOutList(tx.getId(), rawOutList);
 
 		OpReturn opReturn = new OpReturn();
 		if(parseTxOutResult.opReturnStr!=null && !"".equals(parseTxOutResult.opReturnStr)) {
@@ -371,8 +411,8 @@ public class BlockParser {
 		txResult.tx = tx;
 		if(parseTxOutResult.opReturnStr!=null && !"".equals(parseTxOutResult.opReturnStr))
 			txResult.opReturn = opReturn;
-		txResult.inList = inList;
-		txResult.outList = outList;
+		txResult.inMap = inMap;
+		txResult.outMap = outMap;
 
 		return txResult;
 	}
@@ -470,12 +510,13 @@ public class BlockParser {
 		byte[] rawBytes;
 	}
 
-	private ArrayList<Cash> makeInList(String txId, ArrayList<Cash> rawInList) {
-
-		ArrayList<Cash> inList = rawInList;
-		for (Cash in : inList) {
+	private LinkedHashMap<String,Cash> makeInList(String txId, ArrayList<Cash> rawInList) {
+		if(rawInList==null) return new LinkedHashMap<>();
+		LinkedHashMap<String,Cash> inMap = new LinkedHashMap<>();
+		for (Cash in : rawInList) {
 			in.setSpendTxId(txId);
+			inMap.put(in.getId(),in);
 		}
-		return inList;
+		return inMap;
 	}
 }

@@ -19,4 +19,9 @@ public class Values {
     public static final String DESC = "desc";
     public static final String ASC = "asc";
 
+    public static final String GOOD = "good";
+    public static final String BAD = "bad";
+    public static final String CREATED = "created";
+    public static final String UPDATED = "updated";
+
 }

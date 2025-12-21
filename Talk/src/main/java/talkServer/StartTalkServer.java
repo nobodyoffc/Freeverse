@@ -11,7 +11,6 @@ import constants.FieldNames;
 import data.fcData.AutoTask;
 import data.fcData.TalkUnit;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
 import data.feipData.serviceParams.TalkParams;
 
 import redis.clients.jedis.JedisPool;
@@ -83,7 +82,7 @@ public class StartTalkServer {
         sid = service.getId();
         params = (TalkParams) service.getParams();
         try {
-            price = Double.parseDouble(params.getPricePerKBytes());
+            price = Double.parseDouble(params.getPricePerKB());
         }catch (Exception e){
             price = 0;
         }
@@ -118,7 +117,7 @@ public class StartTalkServer {
                 case 2 -> new TalkManager(service, settings.getApiAccount(Service.ServiceType.APIP), br,symkey, TalkParams.class).menu();
                 case 3 -> Order.resetNPrices(br, sid, jedisPool);
                 case 4 -> recreateAllIndices(esClient, br);
-                case 5 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
+                case 5 -> new RewardManager(sid,service.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
                 case 6 -> settings.setting(br, null);
                 case 0 -> {
@@ -132,16 +131,6 @@ public class StartTalkServer {
     }
 
 
-    private static void startCounterThread(byte[] symkey, Settings settings, Params params) {
-        byte[] prikey = Settings.getMainFidPrikey(symkey, settings);
-        if(prikey==null){
-            System.out.println("Failed to get the prikey of the dealer.");
-            return;
-        }
-        counter = new Counter(settings,prikey, params);
-        Thread thread = new Thread(counter);
-        thread.start();
-    }
     private static void close() throws IOException {
         settings.close();
     }

@@ -7,12 +7,12 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import config.Settings;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import data.fcData.ReplyBody;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import initial.Initiator;
 
-import server.ApipApiNames;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
 import data.feipData.Nid;
@@ -24,13 +24,13 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import static constants.FieldNames.*;
-import static constants.IndicesNames.CID;
+import static constants.IndicesNames.FREER;
 import static core.crypto.KeyTools.isGoodFid;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
-@WebServlet(name = ApipApiNames.OID_BY_NIDS, value = "/"+ ApipApiNames.SN_19+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.OID_BY_NIDS)
+@WebServlet(name = ApipApiNames.OID_BY_NIDS, value = "/"+ ApipApiNames.SN_19+"/"+ ApipApiNames.OID_BY_NIDS +"/"+ ApipApiNames.VER_1)
 public class OidByNids extends HttpServlet {
     private final Settings settings = Initiator.settings;
 
@@ -42,7 +42,7 @@ public class OidByNids extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 
@@ -109,16 +109,16 @@ public class OidByNids extends HttpServlet {
                             .map(FieldValue::of)
                             .collect(Collectors.toList());
 
-                    SearchResponse<Cid> cidResult = esClient.search(s -> s
-                            .index(CID)
+                    SearchResponse<Freer> cidResult = esClient.search(s -> s
+                            .index(FREER)
                             .query(q -> q
                                     .terms(t -> t
                                             .field(USED_CIDS)
-                                            .terms(v -> v.value(cidValues)))), Cid.class);
+                                            .terms(v -> v.value(cidValues)))), Freer.class);
 
                     // Process CID results
                     cidResult.hits().hits().forEach(hit -> {
-                        Cid cid = hit.source();
+                        Freer cid = hit.source();
                         if (cid != null) {
                             List<String> usedCids = cid.getUsedCids();
                             for(String usedCid :usedCids){

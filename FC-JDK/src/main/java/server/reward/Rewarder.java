@@ -2,10 +2,9 @@ package server.reward;
 
 import constants.Values;
 import data.fcData.ReplyBody;
-import data.fchData.Cash;
-import data.fchData.SendTo;
 import core.fch.TxCreator;
 import core.fch.Wallet;
+import data.fchData.Cash;
 import data.feipData.Feip;
 import data.feipData.serviceParams.Params;
 import clients.ApipClient;
@@ -158,7 +157,7 @@ public class Rewarder {
 
         RewardInfo rewardInfo = makeRewardInfo(total, rewardParams);
 
-        Map<String, SendTo> sendToMap = makeSendToMap(rewardInfo);
+        Map<String, Cash> sendToMap = makeSendToMap(rewardInfo);
 
         pendingDust(sendToMap, jedisPool);
         addQualifiedPendingToPay(sendToMap);
@@ -203,13 +202,13 @@ public class Rewarder {
         }
         return pendingMap;
     }
-    public void pendingDust(Map<String, SendTo> sendToMap,JedisPool jedisPool) {
-        Iterator<Map.Entry<String, SendTo>> iterator = sendToMap.entrySet().iterator();
+    public void pendingDust(Map<String, Cash> sendToMap, JedisPool jedisPool) {
+        Iterator<Map.Entry<String, Cash>> iterator = sendToMap.entrySet().iterator();
         try(Jedis jedis = jedisPool.getResource()) {
             while (iterator.hasNext()) {
-                Map.Entry<String, SendTo> entry = iterator.next();
-                SendTo sendTo = entry.getValue();
-                String fid = sendTo.getFid();
+                Map.Entry<String, Cash> entry = iterator.next();
+                Cash sendTo = entry.getValue();
+                String fid = sendTo.getOwner();
                 double amount = sendTo.getAmount();
                 if (amount < MinPayValue) {
                     addToPending(fid, utils.FchUtils.coinToSatoshi(amount), jedis);
@@ -218,18 +217,18 @@ public class Rewarder {
             }
         }
     }
-    private void addQualifiedPendingToPay(Map<String, SendTo> sendToMap) {
+    private void addQualifiedPendingToPay(Map<String, Cash> sendToMap) {
         if(pendingMap==null || pendingMap.isEmpty())return;
         for(String key: pendingMap.keySet()){
             double amount = utils.FchUtils.satoshiToCoin(pendingMap.get(key));
-            SendTo sendTo = new SendTo();
+            Cash sendTo = new Cash();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
                     sendTo = sendToMap.get(key);
-                    sendTo.setFid(key);
+                    sendTo.setOwner(key);
                     sendTo.setAmount(sendTo.getAmount()+amount);
                 }else {
-                    sendTo.setFid(key);
+                    sendTo.setOwner(key);
                     sendTo.setAmount(amount);
                 }
                 sendToMap.put(key,sendTo);
@@ -309,14 +308,14 @@ public class Rewarder {
     }
 
     @SuppressWarnings("unused")
-    private Map<String, SendTo> makeNoDustSendToMap(RewardInfo rewardInfo) {
-        Map<String, SendTo> sendToMap = makeSendToMap(rewardInfo);
+    private Map<String, Cash> makeNoDustSendToMap(RewardInfo rewardInfo) {
+        Map<String, Cash> sendToMap = makeSendToMap(rewardInfo);
         sendToMap.entrySet().removeIf(entry -> entry.getValue().getAmount() < MinPayValue);
         return sendToMap;
     }
 
-    public static HashMap<String,SendTo> makeSendToMap(RewardInfo rewardInfo) {
-        HashMap<String,SendTo> sendToMap= new HashMap<>();
+    public static HashMap<String, Cash> makeSendToMap(RewardInfo rewardInfo) {
+        HashMap<String, Cash> sendToMap= new HashMap<>();
 
         ArrayList<Payment> buildList = rewardInfo.getBuilderList();
         ArrayList<Payment> costList = rewardInfo.getCostList();
@@ -333,20 +332,20 @@ public class Rewarder {
         return sendToMap;
     }
 
-    public static void makePayDetailListIntoSendToMap(HashMap<String,SendTo> sendToMap,ArrayList<Payment> payDetailList) {
+    public static void makePayDetailListIntoSendToMap(HashMap<String, Cash> sendToMap, ArrayList<Payment> payDetailList) {
         if(payDetailList==null)return;
         for(Payment payDetail:payDetailList){
-            SendTo sendTo = new SendTo();
+            Cash sendTo = new Cash();
             String fid = payDetail.getFid();
-            sendTo.setFid(fid);
-            double amount = utils.FchUtils.satoshiToCoin(payDetail.getAmount());
+            sendTo.setOwner(fid);
+            Long amount = payDetail.getAmount();
             if(sendToMap.get(fid)!=null){
-                amount = amount+ sendToMap.get(fid).getAmount();
-                sendTo.setAmount(NumberUtils.roundDouble8(amount));
+                amount = amount+ sendToMap.get(fid).getValue();
+                sendTo.setValue(amount);
             }else{
-                sendTo.setAmount(NumberUtils.roundDouble8(amount));
+                sendTo.setValue(amount);
             }
-            sendToMap.put(sendTo.getFid(),sendTo);
+            sendToMap.put(sendTo.getOwner(),sendTo);
         }
     }
 

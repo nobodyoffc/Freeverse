@@ -1,15 +1,10 @@
 package APIP0V1_OpenAPI;
 
-import data.apipData.SignInMode;
-import data.fcData.AlgorithmId;
 import config.Settings;
+import constants.ApipApiNames;
 import constants.CodeMessage;
-import data.fcData.FcSession;
 import data.fcData.ReplyBody;
-import handlers.Manager;
-import handlers.SessionManager;
 import initial.Initiator;
-import server.ApipApiNames;
 import server.HttpRequestChecker;
 import server.FcHttpRequestHandler;
 
@@ -19,7 +14,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApipApiNames.SIGN_IN, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SIGN_IN)
+@WebServlet(name = ApipApiNames.SIGN_IN, value = "/"+ ApipApiNames.SIGN_IN +"/"+ ApipApiNames.VER_1)
 public class SignIn extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;

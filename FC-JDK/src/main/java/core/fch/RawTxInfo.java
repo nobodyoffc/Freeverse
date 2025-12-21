@@ -4,9 +4,8 @@ import core.crypto.Hash;
 import data.fcData.CidInfo;
 import data.fcData.FcEntity;
 import data.fchData.Cash;
-import data.fchData.Multisign;
+import data.fchData.Multisig;
 import data.fchData.RawTxForCsV1;
-import data.fchData.SendTo;
 import utils.FchUtils;
 import utils.Hex;
 import utils.JsonUtils;
@@ -26,12 +25,12 @@ public class RawTxInfo extends FcEntity {
     private String sender;
     private Double feeRate;
     private List<Cash> inputs;
-    private List<SendTo> outputs;
+    private List<Cash> outputs;
     private String opReturn;
     private String changeTo;
     private Long lockTime;
     private Long cd;
-    private Multisign multisign;
+    private Multisig multisig;
     private String ver;
     private CidInfo senderInfo;
     private Long cdd;
@@ -43,16 +42,16 @@ public class RawTxInfo extends FcEntity {
 
     }
 
-    public RawTxInfo(byte[] rawTx, Multisign multisign, List<Cash> inputs) {
+    public RawTxInfo(byte[] rawTx, Multisig multisig, List<Cash> inputs) {
 //        this.rawTx = rawTx;
-        this.multisign = multisign;
+        this.multisig = multisig;
         this.inputs = inputs;
         this.id = Hex.toHex(Hash.sha256x2(rawTx));
     }
 
     public RawTxInfo(byte[] rawTx, RawTxInfo rawTxInfo) {
 //        this.rawTx = rawTx;
-        this.multisign = rawTxInfo.getMultisign();
+        this.multisig = rawTxInfo.getMultisig();
         this.inputs = rawTxInfo.getInputs();
         this.id = Hex.toHex(Hash.sha256x2(rawTx));
         this.feeRate = rawTxInfo.getFeeRate();
@@ -62,19 +61,19 @@ public class RawTxInfo extends FcEntity {
     }
 
     public RawTxInfo(String multisignJson, String cashListJson) {
-        this.multisign = new Gson().fromJson(multisignJson, Multisign.class);
-        this.inputs = ObjectUtils.objectToList(cashListJson,Cash.class);//DataGetter.getCashList(cashList);
+        this.multisig = new Gson().fromJson(multisignJson, Multisig.class);
+        this.inputs = ObjectUtils.objectToList(cashListJson, Cash.class);//DataGetter.getCashList(cashList);
     }
 
 
-    public RawTxInfo(String sender, List<Cash> cashList, List<SendTo> sendToList, String opReturn, Long cd, Double feeRate, Multisign multisign, String ver) {
+    public RawTxInfo(String sender, List<Cash> cashList, List<Cash> sendToList, String opReturn, Long cd, Double feeRate, Multisig multisig, String ver) {
         super();
         this.sender = sender;
         this.setOutputs(sendToList);
         this.setOpReturn(opReturn);
         this.setCd(cd);
         this.setFeeRate(feeRate);
-        this.setMultisign(multisign);
+        this.setMultisig(multisig);
         this.setVer(ver);
         this.setInputs(Cash.makeCashListForPay(cashList));
     }
@@ -118,8 +117,8 @@ public class RawTxInfo extends FcEntity {
 //        return new RawTxInfo(rawTx, rawTxInfo);
 //    }
 
-    public static Transaction createMultisignTx(RawTxInfo rawTxInfo, Multisign multisign, MainNetParams mainNetwork) {
-        rawTxInfo.setMultisign(multisign);
+    public static Transaction createMultisigTx(RawTxInfo rawTxInfo, Multisig multisig, MainNetParams mainNetwork) {
+        rawTxInfo.setMultisig(multisig);
         return TxCreator.createUnsignedTx(rawTxInfo, mainNetwork);
     }
 
@@ -135,11 +134,11 @@ public class RawTxInfo extends FcEntity {
         this.inputs = inputs;
     }
 
-    public List<SendTo> getOutputs() {
+    public List<Cash> getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(List<SendTo> outputs) {
+    public void setOutputs(List<Cash> outputs) {
         this.outputs = outputs;
     }
 
@@ -151,12 +150,12 @@ public class RawTxInfo extends FcEntity {
         this.opReturn = opReturn;
     }
 
-    public Multisign getMultisign() {
-        return multisign;
+    public Multisig getMultisig() {
+        return multisig;
     }
 
-    public void setMultisign(Multisign multisign) {
-        this.multisign = multisign;
+    public void setMultisig(Multisig multisig) {
+        this.multisig = multisig;
     }
 
     public static RawTxInfo fromUserInput(BufferedReader br, @Nullable String sender) {
@@ -174,8 +173,8 @@ public class RawTxInfo extends FcEntity {
         } while (Inputer.askIfYes(br, "Input another input?"));
 
         do {
-            SendTo sendTo = new SendTo();
-            sendTo.setFid(Inputer.inputString(br, "Input the fid you paying to:"));
+            Cash sendTo = new Cash();
+            sendTo.setOwner(Inputer.inputString(br, "Input the fid you paying to:"));
             sendTo.setAmount(Inputer.inputDouble(br, "Input the amount:"));
             rawTxInfo.getOutputs().add(sendTo);
         } while (Inputer.askIfYes(br, "Input another output?"));
@@ -209,7 +208,7 @@ public class RawTxInfo extends FcEntity {
         List<Cash> inputs = new ArrayList<>();
 
         // Process outputs
-        List<SendTo> outputs = new ArrayList<>();
+        List<Cash> outputs = new ArrayList<>();
 
         // Process message
         String msg = null;
@@ -225,8 +224,8 @@ public class RawTxInfo extends FcEntity {
                     inputs.add(cash);
                 }
                 case 2 -> {
-                    SendTo sendTo = new SendTo();
-                    sendTo.setFid(rawTx.getAddress());
+                    Cash sendTo = new Cash();
+                    sendTo.setOwner(rawTx.getAddress());
                     sendTo.setAmount(rawTx.getAmount());
                     outputs.add(sendTo);
                 }
@@ -267,9 +266,9 @@ public class RawTxInfo extends FcEntity {
         int j = 0;
         if (outputs != null) {
             for (j = 0; j < outputs.size(); j++) {
-                SendTo sendTo = outputs.get(j);
+                Cash sendTo = outputs.get(j);
                 RawTxForCsV1 rawTx = RawTxForCsV1.newOutput(
-                        sendTo.getFid(),
+                        sendTo.getOwner(),
                         sendTo.getAmount(),
                         j
                 );

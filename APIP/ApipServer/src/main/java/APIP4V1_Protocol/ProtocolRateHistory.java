@@ -1,7 +1,7 @@
 package APIP4V1_Protocol;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.ProtocolHistory;
 import initial.Initiator;
@@ -23,7 +23,7 @@ import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApipApiNames.PROTOCOL_RATE_HISTORY, value = "/"+ ApipApiNames.SN_4+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROTOCOL_RATE_HISTORY)
+@WebServlet(name = ApipApiNames.PROTOCOL_RATE_HISTORY, value = "/"+ ApipApiNames.SN_4+"/"+ ApipApiNames.PROTOCOL_RATE_HISTORY +"/"+ ApipApiNames.VER_1)
 public class ProtocolRateHistory extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -33,7 +33,7 @@ public class ProtocolRateHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.PROTOCOL_HISTORY, ProtocolHistory.class, OP,RATE,null,null, defaultSort,request,response,authType);
     }

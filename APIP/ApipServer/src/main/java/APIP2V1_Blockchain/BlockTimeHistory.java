@@ -2,8 +2,8 @@ package APIP2V1_Blockchain;
 
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import constants.ApipApiNames;
 import data.feipData.Service;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
 import initial.Initiator;
@@ -22,7 +22,7 @@ import java.util.Map;
 import static constants.FieldNames.*;
 import static data.fchData.FchChainInfo.MAX_REQUEST_COUNT;
 
-@WebServlet(name = ApipApiNames.BLOCK_TIME_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BLOCK_TIME_HISTORY)
+@WebServlet(name = ApipApiNames.BLOCK_TIME_HISTORY, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.BLOCK_TIME_HISTORY +"/"+ ApipApiNames.VER_1)
 public class BlockTimeHistory extends HttpServlet {
     private final Settings settings;
 
@@ -31,7 +31,7 @@ public class BlockTimeHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

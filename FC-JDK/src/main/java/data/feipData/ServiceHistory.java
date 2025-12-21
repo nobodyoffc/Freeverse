@@ -11,6 +11,9 @@ public class ServiceHistory extends FcObject {
 	private Long time;
 	private String signer;
 	private String ver;
+
+	protected String dealer;
+	protected String dealerPubkey;
 	
 	private String stdName;
 	private String[] localNames;
@@ -25,7 +28,7 @@ public class ServiceHistory extends FcObject {
 	private String closeStatement;
 	
 	private String sid;
-	private List<String> sids;
+	private String[] sids;
 	private String op;
 	private Integer rate;
 	private Long cdd;
@@ -166,11 +169,11 @@ public class ServiceHistory extends FcObject {
 		this.sid = sid;
 	}
 
-	public List<String> getSids() {
+	public String[] getSids() {
 		return sids;
 	}
 
-	public void setSids(List<String> sids) {
+	public void setSids(String[] sids) {
 		this.sids = sids;
 	}
 
@@ -196,5 +199,21 @@ public class ServiceHistory extends FcObject {
 
 	public void setCdd(Long cdd) {
 		this.cdd = cdd;
+	}
+
+	public String getDealer() {
+		return dealer;
+	}
+
+	public void setDealer(String dealer) {
+		this.dealer = dealer;
+	}
+
+	public String getDealerPubkey() {
+		return dealerPubkey;
+	}
+
+	public void setDealerPubkey(String dealerPubkey) {
+		this.dealerPubkey = dealerPubkey;
 	}
 }

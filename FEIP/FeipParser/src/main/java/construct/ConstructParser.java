@@ -1,11 +1,16 @@
 package construct;
 
-import data.fchData.Cid;
+import co.elastic.clients.elasticsearch.core.BulkResponse;
+import core.crypto.KeyTools;
+import data.fcData.News;
+import data.fchData.Freer;
 import data.feipData.*;
 import utils.EsUtils;
+import utils.StringUtils;
 import constants.IndicesNames;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
+import co.elastic.clients.elasticsearch.core.IndexResponse;
 
 import com.google.gson.Gson;
 import data.fchData.OpReturn;
@@ -14,39 +19,49 @@ import startFEIP.StartFEIP;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
+
+import static constants.OpNames.*;
+import static constants.Values.CREATED;
+import static constants.Values.UPDATED;
 
 public class ConstructParser {
 
 	public ProtocolHistory makeProtocol(OpReturn opre, Feip feip) {
-		
+
 		Gson gson = new Gson();
 
 		ProtocolOpData protocolRaw = new ProtocolOpData();
 		try {
 			protocolRaw = gson.fromJson(gson.toJson(feip.getData()), ProtocolOpData.class);
-			if(protocolRaw==null)return null;
-		}catch(Exception e) {
-			e.printStackTrace();
-			try {
-				TimeUnit.SECONDS.sleep(5);
-			} catch (InterruptedException ex) {
-				throw new RuntimeException(ex);
+			if(protocolRaw==null){
+				System.out.println("Protocol raw is null");
+				return null;
 			}
+		}catch(Exception e) {
+			System.out.println("Failed to parse protocol");
 			return null;
 		}
 
 		ProtocolHistory protocolHist = new ProtocolHistory();
 
-		if(protocolRaw.getOp()==null)return null;
+		if(protocolRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 
 		protocolHist.setOp(protocolRaw.getOp());
 
 		switch(protocolRaw.getOp()) {
 
-			case "publish":
-				if(protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName())) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+			case PUBLISH:
+				if(protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName())){
+					System.out.println("Sn or name is null or empty");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
 				protocolHist.setId(opre.getId());
 
 				protocolHist.setPid(opre.getId());
@@ -68,10 +83,12 @@ public class ConstructParser {
 
 				break;
 
-			case "update":
+			case UPDATE:
 
-				if(protocolRaw.getPid()==null|| protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName()))
+				if(protocolRaw.getPid()==null|| protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName())){
+					System.out.println("Pid or Sn or name is null or empty");
 					return null;
+				}
 				protocolHist.setId(opre.getId());
 				protocolHist.setHeight(opre.getHeight());
 				protocolHist.setIndex(opre.getTxIndex());
@@ -92,10 +109,11 @@ public class ConstructParser {
 				if(protocolRaw.getWaiters()!=null)protocolHist.setWaiters(protocolRaw.getWaiters());
 
 				break;
-			case "stop":
-			case "recover":
-			case "close":
+			case STOP:
+			case RECOVER:
+			case CLOSE:
 				if (protocolRaw.getPids() == null || protocolRaw.getPids().length == 0) {
+					System.out.println("Pids is null or empty");
 					return null;
 				}
 				protocolHist.setPids(protocolRaw.getPids());
@@ -104,15 +122,21 @@ public class ConstructParser {
 				protocolHist.setIndex(opre.getTxIndex());
 				protocolHist.setTime(opre.getTime());
 				protocolHist.setSigner(opre.getSigner());
-				
-				if (protocolRaw.getOp().equals("close")) {
+
+				if (protocolRaw.getOp().equals(CLOSE)) {
 					protocolHist.setCloseStatement(protocolRaw.getCloseStatement());
 				}
 				break;
 
-			case "rate":
-				if(protocolRaw.getPid()==null)return null;
-				if (opre.getCdd() < StartFEIP.CddRequired) return null;
+			case RATE:
+				if(protocolRaw.getPid()==null){
+					System.out.println("Pid is null");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
 				protocolHist.setPid(protocolRaw.getPid());
 				protocolHist.setRate(protocolRaw.getRate());
 				protocolHist.setCdd(opre.getCdd());
@@ -124,34 +148,51 @@ public class ConstructParser {
 				protocolHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return protocolHist;
 	}
 
 	public ServiceHistory makeService(OpReturn opre, Feip feip) {
-		
+
 		Gson gson = new Gson();
 		ServiceOpData serviceRaw = new ServiceOpData();
 
 		try {
 			serviceRaw = gson.fromJson(gson.toJson(feip.getData()), ServiceOpData.class);
-			if(serviceRaw==null)return null;
+			if(serviceRaw==null){
+				System.out.println("Service raw is null");
+				return null;
+			}
 		}catch(Exception e) {
+			System.out.println("Failed to parse service");
 			return null;
 		}
 
 		ServiceHistory serviceHist = new ServiceHistory();
 
-		if(serviceRaw.getOp()==null)return null;
+		if(serviceRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 
 		serviceHist.setOp(serviceRaw.getOp());
 
 		switch(serviceRaw.getOp()) {
-			case "publish":
-				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName()))return null;
-				if(serviceRaw.getSid()!=null) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+			case PUBLISH:
+				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName())){
+					System.out.println("StdName is null or empty");
+					return null;
+				}
+				if(serviceRaw.getSid()!=null){
+					System.out.println("Sid is not null");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
 				serviceHist.setId(opre.getId());
 				serviceHist.setSid(opre.getId());
 				serviceHist.setHeight(opre.getHeight());
@@ -172,10 +213,24 @@ public class ConstructParser {
 				if(serviceRaw.getParams()!=null) {
 					serviceHist.setParams(serviceRaw.getParams());
 				}
+				if(serviceRaw.getDealer()!=null && serviceRaw.getDealerPubkey()!=null && !serviceRaw.getDealer().equals(KeyTools.pubkeyToFchAddr(serviceRaw.getDealerPubkey()))) {
+					System.out.println("The dealerPubkey does not match the dealer.");
+					return null;
+				}else{
+					serviceHist.setDealer(serviceRaw.getDealer());
+					serviceHist.setDealerPubkey(serviceRaw.getDealerPubkey());
+				}
+
 				break;
-			case "update":
-				if(serviceRaw.getSid()==null) return null;
-				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName())) return null;
+			case UPDATE:
+				if(serviceRaw.getSid()==null){
+					System.out.println("Sid is null");
+					return null;
+				}
+				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName())){
+					System.out.println("StdName is null or empty");
+					return null;
+				}
 
 				serviceHist.setId(opre.getId());
 				serviceHist.setSid(serviceRaw.getSid());
@@ -197,11 +252,19 @@ public class ConstructParser {
 				if(serviceRaw.getParams()!=null) {
 					serviceHist.setParams(serviceRaw.getParams());
 				}
+				if(serviceRaw.getDealer()!=null && serviceRaw.getDealerPubkey()!=null && !serviceRaw.getDealer().equals(KeyTools.pubkeyToFchAddr(serviceRaw.getDealerPubkey()))) {
+					System.out.println("The dealerPubkey does not match the dealer.");
+					return null;
+				}else{
+					serviceHist.setDealer(serviceRaw.getDealer());
+					serviceHist.setDealerPubkey(serviceRaw.getDealerPubkey());
+				}
 				break;
-			case "stop":
+			case STOP:
 			case "recover":
 			case "close":
-				if(serviceRaw.getSids()==null||serviceRaw.getSids().isEmpty()){
+				if(serviceRaw.getSids()==null||serviceRaw.getSids().length==0){
+					System.out.println("Sids is null or empty");
 					return null;
 				}
 				serviceHist.setSids(serviceRaw.getSids());
@@ -210,15 +273,24 @@ public class ConstructParser {
 				serviceHist.setIndex(opre.getTxIndex());
 				serviceHist.setTime(opre.getTime());
 				serviceHist.setSigner(opre.getSigner());
-				
-				if (serviceRaw.getOp().equals("close")) {
+
+				if (serviceRaw.getOp().equals(CLOSE)) {
 					serviceHist.setCloseStatement(serviceRaw.getCloseStatement());
 				}
 				break;
-			case "rate":
-				if(serviceRaw.getSid()==null)return null;
-				if(serviceRaw.getRate()<0 ||serviceRaw.getRate()>5)return null;
-            	if (opre.getCdd() < StartFEIP.CddRequired) return null;
+			case RATE:
+				if(serviceRaw.getSid()==null){
+					System.out.println("Sid is null");
+					return null;
+				}
+				if(serviceRaw.getRate()<0 ||serviceRaw.getRate()>5){
+					System.out.println("Rate should be between 0 and 5");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
 				serviceHist.setSid(serviceRaw.getSid());
 				serviceHist.setId(opre.getId());
 				serviceHist.setHeight(opre.getHeight());
@@ -229,35 +301,52 @@ public class ConstructParser {
 				serviceHist.setCdd(opre.getCdd());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return serviceHist;
 	}
 
 	public AppHistory makeApp(OpReturn opre, Feip feip) {
-		
+
 		Gson gson = new Gson();
 
 		AppOpData appRaw = new AppOpData();
 
 		try {
 			appRaw = gson.fromJson(gson.toJson(feip.getData()), AppOpData.class);
-			if(appRaw==null)return null;
+			if(appRaw==null){
+				System.out.println("App raw is null");
+				return null;
+			}
 		}catch(Exception e) {
+			System.out.println("Failed to parse app");
 			return null;
 		}
 
 		AppHistory appHist = new AppHistory();
 
-		if(appRaw.getOp()==null)return null;
+		if(appRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 		appHist.setOp(appRaw.getOp());
 
 		switch(appRaw.getOp()) {
 
-			case "publish":
-				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())) return null;
-				if(appRaw.getAid()!=null) return null;
-            if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+			case PUBLISH:
+				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())){
+					System.out.println("StdName is null or empty");
+					return null;
+				}
+				if(appRaw.getAid()!=null){
+					System.out.println("Aid is not null");
+					return null;
+				}
+            if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+				System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+				return null;
+			}
 				appHist.setId(opre.getId());
 				appHist.setAid(opre.getId());
 				appHist.setHeight(opre.getHeight());
@@ -279,9 +368,15 @@ public class ConstructParser {
 
 				break;
 
-			case "update":
-				if(appRaw.getAid()==null) return null;
-				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())) return null;
+			case UPDATE:
+				if(appRaw.getAid()==null){
+					System.out.println("Aid is null");
+					return null;
+				}
+				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())){
+					System.out.println("StdName is null or empty");
+					return null;
+				}
 
 				appHist.setAid(appRaw.getAid());
 				appHist.setId(opre.getId());
@@ -304,10 +399,11 @@ public class ConstructParser {
 
 				break;
 
-			case "stop":
-			case "recover":
-			case "close":
-				if(appRaw.getAids()==null||appRaw.getAids().isEmpty()){
+			case STOP:
+			case RECOVER:
+			case CLOSE:
+				if(appRaw.getAids()==null||appRaw.getAids().length==0){
+					System.out.println("Aids is null or empty");
 					return null;
 				}
 				appHist.setAids(appRaw.getAids());
@@ -317,15 +413,24 @@ public class ConstructParser {
 				appHist.setIndex(opre.getTxIndex());
 				appHist.setTime(opre.getTime());
 				appHist.setSigner(opre.getSigner());
-				
-				if (appRaw.getOp().equals("close")) {
+
+				if (appRaw.getOp().equals(CLOSE)) {
 					appHist.setCloseStatement(appRaw.getCloseStatement());
 				}
 				break;
-			case "rate":
-				if(appRaw.getAid()==null)return null;
-				if(appRaw.getRate()<0 ||appRaw.getRate()>5)return null;
-            if (opre.getCdd() < StartFEIP.CddRequired) return null;
+			case RATE:
+				if(appRaw.getAid()==null){
+					System.out.println("Aid is null");
+					return null;
+				}
+				if(appRaw.getRate()<0 ||appRaw.getRate()>5){
+					System.out.println("Rate should be between 0 and 5");
+					return null;
+				}
+            if (opre.getCdd() < StartFEIP.CddRequired){
+				System.out.println("Cdd is less than CddRequired");
+				return null;
+			}
 				appHist.setAid(appRaw.getAid());
 				appHist.setRate(appRaw.getRate());
 				appHist.setCdd(opre.getCdd());
@@ -337,34 +442,51 @@ public class ConstructParser {
 				appHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return appHist;
 	}
 
 	public CodeHistory makeCode(OpReturn opre, Feip feip) {
-		
+
 		Gson gson = new Gson();
 		CodeOpData codeRaw = new CodeOpData();
 
 		try {
 			codeRaw = gson.fromJson(gson.toJson(feip.getData()), CodeOpData.class);
-			if(codeRaw==null)return null;
+			if(codeRaw==null){
+				System.out.println("Code raw is null");
+				return null;
+			}
 		}catch(Exception e) {
+			System.out.println("Failed to parse code");
 			return null;
 		}
 
 		CodeHistory codeHist = new CodeHistory();
 
-		if(codeRaw.getOp()==null)return null;
+		if(codeRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 
 		codeHist.setOp(codeRaw.getOp());
 
 		switch(codeRaw.getOp()) {
-			case "publish":
-				if(codeRaw.getName()==null||"".equals(codeRaw.getName())) return null;
-				if(codeRaw.getCodeId()!=null) return null;
-            if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+			case PUBLISH:
+				if(codeRaw.getName()==null||"".equals(codeRaw.getName())){
+					System.out.println("Name is null or empty");
+					return null;
+				}
+				if(codeRaw.getCodeId()!=null){
+					System.out.println("CodeId is not null");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100){
+					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					return null;
+				}
 				codeHist.setId(opre.getId());
 				codeHist.setCodeId(opre.getId());
 				codeHist.setHeight(opre.getHeight());
@@ -381,9 +503,15 @@ public class ConstructParser {
 				if(codeRaw.getProtocols()!=null)codeHist.setProtocols(codeRaw.getProtocols());
 				if(codeRaw.getWaiters()!=null)codeHist.setWaiters(codeRaw.getWaiters());
 				break;
-			case "update":
-				if(codeRaw.getCodeId()==null) return null;
-				if(codeRaw.getName()==null||"".equals(codeRaw.getName()))return null;
+			case UPDATE:
+				if(codeRaw.getCodeId()==null){
+					System.out.println("CodeId is null");
+					return null;
+				}
+				if(codeRaw.getName()==null||"".equals(codeRaw.getName())){
+					System.out.println("Name is null or empty");
+					return null;
+				}
 
 				codeHist.setId(opre.getId());
 				codeHist.setCodeId(codeRaw.getCodeId());
@@ -401,10 +529,11 @@ public class ConstructParser {
 				if(codeRaw.getProtocols()!=null)codeHist.setProtocols(codeRaw.getProtocols());
 				if(codeRaw.getWaiters()!=null)codeHist.setWaiters(codeRaw.getWaiters());
 				break;
-			case "stop":
-			case "recover":
-			case "close":
+			case STOP:
+			case RECOVER:
+			case CLOSE:
 				if (codeRaw.getCodeIds() == null || codeRaw.getCodeIds().length == 0) {
+					System.out.println("CodeIds is null or empty");
 					return null;
 				}
 				codeHist.setCodeIds(codeRaw.getCodeIds());
@@ -414,15 +543,24 @@ public class ConstructParser {
 				codeHist.setIndex(opre.getTxIndex());
 				codeHist.setTime(opre.getTime());
 				codeHist.setSigner(opre.getSigner());
-				
-				if (codeRaw.getOp().equals("close")) {
+
+				if (codeRaw.getOp().equals(CLOSE)) {
 					codeHist.setCloseStatement(codeRaw.getCloseStatement());
 				}
 				break;
-			case "rate":
-				if(codeRaw.getCodeId()==null) return null;
-				if(codeRaw.getRate()<0 ||codeRaw.getRate()>5)return null;
-            if (opre.getCdd() < StartFEIP.CddRequired) return null;
+			case RATE:
+				if(codeRaw.getCodeId()==null){
+					System.out.println("CodeId is null");
+					return null;
+				}
+				if(codeRaw.getRate()<0 ||codeRaw.getRate()>5){
+					System.out.println("Rate should be between 0 and 5");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
 				codeHist.setCodeId(codeRaw.getCodeId());
 				codeHist.setId(opre.getId());
 				codeHist.setHeight(opre.getHeight());
@@ -433,18 +571,21 @@ public class ConstructParser {
 				codeHist.setCdd(opre.getCdd());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return codeHist;
 	}
 
 	public boolean parseProtocol(ElasticsearchClient esClient, ProtocolHistory protocolHist) throws Exception {
-		
-		boolean isValid = false;
-		if(protocolHist==null)return false;
+
+		if(protocolHist==null){
+			System.out.println("Protocol hist is null");
+			return false;
+		}
 		Protocol protocol;
 		switch (protocolHist.getOp()) {
-			case "publish" -> {
+			case PUBLISH -> {
 				protocol = EsUtils.getById(esClient, IndicesNames.PROTOCOL, protocolHist.getPid(), Protocol.class);
 				if (protocol == null) {
 					protocol = new Protocol();
@@ -475,29 +616,46 @@ public class ConstructParser {
 
 					Protocol protocol1 = protocol;
 
-					esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol1));
-					isValid = true;
+					IndexResponse result = esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol1));
+					if(result==null||result.result()==null){
+						System.out.println("Failed to create protocol");
+						return false;
+					}
+					if (!CREATED.equals(result.result().jsonValue()))
+						if (!UPDATED.equals(result.result().jsonValue())) {
+							System.out.println("Failed to create protocol");
+							return false;
+						}
+
+					System.out.println(result.result());
+
+					// Create news
+					News.createNews(esClient, protocolHist.getId(), protocolHist.getSigner(), PUBLISH,
+							Feip.FeipProtocol.PROTOCOL.getName(), protocolHist.getId(), protocolHist.getName(), protocolHist.getDesc(),
+							protocolHist.getHeight(), protocolHist.getTime());
+					return true;
 				} else {
-					isValid = false;
+					System.out.println("Protocol already exists");
+					return false;
 				}
 			}
-			case "update" -> {
+			case UPDATE -> {
 				protocol = EsUtils.getById(esClient, IndicesNames.PROTOCOL, protocolHist.getPid(), Protocol.class);
 				if (protocol == null) {
-					isValid = false;
-					break;
+					System.out.println("Protocol not found");
+					return false;
 				}
 				if (Boolean.TRUE.equals(protocol.isClosed())) {
-					isValid = false;
-					break;
+					System.out.println("Protocol is closed");
+					return false;
 				}
 				if (!protocol.getOwner().equals(protocolHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Protocol owner is not the same as the signer");
+					return false;
 				}
 				if (Boolean.FALSE.equals(protocol.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Protocol is not active");
+					return false;
 				}
 				protocol.setType(protocolHist.getType());
 				protocol.setSn(protocolHist.getSn());
@@ -513,16 +671,22 @@ public class ConstructParser {
 				protocol.setLastTime(protocolHist.getTime());
 				protocol.setLastHeight(protocolHist.getHeight());
 				Protocol protocol2 = protocol;
-				esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol2));
-				isValid = true;
+				IndexResponse result = esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol2));
+
+				if(result==null || result.result()==null){
+					System.out.println("Failed to update protocol");
+					return false;
+				}
+				System.out.println(result.result());
+				return CREATED.equals(result.result().jsonValue()) || UPDATED.equals(result.result().jsonValue());
 			}
-			case "stop", "recover", "close" -> {
+			case STOP, RECOVER, CLOSE -> {
 				List<String> idList = new ArrayList<>();
 				if (protocolHist.getPids() != null && protocolHist.getPids().length > 0) {
 					idList.addAll(Arrays.asList(protocolHist.getPids()));
 				} else {
-					isValid = false;
-					break;
+					System.out.println("Pids is null or empty");
+					return false;
 				}
 
 				EsUtils.MgetResult<Protocol> result = EsUtils.getMultiByIdList(esClient, IndicesNames.PROTOCOL, idList, Protocol.class);
@@ -535,20 +699,20 @@ public class ConstructParser {
 					}
 
 					if (!protocolItem.getOwner().equals(protocolHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, protocolHist.getSigner(), Cid.class);
-						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(protocolHist.getSigner())) {
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, protocolHist.getSigner(), Freer.class);
+						if (resultCid == null ||resultCid.getMaster() == null || !resultCid.getMaster().equals(protocolHist.getSigner())) {
 							continue;
 						}
 					}
 
 					switch (protocolHist.getOp()) {
-						case "stop":
+						case STOP:
 							protocolItem.setActive(false);
 							break;
-						case "recover":
+						case RECOVER:
 							protocolItem.setActive(true);
 							break;
-						case "close":
+						case CLOSE:
 							protocolItem.setClosed(true);
 							protocolItem.setActive(false);
 							break;
@@ -565,32 +729,41 @@ public class ConstructParser {
 					BulkRequest.Builder br = new BulkRequest.Builder();
 					for (Protocol updatedProtocol : updatedProtocols) {
 						br.operations(op -> op
-							.index(idx -> idx
-								.index(IndicesNames.PROTOCOL)
-								.id(updatedProtocol.getId())
-								.document(updatedProtocol)
-							)
+								.index(idx -> idx
+										.index(IndicesNames.PROTOCOL)
+										.id(updatedProtocol.getId())
+										.document(updatedProtocol)
+								)
 						);
 					}
-					esClient.bulk(br.build());
-					isValid = true;
+					BulkResponse result1 = esClient.bulk(br.build());
+					if(result1.errors()){
+						System.out.println("Failed to bulk update protocol");
+						return false;
+					}else System.out.println("Done");
+					// Create news
+					News.createNews(esClient, protocolHist.getId(), protocolHist.getSigner(), protocolHist.getOp(),
+							Feip.FeipProtocol.PROTOCOL.getName(), null, null, StringUtils.arrayToString(protocolHist.getPids()),
+							protocolHist.getHeight(), protocolHist.getTime());
+
+					return true;
 				}
 			}
-			
-			case "rate" -> {
+
+			case RATE -> {
 				protocol = EsUtils.getById(esClient, IndicesNames.PROTOCOL, protocolHist.getPid(), Protocol.class);
 				if (protocol == null) {
-					isValid = false;
-					break;
+					System.out.println("Protocol not found");
+					return false;
 				}
 				if (protocol.getOwner().equals(protocolHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Protocol owner is the same as the signer");
+					return false;
 				}
 
 				if((protocolHist.getCdd()==null || protocolHist.getRate()==null)){
-					isValid=false;
-					break;
+					System.out.println("Cdd or rate is null");
+					return false;
 				}
 
 				if(protocol.gettCdd()==null||protocol.gettRate()==null){
@@ -608,21 +781,29 @@ public class ConstructParser {
 				protocol.setLastTime(protocolHist.getTime());
 				protocol.setLastHeight(protocolHist.getHeight());
 				Protocol protocol3 = protocol;
-				esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol3));
-				isValid = true;
+				IndexResponse result = esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol3));
+
+				if(result==null || result.result()==null){
+					System.out.println("Failed to update protocol");
+					return false;
+				}
+				System.out.println(result.result());
+				return CREATED.equals(result.result().jsonValue()) || UPDATED.equals(result.result().jsonValue());
 			}
 		}
 
-		return isValid;
+		return false;
 	}
 
 	public boolean parseService(ElasticsearchClient esClient, ServiceHistory serviceHist) throws Exception {
-		
-		boolean isValid = false;
+
+		if(serviceHist==null){
+			System.out.println("Service hist is null");
+			return false;
+		}
 		Service service;
-		if(serviceHist==null||serviceHist.getOp()==null)return false;
 		switch(serviceHist.getOp()) {
-			case "publish":
+			case PUBLISH:
 				service = EsUtils.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 				if(service==null) {
 					service = new Service();
@@ -632,6 +813,14 @@ public class ConstructParser {
 					service.setDesc(serviceHist.getDesc());
 					service.setTypes(serviceHist.getTypes());
 					service.setVer(serviceHist.getVer());
+					service.setDealer(serviceHist.getDealer());
+
+					if(serviceHist.getDealerPubkey()!=null){
+						service.setDealerPubkey(serviceHist.getDealerPubkey());
+						String dealer = KeyTools.pubkeyToFchAddr(serviceHist.getDealerPubkey());
+						service.setDealer(dealer);
+					}
+
 					service.setUrls(serviceHist.getUrls());
 					service.setWaiters(serviceHist.getWaiters());
 					service.setProtocols(serviceHist.getProtocols());
@@ -652,86 +841,112 @@ public class ConstructParser {
 					service.setClosed(false);
 
 					Service service1 = service;
-					esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service1));
-					isValid = true;
+					IndexResponse result = esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service1));
+					if(result==null||result.result()==null){
+						System.out.println("Failed to create service");
+						return false;
+					}
+					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
+						System.out.println("Failed to create service");
+						return false;
+					}
+
+					System.out.println(result.result());
+
+					// Create news
+					News.createNews(esClient, serviceHist.getId(), serviceHist.getSigner(), PUBLISH,
+							Feip.FeipProtocol.SERVICE.getName(), serviceHist.getId(), serviceHist.getStdName(), serviceHist.getDesc(),
+							serviceHist.getHeight(), serviceHist.getTime());
+
+					return true;
 				}else {
-					isValid=false;
+					System.out.println("Service already exists");
+					return false;
 				}
-				break;
-				case "stop", "recover", "close" : {
-					if(serviceHist.getSids()==null||serviceHist.getSids().isEmpty()){
-						isValid = false;
-						break;
-					}
-					
-					EsUtils.MgetResult<Service> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SERVICE, serviceHist.getSids(), Service.class);
-					List<Service> services = result.getResultList();
-				
-					List<Service> updatedServices = new ArrayList<>();
-					for (Service serviceItem : services) {
-						if (Boolean.TRUE.equals(serviceItem.isClosed())) {
-							continue;
-						}
-				
-						if (!serviceItem.getOwner().equals(serviceHist.getSigner())) {
-							Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, serviceHist.getSigner(), Cid.class);
-							if (resultCid.getMaster() == null || !resultCid.getMaster().equals(serviceHist.getSigner())) {
-								continue;
-							}
-						}
-				
-						switch (serviceHist.getOp()) {
-							case "stop":
-								serviceItem.setActive(false);
-								break;
-							case "recover":
-								serviceItem.setActive(true);
-								break;
-							case "close":
-								serviceItem.setClosed(true);
-								serviceItem.setActive(false);
-								break;
-						}
-				
-						serviceItem.setLastTxId(serviceHist.getId());
-						serviceItem.setLastTime(serviceHist.getTime());
-						serviceItem.setLastHeight(serviceHist.getHeight());
-				
-						updatedServices.add(serviceItem);
-					}
-				
-					if (!updatedServices.isEmpty()) {
-						BulkRequest.Builder br = new BulkRequest.Builder();
-						for (Service updatedService : updatedServices) {
-							br.operations(op -> op
-								.index(idx -> idx
-									.index(IndicesNames.SERVICE)
-									.id(updatedService.getId())
-									.document(updatedService)
-								)
-							);
-						}
-						esClient.bulk(br.build());
-						isValid = true;
-					}
+			case STOP, RECOVER, CLOSE : {
+				if(serviceHist.getSids()==null||serviceHist.getSids().length==0){
+					System.out.println("Sids is null or empty");
+					return false;
 				}
 
-			case "update":
+				EsUtils.MgetResult<Service> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SERVICE, List.of(serviceHist.getSids()), Service.class);
+				List<Service> services = result.getResultList();
+
+				List<Service> updatedServices = new ArrayList<>();
+				for (Service serviceItem : services) {
+					if (Boolean.TRUE.equals(serviceItem.isClosed())) {
+						continue;
+					}
+
+					if (!serviceItem.getOwner().equals(serviceHist.getSigner())) {
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, serviceHist.getSigner(), Freer.class);
+						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(serviceHist.getSigner())) {
+							System.out.println("Service owner is not the same as the signer");
+							continue;
+						}
+					}
+
+					switch (serviceHist.getOp()) {
+						case STOP:
+							serviceItem.setActive(false);
+							break;
+						case RECOVER:
+							serviceItem.setActive(true);
+							break;
+						case CLOSE:
+							serviceItem.setClosed(true);
+							serviceItem.setActive(false);
+							break;
+					}
+
+					serviceItem.setLastTxId(serviceHist.getId());
+					serviceItem.setLastTime(serviceHist.getTime());
+					serviceItem.setLastHeight(serviceHist.getHeight());
+
+					updatedServices.add(serviceItem);
+				}
+
+				if (!updatedServices.isEmpty()) {
+					BulkRequest.Builder br = new BulkRequest.Builder();
+					for (Service updatedService : updatedServices) {
+						br.operations(op -> op
+								.index(idx -> idx
+										.index(IndicesNames.SERVICE)
+										.id(updatedService.getId())
+										.document(updatedService)
+								)
+						);
+					}
+					BulkResponse result1 = esClient.bulk(br.build());
+					if(result1.errors()){
+						System.out.println("Failed to bulk update service");
+						return false;
+					} else System.out.println("Done");
+
+					// Create news
+					News.createNews(esClient, serviceHist.getId(), serviceHist.getSigner(), serviceHist.getOp(),
+							Feip.FeipProtocol.SERVICE.getName(), null, null, StringUtils.arrayToString(serviceHist.getSids()),
+							serviceHist.getHeight(), serviceHist.getTime());
+					return true;
+				}
+			}
+
+			case UPDATE:
 				service = EsUtils.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 
 				if(service==null) {
-					isValid = false;
-					break;
+					System.out.println("Service not found");
+					return false;
 				}
 
 				if(Boolean.TRUE.equals(service.isClosed())) {
-					isValid = false;
-					break;
+					System.out.println("Service is closed");
+					return false;
 				}
 
 				if(! (service.getOwner().equals(serviceHist.getSigner()))) {
-					isValid = false;
-					break;
+					System.out.println("Service owner is not the same as the signer");
+					return false;
 				}
 
 				service.setStdName(serviceHist.getStdName());
@@ -739,6 +954,14 @@ public class ConstructParser {
 				service.setDesc(serviceHist.getDesc());
 				service.setTypes(serviceHist.getTypes());
 				service.setVer(serviceHist.getVer());
+				service.setDealer(serviceHist.getDealer());
+
+				if(serviceHist.getDealerPubkey()!=null){
+					service.setDealerPubkey(serviceHist.getDealerPubkey());
+					String dealer = KeyTools.pubkeyToFchAddr(serviceHist.getDealerPubkey());
+					service.setDealer(dealer);
+				}
+
 				service.setUrls(serviceHist.getUrls());
 				service.setWaiters(serviceHist.getWaiters());
 				service.setProtocols(serviceHist.getProtocols());
@@ -752,26 +975,30 @@ public class ConstructParser {
 
 				Service service4 = service;
 
-				esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service4));
-				isValid = true;
-				break;
+				IndexResponse result = esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service4));
+				if(result==null || result.result()==null){
+					System.out.println("Failed to update service");
+					return false;
+				}
+				System.out.println(result.result());
+				return CREATED.equals(result.result().jsonValue()) || UPDATED.equals(result.result().jsonValue());
 
-			case "rate":
+			case RATE:
 				service = EsUtils.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 
 				if(service==null) {
-					isValid = false;
-					break;
+					System.out.println("Service not found");
+					return false;
 				}
 
 				if(service.getOwner().equals(serviceHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Service owner is the same as the signer");
+					return false;
 				}
 
 				if((serviceHist.getCdd()==null || serviceHist.getRate()==null)){
-					isValid=false;
-					break;
+					System.out.println("Cdd or rate is null");
+					return false;
 				}
 
 				if(service.gettCdd()==null||service.gettRate()==null){
@@ -791,20 +1018,26 @@ public class ConstructParser {
 
 				Service service5 = service;
 
-				esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service5));
-				isValid = true;
+				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service5));
+				if(result2==null || result2.result()==null){
+					System.out.println("Failed to update service");
+					return false;
+				}
+				System.out.println(result2.result());
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 
-				break;
 		}
-		return isValid;
+		return false;
 	}
 
 	public boolean parseApp(ElasticsearchClient esClient, AppHistory appHist) throws Exception {
-		if(appHist==null||appHist.getOp()==null)return false;
-		boolean isValid = false;
+		if(appHist==null){
+			System.out.println("App hist is null");
+			return false;
+		}
 		App app;
 		switch(appHist.getOp()) {
-			case "publish":
+			case PUBLISH:
 				app = EsUtils.getById(esClient, IndicesNames.APP, appHist.getAid(), App.class);
 				if(app==null) {
 					app = new App();
@@ -832,91 +1065,115 @@ public class ConstructParser {
 					app.setActive(true);
 
 					App app1=app;
-					esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app1));
-					isValid = true;
-				}else {
-					isValid = false;
-				}
-				break;
+					IndexResponse result = esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app1));
+					if(result==null||result.result()==null){
+						System.out.println("Failed to create app");
+						return false;
+					}
+					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
+						System.out.println("Failed to create app");
+						return false;
+					}
+					System.out.println(result.result());
 
-				case "stop", "recover", "close":
-				if(appHist.getAids()==null||appHist.getAids().isEmpty()){
-					isValid = false;
-					break;
+					// Create news
+					News.createNews(esClient, appHist.getId(), appHist.getSigner(), PUBLISH,
+							Feip.FeipProtocol.APP.getName(), appHist.getId(), appHist.getStdName(), appHist.getDesc(),
+							appHist.getHeight(), appHist.getTime());
+					return true;
+				}else {
+					System.out.println("App already exists");
+					return false;
 				}
-			
-				EsUtils.MgetResult<App> result = EsUtils.getMultiByIdList(esClient, IndicesNames.APP, appHist.getAids(), App.class);
+
+			case STOP, RECOVER, CLOSE:
+				if(appHist.getAids()==null||appHist.getAids().length==0){
+					System.out.println("Aids is null or empty");
+					return false;
+				}
+
+				EsUtils.MgetResult<App> result = EsUtils.getMultiByIdList(esClient, IndicesNames.APP, List.of(appHist.getAids()), App.class);
 				List<App> apps = result.getResultList();
-			
+
 				List<App> updatedApps = new ArrayList<>();
 				for (App appItem : apps) {
 					if (Boolean.TRUE.equals(appItem.isClosed())) {
 						continue;
 					}
-			
+
 					if (!appItem.getOwner().equals(appHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, appHist.getSigner(), Cid.class);
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, appHist.getSigner(), Freer.class);
 						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(appHist.getSigner())) {
+							System.out.println("App owner is not the same as the signer");
 							continue;
 						}
 					}
-			
+
 					switch (appHist.getOp()) {
-						case "stop":
+						case STOP:
 							appItem.setActive(false);
 							break;
-						case "recover":
+						case RECOVER:
 							appItem.setActive(true);
 							break;
-						case "close":
+						case CLOSE:
 							appItem.setClosed(true);
 							appItem.setActive(false);
 							break;
 					}
-			
+
 					appItem.setLastTxId(appHist.getId());
 					appItem.setLastTime(appHist.getTime());
 					appItem.setLastHeight(appHist.getHeight());
-			
+
 					updatedApps.add(appItem);
 				}
-			
+
 				if (!updatedApps.isEmpty()) {
 					BulkRequest.Builder br = new BulkRequest.Builder();
 					for (App updatedApp : updatedApps) {
 						br.operations(op -> op
-							.index(idx -> idx
-								.index(IndicesNames.APP)
-								.id(updatedApp.getId())
-								.document(updatedApp)
-							)
+								.index(idx -> idx
+										.index(IndicesNames.APP)
+										.id(updatedApp.getId())
+										.document(updatedApp)
+								)
 						);
 					}
-					esClient.bulk(br.build());
-					isValid = true;
+					BulkResponse result1 = esClient.bulk(br.build());
+					if(result1.errors()){
+						System.out.println("Failed to bulk update app");
+						return false;
+					} else System.out.println("Done");
+
+					// Create news
+					News.createNews(esClient, appHist.getId(), appHist.getSigner(), appHist.getOp(),
+							Feip.FeipProtocol.APP.getName(), null, null, StringUtils.arrayToString(appHist.getAids()),
+							appHist.getHeight(), appHist.getTime());
+					return true;
 				}
 				break;
-			case "update":
+			case UPDATE:
 				app = EsUtils.getById(esClient, IndicesNames.APP, appHist.getAid(), App.class);
 
 				if(app==null) {
-					isValid = false;
-					break;
+					System.out.println("App not found");
+					return false;
 				}
 
 				if(Boolean.TRUE.equals(app.isClosed())) {
-					isValid = false;
-					break;
+					System.out.println("App is closed");
+					return false;
 				}
 
 				if(! app.getOwner().equals(appHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("App owner is not the same as the signer");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(app.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("App is not active");
+					return false;
 				}
 
 				app.setStdName(appHist.getStdName());
@@ -938,26 +1195,30 @@ public class ConstructParser {
 
 				App app2 = app;
 
-				esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app2));
-				isValid = true;
-				break;
+				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app2));
+				if(result1==null || result1.result()==null){
+					System.out.println("Failed to update app");
+					return false;
+				}
+				System.out.println(result1.result());
+				return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
 
-			case "rate":
+			case RATE:
 				app = EsUtils.getById(esClient, IndicesNames.APP, appHist.getAid(), App.class);
 
 				if(app==null) {
-					isValid = false;
-					break;
+					System.out.println("App not found");
+					return false;
 				}
 
 				if(app.getOwner().equals(appHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("App owner is the same as the signer");
+					return false;
 				}
 
 				if((appHist.getCdd()==null || appHist.getRate()==null)){
-					isValid=false;
-					break;
+					System.out.println("Cdd or rate is null");
+					return false;
 				}
 
 				if(app.gettCdd()==null||app.gettRate()==null){
@@ -977,19 +1238,25 @@ public class ConstructParser {
 
 				App app3 = app;
 
-				esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app3));
-				isValid = true;
-				break;
+				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app3));
+				if(result2==null || result2.result()==null){
+					System.out.println("Failed to update app");
+					return false;
+				}
+				System.out.println(result2.result());
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 		}
-		return isValid;
+		return false;
 	}
 
 	public boolean parseCode(ElasticsearchClient esClient, CodeHistory codeHist) throws Exception {
-		if(codeHist==null||codeHist.getOp()==null)return false;
-		boolean isValid = false;
+		if(codeHist==null){
+			System.out.println("Code hist is null");
+			return false;
+		}
 		Code code;
 		switch(codeHist.getOp()) {
-			case "publish":
+			case PUBLISH:
 				code = EsUtils.getById(esClient, IndicesNames.CODE, codeHist.getCodeId(), Code.class);
 				if(code==null) {
 					code = new Code();
@@ -1015,91 +1282,113 @@ public class ConstructParser {
 					code.setClosed(false);
 
 					Code code1=code;
-					esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(code1));
-					isValid = true;
+					IndexResponse result = esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(code1));
+					if(result==null||result.result()==null){
+						System.out.println("Failed to create code");
+						return false;
+					}
+					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
+						System.out.println("Failed to create code");
+						return false;
+					}
+					System.out.println(result.result());
+
+					// Create news
+					News.createNews(esClient, codeHist.getId(), codeHist.getSigner(), PUBLISH,
+							Feip.FeipProtocol.CODE.getName(), codeHist.getId(), codeHist.getName(), codeHist.getDesc(),
+							codeHist.getHeight(), codeHist.getTime());
+					return true;
 				}else {
-					isValid = false;
+					System.out.println("Code already exists");
+					return false;
 				}
-				break;
-				case "stop", "recover", "close":
+
+			case STOP, RECOVER, CLOSE:
 				if (codeHist.getCodeIds() == null || codeHist.getCodeIds().length == 0) {
-					isValid = false;
-					break;
+					System.out.println("CodeIds is null or empty");
+					return false;
 				}
-			
+
 				EsUtils.MgetResult<Code> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CODE, Arrays.asList(codeHist.getCodeIds()), Code.class);
 				List<Code> codes = result.getResultList();
-			
+
 				List<Code> updatedCodes = new ArrayList<>();
 				for (Code codeItem : codes) {
 					if (Boolean.TRUE.equals(codeItem.isClosed())) {
 						continue;
 					}
-			
+
 					if (!codeItem.getOwner().equals(codeHist.getSigner())) {
-						Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, codeHist.getSigner(), Cid.class);
+						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, codeHist.getSigner(), Freer.class);
 						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(codeHist.getSigner())) {
+							System.out.println("Code owner is not the same as the signer");
 							continue;
 						}
 					}
-			
+
 					switch (codeHist.getOp()) {
-						case "stop":
-							codeItem.setActive(false);
-							break;
-						case "recover":
-							codeItem.setActive(true);
-							break;
-						case "close":
+						case STOP -> codeItem.setActive(false);
+						case RECOVER -> codeItem.setActive(true);
+						case CLOSE -> {
 							codeItem.setClosed(true);
 							codeItem.setActive(false);
-							break;
+						}
 					}
-			
+
 					codeItem.setLastTxId(codeHist.getId());
 					codeItem.setLastTime(codeHist.getTime());
 					codeItem.setLastHeight(codeHist.getHeight());
-			
+
 					updatedCodes.add(codeItem);
 				}
-			
-				if (!updatedCodes.isEmpty()) {
-					BulkRequest.Builder br = new BulkRequest.Builder();
-					for (Code updatedCode : updatedCodes) {
-						br.operations(op -> op
-							.index(idx -> idx
-								.index(IndicesNames.CODE)
-								.id(updatedCode.getId())
-								.document(updatedCode)
-							)
-						);
-					}
-					esClient.bulk(br.build());
-					isValid = true;
-				}
-				break;
 
-				case "update":
+				if(updatedCodes.isEmpty()){
+					System.out.println("No valid codes to be updated");
+					return true;
+				}
+
+				BulkRequest.Builder br = new BulkRequest.Builder();
+				for (Code updatedCode : updatedCodes) {
+					br.operations(op -> op
+							.index(idx -> idx
+									.index(IndicesNames.CODE)
+									.id(updatedCode.getId())
+									.document(updatedCode)
+							)
+					);
+				}
+				BulkResponse result1 = esClient.bulk(br.build());
+				if(result1.errors()){
+					System.out.println("Failed to bulk update code");
+					return false;
+				} else System.out.println("Done");
+				// Create news
+				News.createNews(esClient, codeHist.getId(), codeHist.getSigner(), codeHist.getOp(),
+						Feip.FeipProtocol.CODE.getName(), null, null,StringUtils.arrayToString(codeHist.getCodeIds()),
+						codeHist.getHeight(), codeHist.getTime());
+				return true;
+
+			case UPDATE:
 				code = EsUtils.getById(esClient, IndicesNames.CODE, codeHist.getCodeId(), Code.class);
 
 				if(code==null) {
-					isValid = false;
-					break;
+					System.out.println("Code not found");
+					return false;
 				}
 
 				if(Boolean.TRUE.equals(code.isClosed())) {
-					isValid = false;
-					break;
+					System.out.println("Code is closed");
+					return false;
 				}
 
 				if(! code.getOwner().equals(codeHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Code owner is not the same as the signer");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(code.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Code is not active");
+					return false;
 				}
 
 				code.setName(codeHist.getName());
@@ -1118,25 +1407,25 @@ public class ConstructParser {
 
 				Code app2 = code;
 
-				esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(app2));
-				isValid = true;
-				break;
-			case "rate":
+				IndexResponse result3 = esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(app2));
+				System.out.println(result3.result());
+				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
+			case RATE:
 				code = EsUtils.getById(esClient, IndicesNames.CODE, codeHist.getCodeId(), Code.class);
 
 				if(code==null) {
-					isValid = false;
-					break;
+					System.out.println("Code not found");
+					return false;
 				}
 
 				if(code.getOwner().equals(codeHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Code owner is the same as the signer");
+					return false;
 				}
 
 				if((codeHist.getCdd()==null || codeHist.getRate()==null)){
-					isValid=false;
-					break;
+					System.out.println("Cdd or rate is null");
+					return false;
 				}
 
 				if(code.gettCdd()==null||code.gettRate()==null){
@@ -1157,10 +1446,10 @@ public class ConstructParser {
 
 				Code code3 = code;
 
-				esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(code3));
-				isValid = true;
-				break;
+				IndexResponse result4 = esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(code3));
+				System.out.println(result4.result());
+				return CREATED.equals(result4.result().jsonValue()) || UPDATED.equals(result4.result().jsonValue());
 		}
-		return isValid;
+		return false;
 	}
 }

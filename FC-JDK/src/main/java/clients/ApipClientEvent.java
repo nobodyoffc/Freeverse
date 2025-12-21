@@ -1,5 +1,7 @@
 package clients;
 
+import core.crypto.CryptoDataByte;
+import core.crypto.Encryptor;
 import data.fcData.AlgorithmId;
 import data.fcData.FcSession;
 import data.fcData.ReplyBody;
@@ -7,7 +9,6 @@ import data.fcData.Signature;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
 import data.apipData.SignInMode;
-import data.fcData.AlgorithmId;
 import core.fch.FchMainNetwork;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
@@ -49,7 +50,6 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
-import static constants.FieldNames.ALG;
 import static constants.FieldNames.MODE;
 import static data.fcData.Signature.isGoodSha256Sign;
 import static clients.ApipClientEvent.RequestBodyType.*;
@@ -82,6 +82,9 @@ public class ApipClientEvent {
     protected String via;
     protected Integer code;
     protected String message;
+    protected byte[] sessionKey;
+    protected byte[] myPrikey;
+    protected String itsPubkey;
 
     public enum RequestBodyType {
         NONE,STRING,BYTES,FILE,FCDSL
@@ -92,22 +95,17 @@ public class ApipClientEvent {
 
     public ApipClientEvent() {
     }
-    public ApipClientEvent(String urlHead, String sn, String ver, String apiName,
-                           RequestBodyType requestBodyType,
-                           @Nullable Fcdsl fcdsl,
-                           @Nullable String requestBodyStr,
-                           @Nullable byte[] requestBodyBytes,
-                           @Nullable Map<String,String>paramMap,
-                           @Nullable String requestFileName,
-                           ResponseBodyType responseBodyType,
-                           @Nullable String responseFileName,
-                           @Nullable String responseFilePath,
-                           AuthType authType,
-                           @Nullable byte[] authKey,
-                           @Nullable String via) {
-        String urlTail = ApiUrl.makeUrlTailPath(sn,ver)+apiName;
-        initiate(urlHead, urlTail, requestBodyType, fcdsl, requestBodyStr, requestBodyBytes, paramMap,requestFileName, responseBodyType,responseFileName,responseFilePath,authType, authKey, via);
+
+    public ApipClientEvent(String urlHead, String urlTail, @Nullable Fcdsl fcdsl, String via){
+        initiate(urlHead,
+                urlTail,
+                ApipClientEvent.RequestBodyType.FCDSL,
+                fcdsl, null,null,null,null,
+                ApipClientEvent.ResponseBodyType.STRING, null,null,
+                AuthType.ASY_TWO_WAY_ENCRYPT, null,
+                via);
     }
+
     public ApipClientEvent(String urlHead, String urlTail,
                            RequestBodyType requestBodyType,
                            @Nullable Fcdsl fcdsl,
@@ -124,7 +122,7 @@ public class ApipClientEvent {
         initiate(urlHead, urlTail, requestBodyType, fcdsl, requestBodyStr, requestBodyBytes, paramMap,requestFileName,responseBodyType,responseFileName,responseFilePath, authType, authKey, via);
     }
 
-    private void initiate(String urlHead, String urlTail, RequestBodyType requestBodyType, @Nullable Fcdsl fcdsl, @Nullable String requestBodyStr,@Nullable byte[] requestBodyBytes, @Nullable Map<String, String> paramMap,String requestFileName,
+    private void initiate(String urlHead, String urlTail, RequestBodyType requestBodyType, @Nullable Fcdsl fcdsl, @Nullable String requestBodyStr, @Nullable byte[] requestBodyBytes, @Nullable Map<String, String> paramMap, String requestFileName,
                           @Nullable ResponseBodyType responseBodyType, @Nullable String responseFileName, @Nullable String responseFilePath,
                           AuthType authType, @Nullable byte [] authKey, @Nullable String via) {
         boolean signUrl= AuthType.FC_SIGN_URL.equals(authType);
@@ -172,67 +170,6 @@ public class ApipClientEvent {
             makeHeaderSession(authKey,apiUrl.getUrl().getBytes());
     }
 
-    public ApipClientEvent(String urlHead, String sn, String ver, String apiName, Map<String,String>paramMap, AuthType authType, byte[] authKey, String via) {
-        this.requestParamMap=paramMap;
-        this.via=via;
-        this.authType=authType;
-        switch (authType){
-            case FC_SIGN_URL -> {
-                apiUrl=new ApiUrl(urlHead, sn,ver,apiName,paramMap, true,via);
-                makeHeaderSession(authKey,apiUrl.getUrl().getBytes());
-            }
-            case FC_SIGN_BODY -> {
-                apiUrl=new ApiUrl(urlHead, sn,ver,apiName,null, null,null);
-                requestBody=new RequestBody(apiUrl.getUrl(),via);
-                requestBody.setData(paramMap);
-                requestHeaderMap = new HashMap<>();
-                makeRequestBodyBytes();
-                makeHeaderSession(authKey,requestBodyBytes);
-            }
-            default -> apiUrl=new ApiUrl(urlHead, sn,ver,apiName,null, null,via);
-        }
-    }
-    public ApipClientEvent(String url) {
-        apiUrl=new ApiUrl(url);
-    }
-    public ApipClientEvent(String urlHead, String urlTail) {
-        apiUrl=new ApiUrl(urlHead,urlTail,null,null,null);
-    }
-    public ApipClientEvent(String urlHead, String urlTailPath, String apiName) {
-        apiUrl=new ApiUrl(urlHead,urlTailPath, apiName,null,null,null);
-    }
-    public ApipClientEvent(String urlHead, String urlTailPath, String apiName, Map<String,String>paramMap) {
-        apiUrl=new ApiUrl(urlHead,urlTailPath, apiName,paramMap,false,null);
-    }
-    public ApipClientEvent(String urlHead, String sn, String version, String apiName) {
-        apiUrl=new ApiUrl(urlHead, sn, version, apiName,null,null,null);
-    }
-    public ApipClientEvent(String urlHead, String sn, String version, String apiName, Map<String,String>paramMap) {
-        apiUrl=new ApiUrl(urlHead, sn, version, apiName,paramMap,false,null);
-    }
-    public ApipClientEvent(String urlHead, String sn, String ver, String apiName, Fcdsl fcdsl, AuthType authType, byte[] authKey, String via) {
-        boolean signUrl= AuthType.FC_SIGN_URL.equals(authType);
-        apiUrl=new ApiUrl(urlHead, sn, ver, apiName,null,signUrl,via);
-        this.fcdsl =fcdsl;
-        makeFcdslRequest(urlHead,apiUrl.getUrlTail(),via,fcdsl);
-        if(authType.equals(AuthType.FC_SIGN_BODY)){
-            makeHeaderSession(authKey,requestBodyBytes);
-        }else if (AuthType.FC_SIGN_URL.equals(authType))
-            makeHeaderSession(authKey,apiUrl.getUrl().getBytes());
-    }
-
-    public ApipClientEvent(byte[] authKey, String urlHead, String urlTailPath, String apiName, Fcdsl fcdsl, AuthType authType, String via) {
-        urlTailPath=ApiUrl.formatUrlPath(urlTailPath);
-        apiUrl=new ApiUrl(urlHead,urlTailPath+apiName);
-        this.fcdsl =fcdsl;
-        makeFcdslRequest(urlHead,apiUrl.getUrlTail(),via,fcdsl);
-        if(authType.equals(AuthType.FC_SIGN_BODY)){
-            makeHeaderSession(authKey,requestBodyBytes);
-        }else if (AuthType.FC_SIGN_URL.equals(authType))makeHeaderSession(authKey,apiUrl.getUrl().getBytes());
-    }
-
-
-
     public int checkResponse() {
         if (responseBody == null) {
             code = CodeMessage.Code3001ResponseIsNull;
@@ -254,12 +191,8 @@ public class ApipClientEvent {
         return 0;
     }
 
-    public void signInPost(@Nullable String via, byte[] priKey, @Nullable SignInMode mode){
-        this.signInPost(via, priKey, mode, null);
-    }
-    
-    public void signInPost(@Nullable String via, byte[] priKey, @Nullable SignInMode mode, @Nullable AlgorithmId algorithmId){
-        makeSignInRequest(via, mode, algorithmId);
+    public void signInPost(String ver, @Nullable String via, byte[] priKey, @Nullable SignInMode mode){
+        makeSignInRequest(via, mode);
         makeHeaderAsySign(priKey);
         post();
         if(responseBody!=null){
@@ -275,16 +208,20 @@ public class ApipClientEvent {
         return get(null);
     }
 
-    public boolean get(@Nullable byte[] sessionKey){
+    public boolean get(@Nullable byte[] authKey){
+        // Store sessionKey for potential response decryption
+        this.sessionKey = authKey;
+
         if(responseBodyType==null)responseBodyType=ResponseBodyType.FC_REPLY;
 
-        if(authType == AuthType.FC_SIGN_URL || authType == AuthType.FC_SIGN_BODY ){
-            if(sessionKey==null){
+        if(authType!=null && !authType.equals(AuthType.FREE)){
+            if(authKey==null){
                 code = CodeMessage.Code1023MissSessionKey;
                 message = CodeMessage.Msg1023MissSessionKey;
                 return false;
             }
         }
+
 
         if (apiUrl.getUrl() == null) {
             code = CodeMessage.Code3004RequestUrlIsAbsent;
@@ -302,7 +239,8 @@ public class ApipClientEvent {
                     request.addHeader(head, requestHeaderMap.get(head));
                 }
             }
-
+            //TODO
+            System.out.println("Request Url GET: "+apiUrl.getUrl());
             try {
                 httpResponse = httpClient.execute(request);
             }catch (HttpHostConnectException e){
@@ -312,8 +250,7 @@ public class ApipClientEvent {
                 return false;
             }
 
-            //TODO
-            System.out.println("Request Url GET: "+apiUrl.getUrl());
+
 
             if(httpResponse==null){
                 code= CodeMessage.Code3002GetRequestFailed;
@@ -323,7 +260,7 @@ public class ApipClientEvent {
 
             parseResponseHeader();
 
-            return makeReply(sessionKey);
+            return makeReply(authKey);
         } catch (IOException e) {
 //            log.error("Error when requesting post.", e);
             code = CodeMessage.Code3007ErrorWhenRequestingPost;
@@ -358,15 +295,106 @@ public class ApipClientEvent {
         return false;
     }
 
+    private boolean decryptResponseIfNeeded() throws IOException {
+        // Check if decryption is needed
+        if (authType == null ||
+            !(authType.equals(AuthType.SYMKEY_ENCRYPT) ||
+              authType.equals(AuthType.ASY_ONE_WAY_ENCRYPT) ||
+              authType.equals(AuthType.ASY_TWO_WAY_ENCRYPT))) {
+            return true; // No decryption needed
+        }
+
+        // Parse response as CryptoDataByte
+        String responseJson = new String(responseBodyBytes);
+        CryptoDataByte cryptoDataByte;
+        try {
+            cryptoDataByte = CryptoDataByte.fromJson(responseJson);
+        } catch (Exception e) {
+            code = CodeMessage.Code1020OtherError;
+            message = "Failed to parse encrypted response as CryptoDataByte: " + e.getMessage();
+            return false;
+        }
+
+        if (cryptoDataByte.getCipher() == null) {
+            code = CodeMessage.Code1020OtherError;
+            message = "Invalid encrypted response format.";
+            return false;
+        }
+
+        // Determine decryption key based on authType
+        core.crypto.Decryptor decryptor = new core.crypto.Decryptor();
+        // Decrypt the response
+        CryptoDataByte decryptedData = null;
+        switch (authType) {
+            case SYMKEY_ENCRYPT:
+                if (this.sessionKey == null) {
+                    code = CodeMessage.Code1023MissSessionKey;
+                    message = CodeMessage.Msg1023MissSessionKey;
+                    return false;
+                }
+                decryptedData = decryptor.decryptJsonBySymkey(responseJson,sessionKey);
+                break;
+            case ASY_TWO_WAY_ENCRYPT:
+                if (this.myPrikey == null) {
+                    code = CodeMessage.Code1033MissPrikey;
+                    message = CodeMessage.Msg1033MissPrikey;
+                    return false;
+                }
+
+                if (this.itsPubkey == null) {
+                    code = CodeMessage.Code1001PubkeyMissed;
+                    message = CodeMessage.Msg1001PubkeyMissed;
+                    return false;
+                }
+                decryptedData = decryptor.decryptJsonByAsyTwoWay(responseJson,myPrikey,Hex.fromHex(itsPubkey));
+
+                break;
+            case ASY_ONE_WAY_ENCRYPT:
+                if (this.myPrikey == null) {
+                    code = CodeMessage.Code1033MissPrikey;
+                    message = CodeMessage.Msg1033MissPrikey;
+                    return false;
+                }
+                decryptedData = decryptor.decryptJsonByAsyOneWay(responseJson,Hex.fromHex(itsPubkey));
+                break;
+            default:
+                return true; // Should not reach here
+        }
+
+        if (decryptedData.getCode() != CodeMessage.Code0Success) {
+            code = CodeMessage.Code1029FailedToDecrypt;
+            message = "Failed to decrypt response: " + decryptedData.getMessage();
+            return false;
+        }
+
+        // Replace responseBodyBytes with decrypted data
+        byte[] decryptedBytes = decryptedData.getData();
+        if (decryptedBytes == null) {
+            code = CodeMessage.Code1020OtherError;
+            message = "Decrypted response data is null.";
+            return false;
+        }
+
+        responseBodyBytes = decryptedBytes;
+        return true;
+    }
+
     private boolean makeStringReply(byte[] sessionKey) throws IOException {
         responseBodyBytes = httpResponse.getEntity().getContent().readAllBytes();
+
+        // Decrypt if needed
+        if (!decryptResponseIfNeeded()) {
+            return false;
+        }
+
         responseBodyStr = new String(responseBodyBytes);
         code=0;
         return checkReplySign(sessionKey);
     }
 
     private boolean checkReplySign(byte[] sessionKey) {
-        if(authType==AuthType.FREE)return true;
+        if(authType!= AuthType.FC_SIGN_BODY && authType!=AuthType.FC_SIGN_URL)
+            return true;
         if (responseHeaderMap != null && responseHeaderMap.get(SIGN) != null) {
             if (sessionKey ==null || !checkResponseSign(sessionKey)) {
                 code = CodeMessage.Code1008BadSign;
@@ -379,6 +407,12 @@ public class ApipClientEvent {
 
     private boolean makeBytesReply(byte[] sessionKey) throws IOException {
         responseBodyBytes = httpResponse.getEntity().getContent().readAllBytes();
+
+        // Decrypt if needed
+        if (!decryptResponseIfNeeded()) {
+            return false;
+        }
+
         if(responseBodyBytes==null){
             code= CodeMessage.Code1020OtherError;
             message = "The response body is null.";
@@ -416,6 +450,12 @@ public class ApipClientEvent {
 
     private boolean makeFcReply(byte[] sessionKey) throws IOException {
         responseBodyBytes = httpResponse.getEntity().getContent().readAllBytes();
+
+        // Decrypt if needed
+        if (!decryptResponseIfNeeded()) {
+            return false;
+        }
+
         responseBodyStr = new String(responseBodyBytes);
         parseFcResponse(httpResponse);
         try {
@@ -525,12 +565,19 @@ public class ApipClientEvent {
         return didFromResponse;
     }
     public boolean post() {
-        return post(null);
+        return post(null, null, null);
     }
 
-    public boolean post(@Nullable byte[] sessionKey) {
-        if(this.requestBodyType==null)requestBodyType= STRING;
-        if(responseBodyType==null)responseBodyType=ResponseBodyType.FC_REPLY;
+    public boolean post(@Nullable byte[] sessionKey, byte[] myPrikey, String itsPubkey) {
+        // Store encryption keys for response decryption
+        this.sessionKey = sessionKey;
+        this.myPrikey = myPrikey;
+        this.itsPubkey = itsPubkey;
+
+        if(this.requestBodyType==null)
+            requestBodyType= STRING;
+        if(responseBodyType==null)
+            responseBodyType=ResponseBodyType.FC_REPLY;
 
         if (apiUrl.getUrl() == null) {
             code = CodeMessage.Code3004RequestUrlIsAbsent;
@@ -539,14 +586,57 @@ public class ApipClientEvent {
             return false;
         }
 
-
         //TODO for test
         if(fcdsl!=null) {
             String params = Fcdsl.fcdslToUrlParams(fcdsl);
-            if(params!=null && !params.isBlank())System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl()+"?"+ params);
-            else System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl());
+            if(params!=null && !params.isBlank())
+                System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl()+"?"+ params);
+            else
+                System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl());
+        }
+        CryptoDataByte result;
+
+        switch (authType){
+            case SYMKEY_ENCRYPT -> {
+                if(sessionKey==null){
+                    code = CodeMessage.Code1023MissSessionKey;
+                    message = CodeMessage.Msg1023MissSessionKey;
+                    System.out.println(message);
+                    return false;
+                }
+
+                Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
+                result = encryptor.encryptBySymkey(this.requestBodyBytes, sessionKey);
+            }
+
+            case ASY_TWO_WAY_ENCRYPT -> {
+                Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+
+                if(myPrikey == null){
+                    code = CodeMessage.Code1033MissPrikey;
+                    message = CodeMessage.Msg1033MissPrikey;
+                    System.out.println(message);
+                    return false;
+                }
+                result = encryptor.encryptByAsyTwoWay(this.requestBodyBytes, myPrikey,Hex.fromHex(itsPubkey));
+            }
+            default -> {
+                code = CodeMessage.Code1020OtherError;
+                message = "Unsupported authType:"+authType;
+                System.out.println(message);
+                return false;
+            }
         }
 
+        if(result!=null && result.getCode() != 0){
+            code = CodeMessage.Code1020OtherError;
+            message = result.getMessage();
+            System.out.println(message);
+            return false;
+        }else if(result!=null) {
+            this.requestBodyStr = result.toJson();
+            this.requestBodyBytes = result.toJson().getBytes();
+        }
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
 
             HttpPost httpPost = new HttpPost(apiUrl.getUrl());
@@ -558,7 +648,7 @@ public class ApipClientEvent {
 
             switch (requestBodyType){
                 case STRING,FCDSL ->{
-                    StringEntity entity = new StringEntity(new String(requestBodyBytes));
+                    StringEntity entity = new StringEntity(requestBodyStr);
                     httpPost.setEntity(entity);
                 }
                 case BYTES -> {
@@ -604,6 +694,71 @@ public class ApipClientEvent {
             if (httpResponse.getStatusLine().getStatusCode() != 200) {
                 log.debug("Post response status: {}.{}", httpResponse.getStatusLine().getStatusCode(), httpResponse.getStatusLine().getReasonPhrase());
                 log.debug("Post response error: {}", httpResponse.getEntity().getContent().toString());
+                code = CodeMessage.Code3006ResponseStatusWrong;
+                message = CodeMessage.Msg3006ResponseStatusWrong + ": " + httpResponse.getStatusLine().getStatusCode()+"."+httpResponse.getStatusLine().getReasonPhrase();
+                log.debug("Code:{}. Message:{}",code,message);
+                return false;
+            }
+
+            if(authType.equals(AuthType.FC_SIGN_BODY)||authType.equals(AuthType.FC_SIGN_URL))
+                parseResponseHeader();
+            return makeReply(sessionKey);
+        } catch (Exception e) {
+            log.error("Error when requesting post.", e);
+            code = CodeMessage.Code3007ErrorWhenRequestingPost;
+            message = CodeMessage.Msg3007ErrorWhenRequestingPost+":"+e.getMessage();
+            log.debug("Code:{}. Message:{}",code,message);
+            return false;
+        }
+    }
+
+    public byte[] postBytes(byte[] requestBodyBytes) {
+
+        if(this.requestBodyType==null)
+            requestBodyType= STRING;
+        if(responseBodyType==null)
+            responseBodyType=ResponseBodyType.FC_REPLY;
+
+        if (apiUrl.getUrl() == null) {
+            code = CodeMessage.Code3004RequestUrlIsAbsent;
+            message = CodeMessage.Msg3004RequestUrlIsAbsent;
+            System.out.println(message);
+            return null;
+        }
+
+        this.requestBodyBytes = requestBodyBytes;
+
+        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+
+            HttpPost httpPost = new HttpPost(apiUrl.getUrl());
+            if (requestHeaderMap != null) {
+                for (String key : requestHeaderMap.keySet()) {
+                    httpPost.setHeader(key, requestHeaderMap.get(key));
+                }
+            }
+
+            ByteArrayEntity entity = new ByteArrayEntity(requestBodyBytes);
+            httpPost.setEntity(entity);
+
+            try {
+                httpResponse = httpClient.execute(httpPost);
+            }catch (HttpHostConnectException e){
+                log.debug("Failed to connect "+apiUrl.getUrl()+". Check the URL.");
+                code = CodeMessage.Code3001ResponseIsNull;
+                message = CodeMessage.Msg3001ResponseIsNull;
+                return null;
+            }
+
+            if (httpResponse == null) {
+                log.debug("httpResponse == null.");
+                code = CodeMessage.Code3001ResponseIsNull;
+                message = CodeMessage.Msg3001ResponseIsNull;
+                return null;
+            }
+
+            if (httpResponse.getStatusLine().getStatusCode() != 200) {
+                log.debug("Post response status: {}.{}", httpResponse.getStatusLine().getStatusCode(), httpResponse.getStatusLine().getReasonPhrase());
+                log.debug("Post response error: {}", httpResponse.getEntity().getContent().toString());
                 if(httpResponse.getHeaders(UpStrings.CODE)!=null&&httpResponse.getHeaders(UpStrings.CODE).length>0){
                     if(httpResponse.getHeaders(UpStrings.CODE)[0]!=null) {
                         code = Integer.valueOf(httpResponse.getHeaders(UpStrings.CODE)[0].getValue());
@@ -615,63 +770,28 @@ public class ApipClientEvent {
                     message = CodeMessage.Msg3006ResponseStatusWrong + ": " + httpResponse.getStatusLine().getStatusCode();
                     log.debug("Code:{}. Message:{}",code,message);
                 }
-                return false;
+                return null;
             }
 
-            parseResponseHeader();
-            return makeReply(sessionKey);
-//            switch (responseBodyType){
-//                case STRING ->{
-//                    responseBodyBytes = httpResponse.getEntity().getContent().readAllBytes();
-//                    responseBodyStr = new String(responseBodyBytes);
-//                    code=0;
-//                }
-//                case FC_REPLY ->{
-//                    if (makeFcReply(sessionKey)) return false;
-//                }
-//                case BYTES -> responseBodyBytes = httpResponse.getEntity().getContent().readAllBytes();
-//                case FILE -> {
-//                    String codeStr = responseHeaderMap.get(CODE);
-//                    if(!"0".equals(codeStr))
-//                        if (makeFcReply(sessionKey)) return false;
-//
-//                    String fileName;
-//                    if(responseFileName==null)fileName= StringTools.getTempName();
-//                    else fileName=responseFileName;
-//                    String gotDid = downloadFileFromHttpResponse(fileName,responseFilePath);
-//                    if(responseFileName==null){
-//                        Files.move(Paths.get(fileName),Paths.get(gotDid), StandardCopyOption.REPLACE_EXISTING);
-//                    }
-//                    if(responseBody==null)responseBody=new FcReplier();
-//                    responseBody.setCode(ReplyCodeMessage.Code0Success);
-//                    responseBody.setMessage(ReplyCodeMessage.Msg0Success);
-//                    responseBody.setData(gotDid);
-//                }
-//                default -> {
-//                    code = ReplyCodeMessage.Code1020OtherError;
-//                    message = "ResponseBodyType is null.";
-//                    log.debug("Code:{}. Message:{}",code,message);
-//                    return false;
-//                }
-//            }
+            responseBodyBytes = httpResponse.getEntity().getContent().readAllBytes();
+
+            if(responseBodyBytes==null){
+                code= CodeMessage.Code1020OtherError;
+                message = "The response body is null.";
+                return null;
+            }
+            code= CodeMessage.Code0Success;
+            message= CodeMessage.Msg0Success;
+
         } catch (Exception e) {
             log.error("Error when requesting post.", e);
             code = CodeMessage.Code3007ErrorWhenRequestingPost;
             message = CodeMessage.Msg3007ErrorWhenRequestingPost+":"+e.getMessage();
             log.debug("Code:{}. Message:{}",code,message);
-            return false;
+            return null;
         }
-//
-//
-//        if (responseHeaderMap != null && responseHeaderMap.get(SIGN) != null) {
-//            if (sessionKey==null || !checkResponseSign(sessionKey)) {
-//                code = ReplyCodeMessage.Code1008BadSign;
-//                message = ReplyCodeMessage.Msg1008BadSign;
-//                log.debug("Code:{}. Message:{}",code,message);
-//                return false;
-//            }
-//        }
-//        return checkResponseCode();
+
+        return responseBodyBytes;
     }
 
     private void parseResponseHeader() {
@@ -681,16 +801,11 @@ public class ApipClientEvent {
         this.signatureOfResponse = new Signature(sign, sessionName);
     }
 
-//    public void makeRequestBody() {
-//        requestBody = new RequestBody();
-//        requestBody.makeRequestBody(apiUrl.getUrl(), requestBody.getVia());
-//    }
-
     protected void makeFcdslRequest(String urlHead, String urlTail, @Nullable String via, Fcdsl fcdsl) {
         if(apiUrl==null){
             apiUrl=new ApiUrl(urlHead,urlTail);
         }
-        String url = ApiUrl.makeUrl(urlHead, urlTail);
+        String url = apiUrl.getUrl();
         requestBody = new RequestBody(url, via);
         requestBody.setFcdsl(fcdsl);
 
@@ -701,40 +816,6 @@ public class ApipClientEvent {
         requestHeaderMap = new HashMap<>();
         requestHeaderMap.put(CONTENT_TYPE, utils.http.ContentType.APPLICATION_JSON.getType());
     }
-
-//    public boolean post(byte[] sessionKey, RequestBodyType requestBodyType, ResponseBodyType responseBodyType, String requestFileName,String responseFileName) {
-//
-////        if(requestHeaderMap==null)
-////            requestHeaderMap = new HashMap<>();
-//        if (apiUrl.getUrl() == null) {
-//            code = ReplyInfo.Code3004RequestUrlIsAbsent;
-//            message = ReplyInfo.Msg3004RequestUrlIsAbsent;
-//            System.out.println(message);
-//            return false;
-//        }
-//
-//        post(sessionKey,requestBodyType,responseBodyType, requestFileName, responseFileName);
-//
-//        if (responseHeaderMap != null && responseHeaderMap.get(UpStrings.SIGN) != null) {
-//            if (sessionKey==null || !checkResponseSign(sessionKey)) {
-//                code = ReplyInfo.Code1008BadSign;
-//                message = ReplyInfo.Msg1008BadSign;
-//                return false;
-//            }
-//        }
-//
-//        if(responseBody!=null){
-//            boolean done=false;
-//            if(responseBody.getCode()!=null) {
-//                code = responseBody.getCode();
-//                if(code==0)done=true;
-//            }
-//            if(responseBody.getMessage()!=null)
-//                message = responseBody.getMessage();
-//            return done;
-//        }
-//        return false;
-//    }
 
     protected void makeHeaderAsySign(byte[] priKey) {
         if (priKey == null) return;
@@ -749,40 +830,23 @@ public class ApipClientEvent {
         requestHeaderMap.put(UpStrings.FID, fid);
         requestHeaderMap.put(SIGN, signatureOfRequest.getSign());
     }
-    protected void makeFcdslRequest(@Nullable String via, @Nullable Fcdsl fcdsl) {
-        requestBody = new RequestBody(apiUrl.getUrl(), via);
-        if(fcdsl!=null)requestBody.setFcdsl(fcdsl);
-
-        makeRequestBodyBytes();
-
-        requestHeaderMap = new HashMap<>();
-        requestHeaderMap.put("Content-Type", "application/json");
-    }
 
     public void makeRequestBodyBytes() {
         this.requestBodyStr = JsonUtils.toJson(requestBody);
         requestBodyBytes = this.requestBodyStr.getBytes(StandardCharsets.UTF_8);
     }
 
-    protected void makeSignInRequest(@Nullable String via, @Nullable SignInMode mode) {
-        makeSignInRequest(via, mode, null);
-    }
     
-    protected void makeSignInRequest(@Nullable String via, @Nullable SignInMode mode, @Nullable AlgorithmId algorithmId) {
+    protected void makeSignInRequest(@Nullable String via, @Nullable SignInMode mode) {
         requestBody = new RequestBody(apiUrl.getUrl(), via);
         
         // Add mode and algorithm to fcdsl.other if specified
-        if (mode != null || algorithmId != null) {
+        if (mode != null) {
             Fcdsl fcdsl = new Fcdsl();
             Map<String, String> otherMap = new HashMap<>();
-            
-            if (mode != null) {
-                otherMap.put(MODE, mode.name());
-            }
-            if (algorithmId != null) {
-                otherMap.put(ALG, algorithmId.getDisplayName());
-            }
-            
+
+            otherMap.put(MODE, mode.name());
+
             fcdsl.setOther(otherMap);
             requestBody.setFcdsl(fcdsl);
         }

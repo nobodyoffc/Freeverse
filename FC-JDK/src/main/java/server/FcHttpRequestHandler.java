@@ -2,7 +2,6 @@ package server;
 
 import data.apipData.*;
 import data.apipData.SignInMode;
-import data.fcData.AlgorithmId;
 import data.fcData.FcSession;
 import data.fchData.*;
 import config.Settings;
@@ -10,6 +9,8 @@ import data.feipData.Service;
 import data.feipData.serviceParams.ApipParams;
 import handlers.Manager;
 import handlers.SessionManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -43,11 +44,13 @@ import java.util.stream.Collectors;
 
 import static constants.FieldNames.*;
 import static constants.IndicesNames.CASH;
-import static constants.IndicesNames.CID;
+import static constants.IndicesNames.FREER;
 import static constants.Strings.HEIGHT;
 import static constants.Strings.SERVICE;
 
 public class FcHttpRequestHandler {
+    protected static final Logger log = LoggerFactory.getLogger(FcHttpRequestHandler.class);
+
     private RequestBody requestBody;
     private final ElasticsearchClient esClient;
     private final Settings settings;
@@ -118,86 +121,57 @@ public class FcHttpRequestHandler {
 
     public static void doSigInPost(HttpServletRequest request, HttpServletResponse response, ReplyBody replier, Settings settings, HttpRequestChecker httpRequestChecker) {
         try {
-            FcSession fcSession;
-            String pubKey;
+
             SessionManager sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
             if (sessionHandler == null) {
                 System.out.println("Failed to get session handler.");
                 replier.replyOtherErrorHttp("Failed to get session handler.", response);
                 return;
             }
-            boolean isOk = httpRequestChecker.checkSignInRequestHttp(request, response);
-            if (!isOk) {
-                return;
-            }
-            pubKey = httpRequestChecker.getPubkey();
-            String fid = httpRequestChecker.getFid();
 
-            // Get mode from fcdsl.other
-            SignInMode mode = SignInMode.NORMAL; // default
-            if (httpRequestChecker.getRequestBody().getFcdsl() != null &&
-                httpRequestChecker.getRequestBody().getFcdsl().getOther() != null) {
-                
-                String modeStr = httpRequestChecker.getRequestBody().getFcdsl().getOther().get("mode");
-                if (modeStr != null) {
-                    try {
-                        mode = SignInMode.valueOf(modeStr.toUpperCase());
-                    } catch (IllegalArgumentException e) {
-                        // Keep default NORMAL mode
-                    }
-                }
-            }
-            AlgorithmId algorithmId = null;
-            String algStr = httpRequestChecker.getRequestBody().getFcdsl().getOther().get("alg");
-            if (algStr != null) {
-                try {
-                    algorithmId = AlgorithmId.fromDisplayName(algStr);
-                } catch (IllegalArgumentException e) {
-                    replier.replyHttp(CodeMessage.Code4002NoSuchAlgorithm, response);
-                    return;
-                }
-            }
-
-            if(algorithmId!=null && algorithmId.equals(AlgorithmId.NONE)) {
-                // Original sign-in path for unencrypted sessions
-                if (sessionHandler.getSessionByUserId(fid) == null || SignInMode.REFRESH.equals(mode)) {
-                    try {
-                        fcSession = sessionHandler.addNewSession(fid, null);
-                    } catch (Exception e) {
-                        replier.replyOtherErrorHttp("Something wrong when making sessionKey.\n" + e.getMessage(), response);
-                        return;
-                    }
-                } else {
-                    fcSession = sessionHandler.getSessionByUserId(fid);
-                    if (fcSession == null) {
-                        try {
-                            fcSession = sessionHandler.addNewSession(fid, null);
-                        } catch (Exception e) {
-                            replier.replyOtherErrorHttp("Something wrong when making sessionKey.\n" + e.getMessage(), response);
-                            return;
-                        }
-                    }
-                }
-                fcSession.setKeyCipher(null);
-                replier.reply0SuccessHttp(fcSession, response);
+            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.ASY_TWO_WAY_ENCRYPT);
+            if (!isOk)
                 return;
-            }
 
-            if (sessionHandler.getSessionByUserId(fid) == null || SignInMode.REFRESH.equals(mode)) {
-                fcSession = sessionHandler.addNewSession(fid, pubKey);
-            } else {
-                fcSession = sessionHandler.getSessionByUserId(fid);
-            }
-            if (fcSession == null) {
-                replier.replyOtherErrorHttp("Failed to get session.", response);
-                return;
-            }
-            fcSession.setKey(null);
-            replier.reply0SuccessHttp(fcSession, response);
+            doSignIn(response, replier, httpRequestChecker, sessionHandler);
         }catch (Exception e){
             e.printStackTrace();
             replier.replyOtherErrorHttp(e.toString(), response);
         }
+    }
+
+    private static void doSignIn(HttpServletResponse response, ReplyBody replier, HttpRequestChecker httpRequestChecker, SessionManager sessionHandler) {
+        FcSession fcSession;
+        String fid = httpRequestChecker.getFid();
+
+        // Get mode from fcdsl.other
+        SignInMode mode = SignInMode.NORMAL; // default
+        if (httpRequestChecker.getRequestBody().getFcdsl() != null &&
+            httpRequestChecker.getRequestBody().getFcdsl().getOther() != null) {
+
+            String modeStr = httpRequestChecker.getRequestBody().getFcdsl().getOther().get("mode");
+            if (modeStr != null) {
+                try {
+                    mode = SignInMode.valueOf(modeStr.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    // Keep default NORMAL mode
+                }
+            }
+        }
+
+        if (sessionHandler.getSessionByUserId(fid) == null || SignInMode.REFRESH.equals(mode)) {
+            fcSession = sessionHandler.addNewSession(fid, null);
+        } else {
+            fcSession = sessionHandler.getSessionByUserId(fid);
+        }
+        if (fcSession == null) {
+            replier.replyOtherErrorHttp("Failed to get session.", response);
+            return;
+        }
+        fcSession.setKeyCipher(null);
+        fcSession.setPubkey(null);
+        fcSession.setUserId(null);
+        replier.reply0SuccessHttp(fcSession, response);
     }
 
     public static void doPingPost(HttpServletRequest request, HttpServletResponse response, AuthType authType, ReplyBody replier, HttpRequestChecker httpRequestChecker) {
@@ -295,6 +269,28 @@ public class FcHttpRequestHandler {
                 List<String> after = fcdsl.getAfter();
                 searchBuilder.searchAfter(after);
             }
+
+            // Handle field filtering with _source
+            // Both fields and noFields can exist together:
+            // - fields (includes) specifies which fields to return
+            // - noFields (excludes) removes fields from the result
+            // When both exist, includes is applied first, then excludes
+            boolean hasFields = fcdsl.getFields() != null && !fcdsl.getFields().isEmpty();
+            boolean hasNoFields = fcdsl.getNoFields() != null && !fcdsl.getNoFields().isEmpty();
+
+            if (hasFields && hasNoFields) {
+                // Both includes and excludes
+                searchBuilder.source(s -> s.filter(f -> f
+                    .includes(fcdsl.getFields())
+                    .excludes(fcdsl.getNoFields())
+                ));
+            } else if (hasFields) {
+                // Only includes
+                searchBuilder.source(s -> s.filter(f -> f.includes(fcdsl.getFields())));
+            } else if (hasNoFields) {
+                // Only excludes
+                searchBuilder.source(s -> s.filter(f -> f.excludes(fcdsl.getNoFields())));
+            }
         }
         TrackHits.Builder tb = new TrackHits.Builder();
         tb.enabled(true);
@@ -306,7 +302,7 @@ public class FcHttpRequestHandler {
             result = esClient.search(searchRequest, tClass);
         }catch(Exception e){
             finalReplyJson = replyBody.replyError(CodeMessage.Code1012BadQuery);
-            e.printStackTrace();
+            log.debug("Failed to request ES: "+e.getMessage());
             return null;
         }
 
@@ -349,7 +345,7 @@ public class FcHttpRequestHandler {
         replyBody = httpRequestChecker.getReplyBody();
         requestBody = httpRequestChecker.getRequestBody();
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replyBody,settings);
-        Map<String, T> meetMap = fcHttpRequestHandler.doRequestForMap(indexName, tClass, keyFieldName);
+        Map<String, T> meetMap = fcHttpRequestHandler.doRequestForMap(indexName, tClass, keyFieldName, response);
         if (meetMap == null) {
             replyBody.responseFinalJsonHttp(response);
             return;
@@ -358,7 +354,7 @@ public class FcHttpRequestHandler {
     }
 
     @Nullable
-    public <T> Map<String, T> doRequestForMap(String indexName, Class<T> tClass, String keyFieldName) {
+    public <T> Map<String, T> doRequestForMap(String indexName, Class<T> tClass, String keyFieldName, HttpServletResponse response) {
         HttpRequestChecker httpRequestChecker = replyBody.getRequestChecker();
         if (httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
             replyBody.replyOtherErrorHttp("The parameter 'ids' is required.", null);
@@ -437,12 +433,22 @@ public class FcHttpRequestHandler {
             replyBody = httpRequestChecker.getReplyBody();
             requestBody = httpRequestChecker.getRequestBody();
 
-            if (httpRequestChecker.getApiName().equals(ApipApiNames.BLOCK_BY_IDS) && httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
+            // Add default noFields to exclude heavy fields from response when not returning a map
+            if (!isForMap) {
+                if (requestBody.getFcdsl() == null) {
+                    requestBody.setFcdsl(new Fcdsl());
+                }
+                if (requestBody.getFcdsl().getNoFields() == null) {
+                    requestBody.getFcdsl().setNoFields(List.of(TX_LIST));
+                }
+            }
+
+            if (httpRequestChecker.getApiName().equals(ApipApi.BLOCK_BY_IDS.getName()) && httpRequestChecker.getRequestBody().getFcdsl().getIds() == null) {
                 replyBody.replyOtherErrorHttp("The parameter 'ids' is required.", response);
                 return;
             }
 
-            if (httpRequestChecker.getApiName().equals(ApipApiNames.BLOCK_BY_HEIGHTS)) {
+            if (httpRequestChecker.getApiName().equals(ApipApi.BLOCK_BY_HEIGHTS.getName())) {
                 FcQuery query = httpRequestChecker.getRequestBody().getFcdsl().getQuery();
                 if(query == null||query.getTerms()==null) {
                     replyBody.replyOtherErrorHttp("The terms query on the height field is required.", response);
@@ -462,8 +468,6 @@ public class FcHttpRequestHandler {
                 return;
             }
 
-            List<BlockHas> blockHasList;
-            List<BlockInfo> meetList = new ArrayList<>();
 
             if(isForMap){
 
@@ -477,23 +481,12 @@ public class FcHttpRequestHandler {
                     replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
                     return;
                 }
-                blockHasList = EsUtils.getMultiByIdList(esClient, IndicesNames.BLOCK_HAS, idList, BlockHas.class).getResultList();
-                if (blockHasList == null ) {
-                    replyBody.replyOtherErrorHttp("Failed to get block info.", response);
-                    return;
-                }
-                if (blockHasList.size()==0 ) {
-                    replyBody.replyHttp(CodeMessage.Code1011DataNotFound,response);
-                    return;
-                }
-
-                meetList = BlockInfo.mergeBlockAndBlockHas(blockList, blockHasList);
             }
 
-            Map<String, BlockInfo> meetMap = null;
+            Map<String, Block> meetMap = null;
 
-            if(isForMap && !meetList.isEmpty()){
-                meetMap= ObjectUtils.listToMap(meetList,idFieldName);
+            if(isForMap && !blockList.isEmpty()){
+                meetMap= ObjectUtils.listToMap(blockList,idFieldName);
                 replyBody.setLast(null);
             }
 
@@ -525,10 +518,10 @@ public class FcHttpRequestHandler {
             return;
         }
 
-        List<Cid> meetAddrList;
+        List<Freer> meetAddrList;
 
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replyBody, settings);
-        meetAddrList = fcHttpRequestHandler.doRequest(CID, sort, Cid.class);
+        meetAddrList = fcHttpRequestHandler.doRequest(FREER, sort, Freer.class);
 
         if (meetAddrList == null) return;
         try {
@@ -536,18 +529,18 @@ public class FcHttpRequestHandler {
         }catch (Exception ignore){
         }
 
-        for (Cid cid : meetAddrList) {
+        for (Freer cid : meetAddrList) {
             cid.reCalcWeight();
         }
 
-        Map<String, Cid> meetMap;
+        Map<String, Freer> meetMap;
         meetMap= ObjectUtils.listToMap(meetAddrList,ID);
         replyBody.setGot((long) meetAddrList.size());
         replyBody.setTotal((long) meetAddrList.size());
         replyBody.reply0SuccessHttp(meetMap, response);
     }
 
-    public Map<String, Long> sumCashValueByOwners(List<String> idList, ElasticsearchClient esClient) {
+    public static Map<String, Long> sumCashValueByOwners(List<String> idList, ElasticsearchClient esClient) {
         if (idList == null || idList.isEmpty() || esClient == null) {
             return Collections.emptyMap();
         }
@@ -617,11 +610,11 @@ public class FcHttpRequestHandler {
             }
             replyBody = httpRequestChecker.getReplyBody();
             requestBody = httpRequestChecker.getRequestBody();
-            List<Cid> meetCidList=null;
+            List<Freer> meetCidList=null;
 
             try{
                 FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
-                meetCidList = fcHttpRequestHandler.doRequest(CID, sort, Cid.class);
+                meetCidList = fcHttpRequestHandler.doRequest(FREER, sort, Freer.class);
             }catch(Exception ignored){
             }
 
@@ -631,7 +624,7 @@ public class FcHttpRequestHandler {
                 return;
             }
 
-            for (Cid cid : meetCidList) {
+            for (Freer cid : meetCidList) {
                 cid.reCalcWeight();
             }
 
@@ -654,7 +647,7 @@ public class FcHttpRequestHandler {
     public void doFidTxMaskRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType) {
 
         ReplyBody replier = new ReplyBody(settings);
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+
         try {
             HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
             boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
@@ -663,50 +656,41 @@ public class FcHttpRequestHandler {
             }
             replyBody = httpRequestChecker.getReplyBody();
             requestBody = httpRequestChecker.getRequestBody();
+
+            //For old version
+            if(requestBody!=null && requestBody.getFcdsl()!=null && requestBody.getFcdsl().getQuery()!=null && requestBody.getFcdsl().getQuery().getTerms()!=null){
+                String[] fields = requestBody.getFcdsl().getQuery().getTerms().getFields();
+                    if (fields[0].equals("inMarks.owner"))
+                        fields[0] = "spentCashes.owner";
+                if (fields[1].equals("outMarks.owner"))
+                    fields[1] = "issuedCashes.owner";
+            }
+
             String fid;
             try {
                 fid = httpRequestChecker.getRequestBody().getFcdsl().getQuery().getTerms().getValues()[0];
             }catch (Exception e){
-                replier.replyOtherErrorHttp("Failed to get the FID.", null);
+                replier.replyOtherErrorHttp("Failed to get the FID.", response);
                 return;
             }
 
             //Set default sort.
-            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, ID, true, null, null);
+            ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false,TX_INDEX, false, ID, false);
 
             //Request
-            String index = IndicesNames.TX_HAS;
+            String index = IndicesNames.TX;
 
             FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
-            List<TxHas> txHasList = fcHttpRequestHandler.doRequest(index, defaultSortList, TxHas.class);
+            List<Tx> txHasList = fcHttpRequestHandler.doRequest(index, defaultSortList, Tx.class);
             if (txHasList == null || txHasList.size() == 0) {
                 replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
                 return;
             }
 
 
-            List<String> idList = new ArrayList<>();
-            for (TxHas txHas : txHasList) {
-                idList.add(txHas.getId());
-            }
-
-            List<Tx> txList;
-
-            txList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX, idList, Tx.class).getResultList();
-            if (txList == null ) {
-                replier.replyOtherErrorHttp("Failed to get TX info.", response);
-                return;
-            }
-            if (txList.size()==0 ) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-                return;
-            }
-
-            List<TxInfo> meetList = TxInfo.mergeTxAndTxHas(txList, txHasList);
-
             List<FidTxMask> fidTxMaskList = new ArrayList<>();
-            for (TxInfo txInfo : meetList) {
-                FidTxMask fidTxMask = FidTxMask.fromTxInfo(fid, txInfo);
+            for (Tx tx : txHasList) {
+                FidTxMask fidTxMask = FidTxMask.fromTxInfo(fid, tx);
                 fidTxMaskList.add(fidTxMask);
             }
             //response
@@ -730,6 +714,17 @@ public class FcHttpRequestHandler {
             }
             replyBody = httpRequestChecker.getReplyBody();
             requestBody = httpRequestChecker.getRequestBody();
+
+            // Add default noFields to exclude heavy fields from response when not returning a map
+            if (!isForMap) {
+                if (requestBody.getFcdsl() == null) {
+                    requestBody.getFcdsl().setNoFields(List.of(RAW_TX));
+                }
+                if (requestBody.getFcdsl().getNoFields() == null) {
+                    requestBody.getFcdsl().setNoFields(List.of(SPENT_CASHES, ISSUED_CASHES, RAW_TX));
+                }
+            }
+
             if (ifForMapWithoutIds(isForMap, replier, response, httpRequestChecker)) return;
             //Set default sort.
             ArrayList<Sort> defaultSortList = Sort.makeSortList(HEIGHT, false, TX_INDEX, false, ID, true);
@@ -744,32 +739,8 @@ public class FcHttpRequestHandler {
                 return;
             }
 
-            List<TxInfo> meetList = new ArrayList<>();
-
-            if(isForMap) {
-
-                List<String> idList = new ArrayList<>();
-                for (Tx tx : txList) {
-                    idList.add(tx.getId());
-                }
-
-                List<TxHas> txHasList;
-
-                txHasList = EsUtils.getMultiByIdList(esClient, IndicesNames.TX_HAS, idList, TxHas.class).getResultList();
-                if (txHasList == null ) {
-                    replier.replyOtherErrorHttp("Failed to get TX info.", response);
-                    return;
-                }
-                if (txHasList.size()==0 ) {
-                    replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-                    return;
-                }
-                meetList = TxInfo.mergeTxAndTxHas(txList, txHasList);
-            }
-
-
-            Map<String, TxInfo> meetMap = null;
-            if(isForMap && !meetList.isEmpty())meetMap= ObjectUtils.listToMap(meetList,idFieldName);
+            Map<String, Tx> meetMap = null;
+            if(isForMap)meetMap= ObjectUtils.listToMap(txList,idFieldName);
 
             //response
             replier.setGot((long) txList.size());
@@ -1094,7 +1065,7 @@ public class FcHttpRequestHandler {
         return termsBoolBuilder;
     }
 
-    public void updateAddressBalances(Map<String, Long> fidBalanceMap, ElasticsearchClient esClient) {
+    public static void updateAddressBalances(Map<String, Long> fidBalanceMap, ElasticsearchClient esClient) {
         if (fidBalanceMap == null || fidBalanceMap.isEmpty() || esClient == null) {
             return;
         }
@@ -1102,21 +1073,21 @@ public class FcHttpRequestHandler {
         try {
             // First get the current address documents
             List<String> fids = new ArrayList<>(fidBalanceMap.keySet());
-            MgetResponse<Cid> response = esClient.mget(m -> m
-                .index(CID)
+            MgetResponse<Freer> response = esClient.mget(m -> m
+                .index(FREER)
                 .ids(fids), 
-                Cid.class
+                Freer.class
             );
 
             // Prepare bulk update
             List<BulkOperation> operations = new ArrayList<>();
             
-            for (MultiGetResponseItem<Cid> item : response.docs()) {
+            for (MultiGetResponseItem<Freer> item : response.docs()) {
                 if (!item.result().found()) {
                     continue;
                 }
                 
-                Cid cid = item.result().source();
+                Freer cid = item.result().source();
                 if(cid ==null)continue;
                 String fid = cid.getId();
                 Long newBalance = fidBalanceMap.get(fid);
@@ -1125,7 +1096,7 @@ public class FcHttpRequestHandler {
                     // Create update operation
                     operations.add(new BulkOperation.Builder()
                         .update(u -> u
-                            .index(CID)
+                            .index(FREER)
                             .id(fid)
                             .action(a -> a
                                 .doc(JsonData.of(Map.of("balance", newBalance)))

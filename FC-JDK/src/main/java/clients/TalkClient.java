@@ -2,9 +2,10 @@ package clients;
 
 import core.crypto.*;
 import data.fcData.*;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
+import data.feipData.Contact;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -107,7 +108,7 @@ public class TalkClient extends FcClient {
         this.myFid = apiAccount.getUserId();
         this.myPrikey = Decryptor.decryptPrikey(apiAccount.getUserPrikeyCipher(), symkey);
         this.displayer = new Displayer(this);
-        this.dealer = ((TalkParams)apiProvider.getService().getParams()).getDealer();
+        this.dealer = apiProvider.getService().getDealer();
         this.dealerPubkey = apiProvider.getDealerPubkey();
         this.talkIdHandler = new TalkIdManager(apiAccount.getUserId(),null, null);
         this.diskHandler = new DiskManager(apiAccount.getUserId(), null);
@@ -684,7 +685,7 @@ public class TalkClient extends FcClient {
     }
 
     public TalkIdInfo searchCidOrFid(ApipClient apipClient, BufferedReader br) {
-        Cid cid = apipClient.searchCidOrFid(br);
+        Freer cid = apipClient.searchCidOrFid(br);
         if(cid ==null)return null;
         return TalkIdInfo.fromCidInfo(cid);
     }
@@ -724,14 +725,14 @@ public class TalkClient extends FcClient {
     }
 
     public List<String> getGroupMembers(String id, ApipClient apipClient) {
-        Map<String, Group> groupMap = apipClient.groupByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
+        Map<String, Group> groupMap = apipClient.groupByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, id);
         if(groupMap==null || groupMap.isEmpty())return null;
         Group group = groupMap.get(id);
         return Arrays.asList(group.getMembers());
     }
 
     public List<String> getTeamMembers(String id, ApipClient apipClient) {
-        Map<String, Team> teamMap = apipClient.teamByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, id);
+        Map<String, Team> teamMap = apipClient.teamByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, id);
         if(teamMap==null || teamMap.isEmpty())return null;
         Team team = teamMap.get(id);
         return Arrays.asList(team.getMembers());
@@ -764,13 +765,7 @@ public class TalkClient extends FcClient {
                     return null;
                 }
             }
-            case FID -> {
-                talkIdInfo = searchFid(part, br);
-                if (talkIdInfo == null) {
-                    System.out.println("FID not found. Try again.");
-                    return null;
-                }
-            }
+
             case FieldNames.GROUP -> {
                 talkIdInfo = searchGroup(part);
                 if (talkIdInfo == null) {
@@ -804,30 +799,12 @@ public class TalkClient extends FcClient {
         return talkIdInfo;
     }
 
-    public TalkIdInfo searchFid(String part, BufferedReader br) {
-        Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewPart().addNewFields(FID).addNewValue(part);
-        List<Cid> result = apipClient.fidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-        Cid fid = Inputer.chooseOneFromList(result, FID, "Choose the FID:", br);
-        if (fid == null) return null;
-
-        TalkIdInfo talkIdInfo = new TalkIdInfo();
-        talkIdInfo.setId(fid.getId());
-        talkIdInfo.setIdType(TalkUnit.IdType.FID);
-
-        Cid cid = apipClient.cidInfoById(fid.getId());
-        if (cid != null) {
-            talkIdInfo.setShowName(cid.getCid());
-        }
-
-        return talkIdInfo;
-    }
 
     public TalkIdInfo searchCid(String part, BufferedReader br) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.USED_CIDS).addNewValue(part);
-        List<Cid> result = apipClient.cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
-        Cid cid = Inputer.chooseOneFromList(result, FieldNames.CID, "Choose the CID:", br);
+        List<Freer> result = apipClient.freerSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        Freer cid = Inputer.chooseOneFromList(result, FieldNames.CID, "Choose the CID:", br);
         if (cid == null) return null;
 
         TalkIdInfo talkIdInfo = new TalkIdInfo();
@@ -841,7 +818,7 @@ public class TalkClient extends FcClient {
     public  TalkIdInfo searchGroup(String part) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.GID, FieldNames.NAME, Values.DESC).addNewValue(part);
-        List<Group> result = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Group> result = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         Group group = Inputer.chooseOneFromList(result, NAME, "Choose the group:", br);
         if (group == null) return null;
         return TalkIdInfo.fromGroup(group);
@@ -850,7 +827,7 @@ public class TalkClient extends FcClient {
     public TalkIdInfo searchTeam(String part) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC).addNewValue(part);
-        List<Team> result = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Team> result = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         Team team = Inputer.chooseOneFromList(result, NAME, "Choose the team:", br);
         if (team == null) return null;
         return TalkIdInfo.fromTeam(team);
@@ -871,7 +848,7 @@ public class TalkClient extends FcClient {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.GID, NAME, Values.DESC).addNewValue(part);
 
-        List<Group> groupList = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Group> groupList = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if (!groupList.isEmpty()) {
             Group group;
             if (groupList.size() == 1) {
@@ -892,7 +869,7 @@ public class TalkClient extends FcClient {
         fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC).addNewValue(part);
         Team team;
-        List<Team> teamList = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        List<Team> teamList = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if (!teamList.isEmpty()) {
             if (teamList.size() == 1) {
                 team = teamList.get(0);
@@ -912,14 +889,14 @@ public class TalkClient extends FcClient {
         if (talkIdInfo != null)
             return talkIdInfo;
 
-        ContactDetail contactDetail = contactHandler.getContact(fid);
-        if (contactDetail != null) {
-            talkIdInfo = TalkIdInfo.fromContact(contactDetail);
+        Contact contact = contactHandler.getContact(fid);
+        if (contact != null) {
+            talkIdInfo = TalkIdInfo.fromContact(contact);
             talkIdHandler.put(fid, talkIdInfo);
             return talkIdInfo;
         }
 
-        Cid cid = apipClient.searchCidOrFid(br);
+        Freer cid = apipClient.searchCidOrFid(br);
         if (cid != null) {
             talkIdInfo = TalkIdInfo.fromCidInfo(cid);
             talkIdHandler.put(fid, talkIdInfo);
@@ -957,8 +934,8 @@ public class TalkClient extends FcClient {
 
         // 2. Search in contacts using ContactHandler
         if(results.isEmpty() || allResources) {
-            List<ContactDetail> contacts = contactHandler.searchContacts(lowerSearchString);
-            for (ContactDetail contact : contacts) {
+            List<Contact> contacts = contactHandler.searchContacts(lowerSearchString);
+            for (Contact contact : contacts) {
                 if (contact.getCid() != null && contact.getCid().toLowerCase().contains(lowerSearchString)) {
                     results.add(TalkIdInfo.fromContact(contact));
                 }
@@ -969,9 +946,9 @@ public class TalkClient extends FcClient {
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.USED_CIDS).addNewValue(searchString);
-            List<Cid> apiResults = apipClient.cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Freer> apiResults = apipClient.freerSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
-            for (Cid cid : apiResults) {
+            for (Freer cid : apiResults) {
                 results.add(TalkIdInfo.fromCidInfo(cid));
                 // Add to TalkIdHandler cache
                 talkIdHandler.put(cid.getId(), TalkIdInfo.fromCidInfo(cid));
@@ -993,8 +970,8 @@ public class TalkClient extends FcClient {
 
         // 2. Search in contacts using ContactHandler
         if(results.isEmpty() || allResources) {
-            List<ContactDetail> contacts = contactHandler.searchContacts(searchString);
-            for (ContactDetail contact : contacts) {
+            List<Contact> contacts = contactHandler.searchContacts(searchString);
+            for (Contact contact : contacts) {
                 if (contact.getFid() != null && contact.getFid().toLowerCase().contains(lowerSearchString)) {
                     results.add(TalkIdInfo.fromContact(contact));
                 }
@@ -1005,9 +982,9 @@ public class TalkClient extends FcClient {
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.FID).addNewValue(searchString);
-            List<Cid> apiResults = apipClient.cidSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Freer> apiResults = apipClient.freerSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
-            for (Cid cid : apiResults) {
+            for (Freer cid : apiResults) {
                 results.add(TalkIdInfo.fromCidInfo(cid));
                 // Add to TalkIdHandler cache
                 talkIdHandler.put(cid.getId(), TalkIdInfo.fromCidInfo(cid));
@@ -1032,7 +1009,7 @@ public class TalkClient extends FcClient {
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.GID, FieldNames.NAME, Values.DESC).addNewValue(searchString);
-            List<Group> apiResults = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Group> apiResults = apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
             for (Group group : apiResults) {
                 TalkIdInfo info = TalkIdInfo.fromGroup(group);
@@ -1060,7 +1037,7 @@ public class TalkClient extends FcClient {
         if(results.isEmpty() || allResources) {
             Fcdsl fcdsl = new Fcdsl();
             fcdsl.addNewQuery().addNewPart().addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC).addNewValue(searchString);
-            List<Team> apiResults = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            List<Team> apiResults = apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
             for (Team team : apiResults) {
                 TalkIdInfo info = TalkIdInfo.fromTeam(team);
@@ -1085,9 +1062,9 @@ public class TalkClient extends FcClient {
         if (talkIdInfo != null) return talkIdInfo;
 
         // 2. Check contactHandler
-        ContactDetail contactDetail = contactHandler.getContact(talkId);
-        if (contactDetail != null) {
-            talkIdInfo = TalkIdInfo.fromContact(contactDetail);
+        Contact contact = contactHandler.getContact(talkId);
+        if (contact != null) {
+            talkIdInfo = TalkIdInfo.fromContact(contact);
             talkIdHandler.put(talkId, talkIdInfo);
             return talkIdInfo;
         }
@@ -1109,9 +1086,9 @@ public class TalkClient extends FcClient {
         }
 
         // 6. Check apipClient.cidInfoByIds as last resort
-        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, talkId);
+        Map<String, Freer> cidInfoMap = apipClient.freerByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, talkId);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
-            Cid cid = cidInfoMap.get(talkId);
+            Freer cid = cidInfoMap.get(talkId);
             if (cid != null) {
                 talkIdInfo = TalkIdInfo.fromCidInfo(cid);
                 talkIdHandler.put(talkId, talkIdInfo);

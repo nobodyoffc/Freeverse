@@ -2,9 +2,8 @@ package core.fch;
 
 import data.fcData.FcEntity;
 import data.fchData.Cash;
-import data.fchData.Multisign;
+import data.fchData.Multisig;
 import data.fchData.RawTxForCsV1;
-import data.fchData.SendTo;
 import utils.FchUtils;
 import utils.JsonUtils;
 
@@ -17,12 +16,12 @@ public class RawTxInfo11 extends FcEntity {
     private String sender;
     private Double feeRate;
     private List<Cash> inputs;
-    private List<SendTo> outputs;
+    private List<Cash> outputs;
     private String msg;
     private String changeTo;
     private Long lockTime;
     private Long cd;
-    private Multisign multisign;
+    private Multisig multisig;
     private String ver;
 
     public RawTxInfo11() {
@@ -30,14 +29,14 @@ public class RawTxInfo11 extends FcEntity {
         this.outputs = new ArrayList<>();
     }
 
-    public RawTxInfo11(String sender, List<Cash> cashList, List<SendTo> sendToList, String msg, Long cd, Double feeRate, Multisign multisign, String ver) {
+    public RawTxInfo11(String sender, List<Cash> cashList, List<Cash> sendToList, String msg, Long cd, Double feeRate, Multisig multisig, String ver) {
         super();
         this.sender = sender;
         this.setOutputs(sendToList);
         this.setMsg(msg);
         this.setCd(cd);
         this.setFeeRate(feeRate);
-        this.setP2sh(multisign);
+        this.setP2sh(multisig);
         this.setVer(ver);
         this.setInputs(Cash.makeCashListForPay(cashList));
     }
@@ -68,11 +67,11 @@ public class RawTxInfo11 extends FcEntity {
         this.inputs = inputs;
     }
 
-    public List<SendTo> getOutputs() {
+    public List<Cash> getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(List<SendTo> outputs) {
+    public void setOutputs(List<Cash> outputs) {
         this.outputs = outputs;
     }
 
@@ -84,12 +83,12 @@ public class RawTxInfo11 extends FcEntity {
         this.msg = msg;
     }
 
-    public Multisign getP2sh() {
-        return multisign;
+    public Multisig getP2sh() {
+        return multisig;
     }
 
-    public void setP2sh(Multisign multisign) {
-        this.multisign = multisign;
+    public void setP2sh(Multisig multisig) {
+        this.multisig = multisig;
     }
 
     public static RawTxInfo11 fromUserInput(BufferedReader br, @Nullable String sender) {
@@ -107,8 +106,8 @@ public class RawTxInfo11 extends FcEntity {
         } while (Inputer.askIfYes(br, "Input another input?"));
 
         do {
-            SendTo sendTo = new SendTo();
-            sendTo.setFid(Inputer.inputString(br, "Input the fid you paying to:"));
+            Cash sendTo = new Cash();
+            sendTo.setOwner(Inputer.inputString(br, "Input the fid you paying to:"));
             sendTo.setAmount(Inputer.inputDouble(br, "Input the amount:"));
             rawTxInfo.getOutputs().add(sendTo);
         } while (Inputer.askIfYes(br, "Input another output?"));
@@ -136,7 +135,7 @@ public class RawTxInfo11 extends FcEntity {
         List<Cash> inputs = new ArrayList<>();
 
         // Process outputs
-        List<SendTo> outputs = new ArrayList<>();
+        List<Cash> outputs = new ArrayList<>();
 
         // Process message
         String msg = null;
@@ -152,8 +151,8 @@ public class RawTxInfo11 extends FcEntity {
                     inputs.add(cash);
                 }
                 case 2 -> {
-                    SendTo sendTo = new SendTo();
-                    sendTo.setFid(rawTx.getAddress());
+                    Cash sendTo = new Cash();
+                    sendTo.setOwner(rawTx.getAddress());
                     sendTo.setAmount(rawTx.getAmount());
                     outputs.add(sendTo);
                 }
@@ -194,9 +193,9 @@ public class RawTxInfo11 extends FcEntity {
         int j = 0;
         if (outputs != null) {
             for (j = 0; j < outputs.size(); j++) {
-                SendTo sendTo = outputs.get(j);
+                Cash sendTo = outputs.get(j);
                 RawTxForCsV1 rawTx = RawTxForCsV1.newOutput(
-                        sendTo.getFid(),
+                        sendTo.getOwner(),
                         sendTo.getAmount(),
                         j
                 );

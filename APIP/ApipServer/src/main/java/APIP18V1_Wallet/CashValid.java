@@ -1,11 +1,11 @@
 package APIP18V1_Wallet;
 
+import constants.ApipApiNames;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
 import data.apipData.Sort;
 import handlers.CashManager;
 import handlers.MempoolManager;
-import server.ApipApiNames;
 import constants.FieldNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
@@ -22,7 +22,6 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +37,7 @@ import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.feipData.Service;
 
-@WebServlet(name = ApipApiNames.CASH_VALID, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_VALID)
+@WebServlet(name = ApipApiNames.CASH_VALID, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.CASH_VALID +"/"+ ApipApiNames.VER_1)
 public class CashValid extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -46,7 +45,7 @@ public class CashValid extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -97,11 +96,7 @@ public class CashValid extends HttpServlet {
                 FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
                 List<Cash> meetList = fcHttpRequestHandler.doRequest(CASH, defaultSort, Cash.class);
                 if(meetList==null){
-                    try {
-                        response.getWriter().write(fcHttpRequestHandler.getFinalReplyJson());
-                    } catch (IOException ignore) {
-                        return;
-                    }
+                    replier.replyHttp(fcHttpRequestHandler.getFinalReplyJson(),response);
                 }
                 MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
                 mempoolHandler.updateUnconfirmedValidCash(meetList, fid);

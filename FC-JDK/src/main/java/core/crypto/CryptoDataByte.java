@@ -8,8 +8,12 @@ import org.jetbrains.annotations.NotNull;
 
 import constants.CodeMessage;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -17,9 +21,6 @@ import java.util.HexFormat;
 import static utils.JsonUtils.readOneJsonFromFile;
 
 public class CryptoDataByte {
-
-    public static final String ALG_0 = "000000000000";
-    public static final String ALG_1 = "000000000001";
     private EncryptType type;
     private AlgorithmId alg;
 
@@ -114,7 +115,6 @@ public class CryptoDataByte {
             cryptoDataByte.setCipherId(Hex.fromHex(cryptoDataStr.getCipherId()));
         if(cryptoDataStr.getKeyName()!=null)
             cryptoDataByte.setKeyName(Hex.fromHex(cryptoDataStr.getKeyName()));
-//        cryptoDataByte.setBadSum(cryptoData.isBadSum());
 
         return cryptoDataByte;
     }
@@ -124,8 +124,18 @@ public class CryptoDataByte {
     }
 
     public byte[] toBundle() {
-        if (iv == null || cipher == null || sum == null || type == null || alg == null) {
+        if (iv == null || cipher == null || type == null || alg == null) {
             return null; // Handle basic null checks early
+        }
+
+        // For AES-GCM algorithms, sum is not required (built-in authentication)
+        // ChaCha20 requires sum as it doesn't have built-in authentication
+        boolean requiresSum = (alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
+                              alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
+                              alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
+
+        if (requiresSum && sum == null) {
+            return null; // sum is required but missing for non-GCM algorithms
         }
 
         if (type.equals(EncryptType.Symkey) || type.equals(EncryptType.Password)) {
@@ -136,6 +146,11 @@ public class CryptoDataByte {
         byte[] algBytes = switch (alg) {
             case FC_AesCbc256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 1};  // Defaults to all zeroes
             case FC_EccK1AesCbc256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 2};
+            case FC_AesGcm256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 3};
+            case FC_EccK1AesGcm256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 4};
+            case FC_X25519AesGcm256_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 5};
+            case FC_ChaCha20_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 6};
+            case FC_EccK1ChaCha20_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 7};
             default -> null;
         };
 
@@ -155,18 +170,20 @@ public class CryptoDataByte {
             }
 
             // Conditionally write keyName based on EncryptType
-            if (type == EncryptType.Symkey || type == EncryptType.Password) {
+            if (type == EncryptType.Symkey) {
                 outputStream.write(keyName);
             }
 
-            // Write iv (16 bytes)
+            // Write iv (12 or 16 bytes depending on algorithm)
             outputStream.write(iv);
 
             // Write cipher (variable length)
             outputStream.write(cipher);
 
-            // Write sum (4 bytes)
-            outputStream.write(sum);
+            // Write sum (4 bytes) only for non-GCM algorithms
+            if (requiresSum) {
+                outputStream.write(sum);
+            }
 
             // Convert the output stream to a byte array
             return outputStream.toByteArray();
@@ -182,18 +199,6 @@ public class CryptoDataByte {
         keyName = new byte[6];
         byte[] hash = Hash.sha256(key);
         System.arraycopy(hash,0,keyName,0,6);
-    }
-
-
-    @NotNull
-    private static byte[] makeBundleWithoutPubKey(byte[] iv, byte[] cipher, byte[] sum, byte[] algBytes) {
-        byte[] bundle;
-        bundle = new byte[6+ iv.length+ sum.length+ cipher.length];
-        System.arraycopy(algBytes,0,bundle,0, 6);
-        System.arraycopy(iv,0,bundle,6, iv.length);
-        System.arraycopy(cipher,0,bundle, 6+ iv.length, cipher.length);
-        System.arraycopy(sum,0,bundle, 6+ iv.length+ cipher.length, sum.length);
-        return bundle;
     }
 
     public static CryptoDataByte fromBundle(byte[] bundle) {
@@ -212,6 +217,11 @@ public class CryptoDataByte {
         AlgorithmId alg = switch (Arrays.toString(algBytes)) {
             case "[0, 0, 0, 0, 0, 1]" -> AlgorithmId.FC_AesCbc256_No1_NrC7;
             case "[0, 0, 0, 0, 0, 2]" -> AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 3]" -> AlgorithmId.FC_AesGcm256_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 4]" -> AlgorithmId.FC_EccK1AesGcm256_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 5]" -> AlgorithmId.FC_X25519AesGcm256_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 6]" -> AlgorithmId.FC_ChaCha20_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 7]" -> AlgorithmId.FC_EccK1ChaCha20_No1_NrC7;
             default -> null;
         };
 
@@ -230,15 +240,16 @@ public class CryptoDataByte {
 
         // Check if pubKeyA exists for Asy
         if (type == EncryptType.AsyOneWay || type == EncryptType.AsyTwoWay) {
-            // Extract pubKeyA (33 bytes)
-            byte[] pubKeyA = new byte[33];
-            System.arraycopy(bundle, offset, pubKeyA, 0, 33);
+            // Determine public key size based on algorithm
+            int pubKeySize = (alg == AlgorithmId.FC_X25519AesGcm256_No1_NrC7) ? 32 : 33;
+            byte[] pubKeyA = new byte[pubKeySize];
+            System.arraycopy(bundle, offset, pubKeyA, 0, pubKeySize);
             cryptoData.setPubkeyA(pubKeyA);
-            offset += 33;
+            offset += pubKeySize;
         }
 
         // Check if keyName exists for Symkey or Password
-        if (type == EncryptType.Symkey || type == EncryptType.Password) {
+        if (type == EncryptType.Symkey) {
             // Extract pubKeyA (33 bytes)
             byte[] keyName = new byte[6];
             System.arraycopy(bundle, offset, keyName, 0, 6);
@@ -246,14 +257,27 @@ public class CryptoDataByte {
             offset += 6;
         }
 
-        // Extract iv (16 bytes)
-        byte[] iv = new byte[16];
-        System.arraycopy(bundle, offset, iv, 0, 16);
+        // Extract iv (length depends on algorithm: 12 bytes for GCM/ChaCha20, 16 bytes for CBC)
+        boolean uses12ByteIv = (alg == AlgorithmId.FC_AesGcm256_No1_NrC7 ||
+                                alg == AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 ||
+                                alg == AlgorithmId.FC_X25519AesGcm256_No1_NrC7 ||
+                                alg == AlgorithmId.FC_ChaCha20_No1_NrC7 ||
+                                alg == AlgorithmId.FC_EccK1ChaCha20_No1_NrC7);
+
+        int ivLength = uses12ByteIv ? 12 : 16;
+        byte[] iv = new byte[ivLength];
+        System.arraycopy(bundle, offset, iv, 0, ivLength);
         cryptoData.setIv(iv);
-        offset += 16;
+        offset += ivLength;
+
+        // For AES-GCM algorithms, sum is not included (built-in authentication)
+        // ChaCha20 requires sum as it doesn't have built-in authentication
+        boolean hasSum = (alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
+                         alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
+                         alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
 
         // Calculate cipher length dynamically
-        int sumLength = 4;
+        int sumLength = hasSum ? 4 : 0;
         int cipherLength = bundle.length - offset - sumLength;
 
         if (cipherLength <= 0) return null; // Sanity check to ensure we have a valid cipher length
@@ -264,11 +288,13 @@ public class CryptoDataByte {
         cryptoData.setCipher(cipher);
         offset += cipherLength;
 
-        // Extract sum (last 4 bytes)
-        byte[] sum = new byte[4];
-        System.arraycopy(bundle, offset, sum, 0, 4);
-        cryptoData.setSum(sum);
-
+        // Extract sum (last 4 bytes) only for non-GCM algorithms
+        if (hasSum) {
+            byte[] sum = new byte[4];
+            System.arraycopy(bundle, offset, sum, 0, 4);
+            cryptoData.setSum(sum);
+        }
+        cryptoData.setCode(0);
         return cryptoData;
     }
 

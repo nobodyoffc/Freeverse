@@ -1,7 +1,7 @@
 package APIP4V1_Protocol;
 
 import data.apipData.Sort;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import constants.IndicesNames;
 import data.feipData.Protocol;
@@ -22,7 +22,7 @@ import static constants.FieldNames.ID;
 import static constants.Strings.ACTIVE;
 
 
-@WebServlet(name = ApipApiNames.PROTOCOL_SEARCH, value = "/"+ ApipApiNames.SN_4+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROTOCOL_SEARCH)
+@WebServlet(name = ApipApiNames.PROTOCOL_SEARCH, value = "/"+ ApipApiNames.SN_4+"/"+ ApipApiNames.PROTOCOL_SEARCH +"/"+ ApipApiNames.VER_1)
 public class ProtocolSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -32,7 +32,7 @@ public class ProtocolSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE, false, FieldNames.T_RATE, false, ID, true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.PROTOCOL, Protocol.class, defaultSort, request, response, authType);
     }

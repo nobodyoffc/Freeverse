@@ -1,0 +1,769 @@
+package writeEs;
+
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import core.crypto.Hash;
+import core.crypto.KeyTools;
+import data.fchData.*;
+import core.fch.Weight;
+import org.bitcoinj.script.Script;
+import org.bitcoinj.script.ScriptBuilder;
+import org.bitcoinj.script.ScriptChunk;
+import parser.ReadyBlock;
+import utils.EsUtils;
+import utils.FchUtils;
+import utils.Hex;
+import utils.JsonUtils;
+
+import java.util.*;
+
+import static constants.IndicesNames.*;
+
+public class BlockMaker {
+
+	public ReadyBlock makeReadyBlock(ElasticsearchClient esClient, ReadyBlock rawBlock) throws Exception {
+
+		if (rawBlock.getInList() == null || rawBlock.getInList().isEmpty()) {
+
+			ReadyBlock txTxHasOpMadeBlock = makeTxTxHasOpReturn(rawBlock);
+			ReadyBlock blockBlockHasMadeBlock = makeBlock(txTxHasOpMadeBlock);
+			ReadyBlock addrMadeBlock = makeAddress(esClient, blockBlockHasMadeBlock);
+			addrMadeBlock.setOutWriteList(addrMadeBlock.getOutList());
+			return addrMadeBlock;
+
+		} else {
+			ReadyBlock inputMadeBlock = makeInputList(esClient, rawBlock);
+			inputMadeBlock.setOutList(rawBlock.getOutList());
+			ReadyBlock txTxHasOpMadeBlock = makeTxTxHasOpReturn(inputMadeBlock);
+			ReadyBlock blockBlockHasMadeBlock = makeBlock(txTxHasOpMadeBlock);
+
+			return makeAddress(esClient, blockBlockHasMadeBlock);
+		}
+
+	}
+
+	private ReadyBlock makeInputList(ElasticsearchClient esClient, ReadyBlock rawBlock) throws Exception {
+
+		ArrayList<Cash> inList = rawBlock.getInList();
+		Map<String, Cash> inMap = new HashMap<>();
+		List<String> inStrList = new ArrayList<>();
+		for (Cash in : inList) {
+			inMap.put(in.getId(), in);
+			inStrList.add(in.getId());
+		}
+
+		ArrayList<Cash> outList = rawBlock.getOutList();
+		Map<String, Cash> outMap = new HashMap<>();
+		for (Cash out : outList) {
+			outMap.put(out.getId(), out);
+		}
+
+		EsUtils.MgetResult<Cash> inMgetResult = EsUtils.getMultiByIdList(esClient, CASH, inStrList, Cash.class);
+		ArrayList<Cash> inOldList = (ArrayList<Cash>) inMgetResult.getResultList();
+		List<String> inNewIdList = inMgetResult.getMissList();
+
+		ArrayList<Cash> inMadeList = new ArrayList<>();
+		ArrayList<Cash> outWriteList = new ArrayList<>();
+
+		for (Cash out : inOldList) {
+			Cash in = inMap.get(out.getId());
+			if(out.getIssuer()!=null)
+				in.setIssuer(out.getIssuer());
+			setInFromOut(out, in);
+			inMadeList.add(in);
+		}
+
+		for (String id : inNewIdList) {
+			Cash in = inMap.get(id);
+			Cash out = outMap.get(id);
+
+			//这些本区块产生的cash 还没有被设置issuer
+//			in.setIssuer(out.getIssuer());
+			if(out==null){
+				System.out.println("Input missed:"+id+". " +
+						"\nTry to rollback. If it does not work, try to rollback 20000 blocks or more. " +
+						"\nIf still does not work, you have to reparse all blocks. Sorry. " +
+						"\n The cause is generally a interruption when rolling back.");
+				RuntimeException runtimeException = new RuntimeException();
+				runtimeException.printStackTrace();
+				throw runtimeException;
+			}
+			setInFromOut(out, in);
+			outMap.remove(id);
+			inMadeList.add(in);
+		}
+
+		Set<String> idSet = outMap.keySet();
+		for (String id : idSet) {
+			outWriteList.add(outMap.get(id));
+		}
+
+		rawBlock.setInList(inMadeList);
+		rawBlock.setOutWriteList(outWriteList);
+		rawBlock.setOutList(outList);
+		return rawBlock;
+	}
+
+	private void setInFromOut(Cash out, Cash in) {
+		in.setOwner(out.getOwner());
+		in.setBirthIndex(out.getBirthIndex());
+		in.setType(out.getType());
+		in.setValue(out.getValue());
+		in.setLockScript(out.getLockScript());
+		in.setBirthTxId(out.getBirthTxId());
+		in.setBirthTxIndex(out.getBirthTxIndex());
+		in.setBirthTime(out.getBirthTime());
+		in.setBirthHeight(out.getBirthHeight());
+		in.setCdd(FchUtils.cdd(in.getValue(), in.getBirthTime(), in.getSpendTime()));
+	}
+
+	private ReadyBlock makeTxTxHasOpReturn(ReadyBlock blockForMaking) {
+
+		ArrayList<Cash> outList = blockForMaking.getOutList();
+		ArrayList<Tx> txList = blockForMaking.getTxList();
+		ArrayList<OpReturn> opList = blockForMaking.getOpReturnList();
+
+		Map<String, Tx> txMap = new HashMap<>();
+
+		for (Tx tx : txList) {
+			txMap.put(tx.getId(), tx);
+
+			ArrayList<CashMask> inMarks = new ArrayList<>();
+			ArrayList<CashMask> outMarks = new ArrayList<>();
+
+			tx.setSpentCashes(inMarks);
+			tx.setIssuedCashes(outMarks);
+		}
+
+		if (blockForMaking.getInList() != null)
+			for (Cash in : blockForMaking.getInList()) {
+				long value = in.getValue();
+				long cdd = in.getCdd();
+
+				Tx tx = txMap.get(in.getSpendTxId());
+
+				if(tx.getInValueT()!=null)tx.setInValueT(tx.getInValueT() + value);
+				else tx.setInValueT(value);
+
+				if(tx.getCdd()!=null)tx.setCdd(tx.getCdd() + cdd);
+				else tx.setCdd(cdd);
+
+				CashMask inMark = new CashMask();
+				inMark.setId(in.getId());
+				inMark.setOwner(in.getOwner());
+				inMark.setValue(in.getValue());
+				inMark.setCdd(in.getCdd());
+
+				tx.getSpentCashes().add(inMark);
+			}
+
+		for (Cash out : outList) {
+			long value = out.getValue();
+
+			Tx tx = txMap.get(out.getBirthTxId());
+
+			if(tx.getOutValueT()!=null)
+				tx.setOutValueT(tx.getOutValueT() + value);
+			else tx.setOutValueT(value);
+
+			CashMask outMark = new CashMask();
+			outMark.setId(out.getId());
+			outMark.setOwner(out.getOwner());
+			outMark.setValue(out.getValue());
+
+			tx.getIssuedCashes().add(outMark);
+
+			if(tx.getSpentCashes().size()>0){
+				out.setIssuer(tx.getSpentCashes().get(0).getOwner());
+			}else {
+				out.setIssuer("coinbase");
+			}
+		}
+
+		for(Cash in : blockForMaking.getInList()){
+			if(in.getIssuer()==null){
+				Tx tx = txMap.get(in.getBirthTxId());
+				ArrayList<CashMask> inMarks = tx.getSpentCashes();
+				in.setIssuer(inMarks.get(0).getOwner());
+			}
+		}
+
+		if (opList != null && !opList.isEmpty()) {
+
+			Iterator<OpReturn> iterOp = opList.iterator();
+			while(iterOp.hasNext()) {
+				OpReturn opReturn = iterOp.next();
+				if("".equals(opReturn.getOpReturn())){
+					iterOp.remove();
+					continue;
+				}
+
+				String txId = opReturn.getId();
+
+				Tx tx = txMap.get(txId);
+				opReturn.setCdd(tx.getCdd());
+				opReturn.setTime(tx.getBlockTime());
+
+				String signer = tx.getSpentCashes().get(0).getOwner();
+				opReturn.setSigner(signer);
+				Long paid = null;
+				for (CashMask txoB : tx.getIssuedCashes()) {
+					String addr = txoB.getOwner();
+					if (!addr.equals(signer) && !addr.equalsIgnoreCase("unknown") && !addr.equalsIgnoreCase("OpReturn")) {
+						if(opReturn.getRecipient()==null) {
+							opReturn.setRecipient(addr);
+							if(paid==null)paid=0L;
+							paid += txoB.getValue();
+						} else if(opReturn.getRecipient().equals(addr)){
+							paid += txoB.getValue();
+						}
+					}
+				}
+				opReturn.setPaid(paid);
+
+				if (opReturn.getRecipient() == null)
+					opReturn.setRecipient("nobody");
+
+				//For CLTV
+				checkAnnouncedLockTimeP2SH(outList, txMap, opReturn);
+			}
+		}
+
+		Iterator<Tx> iterTx = txList.iterator();
+		ArrayList<Tx> txGoodList = new ArrayList<>();
+		while (iterTx.hasNext()) {
+			Tx tx = txMap.get(iterTx.next().getId());
+			if (tx.getInCount() != 0)
+				tx.setFee(tx.getInValueT() - tx.getOutValueT());
+			txGoodList.add(tx);
+		}
+
+
+		blockForMaking.setTxList(txGoodList);
+		blockForMaking.setOpReturnList(opList);
+
+		return blockForMaking;
+	}
+
+	private static void checkAnnouncedLockTimeP2SH(ArrayList<Cash> outList, Map<String, Tx> txMap, OpReturn opReturn) {
+		Tx tx;
+		try{
+			String opReturnText = opReturn.getOpReturn();
+			if(!opReturnText.isEmpty()&& opReturnText.trim().startsWith("{")){
+				// Parse P2SH map format: {hash160Hex: redeemScriptHex}
+				Map<String, String> p2shMap = P2SH.parseP2SHMapFromOpReturn(opReturnText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+				if(p2shMap != null && !p2shMap.isEmpty()){
+
+					Map<String, Cash> outMap = new HashMap<>();
+					for (Cash out : outList) {
+						outMap.put(out.getId(), out);
+					}
+
+					tx = txMap.get(opReturn.getId());
+
+					for (CashMask cashMask : tx.getIssuedCashes()) {
+						Cash cash = outMap.get(cashMask.getId());
+						if (cash.getType().equals("P2SH")) {
+							String lockScript = cash.getLockScript();
+							if (lockScript.length() < 44)
+								continue;
+
+							// Extract hash160 from P2SH lockScript using P2SH method
+							byte[] lockScriptBytes = Hex.fromHex(lockScript);
+							byte[] hash160Bytes = P2SH.extractP2SHScriptHash(lockScriptBytes);
+
+							if (hash160Bytes != null) {
+								String hash160Hex = Hex.toHex(hash160Bytes);
+
+								// Look up redeemScript in map
+								String redeemScriptHex = p2shMap.get(hash160Hex);
+								if (redeemScriptHex != null && !redeemScriptHex.isEmpty()) {
+									// Validate redeemScript syntax strictly - only process valid CLTV scripts
+									// This ensures the cash can be spent later
+									if (P2SH.validateRedeemScriptSyntax(redeemScriptHex)) {
+										// Further verify this is a CLTV script (not plain multisig)
+										Long lockTime = P2SH.extractLockTimeFromRedeemScript(redeemScriptHex);
+										if (lockTime != null && lockTime > 0) {
+											// This is a valid CLTV or CLTV+multisig script
+											addCLTVInfoToCash(cash, redeemScriptHex);
+											cashMask.setOwner(cash.getOwner());
+										}
+										// else: plain multisig without CLTV - ignore it
+									}
+									// else: invalid script syntax - ignore it
+								}
+							}
+						}
+					}
+				}
+			}
+		}catch (Exception ignore){}
+	}
+
+	public static void addCLTVInfoToCash(Cash cash, String redeemScriptHex) {
+		try {
+			// Parse P2SH script from hex format by converting to Script object
+			// Three possible formats:
+			// 1. Single-sig CLTV: <lockTime> CLTV DROP DUP HASH160 <pubkeyHash> EQUALVERIFY CHECKSIG
+			//    -> Set lockTime AND update owner to pubkeyHash
+			// 2. Multisig: <m> <pubkey1> ... <pubkeyN> <n> CHECKMULTISIG
+			//    -> Ignore (do nothing)
+			// 3. Multisig + CLTV: <lockTime> CLTV DROP <m> <pubkey1> ... <pubkeyN> <n> CHECKMULTISIG
+			//    -> Set lockTime but keep original owner
+
+			// Convert hex to Script object
+			byte[] redeemScriptBytes = Hex.fromHex(redeemScriptHex);
+			Script script = new Script(redeemScriptBytes);
+
+			// Get script chunks (parsed opcodes and data)
+			List<ScriptChunk> chunks = script.getChunks();
+
+			if(chunks.isEmpty()) return;
+
+			// Check if first chunk is a lockTime (data or number)
+			Long lockTime = null;
+			int startIdx = 0;
+
+			ScriptChunk firstChunk = chunks.get(0);
+			if(firstChunk.data != null && firstChunk.data.length > 0) {
+				// Check if followed by CLTV (0xb1 = 177)
+				if(chunks.size() > 2 && chunks.get(1).opcode == 177) { // OP_CHECKLOCKTIMEVERIFY
+					lockTime = bytesToLong(firstChunk.data);
+					cash.setLockTime(lockTime);
+					cash.setType(Cash.CashType.P2SH_CLTV.getValue());
+					startIdx = 3; // Skip lockTime, CLTV, DROP
+				}
+			}
+
+			// If no CLTV found, this is plain multisig - ignore it
+			if(lockTime == null) {
+				return;
+			}
+
+			// Now check if it's single-sig CLTV or multisig+CLTV
+			if(startIdx < chunks.size()) {
+				ScriptChunk nextChunk = chunks.get(startIdx);
+
+				// Check if it's single-sig CLTV (has DUP HASH160 pattern)
+				if(nextChunk.opcode == 118) { // OP_DUP
+					// Single-sig CLTV: DUP HASH160 <pubkeyHash> EQUALVERIFY CHECKSIG
+					// Extract pubkeyHash and update owner
+					if(startIdx + 4 < chunks.size() && chunks.get(startIdx + 1).opcode == 169) { // OP_HASH160
+						ScriptChunk pubkeyHashChunk = chunks.get(startIdx + 2);
+						if(pubkeyHashChunk.data != null && pubkeyHashChunk.data.length == 20) {
+							byte[] pubkeyHashBytes = pubkeyHashChunk.data;
+							String fid = KeyTools.hash160ToFchAddr(pubkeyHashBytes);
+							cash.setOwner(fid);
+							cash.setType(Cash.CashType.P2SH_CLTV.getValue());
+						}
+					}
+				}else{  // This is multisig+CLTV - extract multisig script and compute owner FID
+					cash.setType(Cash.CashType.P2SH_MULTISIG_CLTV.getValue());
+
+					// Extract multisig portion (everything from startIdx onwards)
+					// to create the standard multisig FID
+					byte[] multisigScript = extractMultisigScript(chunks, startIdx);
+					if(multisigScript != null) {
+						byte[] multisigHash160 = Hash.sha256hash160(multisigScript);
+						String multisigFid = KeyTools.hash160ToMultiAddr(multisigHash160);
+						cash.setOwner(multisigFid);
+					}
+				}
+			}
+		} catch (Exception ignore) {
+			// Silently continue if parsing fails
+		}
+	}
+
+	/**
+	 * Convert byte array to long value (little-endian)
+	 * Used for parsing lockTime from Bitcoin script chunks
+	 * @param bytes The byte array
+	 * @return The long value
+	 */
+	private static long bytesToLong(byte[] bytes) {
+		long result = 0;
+		for(int i = 0; i < bytes.length && i < 8; i++) {
+			result |= ((long)(bytes[i] & 0xFF)) << (8 * i);
+		}
+		return result;
+	}
+
+	/**
+	 * Decode small number from script chunk (OP_0 to OP_16)
+	 */
+	private static int decodeSmallNum(ScriptChunk chunk) {
+		// OP_1 = 81, OP_2 = 82, ..., OP_16 = 96
+		if (chunk.opcode >= 81 && chunk.opcode <= 96) { // OP_1 to OP_16
+			return chunk.opcode - 80;
+		}
+		// OP_0 = 0
+		if (chunk.opcode == 0) {
+			return 0;
+		}
+		// If it's data, try to decode as number
+		if (chunk.data != null && chunk.data.length == 1) {
+			return chunk.data[0] & 0xFF;
+		}
+		return -1;
+	}
+
+	/**
+	 * Validate redeemScript and add CLTV info to cash in one pass for better performance
+	 * This method combines validation, lockTime extraction, and cash property setting
+	 * to avoid parsing the same script multiple times.
+	 *
+	 * Previous implementation parsed the script 3 times:
+	 * 1. validateRedeemScriptSyntax() - validate structure
+	 * 2. extractLockTimeFromRedeemScript() - get lockTime
+	 * 3. addCLTVInfoToCash() - set cash properties
+	 *
+	 * This optimized version does all three in a single pass.
+	 *
+	 * @param cash The cash object to update
+	 * @param redeemScriptHex The redeem script in hex format
+	 * @return true if it's a valid CLTV script and cash was updated, false otherwise
+	 */
+	public static boolean addCLTVInfoToCashWithValidation(Cash cash, String redeemScriptHex) {
+		if (redeemScriptHex == null || redeemScriptHex.isEmpty()) {
+			return false;
+		}
+
+		if (!Hex.isHexString(redeemScriptHex)) {
+			return false;
+		}
+
+		try {
+			// Parse script once
+			byte[] redeemScriptBytes = Hex.fromHex(redeemScriptHex);
+			Script script = new Script(redeemScriptBytes);
+			List<ScriptChunk> chunks = script.getChunks();
+
+			if (chunks.isEmpty()) {
+				return false;
+			}
+
+			// Check for CLTV prefix
+			ScriptChunk firstChunk = chunks.get(0);
+			if (firstChunk.data == null || firstChunk.data.length == 0) {
+				// No CLTV - this is plain multisig, return false
+				return false;
+			}
+
+			// Validate CLTV structure: <lockTime> OP_CLTV OP_DROP
+			if (chunks.size() <= 2 ||
+				chunks.get(1).opcode != 177 || // OP_CHECKLOCKTIMEVERIFY
+				chunks.get(2).opcode != 117) { // OP_DROP
+				// Invalid CLTV structure
+				return false;
+			}
+
+			// Extract and validate lockTime
+			long lockTime = bytesToLong(firstChunk.data);
+			if (lockTime <= 0) {
+				return false;
+			}
+
+			int startIdx = 3; // Skip lockTime, CLTV, DROP
+
+			if (startIdx >= chunks.size()) {
+				return false; // No script body after CLTV
+			}
+
+			ScriptChunk nextChunk = chunks.get(startIdx);
+
+			// Validate and set cash properties based on script type
+			if (nextChunk.opcode == 118) { // OP_DUP
+				// Single-sig CLTV validation: DUP HASH160 <pubkeyHash> EQUALVERIFY CHECKSIG
+				if (chunks.size() < startIdx + 5 ||
+					chunks.get(startIdx + 1).opcode != 169) { // OP_HASH160
+					return false;
+				}
+
+				ScriptChunk pubkeyHashChunk = chunks.get(startIdx + 2);
+				if (pubkeyHashChunk.data == null || pubkeyHashChunk.data.length != 20) {
+					return false;
+				}
+
+				if (chunks.get(startIdx + 3).opcode != 136 || // OP_EQUALVERIFY
+					chunks.get(startIdx + 4).opcode != 172) { // OP_CHECKSIG
+					return false;
+				}
+
+				// Valid single-sig CLTV - set properties
+				byte[] pubkeyHashBytes = pubkeyHashChunk.data;
+				String fid = KeyTools.hash160ToFchAddr(pubkeyHashBytes);
+				cash.setOwner(fid);
+				cash.setLockTime(lockTime);
+				cash.setType(Cash.CashType.P2SH_CLTV.getValue());
+				return true;
+
+			} else {
+				// Multisig + CLTV validation: <m> <pubkey1> ... <pubkeyN> <n> CHECKMULTISIG
+				int m = decodeSmallNum(nextChunk);
+				if (m <= 0 || m > 16 || chunks.size() < startIdx + 3) {
+					return false;
+				}
+
+				ScriptChunk lastChunk = chunks.get(chunks.size() - 1);
+				if (lastChunk.opcode != 174) { // OP_CHECKMULTISIG
+					return false;
+				}
+
+				ScriptChunk nChunk = chunks.get(chunks.size() - 2);
+				int n = decodeSmallNum(nChunk);
+				if (n <= 0 || n > 16 || m > n) {
+					return false;
+				}
+
+				// Validate pubkey count
+				int expectedPubkeys = n;
+				int actualPubkeys = chunks.size() - startIdx - 3; // Exclude m, n, CHECKMULTISIG
+				if (actualPubkeys != expectedPubkeys) {
+					return false;
+				}
+
+				// Validate each pubkey (33 bytes compressed or 65 bytes uncompressed)
+				for (int i = startIdx + 1; i < chunks.size() - 2; i++) {
+					ScriptChunk pubkeyChunk = chunks.get(i);
+					if (pubkeyChunk.data == null ||
+						(pubkeyChunk.data.length != 33 && pubkeyChunk.data.length != 65)) {
+						return false;
+					}
+				}
+
+				// Valid multisig+CLTV - set properties
+				byte[] multisigScript = extractMultisigScript(chunks, startIdx);
+				if (multisigScript != null) {
+					byte[] multisigHash160 = Hash.sha256hash160(multisigScript);
+					String multisigFid = KeyTools.hash160ToMultiAddr(multisigHash160);
+					cash.setOwner(multisigFid);
+					cash.setLockTime(lockTime);
+					cash.setType(Cash.CashType.P2SH_MULTISIG_CLTV.getValue());
+					return true;
+				}
+				return false;
+			}
+
+		} catch (Exception e) {
+			return false; // Silently fail on any parsing errors
+		}
+	}
+
+	/**
+	 * Extract multisig script portion from script chunks
+	 * Used to rebuild the standard multisig script without CLTV for proper FID generation
+	 * @param chunks The script chunks
+	 * @param startIdx Starting index (after CLTV DROP)
+	 * @return The multisig script bytes, or null if extraction fails
+	 */
+	private static byte[] extractMultisigScript(List<ScriptChunk> chunks, int startIdx) {
+		try {
+			// Rebuild script from remaining chunks (multisig portion only)
+			// Format: <m> <pubkey1> ... <pubkeyN> <n> CHECKMULTISIG
+			ScriptBuilder builder = new ScriptBuilder();
+
+			for(int i = startIdx; i < chunks.size(); i++) {
+				ScriptChunk chunk = chunks.get(i);
+				if(chunk.data != null) {
+					builder.data(chunk.data);
+				} else {
+					builder.op(chunk.opcode);
+				}
+			}
+
+			return builder.build().getProgram();
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	private ReadyBlock makeBlock(ReadyBlock txAndTxHasMadeBlock) {
+
+		ArrayList<Tx> txList = txAndTxHasMadeBlock.getTxList();
+		Block block = txAndTxHasMadeBlock.getBlock();
+		block.setTxList(new ArrayList<>());
+
+		for (Tx tx : txList) {
+			Long blockInValueT = block.getInValueT();
+			if(blockInValueT==null)blockInValueT=0L;
+
+			Long blockOutValueT = block.getOutValueT();
+			if(blockOutValueT==null)blockOutValueT=0L;
+
+			Long txInValueT = tx.getInValueT();
+			if(txInValueT==null)txInValueT=0L;
+
+			Long txOutValueT = tx.getOutValueT();
+			if(txOutValueT==null)txOutValueT=0L;
+
+			block.setInValueT(blockInValueT + txInValueT);
+			block.setOutValueT(blockOutValueT + txOutValueT);
+
+			Long blockFee = block.getFee();
+			if(blockFee==null)blockFee=0L;
+			Long blockCdd = block.getCdd();
+			if(blockCdd==null)blockCdd=0L;
+
+			Long txFee = tx.getFee();
+			if(txFee==null)txFee=0L;
+			Long txCdd = tx.getCdd();
+			if(txCdd==null)txCdd=0L;
+
+			block.setFee(blockFee + txFee);
+			block.setCdd(blockCdd + txCdd);
+
+			TxMask txMask = new TxMask();
+			txMask.setId(tx.getId());
+			txMask.setOutValue(tx.getOutValueT());
+
+			if (tx.getInCount() != 0) {
+				long fee = tx.getFee();
+				txMask.setFee(fee);
+				txMask.setCdd(tx.getCdd());
+			}
+
+			block.getTxList().add(txMask);
+		}
+
+		txAndTxHasMadeBlock.setBlock(block);
+
+		return txAndTxHasMadeBlock;
+	}
+
+	private ReadyBlock makeAddress(ElasticsearchClient esClient, ReadyBlock readyBlock) throws Exception {
+
+		List<String> addrStrList = getAddrStrList(readyBlock);
+
+		ArrayList<Cid> addrList = readAddrListFromEs(esClient, addrStrList);
+
+		Map<String, Cid> addrMap = new HashMap<>();
+
+		for (Cid addr : addrList) {
+			addrMap.put(addr.getId(), addr);
+		}
+
+		ArrayList<Tx> txList = readyBlock.getTxList();
+
+		for (Tx txHas : txList) {
+
+			if (txHas.getSpentCashes() != null && !txHas.getSpentCashes().isEmpty()) {
+				for (CashMask inb : txHas.getSpentCashes()) {
+					String inAddr = inb.getOwner();
+					long inValue = inb.getValue();
+					long cdd = inb.getCdd();
+
+					Cid addr = addrMap.get(inAddr);
+					if(addr.getExpend()==null)addr.setExpend(inValue);
+					else addr.setExpend(addr.getExpend() + inValue);
+					if(addr.getBalance()==null)addr.setBalance(inValue);
+					else addr.setBalance(addr.getBalance() - inValue);
+					if(addr.getCdd()==null)addr.setCdd(cdd);
+					else addr.setCdd(addr.getCdd() + cdd);
+					if(addr.getWeight()==null)addr.setWeight((cdd* Weight.cddPercentInWeight)/100);
+					else addr.setWeight(addr.getWeight()+(cdd* Weight.cddPercentInWeight)/100);
+					addr.setLastHeight(txHas.getHeight());
+					if(addr.getCash()==null)addr.setCash(1L);
+					else addr.setCash(addr.getCash() - 1);
+
+					if (addr.getPubkey() == null) {
+						ArrayList<Cash> inList = readyBlock.getInList();
+						for (Cash in : inList) {
+							if (in.getOwner().equals(addr.getId()) && in.getType().equals("P2PKH")) {
+								setPKAndMoreAddrs(addr, in.getUnlockScript());
+								break;
+							}
+							if (in.getOwner().equals(addr.getId()) && in.getType().equals("P2SH")) {
+								Multisig multisig = new Multisig();
+								multisig.parseMultisig(esClient, in);
+								break;
+							}
+						}
+					}
+				}
+			}
+			for (CashMask outB : txHas.getIssuedCashes()) {
+				String outAddr = outB.getOwner();
+				long outValue = outB.getValue();
+				Cid addr = addrMap.get(outAddr);
+				if(addr.getIncome()==null)addr.setIncome(outValue);
+				else addr.setIncome(addr.getIncome() + outValue);
+
+				if(addr.getBalance()==null)addr.setBalance(outValue);
+				else addr.setBalance(addr.getBalance() + outValue);
+
+				addr.setLastHeight(txHas.getHeight());
+
+				if(addr.getCash()==null)addr.setCash(1L);
+				else addr.setCash(addr.getCash() + 1);
+
+				if (addr.getBirthHeight() == null)
+					addr.setBirthHeight(txHas.getHeight());
+
+				if (addr.getGuide() == null) {
+					if (txHas.getSpentCashes() != null && !txHas.getSpentCashes().isEmpty()) {
+						addr.setGuide(txHas.getSpentCashes().get(0).getOwner());
+					} else
+						addr.setGuide("coinbase");
+				}
+			}
+		}
+
+		Collection<Cid> addrs = addrMap.values();
+
+		ArrayList<Cid> readyAddrList = new ArrayList<>(addrs);
+
+		readyBlock.setAddrList(readyAddrList);
+
+		return readyBlock;
+	}
+
+	private List<String> getAddrStrList(ReadyBlock readyBlock) {
+
+		ArrayList<Cash> inList = readyBlock.getInList();
+		ArrayList<Cash> outList = readyBlock.getOutList();
+		Set<String> addrStrSet = new HashSet<>();
+
+		for (Cash in : inList)
+			addrStrSet.add(in.getOwner());
+		for (Cash out : outList)
+			addrStrSet.add(out.getOwner());
+
+		return new ArrayList<>(addrStrSet);
+	}
+
+	private ArrayList<Cid> readAddrListFromEs(ElasticsearchClient esClient, List<String> addrStrList)
+			throws Exception {
+		EsUtils.MgetResult<Cid> addrMgetResult = EsUtils.getMultiByIdList(esClient, CID, addrStrList,
+				Cid.class);
+
+		ArrayList<Cid> addrOldList = (ArrayList<Cid>) addrMgetResult.getResultList();
+
+		List<String> addrNewStrList = addrMgetResult.getMissList();
+		ArrayList<Cid> addrNewList = new ArrayList<>();
+
+		for (String addrStr : addrNewStrList) {
+			Cid addr = new Cid();
+			addr.setId(addrStr);
+			addrNewList.add(addr);
+		}
+
+		ArrayList<Cid> addrList = new ArrayList<>();
+		addrList.addAll(addrOldList);
+		addrList.addAll(addrNewList);
+		return addrList;
+	}
+
+	private void setPKAndMoreAddrs(Cid addr, String unLockScript) {
+
+		String pk = KeyTools.parsePkFromUnlockScript(unLockScript);
+
+		addr.setPubkey(pk);
+		addr.setBtcAddr(KeyTools.pubkeyToBtcAddr(pk));
+		addr.setEthAddr(KeyTools.pubkeyToEthAddr(pk));
+		addr.setBchAddr(KeyTools.pubkeyToBchBesh32Addr(pk));
+		addr.setLtcAddr(KeyTools.pubkeyToLtcAddr(pk));
+		addr.setDogeAddr(KeyTools.pubkeyToDogeAddr(pk));
+		addr.setTrxAddr(KeyTools.pubkeyToTrxAddr(pk));
+	}
+}

@@ -591,9 +591,11 @@ public class EccAes256K1P7 {
 
     public static byte[] decryptJsonBytes(String keyCipherJson, byte[] keyOrPassword) {
         EccAes256K1P7 ecc = new EccAes256K1P7();
-//        System.out.println("Decrypt key...");
         CryptoDataByte result = ecc.decrypt(keyCipherJson, keyOrPassword);
-        if (result.getMessage() != null) {
+        if (result==null ) {
+            log.debug("Decrypting wrong." );
+            return null;
+        }else if(result.getData()==null){
             log.debug("Decrypting wrong: " + result.getMessage());
             return null;
         }
@@ -1449,7 +1451,6 @@ public class EccAes256K1P7 {
     public void aesEncrypt(CryptoDataByte cryptoDataByte) {
 
         if (!isGoodEncryptParams(cryptoDataByte)) {
-            //eccAesDataByte.clearAllSensitiveData();
             return;
         }
 

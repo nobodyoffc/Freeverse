@@ -1,5 +1,6 @@
 package personal;
 
+import constants.OpNames;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -10,6 +11,9 @@ import data.feipData.BoxHistory;
 import utils.JsonUtils;
 
 import java.util.*;
+
+import static constants.FieldNames.BID;
+import static constants.FieldNames.BIDS;
 
 public class PersonalRollbacker {
 
@@ -36,7 +40,7 @@ public class PersonalRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return false;
 		deleteRolledHists(esClient, IndicesNames.BOX_HISTORY,histIdList);
 
-		List<BoxHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY,"bid",itemIdList,BoxHistory.class);
+		List<BoxHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY,BID, BIDS, itemIdList, BoxHistory.class);
 
 		reparseBox(esClient,reparseHistList);
 
@@ -57,10 +61,34 @@ public class PersonalRollbacker {
 		for(Hit<BoxHistory> hit: resultSearch.hits().hits()) {
 
 			BoxHistory item = hit.source();
-			if(item.getOp().equals("create")) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getBid());
+			if(item==null){
+				System.out.println("Box hist is null");
+				continue;
+			}
+			String op = item.getOp();
+			switch (op) {
+				case OpNames.CREATE -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				case OpNames.RECOVER -> {
+					if(item.getBids()==null || item.getBids().isEmpty()){
+						continue;
+					}
+					for(String bid: item.getBids()){
+						if(bid==null){
+							continue;
+						}
+						itemSet.add(bid);
+					}
+				}
+				default -> {
+					if(item.getBid()!=null){
+						itemSet.add(item.getBid());
+					}
+				}
 			}
 			histList.add(hit.id());
 		}

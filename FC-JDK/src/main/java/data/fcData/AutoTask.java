@@ -26,7 +26,7 @@ public class AutoTask {
     private Integer interval;
     private String listenFile;
     private String listenDir;
-    final static Logger log = LoggerFactory.getLogger(AccountManager.class);
+    final static Logger log = LoggerFactory.getLogger(AutoTask.class);
 
     private transient Settings settings;
     private static ScheduledExecutorService intervalExecutor;
@@ -352,17 +352,17 @@ public class AutoTask {
     public void checkTrigger(BufferedReader br) {
         switch (type) {
             case INTERVAL_SEC -> {
-                if (Inputer.askIfYes(br, this.managerType.name() + "Handler." + this.methodName + " will auto run every " + this.interval + " seconds(" + NumberUtils.roundDouble2((double) this.interval / Constants.SEC_PER_DAY) + " days). Change it?")) {
+                if (Inputer.askIfYes(br, this.managerType.name().toLowerCase() + "Handler." + this.methodName + " will auto run every " + this.interval + " seconds(" + NumberUtils.roundDouble2((double) this.interval / Constants.SEC_PER_DAY) + " days). Change it?")) {
                     interval = Inputer.inputInteger(br, "Input the interval seconds", 0, 0);
                 }
             }
             case LISTEN_FILE -> {
-                if (Inputer.askIfYes(br, this.managerType.name() + "Handler." + this.methodName + " will auto run when the file " + this.listenFile + " is modified. Change it?")) {
+                if (Inputer.askIfYes(br, this.managerType.name().toLowerCase() + "Handler." + this.methodName + " will auto run when the file " + this.listenFile + " is modified. Change it?")) {
                     listenFile = Inputer.inputString(br, "Input the file path", listenFile);
                 }
             }
             case LISTEN_DIR -> {
-                if (Inputer.askIfYes(br, this.managerType.name() + "Handler." + this.methodName + " will auto run when the directory " + this.listenDir + " is modified. Change it?")) {
+                if (Inputer.askIfYes(br, this.managerType.name().toLowerCase() + "Handler." + this.methodName + " will auto run when the directory " + this.listenDir + " is modified. Change it?")) {
                     listenDir = Inputer.inputString(br, "Input the directory path", listenDir);
                 }
             }

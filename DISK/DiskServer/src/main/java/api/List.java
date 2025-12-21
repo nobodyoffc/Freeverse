@@ -2,7 +2,7 @@ package api;
 
 import data.apipData.Sort;
 import data.fcData.DiskItem;
-import server.ApipApiNames;
+import server.DiskApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -17,12 +17,11 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import static server.DiskApiNames.LIST;
 import static constants.FieldNames.DID;
 import static constants.FieldNames.SINCE;
 import static constants.Strings.DATA;
 
-@WebServlet(name = LIST, value ="/"+ ApipApiNames.VERSION_1 +"/"+ LIST)
+@WebServlet(name = DiskApiNames.LIST, value ="/"+ DiskApiNames.LIST+ DiskApiNames.VER_1)
 public class List extends HttpServlet {
 
     private final Settings settings = Initiator.settings;
@@ -35,7 +34,7 @@ public class List extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType);
     }
 
@@ -57,11 +56,7 @@ public class List extends HttpServlet {
         java.util.List<DiskItem> meetList = fcHttpRequestHandler.doRequest(Settings.addSidBriefToName(settings.getSid(), DATA), defaultSortList, DiskItem.class);
 
         if(meetList==null){
-            try {
-                response.getWriter().write(fcHttpRequestHandler.getFinalReplyJson());
-            } catch (IOException ignore) {
-                return;
-            }
+            replier.replyHttp(fcHttpRequestHandler.getFinalReplyJson(),response);
         }
 
         replier.reply0SuccessHttp(meetList,response);

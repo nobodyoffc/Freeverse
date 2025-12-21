@@ -1,13 +1,12 @@
 package server.reward;
 
+import data.fchData.Cash;
 import handlers.CashManager;
 import data.fcData.Affair;
 import data.fcData.DataSignTx;
 import data.fcData.Op;
 import core.fch.*;
 import handlers.CashManager.SearchResult;
-import data.fchData.Cash;
-import data.fchData.SendTo;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
 import data.feipData.Feip;
@@ -82,7 +81,7 @@ public class AffairMaker {
 
         long rewardT = rewardInfo.getRewardT();
 
-        HashMap<String, SendTo> sendToMap = makeSendToMap(rewardInfo);
+        HashMap<String, Cash> sendToMap = makeSendToMap(rewardInfo);
 
         SearchResult<Cash> cashListReturn = CashManager.getValidCashes(account,rewardT, null, null, sendToMap.size(), msg.getBytes().length,null,esClient, null);
 
@@ -117,17 +116,17 @@ public class AffairMaker {
         return JsonUtils.toNiceJson(affairReward);
     }
 
-    private void addQualifiedPendingToPay(HashMap<String, SendTo> sendToMap) {
+    private void addQualifiedPendingToPay(HashMap<String, Cash> sendToMap) {
         for(String key: pendingMap.keySet()){
             double amount = utils.FchUtils.satoshiToCoin(pendingMap.get(key));
-            SendTo sendTo = new SendTo();
+            Cash sendTo = new Cash();
             if (amount >= MinPayValue){
                 if(sendToMap.get(key)!=null){
                     sendTo = sendToMap.get(key);
-                    sendTo.setFid(key);
+                    sendTo.setOwner(key);
                     sendTo.setAmount(sendTo.getAmount()+amount);
                 }else {
-                    sendTo.setFid(key);
+                    sendTo.setOwner(key);
                     sendTo.setAmount(amount);
                 }
                 sendToMap.put(key,sendTo);
@@ -136,12 +135,12 @@ public class AffairMaker {
         }
     }
 
-    public void pendingDust(HashMap<String, SendTo> sendToMap,JedisPool jedisPool) {
-        Iterator<Map.Entry<String, SendTo>> iterator = sendToMap.entrySet().iterator();
+    public void pendingDust(HashMap<String, Cash> sendToMap, JedisPool jedisPool) {
+        Iterator<Map.Entry<String, Cash>> iterator = sendToMap.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<String, SendTo> entry = iterator.next();
-            SendTo sendTo = entry.getValue();
-            String fid = sendTo.getFid();
+            Map.Entry<String, Cash> entry = iterator.next();
+            Cash sendTo = entry.getValue();
+            String fid = sendTo.getOwner();
             double amount = sendTo.getAmount();
             if (amount < MinPayValue) {
                 addToPending(fid, utils.FchUtils.coinToSatoshi(amount),jedisPool);
@@ -150,8 +149,8 @@ public class AffairMaker {
         }
     }
 
-    public static HashMap<String,SendTo> makeSendToMap(RewardInfo rewardInfo) {
-        HashMap<String,SendTo> sendToMap= new HashMap<>();
+    public static HashMap<String, Cash> makeSendToMap(RewardInfo rewardInfo) {
+        HashMap<String, Cash> sendToMap= new HashMap<>();
 
         ArrayList<Payment> buildList = rewardInfo.getBuilderList();
         ArrayList<Payment> costList = rewardInfo.getCostList();
@@ -166,20 +165,20 @@ public class AffairMaker {
         return sendToMap;
     }
 
-    public static void makePayDetailListIntoSendToMap(HashMap<String,SendTo> sendToMap,ArrayList<Payment> payDetailList) {
+    public static void makePayDetailListIntoSendToMap(HashMap<String, Cash> sendToMap, ArrayList<Payment> payDetailList) {
 
         for(Payment payDetail:payDetailList){
-            SendTo sendTo = new SendTo();
+            Cash sendTo = new Cash();
             String fid = payDetail.getFid();
-            sendTo.setFid(fid);
-            double amount = FchUtils.satoshiToCoin(payDetail.getAmount());
+            sendTo.setOwner(fid);
+            long amount = payDetail.getAmount();
             if(sendToMap.get(fid)!=null){
-                amount = amount+ sendToMap.get(fid).getAmount();
-                sendTo.setAmount(NumberUtils.roundDouble8(amount));
+                amount = amount+ sendToMap.get(fid).getValue();
+                sendTo.setValue(amount);
             }else{
-                sendTo.setAmount(NumberUtils.roundDouble8(amount));
+                sendTo.setValue(amount);
             }
-            sendToMap.put(sendTo.getFid(),sendTo);
+            sendToMap.put(sendTo.getOwner(),sendTo);
         }
     }
 

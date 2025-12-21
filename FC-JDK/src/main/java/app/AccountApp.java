@@ -2,13 +2,13 @@ package app;
 
 import handlers.AccountManager;
 import handlers.Manager;
+import server.ApipApi;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
 import config.Starter;
 import data.fcData.AutoTask;
 import data.feipData.Service;
-import server.ApipApiNames;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -50,7 +50,7 @@ public class AccountApp {
 
 
         while(true) {
-            Settings settings = Starter.startServer(Service.ServiceType.APIP, settingMap, ApipApiNames.apiList,modules, br, autoTaskList);
+            Settings settings = Starter.startServer(Service.ServiceType.APIP, settingMap, ApipApi.apiNameList,modules, br, autoTaskList);
 
             if (settings == null) return;
 

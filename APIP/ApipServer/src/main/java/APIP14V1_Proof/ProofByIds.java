@@ -2,7 +2,7 @@
 package APIP14V1_Proof;
 
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -19,7 +19,7 @@ import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.PROOF_BY_IDS, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PROOF_BY_IDS)
+@WebServlet(name = ApipApiNames.PROOF_BY_IDS, value = "/"+ ApipApiNames.SN_14+"/"+ ApipApiNames.PROOF_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class ProofByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -29,7 +29,7 @@ public class ProofByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.PROOF, Proof.class, ID, request,response,authType);
     }
     @Override

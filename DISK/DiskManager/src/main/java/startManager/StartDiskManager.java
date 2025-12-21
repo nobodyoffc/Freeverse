@@ -11,6 +11,7 @@ import data.feipData.Service;
 import data.feipData.serviceParams.DiskParams;
 import handlers.AccountManager;
 import handlers.Manager;
+import server.ApipApi;
 import ui.Inputer;
 import ui.Menu;
 import data.fcData.DiskItem;
@@ -120,7 +121,7 @@ public class StartDiskManager {
             switch (choice) {
                 case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symkey, DiskParams.class).menu();
                 case 2 -> accountHandler.menu(br, false);
-                case 3 -> new RewardManager(sid,params.getDealer(),apipClient,esClient,null, jedisPool, br)
+                case 3 -> new RewardManager(sid,service.getDealer(),apipClient,esClient,null, jedisPool, br)
                         .menu(params.getConsumeViaShare(), params.getOrderViaShare());
                 case 4 -> Order.resetNPrices(br, sid, jedisPool);
                 case 5 -> manageIndices(br);

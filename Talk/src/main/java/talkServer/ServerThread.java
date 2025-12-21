@@ -33,7 +33,7 @@
 //import java.net.Socket;
 //import java.util.*;
 //
-//import static constants.ApiNames.SignInEcc;
+//import static constants.ApipApiNames.SignInEcc;
 //import static constants.Strings.*;
 //import static server.RequestChecker.*;
 //import static config.Settings.addSidBriefToName;

@@ -10,11 +10,9 @@ import core.crypto.Encryptor;
 import core.crypto.KeyTools;
 import db.LocalDB;
 import data.fcData.AlgorithmId;
-import data.fcData.SecretDetail;
-import data.feipData.Feip;
 import data.feipData.Secret;
+import data.feipData.Feip;
 import data.feipData.SecretOpData;
-import data.feipData.Service;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import utils.DateUtils;
@@ -30,14 +28,14 @@ import static constants.FieldNames.*;
 import static constants.Strings.SECRET;
 import static ui.Shower.showAndChooseFromStringLongMap;
 
-public class SecretManager extends Manager<SecretDetail> {
+public class SecretManager extends Manager<Secret> {
     public static String name = ManagerType.SECRET.name();
 
     private final byte[] myPubKey;
     private Map<String,String> fakeSecretCipherMap;
 
     public SecretManager(Settings settings) {
-        super(settings, ManagerType.SECRET, LocalDB.SortType.UPDATE_ORDER, SecretDetail.class, true, true);
+        super(settings, ManagerType.SECRET, LocalDB.SortType.UPDATE_ORDER, Secret.class, true, true);
         this.myPubKey = KeyTools.prikeyToPubkey(prikey);
         hideFieldsInListing = List.of(CONTENT);
     }
@@ -109,7 +107,7 @@ public class SecretManager extends Manager<SecretDetail> {
         List<Secret> deletedSecretList = new ArrayList<>();
         boolean recovered;
         for(Secret item:items.values()){
-            if(!item.isActive()) {
+            if(!item.getActive()) {
                 deletedSecretList.add(item);
             }else{
                 reloadedList.add(item);
@@ -128,10 +126,10 @@ public class SecretManager extends Manager<SecretDetail> {
         }
         if(reloadedList.isEmpty())return new HashMap<>();
 
-        List<SecretDetail> secretDetailList = secretToSecretDetail(reloadedList, false);
-        if(secretDetailList.isEmpty())return new HashMap<>();
+        List<Secret> secretList = secretToSecretDetail(reloadedList, false);
+        if(secretList.isEmpty())return new HashMap<>();
 
-        putAllSecretDetail(secretDetailList);
+        putAllSecretDetail(secretList);
 
         List<String> reloadedIdList = reloadedList.stream().map(Secret::getId).collect(Collectors.toList());
         // Remove from locally removed tracking
@@ -156,15 +154,15 @@ public class SecretManager extends Manager<SecretDetail> {
         }
     }
 
-    public void putSecret(String id, SecretDetail secret) {
+    public void putSecret(String id, Secret secret) {
             localDB.put(id, secret);
         }
 
-    public SecretDetail getSecret(String id) {
+    public Secret getSecret(String id) {
         return localDB.get(id);
     }
 
-    public Map<String, SecretDetail> getAllSecrets() {
+    public Map<String, Secret> getAllSecrets() {
         return localDB.getAll();
     }
 
@@ -176,11 +174,11 @@ public class SecretManager extends Manager<SecretDetail> {
         return localDB.getIdIndexMap();
     }
 
-    public SecretDetail getSecretById(String id) {
+    public Secret getSecretById(String id) {
         return localDB.get(id);
     }
 
-    public SecretDetail getSecretByIndex(long index) {
+    public Secret getSecretByIndex(long index) {
         return localDB.getByIndex(index);
     }
 
@@ -193,13 +191,13 @@ public class SecretManager extends Manager<SecretDetail> {
     }
 
 
-    public List<SecretDetail> getSecretList(Integer size, Long fromIndex, String fromId,
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
+    public List<Secret> getSecretList(Integer size, Long fromIndex, String fromId,
+                                      boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
         return localDB.getList(size, fromId, fromIndex, isFromInclude, toId, toIndex, isToInclude, isFromEnd);
     }
 
-    public LinkedHashMap<String, SecretDetail> getSecretMap(int size, Long fromIndex, String fromId,
-            boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
+    public LinkedHashMap<String, Secret> getSecretMap(int size, Long fromIndex, String fromId,
+                                                      boolean isFromInclude, Long toIndex, String toId, boolean isToInclude, boolean isFromEnd) {
         return localDB.getMap(size, fromId,fromIndex,  isFromInclude, toId, toIndex, isToInclude, isFromEnd);
     }
 
@@ -215,15 +213,15 @@ public class SecretManager extends Manager<SecretDetail> {
         clear();
     }
 
-    public List<SecretDetail> searchSecrets(String searchString) {
+    public List<Secret> searchSecrets(String searchString) {
         return searchInValue(searchString);
     }
 
-    public List<SecretDetail> searchSecrets(BufferedReader br, boolean withChoose, boolean withOperation) {
+    public List<Secret> searchSecrets(BufferedReader br, boolean withChoose, boolean withOperation) {
         return searchItems(br, withChoose, withOperation);
     }
 
-    public void opOnChain(List<SecretDetail> chosenSecrets, String ask, BufferedReader br) {
+    public void opOnChain(List<Secret> chosenSecrets, String ask, BufferedReader br) {
         SecretOpData.Op op = null;
         String opStr = Inputer.chooseOne(
             Arrays.stream(SecretOpData.Op.values())
@@ -254,11 +252,11 @@ public class SecretManager extends Manager<SecretDetail> {
         return opSecret(null, null, SecretOpData.Op.ADD, br);
     }
 
-    public void addSecrets(List<SecretDetail> itemList,@Nullable BufferedReader br) {
+    public void addSecrets(List<Secret> itemList, @Nullable BufferedReader br) {
         if(itemList == null && br != null) addSecrets(br);
         else{
             if(itemList==null || itemList.isEmpty())return;
-            for(SecretDetail item:itemList){
+            for(Secret item:itemList){
                 SecretOpData secretOpData = encryptSecret(item);
                 carveSecretData(secretOpData, br);
                 if(br!=null && !Inputer.askIfYes(br,"Carve next?"))break;
@@ -282,23 +280,23 @@ public class SecretManager extends Manager<SecretDetail> {
 
     public void deleteSecrets(BufferedReader br) {
         if (dbEmpty()) return;
-        List<SecretDetail> chosenSecrets = chooseItems(br);
+        List<Secret> chosenSecrets = chooseItems(br);
         deleteSecrets(chosenSecrets, br);
     }
 
-    public void deleteSecrets(List<SecretDetail> chosenSecrets, BufferedReader br) {
+    public void deleteSecrets(List<Secret> chosenSecrets, BufferedReader br) {
         if (chosenSecrets.isEmpty()) {
             System.out.println("No secrets chosen for deletion.");
             return;
         }
 
         if (Inputer.askIfYes(br, "View them before delete?")) {
-            Shower.showOrChooseListInPages("Chosen Secrets", chosenSecrets, DEFAULT_PAGE_SIZE, null, true, SecretDetail.class, br);
+            Shower.showOrChooseListInPages("Chosen Secrets", chosenSecrets, DEFAULT_PAGE_SIZE, null, true, Secret.class, br);
         }
 
         if (Inputer.askIfYes(br, "Delete " + chosenSecrets.size() + " secrets?")) {
             List<String> secretIds = new ArrayList<>();
-            for (SecretDetail secret : chosenSecrets) {
+            for (Secret secret : chosenSecrets) {
                 secretIds.add(secret.getId());
             }
 
@@ -346,9 +344,9 @@ public class SecretManager extends Manager<SecretDetail> {
         finalChosenDeleted.addAll(onChainDeleted);
         finalChosenDeleted.addAll(localDeletedSecrets.values());
 
-        List<SecretDetail> secretDetailList = secretToSecretDetail(finalChosenDeleted, false);
+        List<Secret> secretList = secretToSecretDetail(finalChosenDeleted, false);
 
-        List<SecretDetail> chosenSecrets = chooseSecretDetailList(secretDetailList, 0, br);
+        List<Secret> chosenSecrets = chooseSecretDetailList(secretList, 0, br);
 
         recoverSecrets(null, chosenSecrets, br);
 
@@ -362,12 +360,12 @@ public class SecretManager extends Manager<SecretDetail> {
         handleFakeSecretData(br);
     }
 
-    private boolean recoverSecrets(@Nullable List<String> secretIds, List<SecretDetail> chosenSecrets, BufferedReader br) {
+    private boolean recoverSecrets(@Nullable List<String> secretIds, List<Secret> chosenSecrets, BufferedReader br) {
         String result;
         if(secretIds!=null && !secretIds.isEmpty() && Inputer.askIfYes(br, "Recover " + secretIds.size() + " secrets?")){
             result = recoverSecret(secretIds, br);
         }else if (chosenSecrets!=null && Inputer.askIfYes(br, "Recover " + chosenSecrets.size() + " secrets?")) {
-            result = recoverSecret(chosenSecrets.stream().map(SecretDetail::getId).collect(Collectors.toList()), br);
+            result = recoverSecret(chosenSecrets.stream().map(Secret::getId).collect(Collectors.toList()), br);
         }else return false;
 
         if (Hex.isHex32(result)) {
@@ -406,7 +404,7 @@ public class SecretManager extends Manager<SecretDetail> {
             else lastHeight = ((Number)lastHeightObj).longValue();
         }
         List<Secret> secretList = loadAllOnChainItems(SECRET, LAST_HEIGHT,OWNER,lastHeight, true,apipClient,Secret.class, null, true);
-        List<SecretDetail> secretDetailList;
+        List<Secret> secretDetailList;
         if (secretList!=null && !secretList.isEmpty()) {
             secretDetailList = secretToSecretDetail(secretList, true);
 
@@ -421,8 +419,8 @@ public class SecretManager extends Manager<SecretDetail> {
         }else System.out.println("No secrets updated.");
     }
 
-    public void putAllSecretDetail(List<SecretDetail> secretDetailList) {
-        localDB.putAll(secretDetailList,ID);
+    public void putAllSecretDetail(List<Secret> secretList) {
+        localDB.putAll(secretList,ID);
     }
 
     private void deleteUnreadableSecrets(BufferedReader br) {
@@ -437,17 +435,17 @@ public class SecretManager extends Manager<SecretDetail> {
     }
 
     @Override
-    public void opItems(List<SecretDetail> items, String ask, BufferedReader br) {
+    public void opItems(List<Secret> items, String ask, BufferedReader br) {
         Menu menu = new Menu("Secret Operations", () -> {});
         menu.add("Show details", () -> showItemDetails(items, br));
-        menu.add("Remove from local", () -> removeItems(items.stream().map(SecretDetail::getId).collect(Collectors.toList()),br));
+        menu.add("Remove from local", () -> removeItems(items.stream().map(Secret::getId).collect(Collectors.toList()),br));
         menu.add("Delete on chain", () -> deleteSecrets(items, br));
         menu.add("Recover on chain", () -> recoverSecrets(null, items, br));
         menu.add("Add to chain", () -> addSecrets(items, br));
         menu.showAndSelect(br);
     }
 
-    private String opSecret(List<String> secretIds, SecretDetail secretDetail, SecretOpData.Op op, BufferedReader br) {
+    private String opSecret(List<String> secretIds, Secret secret, SecretOpData.Op op, BufferedReader br) {
         if (op == null) return null;
 
         SecretOpData secretOpData = new SecretOpData();
@@ -458,14 +456,14 @@ public class SecretManager extends Manager<SecretDetail> {
         }
 
         if (op == SecretOpData.Op.ADD) {
-            if(secretDetail == null && br != null){
-                secretDetail = new SecretDetail();
-                secretDetail.setType(Inputer.inputString(br, "Input type:"));
-                secretDetail.setTitle(Inputer.inputString(br, "Input title:"));
-                secretDetail.setContent(Inputer.inputString(br, "Input content:"));
-                secretDetail.setMemo(Inputer.inputString(br, "Input memo:"));
+            if(secret == null && br != null){
+                secret = new Secret();
+                secret.setType(Inputer.inputString(br, "Input type:"));
+                secret.setTitle(Inputer.inputString(br, "Input title:"));
+                secret.setContent(Inputer.inputString(br, "Input content:"));
+                secret.setMemo(Inputer.inputString(br, "Input memo:"));
             }
-            secretOpData = encryptSecret(secretDetail);
+            secretOpData = encryptSecret(secret);
             if(secretOpData == null) return null;
         } else {
             if (secretIds == null) {
@@ -492,14 +490,14 @@ public class SecretManager extends Manager<SecretDetail> {
         return carve(opReturnStr, cd, br);
     }
 
-    private SecretOpData encryptSecret(SecretDetail secretDetail) {
-        if(secretDetail==null)return null;
-        secretDetail.setUpdateHeight(null);
-        secretDetail.setId(null);
-        secretDetail.setId(null);
+    private SecretOpData encryptSecret(Secret secret) {
+        if(secret ==null)return null;
+        secret.setLastHeight(null);
+        secret.setId(null);
+        secret.setId(null);
         SecretOpData secretOpData = new SecretOpData();
         Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonUtils.toJson(secretDetail).getBytes(), myPubKey);
+        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonUtils.toJson(secret).getBytes(), myPubKey);
         if (cryptoDataByte.getCode() != 0) {
             log.error("Failed to encrypt.");
             return null;
@@ -511,16 +509,16 @@ public class SecretManager extends Manager<SecretDetail> {
         return secretOpData;
     }
 
-    private List<SecretDetail> secretToSecretDetail(List<Secret> secretList, boolean ignoreBadCipher) {
-        List<SecretDetail> secretDetailList = new ArrayList<>();
+    private List<Secret> secretToSecretDetail(List<Secret> secretList, boolean ignoreBadCipher) {
+        List<Secret> secretDetailList = new ArrayList<>();
         fakeSecretCipherMap = new HashMap<>();
 
         for (Secret secret : secretList) {
-            SecretDetail secretDetail = SecretDetail.fromSecret(secret, prikey);
+            Secret secretDetail = Secret.parseDetail(secret, prikey);
             if (secretDetail == null) {
                 fakeSecretCipherMap.put(secret.getId(), DateUtils.longToTime(secret.getBirthTime(), DateUtils.LONG_FORMAT)+" "+secret.getCipher());
                 if (!ignoreBadCipher) {
-                    secretDetail = new SecretDetail();
+                    secretDetail = new Secret();
                     secretDetail.setId(secret.getId());
                     secretDetail.setTitle("Bad cipher: " + secret.getCipher());
                 }
@@ -531,12 +529,12 @@ public class SecretManager extends Manager<SecretDetail> {
 
         return secretDetailList;
     }
-    private List<SecretDetail> chooseSecretDetailList(List<SecretDetail> currentList,
-                                                      int totalDisplayed, BufferedReader br) {
-        List<SecretDetail> chosenSecrets = new ArrayList<>();
+    private List<Secret> chooseSecretDetailList(List<Secret> currentList,
+                                                int totalDisplayed, BufferedReader br) {
+        List<Secret> chosenSecrets = new ArrayList<>();
 
         String title = "Choose Secrets";
-        SecretDetail.showSecretDetailList(currentList, title, totalDisplayed);
+        Secret.showSecretDetailList(currentList, title, totalDisplayed);
 
         System.out.println("Enter secret numbers to select (comma-separated), 'a' for all. 'q' to quit, or press Enter for more:");
         String input = Inputer.inputString(br);
@@ -567,14 +565,14 @@ public class SecretManager extends Manager<SecretDetail> {
     }
 
     public Feip getFeip() {
-        return Feip.fromProtocolName(Feip.ProtocolName.SECRET);
+        return Feip.fromProtocolName(Feip.FeipProtocol.SECRET);
     }
 
     private void testMethods(BufferedReader br) {
         System.out.println("Testing various methods...");
 
         // Test basic CRUD operations
-        SecretDetail testSecret = new SecretDetail();
+        Secret testSecret = new Secret();
         testSecret.setTitle("Test Secret");
         testSecret.setContent("Test Content");
         testSecret.setType("Test Type");
@@ -583,7 +581,7 @@ public class SecretManager extends Manager<SecretDetail> {
         // Test individual put/get
         System.out.println("\nTesting put/get...");
         putSecret(testId, testSecret);
-        SecretDetail retrieved = getSecret(testId);
+        Secret retrieved = getSecret(testId);
         System.out.println("Put and retrieved secret matches: " + 
             (retrieved != null && retrieved.getTitle().equals(testSecret.getTitle())));
 
@@ -601,17 +599,17 @@ public class SecretManager extends Manager<SecretDetail> {
 
         // Test search functionality
         System.out.println("\nTesting search...");
-        List<SecretDetail> searchResults = searchSecrets("Test");
+        List<Secret> searchResults = searchSecrets("Test");
         System.out.println("Search results found: " + searchResults.size());
 
         // Test list operations with various parameters
         System.out.println("\nTesting list operations...");
-        List<SecretDetail> secretList = getSecretList(10, null, null, true, null, null, true, false);
+        List<Secret> secretList = getSecretList(10, null, null, true, null, null, true, false);
         System.out.println("Retrieved list size: " + (secretList != null ? secretList.size() : 0));
 
         // Test map retrieval with parameters
         System.out.println("\nTesting map retrieval...");
-        LinkedHashMap<String, SecretDetail> secretMap = getSecretMap(10, null, null, true, null, null, true, false);
+        LinkedHashMap<String, Secret> secretMap = getSecretMap(10, null, null, true, null, null, true, false);
         System.out.println("Retrieved map size: " + (secretMap != null ? secretMap.size() : 0));
 
         // Test removal tracking

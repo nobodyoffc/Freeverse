@@ -72,6 +72,10 @@ public class OpReFileUtils {
             offset += 8;
             op.setCdd(BytesUtils.bytes8ToLong(cddArr, false));
 
+            byte[] paidArr = Arrays.copyOfRange(opbytes, offset, offset + 8);
+            offset += 8;
+            op.setPaid(BytesUtils.bytes8ToLong(paidArr, false));
+
             byte[] opReArr = Arrays.copyOfRange(opbytes, offset, opLength);
             op.setOpReturn(new String(opReArr));
         } else {
@@ -134,7 +138,7 @@ public class OpReFileUtils {
             ArrayList<byte[]> opArrList = new ArrayList<byte[]>();
             OpReturn op = iterOp.next();
 
-            opArrList.add(BytesUtils.intToByteArray(128 + op.getOpReturn().getBytes().length));
+            opArrList.add(BytesUtils.intToByteArray(136 + op.getOpReturn().getBytes().length));
             opArrList.add(BytesUtils.hexToByteArray(op.getId()));
             opArrList.add(BytesUtils.longToBytes(op.getHeight()));
             opArrList.add(BytesUtils.longToBytes(op.getTime()));
@@ -146,6 +150,7 @@ public class OpReFileUtils {
                 opArrList.add(op.getRecipient().getBytes());
             }
             opArrList.add(BytesUtils.longToBytes(op.getCdd()));
+            opArrList.add(BytesUtils.longToBytes(op.getPaid()!=null? op.getPaid() : 0L));
             opArrList.add(op.getOpReturn().getBytes());
 
             opos.write(BytesUtils.bytesMerger(opArrList));

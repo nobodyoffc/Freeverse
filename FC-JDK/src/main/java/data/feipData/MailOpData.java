@@ -11,11 +11,7 @@ public class MailOpData {
 	private String op;
 	private String mailId;
     private String alg;
-	private String msg;
 	private String cipher;
-	private String cipherSend;
-	private String cipherReci;
-	private String textId;
 	private List<String> mailIds;
 
 	public enum Op {
@@ -50,7 +46,7 @@ public class MailOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.SEND.toLowerCase(), new String[]{FieldNames.ALG, FieldNames.CIPHER, FieldNames.CIPHER_SEND, FieldNames.CIPHER_RECI, FieldNames.TEXT_ID});
+		OP_FIELDS.put(Op.SEND.toLowerCase(), new String[]{FieldNames.ALG, FieldNames.CIPHER, FieldNames.CIPHER_SEND, FieldNames.CIPHER_RECI});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.MAIL_IDS});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.MAIL_IDS});
 	}
@@ -75,30 +71,6 @@ public class MailOpData {
     public void setAlg(String alg) {
         this.alg = alg;
 	}
-	public String getCipherSend() {
-		return cipherSend;
-	}
-	public void setCipherSend(String cipherSend) {
-		this.cipherSend = cipherSend;
-	}
-	public String getCipherReci() {
-		return cipherReci;
-	}
-	public void setCipherReci(String cipherReci) {
-		this.cipherReci = cipherReci;
-	}
-	public String getMsg() {
-		return msg;
-	}
-	public void setMsg(String msg) {
-		this.msg = msg;
-	}
-	public String getTextId() {
-		return textId;
-	}
-	public void setTextId(String textId) {
-		this.textId = textId;
-	}
 
 	public String getCipher() {
 		return cipher;
@@ -117,14 +89,11 @@ public class MailOpData {
 		this.mailIds = mailIds;
 	}
 	// Factory method for SEND operation
-	public static MailOpData makeSend(String alg, String cipher, String cipherSend, String cipherReci, String textId) {
+	public static MailOpData makeSend(String alg, String cipher, String cipherSend, String cipherReci) {
 		MailOpData data = new MailOpData();
 		data.setOp(Op.SEND.toLowerCase());
 		data.setAlg(alg);
 		data.setCipher(cipher);
-		data.setCipherSend(cipherSend);
-		data.setCipherReci(cipherReci);
-		data.setTextId(textId);
 		return data;
 	}
 

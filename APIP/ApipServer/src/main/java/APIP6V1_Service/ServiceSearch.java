@@ -1,7 +1,7 @@
 package APIP6V1_Service;
 
 import data.apipData.Sort;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Service;
 import initial.Initiator;
@@ -22,7 +22,7 @@ import static constants.Strings.ACTIVE;
 import static constants.FieldNames.ID;
 
 
-@WebServlet(name = ApipApiNames.SERVICE_SEARCH, value = "/"+ ApipApiNames.SN_6+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SERVICE_SEARCH)
+@WebServlet(name = ApipApiNames.SERVICE_SEARCH, value = "/"+ ApipApiNames.SN_6+"/"+ ApipApiNames.SERVICE_SEARCH +"/"+ ApipApiNames.VER_1)
 public class ServiceSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -32,7 +32,7 @@ public class ServiceSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.SERVICE, Service.class, defaultSort, request,response,authType);
     }

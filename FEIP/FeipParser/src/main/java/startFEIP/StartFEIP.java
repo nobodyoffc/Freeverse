@@ -30,7 +30,7 @@ import static startFEIP.IndicesFEIP.createAllIndices;
 import static startFEIP.IndicesFEIP.deleteAllIndices;
 
 public class StartFEIP {
-	public static long CddCheckHeight=3000000;
+	public static long CddCheckHeight=4000000;
 	public static long CddRequired=1;
 
 	private static final Logger log = LoggerFactory.getLogger(StartFEIP.class);
@@ -170,8 +170,10 @@ public class StartFEIP {
 		
 		boolean isRollback = false;
 		boolean error = fileParser.parseFile(esClient,isRollback);
+		if(error)log.error("Error during restartFromFile");
 		} catch (Exception e) {
 			e.printStackTrace();
+			log.error("Error during restartFromFile",e);
 		}
 		System.out.println("restartFromFile.");
 	}
@@ -188,7 +190,11 @@ public class StartFEIP {
 								.field(LAST_HEIGHT).order(SortOrder.Desc)))
 				, ParseMark.class);
 
-		if (result.hits().total() == null) throw new AssertionError();
+		if (result==null||result.hits()==null||result.hits().total()==null) {
+			log.error("Result is null");
+			return;
+		}
+
 		if(result.hits().total().value()==0) {
 			restartFromFile(esClient, path);
 			return;
@@ -210,6 +216,7 @@ public class StartFEIP {
 		boolean isRollback = true;
 		
 		boolean error = fileParser.parseFile(esClient,isRollback);
+		if(error)log.error("Error during manualRestartFromFile");
 		
 		System.out.println("manualRestartFromFile");
 

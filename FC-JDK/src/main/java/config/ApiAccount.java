@@ -1,11 +1,10 @@
 package config;
 
 import core.crypto.*;
-import data.fcData.AlgorithmId;
 import data.fcData.CidInfo;
 import clients.*;
 import data.fcData.FcSession;
-import data.apipData.SignInMode;
+import data.fchData.Cash;
 import handlers.AccountManager;
 import ui.Inputer;
 import ui.Menu;
@@ -16,8 +15,6 @@ import handlers.CashManager;
 import org.bitcoinj.fch.FchMainNetwork;
 import utils.IdNameUtils;
 import core.fch.TxCreator;
-import data.fchData.Cash;
-import data.fchData.SendTo;
 import data.feipData.Service;
 import data.feipData.serviceParams.ApipParams;
 import data.feipData.serviceParams.Params;
@@ -39,10 +36,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import static constants.Constants.*;
 import static ui.Inputer.*;
-import static server.ApipApiNames.VERSION_1;
-import static constants.Constants.APIP_Account_JSON;
-import static constants.Constants.COIN_TO_SATOSHI;
+import static server.ApipApi.VER_1;
 import static core.crypto.KeyTools.prikeyToFid;
 import static data.fcData.AlgorithmId.FC_AesCbc256_No1_NrC7;
 import static data.fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
@@ -88,8 +84,8 @@ public class ApiAccount {
 
     public boolean isBalanceSufficient(){
         long price;
-        if(serviceParams.getPricePerKBytes()!=null){
-            price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerKBytes()))*COIN_TO_SATOSHI);
+        if(serviceParams.getPricePerKB()!=null){
+            price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerKB()))*COIN_TO_SATOSHI);
         }else price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerRequest()))*COIN_TO_SATOSHI);
 
         return balance < price * minRequestTimes;
@@ -150,7 +146,7 @@ public class ApiAccount {
 
     public void showApipBalance(){
         System.out.println("APIP balance: "+(double) balance/ COIN_TO_SATOSHI + " F");
-        System.out.println("Rest request: "+balance/(Double.parseDouble(serviceParams.getPricePerKBytes()) * COIN_TO_SATOSHI)+" times");
+        System.out.println("Rest request: "+balance/(Double.parseDouble(serviceParams.getPricePerKB()) * COIN_TO_SATOSHI)+" times");
     }
 
     private byte[] connectOtherApi(ApiProvider apiProvider, byte[] symkey) {
@@ -294,17 +290,17 @@ public class ApiAccount {
             if(br!=null)inputPrikeyCipher(symkey,br,cidInfoMap);
             else return null;
         }
-
-        byte[] sessionKey1 =
-                checkSessionKey(symkey, apiProvider.getType(), br);
-
-        if(sessionKey1==null) {
-            System.out.println("Failed to connect Disk server.");
-            return null;
-        }
-
-        sessionKey = sessionKey1;
-        diskClient.setSessionKey(sessionKey);
+//
+//        byte[] sessionKey1 =
+//                checkSessionKey(symkey, apiProvider.getType(), br);
+//
+//        if(sessionKey1==null) {
+//            System.out.println("Failed to connect Disk server.");
+//            return null;
+//        }
+//
+//        sessionKey = sessionKey1;
+//        diskClient.setSessionKey(sessionKey);
         client = diskClient;
 
         log.debug("Connected to the Disk service: " + providerId + " on " + apiUrl);
@@ -333,7 +329,7 @@ public class ApiAccount {
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
         }
-        String accountPubkey = apipClient.getPubkey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
+        String accountPubkey = apiProvider.getDealerPubkey();
 
         if (accountPubkey != null) {
             apiProvider.setDealerPubkey(accountPubkey);
@@ -445,9 +441,15 @@ public class ApiAccount {
         }
 
         if (apiAccount.fcSession.getKeyCipher() == null) {
-            sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, SignInMode.NORMAL, null);
-            if (sessionKey == null) return null;
-            revised = true;
+//            sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, SignInMode.NORMAL, null);
+//            if (sessionKey == null) return null;
+//            revised = true;
+
+            Object result = ((ApipClient)apiAccount.getClient()).ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, Service.ServiceType.APIP);
+            if(result!=null) {
+                System.out.println("OK! " + result + " KB/requests are available.");
+            }else
+                System.out.println("Failed to connect server:"+apiAccount.apiUrl);
         }
 
         if (revised) writeApipParamsToFile(apiAccount, APIP_Account_JSON);
@@ -488,15 +490,19 @@ public class ApiAccount {
         System.out.println();
         System.out.println("Set the APIP service buyer(requester)...");
         apiAccount.inputPrikeyCipher(br, symkey);
-        sessionKey = apiAccount.freshSessionKey(symkey, Service.ServiceType.APIP, SignInMode.NORMAL, null);
-        if (sessionKey == null) return null;
-
-        writeApipParamsToFile(apiAccount, APIP_Account_JSON);
+        FcClient client = (FcClient) apiAccount.client;
+        Object result = client.ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, client.getServiceType());
+        if(result!=null) {
+            System.out.println("OK! " + result + " KB/requests are available.");
+            writeApipParamsToFile(apiAccount, APIP_Account_JSON);
+        }else {
+            System.out.println("Failed to connect server:" + apiAccount.apiUrl);
+        }
         return apiAccount;
     }
 
     static Service getService(String urlHead) {
-        ReplyBody replier = ApipClient.getService(urlHead, VERSION_1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(urlHead, VER_1, ApipParams.class);
         if(replier==null)return null;
         Service service = (Service) replier.getData();
         if(service!=null) {
@@ -787,14 +793,14 @@ public class ApiAccount {
     }
 
     public Double buyApi(byte[] symkey, ApipClient apipClient, @Nullable BufferedReader br) {
-        if(apipClient==null) apipClient = Settings.getFreeApipClient();
+        if(apipClient==null) apipClient = Settings.getDefaultApipClient();
 
         byte[] prikey = decryptUserPrikey(userPrikeyCipher, symkey);
         Long minPay = utils.FchUtils.coinStrToSatoshi(serviceParams.getMinPayment());
         if(minPay==null)minPay= AccountManager.DEFAULT_MIN_PAYMENT;
 
         Long price;
-        price = FchUtils.coinStrToSatoshi(serviceParams.getPricePerKBytes());
+        price = FchUtils.coinStrToSatoshi(serviceParams.getPricePerKB());
         if(price==null) {
             System.out.println("The price of APIP service is 0.");
             price = 0L;
@@ -804,10 +810,10 @@ public class ApiAccount {
 
         payValue = (double) Math.max(price * orderRequestTimes, minPay) / COIN_TO_SATOSHI;
 
-        List<SendTo> sendToList = new ArrayList<>();
-        SendTo sendTo = new SendTo();
+        List<Cash> sendToList = new ArrayList<>();
+        Cash sendTo = new Cash();
 
-        sendTo.setFid(serviceParams.getDealer());
+        sendTo.setOwner(service.getDealer());
         sendTo.setAmount(payValue);
         sendToList.add(sendTo);
 
@@ -828,7 +834,7 @@ public class ApiAccount {
             return null;
         }
         log.debug("TxId: " + result);
-        System.out.println("Paid for APIP service: " + payValue + "f to " + serviceParams.getDealer() + " by "+result+". \nWait for the confirmation for a few minutes...");
+        System.out.println("Paid for APIP service: " + payValue + "f to " + service.getDealer() + " by "+result+". \nWait for the confirmation for a few minutes...");
 
         waitConfirmation(cashList.get(0).getId(), apipClient);
         BytesUtils.clearByteArray(prikey);
@@ -860,16 +866,16 @@ public class ApiAccount {
             apipClient = new ApipClient(apiProvider,this,symkey);
             client = apipClient;
         }else apipClient=(ApipClient) client;
-
-        byte[] sessionKey1 = checkSessionKey(symkey, apiProvider.getType(), br);
-
-        if(sessionKey1==null) {
-            System.out.println("Failed to get the sessionKey of APIP service from "+apiUrl+". Only free APIs are available.");
-            return null;
-        }
-
-        sessionKey = sessionKey1;
-        System.out.println("Connected to the APIP service: " + providerId + " on " + apiUrl);
+//
+//        byte[] sessionKey1 = checkSessionKey(symkey, apiProvider.getType(), br);
+//
+//        if(sessionKey1==null) {
+//            System.out.println("Failed to get the sessionKey of APIP service from "+apiUrl+". Only free APIs are available.");
+//            return null;
+//        }
+//        sessionKey = sessionKey1;
+//        System.out.println("Connected to the APIP service: " + providerId + " on " + apiUrl);
+        apipClient.ping(VER_1, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, Service.ServiceType.APIP);
 
         apipClient.setUrlHead(apiUrl);
         apipClient.setVia(via);
@@ -878,7 +884,7 @@ public class ApiAccount {
     }
 
     public boolean checkApipProvider(ApiProvider apiProvider,String apiUrl) {
-        ReplyBody replier = ApipClient.getService(apiUrl, VERSION_1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(apiUrl, VER_1, ApipParams.class);
         if(replier==null || replier.getData()==null) {
             return false;
         }
@@ -892,14 +898,17 @@ public class ApiAccount {
         }catch (Exception ignore){}
 
         providerId = service.getId();
-        if(service.getUrls()!=null && service.getUrls().length>0)
-            apiProvider.setOrgUrl(service.getUrls()[0]);
-        ApipParams apipParams = (ApipParams) service.getParams();
-        if(apipParams!=null && apipParams.getUrlHead()!=null)
-            this.apiUrl = apipParams.getUrlHead();
-        apiProvider.setOwner(service.getOwner());
-        apiProvider.setProtocols(service.getProtocols());
-        apiProvider.setTicks(new String[]{"core/fch"});
+
+        apiProvider.fromFcService(service,ApipParams.class);
+
+//        ApipParams apipParams = (ApipParams) service.getParams();
+//        if(apipParams!=null && apipParams.getUrlHead()!=null)
+//            this.apiUrl = apipParams.getUrlHead();
+//        apiProvider.setOwner(service.getOwner());
+//        apiProvider.setProtocols(service.getProtocols());
+//        if(apipParams!=null && apipParams.getCurrency()!=null)
+//            apiProvider.setTicks(new String[]{apipParams.getCurrency()});
+//        else apiProvider.setTicks(new String[]{"fch"});
 
         return true;
     }
@@ -907,7 +916,7 @@ public class ApiAccount {
     public ApiProvider checkFcApiProvider(ApiProvider apiProvider, Service.ServiceType type, ApipClient apipClient) {
 
         System.out.println("Update API provider from APIP service...");
-        Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, apiProvider.getId());
+        Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, apiProvider.getId());
         if(serviceMap==null || serviceMap.get(apiProvider.getId())==null)return null;
 
         this.service = serviceMap.get(apiProvider.getId());
@@ -925,71 +934,71 @@ public class ApiAccount {
         }
         return apiProvider;
     }
-
-    private byte[] checkSessionKey(byte[] symkey, Service.ServiceType type, BufferedReader br) {
-        if(this.fcSession ==null)this.fcSession = new FcSession();
-        if (this.fcSession.getKeyCipher()== null) {
-            this.sessionKey=freshSessionKey(symkey, type, SignInMode.NORMAL, br);
-        } else {
-            this.sessionKey =decryptSessionKey(fcSession.getKeyCipher(),symkey);
-        }
-        if (this.sessionKey==null || this.sessionKey.length==0) {
-            this.sessionKey=freshSessionKey(symkey, type, SignInMode.NORMAL, br);
-            if(this.sessionKey==null){
-                log.debug("Failed to get sessionKey for "+type+" service.");
-                System.out.println("Failed to get sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
-                return null;
-            }
-        }
-        //test the client
-        FcClient fcClient1 = (FcClient) client;
-
-        fcClient1.setSessionKey(sessionKey);
-        try {
-            boolean allowFreeRequest = (boolean) fcClient1.ping(VERSION_1, RequestMethod.GET, AuthType.FREE, type);
-            if (Settings.freeApiListMap != null) ((FcClient) client).setAllowFreeRequest(allowFreeRequest);
-            Object rest = fcClient1.ping(VERSION_1, RequestMethod.POST, AuthType.FC_SIGN_BODY, null);
-            if (rest != null) {
-                System.out.println((Long) rest + " KB/requests are available on " + apiUrl);
-                return sessionKey;
-            } else return null;
-        }catch (Exception e){
-            return null;
-        }
-    }
-
-    public byte[] freshSessionKey(byte[] symkey, Service.ServiceType type, SignInMode mode, BufferedReader br) {
-        System.out.println("Fresh the sessionKey of the "+type+" service...");
-
-        FcSession fcSession;
-        switch (type){
-            case APIP -> {
-                ApipClient apipClient = (ApipClient) client;
-                fcSession = apipClient.signIn(this, mode,symkey, AlgorithmId.EccAes256K1P7_No1_NrC7, br);
-            }
-            case DISK -> {
-                DiskClient diskClient = (DiskClient) client;
-                fcSession = diskClient.signIn(this, mode,symkey, AlgorithmId.EccAes256K1P7_No1_NrC7, br);
-            }
+//
+//    private byte[] checkSessionKey(byte[] symkey, Service.ServiceType type, BufferedReader br) {
+//        if(this.fcSession ==null)this.fcSession = new FcSession();
+//        if (this.fcSession.getKeyCipher()== null) {
+//            this.sessionKey=freshSessionKey(symkey, type, SignInMode.NORMAL, br);
+//        } else {
+//            this.sessionKey =decryptSessionKey(fcSession.getKeyCipher(),symkey);
+//        }
+//        if (this.sessionKey==null || this.sessionKey.length==0) {
+//            this.sessionKey=freshSessionKey(symkey, type, SignInMode.NORMAL, br);
+//            if(this.sessionKey==null){
+//                log.debug("Failed to get sessionKey for "+type+" service.");
+//                System.out.println("Failed to get sessionKey for API account"+this.getId()+" of API provider "+service.getId()+".");
+//                return null;
+//            }
+//        }
+//        //test the client
+//        FcClient fcClient1 = (FcClient) client;
+//
+//        fcClient1.setSessionKey(sessionKey);
+//        try {
+//            boolean allowFreeRequest = (boolean) fcClient1.ping(VER_1, RequestMethod.GET, AuthType.FREE, type);
+//            if (Settings.freeApiListMap != null) ((FcClient) client).setAllowFreeRequest(allowFreeRequest);
+//            Object rest = fcClient1.ping(VER_1, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, null);
+//            if (rest != null) {
+//                System.out.println((Long) rest + " KB/requests are available on " + apiUrl);
+//                return sessionKey;
+//            } else return null;
+//        }catch (Exception e){
+//            return null;
+//        }
+//    }
+//
+//    public byte[] freshSessionKey(byte[] symkey, Service.ServiceType type, SignInMode mode, BufferedReader br) {
+//        System.out.println("Fresh the sessionKey of the "+type+" service...");
+//
+//        FcSession fcSession;
+//        switch (type){
+//            case APIP -> {
+//                ApipClient apipClient = (ApipClient) client;
+//                fcSession = apipClient.signIn(mode, br);
+//            }
+//            case DISK -> {
+//                DiskClient diskClient = (DiskClient) client;
+//                fcSession = diskClient.signIn(mode, br);
+//            }
 //            case TALK -> {
 //                ClientTalk clientTalk = (ClientTalk) client;
 //                apipSession = clientTalk.signInEcc(this, mode,symkey);
 //            }
-            default -> {
-                byte[] prikey = decryptUserPrikey(userPrikeyCipher,symkey);
-                if(prikey==null)return null;
-                FcClient fcClient1 = (FcClient)client;
-                fcSession = fcClient1.signIn(this, mode,symkey, FC_EccK1AesCbc256_No1_NrC7, null);
-                BytesUtils.clearByteArray(prikey);
-            }
-        }
-
-        if (fcSession == null) return null;
-        this.sessionKey = Hex.fromHex(fcSession.getKey());
-
-        fcSession.setKey(null);
-        return sessionKey;
-    }
+//            default -> {
+//                byte[] prikey = decryptUserPrikey(userPrikeyCipher,symkey);
+//                if(prikey==null)return null;
+//                FcClient fcClient1 = (FcClient)client;
+//                fcSession = fcClient1.signIn(mode, null);
+//                BytesUtils.clearByteArray(prikey);
+//            }
+//        }
+//
+//        if (fcSession == null) return null;
+//        this.sessionKey = Hex.fromHex(fcSession.getKey());
+//
+//        fcSession.setKey(null);
+//        return sessionKey;
+//    }
 
     public void inputApiUrl(BufferedReader br) {
         System.out.println("Input the urlHead of the APIP service. Enter to set as '" + DEFAULT_APIP_SERVER + "':");

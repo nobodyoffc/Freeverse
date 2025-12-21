@@ -3,18 +3,23 @@ package startAPIP;
 
 import data.apipData.WebhookInfo;
 import config.Starter;
+import feature.swap.SwapAffair;
+import feature.swap.SwapLpData;
+import feature.swap.SwapPendingData;
+import feature.swap.SwapStateData;
 import handlers.AccountManager;
 import handlers.Manager;
+import server.serviceManagers.ApipManager;
 import ui.Inputer;
 import ui.Menu;
 import constants.FieldNames;
 import data.fcData.AutoTask;
-import data.fchData.Cid;
+import data.fchData.Freer;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import config.Configure;
-import server.ApipApiNames;
+import server.ApipApi;
 import data.feipData.Service;
 import data.feipData.serviceParams.ApipParams;
 import clients.NaSaClient.NaSaRpcClient;
@@ -25,10 +30,6 @@ import config.Settings;
 import server.balance.BalanceInfo;
 import server.order.Order;
 import server.reward.RewardInfo;
-import data.swap.SwapAffair;
-import data.swap.SwapLpData;
-import data.swap.SwapPendingData;
-import data.swap.SwapStateData;
 import utils.FchUtils;
 import utils.ObjectUtils;
 
@@ -44,7 +45,7 @@ import static config.Settings.AVATAR_PNG_PATH;
 import static config.Settings.LISTEN_PATH;
 import static constants.Constants.*;
 import static constants.Constants.SEC_PER_DAY;
-import static constants.IndicesNames.CID;
+import static constants.IndicesNames.FREER;
 import static constants.IndicesNames.ORDER;
 import static constants.IndicesNames.WEBHOOK;
 import static constants.IndicesNames.*;
@@ -99,7 +100,7 @@ public class StartApipManager {
 		Menu.welcome("APIP Manager");
 
 		br = new BufferedReader(new InputStreamReader(System.in));
-		settings = Starter.startServer(serverType, settingMap, ApipApiNames.apiList, modules, br, autoTaskList);
+		settings = Starter.startServer(serverType, settingMap, ApipApi.apiNameList, modules, br, autoTaskList);
 		if(settings==null)return;
 
 		byte[] symkey = settings.getSymkey();
@@ -127,7 +128,7 @@ public class StartApipManager {
 			menu.add("Manage account", () -> accountHandler.menu(br, false));
 			menu.add("Manage indices", () -> new IndicesApip(esClient,br).menu());
 			menu.add("Repair address", () -> repairAddress());
-			menu.add("Reset nPrice", () -> Order.setNPrices(sid, ApipApiNames.apiList,jedisPool,br,true));
+			menu.add("Reset nPrice", () -> Order.setNPrices(sid, ApipApi.apiNameList,jedisPool,br,true));
 			menu.add("Settings", () -> settings.setting(br, serverType));
 
 			menu.showAndSelect(br);
@@ -154,12 +155,12 @@ public class StartApipManager {
 	private static void repairAddress() {
 		List<String> addrList = Inputer.inputStringList(br, "Input address list:", 0);
 		try {
-			EsUtils.MgetResult<Cid> result = EsUtils.getMultiByIdList(esClient, CID, addrList, Cid.class);
-			List<Cid> cidList = result.getResultList();
+			EsUtils.MgetResult<Freer> result = EsUtils.getMultiByIdList(esClient, FREER, addrList, Freer.class);
+			List<Freer> cidList = result.getResultList();
 
-			addrList = cidList.stream().map(Cid::getId).collect(Collectors.toList());
+			addrList = cidList.stream().map(Freer::getId).collect(Collectors.toList());
 			FchUtils.makeAddress(cidList,esClient);
-			BulkResponse bulkResponse = EsUtils.bulkWriteList(esClient, CID, cidList, addrList, Cid.class);
+			BulkResponse bulkResponse = EsUtils.bulkWriteList(esClient, FREER, cidList, addrList, Freer.class);
 			boolean result1;
 			if(bulkResponse!= null)result1 = !bulkResponse.errors();
 			else result1 =  false;

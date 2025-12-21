@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import core.crypto.Hash;
 import data.fchData.Cash;
-import data.fchData.P2SH;
+import data.fchData.Multisig;
 import utils.BytesUtils;
 import utils.JsonUtils;
 import utils.ObjectUtils;
@@ -17,11 +17,11 @@ public final class MultiSigData {
     private long nonce;
     private String rawTxId;
     private byte[] rawTx;
-    private P2SH p2SH;
+    private Multisig p2SH;
     private List<Cash> cashList;
     private Map<String, List<byte[]>> fidSigMap;
 
-    public MultiSigData(byte[] rawTx, P2SH p2SH, List<Cash> cashList) {
+    public MultiSigData(byte[] rawTx, Multisig p2SH, List<Cash> cashList) {
         this.nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
         this.rawTx = rawTx;
         this.p2SH = p2SH;
@@ -32,7 +32,7 @@ public final class MultiSigData {
     public MultiSigData(String rawTxHex, String p2SHStr, String cashList) {
         this.nonce = BytesUtils.bytes4ToLongBE(BytesUtils.getRandomBytes(4));
         this.rawTx = HexFormat.of().parseHex(rawTxHex);
-        this.p2SH = new Gson().fromJson(p2SHStr, P2SH.class);
+        this.p2SH = new Gson().fromJson(p2SHStr, Multisig.class);
         this.cashList = ObjectUtils.objectToList(cashList,Cash.class);//DataGetter.getCashList(cashList);
     }
 
@@ -55,7 +55,7 @@ public final class MultiSigData {
         if (dataMap.get("rawTx") != null)
             multiSignData.setRawTx(HexFormat.of().parseHex((String) dataMap.get("rawTx")));
         if (dataMap.get("p2SH") != null)
-            multiSignData.setP2SH(gson.fromJson(gson.toJson(dataMap.get("p2SH")), P2SH.class));
+            multiSignData.setP2SH(gson.fromJson(gson.toJson(dataMap.get("p2SH")), Multisig.class));
         if (dataMap.get("cashList") != null)
             multiSignData.setCashList(ObjectUtils.objectToList(dataMap.get("cashList"),Cash.class));//DataGetter.getCashList(dataMap.get("cashList")));
         if (dataMap.get("fidSigMap") != null) {
@@ -143,11 +143,11 @@ public final class MultiSigData {
         this.rawTxId = HexFormat.of().formatHex(Hash.sha256x2(rawTx));
     }
 
-    public P2SH getP2SH() {
+    public Multisig getP2SH() {
         return p2SH;
     }
 
-    public void setP2SH(P2SH p2SH) {
+    public void setP2SH(Multisig p2SH) {
         this.p2SH = p2SH;
     }
 

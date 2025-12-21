@@ -78,7 +78,7 @@ public class TalkServer {
         this.price = FchUtils.coinToSatoshi(price);
         this.service = settings.getService();
         this.talkParams = (TalkParams)this.service.getParams();
-        this.dealer = talkParams.getDealer();
+        this.dealer = service.getDealer();
         
         // Get clients from settings
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);

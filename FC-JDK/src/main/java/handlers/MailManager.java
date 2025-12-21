@@ -1,7 +1,8 @@
 package handlers;
 
 import core.crypto.Decryptor;
-import data.fchData.Cid;
+import data.fchData.Cash;
+import data.fchData.Freer;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -12,13 +13,10 @@ import core.crypto.CryptoDataByte;
 import core.crypto.Encryptor;
 import core.crypto.KeyTools;
 import data.fcData.AlgorithmId;
-import utils.IdNameUtils;
-import data.fcData.MailDetail;
+import data.feipData.Mail;
 import data.fcData.Op;
 import core.fch.Wallet;
-import data.fchData.SendTo;
 import data.feipData.Feip;
-import data.feipData.Mail;
 import data.feipData.MailOpData;
 import data.feipData.Service;
 import org.jetbrains.annotations.Nullable;
@@ -36,7 +34,7 @@ import static ui.Inputer.askIfYes;
 import static constants.Constants.Dust;
 import static constants.OpNames.*;
 
-public class MailManager extends Manager<MailDetail> {
+public class MailManager extends Manager<Mail> {
     // Constants and Enums
     private static final Integer DEFAULT_SIZE = 50;
     private static final String LAST_HEIGHT = "last_height";
@@ -66,7 +64,7 @@ public class MailManager extends Manager<MailDetail> {
     // Constructor
 
     public MailManager(Settings settings) {
-        super(settings, ManagerType.MAIL, LocalDB.SortType.BIRTH_ORDER, MailDetail.class, true, true);
+        super(settings, ManagerType.MAIL, LocalDB.SortType.BIRTH_ORDER, Mail.class, true, true);
         this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
         this.cashHandler = (CashManager) settings.getManager(ManagerType.CASH);
         this.myFid = settings.getMainFid();
@@ -108,18 +106,18 @@ public class MailManager extends Manager<MailDetail> {
             List<Mail> currentBatch = fetchMailList(0L, false, last, DEFAULT_SIZE);
             if (currentBatch==null || currentBatch.isEmpty()) break;
             
-            List<MailDetail> currentMailDetailList = mailToMailDetail(currentBatch);
+            List<Mail> currentMailList = mailToMailDetail(currentBatch);
 
-            System.out.println("Loaded " + currentMailDetailList.size() + " deleted mails.");
+            System.out.println("Loaded " + currentMailList.size() + " deleted mails.");
             if (!askIfYes(br,"View or choose them?")) break;
             
-            List<MailDetail> chosenMailDetails = choseFromMailDetailList(currentMailDetailList, br);
+            List<Mail> chosenMails = choseFromMailDetailList(currentMailList, br);
 
-            System.out.println("You chosen " + chosenMailDetails.size() + " mails.");
+            System.out.println("You chosen " + chosenMails.size() + " mails.");
 
-            if (askIfYes(br,"View them?")) chooseToShowNiceJsonList(chosenMailDetails, br);
+            if (askIfYes(br,"View them?")) chooseToShowNiceJsonList(chosenMails, br);
 
-            List<String> currentChosenMailIds = chosenMailDetails.stream().map(MailDetail::getMailId).collect(Collectors.toList());
+            List<String> currentChosenMailIds = chosenMails.stream().map(Mail::getMailId).collect(Collectors.toList());
             chosenMailIds.addAll(currentChosenMailIds);
             
             if (!askIfYes(br,"Load more mails?")) break;
@@ -139,21 +137,21 @@ public class MailManager extends Manager<MailDetail> {
     public String findMailId(BufferedReader br) {
         String mailId;
         while (true) {
-            MailDetail mailDetail = findMail(br);
-            if (mailDetail == null) continue;
-            mailId = mailDetail.getMailId();
+            Mail mail = findMail(br);
+            if (mail == null) continue;
+            mailId = mail.getMailId();
             break;
         }
         return mailId;
     }
 
     @Nullable
-    public MailDetail findMail(BufferedReader br) {
+    public Mail findMail(BufferedReader br) {
         String input = Inputer.inputString(br,"Input the FID, CID or part of the content:");
-        List<MailDetail> list = findMailDetails(input);
-        MailDetail mailDetail = chooseOneMailDetailFromList(list, br);
-        if (mailDetail == null) return null;
-        return mailDetail;
+        List<Mail> list = findMailDetails(input);
+        Mail mail = chooseOneMailDetailFromList(list, br);
+        if (mail == null) return null;
+        return mail;
     }
 
     public void checkMail(BufferedReader br) {
@@ -162,7 +160,7 @@ public class MailManager extends Manager<MailDetail> {
         Long lastHeight = getLastHeight();
         mailList = loadAllMailList(lastHeight, true, last, DEFAULT_SIZE);
 
-        List<MailDetail> mailDetailList = new ArrayList<>();
+        List<Mail> mailDetailList = new ArrayList<>();
 
         if (!mailList.isEmpty()) {
             mailDetailList = mailToMailDetail(mailList);
@@ -189,13 +187,13 @@ public class MailManager extends Manager<MailDetail> {
     }
 
     public void readRecentMails(BufferedReader br) {
-        List<MailDetail> recentMails = chooseMailDetails(br);
+        List<Mail> recentMails = chooseMailDetails(br);
         System.out.println("You chosen " + recentMails.size() + " mails. Read them...");
         chooseToShowNiceJsonList(recentMails, br);
     }
 
     public void readMails(BufferedReader br) {
-        List<MailDetail> chosenMails = null;
+        List<Mail> chosenMails = null;
         
         String input;
         while (true) {
@@ -207,8 +205,8 @@ public class MailManager extends Manager<MailDetail> {
                     return;
                 }
             } else {
-                List<MailDetail> foundMailDetailList = findMailDetails(input);
-                chosenMails = choseFromMailDetailList(foundMailDetailList,br);
+                List<Mail> foundMailList = findMailDetails(input);
+                chosenMails = choseFromMailDetailList(foundMailList,br);
             }
 
             System.out.println("You chosen " + chosenMails.size() + " mails.");
@@ -232,12 +230,12 @@ public class MailManager extends Manager<MailDetail> {
     }
 
     public void choseToDelete(BufferedReader br) {
-        List<MailDetail> chosenMails = chooseMailDetails(br);
+        List<Mail> chosenMails = chooseMailDetails(br);
         
         delete(br, chosenMails);
     }
 
-    private void delete(BufferedReader br, List<MailDetail> chosenMails) {
+    private void delete(BufferedReader br, List<Mail> chosenMails) {
         if (chosenMails.isEmpty()) {
             System.out.println("No mails chosen for deletion.");
             return;
@@ -248,7 +246,7 @@ public class MailManager extends Manager<MailDetail> {
             chooseToShowNiceJsonList(chosenMails, br);
         }
         
-        List<String> mailIds = chosenMails.stream().map(MailDetail::getMailId).collect(Collectors.toList());
+        List<String> mailIds = chosenMails.stream().map(Mail::getMailId).collect(Collectors.toList());
         if (askIfYes(br, "Delete " + chosenMails.size() + " mails?")) {
             MailOp op = MailOp.DELETE;
             String result = opMail(null, mailIds, br, op);
@@ -271,10 +269,10 @@ public class MailManager extends Manager<MailDetail> {
             System.out.println("Failed to get the prikey of " + myFid);
             return null;
         }
-        Cid cid;
+        Freer cid;
 
         Map<String, Mail> recoverMailMap = null;
-        List<SendTo> sendToList = null;
+        List<Cash> sendToList = null;
         if (op.equals(MailOp.SEND)) {
             sendToList = new ArrayList<>();
             cid = apipClient.searchCidOrFid(br);
@@ -289,13 +287,11 @@ public class MailManager extends Manager<MailDetail> {
             } else {
                 amount = Dust;
             }
-            sendToList.add(new SendTo(to, amount));
+            sendToList.add(new Cash(to, amount));
 
             String msg = Inputer.inputString(br,"Input the message:");
             if (msg == null) return null;
 
-            mailOpData.setTextId(IdNameUtils.makeDid(msg));
-//            mailData.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7.getDisplayName());
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
             String pubkey = cid.getPubkey();
             if (pubkey == null) {
@@ -317,7 +313,7 @@ public class MailManager extends Manager<MailDetail> {
                     mailIds.add(mailId);
                 }
             } else {
-                recoverMailMap = apipClient.mailByIds(RequestMethod.POST, AuthType.FC_SIGN_BODY, mailIds.toArray(new String[0]));
+                recoverMailMap = apipClient.mailByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, mailIds.toArray(new String[0]));
                 if (recoverMailMap == null || recoverMailMap.isEmpty()) {
                     System.out.println("The mails do not exist or are deleted.");
                     return null;
@@ -351,10 +347,10 @@ public class MailManager extends Manager<MailDetail> {
                     }
                 }else if(op.equals(MailOp.RECOVER)){
                     if(recoverMailMap!=null && !recoverMailMap.isEmpty()) {
-                        List<MailDetail> mailDetailList = mailToMailDetail(new ArrayList<>(recoverMailMap.values()));
-                        if(mailDetailList!=null && !mailDetailList.isEmpty()) {
-                            for(MailDetail mailDetail:mailDetailList) {
-                                put(mailDetail.getId(), mailDetail);
+                        List<Mail> mailList = mailToMailDetail(new ArrayList<>(recoverMailMap.values()));
+                        if(mailList !=null && !mailList.isEmpty()) {
+                            for(Mail mail : mailList) {
+                                put(mail.getId(), mail);
                             }
                         }
                     }   
@@ -395,83 +391,63 @@ public class MailManager extends Manager<MailDetail> {
         return subMailList;
     }
 
-    private List<MailDetail> mailToMailDetail(List<Mail> mailList) {
-        if(failedDecryptMailIdList == null) failedDecryptMailIdList = new ArrayList<>();
-        List<MailDetail> mailDetailList = new ArrayList<>();
+    private List<Mail> mailToMailDetail(List<Mail> mailList) {
         byte[] prikey = Decryptor.decryptPrikey(myPrikeyCipher, symkey);
-        Set<String> fidSet = new HashSet<>();
 
-        for (Mail mail : mailList) {
-            fidSet.add(mail.getSender());
-            fidSet.add(mail.getRecipient());
-            if (mail.getRecipient() == null) mail.setRecipient(mail.getSender());
-        }
-
-        Map<String, String> fidCidMap = apipClient.getFidCidMap(new ArrayList<>(fidSet));
-        if (fidCidMap != null)
+        if (mailList != null && !mailList.isEmpty())
             for (int i = mailList.size() - 1; i >= 0; i--) {
                 Mail mail = mailList.get(i);
-                MailDetail mailDetail = MailDetail.fromMail(myFid, mail, prikey, apipClient);
-                if(mailDetail == null) {
-                    failedDecryptMailIdList.add(mail.getId());
-                    continue;
-                }
-                String senderCid = fidCidMap.get(mail.getSender());
-                String recipientCid = fidCidMap.get(mail.getRecipient());
-                if (senderCid != null) mailDetail.setFromCid(senderCid);
-                if (recipientCid != null) mailDetail.setToCid(recipientCid);
-                if (mailDetail.getId() != null) {
-                    put(mailDetail.getId(), mailDetail);
-                    mailDetailList.add(mailDetail);
-                }
+                mail.parseDetail(myFid, mail, prikey, apipClient);
             }
-        return mailDetailList;
+        return mailList;
     }
 
-    private List<MailDetail> chooseMailDetails(BufferedReader br) {
+    private List<Mail> chooseMailDetails(BufferedReader br) {
         return chooseItems(br);
     }
 
-    private MailDetail chooseOneMailDetailFromList(List<MailDetail> mailDetailList, BufferedReader br) {
-        if (mailDetailList.isEmpty()) return null;
+    private Mail chooseOneMailDetailFromList(List<Mail> mailList, BufferedReader br) {
+        if (mailList.isEmpty()) return null;
 
         String title = "Chosen Mail";
-        showMailDetailList(mailDetailList, title, 0);   
+        showMailDetailList(mailList, title, 0);
 
         System.out.println();
-        int input = Inputer.inputInt(br, "Enter mail number to select it, Enter to quit:", mailDetailList.size());
+        int input = Inputer.inputInt(br, "Enter mail number to select it, Enter to quit:", mailList.size());
 
         int index = input - 1;
-        if (index >= 0 && index < mailDetailList.size()) {
-            return mailDetailList.get(index);
+        if (index >= 0 && index < mailList.size()) {
+            return mailList.get(index);
         }
         return null;
     }
 
-    private static void showMailDetailList(List<MailDetail> mailDetailList, String title, int totalDisplayed) {
+    private static void showMailDetailList(List<Mail> mailList, String title, int totalDisplayed) {
         String[] fields = new String[]{"Time", "From", "To", "Content"};
         int[] widths = new int[]{12, 13, 13, 30};
         List<List<Object>> valueListList = new ArrayList<>();
 
-        for (MailDetail mailDetail : mailDetailList) {
+        for (Mail mail : mailList) {
             List<Object> showList = new ArrayList<>();
-            showList.add(DateUtils.longToTime(mailDetail.getTime(), "yyyy-MM-dd"));
+            showList.add(DateUtils.longToTime(mail.getTime(), "yyyy-MM-dd"));
             String from;
-            if (mailDetail.getFromCid() != null) from = mailDetail.getFromCid();
-            else from = mailDetail.getFrom();
+            if (mail.getFromCid() != null)
+                from = mail.getFromCid();
+            else from = mail.getFrom();
+
             showList.add(from);
 
             String to;
-            if (mailDetail.getToCid() != null) to = mailDetail.getToCid();
-            else to = mailDetail.getTo();
+            if (mail.getToCid() != null) to = mail.getToCid();
+            else to = mail.getTo();
             showList.add(to);
-            showList.add(mailDetail.getContent());
+            showList.add(mail.getContent());
             valueListList.add(showList);
         }
         Shower.showOrChooseList(title, fields, widths, valueListList, null);
     }
 
-    private static void showMailDetail(MailDetail mail) {
+    private static void showMailDetail(Mail mail) {
         Shower.printUnderline(20);
         System.out.println(" Mail ID: " + mail.getMailId());
         System.out.println(" Time: " + DateUtils.longToTime(mail.getTime(), "yyyy-MM-dd HH:mm:ss"));
@@ -481,12 +457,12 @@ public class MailManager extends Manager<MailDetail> {
         Shower.printUnderline(20);
     }
 
-    private List<MailDetail> choseFromMailDetailList(List<MailDetail> mailDetailList, BufferedReader br) {
-        List<MailDetail> chosenMails = new ArrayList<>();
+    private List<Mail> choseFromMailDetailList(List<Mail> mailList, BufferedReader br) {
+        List<Mail> chosenMails = new ArrayList<>();
         
         while (true) {
             String title = "Choose Mails";
-            showMailDetailList(mailDetailList, title, 0);
+            showMailDetailList(mailList, title, 0);
 
             System.out.println("Enter mail numbers to select (comma-separated), 'a' to select all, or 'q' to quit:");
             String input = Inputer.inputString(br);
@@ -496,7 +472,7 @@ public class MailManager extends Manager<MailDetail> {
             }
 
             if ("a".equalsIgnoreCase(input)) {
-                chosenMails.addAll(mailDetailList);
+                chosenMails.addAll(mailList);
                 break;
             }
 
@@ -504,8 +480,8 @@ public class MailManager extends Manager<MailDetail> {
             for (String selection : selections) {
                 try {
                     int index = Integer.parseInt(selection.trim()) - 1;
-                    if (index >= 0 && index < mailDetailList.size()) {
-                        chosenMails.add(mailDetailList.get(index));
+                    if (index >= 0 && index < mailList.size()) {
+                        chosenMails.add(mailList.get(index));
                     } else {
                         System.out.println("Invalid selection: " + (index + 1));
                     }
@@ -524,7 +500,7 @@ public class MailManager extends Manager<MailDetail> {
     }
 
 
-    private static void chooseToShowOld(List<MailDetail> mailList, BufferedReader br) {
+    private static void chooseToShowOld(List<Mail> mailList, BufferedReader br) {
         if (mailList == null || mailList.isEmpty()) {
             System.out.println("No mails to display.");
             return;
@@ -548,8 +524,8 @@ public class MailManager extends Manager<MailDetail> {
                         showMailDetail(mailList.get(choiceInt - 1));
                     }
                 } else if ("A".equalsIgnoreCase(input)) {
-                    for (MailDetail mailDetail : mailList) {
-                        showMailDetail(mailDetail);
+                    for (Mail mail : mailList) {
+                        showMailDetail(mail);
                     }
                     Menu.anyKeyToContinue(br);
                 } else {
@@ -558,7 +534,7 @@ public class MailManager extends Manager<MailDetail> {
                         System.out.println("Invalid choice. Please enter a number between 1 and " + mailList.size());
                         return;
                     }
-                    MailDetail chosenMail = mailList.get(choice - 1);
+                    Mail chosenMail = mailList.get(choice - 1);
                     showMailDetail(chosenMail);
                     Menu.anyKeyToContinue(br);
                 }
@@ -570,20 +546,20 @@ public class MailManager extends Manager<MailDetail> {
         }
     }
 
-    private List<MailDetail> findMailDetails(String searchStr) {
+    private List<Mail> findMailDetails(String searchStr) {
         byte[] searchBytes;
         if (KeyTools.isGoodFid(searchStr)) searchBytes = KeyTools.addrToHash160(searchStr);
         else searchBytes = searchStr.getBytes();
         return findMailDetails(searchBytes);
     }
 
-    private List<MailDetail> findMailDetails(byte[] searchBytes) {
+    private List<Mail> findMailDetails(byte[] searchBytes) {
         return searchInValue(new String(searchBytes));
     }
 
     // Getter Methods
     public Feip getFeip() {
-        return Feip.fromProtocolName(Feip.ProtocolName.MAIL);
+        return Feip.fromProtocolName(Feip.FeipProtocol.MAIL);
     }
 
     private Long getLastHeight() {
@@ -596,10 +572,10 @@ public class MailManager extends Manager<MailDetail> {
         }
     }
 
-    private void put(String id, MailDetail mailDetail) {
+    private void put(String id, Mail mail) {
         if (localDB == null) return;
         try {
-            localDB.put(id, mailDetail);
+            localDB.put(id, mail);
         } catch (Exception e) {
             log.error("Failed to put mail detail: {}", e.getMessage());
         }

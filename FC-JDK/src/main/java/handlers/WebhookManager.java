@@ -20,7 +20,6 @@ import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import server.ApipApiNames;
 import utils.EsUtils;
 import utils.FchUtils;
 import utils.ObjectUtils;
@@ -38,6 +37,9 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static constants.ApipApiNames.HOOK_NEW_CASH_BY_FIDS;
+import static constants.ApipApiNames.HOOK_NEW_OP_RETURN_BY_FIDS;
 
 public class WebhookManager extends Manager<WebhookManager.WebhookRequestBody> {
     private static final Logger log = LoggerFactory.getLogger(WebhookManager.class);
@@ -184,10 +186,10 @@ public class WebhookManager extends Manager<WebhookManager.WebhookRequestBody> {
         for (Map.Entry<String, Map<String, WebhookRequestBody>> entry : methodFidWebhookInfoMapMap.entrySet()) {
             String method = entry.getKey();
             Map<String, WebhookRequestBody> fidWebhookInfoMap = entry.getValue();
-            
+
             switch (method) {
-                case ApipApiNames.NEW_CASH_BY_FIDS -> pushNewCashByFids(fidWebhookInfoMap, sinceHeight);
-                case ApipApiNames.NEW_OP_RETURN_BY_FIDS -> pushNewOpReturnByFids(fidWebhookInfoMap, sinceHeight);
+                case HOOK_NEW_CASH_BY_FIDS -> pushNewCashByFids(fidWebhookInfoMap, sinceHeight);
+                case HOOK_NEW_OP_RETURN_BY_FIDS -> pushNewOpReturnByFids(fidWebhookInfoMap, sinceHeight);
                 default -> log.warn("Unknown webhook method: {}", method);
             }
         }
@@ -198,7 +200,7 @@ public class WebhookManager extends Manager<WebhookManager.WebhookRequestBody> {
             try {
                 List<Cash> newCashList = getNewCashList(webhookInfo, sinceHeight);
                 if (newCashList != null && !newCashList.isEmpty()) {
-                    pushDataList(webhookInfo, ApipApiNames.NEW_CASH_BY_FIDS, newCashList);
+                    pushDataList(webhookInfo, HOOK_NEW_CASH_BY_FIDS, newCashList);
                 }
             } catch (Exception e) {
                 log.error("Error pushing new cash for {}: {}", webhookInfo.getUserId(), e.getMessage());
@@ -211,7 +213,7 @@ public class WebhookManager extends Manager<WebhookManager.WebhookRequestBody> {
             try {
                 List<OpReturn> newOpReturnList = getNewOpReturnList(webhookInfo, sinceHeight, null);
                 if (newOpReturnList != null && !newOpReturnList.isEmpty()) {
-                    pushDataList(webhookInfo, ApipApiNames.NEW_OP_RETURN_BY_FIDS, newOpReturnList);
+                    pushDataList(webhookInfo, HOOK_NEW_OP_RETURN_BY_FIDS, newOpReturnList);
                 }
             } catch (Exception e) {
                 log.error("Error pushing new op returns for {}: {}", webhookInfo.getUserId(), e.getMessage());
@@ -282,7 +284,7 @@ public class WebhookManager extends Manager<WebhookManager.WebhookRequestBody> {
             if(last!=null){
                 fcdsl.setAfter(last);
             }
-            opReturnList = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            opReturnList = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         }else if(esClient!=null){
             try {
                 opReturnList = EsUtils.getListByTermsSinceHeight(esClient, Settings.addSidBriefToName(sid, IndicesNames.OPRETURN), FieldNames.SIGNER, idList, sinceHeight, FieldNames.HEIGHT, SortOrder.Desc, OpReturn.class, last);

@@ -1,6 +1,6 @@
 package APIP18V1_Wallet;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.Cash;
 import initial.Initiator;
@@ -19,7 +19,7 @@ import java.util.Map;
 import config.Settings;
 import handlers.Manager.ManagerType;
 
-@WebServlet(name = ApipApiNames.UNCONFIRMED_CASHES, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.UNCONFIRMED_CASHES)
+@WebServlet(name = ApipApiNames.UNCONFIRMED_CASHES, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.UNCONFIRMED_CASHES +"/"+ ApipApiNames.VER_1)
 public class UnconfirmedCashes extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -27,7 +27,7 @@ public class UnconfirmedCashes extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

@@ -51,7 +51,7 @@ public class RawTxForCsV1 {
         return makeRawTxForCsList(rawTxInfo.getSender(), rawTxInfo.getInputs(), rawTxInfo.getOutputs(), rawTxInfo.getOpReturn());
     }
 
-    public static List<RawTxForCsV1> makeRawTxForCsList(String sender, List<Cash> cashList, List<SendTo> outputs, String opReturn) {
+    public static List<RawTxForCsV1> makeRawTxForCsList(String sender, List<Cash> cashList, List<Cash> outputs, String opReturn) {
         List<RawTxForCsV1> rawTxForCsV1List = new ArrayList<>();
 
         if(!cashList.isEmpty())
@@ -62,8 +62,8 @@ public class RawTxForCsV1 {
 
         int j=0;
         for(; j < outputs.size(); j++){
-            SendTo output = outputs.get(j);
-            RawTxForCsV1 rawTxForCsV1 = newOutput(output.getFid(), output.getAmount(), j);
+            Cash output = outputs.get(j);
+            RawTxForCsV1 rawTxForCsV1 = newOutput(output.getOwner(), output.getAmount(), j);
             if(rawTxForCsV1 !=null) rawTxForCsV1List.add(rawTxForCsV1);
         }
         if(opReturn !=null){

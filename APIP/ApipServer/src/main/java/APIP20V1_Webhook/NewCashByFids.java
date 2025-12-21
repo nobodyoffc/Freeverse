@@ -7,7 +7,7 @@ import data.fcData.ReplyBody;
 import handlers.Manager;
 import handlers.WebhookManager;
 import initial.Initiator;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
 import config.Settings;
@@ -21,12 +21,12 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-@WebServlet(name = ApipApiNames.NEW_CASH_BY_FIDS, value = "/"+ ApipApiNames.SN_20+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.NEW_CASH_BY_FIDS)
+@WebServlet(name = ApipApiNames.HOOK_NEW_CASH_BY_FIDS, value = "/"+ ApipApiNames.SN_20+"/"+ ApipApiNames.HOOK_NEW_CASH_BY_FIDS +"/"+ ApipApiNames.VER_1)
 public class NewCashByFids extends HttpServlet {
     private final Settings settings = Initiator.settings;
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 
@@ -60,7 +60,7 @@ public class NewCashByFids extends HttpServlet {
         try {
             webhookRequestBody = gson.fromJson(otherMap.get(FieldNames.WEBHOOK_REQUEST_BODY), WebhookManager.WebhookRequestBody.class);
             webhookRequestBody.setUserId(addr);
-            webhookRequestBody.setMethod(ApipApiNames.NEW_CASH_BY_FIDS);
+            webhookRequestBody.setMethod(ApipApiNames.HOOK_NEW_CASH_BY_FIDS);
             webhookRequestBody.makeHookUserId(settings.getSid());
 
             Map<String, String> dataMap = new HashMap<>();

@@ -1,10 +1,10 @@
 package api;
 
 import config.Settings;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.FcHttpRequestHandler;
+import server.DiskApiNames;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
 
@@ -13,7 +13,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-@WebServlet(name = ApipApiNames.PING, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.PING)
+@WebServlet(name = DiskApiNames.PING, value = "/"+ DiskApiNames.PING+"/"+ DiskApiNames.VER_1)
 public class Ping extends HttpServlet {
     private final ReplyBody replier;
     private final HttpRequestChecker httpRequestChecker;
@@ -25,7 +25,7 @@ public class Ping extends HttpServlet {
     }
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         FcHttpRequestHandler.doPingPost(request, response, authType,replier,httpRequestChecker);
 
     }

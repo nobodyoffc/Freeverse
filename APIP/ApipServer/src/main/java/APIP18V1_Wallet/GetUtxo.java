@@ -12,7 +12,7 @@ import handlers.CashManager.SearchResult;
 import handlers.Manager.ManagerType;
 import data.fchData.Cash;
 import initial.Initiator;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import utils.FchUtils;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -28,7 +28,7 @@ import static constants.FieldNames.AMOUNT;
 import static constants.FieldNames.ADDRESS;
 
 
-@WebServlet(name = ApipApiNames.GET_UTXO, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_UTXO)
+@WebServlet(name = ApipApiNames.GET_UTXO, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.GET_UTXO +"/"+ ApipApiNames.VER_1)
 public class GetUtxo extends HttpServlet {
     private final Settings settings = Initiator.settings;
 
@@ -37,7 +37,7 @@ public class GetUtxo extends HttpServlet {
         doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

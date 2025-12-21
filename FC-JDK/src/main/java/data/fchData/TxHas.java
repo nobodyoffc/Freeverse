@@ -7,8 +7,9 @@ import java.util.ArrayList;
 public class TxHas extends FcObject {
 	private String rawTx;
 	private Long height;		//height
-	private ArrayList<CashMark> inMarks;
-	private  ArrayList<CashMark> outMarks;
+	private Integer txIndex;
+	private ArrayList<CashMask> inMarks;
+	private  ArrayList<CashMask> outMarks;
 
 	public Long getHeight() {
 		return height;
@@ -16,16 +17,16 @@ public class TxHas extends FcObject {
 	public void setHeight(Long height) {
 		this.height = height;
 	}
-	public ArrayList<CashMark> getInMarks() {
+	public ArrayList<CashMask> getInMarks() {
 		return inMarks;
 	}
-	public void setInMarks(ArrayList<CashMark> inMarks) {
+	public void setInMarks(ArrayList<CashMask> inMarks) {
 		this.inMarks = inMarks;
 	}
-	public ArrayList<CashMark> getOutMarks() {
+	public ArrayList<CashMask> getOutMarks() {
 		return outMarks;
 	}
-	public void setOutMarks(ArrayList<CashMark> outMarks) {
+	public void setOutMarks(ArrayList<CashMask> outMarks) {
 		this.outMarks = outMarks;
 	}
 
@@ -35,5 +36,13 @@ public class TxHas extends FcObject {
 
 	public void setRawTx(String rawTx) {
 		this.rawTx = rawTx;
+	}
+
+	public Integer getTxIndex() {
+		return txIndex;
+	}
+
+	public void setTxIndex(Integer txIndex) {
+		this.txIndex = txIndex;
 	}
 }

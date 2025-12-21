@@ -30,15 +30,8 @@ public class HttpUtils {
     public static final String CONTENT_TYPE = "Content-Type";
 
     public static String getApiNameFromUrl(String url) {
-        int lastSlashIndex = url.lastIndexOf('/');
-        if (lastSlashIndex == -1 || lastSlashIndex == url.length() - 1)return null;
-        String name = url.substring(lastSlashIndex + 1);
-
-        int firstQuestionIndex = name.indexOf('?');
-        if(firstQuestionIndex!=-1){
-            name = name.substring(0,firstQuestionIndex);
-        }
-        return name;
+        ApiUrl apiUrl = new ApiUrl(url);
+        return apiUrl.getName();
     }
 
     @Nullable
@@ -134,16 +127,31 @@ public class HttpUtils {
         map.put("p1","10");
         map.put("p2","200");
 
-        String url = ApiUrl.makeUrl("http://120.1.1.1/","/tail/1/","/put",map);
+        String url = new ApiUrl("http://120.1.1.1/","/sn1/put/v1/",map,null,null).getUrl();
         System.out.println(url);
     }
     public static boolean illegalUrl(String url){
+        if(url == null || url.trim().isEmpty()){
+            return true;
+        }
         try {
             URI uri = new URI(url);
             uri.toURL();
             return false;
         }catch (Exception e){
-            e.printStackTrace();
+            // 如果 URL 没有协议（如 127.0.0.1:8500），尝试添加 http:// 前缀
+            if(!url.startsWith("http://") && !url.startsWith("https://")){
+                try {
+                    String urlWithProtocol = "http://" + url;
+                    URI uri = new URI(urlWithProtocol);
+                    uri.toURL();
+                    return false;
+                }catch (Exception e2){
+                    // 即使添加了协议也失败，返回 true（非法）
+                    return true;
+                }
+            }
+            // 已经有协议但仍然失败，返回 true（非法）
             return true;
         }
     }

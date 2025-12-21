@@ -1,6 +1,6 @@
 package APIP17V1_Crypto;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import core.crypto.KeyTools;
 import data.fcData.ReplyBody;
@@ -15,7 +15,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 import config.Settings;
 
-@WebServlet(name = ApipApiNames.ADDRESSES, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.ADDRESSES)
+@WebServlet(name = ApipApiNames.ADDRESSES, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.ADDRESSES +"/"+ ApipApiNames.VER_1)
 public class Addresses extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -23,7 +23,7 @@ public class Addresses extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

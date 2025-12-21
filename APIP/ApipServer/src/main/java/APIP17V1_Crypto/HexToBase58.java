@@ -1,6 +1,6 @@
 package APIP17V1_Crypto;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import core.crypto.Base58;
 import data.fcData.ReplyBody;
@@ -17,7 +17,7 @@ import java.util.Map;
 
 import config.Settings;
 
-@WebServlet(name = ApipApiNames.HEX_TO_BASE_58, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.HEX_TO_BASE_58)
+@WebServlet(name = ApipApiNames.HEX_TO_BASE_58, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.HEX_TO_BASE_58 +"/"+ ApipApiNames.VER_1)
 public class HexToBase58 extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -25,7 +25,7 @@ public class HexToBase58 extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

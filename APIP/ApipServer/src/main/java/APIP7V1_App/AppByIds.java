@@ -1,6 +1,6 @@
 package APIP7V1_App;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.App;
 import initial.Initiator;
@@ -18,7 +18,7 @@ import static constants.FieldNames.ID;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.APP_BY_IDS, value = "/"+ ApipApiNames.SN_7+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.APP_BY_IDS)
+@WebServlet(name = ApipApiNames.APP_BY_IDS, value = "/"+ ApipApiNames.SN_7+"/"+ ApipApiNames.APP_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class AppByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -27,7 +27,7 @@ public class AppByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.APP, App.class, ID, request,response,authType);
     }
     @Override

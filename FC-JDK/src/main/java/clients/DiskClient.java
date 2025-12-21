@@ -6,7 +6,7 @@ import config.ApiProvider;
 import core.crypto.Encryptor;
 import handlers.DiskManager;
 import handlers.HatManager;
-import server.ApipApiNames;
+import server.ApipApi;
 import constants.Constants;
 import constants.CodeMessage;
 import core.crypto.Hash;
@@ -26,8 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static server.ApipApiNames.*;
+import static server.ApipApi.*;
 import static constants.FieldNames.*;
+import static server.DiskApiNames.CARVE;
 import static utils.ObjectUtils.objectToList;
 
 public class DiskClient extends FcClient {
@@ -48,19 +49,19 @@ public class DiskClient extends FcClient {
         Map<String,String> paramMap= new HashMap<>();
         paramMap.put(DID,did);
         fcdsl.setOther(paramMap);
-        Object data = requestFile(ApipApiNames.VERSION_1, DiskApiNames.GET, fcdsl, did, localPath, authType, sessionKey, method);
+        Object data = requestFile(ApipApi.VER_1, DiskApiNames.GET, fcdsl, did, localPath, authType, sessionKey, method);
         return (String)data;
     }
 
-    public String check(String did) {
+    public DiskItem check(String did) {
         Map<String,String> urlParamMap= new HashMap<>();
         urlParamMap.put(DID,did);
-        Object data  = requestJsonByUrlParams( ApipApiNames.VERSION_1, DiskApiNames.CHECK, urlParamMap,null);
-        return String.valueOf(data);
+        Object data  = requestJsonByUrlParams( ApipApi.VER_1, DiskApiNames.CHECK, urlParamMap,null);
+        return ObjectUtils.objectToClass(data,DiskItem.class);
     }
 
     public List<DiskItem> list(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(VERSION_1, DiskApiNames.LIST,fcdsl, authType,sessionKey, requestMethod);
+        Object data = requestJsonByFcdsl(VER_1, DiskApiNames.LIST,fcdsl, authType,sessionKey, requestMethod);
         return objectToList(data, DiskItem.class);
     }
     public List<DiskItem> list(RequestMethod method, AuthType authType, int size, String sort, String order, String[] last) {
@@ -91,11 +92,11 @@ public class DiskClient extends FcClient {
     }
 
     public String put(String fileName) {
-        Object data = requestJsonByFile(ApipApiNames.VERSION_1, DiskApiNames.PUT,null,sessionKey,fileName);
+        Object data = requestJsonByFile(ApipApi.VER_1, DiskApiNames.PUT,null,sessionKey,fileName);
         return replyPut(fileName, data);
     }
     public String carve(String fileName) {
-        Object data = requestJsonByFile( ApipApiNames.VERSION_1, Carve,null,sessionKey,fileName);
+        Object data = requestJsonByFile( ApipApi.VER_1, CARVE,null,sessionKey,fileName);
         return replyPut(fileName, data);
     }
 
@@ -143,7 +144,7 @@ public class DiskClient extends FcClient {
         // 2. Try getting data from diskClient
         try {
             String tempPath = System.getProperty("java.io.tmpdir");
-            String gotFileId = diskClient.get(RequestMethod.POST, AuthType.FC_SIGN_BODY, did, tempPath);
+            String gotFileId = diskClient.get(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, did, tempPath);
             if (gotFileId != null) {
                 byte[] data = Files.readAllBytes(Path.of(tempPath, gotFileId));
                 log.debug("Got data from diskClient with DID: {}", did);
@@ -171,7 +172,7 @@ public class DiskClient extends FcClient {
                 // Try diskClient with rawDid
                 try {
                     String tempPath = System.getProperty("java.io.tmpdir");
-                    String gotFileId = diskClient.get(RequestMethod.POST, AuthType.FC_SIGN_BODY, rawDid, tempPath);
+                    String gotFileId = diskClient.get(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, rawDid, tempPath);
                     if (gotFileId != null) {
                         byte[] data = Files.readAllBytes(Path.of(tempPath, gotFileId));
                         log.debug("Got data from diskClient using rawDid: {}", rawDid);
@@ -208,8 +209,7 @@ public class DiskClient extends FcClient {
             hat.setSize((long) dataBytes.length);
             hat.setBorn(System.currentTimeMillis());
             hat.setState(Hat.DataState.ACTIVE);
-            hat.setPubkeyB(diskClient.getApiAccount().getUserPubkey());
-            
+
             if (hatHandler != null) {
                 hatHandler.putHat(hat);
             }

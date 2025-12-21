@@ -27,7 +27,10 @@ public class Tx extends FcObject {
 	private Long fee;		//tx fee
 	
 	private Long cdd;
-	transient private String rawTx;
+	private String rawTx;
+
+	private ArrayList<CashMask> spentCashes;
+	private ArrayList<CashMask> issuedCashes;
 
 	//Static methods
 
@@ -192,4 +195,19 @@ public class Tx extends FcObject {
 		this.cdd = cdd;
 	}
 
+	public ArrayList<CashMask> getSpentCashes() {
+		return spentCashes;
+	}
+
+	public void setSpentCashes(ArrayList<CashMask> spentCashes) {
+		this.spentCashes = spentCashes;
+	}
+
+	public ArrayList<CashMask> getIssuedCashes() {
+		return issuedCashes;
+	}
+
+	public void setIssuedCashes(ArrayList<CashMask> issuedCashes) {
+		this.issuedCashes = issuedCashes;
+	}
 }

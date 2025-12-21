@@ -1,6 +1,6 @@
 package APIP9V1_Team;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Team;
 import initial.Initiator;
@@ -19,7 +19,7 @@ import config.Settings;
 import server.FcHttpRequestHandler;
 
 
-@WebServlet(name = ApipApiNames.TEAM_EX_MEMBERS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_EX_MEMBERS)
+@WebServlet(name = ApipApiNames.TEAM_EX_MEMBERS, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.TEAM_EX_MEMBERS +"/"+ ApipApiNames.VER_1)
 public class TeamExMembers extends HttpServlet {
     private final Settings settings;
     private final FcHttpRequestHandler fcHttpRequestHandler;
@@ -30,7 +30,7 @@ public class TeamExMembers extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request,response,authType,settings);
     }
     @Override

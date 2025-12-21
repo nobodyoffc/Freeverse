@@ -31,8 +31,27 @@ public class FcSession extends FcObject {
     private String keyCipher;
     private String userId;
     private AlgorithmId alg;
+    private Long birthTime;
+    private KeyState state;
     private transient byte[] keyBytes;
 
+    public FcSession() {
+    }
+
+    public FcSession(String sessionKeyHex, String fid, String pubkey) {
+        setKey(sessionKeyHex);
+        makeKeyBytes();
+        makeId();
+        setUserId(fid);
+        setPubkey(pubkey);
+        setBirthTime(System.currentTimeMillis());
+    }
+
+    enum KeyState {
+        PROPOSED,    // 已提议，等待对方确认
+        ACTIVE,      // 正在使用
+        DEPRECATED,  // 已废弃，但保留一段时间用于解密旧包
+    }
 
     // public static void deleteSession(String sessionName, String sid, Jedis jedis) {
     //     jedis.select(1);
@@ -167,8 +186,10 @@ public class FcSession extends FcObject {
         return IdNameUtils.makeKeyName(sessionKey);
     }
     public String makeId() {
-        if(keyBytes==null & key!=null)keyBytes=Hex.fromHex(key);
-        return IdNameUtils.makeKeyName(keyBytes);
+        if(keyBytes==null && key!=null)
+            keyBytes=Hex.fromHex(key);
+        this.id = IdNameUtils.makeKeyName(keyBytes);
+        return this.id;
     }
 
     public byte[] getKeyBytes() {
@@ -235,5 +256,21 @@ public class FcSession extends FcObject {
 
     public void setAlg(AlgorithmId alg) {
         this.alg = alg;
+    }
+
+    public Long getBirthTime() {
+        return birthTime;
+    }
+
+    public void setBirthTime(Long birthTime) {
+        this.birthTime = birthTime;
+    }
+
+    public KeyState getState() {
+        return state;
+    }
+
+    public void setState(KeyState state) {
+        this.state = state;
     }
 }

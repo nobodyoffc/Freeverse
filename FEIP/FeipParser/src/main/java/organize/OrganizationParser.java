@@ -1,6 +1,10 @@
 package organize;
 
-import data.fchData.Cid;
+import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.IndexResponse;
+import constants.OpNames;
+import data.fcData.News;
+import data.fchData.Freer;
 import data.feipData.*;
 import utils.EsUtils;
 import utils.EsUtils.MgetResult;
@@ -11,8 +15,13 @@ import com.google.gson.Gson;
 import constants.IndicesNames;
 import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
+import utils.StringUtils;
 
 import java.util.*;
+
+import static constants.OpNames.*;
+import static constants.Values.CREATED;
+import static constants.Values.UPDATED;
 
 public class OrganizationParser {
 
@@ -24,22 +33,38 @@ public class OrganizationParser {
 
 		try {
 			groupRaw = gson.fromJson(gson.toJson(feip.getData()), GroupOpData.class);
-			if(groupRaw==null)return null;
+			if(groupRaw==null){
+				System.out.println("Bad group data");
+				return null;
+			}
 		}catch(com.google.gson.JsonSyntaxException e) {
+			System.out.println("Bad group data");
 			return null;
 		}
 
 		GroupHistory groupHist = new GroupHistory();
 
-		if(groupRaw.getOp()==null)return null;
+		if(groupRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 		groupHist.setOp(groupRaw.getOp());
 
 		switch(groupRaw.getOp()) {
 
 			case "create":
-				if(groupRaw.getName()==null)return null;
-				if(groupRaw.getGid()!=null)return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+				if(groupRaw.getName()==null){
+					System.out.println("Name is null");
+					return null;
+				}
+				if(groupRaw.getGid()!=null){
+					System.out.println("GID is not null");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("CDD is less than required");
+					return null;
+				}
 				groupHist.setId(opre.getId());
 				groupHist.setGid(opre.getId());
 				groupHist.setHeight(opre.getHeight());
@@ -54,8 +79,14 @@ public class OrganizationParser {
 				break;
 
 			case "update":
-				if(groupRaw.getGid()==null) return null;
-				if(groupRaw.getName()==null) return null;
+				if(groupRaw.getGid()==null){
+					System.out.println("GID is null");
+					return null;
+				}
+				if(groupRaw.getName()==null){
+					System.out.println("Name is null");
+					return null;
+				}
 				groupHist.setGid(groupRaw.getGid());
 				groupHist.setId(opre.getId());
 				groupHist.setHeight(opre.getHeight());
@@ -70,8 +101,14 @@ public class OrganizationParser {
 				break;
 
 			case "join":
-				if(groupRaw.getGid()==null)return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) return null;
+				if(groupRaw.getGid()==null){
+					System.out.println("GID is null");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("CDD is less than required");
+					return null;
+				}
 				groupHist.setGid(groupRaw.getGid());
 
 				groupHist.setId(opre.getId());
@@ -82,7 +119,10 @@ public class OrganizationParser {
 				groupHist.setCdd(opre.getCdd());
 				break;
 			case "leave":
-				if(groupRaw.getGids()==null || groupRaw.getGids().isEmpty())return null;
+				if(groupRaw.getGids()==null || groupRaw.getGids().isEmpty()){
+					System.out.println("GIDs are null or empty");
+					return null;
+				}
 				groupHist.setGids(groupRaw.getGids());
 
 				groupHist.setId(opre.getId());
@@ -92,6 +132,7 @@ public class OrganizationParser {
 				groupHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return groupHist;
@@ -99,12 +140,14 @@ public class OrganizationParser {
 
 	public boolean parseGroup(ElasticsearchClient esClient, GroupHistory groupHist) throws Exception {
 
-		if(groupHist==null || groupHist.getOp()==null)return false;
-		boolean isValid = false;
+		if(groupHist==null || groupHist.getOp()==null){
+			System.out.println("Group history is null or OP is null");
+			return false;
+		}
 		Group group;
 
 		switch(groupHist.getOp()) {
-			case "create":
+			case CREATE:
 				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 				if(group==null) {
 					group = new Group();
@@ -131,29 +174,37 @@ public class OrganizationParser {
 
 					if(groupHist.getCdd()==null){
 						group.setCddToUpdate(1L);
-					}
-					else {
+					} else {
 						group.setCddToUpdate(groupHist.getCdd()+1);
 						if(group.gettCdd()==null)group.settCdd(groupHist.getCdd());
 						else group.settCdd(group.gettCdd()+groupHist.getCdd());
 					}
 
 					Group group1=group;
-					esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group1));
-					isValid = true;
+					IndexResponse result = esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group1));
+					System.out.println(result.result());
+					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
+						System.out.println("Failed to create group");
+						return false;
+					}
+
+					// Create News
+					News.createNews(esClient, groupHist.getId(), groupHist.getSigner(), CREATE, Feip.FeipProtocol.GROUP.getName(),
+							groupHist.getId(), groupHist.getName(), groupHist.getDesc(), groupHist.getHeight(), groupHist.getTime());
+					return true;
 				}else {
-					isValid = false;
+					System.out.println("Group is not found");
+					return false;
 				}
 
-				break;
 
 			case "join":
 
 				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 
 				if(group==null) {
-					isValid = false;
-					break;
+					System.out.println("Group is not found");
+					return false;
 				}
 				String [] activeMembers = new String[group.getMembers().length+1];
 
@@ -179,21 +230,24 @@ public class OrganizationParser {
 				}
 				Group group2 = group;
 
-				esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group2));
+				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group2));
+				System.out.println(result2.result());
 
-				isValid = true;
-				break;
+				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 
 			case "update":
 
 				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
 
 				if(group==null) {
-					isValid = false;
-					break;
+					System.out.println("Group is not found");
+					return false;
 				}
 
-				if(groupHist.getCdd()==null || groupHist.getCdd() < group.getCddToUpdate())return isValid;
+				if(groupHist.getCdd()==null || groupHist.getCdd() < group.getCddToUpdate()){
+					System.out.println("CDD is less than required");
+					return false;
+				}
 				group.setCddToUpdate(groupHist.getCdd()+1);
 
 				Long tCdd = 0L;
@@ -207,7 +261,10 @@ public class OrganizationParser {
 						break;
 					}
 				}
-				if(!found)return isValid;
+				if(!found){
+					System.out.println("Signer is not found in group");
+					return false;
+				}
 
 				group.setName(groupHist.getName());
 				group.setDesc(groupHist.getDesc());
@@ -227,16 +284,22 @@ public class OrganizationParser {
 
 				Group group3 = group;
 
-				esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group3));
-				isValid = true;
-				break;
+				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group3));
+				System.out.println(result1.result());
+				return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
 
 			case "leave":
 
-				if(groupHist.getGids()==null || groupHist.getGids().isEmpty())return isValid;
+				if(groupHist.getGids()==null || groupHist.getGids().isEmpty()){
+					System.out.println("GIDs are null or empty");
+					return false;
+				}
 
 				EsUtils.MgetResult<Group> result = EsUtils.getMultiByIdList(esClient, IndicesNames.GROUP, groupHist.getGids(), Group.class);
-				if(result==null||result.getResultList()==null||result.getResultList().isEmpty())return isValid;	
+				if(result==null||result.getResultList()==null||result.getResultList().isEmpty()){
+					System.out.println("Group list is empty");
+					return false;
+				}
 
 				BulkRequest.Builder br = new BulkRequest.Builder();
 				for(Group group1:result.getResultList()){
@@ -244,56 +307,64 @@ public class OrganizationParser {
 					String [] activeMembers1 = new String[group1.getMembers().length+1];
 
 					Set<String>memberSet1 = new HashSet<String>();
-	
+
 					boolean found1 =false;
 					for(String member:group1.getMembers()) {
 						if(!member.equals(groupHist.getSigner())) {
 							memberSet1.add(member);
 						}else found1=true;
 					}
-	
-					if(!found1)return isValid;
-	
+
+					if(!found1){
+						System.out.println("Signer is not found in group");
+						return false;
+					}
+
 					activeMembers1 = memberSet1.toArray(new String[0]);
 					group1.setMembers(activeMembers1);
 					group1.setMemberNum((long) activeMembers1.length);
-	
+
 					//TODO Important: If no one is in this group, delete the group and its history.
 					if(activeMembers1.length==0){
 						Group finalGroup = group1;
 						esClient.delete(d->d.index(IndicesNames.GROUP).id(finalGroup.getId()));
 						Group finalGroup1 = group1;
 						esClient.deleteByQuery(d->d.index(IndicesNames.GROUP_HISTORY).query(q->q.term(t->t.field("gid").value(finalGroup1.getId()))));
-						isValid = false;
-						return isValid;
+						System.out.println("Group and group history are deleted");
+						return false;
 					}
-	
+
 					group1.setLastTxId(groupHist.getId());
 					group1.setLastTime(groupHist.getTime());
 					group1.setLastHeight(groupHist.getHeight());
-	
+
 					if(groupHist.getCdd()!=null) {
 						if(group1.gettCdd()==null)group1.settCdd(groupHist.getCdd());
 						else group1.settCdd(group1.gettCdd() + groupHist.getCdd());
-						}
+					}
 
 					Group group4 = group1;
 					br.operations(op -> op
-						.index(idx -> idx
-							.index(IndicesNames.GROUP)
-							.id(group4.getId())
-							.document(group4)
-						)
+							.index(idx -> idx
+									.index(IndicesNames.GROUP)
+									.id(group4.getId())
+									.document(group4)
+							)
 					);
 				}
 
-				esClient.bulk(br.build());
-
-				isValid = true;
-				break;
+				BulkResponse result3 = esClient.bulk(br.build());
+				if(result3.errors()){
+					System.out.println("Failed");
+					return false;
+				}
+				else {
+					System.out.println("Done");
+					return true;
+				}
 
 		}
-		return isValid;
+		return false;
 	}
 
 	public TeamHistory makeTeam(OpReturn opre, Feip feip)  {
@@ -306,23 +377,42 @@ public class OrganizationParser {
 
 		try {
 			teamRaw = gson.fromJson(gson.toJson(feip.getData()), TeamOpData.class);
-			if(teamRaw==null)return null;
+			if(teamRaw==null){
+				System.out.println("Team data is null");
+				return null;
+			}
 		}catch(com.google.gson.JsonSyntaxException e) {
+			System.out.println("Bad team data");
 			return null;
 		}
 
 		TeamHistory teamHist = new TeamHistory();
 
-		if(teamRaw.getOp()==null)return null;
+		if(teamRaw.getOp()==null){
+			System.out.println("OP is null");
+			return null;
+		}
 		teamHist.setOp(teamRaw.getOp());
 
 		switch(teamRaw.getOp()) {
 
-			case "create":
-				if(teamRaw.getStdName()==null) return null;
-				if(teamRaw.getTid()!=null) return null;
-				if(teamRaw.getConsensusId()==null) return null;
-            	if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100) return null;
+			case CREATE:
+				if(teamRaw.getStdName()==null){
+					System.out.println("StdName is null");
+					return null;
+				}
+				if(teamRaw.getTid()!=null){
+					System.out.println("TID is not null");
+					return null;
+				}
+				if(teamRaw.getConsensusId()==null){
+					System.out.println("ConsensusId is null");
+					return null;
+				}
+				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("CDD is less than required");
+					return null;
+				}
 				teamHist.setId(opre.getId());
 				teamHist.setTid(opre.getId());
 				teamHist.setHeight(opre.getHeight());
@@ -340,7 +430,10 @@ public class OrganizationParser {
 				break;
 
 			case "disband", "leave":
-				if(teamRaw.getTids()==null)return null;
+				if(teamRaw.getTids()==null){
+					System.out.println("TIDs are null");
+					return null;
+				}
 				teamHist.setTids(teamRaw.getTids());
 
 				teamHist.setId(opre.getId());
@@ -350,9 +443,18 @@ public class OrganizationParser {
 				teamHist.setSigner(opre.getSigner());
 				break;
 			case "transfer":
-				if(teamRaw.getTid()==null)return null;
-				if(teamRaw.getTransferee() ==null)return null;
-				if(!teamRaw.getConfirm().equals("I transfer the team to the transferee."))return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(teamRaw.getTransferee() ==null){
+					System.out.println("Transferee is null");
+					return null;
+				}
+				if(!teamRaw.getConfirm().equals("I transfer the team to the transferee.")){
+					System.out.println("Confirm is not 'I transfer the team to the transferee.'");
+					return null;
+				}
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setTransferee(teamRaw.getTransferee());
 
@@ -363,8 +465,14 @@ public class OrganizationParser {
 				teamHist.setSigner(opre.getSigner());
 				break;
 			case "take over":
-				if(teamRaw.getTid()==null)return null;
-				if(!teamRaw.getConfirm().equals("I take over the team and agree with the team consensus."))return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(!teamRaw.getConfirm().equals("I take over the team and agree with the team consensus.")){
+					System.out.println("Confirm is not 'I take over the team and agree with the team consensus.'");
+					return null;
+				}
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
 
@@ -376,9 +484,18 @@ public class OrganizationParser {
 				break;
 
 			case "update":
-				if(teamRaw.getTid()==null) return null;
-				if(teamRaw.getStdName()==null) return null;
-				if(teamRaw.getConsensusId()==null) return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(teamRaw.getStdName()==null){
+					System.out.println("StdName is null");
+					return null;
+				}
+				if(teamRaw.getConsensusId()==null){
+					System.out.println("ConsensusId is null");
+					return null;
+				}
 
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setId(opre.getId());
@@ -396,8 +513,14 @@ public class OrganizationParser {
 
 				break;
 			case "agree consensus":
-				if(teamRaw.getTid()==null)return null;
-				if(!teamRaw.getConfirm().equals("I agree with the new consensus."))return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(!teamRaw.getConfirm().equals("I agree with the new consensus.")){
+					System.out.println("Confirm is not 'I agree with the new consensus.'");
+					return null;
+				}
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)
 					teamHist.setConsensusId(teamRaw.getConsensusId());
@@ -409,9 +532,18 @@ public class OrganizationParser {
 				teamHist.setSigner(opre.getSigner());
 				break;
 			case "invite", "withdraw invitation", "dismiss", "appoint", "cancel appointment":
-				if(teamRaw.getTid()==null)return null;
-				if(teamRaw.getList()==null)return null;
-				if(teamRaw.getList().length==0)return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(teamRaw.getList()==null){
+					System.out.println("List is null");
+					return null;
+				}
+				if(teamRaw.getList().length==0){
+					System.out.println("List is empty");
+					return null;
+				}
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setList(teamRaw.getList());
 
@@ -423,8 +555,14 @@ public class OrganizationParser {
 				break;
 
 			case "join":
-				if(teamRaw.getTid()==null)return null;
-				if(!teamRaw.getConfirm().equals("I join the team and agree with the team consensus."))return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(!teamRaw.getConfirm().equals("I join the team and agree with the team consensus.")){
+					System.out.println("Confirm is not 'I join the team and agree with the team consensus.'");
+					return null;
+				}
 				teamHist.setTid(teamRaw.getTid());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
 
@@ -436,9 +574,18 @@ public class OrganizationParser {
 				break;
 
 			case "rate":
-				if(teamRaw.getTid()==null)return null;
-				if(teamRaw.getRate()<0 ||teamRaw.getRate()>5)return null;
-            	if (opre.getCdd() < StartFEIP.CddRequired) return null;
+				if(teamRaw.getTid()==null){
+					System.out.println("TID is null");
+					return null;
+				}
+				if(teamRaw.getRate()<0 ||teamRaw.getRate()>5){
+					System.out.println("Rate is less than 0 or greater than 5");
+					return null;
+				}
+				if (opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("CDD is less than required");
+					return null;
+				}
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setRate(teamRaw.getRate());
 				teamHist.setCdd(opre.getCdd());
@@ -450,18 +597,21 @@ public class OrganizationParser {
 				teamHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return teamHist;
 	}
 
 	public boolean parseTeam(ElasticsearchClient esClient, TeamHistory teamHist) throws Exception {
-		if(teamHist==null || teamHist.getOp()==null)return false;
-		boolean isValid = false;
+		if(teamHist==null || teamHist.getOp()==null){
+			System.out.println("Team history is null or OP is null");
+			return false;
+		}
 		Team team;
 		boolean found = false;
 		switch(teamHist.getOp()) {
-			case "create":
+			case CREATE:
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 				if(team==null) {
 					team = new Team();
@@ -493,23 +643,32 @@ public class OrganizationParser {
 					team.setActive(true);
 
 					Team team1=team;
-					esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team1));
-					isValid = true;
-				}else {
-					isValid = false;
-				}
-				break;
+					IndexResponse result = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team1));
+					System.out.println(result.result());
+					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
+						System.out.println("Failed to create team");
+						return false;
+					}
 
-			case "disband":
+					// Create News
+					News.createNews(esClient, teamHist.getId(), teamHist.getSigner(), CREATE, Feip.FeipProtocol.TEAM.getName(),
+							teamHist.getId(), teamHist.getStdName(), teamHist.getDesc(), teamHist.getHeight(), teamHist.getTime());
+					return true;
+				}else {
+					System.out.println("Team is not found");
+					return false;
+				}
+
+			case DISBAND:
 				if(teamHist.getTids()==null||teamHist.getTids().isEmpty()) {
-					isValid = false;
-					break;
+					System.out.println("TIDs are null or empty");
+					return false;
 				}
 
 				EsUtils.MgetResult<Team> result = EsUtils.getMultiByIdList(esClient, IndicesNames.TEAM, teamHist.getTids(), Team.class);
 				if(result==null||result.getResultList()==null||result.getResultList().isEmpty()) {
-					isValid = false;
-					break;
+					System.out.println("Team list is empty");
+					return false;
 				}
 
 				if(result.getMissList()!=null && !result.getMissList().isEmpty()) {
@@ -531,41 +690,47 @@ public class OrganizationParser {
 
 					Team team2 = team1;
 					br.operations(op -> op
-						.index(idx -> idx
-							.index(IndicesNames.TEAM)
-							.id(team2.getId())
-							.document(team2)
-						)
+							.index(idx -> idx
+									.index(IndicesNames.TEAM)
+									.id(team2.getId())
+									.document(team2)
+							)
 					);
 				}
-				esClient.bulk(br.build());
-				isValid = true;
-				break;
+				BulkResponse result4 = esClient.bulk(br.build());
+				if(result4.errors())System.out.println("Failed");
+				else System.out.println("Done");
 
-			case "transfer":
+				// Create News
+				News.createNews(esClient, teamHist.getId(), teamHist.getSigner(), OpNames.DISBAND, Feip.FeipProtocol.TEAM.getName(),
+						null, null, StringUtils.listToString(teamHist.getTids()), teamHist.getHeight(), teamHist.getTime());
+
+				return true;
+
+			case TRANSFER:
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(! team.getOwner().equals(teamHist.getSigner())) {
-					Cid resultCid = EsUtils.getById(esClient, IndicesNames.CID, teamHist.getSigner(), Cid.class);
+					Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, teamHist.getSigner(), Freer.class);
 					if(resultCid.getMaster()!=null) {
 						if(! resultCid.getMaster().equals(teamHist.getSigner())) {
-							isValid = false;
-							break;
+							System.out.println("Signer is not the master");
+							return false;
 						}
 					}else {
-						isValid = false;
-						break;
+						System.out.println("Signer is not the master");
+						return false;
 					}
 				}
 
@@ -579,34 +744,41 @@ public class OrganizationParser {
 
 				Team team3 = team;
 
-				esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team3));
-				isValid = true;
+				IndexResponse result3 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team3));
+				System.out.println(result3.result());
+				if(!CREATED.equals(result3.result().jsonValue()) && !UPDATED.equals(result3.result().jsonValue())){
+					System.out.println("Failed to transfer team");
+					return false;
+				}
+				// Create News
+				News.createNews(esClient, teamHist.getId(), teamHist.getSigner(), OpNames.TRANSFER, Feip.FeipProtocol.TEAM.getName(),
+						teamHist.getTid(), teamHist.getTransferee(), null, teamHist.getHeight(), teamHist.getTime());
 
-				break;
+				return true;
 
-			case "take over":
+			case TAKE_OVER:
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(team.getTransferee()==null) {
-					isValid = false;
-					break;
+					System.out.println("Transferee is null");
+					return false;
 				}
 
 				if(teamHist.getConsensusId()!=null) {
 					if(!teamHist.getConsensusId().equals(team.getConsensusId())){
-						isValid = false;
-						break;
+						System.out.println("ConsensusId is not the same");
+						return false;
 					}
 				}
 
@@ -628,28 +800,35 @@ public class OrganizationParser {
 
 					Team team4 = team;
 
-					esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team4));
-					isValid = true;
-					break;
-				}
-				break;
+					IndexResponse result5 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team4));
+					System.out.println(result5.result());
+					if(!CREATED.equals(result5.result().jsonValue()) && !UPDATED.equals(result5.result().jsonValue())){
+						System.out.println("Failed to take over team");
+						return false;
+					}
+					// Create News
+					News.createNews(esClient, teamHist.getId(), teamHist.getSigner(), OpNames.TAKE_OVER, Feip.FeipProtocol.TEAM.getName(),
+							teamHist.getTid(), null, null, teamHist.getHeight(), teamHist.getTime());
 
-			case "update":
+					return true;
+				}
+
+			case UPDATE:
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(! team.getOwner().equals(teamHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Signer is not the owner");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				team.setStdName(teamHist.getStdName());
@@ -695,27 +874,27 @@ public class OrganizationParser {
 
 				Team team5 = team;
 
-				esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team5));
-				isValid = true;
-				break;
+				IndexResponse result5 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team5));
+				System.out.println(result5.result());
+				return CREATED.equals(result5.result().jsonValue()) || UPDATED.equals(result5.result().jsonValue());
 
 			case "agree consensus":
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(!teamHist.getConsensusId().equals(team.getConsensusId())){
-					isValid = false;
-					break;
+					System.out.println("ConsensusId is not the same");
+					return false;
 				}
 
 				found = false;
@@ -744,12 +923,12 @@ public class OrganizationParser {
 
 					Team team6 = team;
 
-					esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team6));
-					isValid = true;
-					break;
+					IndexResponse result6 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team6));
+					System.out.println(result6.result());
+					return CREATED.equals(result6.result().jsonValue()) || UPDATED.equals(result6.result().jsonValue());
 				}else {
-					isValid = false;
-					break;
+					System.out.println("Signer is not in the not agree members");
+					return false;
 				}
 
 			case "invite":
@@ -757,13 +936,13 @@ public class OrganizationParser {
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(team.getManagers()!=null) {
@@ -790,26 +969,25 @@ public class OrganizationParser {
 
 							Team team7 = team;
 
-							esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-							isValid = true;
-							break;
+							IndexResponse result7 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
+							System.out.println(result7.result());
+							return CREATED.equals(result7.result().jsonValue()) || UPDATED.equals(result7.result().jsonValue());
 						}
 					}
 				}
-				break;
 
 			case "withdraw invitation":
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive()) ){
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(team.getManagers()!=null) {
@@ -831,36 +1009,35 @@ public class OrganizationParser {
 
 							Team team7 = team;
 
-							esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-							isValid = true;
-							break;
+							IndexResponse result8 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
+							System.out.println(result8.result());
+							return CREATED.equals(result8.result().jsonValue()) || UPDATED.equals(result8.result().jsonValue());
 						}
 					}
 				}
-				break;
 
 			case "join":
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(team.getConsensusId()==null) {
-					isValid = false;
-					break;
+					System.out.println("ConsensusId is null");
+					return false;
 				}
 
 				if(!teamHist.getConsensusId().equals(team.getConsensusId())){
-					isValid = false;
-					break;
+					System.out.println("ConsensusId is not the same");
+					return false;
 				}
 				if(team.getInvitees()!=null) {
 					for(String invitee:team.getInvitees()) {
@@ -904,23 +1081,22 @@ public class OrganizationParser {
 
 							Team team7 = team;
 
-							esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-							isValid = true;
-							break;
+							IndexResponse result9 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
+							System.out.println(result9.result());
+							return CREATED.equals(result9.result().jsonValue()) || UPDATED.equals(result9.result().jsonValue());
 						}
 					}
 				}
-				break;
 
 			case "leave":
 				if(teamHist.getTids()==null||teamHist.getTids().isEmpty()) {
-					isValid = false;
-					break;
-				}	
+					System.out.println("TIDs are null or empty");
+					return false;
+				}
 				MgetResult<Team> result1 = EsUtils.getMultiByIdList(esClient,IndicesNames.TEAM, teamHist.getTids(), Team.class);
 				if(result1==null||result1.getResultList()==null||result1.getResultList().isEmpty()) {
-					isValid = false;
-					break;
+					System.out.println("Team list is empty");
+					return false;
 				}
 
 				if(result1.getMissList()!=null&&!result1.getMissList().isEmpty()) {
@@ -928,7 +1104,7 @@ public class OrganizationParser {
 				}
 
 				BulkRequest.Builder br1 = new BulkRequest.Builder();
-				
+
 				Iterator<Team> iterator = result1.getResultList().iterator();
 				while(iterator.hasNext()) {
 					team = iterator.next();
@@ -944,72 +1120,78 @@ public class OrganizationParser {
 					found = false;
 					Set<String> activeMemberSet = new HashSet<String>();
 					for(String activeMember:team.getMembers()) {
-					if(activeMember.equals(teamHist.getSigner())) {
-						found = true;
-					}else {
-						activeMemberSet.add(activeMember);
+						if(activeMember.equals(teamHist.getSigner())) {
+							found = true;
+						}else {
+							activeMemberSet.add(activeMember);
 						}
 					}
 					if(found) {
 						String[] activeMembers = activeMemberSet.toArray(new String[0]);
-					team.setMembers(activeMembers);
-					team.setMemberNum((long) activeMembers.length);
+						team.setMembers(activeMembers);
+						team.setMemberNum((long) activeMembers.length);
 
-					Set<String> exMemberSet = new HashSet<String>();
-					if(team.getExMembers()!=null) {
-						exMemberSet.addAll(Arrays.asList(team.getExMembers()));
-						exMemberSet.add(teamHist.getSigner());
-						String[] exMembers = exMemberSet.toArray(new String[0]);
-						team.setExMembers(exMembers);
-					}else{
-						team.setExMembers(new String[]{teamHist.getSigner()});
-					}
-
-					if(team.getManagers()!=null) {
-						Set<String> magagerSet = new HashSet<String>();
-						for(String magager:team.getManagers()) {
-							if(!magager.equals(teamHist.getSigner())) {
-								magagerSet.add(magager);
-							}
+						Set<String> exMemberSet = new HashSet<String>();
+						if(team.getExMembers()!=null) {
+							exMemberSet.addAll(Arrays.asList(team.getExMembers()));
+							exMemberSet.add(teamHist.getSigner());
+							String[] exMembers = exMemberSet.toArray(new String[0]);
+							team.setExMembers(exMembers);
+						}else{
+							team.setExMembers(new String[]{teamHist.getSigner()});
 						}
-						String[] managers = magagerSet.toArray(new String[0]);
-						team.setManagers(managers);
-					}
-					team.setLastTxId(teamHist.getId());
-					team.setLastTime(teamHist.getTime());
-					team.setLastHeight(teamHist.getHeight());
 
-					Team team7 = team;
+						if(team.getManagers()!=null) {
+							Set<String> magagerSet = new HashSet<String>();
+							for(String magager:team.getManagers()) {
+								if(!magager.equals(teamHist.getSigner())) {
+									magagerSet.add(magager);
+								}
+							}
+							String[] managers = magagerSet.toArray(new String[0]);
+							team.setManagers(managers);
+						}
+						team.setLastTxId(teamHist.getId());
+						team.setLastTime(teamHist.getTime());
+						team.setLastHeight(teamHist.getHeight());
 
-					br1.operations(op -> op
-							.index(idx -> idx
-								.index(IndicesNames.TEAM)
-								.id(team7.getId())
-								.document(team7)
-							)
+						Team team7 = team;
+
+						br1.operations(op -> op
+								.index(idx -> idx
+										.index(IndicesNames.TEAM)
+										.id(team7.getId())
+										.document(team7)
+								)
 						);
 					}
-					esClient.bulk(br1.build());	
-					isValid = true;
+					BulkResponse result6 = esClient.bulk(br1.build());
+					if(result6.errors()){
+						System.out.println("Failed");
+						return false;
+					}
+					else {
+						System.out.println("Done");
+						return true;
+					}
 				}
-				break;
 
 			case "dismiss":
 				if(teamHist.getTid()==null) {
-					isValid = false;
-					break;
+					System.out.println("TID is null");
+					return false;
 				}
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				for(String manager:team.getManagers()) {
@@ -1068,30 +1250,29 @@ public class OrganizationParser {
 
 						Team team7 = team;
 
-						esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-						isValid = true;
-						break;
+						IndexResponse result9 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
+						System.out.println(result9.result());
+						return CREATED.equals(result9.result().jsonValue()) || UPDATED.equals(result9.result().jsonValue());
 					}
 				}
-				break;
 
 			case "appoint":
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(! team.getOwner().equals(teamHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Signer is not the owner");
+					return false;
 				}
 
 
@@ -1122,26 +1303,26 @@ public class OrganizationParser {
 
 				Team team7 = team;
 
-				esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-				isValid = true;
-				break;
+				IndexResponse result10 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
+				System.out.println(result10.result());
+				return CREATED.equals(result10.result().jsonValue()) || UPDATED.equals(result10.result().jsonValue());
 
 			case "cancel appointment":
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(Boolean.FALSE.equals(team.isActive())) {
-					isValid = false;
-					break;
+					System.out.println("Team is not active");
+					return false;
 				}
 
 				if(! team.getOwner().equals(teamHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Signer is not the owner");
+					return false;
 				}
 
 				Set<String> activeMemberSet2 = new HashSet<String>();
@@ -1169,21 +1350,21 @@ public class OrganizationParser {
 
 				Team team8 = team;
 
-				esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team8));
-				isValid = true;
-				break;
+				IndexResponse result11 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team8));
+				System.out.println(result11.result());
+				return CREATED.equals(result11.result().jsonValue()) || UPDATED.equals(result11.result().jsonValue());
 
 			case "rate":
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
 				if(team==null) {
-					isValid = false;
-					break;
+					System.out.println("Team is not found");
+					return false;
 				}
 
 				if(team.getOwner().equals(teamHist.getSigner())) {
-					isValid = false;
-					break;
+					System.out.println("Signer is the owner");
+					return false;
 				}
 
 				if(teamHist.getCdd()!=null)
@@ -1205,13 +1386,13 @@ public class OrganizationParser {
 
 				Team team9 = team;
 
-				esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team9));
-				isValid = true;
-				break;
+				IndexResponse result12 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team9));
+				System.out.println(result12.result());
+				return CREATED.equals(result12.result().jsonValue()) || UPDATED.equals(result12.result().jsonValue());
 			default:
-				throw new IllegalStateException("Unexpected value: " + teamHist.getOp());
+				System.out.println("Invalid operation");
+				return false;
 		}
-		return isValid;
 	}
 
 }

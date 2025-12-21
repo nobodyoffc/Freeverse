@@ -1,7 +1,7 @@
 package APIP2V1_Blockchain;
 
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import server.FcHttpRequestHandler;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -16,7 +16,7 @@ import java.io.IOException;
 
 import static constants.Strings.HEIGHT;
 
-@WebServlet(name = ApipApiNames.BLOCK_BY_HEIGHTS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BLOCK_BY_HEIGHTS)
+@WebServlet(name = ApipApiNames.BLOCK_BY_HEIGHTS, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.BLOCK_BY_HEIGHTS +"/"+ ApipApiNames.VER_1)
 public class BlockByHeights extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
     public BlockByHeights() {
@@ -26,7 +26,7 @@ public class BlockByHeights extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         fcHttpRequestHandler.doBlockInfoRequest(true,HEIGHT, request, response, authType);
     }
 

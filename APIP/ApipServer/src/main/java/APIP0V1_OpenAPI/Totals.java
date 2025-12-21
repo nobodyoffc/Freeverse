@@ -4,8 +4,8 @@ import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
+import constants.ApipApiNames;
 import data.feipData.Service;
-import server.ApipApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@WebServlet(name = ApipApiNames.TOTALS, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOTALS)
+@WebServlet(name = ApipApiNames.TOTALS, value = "/"+ ApipApiNames.TOTALS+"/"+ ApipApiNames.VER_1 )
 public class Totals extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;
@@ -33,7 +33,7 @@ public class Totals extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

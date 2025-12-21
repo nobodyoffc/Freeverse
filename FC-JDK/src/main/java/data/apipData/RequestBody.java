@@ -13,6 +13,8 @@ public class RequestBody extends FcEntity {
     private String via;
     private Object data;
     private Fcdsl fcdsl;
+    private String symkey;
+
 
     public void renew() {
         this.nonce = Math.abs(BytesUtils.bytesToIntBE(BytesUtils.getRandomBytes(4)));
@@ -122,4 +124,13 @@ public class RequestBody extends FcEntity {
     public void setOp(Op op) {
         this.op = op;
     }
+
+    public String getSymkey() {
+        return symkey;
+    }
+
+    public void setSymkey(String symkey) {
+        this.symkey = symkey;
+    }
+
 }

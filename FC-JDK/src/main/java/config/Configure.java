@@ -1,5 +1,6 @@
 package config;
 
+import clients.DiskClient;
 import core.crypto.*;
 import data.fcData.CidInfo;
 import ui.Menu;
@@ -20,6 +21,7 @@ import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import com.google.gson.Gson;
+import fapi.client.FapiClient;
 import constants.FieldNames;
 import constants.IndicesNames;
 import data.fcData.AlgorithmId;
@@ -150,11 +152,11 @@ public class Configure {
         }
 
         if(freeApiListMap.get(Service.ServiceType.DISK)==null){
-            ArrayList<FreeApi> freeApipList = new ArrayList<>();
-            for(String url:ApipClient.freeAPIs){
-                freeApipList.add(new FreeApi(url,true, Service.ServiceType.DISK));
+            ArrayList<FreeApi> freeDiskList = new ArrayList<>();
+            for(String url: DiskClient.freeAPIs){
+                freeDiskList.add(new FreeApi(url,true, Service.ServiceType.DISK));
             }
-            freeApiListMap.put(Service.ServiceType.APIP,freeApipList);
+            freeApiListMap.put(Service.ServiceType.DISK,freeDiskList);
         }
 
         if(freeApiListMap.get(Service.ServiceType.ES)==null){
@@ -172,6 +174,13 @@ public class Configure {
             freeApipList.add(freeApiLocal1);
             freeApipList.add(freeApiLocal2);
             freeApiListMap.put(Service.ServiceType.REDIS,freeApipList);
+        }
+        if(freeApiListMap.get(Service.ServiceType.FAPI)==null){
+            ArrayList<FreeApi> freeFapiList = new ArrayList<>();
+            // host:port for FUDP bootstrap
+            FreeApi localFudp = new FreeApi("127.0.0.1:8500",true, Service.ServiceType.FAPI);
+            freeFapiList.add(localFudp);
+            freeApiListMap.put(Service.ServiceType.FAPI, freeFapiList);
         }
     }
 
@@ -258,7 +267,7 @@ public class Configure {
         return chooseOwnerService(owner,symkey, serviceType,esClient,null);
     }
 
-    public List<Service> getServiceListByOwnerAndTypeFromEs(String owner, @Nullable Service.ServiceType type, ElasticsearchClient esClient) {
+    public static List<Service> getServiceListByOwnerAndTypeFromEs(String owner, @Nullable Service.ServiceType type, ElasticsearchClient esClient) {
         List<Service> serviceList;
 
         SearchRequest.Builder sb = new SearchRequest.Builder();
@@ -284,6 +293,40 @@ public class Configure {
         }
         return serviceList;
     }
+
+    public static List<Service> getServiceListByDealerAndTypeFromEs(String dealer, @Nullable Service.ServiceType type, ElasticsearchClient esClient) {
+        List<Service> serviceList;
+
+        SearchRequest.Builder sb = new SearchRequest.Builder();
+        sb.index(IndicesNames.SERVICE);
+
+        BoolQuery.Builder bb = QueryBuilders.bool();
+        bb.must(b->b.term(t->t.field(DEALER).value(dealer)));
+        bb.must(m->m.term(t1->t1.field(CLOSED).value(false)));
+        if(type!=null)bb.must(m2->m2.match(m3->m3.field(TYPES).query(type.name())));
+        BoolQuery boolQuery = bb.build();
+        sb.query(q->q.bool(boolQuery));
+        sb.size(EsUtils.READ_MAX);
+        SearchResponse<Service> result;
+        try {
+            result = esClient.search(sb.build(), Service.class);
+        } catch (IOException e) {
+            return null;
+        }
+        serviceList = new ArrayList<>();
+        if(result==null || result.hits()==null)return null;
+        for(Hit<Service> hit : result.hits().hits()){
+            serviceList.add(hit.source());
+        }
+        return serviceList;
+    }
+
+
+    public static List<Service> getServiceListByDealerFromEs(String dealer, ElasticsearchClient esClient) {
+        return getServiceListByDealerAndTypeFromEs(dealer,null,esClient);
+    }
+
+
     @Nullable
     public Service chooseOwnerService(String owner, byte[] symkey, Service.ServiceType type, ElasticsearchClient esClient, ApipClient apipClient) {
         List<Service> serviceList;
@@ -296,6 +339,33 @@ public class Configure {
             System.out.println("No any service on chain of the owner.");
             return null;
         }
+
+        Service service;
+        if(symkey!=null)service = selectService(serviceList, symkey, apipClient==null?null:apipClient.getApiAccount());
+        else service = selectService(serviceList);
+        if(service==null) System.out.println("Failed to get the service.");
+
+        return service;
+    }
+
+    public Service chooseDealerService(String dealer, byte[] symkey, Service.ServiceType type, ElasticsearchClient esClient, ApipClient apipClient) {
+        List<Service> serviceList;
+
+        if(esClient==null && apipClient==null){
+            System.out.println("No client available to query services.");
+            return null;
+        }
+
+        if(esClient==null)
+            serviceList = apipClient.getServiceListByDealerAndType(dealer,type);
+        else serviceList = getServiceListByDealerAndTypeFromEs(dealer,type,esClient);
+
+        if(serviceList==null || serviceList.isEmpty()){
+            System.out.println("No any service on chain of the dealer.");
+            return null;
+        }
+
+        if(serviceList.size()==1)return serviceList.get(0);
 
         Service service;
         if(symkey!=null)service = selectService(serviceList, symkey, apipClient==null?null:apipClient.getApiAccount());
@@ -519,16 +589,15 @@ public class Configure {
     }
 
     public ApiProvider addApiProvider(Service.ServiceType serviceType, ApipClient apipClient) {
+        return addApiProvider(serviceType, apipClient, null);
+    }
+
+    public ApiProvider addApiProvider(Service.ServiceType serviceType, ApipClient apipClient, FapiClient fapiClient) {
         String ask;
         System.out.println("Adding a new API provider...");
-//        if(serviceType==null)
-//            ask = "Stop adding new provider?";
-//        else ask = "Stop adding new "+ serviceType +" provider?";
-
-//        if(askIfYes(br,ask))return null;
 
         ApiProvider apiProvider = new ApiProvider();
-        if(!apiProvider.makeApiProvider(br, serviceType,apipClient))return null;
+        if(!apiProvider.makeApiProvider(br, serviceType,apipClient, fapiClient))return null;
 
         if(apiProviderMap==null)apiProviderMap= new HashMap<>();
         apiProviderMap.put(apiProvider.getId(),apiProvider);
@@ -648,7 +717,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             setApiProviderMap(apiProviderMap);
         }
         if (apiProviderMap.size() == 0) {
-            System.out.println("No API provider yet.");
+            System.out.println("No API provider prepared yet.");
             return null;
         } else {
             if(apiProviderMap.size()==1){
@@ -680,7 +749,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             System.out.println("The API provider or its ID is null.");
             return null;
         }
-        System.out.println("Get account for "+apiProvider.getName()+"...");
+        System.out.println("Get account for API provider '"+apiProvider.getName()+"'...");
         ApiAccount apiAccount;
         if (apiAccountMap == null) setApiAccountMap(new HashMap<>());
 
@@ -831,10 +900,14 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
 //    }
 
     public ApiAccount getApiAccount(byte[] symkey, String userFid, Service.ServiceType serviceType, ApipClient apipClient) {
+        return getApiAccount(symkey, userFid, serviceType, apipClient, null);
+    }
+
+    public ApiAccount getApiAccount(byte[] symkey, String userFid, Service.ServiceType serviceType, ApipClient apipClient, FapiClient fapiClient) {
         ApiProvider apiProvider = chooseApiProvider(apiProviderMap, serviceType);
 
         while(apiProvider==null) {
-            apiProvider = addApiProvider(serviceType,apipClient);
+            apiProvider = addApiProvider(serviceType,apipClient, fapiClient);
             if(apiProvider!=null)break;
 
             if(!Inputer.askIfYes(br,"Failed to add API provider. Try again?"))return null;
@@ -847,8 +920,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
         }
 
         ApiAccount apiAccount;
-//        if(shareApiAccount)apiAccount = findAccountForTheProvider(apiProvider, userFid, symkey,apipClient);
-//        else
+
         apiAccount = getAccountForTheProvider(apiProvider, userFid, symkey,apipClient);
 
         if(apiAccount!=null && apiAccount.getClient()!=null) saveConfig();

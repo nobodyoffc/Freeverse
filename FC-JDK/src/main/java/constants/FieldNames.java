@@ -37,7 +37,7 @@ public class FieldNames {
 
     public static final String VALUE = "value";
     public static final String SUM = "sum";
-    public static final String SPEND_CASHES = "spendCashes";
+    public static final String SPENT_CASHES = "spentCashes";
     public static final String ISSUED_CASHES="issuedCashes";
     public static final String TX_VALUE_MAP = "txValueMap";
     public static final String NET = "net"; 
@@ -102,6 +102,7 @@ public class FieldNames {
 
     public static final String BLOCK_ID = "blockId";
     public static final String TX_INDEX = "txIndex";
+    public static final String TX_LIST = "txList";
     public static final String LEAK_HEIGHT = "leakHeight";
     public static final String LEAK_TX_INDEX = "leakTxIndex";
     public static final String START_TIME = "startTime";
@@ -117,6 +118,7 @@ public class FieldNames {
     public static final String AID = "aid";
     public static final String GID = "gid";
     public static final String TID = "tid";
+    public static final String TIDS = "tids";
     public static final String NID = "nid";
     public static final String ROOM_ID = "roomId";
 
@@ -172,7 +174,7 @@ public class FieldNames {
     public static final String ORDER_VIA = "orderVia";
     public static final String MIN_PAYMENT = "minPayment";
     public static final String SESSION_KEY = "sessionKey";
-    public static final String PRICE_PER_K_BYTES = "pricePerKBytes";
+    public static final String PRICE_PER_K_Bytes = "pricePerKBytes";
     public static final String PRICE_PER_K_BYTES_CARVE = "pricePerKBytesCarve";
     public static final String PRICE_PER_REQUEST = "pricePerRequest";
     public static final String BALANCE = "balance";
@@ -222,6 +224,12 @@ public class FieldNames {
     public static final String REPORT_IDS = "reportIds";
     public static final String ARTWORK_ID = "artworkId";
     public static final String ARTWORK_IDS = "artworkIds";
+    public static final String SOUND_ID = "soundId";
+    public static final String SOUND_IDS = "soundIds";
+    public static final String IMAGE_ID = "imageId";
+    public static final String IMAGE_IDS = "imageIds";
+    public static final String VIDEO_ID = "videoId";
+    public static final String VIDEO_IDS = "videoIds";
     public static final String AUTHORS = "authors";
     public static final String KEYWORDS = "keywords";
     public static final String SUMMARY = "summary";
@@ -237,6 +245,7 @@ public class FieldNames {
     public static final String CIPHER_RECI = "cipherReci";
 
     public static final String TEXT_ID = "textId";
+    public static final String TEXT_IDS = "textIds";
 
     public static final String OID = "oid";
 
@@ -295,6 +304,7 @@ public class FieldNames {
     public static final String CAPACITY = "capacity";
     public static final String LANG = "lang";
     public static final String LANGS = "langs";
+    public static final String FORMAT = "format";
 
     public static final String WATCH_ONLY = "watchOnly";
     public static final String ACCOUNT_DB = "account";
@@ -351,5 +361,8 @@ public class FieldNames {
     public static final String NIDS = "nids";
     public static final String GET_TIME = "getTime";
 
+    public static final String DEALER = "dealer";
+    public static final String DEALER_PUBKEY = "dealerPubkey";
+    public static final String ACTIVE = "active";
 }
 

@@ -235,7 +235,7 @@ class ServerUdpThread extends Thread {
     public Long updateBalance(long oldBalance, String api,long length, Jedis jedis, Long price) {
         if(userFid ==null)return null;
 
-        if(userFid.equals(talkParams.getDealer())){
+        if(userFid.equals(service.getDealer())){
             String minPay = talkParams.getMinPayment();
             balance= utils.FchUtils.coinToSatoshi(Double.parseDouble(minPay));
             return balance;
@@ -277,7 +277,7 @@ class ServerUdpThread extends Thread {
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
             CryptoDataByte result = encryptor.encryptByAsyTwoWay(sessionKey, waiterPrikey,Hex.fromHex(userPubkey));
             if(result==null || result.getCode()!=0)return false;
-            replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code0Success, result.toJson(), null, nonce, false);
+            replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code0Success, result.toJson(), null, nonce, false);
 
             return true;
         }
@@ -297,24 +297,24 @@ class ServerUdpThread extends Thread {
                 Map<String, String> dataMap = new HashMap<>();
                 dataMap.put("userFid", userFid);
                 dataMap.put("pubkey", Hex.toHex(cryptoDataByte.getPubkeyA()));
-                replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The pubkey is not of the user FID.", nonce, false);
+                replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The pubkey is not of the user FID.", nonce, false);
             } else {
                 if (requestBody.getVia() != null) via = requestBody.getVia();
                 if (isBadBalanceTcp(jedis, service.getId(), userFid)) {
                     String otherError = "Send at lest " + talkParams.getMinPayment() + " F to " + talkParams.getMinPayment() + " to buy the service #" + service.getId() + ".";
                     String data = null;
-                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, data, otherError, nonce, false);
+                    replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, data, otherError, nonce, false);
                 } else if (!service.getId().equals(requestBody.getSid())) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("Signed SID:", requestBody.getSid());
                     dataMap.put("Requested SID:", service.getId());
-                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
+                    replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError, JsonUtils.toJson(dataMap), "The signed SID is not the requested SID.", nonce, false);
                 } else if (isBadNonce(requestBody.getNonce(), windowTime, jedis)) {
-                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1007UsedNonce, null, null, nonce, false);
+                    replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1007UsedNonce, null, null, nonce, false);
                 } else if (NonceManager.isBadTime(requestBody.getTime(), windowTime)) {
                     Map<String, String> dataMap = new HashMap<>();
                     dataMap.put("windowTime", String.valueOf(windowTime));
-                    replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1006RequestTimeExpired, JsonUtils.toJson(dataMap), null, nonce, false);
+                    replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1006RequestTimeExpired, JsonUtils.toJson(dataMap), null, nonce, false);
                 } else {
                     return requestBody;
                 }
@@ -325,7 +325,7 @@ class ServerUdpThread extends Thread {
 
     public boolean isBadBalanceTcp(Jedis jedis, String sid, String fid) {
         long balance = RedisUtils.readHashLong(jedis, addSidBriefToName(sid, BALANCE), fid);
-        String priceStr = talkParams.getPricePerKBytes();
+        String priceStr = talkParams.getPricePerKB();
         long price = FchUtils.coinStrToSatoshi(priceStr);
         return balance<price;
     }
@@ -338,7 +338,7 @@ class ServerUdpThread extends Thread {
                 cryptoDataByte.setPrikeyB(waiterPrikey);
             case Symkey -> cryptoDataByte.setSymkey(sessionKey);
             default -> {
-                replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError,null,"Failed to decrypt type:"+cryptoDataByte.getType(), nonce, false);
+                replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError,null,"Failed to decrypt type:"+cryptoDataByte.getType(), nonce, false);
                 return null;
             }
         }
@@ -346,7 +346,7 @@ class ServerUdpThread extends Thread {
         decryptor.decryptByAsyKey(cryptoDataByte);
 
         if(cryptoDataByte.getCode()!=0){
-            replyEncrypted(talkParams.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError,null,"Failed to decrypt request.", nonce, false);
+            replyEncrypted(service.getDealer(), TalkUnit.IdType.FID, userFid, osw, CodeMessage.Code1020OtherError,null,"Failed to decrypt request.", nonce, false);
             return null;
         }
         return cryptoDataByte;

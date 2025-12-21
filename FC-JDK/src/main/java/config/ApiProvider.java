@@ -2,13 +2,18 @@ package config;
 
 
 import clients.FcClient;
-import server.ApipApiNames;
+import constants.Values;
+import server.ApipApi;
 import constants.Strings;
+import constants.FieldNames;
+import constants.IndicesNames;
+import data.apipData.Fcdsl;
 import data.fcData.ReplyBody;
 import data.feipData.serviceParams.ApipParams;
 import data.feipData.serviceParams.DiskParams;
 import data.feipData.serviceParams.Params;
 import clients.ApipClient;
+import fapi.client.FapiClient;
 import data.feipData.Service;
 import ui.Inputer;
 import utils.JsonUtils;
@@ -22,6 +27,7 @@ import server.FreeApi;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import static ui.Inputer.askIfYes;
 import static ui.Inputer.promptAndUpdate;
@@ -43,6 +49,7 @@ public class ApiProvider {
     private String[] ticks;
     private transient Service service;
     private transient Params apiParams;
+    private String dealer;
     private String dealerPubkey;
 //    private transient List<FreeApi> freeApiList;
 
@@ -51,10 +58,18 @@ public class ApiProvider {
         if(service==null)return false;
         this.id =service.getId();
         this.name = service.getStdName();
-        Params params = Params.getParamsFromService(service, tClass);
+        Params params  = Params.getParamsFromService(service, tClass);
         if(params==null) return false;
-        this.apiUrl=params.getUrlHead();
+        String urlHead = params.getUrlHead();
+        if(urlHead!=null && !urlHead.isBlank()){
+            this.apiUrl = urlHead;
+        }else if(this.apiUrl==null){
+            this.apiUrl= "http://127.0.0.1:8081/APIP";
+        }
         this.owner=service.getOwner();
+        this.dealer = service.getDealer();
+        this.dealerPubkey = service.getDealerPubkey();
+
         for(String type : service.getTypes()){
             try{
                 this.type= Service.ServiceType.valueOf(type.toUpperCase());
@@ -63,8 +78,14 @@ public class ApiProvider {
                 log.error("Failed to get the type of the service "+service.getStdName()+" : "+type);
             }
         }
-        if(service.getUrls().length>0)this.orgUrl=service.getUrls()[0];
-        if(service.getProtocols()!=null && service.getProtocols().length>0)this.protocols=service.getProtocols();
+        if(service.getUrls().length>0)
+            this.orgUrl=service.getUrls()[0];
+        if(service.getProtocols()!=null && service.getProtocols().length>0)
+            this.protocols=service.getProtocols();
+
+        if(params.getCurrency() != null)
+            setTicks(new String[]{params.getCurrency()});
+
         this.apiParams=Params.getParamsFromService(service,tClass);
         this.service=service;
         return true;
@@ -133,7 +154,7 @@ public class ApiProvider {
         }
         ReplyBody replier;
         try {
-            replier = FcClient.getService(apiUrl, ApipApiNames.VERSION_1, ApipParams.class);//OpenAPIs.getService(apiUrl);
+            replier = FcClient.getService(apiUrl, ApipApi.VER_1, ApipParams.class);//OpenAPIs.getService(apiUrl);
         }catch (Exception ignore) {
             return false;
         }
@@ -148,11 +169,13 @@ public class ApiProvider {
         owner = service.getOwner();
         protocols = service.getProtocols();
         ticks = new String[]{"core/fch"};
+        dealerPubkey = service.getDealerPubkey();
+        dealer = service.getDealer();
         return true;
     }
 
 
-    public boolean makeApiProvider(BufferedReader br, Service.ServiceType serviceType, @Nullable ApipClient apipClient) {
+    public boolean makeApiProvider(BufferedReader br, Service.ServiceType serviceType, @Nullable ApipClient apipClient, @Nullable FapiClient fapiClient) {
         try  {
             if(serviceType ==null)serviceType = inputType(br);
             else type = serviceType;
@@ -180,11 +203,11 @@ public class ApiProvider {
                     name=id;
                 }
                 case DISK, TALK -> {
-                    if(apipClient==null){
-                        System.out.println("Can't add such provider because the APIP client is null.");
+                    List<Service> serviceList = fetchServicesByType(serviceType, fapiClient, apipClient);
+                    if(serviceList==null || serviceList.isEmpty()){
+                        System.out.println("No "+serviceType+" service available.");
                         return false;
                     }
-                    List<Service> serviceList = apipClient.getServiceListByType(serviceType.name());
                     Service service = Configure.selectService(serviceList);
                     Class<? extends Params> tClass = switch (type){
                         case DISK -> DiskParams.class;
@@ -194,9 +217,23 @@ public class ApiProvider {
                     boolean done = fromFcService(service, tClass);
                     if(!done) System.out.println("Failed to make provider from on-chain service information.");
                 }
+                case FAPI -> {
+                    List<Service> serviceList = fetchServicesByType(serviceType, fapiClient, apipClient);
+                    Service service = Configure.selectService(serviceList);
+                    if(service==null){
+                        System.out.println("No FAPI service available.");
+                        return false;
+                    }
+                    boolean done = fromFcService(service, Params.class);
+                    if(!done) System.out.println("Failed to make provider from on-chain service information.");
+                }
                 default -> {
                     inputSid(br);
                     inputApiURL(br, null);
+                    Service service = fetchServiceById(this.id, fapiClient, apipClient);
+                    if(service!=null){
+                        fromFcService(service, Params.class);
+                    }
                     inputOrgUrl(br);
                     inputDocUrl(br);
                     inputOwner(br);
@@ -234,6 +271,33 @@ public class ApiProvider {
             }
             System.out.println("Sid is necessary. Input again.");
         }
+    }
+
+    private List<Service> fetchServicesByType(Service.ServiceType serviceType, @Nullable FapiClient fapiClient, @Nullable ApipClient apipClient){
+        if(fapiClient!=null){
+            Fcdsl fcdsl = new Fcdsl();
+            fcdsl.setIndex(IndicesNames.SERVICE);
+            fcdsl.addNewQuery().addNewMatch().addNewFields(FieldNames.TYPES).addNewValue(serviceType.name());
+            fcdsl.addNewExcept().addNewTerms().addNewFields(FieldNames.ACTIVE).addNewValues(Values.FALSE);
+            List<Service> services = fapiClient.entitySearch(IndicesNames.SERVICE, fcdsl, Service.class);
+            if(services!=null && !services.isEmpty())return services;
+        }
+        if(apipClient!=null){
+            return apipClient.getServiceListByType(serviceType.name());
+        }
+        return null;
+    }
+
+    private Service fetchServiceById(@Nullable String sid, @Nullable FapiClient fapiClient, @Nullable ApipClient apipClient){
+        if(sid==null)return null;
+        if(fapiClient!=null){
+            Map<String, Service> result = fapiClient.entityByIds(IndicesNames.SERVICE, Service.class, sid);
+            if(result!=null && result.containsKey(sid))return result.get(sid);
+        }
+        if(apipClient!=null){
+            return apipClient.serviceById(sid);
+        }
+        return null;
     }
 
     private Service.ServiceType inputType(BufferedReader br) throws IOException {
@@ -288,7 +352,7 @@ public class ApiProvider {
                         apiUrl = Inputer.inputString(br, "Input the urlHead of the API service:");
                     }
                     if(apiUrl==null)return;
-                    ReplyBody replier = ApipClient.getService(apiUrl, ApipApiNames.VERSION_1, ApipParams.class);//OpenAPIs.getService(apiUrl);
+                    ReplyBody replier = ApipClient.getService(apiUrl, ApipApi.VER_1, ApipParams.class);//OpenAPIs.getService(apiUrl);
 
                     if(replier==null||replier.getData()==null)return;
                     service = (Service) replier.getData();
@@ -417,6 +481,14 @@ public class ApiProvider {
 
     public String getDealerPubkey() {
         return dealerPubkey;
+    }
+
+    public String getDealer() {
+        return dealer;
+    }
+
+    public void setDealer(String dealer) {
+        this.dealer = dealer;
     }
 
     public void setDealerPubkey(String dealerPubkey) {

@@ -11,6 +11,7 @@ public class RepuHist extends FcObject {
 	private String rater;
 	private Long reputation;
 	private Long hot;
+	private String rate;
 	private String cause;
 	public Long getHeight() {
 		return height;
@@ -61,4 +62,11 @@ public class RepuHist extends FcObject {
 		this.cause = cause;
 	}
 
+	public String getRate() {
+		return rate;
+	}
+
+	public void setRate(String rate) {
+		this.rate = rate;
+	}
 }

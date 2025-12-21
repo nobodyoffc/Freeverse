@@ -2,8 +2,8 @@
 package APIP16V1_Token;
 
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 
 import javax.servlet.ServletException;
@@ -22,7 +22,7 @@ import config.Settings;
 import static constants.FieldNames.*;
 
 
-@WebServlet(name = ApipApiNames.TOKEN_HOLDER_SEARCH, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOKEN_HOLDER_SEARCH)
+@WebServlet(name = ApipApiNames.TOKEN_HOLDER_SEARCH, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.TOKEN_HOLDER_SEARCH +"/"+ ApipApiNames.VER_1)
 public class TokenHolderSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -32,7 +32,7 @@ public class TokenHolderSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN_HOLDER, TokenHolder.class,defaultSort, request,response,authType);
     }

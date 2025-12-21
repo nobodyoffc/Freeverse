@@ -1,5 +1,6 @@
 package organize;
 
+import constants.OpNames;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
@@ -13,6 +14,8 @@ import utils.JsonUtils;
 
 import java.io.IOException;
 import java.util.*;
+
+import static constants.FieldNames.*;
 
 public class OrganizationRollbacker {
 
@@ -39,7 +42,7 @@ public class OrganizationRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.GROUP_HISTORY,histIdList);
 		
-		List<GroupHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.GROUP_HISTORY,"gid",itemIdList, GroupHistory.class);
+		List<GroupHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.GROUP_HISTORY,GID, GIDS, itemIdList, GroupHistory.class);
 		
 		reparseGroup(esClient,reparseHistList);
 		
@@ -60,10 +63,36 @@ public class OrganizationRollbacker {
 		for(Hit<GroupHistory> hit: resultSearch.hits().hits()) {
 			
 			GroupHistory item = hit.source();
-			if(item.getOp().equals("create")) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getGid());
+			if(item==null){
+				System.out.println("Group hist is null");
+				continue;
+			}
+			String op = item.getOp();
+			switch (op) {
+				case OpNames.CREATE -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+
+				case OpNames.LEAVE -> {
+					if(item.getGids()==null || item.getGids().isEmpty()){
+						continue;
+					}
+					for(String gid: item.getGids()){
+						if(gid==null){
+							continue;
+						}
+						itemSet.add(gid);
+					}
+				}
+
+				default -> {
+					if(item.getGid()!=null){
+						itemSet.add(item.getGid());
+					}
+				}
 			}
 			histList.add(hit.id());
 		}
@@ -99,7 +128,7 @@ public class OrganizationRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.TEAM_HISTORY,histIdList);
 
-		List<TeamHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEAM_HISTORY,"tid",itemIdList, TeamHistory.class);
+		List<TeamHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEAM_HISTORY,TID,TIDS , itemIdList, TeamHistory.class);
 		
 		reparseTeam(esClient,reparseHistList);
 		
@@ -120,10 +149,22 @@ public class OrganizationRollbacker {
 		for(Hit<TeamHistory> hit: resultSearch.hits().hits()) {
 			
 			TeamHistory item = hit.source();
-			if(item.getOp().equals("create")) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getTid());
+			if(item==null || item.getOp()==null){
+				continue;
+			}
+			String op = item.getOp();
+			switch (op) {
+				case OpNames.CREATE -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				default -> {
+					if(item.getTid()!=null){
+						itemSet.add(item.getTid());
+					}
+				}
 			}
 			histList.add(hit.id());
 		}

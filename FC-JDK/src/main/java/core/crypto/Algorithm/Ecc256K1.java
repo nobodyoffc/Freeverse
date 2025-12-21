@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Arrays;
 
 public class Ecc256K1 {
+
     public static byte[] getSharedSecret(byte[] priKeyBytes, byte[] pubKeyBytes) {
         ECPrivateKeyParameters priKey = KeyTools.prikeyFromBytes(priKeyBytes);
         ECPublicKeyParameters pubKey = KeyTools.pubkeyFromBytes(pubKeyBytes);
@@ -17,6 +18,7 @@ public class Ecc256K1 {
         agreement.init(priKey);
         return agreement.calculateAgreement(pubKey).toByteArray();
     }
+
     @NotNull
     public static byte[] sharedSecretToSymkey(byte[] sharedSecret, byte[] nonce) {
         byte[] symkey;

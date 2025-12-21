@@ -1,27 +1,28 @@
 package parser;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 
+import data.fchData.Cash;
 import data.fchData.*;
 
 public class ReadyBlock {
-	
-	private BlockMark blockMark;
+
+	private BlockMask blockMask;
 	private Block block;
-	private BlockHas blockHas;
-	private ArrayList<Tx> txList;
-	private ArrayList<TxHas> txHasList;
-	private ArrayList<Cash> inList;
-	private ArrayList<Cash> outList;
-	private ArrayList<OpReturn> opReturnList;
-	private ArrayList<Cid> addrList;
-	private ArrayList<Cash> outWriteList;
+	private LinkedHashMap<String, Tx> txLinkedMap;
+	private LinkedHashMap<String, Cash> inMap;
+	private LinkedHashMap<String, Cash> outMap;
+	private LinkedHashMap<String, OpReturn> opReturnMap;
+	private LinkedHashMap<String, Freer> addrMap;
+	private LinkedHashMap<String, Cash> outWriteMap;
+	private LinkedHashMap<String,P2SH> p2SHMap;
+	private LinkedHashMap<String,Multisig> multisigMap;
 	
-	public BlockMark getBlockMark() {
-		return blockMark;
+	public BlockMask getBlockMark() {
+		return blockMask;
 	}
-	public void setBlockMark(BlockMark blockMark) {
-		this.blockMark = blockMark;
+	public void setBlockMark(BlockMask blockMask) {
+		this.blockMask = blockMask;
 	}
 	public Block getBlock() {
 		return block;
@@ -29,54 +30,59 @@ public class ReadyBlock {
 	public void setBlock(Block block) {
 		this.block = block;
 	}
-	public BlockHas getBlockHas() {
-		return blockHas;
+	public LinkedHashMap<String, Tx> getTxLinkedMap() {
+		return txLinkedMap;
 	}
-	public void setBlockHas(BlockHas blockHas) {
-		this.blockHas = blockHas;
+	public void setTxLinkedMap(LinkedHashMap<String, Tx> txLinkedMap) {
+		this.txLinkedMap = txLinkedMap;
 	}
-	public ArrayList<Tx> getTxList() {
-		return txList;
-	}
-	public void setTxList(ArrayList<Tx> txList) {
-		this.txList = txList;
-	}
-	public ArrayList<TxHas> getTxHasList() {
-		return txHasList;
-	}
-	public void setTxHasList(ArrayList<TxHas> txHasList) {
-		this.txHasList = txHasList;
-	}
-	public ArrayList<Cash> getInList() {
-		return inList;
-	}
-	public void setInList(ArrayList<Cash> inList) {
-		this.inList = inList;
-	}
-	public ArrayList<Cash> getOutList() {
-		return outList;
-	}
-	public void setOutList(ArrayList<Cash> outList) {
-		this.outList = outList;
-	}
-	public ArrayList<OpReturn> getOpReturnList() {
-		return opReturnList;
-	}
-	public void setOpReturnList(ArrayList<OpReturn> opReturnList) {
-		this.opReturnList = opReturnList;
-	}
-	public ArrayList<Cid> getAddrList() {
-		return addrList;
-	}
-	public void setAddrList(ArrayList<Cid> addrList) {
-		this.addrList = addrList;
-	}
-	public ArrayList<Cash> getOutWriteList() {
-		return outWriteList;
-	}
-	public void setOutWriteList(ArrayList<Cash> outWriteList) {
-		this.outWriteList = outWriteList;
-	}
-	
 
+	public LinkedHashMap<String, Cash> getInMap() {
+		return inMap;
+	}
+	public void setInMap(LinkedHashMap<String, Cash> inMap) {
+		this.inMap = inMap;
+	}
+	public LinkedHashMap<String, Cash> getOutMap() {
+		return outMap;
+	}
+	public void setOutMap(LinkedHashMap<String, Cash> outMap) {
+		this.outMap = outMap;
+	}
+	public LinkedHashMap<String, OpReturn> getOpReturnMap() {
+		return opReturnMap;
+	}
+	public void setOpReturnMap(LinkedHashMap<String, OpReturn> opReturnMap) {
+		this.opReturnMap = opReturnMap;
+	}
+	public LinkedHashMap<String, Freer> getAddrMap() {
+		return addrMap;
+	}
+	public void setAddrMap(LinkedHashMap<String, Freer> addrMap) {
+		this.addrMap = addrMap;
+	}
+	public LinkedHashMap<String, Cash> getOutWriteMap() {
+		return outWriteMap;
+	}
+	public void setOutWriteMap(LinkedHashMap<String, Cash> outWriteMap) {
+		this.outWriteMap = outWriteMap;
+	}
+
+	public LinkedHashMap<String, P2SH> getP2SHMap() {
+		if(p2SHMap==null)p2SHMap=new LinkedHashMap<>();
+		return p2SHMap;
+	}
+
+	public void setP2SHMap(LinkedHashMap<String, P2SH> p2SHMap) {
+		this.p2SHMap = p2SHMap;
+	}
+
+	public LinkedHashMap<String, Multisig> getMultisigMap() {
+		if(multisigMap==null)multisigMap= new LinkedHashMap<>();
+		return multisigMap;
+	}
+
+	public void setMultisigMap(LinkedHashMap<String, Multisig> multisigMap) {
+		this.multisigMap = multisigMap;
+	}
 }

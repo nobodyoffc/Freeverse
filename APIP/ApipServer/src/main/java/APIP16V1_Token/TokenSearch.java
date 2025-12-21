@@ -3,7 +3,7 @@ package APIP16V1_Token;
 
 
 import data.apipData.Sort;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 
 import javax.servlet.ServletException;
@@ -23,7 +23,7 @@ import static constants.FieldNames.ID;
 import static constants.FieldNames.LAST_HEIGHT;
 
 
-@WebServlet(name = ApipApiNames.TOKEN_SEARCH, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOKEN_SEARCH)
+@WebServlet(name = ApipApiNames.TOKEN_SEARCH, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.TOKEN_SEARCH +"/"+ ApipApiNames.VER_1)
 public class TokenSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -33,7 +33,7 @@ public class TokenSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN, Token.class,defaultSort, request,response,authType);
     }

@@ -3,7 +3,7 @@ package APIP18V1_Wallet;
 import config.Settings;
 import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import initial.Initiator;
 import server.HttpRequestChecker;
@@ -19,7 +19,7 @@ import java.util.Map;
 import static constants.FieldNames.RAW_TX;
 
 
-@WebServlet(name = ApipApiNames.BROADCAST_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BROADCAST_TX)
+@WebServlet(name = ApipApiNames.BROADCAST_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.BROADCAST_TX +"/"+ ApipApiNames.VER_1)
 public class BroadcastTx extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -27,7 +27,7 @@ public class BroadcastTx extends HttpServlet {
         doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 

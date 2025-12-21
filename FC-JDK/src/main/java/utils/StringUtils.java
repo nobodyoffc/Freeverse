@@ -223,4 +223,24 @@ public class StringUtils {
         return str.matches("^[a-z0-9]+$");
     }
 
+    /**
+     * Removes literal escape sequences (e.g. "\n") and the actual control characters
+     * they represent from the provided string.
+     *
+     * @param input string that may contain escape sequences
+     * @return string without escape sequences; returns null when input is null
+     */
+    public static String removeEscapeSequences(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        String sanitized = input;
+        String[] literalSequences = {"\\n", "\\r", "\\t", "\\f", "\\b", "\\\"", "\\'", "\\\\"};
+        for (String sequence : literalSequences) {
+            sanitized = sanitized.replace(sequence, "");
+        }
+
+        return sanitized.replaceAll("[\\n\\r\\t\\f\\b]+", "");
+    }
 }

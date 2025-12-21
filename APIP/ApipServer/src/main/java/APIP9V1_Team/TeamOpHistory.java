@@ -1,7 +1,7 @@
 package APIP9V1_Team;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.TeamHistory;
 import initial.Initiator;
@@ -23,7 +23,7 @@ import static constants.Strings.HEIGHT;
 import static constants.Strings.OP;
 
 
-@WebServlet(name = ApipApiNames.TEAM_OP_HISTORY, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TEAM_OP_HISTORY)
+@WebServlet(name = ApipApiNames.TEAM_OP_HISTORY, value = "/"+ ApipApiNames.SN_9+"/"+ ApipApiNames.TEAM_OP_HISTORY +"/"+ ApipApiNames.VER_1)
 
 public class TeamOpHistory extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
@@ -34,7 +34,7 @@ public class TeamOpHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.TEAM_HISTORY, TeamHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);
     }

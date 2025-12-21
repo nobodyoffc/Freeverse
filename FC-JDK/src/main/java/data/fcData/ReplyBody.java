@@ -2,12 +2,16 @@ package data.fcData;
 
 import config.Settings;
 import constants.CodeMessage;
+import core.crypto.CryptoDataByte;
+import core.crypto.Encryptor;
 import data.fchData.Block;
 import handlers.AccountManager;
 import handlers.Manager;
 import handlers.SessionManager;
 import server.HttpRequestChecker;
 import utils.FchUtils;
+import utils.Hex;
+import utils.http.AuthType;
 
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -26,6 +30,8 @@ public class ReplyBody extends FcObject {
     protected Long got;
     protected Long total;
     protected Long bestHeight;
+    protected String symkey;
+
     protected String bestBlockId; //For rollback checking
     protected transient String sid;
     protected transient AccountManager accountHandler;
@@ -46,6 +52,9 @@ public class ReplyBody extends FcObject {
             sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
     }
     public String replyError(int code){
+        this.data=null;
+        this.got= 0L;
+        this.total = 0L;
         return reply(code,null,null);
     }
     public String reply(int code, String otherErrorMsg, Object data){
@@ -57,7 +66,9 @@ public class ReplyBody extends FcObject {
         setBestBlock();
 
         updateBalance(httpRequestChecker.getApiName());
+
         finalJson = this.toJson();
+
         return finalJson;
     }
 
@@ -134,6 +145,15 @@ public class ReplyBody extends FcObject {
         balance=null;
         data=null;
         last=null;
+        symkey=null;
+        bestBlockId=null;
+        finalJson=null;
+        requestId=null;
+        op=null;
+        time=null;
+        got=null;
+        total=null;
+        bestHeight=null;
     }
     public Integer getCode() {
         return code;
@@ -300,42 +320,66 @@ public class ReplyBody extends FcObject {
         replyHttp(CodeMessage.Code1020OtherError,otherError,null,response);
     }
 
+    public void responseFinalJsonHttp(HttpServletResponse response) {
+        replyHttp(finalJson,response);
+    }
+
     private void replyHttp(int code, String otherError, Object data, HttpServletResponse response) {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         response.setHeader(CodeMessage.CodeInHeader, String.valueOf(code));
 
         String replyStr = reply(code,otherError,data);
+        replyHttp(replyStr,response);
+    }
 
-        String sessionKey = httpRequestChecker.getSessionKey();
+    public void replyHttp(String replyStr, HttpServletResponse response) {
 
-        if(sessionKey !=null){
-            String sign = Signature.symSign(replyStr,sessionKey);
-            if(sign!=null) response.setHeader(CodeMessage.SignInHeader,sign);
+        AuthType authType = httpRequestChecker.getAuthType();
+        Encryptor encryptor;
+        CryptoDataByte result = null;
+        switch (authType) {
+            case SYMKEY_ENCRYPT-> {
+                String sessionKey = httpRequestChecker.getSessionKey();
+                if(sessionKey!=null){
+                    encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
+                    result = encryptor.encryptBySymkey(replyStr.getBytes(), Hex.fromHex(sessionKey));
+                }
+            }
+            case ASY_TWO_WAY_ENCRYPT -> {
+                String pubkey = httpRequestChecker.getPubkey();
+                if (pubkey!=null){
+                    byte[] prikey = settings.decryptPrikey();
+                    encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+                    result = encryptor.encryptByAsyTwoWay(replyStr.getBytes(),prikey,Hex.fromHex(pubkey));
+                }
+            }
+            case FC_SIGN_BODY,FC_SIGN_URL -> {
+                String sessionKey = httpRequestChecker.getSessionKey();
+                if (sessionKey != null) {
+                    String sign = Signature.symSign(replyStr, sessionKey);
+                    if (sign != null) response.setHeader(CodeMessage.SignInHeader, sign);
+                }
+            }
         }
+
+        if(result!=null)
+            replyStr = result.toJson();
+
         try {
             response.getWriter().write(replyStr);
+            clean();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         clean();
     }
 
-    public void responseFinalJsonHttp(HttpServletResponse response) {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        response.setHeader(CodeMessage.CodeInHeader, String.valueOf(code));
+    public String getSymkey() {
+        return symkey;
+    }
 
-        String sessionKey = httpRequestChecker.getSessionKey();
-
-        if(sessionKey !=null){
-            String sign = Signature.symSign(finalJson,sessionKey);
-            if(sign!=null) response.setHeader(CodeMessage.SignInHeader,sign);
-        }
-        try {
-            response.getWriter().write(finalJson);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public void setSymkey(String symkey) {
+        this.symkey = symkey;
     }
 }

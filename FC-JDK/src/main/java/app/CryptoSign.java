@@ -2,7 +2,8 @@ package app;
 
 import core.crypto.*;
 import core.fch.RawTxInfo;
-import data.fchData.Multisign;
+import data.fchData.Multisig;
+import data.feipData.Secret;
 import ui.Inputer;
 import ui.Menu;
 import ui.Shower;
@@ -11,6 +12,9 @@ import config.Settings;
 import config.Starter;
 import constants.Constants;
 import core.crypto.Algorithm.Bitcore;
+import core.crypto.Algorithm.AesGcm256;
+import core.crypto.Algorithm.ChaCha20;
+import core.crypto.Algorithm.Ecc256K1AesGcm256;
 import data.fcData.*;
 import core.fch.TxCreator;
 import data.fchData.RawTxForCsV1;
@@ -80,7 +84,7 @@ public class CryptoSign extends FcApp {
         menu.add("Secret", () -> secret(br));
         menu.add("Key Tools",()-> keyTools(br));
         menu.add("Sign TX", () -> signTx( br));
-        menu.add("Sign Multisig TX", () -> multiSign(br));
+        menu.add("Sign Multisig TX", () -> multiSig(br));
         menu.add("Sign Message", () -> signMsg(br));
         menu.add("Verify Signature", () -> HomeApp.verify(br));
         menu.add("Encrypt", () -> encrypt(br));
@@ -495,7 +499,7 @@ public class CryptoSign extends FcApp {
         return cidInfo;
     }
 
-    private void multiSignTx(BufferedReader br) {
+    private void multiSigTx(BufferedReader br) {
         System.out.println("Input the unsigned data json string ");
         String multiSignDataJson = Inputer.inputStringMultiLine(br);
         do {
@@ -509,10 +513,10 @@ public class CryptoSign extends FcApp {
                 return;
             }
 
-            showRawMultiSignTxInfo(multiSignDataJson, br);
+            showRawMultiSigTxInfo(multiSignDataJson, br);
 
             Shower.printUnderline(60);
-            String signedSchnorrMultiSignTx = TxCreator.signSchnorrMultiSignTx(multiSignDataJson, cidInfo.getPrikeyBytes(), FchMainNetwork.MAINNETWORK);
+            String signedSchnorrMultiSignTx = TxCreator.signSchnorrMultiSigTx(multiSignDataJson, cidInfo.getPrikeyBytes(), FchMainNetwork.MAINNETWORK);
             System.out.println(signedSchnorrMultiSignTx);
             Shower.printUnderline(60);
             multiSignDataJson = signedSchnorrMultiSignTx;
@@ -547,12 +551,12 @@ public class CryptoSign extends FcApp {
 
         byte[] key;
         switch (choose) {
-            case AlgorithmId.Constants.BTC_ECDSA_SIGNMSG_NO1_NRC7, AlgorithmId.Constants.FC_SCHNORR_SIGNMSG_NO1_NRC7 -> {
+            case AlgorithmId.Constants.BTC_ECDSA_SIGN_MSG_NO1_NRC7, AlgorithmId.Constants.FC_SCHNORR_SIGN_MSG_NO1_NRC7 -> {
                 CidInfo cidInfo = chooseKeyInfo();
                 if (cidInfo == null) return;
                 key = Decryptor.decryptPrikey(cidInfo.getPrikeyCipher(), settings.getSymkey());
             }
-            case AlgorithmId.Constants.FC_SHA256SYM_SIGNMSG_NO1_NRC7 ->
+            case AlgorithmId.Constants.FC_SHA256SYM_SIGN_MSG_NO1_NRC7 ->
                     key = Inputer.inputSymkey32(br, "Input the 32 bytes symkey:");
             default -> {
                 return;
@@ -580,8 +584,14 @@ public class CryptoSign extends FcApp {
         menu.add("To json by symkey",()->encryptWithSymkeyToJson(br));
         menu.add("To json by password",()->encryptWithPasswordToJson(br));
         menu.add("To json by pubkey",()->encryptAsyToJson(br));
+        menu.add("By AES_GCM", () -> encryptAesGcm(br));
+        menu.add("By ChaCha20", () -> encryptChaCha20(br));
+        menu.add("By EccK1AesGcm256", () -> encryptEccK1AesGcm256(br));
         menu.add("Encrypt file with symkey",()->encryptFileWithSymkey(br));
         menu.add("Encrypt file with pubkey",()->encryptFileAsy(br));
+        menu.add("File by AES_GCM", () -> encryptFileAesGcm(br));
+        menu.add("File by ChaCha20", () -> encryptFileChaCha20(br));
+        menu.add("File by EccK1AesGcm256", () -> encryptFileEccK1AesGcm256(br));
 
         menu.add("To bundle by password",()->encryptWithPasswordBundle(br));
         menu.add("To bundle by symkey",()->encryptWithSymkeyToBundle(br));
@@ -594,9 +604,13 @@ public class CryptoSign extends FcApp {
 
     public void decrypt(BufferedReader br) {
         Menu menu = new Menu("Decrypt");
-        menu.add("Json by symkey",()->decryptWithSymkeyFromJson(br));
-        menu.add("Json by password",()->decryptWithPasswordFromJson(br));
-        menu.add("Json by prikey",()->decryptAsyFromJson(br));
+        menu.add("Json by symkey AES_CBC",()->decryptWithSymkeyFromJson(br));
+        menu.add("Json by password AES_CBC",()->decryptWithPasswordFromJson(br));
+        menu.add("Json by prikey EccK1AesCbc256",()->decryptAsyFromJson(br));
+
+        menu.add("Json by symkey AES_GCM", () -> decryptAesGcm(br));
+        menu.add("Json by symkey ChaCha20", () -> decryptChaCha20(br));
+        menu.add("Json by prikey EccK1AesGcm256", () -> decryptEccK1AesGcm256(br));
 
         menu.add("Bundle by symkey",()->decryptWithSymkeyFromBundle(br));
         menu.add("Bundle by password",()->decryptWithPasswordFromBundle(br));
@@ -604,6 +618,9 @@ public class CryptoSign extends FcApp {
         menu.add("Bundle by prikey B and pubkey A",()->decryptAsyTwoWayFromBundle(br));
         menu.add("File by symkey",()->decryptFileSymkey(br));
         menu.add("File by prikey",()->decryptFileAsy(br));
+        menu.add("File by AES_GCM", () -> decryptFileAesGcm(br));
+        menu.add("File by ChaCha20", () -> decryptFileChaCha20(br));
+        menu.add("File by EccK1AesGcm256", () -> decryptFileEccK1AesGcm256(br));
         menu.add("Bitcore-ECEIS bundle",()->decryptBitcoreFromBundle(br));
 
         menu.showAndSelect(br);
@@ -638,44 +655,44 @@ public class CryptoSign extends FcApp {
             return;
         }
 
-        List<SecretDetail> secretDetailList = SecretDetail.listFromFile(SecretDetail.class);
-        if(secretDetailList==null)secretDetailList = new ArrayList<>();
-        List<SecretDetail> finalSecretDetailList = secretDetailList;
+        List<Secret> secretList = Secret.listFromFile(Secret.class);
+        if(secretList ==null) secretList = new ArrayList<>();
+        List<Secret> finalSecretList = secretList;
 
         Menu menu = new Menu("Secret");
-        menu.add("Find secret details",()->findSecretDetail(br, cidInfoList, finalSecretDetailList));
-        menu.add("List secret details",()->listSecretDetail(br, cidInfoList, finalSecretDetailList));
-        menu.add("Add new secret details",()->addSecrets(br, finalSecretDetailList));
-        menu.add("Import secret details",()->importSecretDetail(br, finalSecretDetailList));
-        menu.add("Update Secret Details",()->updateSecretDetail(br, finalSecretDetailList));
+        menu.add("Find secret details",()->findSecretDetail(br, cidInfoList, finalSecretList));
+        menu.add("List secret details",()->listSecretDetail(br, cidInfoList, finalSecretList));
+        menu.add("Add new secret details",()->addSecrets(br, finalSecretList));
+        menu.add("Import secret details",()->importSecretDetail(br, finalSecretList));
+        menu.add("Update Secret Details",()->updateSecretDetail(br, finalSecretList));
         menu.showAndSelect(br);
     }
 
-    private void updateSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList) {
-        List<SecretDetail> chosenSecretDetailList =  Shower.showOrChooseListInPages("FID Info", finalSecretDetailList, DEFAULT_PAGE_SIZE, null, true, SecretDetail.class, br);
-        if(chosenSecretDetailList==null || chosenSecretDetailList.isEmpty()){
+    private void updateSecretDetail(BufferedReader br, List<Secret> finalSecretList) {
+        List<Secret> chosenSecretList =  Shower.showOrChooseListInPages("FID Info", finalSecretList, DEFAULT_PAGE_SIZE, null, true, Secret.class, br);
+        if(chosenSecretList ==null || chosenSecretList.isEmpty()){
             System.out.println("No secret details selected.");
             return;
         }
 
-        updateSecretDetail(br, finalSecretDetailList, chosenSecretDetailList);
+        updateSecretDetail(br, finalSecretList, chosenSecretList);
         Menu.anyKeyToContinue(br);
     }
 
-    private void updateSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList, List<SecretDetail> chosenSecretDetailList) {
+    private void updateSecretDetail(BufferedReader br, List<Secret> finalSecretList, List<Secret> chosenSecretList) {
         try{
-            for(SecretDetail secretDetail : chosenSecretDetailList){
-                secretDetail.setTitle(Inputer.promptAndUpdate(br, "Title", secretDetail.getTitle()));
-                decryptContent(secretDetail);
-                String content = Inputer.promptAndUpdate(br, "Content", secretDetail.getContent());
+            for(Secret secret : chosenSecretList){
+                secret.setTitle(Inputer.promptAndUpdate(br, "Title", secret.getTitle()));
+                decryptContent(secret);
+                String content = Inputer.promptAndUpdate(br, "Content", secret.getContent());
                 if(content!=null && !content.isEmpty()){
                     String cipher = Encryptor.encryptBySymkeyToJson(content.getBytes(), symkey);
-                    secretDetail.setContentCipher(cipher);
+                    secret.setContentCipher(cipher);
                 }
-                secretDetail.setType(Inputer.promptAndUpdate(br, "Type", secretDetail.getType()));
-                secretDetail.setMemo(Inputer.promptAndUpdate(br, "Memo", secretDetail.getMemo()));
+                secret.setType(Inputer.promptAndUpdate(br, "Type", secret.getType()));
+                secret.setMemo(Inputer.promptAndUpdate(br, "Memo", secret.getMemo()));
             }
-            SecretDetail.listToFile(finalSecretDetailList, SecretDetail.class);
+            Secret.listToFile(finalSecretList, Secret.class);
             System.out.println("Secret details updated.");
         }catch(IOException e){
             System.out.println("Failed to update secret details.");
@@ -683,7 +700,7 @@ public class CryptoSign extends FcApp {
     }
 
     //TODO untested
-    private void importSecretDetail(BufferedReader br, List<SecretDetail> finalSecretDetailList) {
+    private void importSecretDetail(BufferedReader br, List<Secret> finalSecretList) {
         String choice = Inputer.chooseOne(new String[]{"From plain JSON","From cipher JSON","From cipher bundle"}, null, "Select the source of the secret details:", br);
         if(choice==null|| choice.equals("0"))return;
        
@@ -694,7 +711,7 @@ public class CryptoSign extends FcApp {
         }
         CryptoDataByte cryptoDataByte = null;
         do{
-            SecretDetail secretDetail = new SecretDetail();
+            Secret secret = new Secret();
             String input;
             if(scanner!=null && askIfYes(br,"Scan secretDetail QR code?")){
                 try {
@@ -709,7 +726,7 @@ public class CryptoSign extends FcApp {
             if(input==null|| input.isEmpty())return;
             switch(choice){
                 case "From plain JSON":
-                    secretDetail = JsonUtils.fromJson(input, SecretDetail.class);
+                    secret = JsonUtils.fromJson(input, Secret.class);
                     break;
                 case "From cipher bundle":
                     cryptoDataByte = CryptoDataByte.fromBundle(Base64.getDecoder().decode(input));
@@ -723,27 +740,27 @@ public class CryptoSign extends FcApp {
                         System.out.println("Decrypt failed");
                         break;
                     }
-                    secretDetail = JsonUtils.fromJson(new String(result.getData()), SecretDetail.class);
+                    secret = JsonUtils.fromJson(new String(result.getData()), Secret.class);
                     break;
             }
-            if(secretDetail!=null)
-                finalSecretDetailList.add(secretDetail);
+            if(secret !=null)
+                finalSecretList.add(secret);
         }while(!Inputer.askIfYes(br, "Finished?"));
-        SecretDetail.listToFile(finalSecretDetailList, SecretDetail.class);
+        Secret.listToFile(finalSecretList, Secret.class);
     }
 
-    private void findSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> finalSecretDetailList) {
+    private void findSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<Secret> finalSecretList) {
         String keyword = Inputer.inputString(br, "Input the keyword:");
         if(keyword==null)return;
-        List<SecretDetail> chosenSecretDetailList = finalSecretDetailList.stream()
-                .filter(secretDetail -> secretDetail.getTitle().contains(keyword) || secretDetail.getType().contains(keyword) || secretDetail.getMemo().contains(keyword))
+        List<Secret> chosenSecretList = finalSecretList.stream()
+                .filter(secret -> secret.getTitle().contains(keyword) || secret.getType().contains(keyword) || secret.getMemo().contains(keyword))
                 .collect(Collectors.toList());
-        listSecretDetail(br, cidInfoList, chosenSecretDetailList);
+        listSecretDetail(br, cidInfoList, chosenSecretList);
     }
 
-    private void listSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> secretDetailList) {
-        List<SecretDetail> chosenSecretDetailList = Shower.showOrChooseListInPages("FID Info", secretDetailList, DEFAULT_PAGE_SIZE, null, true, SecretDetail.class, br);
-        if(chosenSecretDetailList==null || chosenSecretDetailList.isEmpty()){
+    private void listSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<Secret> secretList) {
+        List<Secret> chosenSecretList = Shower.showOrChooseListInPages("FID Info", secretList, DEFAULT_PAGE_SIZE, null, true, Secret.class, br);
+        if(chosenSecretList ==null || chosenSecretList.isEmpty()){
             System.out.println("No secret details selected.");
             return;
         }
@@ -753,70 +770,70 @@ public class CryptoSign extends FcApp {
             if(op==null) return;
 
             switch (op) {
-                case "Show" -> showSecretDetail(chosenSecretDetailList);
-                case "Delete" -> deleteSecretDetail(br, secretDetailList, chosenSecretDetailList);
-                case "Encrypt" -> encryptSecretDetail(br, cidInfoList, chosenSecretDetailList);
-                case "Update" -> updateSecretDetail(br, secretDetailList,chosenSecretDetailList);
+                case "Show" -> showSecretDetail(chosenSecretList);
+                case "Delete" -> deleteSecretDetail(br, secretList, chosenSecretList);
+                case "Encrypt" -> encryptSecretDetail(br, cidInfoList, chosenSecretList);
+                case "Update" -> updateSecretDetail(br, secretList, chosenSecretList);
             }
             Menu.anyKeyToContinue(br);
         }
     }
 
-    private void encryptSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<SecretDetail> chosenSecretDetailList) {
+    private void encryptSecretDetail(BufferedReader br, List<CidInfo> cidInfoList, List<Secret> chosenSecretList) {
         CidInfo cidInfo = Inputer.chooseOneFromList(cidInfoList, "id", "Select a key:", br);
         if(cidInfo ==null) return;
-        for (SecretDetail secretDetail : chosenSecretDetailList) {
-            decryptContent(secretDetail);
-            SecretDetail secretDetail1 = new SecretDetail();
-            secretDetail1.setTitle(secretDetail.getTitle());
-            secretDetail1.setContent(secretDetail.getContent());
-            secretDetail1.setType(secretDetail.getType());
-            secretDetail1.setMemo(secretDetail.getMemo());
-            CryptoDataByte cryptoDataByte = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7).encryptByAsyOneWay(secretDetail1.toBytes(), cidInfo.getPubkeyBytes());
+        for (Secret secret : chosenSecretList) {
+            decryptContent(secret);
+            Secret secret1 = new Secret();
+            secret1.setTitle(secret.getTitle());
+            secret1.setContent(secret.getContent());
+            secret1.setType(secret.getType());
+            secret1.setMemo(secret.getMemo());
+            CryptoDataByte cryptoDataByte = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7).encryptByAsyOneWay(secret1.toBytes(), cidInfo.getPubkeyBytes());
             System.out.println("Encrypted by "+ cidInfo.getId());
             String cipher = Base64.getEncoder().encodeToString(cryptoDataByte.toBundle());
 
-            System.out.println(secretDetail.getTitle() + ":\n" + cipher);
+            System.out.println(secret.getTitle() + ":\n" + cipher);
             QRCodeUtils.generateQRCode(cipher);
         }
-        System.out.println("Encrypted " + chosenSecretDetailList.size() + " secret details.");
+        System.out.println("Encrypted " + chosenSecretList.size() + " secret details.");
     }
 
-    private static void deleteSecretDetail(BufferedReader br, List<SecretDetail> secretDetailList, List<SecretDetail> chosenSecretDetailList) {
+    private static void deleteSecretDetail(BufferedReader br, List<Secret> secretList, List<Secret> chosenSecretList) {
         if (askIfYes(br, "Are you sure you want to delete these secret details?")) {
-            int count = chosenSecretDetailList.size();
-            secretDetailList.removeAll(chosenSecretDetailList);
-            SecretDetail.listToFile(secretDetailList,SecretDetail.class);
+            int count = chosenSecretList.size();
+            secretList.removeAll(chosenSecretList);
+            Secret.listToFile(secretList, Secret.class);
             System.out.println("Deleted " + count + " secret details.");
         }
     }
 
-    private void showSecretDetail(List<SecretDetail> chosenSecretDetailList) {
-        for (SecretDetail secretDetail : chosenSecretDetailList) {
-            decryptContent(secretDetail);
-            SecretDetail secretDetail1 = new SecretDetail();
-            secretDetail1.setTitle(secretDetail.getTitle());
-            secretDetail1.setContent(secretDetail.getContent());
-            secretDetail1.setType(secretDetail.getType());
-            secretDetail1.setMemo(secretDetail.getMemo());
-            System.out.println(secretDetail1.toNiceJson());
+    private void showSecretDetail(List<Secret> chosenSecretList) {
+        for (Secret secret : chosenSecretList) {
+            decryptContent(secret);
+            Secret secret1 = new Secret();
+            secret1.setTitle(secret.getTitle());
+            secret1.setContent(secret.getContent());
+            secret1.setType(secret.getType());
+            secret1.setMemo(secret.getMemo());
+            System.out.println(secret1.toNiceJson());
         }
     }
-    private void decryptContent(SecretDetail secretDetail) {
-        String contentCipher = secretDetail.getContentCipher();
+    private void decryptContent(Secret secret) {
+        String contentCipher = secret.getContentCipher();
         CryptoDataByte result = new Decryptor().decryptJsonBySymkey(contentCipher, settings.getSymkey());
         if(result==null||result.getData()==null)return;
-        secretDetail.setContent(new String(result.getData()));
+        secret.setContent(new String(result.getData()));
     }
 
-    private void addSecrets(BufferedReader br, List<SecretDetail> secretDetailList) {
+    private void addSecrets(BufferedReader br, List<Secret> secretList) {
         do{
-            SecretDetail secretDetail = SecretDetail.inputSecret(br, settings.getSymkey());
+            Secret secret = Secret.inputSecret(br, settings.getSymkey());
 
-            secretDetailList.add(secretDetail);
-            secretDetail.setId(Hex.toHex(Hash.sha256x2(secretDetail.toBytes())));
+            secretList.add(secret);
+            secret.setId(Hex.toHex(Hash.sha256x2(secret.toBytes())));
         }while(Inputer.askIfYes(br, "Add another secret details?"));
-        SecretDetail.listToFile(secretDetailList,SecretDetail.class);
+        Secret.listToFile(secretList, Secret.class);
     }
 
     private void qrCode(BufferedReader br) {
@@ -839,7 +856,7 @@ public class CryptoSign extends FcApp {
     }
 
     private static void backUpData() {
-        FileUtils.backup(SecretDetail.class.getSimpleName()+DOT_JSON,null,5);
+        FileUtils.backup(Secret.class.getSimpleName()+DOT_JSON,null,5);
     }
 
     private void showIntroduction(BufferedReader br) {
@@ -886,7 +903,7 @@ public class CryptoSign extends FcApp {
                 if(!done) System.out.println("Failed to delete "+ secretDetailFilePath);
             }
             if(askIfYes(br,"Would you like to remove all backups?")){
-                FileUtils.removeAllBackUps(SecretDetail.class.getSimpleName()+DOT_JSON,null);
+                FileUtils.removeAllBackUps(Secret.class.getSimpleName()+DOT_JSON,null);
             }
             System.out.println("All data cleared successfully.");
         }
@@ -925,17 +942,241 @@ public class CryptoSign extends FcApp {
     }
 
     private void reEncryptAllSecretDetails(byte[] oldSymkey, byte[] newSymkey){
-        List<SecretDetail> secretDetailList = SecretDetail.listFromFile(SecretDetail.class);
-        for(SecretDetail secretDetail:secretDetailList){
-            String contentCipher = secretDetail.getContentCipher();
+        List<Secret> secretList = Secret.listFromFile(Secret.class);
+        for(Secret secret : secretList){
+            String contentCipher = secret.getContentCipher();
             if(contentCipher==null)continue;
             CryptoDataByte cryptoDataByte = new Decryptor().decryptJsonBySymkey(contentCipher,oldSymkey);
             if(cryptoDataByte.getCode()!=0)continue;
-            secretDetail.setContentCipher(Encryptor.encryptBySymkeyToJson(cryptoDataByte.getData(), newSymkey));
+            secret.setContentCipher(Encryptor.encryptBySymkeyToJson(cryptoDataByte.getData(), newSymkey));
         }
-        SecretDetail.listToFile(secretDetailList,SecretDetail.class);
+        Secret.listToFile(secretList, Secret.class);
     }
     
+
+    private void encryptAesGcm(BufferedReader br) {
+        System.out.println("Input the message:");
+        String msg = Inputer.inputStringMultiLine(br);
+        if (msg == null) return;
+        
+        byte[] key = getSymkeyOrInput(br);
+        byte[] iv = BytesUtils.getRandomBytes(12);
+        
+        try {
+            CryptoDataByte cryptoDataByte = new CryptoDataByte();
+            cryptoDataByte.setSymkey(key);
+            cryptoDataByte.setIv(iv);
+            
+            ByteArrayInputStream bis = new ByteArrayInputStream(msg.getBytes(StandardCharsets.UTF_8));
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            
+            AesGcm256.encrypt(bis, bos, key, iv, cryptoDataByte);
+            
+            if (cryptoDataByte.getCode() == 0) {
+                cryptoDataByte.setCipher(bos.toByteArray());
+                cryptoDataByte.setSymkey(null);
+                System.out.println(cryptoDataByte.toNiceJson());
+                QRCodeUtils.generateQRCode(cryptoDataByte.toNiceJson());
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void encryptChaCha20(BufferedReader br) {
+        System.out.println("Input the message:");
+        String msg = Inputer.inputStringMultiLine(br);
+        if (msg == null) return;
+        
+        byte[] key = getSymkeyOrInput(br);
+        byte[] iv = BytesUtils.getRandomBytes(12);
+        
+        try {
+            CryptoDataByte cryptoDataByte = new CryptoDataByte();
+            cryptoDataByte.setSymkey(key);
+            cryptoDataByte.setIv(iv);
+            
+            ByteArrayInputStream bis = new ByteArrayInputStream(msg.getBytes(StandardCharsets.UTF_8));
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            
+            ChaCha20.encrypt(bis, bos, key, iv, cryptoDataByte);
+            
+            if (cryptoDataByte.getCode() == 0) {
+                cryptoDataByte.setCipher(bos.toByteArray());
+                cryptoDataByte.setSymkey(null);
+                System.out.println(cryptoDataByte.toNiceJson());
+                QRCodeUtils.generateQRCode(cryptoDataByte.toNiceJson());
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void encryptEccK1AesGcm256(BufferedReader br) {
+        System.out.println("Input the message:");
+        String msg = Inputer.inputStringMultiLine(br);
+        if (msg == null) return;
+
+        CidInfo sender = chooseKeyInfo();
+        if (sender == null || sender.getPrikeyBytes() == null) return;
+
+        String pubkeyStr = Inputer.inputString(br, "Input recipient pubkey (hex):");
+        if (pubkeyStr == null) return;
+        
+        byte[] pubKeyB;
+        try {
+             if (pubkeyStr.length() == 66) pubKeyB = Hex.fromHex(pubkeyStr);
+             else if (pubkeyStr.length() == 130) pubKeyB = Hex.fromHex(KeyTools.getPubkey33(pubkeyStr));
+             else pubKeyB = Hex.fromHex(pubkeyStr);
+        } catch(Exception e) {
+             System.out.println("Invalid pubkey.");
+             return;
+        }
+
+        byte[] nonce = BytesUtils.getRandomBytes(12);
+
+        try {
+            CryptoDataByte result = Ecc256K1AesGcm256.getInstance().encrypt(
+                msg.getBytes(StandardCharsets.UTF_8),
+                sender.getPrikeyBytes(),
+                pubKeyB,
+                nonce
+            );
+            result.setPubkeyA(sender.getPubkeyBytes());
+            result.setSymkey(null);
+            System.out.println(result.toNiceJson());
+            QRCodeUtils.generateQRCode(result.toNiceJson());
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void decryptAesGcm(BufferedReader br) {
+        System.out.println("Input the JSON:");
+        String json = Inputer.inputStringMultiLine(br);
+        if (json == null) return;
+        
+        try {
+            CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(json);
+            if (cryptoDataByte == null) {
+                System.out.println("Invalid JSON");
+                return;
+            }
+            
+            if (cryptoDataByte.getSymkey() == null) {
+                cryptoDataByte.setSymkey(getSymkeyOrInput(br));
+            }
+            
+            AesGcm256.decrypt(cryptoDataByte);
+            
+            if (cryptoDataByte.getCode() == 0) {
+                System.out.println("Decrypted:");
+                System.out.println(new String(cryptoDataByte.getData(), StandardCharsets.UTF_8));
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+             System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void decryptChaCha20(BufferedReader br) {
+        System.out.println("Input the JSON:");
+        String json = Inputer.inputStringMultiLine(br);
+        if (json == null) return;
+        
+        try {
+            CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(json);
+            if (cryptoDataByte == null) {
+                System.out.println("Invalid JSON");
+                return;
+            }
+            
+            if (cryptoDataByte.getSymkey() == null) {
+                cryptoDataByte.setSymkey(getSymkeyOrInput(br));
+            }
+            
+            ChaCha20.decrypt(cryptoDataByte);
+            
+            if (cryptoDataByte.getCode() == 0) {
+                System.out.println("Decrypted:");
+                System.out.println(new String(cryptoDataByte.getData(), StandardCharsets.UTF_8));
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+             System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void decryptEccK1AesGcm256(BufferedReader br) {
+        System.out.println("Input the JSON:");
+        String json = Inputer.inputStringMultiLine(br);
+        if (json == null) return;
+
+        CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(json);
+        if (cryptoDataByte == null) return;
+
+        CidInfo recipient = chooseKeyInfo();
+        if (recipient == null || recipient.getPrikeyBytes() == null) return;
+
+        byte[] pubKeyA = cryptoDataByte.getPubkeyA();
+        if (pubKeyA == null) {
+             String pubAStr = Inputer.inputString(br, "Input sender pubkey (hex):");
+             if (pubAStr != null) pubKeyA = Hex.fromHex(pubAStr);
+        }
+        
+        if (pubKeyA == null) {
+            System.out.println("Missing sender public key.");
+            return;
+        }
+
+        try {
+            CryptoDataByte result = Ecc256K1AesGcm256.getInstance().decrypt(
+                cryptoDataByte.getCipher(),
+                recipient.getPrikeyBytes(),
+                pubKeyA,
+                cryptoDataByte.getIv()
+            );
+            
+            if (result.getCode() == 0) {
+                 System.out.println("Decrypted:");
+                 System.out.println(new String(result.getData(), StandardCharsets.UTF_8));
+            } else {
+                 System.out.println("Error: " + result.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private byte[] getSymkeyOrInput(BufferedReader br) {
+        System.out.println("Input the 32 bytes symkey (hex). Enter to use default:");
+        try {
+            String line = br.readLine();
+            if (line == null || "".equals(line.trim())) {
+                return settings.getSymkey();
+            }
+            String hex = line.trim();
+            if (!Hex.isHexString(hex) || hex.length() != 64) {
+                System.out.println("Invalid hex key. Using default.");
+                return settings.getSymkey();
+            }
+            return Hex.fromHex(hex);
+        } catch (IOException e) {
+            return settings.getSymkey();
+        }
+    }
 
     public void close() {
         backUpData();
@@ -997,7 +1238,7 @@ public class CryptoSign extends FcApp {
 
 
     public void decryptAsyFromJson(BufferedReader br) {
-        String eccAesDataJson = Inputer.inputString(br,"Input the json string:");
+        String eccAesDataJson = Inputer.inputStringMultiLine(br);
         decryptAsyJson(eccAesDataJson);
         Menu.anyKeyToContinue(br);
     }
@@ -1050,12 +1291,12 @@ public class CryptoSign extends FcApp {
         }
     }
 
-    public void multiSign(BufferedReader br) {
+    public void multiSig(BufferedReader br) {
            Menu menu = new Menu("Multisig");
            menu.add("Create multisig FID", () -> createFid(br));
            menu.add("Parse multisig FID from redeem script", () -> showFid(br));
            menu.add("Create new Tx",() -> createTx(br));
-           menu.add("Sign multisig raw TX", () -> multiSignTx(br));
+           menu.add("Sign multisig raw TX", () -> multiSigTx(br));
            menu.add("Build multisig TX", () -> buildSignedTx(br));
            menu.showAndSelect(br);
     }
@@ -1068,14 +1309,14 @@ public class CryptoSign extends FcApp {
         if("".equals(offLineTx))
             rawTxInfo = RawTxInfo.fromUserInput(br,null);
         else rawTxInfo = RawTxInfo.fromString(offLineTx);
-        Multisign multisign;
+        Multisig multisig;
 
         while(true) {
             String redeemScriptStr = Inputer.inputString(br, "Input the redeem script. Enter to exit:");
             if("".equals(redeemScriptStr))return;
             try {
-                multisign = Multisign.parseMultisignRedeemScript(redeemScriptStr);
-                if(multisign ==null){
+                multisig = Multisig.parseMultisigRedeemScript(redeemScriptStr);
+                if(multisig ==null){
                     System.out.println("Failed to parse redeemScript. Try again.");
                     continue;
                 }
@@ -1083,12 +1324,12 @@ public class CryptoSign extends FcApp {
                 System.out.println("Invalid redeem script.");
                 continue;
             }
-            System.out.println("MultiSign Info:\n"+ JsonUtils.toNiceJson(multisign));
+            System.out.println("MultiSign Info:\n"+ JsonUtils.toNiceJson(multisig));
             break;
         }
         if(rawTxInfo ==null)return;
 
-        rawTxInfo.setMultisign(multisign);
+        rawTxInfo.setMultisig(multisig);
         Transaction transaction = TxCreator.createUnsignedTx(rawTxInfo, mainnetwork);
         if(transaction==null){
             System.out.println("Create unsigned tx failed.");
@@ -1096,15 +1337,15 @@ public class CryptoSign extends FcApp {
         }
         byte[] rawTx = transaction.bitcoinSerialize();
 
-        RawTxInfo multiSignData = new RawTxInfo(rawTx, multisign, rawTxInfo.getInputs());
+        RawTxInfo multiSignData = new RawTxInfo(rawTx, multisig, rawTxInfo.getInputs());
 
-        showMultiUnsignedResult(br, multisign, multiSignData);
+        showMultiUnsignedResult(br, multisig, multiSignData);
 
         if(askIfYes(br,"Would you sign it?")){
             do {
                 CidInfo cidInfo = chooseKeyInfo();
                 if(cidInfo ==null)break;
-                TxCreator.signSchnorrMultiSignTx(multiSignData, cidInfo.getPrikeyBytes(), mainnetwork);
+                TxCreator.signSchnorrMultiSigTx(multiSignData, cidInfo.getPrikeyBytes(), mainnetwork);
                 System.out.println("Signed by "+ cidInfo.getId());
             }while (askIfYes(br,"Sign with more keys?"));
 
@@ -1119,7 +1360,7 @@ public class CryptoSign extends FcApp {
         Shower.printUnderline(10);
     }
 
-    public static void showMultiUnsignedResult(BufferedReader br, Multisign multisign, RawTxInfo multiSignData) {
+    public static void showMultiUnsignedResult(BufferedReader br, Multisig multisig, RawTxInfo multiSignData) {
         System.out.println("Multisig data unsigned:");
         Shower.printUnderline(10);
         String unsignedJson = multiSignData.toJson();
@@ -1130,7 +1371,7 @@ public class CryptoSign extends FcApp {
 
         System.out.println("Next step: sign it separately with the prikeys of: ");
         Shower.printUnderline(10);
-        for (String fid1 : multisign.getFids()) System.out.println(fid1);
+        for (String fid1 : multisig.getFids()) System.out.println(fid1);
         Shower.printUnderline(10);
         Menu.anyKeyToContinue(br);
     }
@@ -1156,17 +1397,17 @@ public class CryptoSign extends FcApp {
             pubkeyList.add(HexFormat.of().parseHex(pubkeyString));
         }
 
-        Multisign multisign = TxCreator.createMultisign(pubkeyList, m);
+        Multisig multisig = TxCreator.createMultisig(pubkeyList, m);
 
            Shower.printUnderline(10);
-           System.out.println("The multisig information is: \n" + JsonUtils.toNiceJson(multisign));
+           System.out.println("The multisig information is: \n" + JsonUtils.toNiceJson(multisig));
            System.out.println("It's generated from :");
            for (String pubkeyString : pubkeyStringList) {
                System.out.println(KeyTools.pubkeyToFchAddr(pubkeyString));
            }
            Shower.printUnderline(10);
-           if(multisign ==null)return;
-        String fid = multisign.getId();
+           if(multisig ==null)return;
+        String fid = multisig.getId();
         System.out.println("Your multisig FID: \n" + fid);
            Shower.printUnderline(10);
            Menu.anyKeyToContinue(br);
@@ -1196,21 +1437,21 @@ public class CryptoSign extends FcApp {
     }
     
     public static void showFid(BufferedReader br) {
-        Multisign multisign = inputMultisign(br);
+        Multisig multisig = inputMultisig(br);
         Shower.printUnderline(10);
         System.out.println("Multisig:");
-        System.out.println(JsonUtils.toNiceJson(multisign));
+        System.out.println(JsonUtils.toNiceJson(multisig));
         Shower.printUnderline(10);
         Menu.anyKeyToContinue(br);
     }
 
     @Nullable
-    private static Multisign inputMultisign(BufferedReader br) {
+    private static Multisig inputMultisig(BufferedReader br) {
         String redeemScript = Inputer.inputString(br, "Input the redeem script of the multisig FID:");
         if(redeemScript==null) return null;
-        Multisign multisign;
-        multisign = Multisign.parseMultisignRedeemScript(redeemScript);
-        return multisign;
+        Multisig multisig;
+        multisig = Multisig.parseMultisigRedeemScript(redeemScript);
+        return multisig;
     }
 
     public void pubkeyConvert(BufferedReader br) {
@@ -1313,5 +1554,264 @@ public class CryptoSign extends FcApp {
            menu.add("Address Convert", () -> addressConvert(br));
 
            menu.showAndSelect(br);
+    }
+
+    private void encryptFileAesGcm(BufferedReader br) {
+        File originalFile = getAvailableFile(br);
+        if (originalFile == null) return;
+        if (originalFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) {
+            System.out.println("File too large.");
+            return;
+        }
+
+        byte[] key = getSymkeyOrInput(br);
+        byte[] iv = BytesUtils.getRandomBytes(12);
+
+        String destFileName = originalFile.getName() + ".aesgcm";
+        String jsonFileName = destFileName + ".json";
+
+        try (FileInputStream fis = new FileInputStream(originalFile);
+             FileOutputStream fos = new FileOutputStream(destFileName)) {
+
+            CryptoDataByte cryptoDataByte = AesGcm256.encryptStream(fis, fos, key, iv);
+
+            if (cryptoDataByte.getCode() == 0) {
+                cryptoDataByte.setSymkey(null);
+                String json = cryptoDataByte.toNiceJson();
+                try(FileOutputStream fosJson = new FileOutputStream(jsonFileName)){
+                    fosJson.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+                System.out.println("File encrypted to: " + destFileName);
+                System.out.println("Metadata saved to: " + jsonFileName);
+                System.out.println("Metadata JSON:\n" + json);
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void encryptFileChaCha20(BufferedReader br) {
+        File originalFile = getAvailableFile(br);
+        if (originalFile == null) return;
+        if (originalFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) {
+            System.out.println("File too large.");
+            return;
+        }
+
+        byte[] key = getSymkeyOrInput(br);
+        byte[] iv = BytesUtils.getRandomBytes(12);
+
+        String destFileName = originalFile.getName() + ".chacha20";
+        String jsonFileName = destFileName + ".json";
+
+        try (FileInputStream fis = new FileInputStream(originalFile);
+             FileOutputStream fos = new FileOutputStream(destFileName)) {
+
+            CryptoDataByte cryptoDataByte = new CryptoDataByte();
+            ChaCha20.encrypt(fis, fos, key, iv, cryptoDataByte);
+
+            if (cryptoDataByte.getCode() == 0) {
+                cryptoDataByte.setSymkey(null);
+                String json = cryptoDataByte.toNiceJson();
+                try(FileOutputStream fosJson = new FileOutputStream(jsonFileName)){
+                    fosJson.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+                System.out.println("File encrypted to: " + destFileName);
+                System.out.println("Metadata saved to: " + jsonFileName);
+                System.out.println("Metadata JSON:\n" + json);
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void encryptFileEccK1AesGcm256(BufferedReader br) {
+        File originalFile = getAvailableFile(br);
+        if (originalFile == null) return;
+        if (originalFile.length() > Constants.MAX_FILE_SIZE_M * Constants.M_BYTES) {
+            System.out.println("File too large.");
+            return;
+        }
+
+        CidInfo sender = chooseKeyInfo();
+        if (sender == null || sender.getPrikeyBytes() == null) return;
+
+        String pubkeyStr = Inputer.inputString(br, "Input recipient pubkey (hex):");
+        if (pubkeyStr == null) return;
+
+        byte[] pubKeyB;
+        try {
+             if (pubkeyStr.length() == 66) pubKeyB = Hex.fromHex(pubkeyStr);
+             else if (pubkeyStr.length() == 130) pubKeyB = Hex.fromHex(KeyTools.getPubkey33(pubkeyStr));
+             else pubKeyB = Hex.fromHex(pubkeyStr);
+        } catch(Exception e) {
+             System.out.println("Invalid pubkey.");
+             return;
+        }
+
+        byte[] nonce = BytesUtils.getRandomBytes(12);
+        String destFileName = originalFile.getName() + ".ecc";
+        String jsonFileName = destFileName + ".json";
+
+        try (FileInputStream fis = new FileInputStream(originalFile);
+             FileOutputStream fos = new FileOutputStream(destFileName)) {
+
+            CryptoDataByte cryptoDataByte = Ecc256K1AesGcm256.encryptStream(fis, fos, sender.getPrikeyBytes(), pubKeyB, nonce, null);
+            
+            cryptoDataByte.setPubkeyA(sender.getPubkeyBytes());
+            cryptoDataByte.setSymkey(null);
+
+            if (cryptoDataByte.getCode() == 0) {
+                String json = cryptoDataByte.toNiceJson();
+                try(FileOutputStream fosJson = new FileOutputStream(jsonFileName)){
+                    fosJson.write(json.getBytes(StandardCharsets.UTF_8));
+                }
+                System.out.println("File encrypted to: " + destFileName);
+                System.out.println("Metadata saved to: " + jsonFileName);
+                System.out.println("Metadata JSON:\n" + json);
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void decryptFileAesGcm(BufferedReader br) {
+        System.out.println("Select the encrypted file:");
+        File encryptedFile = getAvailableFile(br);
+        if (encryptedFile == null) return;
+
+        System.out.println("Input the metadata JSON:");
+        String json = Inputer.inputStringMultiLine(br);
+        if (json == null) return;
+
+        CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(json);
+        if (cryptoDataByte == null) {
+            System.out.println("Invalid JSON");
+            return;
+        }
+
+        if (cryptoDataByte.getSymkey() == null) {
+            cryptoDataByte.setSymkey(getSymkeyOrInput(br));
+        }
+
+        String destFileName = encryptedFile.getName();
+        if(destFileName.endsWith(".aesgcm")) destFileName = destFileName.substring(0, destFileName.length() - 7);
+        else destFileName = destFileName + ".dec";
+
+        try (FileInputStream fis = new FileInputStream(encryptedFile);
+             FileOutputStream fos = new FileOutputStream(destFileName)) {
+
+            AesGcm256.decryptStream(fis, fos, cryptoDataByte);
+
+            if (cryptoDataByte.getCode() == 0) {
+                System.out.println("Decrypted to: " + destFileName);
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void decryptFileChaCha20(BufferedReader br) {
+        System.out.println("Select the encrypted file:");
+        File encryptedFile = getAvailableFile(br);
+        if (encryptedFile == null) return;
+
+        System.out.println("Input the metadata JSON:");
+        String json = Inputer.inputStringMultiLine(br);
+        if (json == null) return;
+
+        CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(json);
+        if (cryptoDataByte == null) {
+            System.out.println("Invalid JSON");
+            return;
+        }
+
+        if (cryptoDataByte.getSymkey() == null) {
+            cryptoDataByte.setSymkey(getSymkeyOrInput(br));
+        }
+
+        String destFileName = encryptedFile.getName();
+        if(destFileName.endsWith(".chacha20")) destFileName = destFileName.substring(0, destFileName.length() - 9);
+        else destFileName = destFileName + ".dec";
+
+        try (FileInputStream fis = new FileInputStream(encryptedFile);
+             FileOutputStream fos = new FileOutputStream(destFileName)) {
+
+            ChaCha20.decryptStream(fis, fos, cryptoDataByte);
+
+            if (cryptoDataByte.getCode() == 0) {
+                System.out.println("Decrypted to: " + destFileName);
+            } else {
+                System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private void decryptFileEccK1AesGcm256(BufferedReader br) {
+        System.out.println("Select the encrypted file:");
+        File encryptedFile = getAvailableFile(br);
+        if (encryptedFile == null) return;
+
+        System.out.println("Input the metadata JSON:");
+        String json = Inputer.inputStringMultiLine(br);
+        if (json == null) return;
+
+        CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(json);
+        if (cryptoDataByte == null) return;
+
+        CidInfo recipient = chooseKeyInfo();
+        if (recipient == null || recipient.getPrikeyBytes() == null) return;
+
+        byte[] pubKeyA = cryptoDataByte.getPubkeyA();
+        if (pubKeyA == null) {
+             String pubAStr = Inputer.inputString(br, "Input sender pubkey (hex):");
+             if (pubAStr != null) pubKeyA = Hex.fromHex(pubAStr);
+        }
+        
+        if (pubKeyA == null) {
+            System.out.println("Missing sender public key.");
+            return;
+        }
+
+        String destFileName = encryptedFile.getName();
+        if(destFileName.endsWith(".ecc")) destFileName = destFileName.substring(0, destFileName.length() - 4);
+        else destFileName = destFileName + ".dec";
+
+        try (FileInputStream fis = new FileInputStream(encryptedFile);
+             FileOutputStream fos = new FileOutputStream(destFileName)) {
+
+            Ecc256K1AesGcm256.decryptStream(
+                fis, 
+                fos,
+                recipient.getPrikeyBytes(),
+                pubKeyA,
+                cryptoDataByte.getIv(),
+                cryptoDataByte
+            );
+            
+            if (cryptoDataByte.getCode() == 0) {
+                 System.out.println("Decrypted to: " + destFileName);
+            } else {
+                 System.out.println("Error: " + cryptoDataByte.getMessage());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
     }
 }

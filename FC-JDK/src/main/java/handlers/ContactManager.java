@@ -12,9 +12,8 @@ import core.crypto.Decryptor;
 import core.crypto.Encryptor;
 import db.LocalDB;
 import data.fcData.AlgorithmId;
-import data.fcData.ContactDetail;
-import data.fchData.Cid;
 import data.feipData.Contact;
+import data.fchData.Freer;
 import data.feipData.ContactOpData;
 import data.feipData.Feip;
 import data.feipData.Service.ServiceType;
@@ -40,7 +39,7 @@ import static constants.FieldNames.*;
 import static constants.IndicesNames.CONTACT;
 import static constants.Strings.TIME;
 
-public class ContactManager extends Manager<ContactDetail> {
+public class ContactManager extends Manager<Contact> {
     private static final Logger log = LoggerFactory.getLogger(ContactManager.class);
     public static String name = ManagerType.CONTACT.name();
 
@@ -49,10 +48,10 @@ public class ContactManager extends Manager<ContactDetail> {
     private final String myPrikeyCipher;
     private final String myPubKey;
     private Map<String,String> fakeContactCipherMap;
-    private final MapQueue<String, ContactDetail> recentContactDetailMapQueue;
+    private final MapQueue<String, Contact> recentContactDetailMapQueue;
 
     public ContactManager(Settings settings) {
-        super(settings, ManagerType.CONTACT, LocalDB.SortType.UPDATE_ORDER, ContactDetail.class, true, true);
+        super(settings, ManagerType.CONTACT, LocalDB.SortType.UPDATE_ORDER, Contact.class, true, true);
 
         this.apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         this.symkey = settings.getSymkey();
@@ -105,39 +104,39 @@ public class ContactManager extends Manager<ContactDetail> {
                 }
             }
             case "Search in contacts" -> {
-                List<ContactDetail> contactDetailList = searchFidInContact(br);
-                if (contactDetailList != null && !contactDetailList.isEmpty()) {
-                    List<ContactDetail> chosenContactDetailList = Shower.showOrChooseListInPages("Contacts",contactDetailList,DEFAULT_PAGE_SIZE, null, true,ContactDetail.class,br);
-                    if (chosenContactDetailList != null && !chosenContactDetailList.isEmpty()) {
-                        fidList.addAll(chosenContactDetailList.stream().map(ContactDetail::getFid).collect(Collectors.toList()));
+                List<Contact> contactList = searchFidInContact(br);
+                if (contactList != null && !contactList.isEmpty()) {
+                    List<Contact> chosenContactList = Shower.showOrChooseListInPages("Contacts", contactList,DEFAULT_PAGE_SIZE, null, true, Contact.class,br);
+                    if (chosenContactList != null && !chosenContactList.isEmpty()) {
+                        fidList.addAll(chosenContactList.stream().map(Contact::getFid).collect(Collectors.toList()));
                     }
                 }
             }
             case "Search on chain" -> {
-                List<Cid> cidList = searchCidOnChain(br);
+                List<Freer> cidList = searchCidOnChain(br);
                 if (cidList != null && !cidList.isEmpty()) {
-                    fidList.addAll(cidList.stream().map(Cid::getId).toList());
+                    fidList.addAll(cidList.stream().map(Freer::getId).toList());
                 }
             }
         }
         return fidList;
     }
 
-    public List<ContactDetail> searchFidInContact(BufferedReader br){
-        List<ContactDetail> contactDetailList = new ArrayList<>();
+    public List<Contact> searchFidInContact(BufferedReader br){
+        List<Contact> contactList = new ArrayList<>();
         while(true){
-            List<ContactDetail> batchContactDetailList = searchContacts(br, true, false);
-            contactDetailList.addAll(batchContactDetailList);
+            List<Contact> batchContactList = searchContacts(br, true, false);
+            contactList.addAll(batchContactList);
             if(Inputer.askIfYes(br, "Search more?"))continue;
             else break;
         }
-        return contactDetailList;
+        return contactList;
     }
 
-    public List<Cid> searchCidOnChain(BufferedReader br){
-        List<Cid> cidList = new ArrayList<>();
+    public List<Freer> searchCidOnChain(BufferedReader br){
+        List<Freer> cidList = new ArrayList<>();
         while(true){
-            List<Cid> batchCidList = apipClient.searchCidList(br, true);
+            List<Freer> batchCidList = apipClient.searchCidList(br, true);
             if(batchCidList!=null && !batchCidList.isEmpty())
                 cidList.addAll(batchCidList);
             else System.out.println("No items found. Mind the capitalization.");
@@ -167,7 +166,7 @@ public class ContactManager extends Manager<ContactDetail> {
         List<Contact> deletedContactList = new ArrayList<>();
         boolean recovered;
         for(Contact item:items.values()){
-            if(!item.isActive()) {
+            if(!item.getActive()) {
                 deletedContactList.add(item);
             }else{
                 reloadedList.add(item);
@@ -186,10 +185,10 @@ public class ContactManager extends Manager<ContactDetail> {
         }
         if(reloadedList.isEmpty())return new HashMap<>();
 
-        List<ContactDetail> contactDetailList = contactToContactDetail(reloadedList);
-        if(contactDetailList.isEmpty())return new HashMap<>();
+        List<Contact> contactList = contactToContactDetail(reloadedList);
+        if(contactList.isEmpty())return new HashMap<>();
 
-        putAllContactDetail(contactDetailList);
+        putAllContactDetail(contactList);
 
         List<String> reloadedIdList = reloadedList.stream().map(Contact::getId).collect(Collectors.toList());
         localDB.removeFromMap(LocalDB.LOCAL_REMOVED_MAP, reloadedIdList);
@@ -206,13 +205,13 @@ public class ContactManager extends Manager<ContactDetail> {
         }
     }
 
-    public void putContact(String id, ContactDetail contact) {
+    public void putContact(String id, Contact contact) {
         localDB.put(id, contact);
         recentContactDetailMapQueue.put(id, contact);
     }
 
-    public ContactDetail getContact(String id) {
-        ContactDetail contact = recentContactDetailMapQueue.get(id);
+    public Contact getContact(String id) {
+        Contact contact = recentContactDetailMapQueue.get(id);
         if (contact != null) {
             return contact;
         }
@@ -237,15 +236,15 @@ public class ContactManager extends Manager<ContactDetail> {
         recentContactDetailMapQueue.clear();
     }
 
-    public List<ContactDetail> searchContacts(String searchString) {
+    public List<Contact> searchContacts(String searchString) {
         return searchInValue(searchString);
     }
 
-    public List<ContactDetail> searchContacts(BufferedReader br, boolean withChoose, boolean withOperation) {
+    public List<Contact> searchContacts(BufferedReader br, boolean withChoose, boolean withOperation) {
         return searchItems(br, withChoose, withOperation);
     }
 
-    public void opOnChain(List<ContactDetail> chosenContacts, String ask, BufferedReader br) {
+    public void opOnChain(List<Contact> chosenContacts, String ask, BufferedReader br) {
         ContactOpData.Op op = null;
         String opStr = Inputer.chooseOne(
             Arrays.stream(ContactOpData.Op.values())
@@ -286,11 +285,11 @@ public class ContactManager extends Manager<ContactDetail> {
         }
     }
 
-    public void addContacts(List<ContactDetail> itemList, @Nullable BufferedReader br) {
+    public void addContacts(List<Contact> itemList, @Nullable BufferedReader br) {
         if(itemList == null && br != null) addContacts(br);
         else{
             if(itemList==null || itemList.isEmpty())return;
-            for(ContactDetail item:itemList){
+            for(Contact item:itemList){
                 ContactOpData contactOpData = encryptContact(item);
                 carveContactData(contactOpData, br);
                 if(br!=null && !Inputer.askIfYes(br,"Carve next?"))break;
@@ -305,24 +304,24 @@ public class ContactManager extends Manager<ContactDetail> {
 
     public void deleteContacts(BufferedReader br) {
         if (dbEmpty()) return;
-        List<ContactDetail> finalChosenList = chooseItemList(br);
+        List<Contact> finalChosenList = chooseItemList(br);
         if(finalChosenList!=null && finalChosenList.size()>0)
             deleteContacts(finalChosenList, br);
     }
 
-    public void deleteContacts(List<ContactDetail> chosenContacts, BufferedReader br) {
+    public void deleteContacts(List<Contact> chosenContacts, BufferedReader br) {
         if (chosenContacts.isEmpty()) {
             System.out.println("No contacts chosen for deletion.");
             return;
         }
 
         if (Inputer.askIfYes(br, "View them before delete?")) {
-            Shower.showOrChooseListInPages("Chosen  Contacts", chosenContacts, DEFAULT_PAGE_SIZE, null, true, ContactDetail.class, br);
+            Shower.showOrChooseListInPages("Chosen  Contacts", chosenContacts, DEFAULT_PAGE_SIZE, null, true, Contact.class, br);
         }
 
         if (Inputer.askIfYes(br, "Delete " + chosenContacts.size() + " contacts?")) {
             List<String> contactIds = new ArrayList<>();
-            for (ContactDetail contact : chosenContacts) {
+            for (Contact contact : chosenContacts) {
                 contactIds.add(contact.getId());
             }
 
@@ -338,18 +337,18 @@ public class ContactManager extends Manager<ContactDetail> {
         }
     }
 
-    public void putAllContactDetail(List<ContactDetail> items) {
-        Map<String, ContactDetail> contactDetailMap = new HashMap<>();
-        for (ContactDetail item : items) {
+    public void putAllContactDetail(List<Contact> items) {
+        Map<String, Contact> contactDetailMap = new HashMap<>();
+        for (Contact item : items) {
             contactDetailMap.put(item.getId(), item);
         }
         putAllContactDetail(contactDetailMap);
     }
 
 
-    public void putAllContactDetail(Map<String, ContactDetail> items) {
+    public void putAllContactDetail(Map<String, Contact> items) {
         super.localDB.putAll(items);
-        for (Map.Entry<String, ContactDetail> entry : items.entrySet()) {
+        for (Map.Entry<String, Contact> entry : items.entrySet()) {
             recentContactDetailMapQueue.put(entry.getKey(), entry.getValue());
         }
     }
@@ -375,15 +374,15 @@ public class ContactManager extends Manager<ContactDetail> {
 
             }
 
-            ContactDetail contactDetail = new ContactDetail();
+            Contact contact = new Contact();
             System.out.println("\nAdding "+fid+"...");
-            contactDetail.setFid(fid);
-            contactDetail.setTitles(Inputer.inputStringList(br, "Input titles:",0));
-            contactDetail.setMemo(Inputer.inputString(br, "Input memo:"));
-            contactDetail.setSeeStatement(Inputer.askIfYes(br, "See its statements?"));
-            contactDetail.setSeeWritings(Inputer.askIfYes(br, "See its writings?"));
+            contact.setFid(fid);
+            contact.setTitles(Inputer.inputStringList(br, "Input titles:",0));
+            contact.setMemo(Inputer.inputString(br, "Input memo:"));
+            contact.setSeeStatement(Inputer.askIfYes(br, "See its statements?"));
+            contact.setSeeWritings(Inputer.askIfYes(br, "See its writings?"));
 
-            if (!encryptContactDetail(contactOpData, contactDetail)) return null;
+            if (!encryptContactDetail(contactOpData, contact)) return null;
         } else {
             if (ids == null) return null;
             contactOpData.setContactIds(ids);
@@ -409,11 +408,11 @@ public class ContactManager extends Manager<ContactDetail> {
         return null;
     }
 
-    public boolean encryptContactDetail(ContactOpData contactOpData, ContactDetail contactDetail) {
+    public boolean encryptContactDetail(ContactOpData contactOpData, Contact contact) {
         Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
         if(myPubKey==null)return false;
         byte[] pubKey = Hex.fromHex(myPubKey);
-        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonUtils.toJson(contactDetail).getBytes(), pubKey);
+        CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonUtils.toJson(contact).getBytes(), pubKey);
         if (cryptoDataByte.getCode() != 0) {
             log.error("Failed to encrypt.");
             return false;
@@ -436,7 +435,7 @@ public class ContactManager extends Manager<ContactDetail> {
         else lastHeight = ((Number)lastHeightObj).longValue();
 
         List<Contact> contactList = loadAllOnChainItems(CONTACT, FieldNames.LAST_HEIGHT, FieldNames.OWNER, lastHeight, true, apipClient, Contact.class, null, true);
-        List<ContactDetail> contactDetailList;
+        List<Contact> contactDetailList;
         
         if (contactList!=null && !contactList.isEmpty()) {
             contactDetailList = contactToContactDetail(contactList);
@@ -496,7 +495,7 @@ public class ContactManager extends Manager<ContactDetail> {
     }
 
     public Feip getFeip() {
-        return Feip.fromProtocolName(Feip.ProtocolName.CONTACT);
+        return Feip.fromProtocolName(Feip.FeipProtocol.CONTACT);
     }
 
     private void clearAllLocallyRemoved(BufferedReader br) {
@@ -534,9 +533,9 @@ public class ContactManager extends Manager<ContactDetail> {
         finalChosenDeleted.addAll(onChainDeleted);
         finalChosenDeleted.addAll(localDeletedContacts.values());
 
-        List<ContactDetail> contactDetailList = contactToContactDetail(finalChosenDeleted);
+        List<Contact> contactList = contactToContactDetail(finalChosenDeleted);
 
-        List<ContactDetail> chosenContacts = Shower.showOrChooseListInPages("Chosen  Contacts", contactDetailList, DEFAULT_PAGE_SIZE, null, true, ContactDetail.class, br);
+        List<Contact> chosenContacts = Shower.showOrChooseListInPages("Chosen  Contacts", contactList, DEFAULT_PAGE_SIZE, null, true, Contact.class, br);
 
         recoverContacts(null,chosenContacts,br);
 
@@ -550,12 +549,12 @@ public class ContactManager extends Manager<ContactDetail> {
         handleFakeContactData(br);
     }
 
-    private List<ContactDetail> contactToContactDetail(List<Contact> contactList) {
-        List<ContactDetail> contactDetailList = new ArrayList<>();
+    private List<Contact> contactToContactDetail(List<Contact> contactList) {
+        List<Contact> contactDetailList = new ArrayList<>();
         fakeContactCipherMap = new HashMap<>();
 
         for (Contact contact : contactList) {
-            ContactDetail contactDetail = ContactDetail.fromContact(contact, prikey, apipClient);
+            Contact contactDetail = Contact.parseDetail(contact, prikey, apipClient);
             if (contactDetail == null) {
                 fakeContactCipherMap.put(contact.getId(),
                     DateUtils.longToTime(contact.getBirthTime()*1000, DateUtils.LONG_FORMAT)+" "+contact.getCipher());
@@ -604,16 +603,16 @@ public class ContactManager extends Manager<ContactDetail> {
 //        return chosenContacts;
 //    }
 
-    private ContactOpData encryptContact(ContactDetail contactDetail) {
-        if(contactDetail==null) return null;
+    private ContactOpData encryptContact(Contact contact) {
+        if(contact ==null) return null;
         
         // Clear fields that shouldn't be included in encryption
-        contactDetail.setUpdateHeight(null);
-        contactDetail.setId(null);
+        contact.setLastHeight(null);
+        contact.setId(null);
 
         
         ContactOpData contactOpData = new ContactOpData();
-        if (!encryptContactDetail(contactOpData, contactDetail)) return null;
+        if (!encryptContactDetail(contactOpData, contact)) return null;
 
         return contactOpData;
     }
@@ -635,7 +634,7 @@ public class ContactManager extends Manager<ContactDetail> {
         return carve(opReturnStr, cd, br);
     }
 
-    public boolean recoverContacts(@Nullable List<String> contactIds, @Nullable List<ContactDetail> chosenContacts, BufferedReader br) {
+    public boolean recoverContacts(@Nullable List<String> contactIds, @Nullable List<Contact> chosenContacts, BufferedReader br) {
         String result;
         if(contactIds != null && !contactIds.isEmpty()) {
             if (!Inputer.askIfYes(br, "Recover " + contactIds.size() + " contacts?")) {
@@ -647,7 +646,7 @@ public class ContactManager extends Manager<ContactDetail> {
                 return false;
             }
             List<String> ids = chosenContacts.stream()
-                .map(ContactDetail::getId)
+                .map(Contact::getId)
                 .collect(Collectors.toList());
             result = recoverContact(ids, br);
         } else {
@@ -656,20 +655,20 @@ public class ContactManager extends Manager<ContactDetail> {
 
         if (Hex.isHex32(result)) {
             System.out.println("Recovered contacts: " + (contactIds != null ? contactIds : chosenContacts.stream()
-                .map(ContactDetail::getId)
+                .map(Contact::getId)
                 .toList()) + " in TX " + result + ".");
             if (contactIds != null) {
                 localDB.removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, contactIds);
             } else {
                 List<String> ids = chosenContacts.stream()
-                    .map(ContactDetail::getId)
+                    .map(Contact::getId)
                     .collect(Collectors.toList());
                 localDB.removeFromMap(LocalDB.ON_CHAIN_DELETED_MAP, ids);
             }
             return true;
         } else {
             System.out.println("Failed to recover contacts: " + (contactIds != null ? contactIds : chosenContacts.stream()
-                .map(ContactDetail::getId)
+                .map(Contact::getId)
                 .collect(Collectors.toList())) + ": " + result);
             return false;
         }
@@ -680,10 +679,10 @@ public class ContactManager extends Manager<ContactDetail> {
     }
 
     @Override
-    public void opItems(List<ContactDetail> items, String ask, BufferedReader br) {
+    public void opItems(List<Contact> items, String ask, BufferedReader br) {
         Menu menu = new Menu("Contact Operations", () -> {});
         menu.add("Show details", () -> showItemDetails(items, br));
-        menu.add("Remove from local", () -> removeItems(items.stream().map(ContactDetail::getId).collect(Collectors.toList()), br));
+        menu.add("Remove from local", () -> removeItems(items.stream().map(Contact::getId).collect(Collectors.toList()), br));
         menu.add("Delete on chain", () -> deleteContacts(items, br));
         menu.add("Recover on chain", () -> recoverContacts(null, items, br));
         menu.add("Add to chain", () -> addContacts(items, br));
@@ -697,7 +696,7 @@ public class ContactManager extends Manager<ContactDetail> {
      * 
      * @return Map of contact IDs to ContactDetails from the recent contacts cache
      */
-    public Map<String, ContactDetail> getAllRecentContacts() {
+    public Map<String, Contact> getAllRecentContacts() {
         return recentContactDetailMapQueue.getMap();
     }
 } 

@@ -1,15 +1,31 @@
 package data.fcData;
 
+import core.crypto.KeyTools;
+import utils.Hex;
+
 public class Affair extends FcObject {
-    private Meta meta;
+    public static String NAME = "affair";
+
+    //Subject
+    private String fid;
+    private String pubkey;
+
+    //Operation
     private Op op; // For operating affairs.
-    private Relation rela; //For description affairs.
-    private String fid; //Subject
-    private String oid; //Object of fid. Subject when fid is absent.
-    private String fidB; //Object
-    private String oidB; //Object
+    private String opType;
+
+    //Object
+    private String oid;
+
     private Object data;
-    private String dataBase64;
+    private String dataStr;
+
+    private String fidB;
+    private String pubkeyB;
+
+    private String oidB;
+    private Object dataB;
+
 
     public static Affair makeNotifyAffair(String fromFid, String recipientFid, String message) {
         // Create payment notice affair
@@ -39,21 +55,14 @@ public class Affair extends FcObject {
 }
      */
 
-    public String getDataBase64() {
-        return dataBase64;
+    public String getDataStr() {
+        return dataStr;
     }
 
-    public void setDataBase64(String dataBase64) {
-        this.dataBase64 = dataBase64;
+    public void setDataStr(String dataStr) {
+        this.dataStr = dataStr;
     }
 
-    public Relation getRela() {
-        return rela;
-    }
-
-    public void setRela(Relation rela) {
-        this.rela = rela;
-    }
 
     public String getFidB() {
         return fidB;
@@ -103,4 +112,41 @@ public class Affair extends FcObject {
     public void setData(Object data) {
         this.data = data;
     }
+
+    public String getPubkey() {
+        return pubkey;
+    }
+
+    public void setPubkey(String pubkey) {
+        this.pubkey = pubkey;
+        if(this.fid==null  && pubkey!=null)
+            this.fid = KeyTools.pubkeyToFchAddr(Hex.fromHex(pubkey));
+    }
+
+    public String getPubkeyB() {
+        return pubkeyB;
+    }
+
+    public void setPubkeyB(String pubkeyB) {
+        this.pubkeyB = pubkeyB;
+        if(this.fidB==null && pubkeyB!=null)
+            this.fidB = KeyTools.pubkeyToFchAddr(Hex.fromHex(pubkeyB));
+    }
+
+    public Object getDataB() {
+        return dataB;
+    }
+
+    public void setDataB(Object dataB) {
+        this.dataB = dataB;
+    }
+
+    public String getOpType() {
+        return opType;
+    }
+
+    public void setOpType(String opType) {
+        this.opType = opType;
+    }
+
 }

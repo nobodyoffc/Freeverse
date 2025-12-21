@@ -233,7 +233,7 @@ public class SessionManager extends Manager<FcSession> {
     }
 
     @NotNull
-    private FcSession addNewSession(String fid, String userPubKey, AlgorithmId alg) {
+    private FcSession addNewSession(String fid, String pubKey, AlgorithmId alg) {
         byte[] sessionKey = IdNameUtils.genNew32BytesKey();
         String sessionName = IdNameUtils.makeKeyName(sessionKey);
 
@@ -243,10 +243,16 @@ public class SessionManager extends Manager<FcSession> {
         session.setKey(Hex.toHex(sessionKey));
         session.setUserId(fid);
         session.setId(sessionName);
-        session.setPubkey(userPubKey);
-        session.setKeyCipher(makeKeyCipher(sessionKey, userPubKey, alg));
+        if(pubKey!=null) {
+            session.setPubkey(pubKey);
+            session.setKeyCipher(makeKeyCipher(sessionKey, pubKey, alg));
+        }
         session.setAlg(alg);
 
+        return updateSessionInDB(fid, sessionName, session);
+    }
+
+    private FcSession updateSessionInDB(String fid, String sessionName, FcSession session) {
         if (!useRedis) {
             String oldSessionName = localDB.getFromMap(USER_ID_SESSION_NAME_MAP, fid);
             if (oldSessionName != null) {
@@ -352,5 +358,12 @@ public class SessionManager extends Manager<FcSession> {
         try (var jedis = jedisPool.getResource()) {
             jedis.hdel(jedisUsedSessionsKey, key);
         }
+    }
+
+    public void updateSession(String sessionKeyHex, String fid, String pubkey) {
+
+        FcSession session = new FcSession(sessionKeyHex,fid,pubkey);
+
+        updateSessionInDB(fid, session.getId(), session);
     }
 }

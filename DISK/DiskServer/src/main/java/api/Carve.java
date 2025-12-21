@@ -2,15 +2,17 @@ package api;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
+import constants.ApipApiNames;
 import data.fcData.DiskItem;
 import data.fcData.Hat;
 import data.feipData.Service;
 import handlers.DiskManager;
 import handlers.Manager;
-import server.ApipApiNames;
+import server.ApipApi;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
 import initial.Initiator;
+import server.DiskApiNames;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
 import config.Settings;
@@ -25,7 +27,7 @@ import java.util.Map;
 
 import static constants.Strings.*;
 
-@WebServlet(name = ApipApiNames.Carve, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.Carve)
+@WebServlet(name = DiskApiNames.CARVE, value =  "/"+ DiskApiNames.CARVE+"/"+ DiskApiNames.VER_1)
 public class Carve extends HttpServlet {
     private final Settings settings = Initiator.settings;
 
@@ -34,7 +36,7 @@ public class Carve extends HttpServlet {
         ReplyBody replier = new ReplyBody(settings);
         replier.setCode(CodeMessage.Code1017MethodNotAvailable);
         replier.setMessage(CodeMessage.Msg1017MethodNotAvailable);
-        response.getWriter().write(replier.toNiceJson());
+        replier.replyHttp(CodeMessage.Code1017MethodNotAvailable,response);
     }
 
     @Override

@@ -7,7 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import core.fch.BlockFileUtils;
-import data.fchData.BlockMark;
+import data.fchData.BlockMask;
 import utils.EsUtils;
 import writeEs.RollBacker;
 
@@ -32,11 +32,11 @@ public class Preparer {
 	public static  long Pointer;
 	public static  String BestHash;
 	public static  long BestHeight;
-	public static BlockMark BestBlockMark;
-	public static BlockMark BeforeBestBlockMark;
-	public static ArrayList<BlockMark> orphanList;
-	public static ArrayList<BlockMark> mainList;
-	public static ArrayList<BlockMark> forkList;
+	public static BlockMask bestBlockMask;
+	public static BlockMask beforeBestBlockMask;
+	public static ArrayList<BlockMask> orphanList;
+	public static ArrayList<BlockMask> mainList;
+	public static ArrayList<BlockMask> forkList;
 
 	public void prepare(ElasticsearchClient esClient, String blockDir, long bestHeight) throws Exception {
 		if(esClient==null) {
@@ -75,19 +75,19 @@ public class Preparer {
 
 		}else {
 			BestHeight = bestHeight;
-			SearchResponse<BlockMark> response = esClient.search(s->s.index(BLOCK_MARK)
+			SearchResponse<BlockMask> response = esClient.search(s->s.index(BLOCK_MARK)
 							.query(q->q.term(t->t.field("height").value(BestHeight)))
-					, BlockMark.class);
+					, BlockMask.class);
 
-			BlockMark backToBlockMark = response.hits().hits().get(0).source();
+			BlockMask backToBlockMask = response.hits().hits().get(0).source();
 
-			if(backToBlockMark!=null) {
-				new RollBacker().rollback(esClient, backToBlockMark.getHeight());
+			if(backToBlockMask !=null) {
+				new RollBacker().rollback(esClient, backToBlockMask.getHeight());
 
-				Preparer.BestHash = backToBlockMark.getId();
-				Preparer.BestHeight = backToBlockMark.getHeight();
-				Preparer.CurrentFile = BlockFileUtils.getFileNameWithOrder(backToBlockMark.get_fileOrder());
-				Preparer.Pointer = backToBlockMark.get_pointer() + backToBlockMark.getSize() + 8;
+				Preparer.BestHash = backToBlockMask.getId();
+				Preparer.BestHeight = backToBlockMask.getHeight();
+				Preparer.CurrentFile = BlockFileUtils.getFileNameWithOrder(backToBlockMask.get_fileOrder());
+				Preparer.Pointer = backToBlockMask.get_pointer() + backToBlockMask.getSize() + 8;
 			}
 			TimeUnit.SECONDS.sleep(5);
 
@@ -97,10 +97,10 @@ public class Preparer {
 		}
 	}
 
-	public static ArrayList<BlockMark> readForkList(ElasticsearchClient esClient, long bestHeight) throws ElasticsearchException, IOException {
+	public static ArrayList<BlockMask> readForkList(ElasticsearchClient esClient, long bestHeight) throws ElasticsearchException, IOException {
 
 		System.out.println("Reading fork blockMark list..." );
-		SearchResponse<BlockMark> response = esClient.search(s->s.index(BLOCK_MARK)
+		SearchResponse<BlockMask> response = esClient.search(s->s.index(BLOCK_MARK)
 						.query(q->q.bool(b->b
 								.filter(f->f
 										.term(t->t.field("status").value("fork")))
@@ -111,22 +111,22 @@ public class Preparer {
 						.sort(so->so.field(f->f
 								.field("height")
 								.order(SortOrder.Asc)))
-				, BlockMark.class);
+				, BlockMask.class);
 
-		List<Hit<BlockMark>> hitList = response.hits().hits();
+		List<Hit<BlockMask>> hitList = response.hits().hits();
 
-		ArrayList<BlockMark> readList = new ArrayList<>();
+		ArrayList<BlockMask> readList = new ArrayList<>();
 
-		for (Hit<BlockMark> hit : hitList) {
+		for (Hit<BlockMask> hit : hitList) {
 			readList.add(hit.source());
 		}
 
 		return readList;
 	}
-	public static ArrayList<BlockMark> readOrphanList(ElasticsearchClient esClient) throws ElasticsearchException, IOException {
+	public static ArrayList<BlockMask> readOrphanList(ElasticsearchClient esClient) throws ElasticsearchException, IOException {
 
 		System.out.println("Reading orphan blockMark list..." );
-		SearchResponse<BlockMark> response = esClient.search(s->s.index(BLOCK_MARK)
+		SearchResponse<BlockMask> response = esClient.search(s->s.index(BLOCK_MARK)
 						.query(q->q
 								.bool(b->b
 										.should(s1->s1
@@ -154,27 +154,27 @@ public class Preparer {
 										.field("_fileOrder").order(SortOrder.Asc)
 										.field("_pointer").order(SortOrder.Asc))
 						)
-				, BlockMark.class);
+				, BlockMask.class);
 
-		List<Hit<BlockMark>> hitList = response.hits().hits();
+		List<Hit<BlockMask>> hitList = response.hits().hits();
 
-		ArrayList<BlockMark> readList = new ArrayList<>();
+		ArrayList<BlockMask> readList = new ArrayList<>();
 
-		for (Hit<BlockMark> hit : hitList) {
+		for (Hit<BlockMask> hit : hitList) {
 			readList.add(hit.source());
 		}
 
-		for(BlockMark bm : readList) {
+		for(BlockMask bm : readList) {
 			bm.setStatus(ORPHAN);
 			bm.setHeight(0L);
 		}
 
 		return readList;
 	}
-	public static ArrayList<BlockMark> readMainList(ElasticsearchClient esClient) throws ElasticsearchException, IOException {
+	public static ArrayList<BlockMask> readMainList(ElasticsearchClient esClient) throws ElasticsearchException, IOException {
 
 		System.out.println("Reading main blockMark list..." );
-		SearchResponse<BlockMark> response = esClient.search(s->s.index(BLOCK_MARK)
+		SearchResponse<BlockMask> response = esClient.search(s->s.index(BLOCK_MARK)
 						.query(q->q
 								.term(t->t
 										.field("status")
@@ -183,11 +183,11 @@ public class Preparer {
 						.sort(so->so.field(f->f
 								.field("height")
 								.order(SortOrder.Desc)))
-				, BlockMark.class);
+				, BlockMask.class);
 
-		List<Hit<BlockMark>> hitList = response.hits().hits();
+		List<Hit<BlockMask>> hitList = response.hits().hits();
 
-		ArrayList<BlockMark> readList = new ArrayList<>();
+		ArrayList<BlockMask> readList = new ArrayList<>();
 
 		for(int i=hitList.size()-1; i>=0; i-- ) {
 			readList.add(hitList.get(i).source());

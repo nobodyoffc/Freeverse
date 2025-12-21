@@ -2,8 +2,8 @@ package APIP18V1_Wallet;
 
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import constants.ApipApiNames;
 import data.feipData.Service;
-import server.ApipApiNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
 import initial.Initiator;
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 
 
-@WebServlet(name = ApipApiNames.BALANCE_BY_IDS, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.BALANCE_BY_IDS)
+@WebServlet(name = ApipApiNames.BALANCE_BY_IDS, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.BALANCE_BY_IDS +"/"+ ApipApiNames.VER_1)
 public class BalanceByIds extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -27,7 +27,7 @@ public class BalanceByIds extends HttpServlet {
         doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType, settings);
     }
 
@@ -52,8 +52,8 @@ public class BalanceByIds extends HttpServlet {
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
 
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
-        Map<String,Long> balanceMap = fcHttpRequestHandler.sumCashValueByOwners(fids, esClient);
-        fcHttpRequestHandler.updateAddressBalances(balanceMap, esClient);
+        Map<String,Long> balanceMap = FcHttpRequestHandler.sumCashValueByOwners(fids, esClient);
+        FcHttpRequestHandler.updateAddressBalances(balanceMap, esClient);
         replier.setGot((long) balanceMap.size());
         replier.setGot((long) balanceMap.size());
         replier.reply0SuccessHttp(balanceMap,response);

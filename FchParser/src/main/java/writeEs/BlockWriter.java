@@ -5,6 +5,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest.Builder;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
+import data.fchData.Cash;
 import data.fchData.*;
 import core.fch.OpReFileUtils;
 import org.slf4j.Logger;
@@ -13,9 +14,7 @@ import parser.Preparer;
 import parser.ReadyBlock;
 import utils.EsUtils;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.concurrent.TimeUnit;
+import java.util.*;
 
 public class BlockWriter {
 
@@ -23,37 +22,36 @@ public class BlockWriter {
 	public void writeIntoEs(ElasticsearchClient esClient, ReadyBlock readyBlock, OpReFileUtils opReFile) throws Exception {
 
 		Block block = readyBlock.getBlock();
-		BlockHas blockHas = readyBlock.getBlockHas();
-		ArrayList<Tx> txList = readyBlock.getTxList();
-		ArrayList<TxHas> txHasList = readyBlock.getTxHasList();
-		ArrayList<Cash> inList = readyBlock.getInList();
-		ArrayList<Cash> outList = readyBlock.getOutWriteList();
-		ArrayList<OpReturn> opReturnList = readyBlock.getOpReturnList();
-		BlockMark blockMark = readyBlock.getBlockMark();
-		ArrayList<Cid> addrList = readyBlock.getAddrList();
-		
-		opReFile.writeOpReturnListIntoFile(opReturnList);
+		LinkedHashMap<String, Tx> txMap = readyBlock.getTxLinkedMap();
+		LinkedHashMap<String, Cash> inMap = readyBlock.getInMap();
+		LinkedHashMap<String, Cash> outWriteMap = readyBlock.getOutWriteMap();
+		LinkedHashMap<String, OpReturn> opReturnMap = readyBlock.getOpReturnMap();
+		BlockMask blockMask = readyBlock.getBlockMark();
+		LinkedHashMap<String, Freer> addrMap = readyBlock.getAddrMap();
+		Map<String, P2SH> p2SHMap = readyBlock.getP2SHMap();
+		Map<String, Multisig> multisigMap = readyBlock.getMultisigMap();
 
+		opReFile.writeOpReturnListIntoFile(new ArrayList<>(opReturnMap.values()));
 
 		Builder br = new Builder();
 		putBlock(block, br);
-		putBlockHas(blockHas, br);
-		putTx(esClient, txList, br);
-		putTxHas(esClient, txHasList, br);
-		putCash(esClient, outList, br);
-		putCash(esClient, inList, br);
-		putOpReturn(esClient, opReturnList, br);
-		putAddress(esClient, addrList, br);
-		putBlockMark(blockMark, br);
+		putTx(esClient, txMap, br);
+		putCash(esClient, new ArrayList<>(outWriteMap.values()), br);
+		putCash(esClient, new ArrayList<>(inMap.values()), br);
+		putOpReturn(esClient, new ArrayList<>(opReturnMap.values()), br);
+		putAddress(esClient, new ArrayList<>(addrMap.values()), br);
+		putP2SH(esClient, new ArrayList<>(p2SHMap.values()), br);
+		putMultisig(esClient, new ArrayList<>(multisigMap.values()), br);
+		putBlockMark(blockMask, br);
 		BulkResponse response = EsUtils.bulkWithBuilder(esClient, br);
 
 		System.out.println("Main chain linked. "
 				+"Orphan: "+Preparer.orphanList.size()
 				+" Fork: "+Preparer.forkList.size()
-				+" id: "+blockMark.getId()
+				+" id: "+ blockMask.getId()
 				+" file: "+Preparer.CurrentFile
 				+" pointer: "+Preparer.Pointer
-				+" Height:"+blockMark.getHeight());
+				+" Height:"+ blockMask.getHeight());
 
 		
 		response.items().iterator();
@@ -68,32 +66,33 @@ public class BlockWriter {
 			throw new Exception("bulkWriteToEs error");
 		}
 
-		Preparer.mainList.add(blockMark);
+		Preparer.mainList.add(blockMask);
 		if (Preparer.mainList.size() > EsUtils.READ_MAX) {
 			Preparer.mainList.remove(0);
 		}
-		Preparer.BestHash = blockMark.getId();
-		Preparer.BestHeight = blockMark.getHeight();
-		Preparer.BeforeBestBlockMark = Preparer.BestBlockMark;
-		Preparer.BestBlockMark = blockMark;
+		Preparer.BestHash = blockMask.getId();
+		Preparer.BestHeight = blockMask.getHeight();
+		Preparer.beforeBestBlockMask = Preparer.bestBlockMask;
+		Preparer.bestBlockMask = blockMask;
 	}
 
-	private void putBlockMark(BlockMark blockMark, Builder br) {
-		br.operations(op -> op.index(i -> i.index(IndicesNames.BLOCK_MARK).id(blockMark.getId()).document(blockMark)));
+	private void putBlockMark(BlockMask blockMask, Builder br) {
+		br.operations(op -> op.index(i -> i.index(IndicesNames.BLOCK_MARK).id(blockMask.getId()).document(blockMask)));
 	}
 
-	private void putAddress(ElasticsearchClient esClient, ArrayList<Cid> addrList, Builder br) throws Exception {
+	private void putAddress(ElasticsearchClient esClient, ArrayList<Freer> addrList, Builder br) throws Exception {
 
 		if (addrList.size() > EsUtils.WRITE_MAX / 5) {
-			Iterator<Cid> iter = addrList.iterator();
+			Iterator<Freer> iter = addrList.iterator();
 			ArrayList<String> idList = new ArrayList<>();
 			while (iter.hasNext())
 				idList.add(iter.next().getId());
-			EsUtils.bulkWriteList(esClient, IndicesNames.CID, addrList, idList, Cid.class);
-			TimeUnit.SECONDS.sleep(3);
+			BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.FREER, addrList, idList, Freer.class);
+			checkBulkWriteErrors(response, "CID", addrList.size());
+			// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
 		} else {
-			for (Cid am : addrList) {
-				br.operations(op -> op.index(i -> i.index(IndicesNames.CID).id(am.getId()).document(am)));
+			for (Freer am : addrList) {
+				br.operations(op -> op.index(i -> i.index(IndicesNames.FREER).id(am.getId()).document(am)));
 			}
 		}
 	}
@@ -107,8 +106,9 @@ public class BlockWriter {
 				ArrayList<String> idList = new ArrayList<>();
 				while (iter.hasNext())
 					idList.add(iter.next().getId());
-				EsUtils.bulkWriteList(esClient, IndicesNames.OPRETURN, opReturnList, idList, OpReturn.class);
-				TimeUnit.SECONDS.sleep(3);
+				BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.OPRETURN, opReturnList, idList, OpReturn.class);
+				checkBulkWriteErrors(response, "OPRETURN", opReturnList.size());
+				// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
 			} else {
 				for (OpReturn or : opReturnList) {
 					br.operations(op -> op.index(i -> i.index(IndicesNames.OPRETURN).id(or.getId()).document(or)));
@@ -124,8 +124,9 @@ public class BlockWriter {
 				ArrayList<String> idList = new ArrayList<>();
 				while (iter.hasNext())
 					idList.add(iter.next().getId());
-				EsUtils.bulkWriteList(esClient, IndicesNames.CASH, cashList, idList, Cash.class);
-				TimeUnit.SECONDS.sleep(3);
+				BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.CASH, cashList, idList, Cash.class);
+				checkBulkWriteErrors(response, "CASH", cashList.size());
+				// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
 			} else {
 				for (Cash om : cashList) {
 					br.operations(op -> op.index(i -> i.index(IndicesNames.CASH).id(om.getId()).document(om)));
@@ -134,43 +135,92 @@ public class BlockWriter {
 		}
 	}
 
-	private void putTxHas(ElasticsearchClient esClient, ArrayList<TxHas> txHasList, Builder br) throws Exception {
-		if (txHasList != null) {
-			if (txHasList.size() > EsUtils.WRITE_MAX / 5) {
-				Iterator<TxHas> iter = txHasList.iterator();
-				ArrayList<String> idList = new ArrayList<>();
-				while (iter.hasNext())
-					idList.add(iter.next().getId());
-				EsUtils.bulkWriteList(esClient, IndicesNames.TX_HAS, txHasList, idList, TxHas.class);
-				TimeUnit.SECONDS.sleep(3);
-			} else {
-				for (TxHas ot : txHasList) {
-					br.operations(op -> op.index(i -> i.index(IndicesNames.TX_HAS).id(ot.getId()).document(ot)));
-				}
-			}
-		}
-	}
+	private void putTx(ElasticsearchClient esClient, LinkedHashMap<String, Tx> txLinkedMap, Builder br) throws Exception {
+		if (txLinkedMap.size() > EsUtils.WRITE_MAX / 5) {
+			ArrayList<String> idList = new ArrayList<>(txLinkedMap.keySet());
 
-	private void putTx(ElasticsearchClient esClient, ArrayList<Tx> txList, Builder br) throws Exception {
-		if (txList.size() > EsUtils.WRITE_MAX / 5) {
-			Iterator<Tx> iter = txList.iterator();
-			ArrayList<String> idList = new ArrayList<>();
-			while (iter.hasNext())
-				idList.add(iter.next().getId());
-			EsUtils.bulkWriteList(esClient, IndicesNames.TX, txList, idList, Tx.class);
-			TimeUnit.SECONDS.sleep(3);
+			BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.TX, new ArrayList<>(txLinkedMap.values()), idList, Tx.class);
+			checkBulkWriteErrors(response, "TX", txLinkedMap.size());
+			// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
 		} else {
-			for (Tx tm : txList) {
+			for (Tx tm : txLinkedMap.values()) {
 				br.operations(op -> op.index(i -> i.index(IndicesNames.TX).id(tm.getId()).document(tm)));
 			}
 		}
 	}
 
-	private void putBlockHas(BlockHas blockHas, Builder br) {
-		br.operations(op -> op.index(i -> i.index(IndicesNames.BLOCK_HAS).id(blockHas.getId()).document(blockHas)));
-	}
-
 	private void putBlock(Block block, Builder br) {
 		br.operations(op -> op.index(i -> i.index(IndicesNames.BLOCK).id(block.getId()).document(block)));
+	}
+
+	private void putP2SH(ElasticsearchClient esClient, ArrayList<P2SH> p2shList, Builder br) throws Exception {
+		if (p2shList != null && !p2shList.isEmpty()) {
+			if (p2shList.size() > 100) {
+				Iterator<P2SH> iter = p2shList.iterator();
+				ArrayList<String> idList = new ArrayList<>();
+				while (iter.hasNext())
+					idList.add(iter.next().getId());
+				BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.P2SH, p2shList, idList, P2SH.class);
+				checkBulkWriteErrors(response, "P2SH", p2shList.size());
+				// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
+			} else {
+				for (P2SH p2sh : p2shList) {
+					br.operations(op -> op.index(i -> i.index(IndicesNames.P2SH).id(p2sh.getId()).document(p2sh)));
+				}
+			}
+		}
+	}
+
+	private void putMultisig(ElasticsearchClient esClient, ArrayList<Multisig> multisigList, Builder br) throws Exception {
+		if (multisigList != null && !multisigList.isEmpty()) {
+			if (multisigList.size() > 100) {
+				Iterator<Multisig> iter = multisigList.iterator();
+				ArrayList<String> idList = new ArrayList<>();
+				while (iter.hasNext())
+					idList.add(iter.next().getId());
+				BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.MULTISIG, multisigList, idList, Multisig.class);
+				checkBulkWriteErrors(response, "MULTISIG", multisigList.size());
+				// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
+			} else {
+				for (Multisig multisig : multisigList) {
+					br.operations(op -> op.index(i -> i.index(IndicesNames.MULTISIG).id(multisig.getId()).document(multisig)));
+				}
+			}
+		}
+	}
+
+	/**
+	 * Check for errors in bulk write response and log detailed information
+	 * @param response BulkResponse from Elasticsearch
+	 * @param indexType Type of index being written (for logging)
+	 * @param itemCount Number of items attempted to write
+	 * @throws Exception if there are errors in the bulk write
+	 */
+	private void checkBulkWriteErrors(BulkResponse response, String indexType, int itemCount) throws Exception {
+		if (response!=null && response.errors()) {
+			int errorCount = 0;
+			log.error("Bulk write errors detected for index type: {}, attempted items: {}", indexType, itemCount);
+
+			for (BulkResponseItem item : response.items()) {
+				if (item.error() != null) {
+					errorCount++;
+					log.error("Index: {}, ID: {}, Error Type: {}, Reason: {}",
+						item.index(), item.id(), item.error().type(), item.error().reason());
+
+					// Log first 5 errors in detail, then summarize
+					if (errorCount <= 5) {
+						System.err.println(String.format("[ES Error] %s - Index: %s, Type: %s, Reason: %s",
+							indexType, item.index(), item.error().type(), item.error().reason()));
+					}
+				}
+			}
+
+			log.error("Total bulk write errors for {}: {}/{}", indexType, errorCount, itemCount);
+			throw new Exception(String.format("Bulk write failed for %s: %d/%d items failed", indexType, errorCount, itemCount));
+		} else if(response==null){
+			log.debug("Bulk write failed. The response of EsClient is null.");
+		} else {
+				log.debug("Bulk write successful for {}: {} items written", indexType, itemCount);
+		}
 	}
 }

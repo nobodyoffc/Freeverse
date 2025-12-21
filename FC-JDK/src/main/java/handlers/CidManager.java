@@ -7,7 +7,7 @@ import utils.MapQueue;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
-import data.fchData.Cid;
+import data.fchData.Freer;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CidManager extends Manager<Cid> {
+public class CidManager extends Manager<Freer> {
     private static final int MAX_FID_CID_CACHE_SIZE = 100;
     private static final int MAX_CID_FID_CACHE_SIZE = 100;
     private static final int MAX_FID_AVATAR_CACHE_SIZE = 50;
@@ -67,10 +67,10 @@ public class CidManager extends Manager<Cid> {
         }
 
         // Query API
-        Map<String, Cid> cidInfoMap = apipClient.cidInfoByIds(utils.http.RequestMethod.POST,
-                                                                 utils.http.AuthType.FC_SIGN_BODY, fid);
+        Map<String, Freer> cidInfoMap = apipClient.freerByIds(utils.http.RequestMethod.POST,
+                                                                 utils.http.AuthType.SYMKEY_ENCRYPT, fid);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
-            Cid cidInfo = cidInfoMap.get(fid);
+            Freer cidInfo = cidInfoMap.get(fid);
             if (cidInfo != null) {
                 cid = cidInfo.getCid();
                 if (cid != null) {
@@ -219,7 +219,7 @@ public class CidManager extends Manager<Cid> {
             
             Map<String, String[]> results = apipClient.fidCidSeek(searchTerm, 
                 utils.http.RequestMethod.POST,
-                utils.http.AuthType.FC_SIGN_BODY);
+                utils.http.AuthType.SYMKEY_ENCRYPT);
                 
             if (results != null && !results.isEmpty()) {
                 System.out.println("\nSearch Results:");

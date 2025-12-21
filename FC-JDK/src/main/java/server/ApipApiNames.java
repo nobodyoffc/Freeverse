@@ -41,6 +41,7 @@ public class ApipApiNames {
     public static final String SN_27 = "sn27";
     public static final String SN_28 = "sn28";
     public static final String SN_29 = "sn29";
+    public static final String SN_30 = "sn30";
     public static final String Carve = "carve";
 
     public static String[] openAPIs;
@@ -99,8 +100,9 @@ public class ApipApiNames {
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
     public static final String REPUTATION_HISTORY = "reputationHistory";
     public static final String NOBODY_SEARCH = "nobodySearch";
-    public static final String MULTISIGN_BY_IDS = "multisignByIds";
-    public static final String MULTISIGN_SEARCH = "multisignSearch";
+    public static final String CHECK_NOBODIES = "checkNobodies";
+    public static final String MULTISIG_BY_IDS = "multisigByIds";
+    public static final String MULTISIG_SEARCH = "multisigSearch";
     public static final String PROTOCOL_BY_IDS = "protocolByIds";
     public static final String PROTOCOL_SEARCH = "protocolSearch";
     public static final String PROTOCOL_OP_HISTORY = "protocolOpHistory";
@@ -233,6 +235,24 @@ public class ApipApiNames {
     public static final String ARTWORK_OP_HISTORY = "artworkOpHistory";
     public static final String ARTWORK_RATE_HISTORY = "artworkRateHistory";
 
+    public static final String SOUND_BY_IDS = "soundByIds";
+    public static final String SOUND_SEARCH = "soundSearch";
+    public static final String SOUND_OP_HISTORY = "soundOpHistory";
+    public static final String SOUND_RATE_HISTORY = "soundRateHistory";
+
+    public static final String IMAGE_BY_IDS = "imageByIds";
+    public static final String IMAGE_SEARCH = "imageSearch";
+    public static final String IMAGE_OP_HISTORY = "imageOpHistory";
+    public static final String IMAGE_RATE_HISTORY = "imageRateHistory";
+
+    public static final String VIDEO_BY_IDS = "videoByIds";
+    public static final String VIDEO_SEARCH = "videoSearch";
+    public static final String VIDEO_OP_HISTORY = "videoOpHistory";
+    public static final String VIDEO_RATE_HISTORY = "videoRateHistory";
+
+    public static final String NEWS_BY_IDS = "newsByIds";
+    public static final String NEWS_SEARCH = "newsSearch";
+
     static {
         openAPIs = new String[]{
                 PING, GET_SERVICE, SIGN_IN, SIGN_IN_ECC, TOTALS
@@ -244,7 +264,7 @@ public class ApipApiNames {
                 CASH_SEARCH, CASH_BY_IDS,
                 FID_SEARCH, FID_BY_IDS,
                 OP_RETURN_SEARCH, OP_RETURN_BY_IDS,
-                MULTISIGN_SEARCH, MULTISIGN_BY_IDS,
+                MULTISIG_SEARCH, MULTISIG_BY_IDS,CHECK_NOBODIES,
                 TX_SEARCH, TX_BY_IDS, TX_BY_FID,
                 CHAIN_INFO, BLOCK_TIME_HISTORY, DIFFICULTY_HISTORY, HASH_RATE_HISTORY
         };
@@ -252,7 +272,7 @@ public class ApipApiNames {
         identityAPIs = new String[]{
                 CID_SEARCH,CID_BY_IDS, CID_INFO_BY_IDS, CID_HISTORY,
                  FID_CID_SEEK, GET_FID_CID,
-                NOBODY_SEARCH, NOBODY_BY_IDS,
+                NOBODY_SEARCH, NOBODY_BY_IDS,CHECK_NOBODIES,
                 HOMEPAGE_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
                 NID_SEARCH, OID_BY_NIDS,
                 GET_AVATAR, AVATARS, CID_AVATAR_BY_IDS
@@ -291,7 +311,11 @@ public class ApipApiNames {
                 PAPER_SEARCH, PAPER_BY_IDS, PAPER_OP_HISTORY, PAPER_RATE_HISTORY,
                 BOOK_SEARCH, BOOK_BY_IDS, BOOK_OP_HISTORY, BOOK_RATE_HISTORY,
                 REMARK_SEARCH, REMARK_BY_IDS, REMARK_OP_HISTORY, REMARK_RATE_HISTORY,
-                ARTWORK_SEARCH, ARTWORK_BY_IDS, ARTWORK_OP_HISTORY, ARTWORK_RATE_HISTORY
+                ARTWORK_SEARCH, ARTWORK_BY_IDS, ARTWORK_OP_HISTORY, ARTWORK_RATE_HISTORY,
+                SOUND_SEARCH, SOUND_BY_IDS, SOUND_OP_HISTORY, SOUND_RATE_HISTORY,
+                IMAGE_SEARCH, IMAGE_BY_IDS, IMAGE_OP_HISTORY, IMAGE_RATE_HISTORY,
+                VIDEO_SEARCH, VIDEO_BY_IDS, VIDEO_OP_HISTORY, VIDEO_RATE_HISTORY,
+                NEWS_SEARCH, NEWS_BY_IDS
         };
 
         walletAPIs = new String[]{

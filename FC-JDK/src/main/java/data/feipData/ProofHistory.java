@@ -17,7 +17,7 @@ public class ProofHistory extends FcObject {
 	private String op;
 	private String title;
 	private String content;
-	private String[] cosigners;
+	private List<String> cosigners;
 	private Boolean transferable;
 	private Boolean allSignsRequired;
 
@@ -93,11 +93,11 @@ public class ProofHistory extends FcObject {
 		this.content = content;
 	}
 
-	public String[] getCosigners() {
+	public List<String> getCosigners() {
 		return cosigners;
 	}
 
-	public void setCosigners(String[] cosigners) {
+	public void setCosigners(List<String> cosigners) {
 		this.cosigners = cosigners;
 	}
 

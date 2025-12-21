@@ -81,7 +81,7 @@ public class TalkUdpClient extends FcClient {
         String serverPubkey = apiProvider.getDealerPubkey();
 
         if(serverPubkey==null)
-            apipClient.getPubkey(apiProvider.getApiParams().getDealer(), RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            apipClient.getPubkey(apiProvider.getDealer(), RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
 
         if(serverPubkey==null)return null;
         cryptoDataByte = encryptor.encryptByAsyTwoWay(request.getBytes(),key, Hex.fromHex(serverPubkey));
@@ -183,7 +183,7 @@ public class TalkUdpClient extends FcClient {
             this.sessionKeyMap=sessionKeyMap;
             this.host = ip;
             this.port = port;
-            this.dealer = talkUdpClient.getApiProvider().getApiParams().getDealer();
+            this.dealer = talkUdpClient.getApiProvider().getDealer();
         }
 
         public void run() {
@@ -329,7 +329,7 @@ public class TalkUdpClient extends FcClient {
             byte[] sessionKey = result.getData();
 
             try {
-                String serverAccount = talkTcpClient.getApiProvider().getApiParams().getDealer();
+                String serverAccount = talkTcpClient.getApiProvider().getDealer();
                 if(serverAccount!=null) {
                     sessionKeyMap.put(serverAccount, sessionKey);
 //                    settings.getSessionCipherMap().put(serverAccount, Client.encryptBySymkey(sessionKey, symkey));

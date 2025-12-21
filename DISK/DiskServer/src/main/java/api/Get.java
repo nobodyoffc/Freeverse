@@ -5,7 +5,6 @@ import data.apipData.Fcdsl;
 import config.Settings;
 import handlers.DiskManager;
 import handlers.Manager;
-import server.ApipApiNames;
 import constants.CodeMessage;
 import initial.Initiator;
 import server.DiskApiNames;
@@ -28,7 +27,7 @@ import static constants.FieldNames.DID;
 import static constants.UpStrings.BALANCE;
 import static constants.UpStrings.CODE;
 
-@WebServlet(name = DiskApiNames.GET, value = "/"+ ApipApiNames.VERSION_1 +"/"+ DiskApiNames.GET)
+@WebServlet(name = DiskApiNames.GET, value = "/"+ DiskApiNames.GET+"/"+ DiskApiNames.VER_1 )
 public class Get extends HttpServlet {
 
     private final Settings settings = Initiator.settings;
@@ -59,7 +58,7 @@ public class Get extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
         HttpRequestChecker httpRequestChecker;
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         String did;
         //Check authorization
         httpRequestChecker = new HttpRequestChecker(settings, replier);

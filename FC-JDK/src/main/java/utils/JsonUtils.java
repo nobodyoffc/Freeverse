@@ -415,7 +415,15 @@ public class JsonUtils {
     public static <K, T> Map<K, T> jsonToMap(String json, Class<K> kClass, Class<T> tClass) {
         Type type = TypeToken.getParameterized(Map.class, kClass, tClass).getType();
         try{
-            return new HashMap<>(new Gson().fromJson(json, type));
+            // Use GsonBuilder with proper configuration to handle complex nested objects
+            GsonBuilder gsonBuilder = new GsonBuilder();
+            gsonBuilder.enableComplexMapKeySerialization(); // Enable complex map key serialization
+            gsonBuilder.setLenient(); // Enable lenient parsing for better compatibility
+            gsonBuilder.disableHtmlEscaping(); // Prevent issues with special characters
+            Gson gson = gsonBuilder.create();
+
+            Map<K, T> result = gson.fromJson(json, type);
+            return result != null ? new HashMap<>(result) : null;
         }catch (Exception e){
             e.printStackTrace();
             return null;

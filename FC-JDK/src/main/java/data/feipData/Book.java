@@ -10,6 +10,7 @@ public class Book extends FcObject {
 	private String did;
 	private List<String> authors;
 	private String lang;
+	private String format;
 	private String summary;
 
 	private String publisher;
@@ -110,6 +111,14 @@ public class Book extends FcObject {
 
 	public void setLang(String lang) {
 		this.lang = lang;
+	}
+
+	public String getFormat() {
+		return format;
+	}
+
+	public void setFormat(String format) {
+		this.format = format;
 	}
 
 	public Boolean getDeleted() {

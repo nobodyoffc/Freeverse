@@ -1,7 +1,7 @@
 package APIP5V1_Code;
 
 import data.apipData.Sort;
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Code;
 import initial.Initiator;
@@ -21,7 +21,7 @@ import static constants.FieldNames.*;
 import static constants.Strings.ACTIVE;
 
 
-@WebServlet(name = ApipApiNames.CODE_SEARCH, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CODE_SEARCH)
+@WebServlet(name = ApipApiNames.CODE_SEARCH, value = "/"+ ApipApiNames.SN_5+"/"+ ApipApiNames.CODE_SEARCH +"/"+ ApipApiNames.VER_1)
 public class CodeSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -31,7 +31,7 @@ public class CodeSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(ACTIVE,false,T_RATE,false,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.CODE, Code.class, defaultSort, request,response,authType);
     }

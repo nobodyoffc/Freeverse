@@ -1,8 +1,8 @@
 
 package APIP16V1_Token;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import initial.Initiator;
 import utils.http.AuthType;
@@ -20,7 +20,7 @@ import config.Settings;
 import static constants.FieldNames.HEIGHT;
 import static constants.FieldNames.INDEX;
 
-@WebServlet(name = ApipApiNames.TOKEN_HISTORY, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.TOKEN_HISTORY)
+@WebServlet(name = ApipApiNames.TOKEN_HISTORY, value = "/"+ ApipApiNames.SN_16+"/"+ ApipApiNames.TOKEN_HISTORY +"/"+ ApipApiNames.VER_1)
 public class TokenHistory extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -30,7 +30,7 @@ public class TokenHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN_HISTORY, data.feipData.TokenHistory.class, defaultSort, request,response,authType);
     }

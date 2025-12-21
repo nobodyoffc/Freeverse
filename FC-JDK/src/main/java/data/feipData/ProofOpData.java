@@ -1,6 +1,7 @@
 package data.feipData;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import constants.FieldNames;
@@ -10,10 +11,10 @@ public class ProofOpData {
     private String op;
     private String title;
     private String content;
-    private String[] cosigners;
+    private List<String> cosigners;
     private Boolean transferable;
     private Boolean allSignsRequired;
-    private String[] proofIds;
+    private List<String> proofIds;
 
     public enum Op {
         ISSUE(FeipOp.ISSUE),
@@ -86,13 +87,6 @@ public class ProofOpData {
         this.content = content;
     }
 
-    public String[] getCosigners() {
-        return cosigners;
-    }
-
-    public void setCosigners(String[] cosigners) {
-        this.cosigners = cosigners;
-    }
 
     public Boolean isTransferable() {
         return transferable;
@@ -110,15 +104,31 @@ public class ProofOpData {
         this.allSignsRequired = allSignsRequired;
     }
 
-    public String[] getProofIds() {
+    public List<String> getCosigners() {
+        return cosigners;
+    }
+
+    public void setCosigners(List<String> cosigners) {
+        this.cosigners = cosigners;
+    }
+
+    public Boolean getTransferable() {
+        return transferable;
+    }
+
+    public Boolean getAllSignsRequired() {
+        return allSignsRequired;
+    }
+
+    public List<String> getProofIds() {
         return proofIds;
     }
 
-    public void setProofIds(String[] proofIds) {
+    public void setProofIds(List<String> proofIds) {
         this.proofIds = proofIds;
     }
 
-    public static ProofOpData makeIssue(String title, String content, String[] cosigners, Boolean transferable, Boolean allSignsRequired) {
+    public static ProofOpData makeIssue(String title, String content, List<String> cosigners, Boolean transferable, Boolean allSignsRequired) {
         ProofOpData data = new ProofOpData();
         data.setOp(Op.ISSUE.toLowerCase());
         data.setTitle(title);
@@ -143,7 +153,7 @@ public class ProofOpData {
         return data;
     }
 
-    public static ProofOpData makeDestroy(String[] proofIds) {
+    public static ProofOpData makeDestroy(List<String> proofIds) {
         ProofOpData data = new ProofOpData();
         data.setOp(Op.DESTROY.toLowerCase());
         data.setProofIds(proofIds);

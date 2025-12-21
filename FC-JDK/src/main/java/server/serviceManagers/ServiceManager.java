@@ -96,6 +96,8 @@ public abstract class ServiceManager {
 
         data.inputTypes(br);
 
+        data.inputDealerPubkey(br);
+
         if(symKey!=null) {
             ApipClient apipClient=null;
             if (apipAccount != null)apipClient = apipAccount.getApipClient();

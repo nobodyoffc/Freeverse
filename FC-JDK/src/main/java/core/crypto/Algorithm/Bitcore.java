@@ -121,7 +121,7 @@ public class Bitcore {
         return output;
     }
 
-    private static byte[] hmacSha256(byte[] data, byte[] key) {
+    public static byte[] hmacSha256(byte[] data, byte[] key) {
         HMac hmac = new HMac(new SHA256Digest());
         hmac.init(new KeyParameter(key));
         byte[] output = new byte[hmac.getMacSize()];
@@ -346,6 +346,17 @@ public class Bitcore {
 
         byte[] cipher2 = fromCryptoDataByte(bitcoreCipher);
         System.out.println("Cipher2:"+Base64.getEncoder().encodeToString(cipher2));
+
+        // Test new conversion methods
+        System.out.println("\n=== Testing New Conversion Methods ===");
+        CryptoDataByte cryptoDataFromCipher = cipherToCryptoDataByte(cipherBytes);
+        System.out.println("CryptoDataByte from cipher:");
+        System.out.println(cryptoDataFromCipher.toNiceJson());
+
+        byte[] cipherFromCryptoData = cipherFromCryptoDataByte(cryptoDataFromCipher);
+        System.out.println("\nReconstructed cipher: " + Base64.getEncoder().encodeToString(cipherFromCryptoData));
+        System.out.println("Original cipher:      " + cipher);
+        System.out.println("Ciphers match: " + cipher.equals(Base64.getEncoder().encodeToString(cipherFromCryptoData)));
     }
 
     public static CryptoDataByte parseBitcoreCipher(String base64Cipher) {
@@ -391,12 +402,156 @@ public class Bitcore {
 
         // Create point from public key bytes
         ECPoint point = params.getCurve().decodePoint(publicKeyBytes);
-        
+
         // Create public key spec
         ECPublicKeySpec publicKeySpec = new ECPublicKeySpec(point, ecSpec);
 
         // Generate PublicKey
         KeyFactory keyFactory = KeyFactory.getInstance("EC", "BC");
         return keyFactory.generatePublic(publicKeySpec);
+    }
+
+    /**
+     * Converts a CryptoDataByte object to a Bitcore cipher byte array.
+     * Structure: [Ephemeral Public Key (33 bytes)] + [IV (16 bytes)] + [Encrypted Message] + [HMAC (32 bytes)]
+     *
+     * @param cryptoDataByte The CryptoDataByte object containing cipher components
+     * @return byte array in Bitcore cipher format, or null if required fields are missing
+     */
+    public static byte[] cipherFromCryptoDataByte(CryptoDataByte cryptoDataByte) {
+        if (cryptoDataByte == null) {
+            return null;
+        }
+
+        byte[] pubKeyA = cryptoDataByte.getPubkeyA();
+        byte[] iv = cryptoDataByte.getIv();
+        byte[] cipher = cryptoDataByte.getCipher();
+        byte[] sum = cryptoDataByte.getSum(); // This is the HMAC value
+
+        // Validate required fields
+        if (pubKeyA == null || iv == null || cipher == null || sum == null) {
+            return null;
+        }
+
+        // Validate sizes
+        if (pubKeyA.length != 33 || iv.length != 16) {
+            return null;
+        }
+
+        // HMAC should be 32 bytes for full tag or 4 bytes for short tag
+        // For Bitcore standard, we expect 32 bytes
+        if (sum.length != 32 && sum.length != 4) {
+            return null;
+        }
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try {
+            // Write ephemeral public key (33 bytes compressed)
+            outputStream.write(pubKeyA);
+
+            // Write IV (16 bytes)
+            outputStream.write(iv);
+
+            // Write cipher (variable length)
+            outputStream.write(cipher);
+
+            // Write HMAC tag (32 bytes or 4 bytes)
+            outputStream.write(sum);
+
+            return outputStream.toByteArray();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Converts a Bitcore cipher byte array to a CryptoDataByte object.
+     * Structure: [Ephemeral Public Key (33 bytes)] + [IV (16 bytes)] + [Encrypted Message] + [HMAC (32 bytes)]
+     *
+     * @param cipherBundle The Bitcore cipher byte array
+     * @return CryptoDataByte object with parsed components, or null if parsing fails
+     */
+    public static CryptoDataByte cipherToCryptoDataByte(byte[] cipherBundle) {
+        if (cipherBundle == null) {
+            return null;
+        }
+
+        // Minimum size: 33 (pubkey) + 16 (iv) + 16 (min cipher for AES block) + 4 (min HMAC short tag) = 69 bytes
+        // Standard size with 32-byte HMAC: 33 + 16 + cipher + 32 = 81 + cipher length
+        if (cipherBundle.length < 69) {
+            return null;
+        }
+
+        CryptoDataByte cryptoDataByte = new CryptoDataByte();
+        cryptoDataByte.setAlg(AlgorithmId.BitCore_EccAes256);
+        cryptoDataByte.setType(EncryptType.AsyOneWay);
+
+        int offset = 0;
+
+        try {
+            // Determine public key size (check first byte for compression)
+            int pubKeySize;
+            switch (cipherBundle[0]) {
+                case 0x02:
+                case 0x03:
+                    pubKeySize = 33; // Compressed public key
+                    break;
+                case 0x04:
+                    pubKeySize = 65; // Uncompressed public key
+                    break;
+                default:
+                    return null; // Invalid public key format
+            }
+
+            // Check if bundle is large enough for this public key size
+            if (cipherBundle.length < pubKeySize + 16 + 16 + 4) {
+                return null;
+            }
+
+            // Extract ephemeral public key
+            byte[] pubKeyA = Arrays.copyOfRange(cipherBundle, offset, offset + pubKeySize);
+            cryptoDataByte.setPubkeyA(pubKeyA);
+            offset += pubKeySize;
+
+            // Extract IV (16 bytes)
+            byte[] iv = Arrays.copyOfRange(cipherBundle, offset, offset + 16);
+            cryptoDataByte.setIv(iv);
+            offset += 16;
+
+            // Determine HMAC size by checking remaining bytes
+            // Try 32-byte HMAC first (standard), then fall back to 4-byte (short tag)
+            int remainingBytes = cipherBundle.length - offset;
+            int hmacSize;
+
+            if (remainingBytes >= 32 + 16) { // At least 32 bytes for HMAC + 16 for min cipher
+                hmacSize = 32;
+            } else if (remainingBytes >= 4 + 16) { // At least 4 bytes for short HMAC + 16 for min cipher
+                hmacSize = 4;
+            } else {
+                return null; // Not enough bytes for HMAC + cipher
+            }
+
+            // Extract cipher (everything except the HMAC at the end)
+            int cipherLength = cipherBundle.length - offset - hmacSize;
+            if (cipherLength < 16) { // Cipher must be at least one AES block
+                return null;
+            }
+
+            byte[] cipher = Arrays.copyOfRange(cipherBundle, offset, offset + cipherLength);
+            cryptoDataByte.setCipher(cipher);
+            offset += cipherLength;
+
+            // Extract HMAC (last bytes)
+            byte[] sum = Arrays.copyOfRange(cipherBundle, offset, offset + hmacSize);
+            cryptoDataByte.setSum(sum);
+
+            cryptoDataByte.setCode(0);
+            return cryptoDataByte;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 }

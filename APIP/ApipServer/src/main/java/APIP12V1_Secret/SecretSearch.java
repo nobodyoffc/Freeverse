@@ -2,8 +2,8 @@
 package APIP12V1_Secret;
 
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 
 import javax.servlet.ServletException;
@@ -25,7 +25,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.FALSE;
 
 import config.Settings;
-@WebServlet(name = ApipApiNames.SECRET_SEARCH, value = "/"+ ApipApiNames.SN_12+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SECRET_SEARCH)
+@WebServlet(name = ApipApiNames.SECRET_SEARCH, value = "/"+ ApipApiNames.SN_12+"/"+ ApipApiNames.SECRET_SEARCH +"/"+ ApipApiNames.VER_1)
 public class SecretSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -35,7 +35,7 @@ public class SecretSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.SECRET, Secret.class, null,null,ACTIVE,FALSE,defaultSort, request,response,authType);
     }

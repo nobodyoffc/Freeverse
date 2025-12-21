@@ -1,6 +1,6 @@
 package APIP17V1_Crypto;
 
-import server.ApipApiNames;
+import constants.ApipApiNames;
 import constants.FieldNames;
 import core.crypto.Hash;
 import data.fcData.ReplyBody;
@@ -16,7 +16,7 @@ import java.util.Map;
 
 import config.Settings;
 
-@WebServlet(name = ApipApiNames.SHA_256_X_2, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.SHA_256_X_2)
+@WebServlet(name = ApipApiNames.SHA_256_X_2, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.SHA_256_X_2 +"/"+ ApipApiNames.VER_1)
 public class Sha256x2 extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -24,7 +24,7 @@ public class Sha256x2 extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         doRequest(request, response, authType,settings);
     }
 

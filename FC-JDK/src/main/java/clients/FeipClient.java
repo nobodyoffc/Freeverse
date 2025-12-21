@@ -1,7 +1,8 @@
 package clients;
 
 import core.crypto.Decryptor;
-import data.fchData.Cid;
+import data.fchData.Cash;
+import data.fchData.Freer;
 import ui.Menu;
 import ui.Shower;
 import constants.Constants;
@@ -12,9 +13,8 @@ import data.fcData.AlgorithmId;
 import data.feipData.*;
 import core.fch.Inputer;
 import core.fch.Wallet;
-import data.fchData.SendTo;
 import utils.FeipUtils;
-import data.feipData.Feip.ProtocolName;
+import data.feipData.Feip.FeipProtocol;
 import data.feipData.serviceParams.Params;
 import handlers.MailManager;
 import utils.Hex;
@@ -35,7 +35,7 @@ import static core.fch.Wallet.makeTx;
 public class FeipClient {
 
 
-    public static <T,E extends Enum<E>> String sendFeip(byte[] prikey, String offLineFid, List<SendTo> sendToList, Long cd, T data, Class<T> tClass, ProtocolName protocolName, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br, Class<E> enumClass, Map<String,String[]> opFieldsMap)  {
+    public static <T,E extends Enum<E>> String sendFeip(byte[] prikey, String offLineFid, List<Cash> sendToList, Long cd, T data, Class<T> tClass, FeipProtocol protocolName, ApipClient apipClient, NaSaRpcClient nasaClient, BufferedReader br, Class<E> enumClass, Map<String,String[]> opFieldsMap)  {
         
         if(data==null && br==null){
             System.out.println("The data is required when send "+protocolName.getName()+".");
@@ -67,7 +67,7 @@ public class FeipClient {
 
 
     
-    public static String sendFeip(List<SendTo> sendToList, Long cd, byte[]prikey, String offLineFid, Feip feip, ApipClient apipClient, NaSaRpcClient nasaClient) {
+    public static String sendFeip(List<Cash> sendToList, Long cd, byte[]prikey, String offLineFid, Feip feip, ApipClient apipClient, NaSaRpcClient nasaClient) {
         if (prikey == null && offLineFid == null) return null;
         String opReturnStr = feip.toJson();
         if(cd ==null) cd= Constants.CD_REQUIRED;
@@ -79,7 +79,7 @@ public class FeipClient {
         return result;
     }
 
-    public static String makeFeipTxUnsigned(String fid, List< SendTo > sendToList, Feip feip, ApipClient apipClient) {
+    public static String makeFeipTxUnsigned(String fid, List<Cash> sendToList, Feip feip, ApipClient apipClient) {
         String opReturnStr = feip.toJson();
         long cd = Constants.CD_REQUIRED;
         int maxCashes = Wallet.MAX_CASHE_SIZE;
@@ -95,7 +95,7 @@ public class FeipClient {
 
         String txId;
         if(apipClient != null)
-            txId = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.FC_SIGN_BODY);
+            txId = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         else if(nasaClient != null)
             txId = nasaClient.sendRawTransaction(txSigned);
         else {
@@ -132,7 +132,7 @@ public class FeipClient {
                 master = KeyTools.pubkeyToFchAddr(master);
             }else {
                 if (KeyTools.isGoodFid(master)){
-                    Cid masterInfo = apipClient.cidInfoById(master);
+                    Freer masterInfo = apipClient.freerById(master);
                     if(masterInfo==null){
                         System.out.println("Failed to get CID info.");
                         return;
@@ -220,64 +220,43 @@ public class FeipClient {
      * If the br isn't null, the user can input or update the data and decide to send the Tx or not.
      * @return The TxId of send Tx or UnsignedTx in Base64.
      */
-    public static String protocol(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String protocol(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                   @Nullable ProtocolOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, ProtocolOpData.class, ProtocolName.PROTOCOL, apipClient, nasaClient, br, ProtocolOpData.Op.class, ProtocolOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ProtocolOpData.class, FeipProtocol.PROTOCOL, apipClient, nasaClient, br, ProtocolOpData.Op.class, ProtocolOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String code(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String code(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                               @Nullable CodeOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, CodeOpData.class, ProtocolName.CODE, apipClient, nasaClient, br, CodeOpData.Op.class, CodeOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, CodeOpData.class, FeipProtocol.CODE, apipClient, nasaClient, br, CodeOpData.Op.class, CodeOpData.OP_FIELDS);
     }
-
-    public static String book(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
-                              @Nullable BookOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, BookOpData.class, ProtocolName.BOOK, apipClient, nasaClient, br, BookOpData.Op.class, BookOpData.OP_FIELDS);
-    }
-
-    public static String remark(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
-                              @Nullable RemarkOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, RemarkOpData.class, ProtocolName.REMARK, apipClient, nasaClient, br, RemarkOpData.Op.class, RemarkOpData.OP_FIELDS);
-    }
-
-    public static String paper(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
-                              @Nullable PaperOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, PaperOpData.class, ProtocolName.PAPER, apipClient, nasaClient, br, PaperOpData.Op.class, PaperOpData.OP_FIELDS);
-    }
-
-    public static String report(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
-                              @Nullable ReportOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, ReportOpData.class, ProtocolName.REPORT, apipClient, nasaClient, br, ReportOpData.Op.class, ReportOpData.OP_FIELDS);
-    }
-    
-    public static String essay(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
-                              @Nullable EssayOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, EssayOpData.class, ProtocolName.ESSAY, apipClient, nasaClient, br, EssayOpData.Op.class, EssayOpData.OP_FIELDS);
+    public static String remark(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                                @Nullable RemarkOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, RemarkOpData.class, FeipProtocol.REMARK, apipClient, nasaClient, br, RemarkOpData.Op.class, RemarkOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String cid(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String cid(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                              @Nullable CidOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, CidOpData.class, ProtocolName.CID, apipClient, nasaClient, br, CidOpData.Op.class, CidOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, CidOpData.class, FeipProtocol.CID, apipClient, nasaClient, br, CidOpData.Op.class, CidOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String nobody(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String nobody(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                 @Nullable NobodyOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, NobodyOpData.class, ProtocolName.NOBODY, apipClient, nasaClient, br, null, null);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, NobodyOpData.class, FeipProtocol.NOBODY, apipClient, nasaClient, br, null, null);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String service(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String service(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                  @Nullable ServiceOpData data, Class<? extends Params> paramsClass, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
         try {
             // Create ServiceData with op field handling
@@ -288,7 +267,7 @@ public class FeipClient {
             Params params = Inputer.createFromUserInput(br, paramsClass, null, null);
             serviceOpData.setParams(params);
 
-            Feip feip = Feip.fromProtocolName(ProtocolName.SERVICE);
+            Feip feip = Feip.fromProtocolName(FeipProtocol.SERVICE);
             feip.setData(serviceOpData);
 
             String result = sendFeip(feip, null, prikey, offLineFid, sendToList, apipClient, nasaClient, br);
@@ -303,7 +282,7 @@ public class FeipClient {
     }
 
     @Nullable
-    private static String sendFeip(Feip feip, Long cd, byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+    private static String sendFeip(Feip feip, Long cd, byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
         System.out.println("OP_RETURN:");
         Shower.printUnderline(20);
         System.out.println(feip.toNiceJson());
@@ -328,126 +307,153 @@ public class FeipClient {
     /**
      * The method is similar to protocol.
      */
-    public static String master(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String master(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                 @Nullable MasterOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, MasterOpData.class, ProtocolName.MASTER, apipClient, nasaClient, br, null, null);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, MasterOpData.class, FeipProtocol.MASTER, apipClient, nasaClient, br, null, null);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String mail(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String mail(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                               @Nullable MailOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, MailOpData.class, ProtocolName.MAIL, apipClient, nasaClient, br, MailManager.MailOp.class, MailOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, MailOpData.class, FeipProtocol.MAIL, apipClient, nasaClient, br, MailManager.MailOp.class, MailOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String statement(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String statement(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                    @Nullable StatementOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, StatementOpData.class, ProtocolName.STATEMENT, apipClient, nasaClient, br, null, null);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, StatementOpData.class, FeipProtocol.STATEMENT, apipClient, nasaClient, br, null, null);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String homepage(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String homepage(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                   @Nullable HomepageOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, HomepageOpData.class, ProtocolName.HOMEPAGE, apipClient, nasaClient, br, null, null);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, HomepageOpData.class, FeipProtocol.HOMEPAGE, apipClient, nasaClient, br, null, null);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String noticeFee(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String noticeFee(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                    @Nullable NoticeFeeOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, NoticeFeeOpData.class, ProtocolName.NOTICE_FEE, apipClient, nasaClient, br, null, null);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, NoticeFeeOpData.class, FeipProtocol.NOTICE_FEE, apipClient, nasaClient, br, null, null);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String nid(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String nid(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                              @Nullable NidOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, NidOpData.class, ProtocolName.NID, apipClient, nasaClient, br, NidOpData.Op.class, NidOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, NidOpData.class, FeipProtocol.NID, apipClient, nasaClient, br, NidOpData.Op.class, NidOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String contact(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String contact(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                  @Nullable ContactOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, ContactOpData.class, ProtocolName.CONTACT, apipClient, nasaClient, br, ContactOpData.Op.class, ContactOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ContactOpData.class, FeipProtocol.CONTACT, apipClient, nasaClient, br, ContactOpData.Op.class, ContactOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String box(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String box(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                              @Nullable BoxOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, BoxOpData.class, ProtocolName.BOX, apipClient, nasaClient, br, BoxOpData.Op.class, BoxOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, BoxOpData.class, FeipProtocol.BOX, apipClient, nasaClient, br, BoxOpData.Op.class, BoxOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String proof(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String proof(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                @Nullable ProofOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, ProofOpData.class, ProtocolName.PROOF, apipClient, nasaClient, br, ProofOpData.Op.class, ProofOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ProofOpData.class, FeipProtocol.PROOF, apipClient, nasaClient, br, ProofOpData.Op.class, ProofOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String app(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String app(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                              @Nullable AppOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, AppOpData.class, ProtocolName.APP, apipClient, nasaClient, br, AppOpData.Op.class, AppOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, AppOpData.class, FeipProtocol.APP, apipClient, nasaClient, br, AppOpData.Op.class, AppOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String reputation(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String reputation(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                     @Nullable ReputationOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, ReputationOpData.class, ProtocolName.REPUTATION, apipClient, nasaClient, br, null, null);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ReputationOpData.class, FeipProtocol.REPUTATION, apipClient, nasaClient, br, null, null);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String secret(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String secret(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                 @Nullable SecretOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, SecretOpData.class, ProtocolName.SECRET, apipClient, nasaClient, br, SecretOpData.Op.class, SecretOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, SecretOpData.class, FeipProtocol.SECRET, apipClient, nasaClient, br, SecretOpData.Op.class, SecretOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String team(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String team(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                               @Nullable TeamOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, TeamOpData.class, ProtocolName.TEAM, apipClient, nasaClient, br, TeamOpData.Op.class, TeamOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, TeamOpData.class, FeipProtocol.TEAM, apipClient, nasaClient, br, TeamOpData.Op.class, TeamOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String group(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String group(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                Long cd, @Nullable GroupOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, cd, data, GroupOpData.class, ProtocolName.GROUP, apipClient, nasaClient, br, GroupOpData.Op.class, GroupOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, cd, data, GroupOpData.class, FeipProtocol.GROUP, apipClient, nasaClient, br, GroupOpData.Op.class, GroupOpData.OP_FIELDS);
     }
 
     /**
      * The method is similar to protocol.
      */
-    public static String token(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
+    public static String token(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                @Nullable TokenOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, TokenOpData.class, ProtocolName.TOKEN, apipClient, nasaClient, br, TokenOpData.Op.class, TokenOpData.OP_FIELDS);
+        return sendFeip(prikey, offLineFid, sendToList, null, data, TokenOpData.class, FeipProtocol.TOKEN, apipClient, nasaClient, br, TokenOpData.Op.class, TokenOpData.OP_FIELDS);
     }
 
-    public static String artwork(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<SendTo> sendToList,
-                              @Nullable ArtworkOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, ArtworkOpData.class, ProtocolName.ARTWORK, apipClient, nasaClient, br, ArtworkOpData.Op.class, ArtworkOpData.OP_FIELDS);
+    /**
+     * The method is similar to protocol.
+     */
+    public static String text(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                              @Nullable TextOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, TextOpData.class, FeipProtocol.TEXT, apipClient, nasaClient, br, TextOpData.Op.class, TextOpData.OP_FIELDS);
+    }
+
+    /**
+     * The method is similar to protocol.
+     */
+    public static String sound(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                              @Nullable SoundOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, SoundOpData.class, FeipProtocol.SOUND, apipClient, nasaClient, br, SoundOpData.Op.class, SoundOpData.OP_FIELDS);
+    }
+
+    /**
+     * The method is similar to protocol.
+     */
+    public static String image(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                              @Nullable ImageOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, ImageOpData.class, FeipProtocol.IMAGE, apipClient, nasaClient, br, ImageOpData.Op.class, ImageOpData.OP_FIELDS);
+    }
+
+    /**
+     * The method is similar to protocol.
+     */
+    public static String video(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                              @Nullable VideoOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, VideoOpData.class, FeipProtocol.VIDEO, apipClient, nasaClient, br, VideoOpData.Op.class, VideoOpData.OP_FIELDS);
     }
 
     // Add more protocol-specific methods as needed...

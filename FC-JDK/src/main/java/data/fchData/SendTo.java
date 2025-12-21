@@ -10,9 +10,16 @@ import java.util.List;
 import static core.fch.Inputer.inputGoodFid;
 
 public class SendTo {
+    public static final Double MIN_AMOUNT = 0.0001;
     private String fid;
     private Double amount;
 
+    private Long lockTime;  // Block height or timestamp for CLTV (null = no lock)
+
+    // For multisig outputs (regular or CLTV)
+    private List<String> pubkeys;  // Public keys for multisig
+    private Integer m;  // Required signatures
+    private Integer n;  // Total signers
     public SendTo() {}
 
     public SendTo(String to, Double amount) {
@@ -53,5 +60,51 @@ public class SendTo {
 
     public void setAmount(Double amount) {
         this.amount = amount;
+    }
+
+    public Long getLockTime() {
+        return lockTime;
+    }
+
+    public void setLockTime(Long lockTime) {
+        this.lockTime = lockTime;
+    }
+
+    public List<String> getPubkeys() {
+        return pubkeys;
+    }
+
+    public void setPubkeys(List<String> pubkeys) {
+        this.pubkeys = pubkeys;
+    }
+
+    public Integer getM() {
+        return m;
+    }
+
+    public void setM(Integer m) {
+        this.m = m;
+    }
+
+    public Integer getN() {
+        return n;
+    }
+
+    public void setN(Integer n) {
+        this.n = n;
+    }
+
+    /**
+     * Check if this output is a multisig output
+     */
+    public boolean isMultisig() {
+        return pubkeys != null && !pubkeys.isEmpty() && m != null && n != null;
+    }
+
+    /**
+     * Check if this output has a time lock
+     */
+    public boolean hasLockTime() {
+        return lockTime != null && lockTime > 0;
     }
 }

@@ -1,8 +1,8 @@
 package APIP2V1_Blockchain;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
 import config.Settings;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.fchData.Cash;
 import initial.Initiator;
@@ -19,7 +19,7 @@ import java.util.ArrayList;
 
 import static constants.FieldNames.*;
 
-@WebServlet(name = ApipApiNames.CASH_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CASH_SEARCH)
+@WebServlet(name = ApipApiNames.CASH_SEARCH, value = "/"+ ApipApiNames.SN_2+"/"+ ApipApiNames.CASH_SEARCH +"/"+ ApipApiNames.VER_1)
 public class CashSearch extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -30,7 +30,7 @@ public class CashSearch extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,ID,true,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.CASH, Cash.class, defaultSort, request,response,authType);
     }

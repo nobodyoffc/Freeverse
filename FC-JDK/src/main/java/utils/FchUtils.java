@@ -8,7 +8,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import constants.Constants;
 import constants.FieldNames;
 import constants.IndicesNames;
-import data.fchData.Cid;
+import data.fchData.Freer;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -16,7 +16,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.file.*;
-import java.text.DecimalFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -291,12 +290,12 @@ public class FchUtils {
         return dateTime.format(formatter);
     }
 
-    public static void makeAddress (List<Cid> cidList, ElasticsearchClient esClient) throws Exception {
+    public static void makeAddress (List<Freer> cidList, ElasticsearchClient esClient) throws Exception {
 
-        List<String> fidList = cidList.stream().map(Cid::getId).toList();
+        List<String> fidList = cidList.stream().map(Freer::getId).toList();
         Map<String, Map<String, Long>> result = aggsTxoByAddrs(esClient, fidList);
 
-        for(Cid cid : cidList){
+        for(Freer cid : cidList){
             String addr = cid.getId();
             Long cashValue = result.get(UTXO_SUM).get(addr);
             if(cashValue!=null) cid.setBalance(cashValue);
@@ -427,8 +426,8 @@ public class FchUtils {
         return resultMapMap;
     }
 
-    public static void updateCidNumbers(ElasticsearchClient esClient,List<Cid> cidList) throws IOException {
-        List<String> addrList = cidList.stream().map(Cid::getId).collect(Collectors.toList());
+    public static void updateCidNumbers(ElasticsearchClient esClient,List<Freer> cidList) throws IOException {
+        List<String> addrList = cidList.stream().map(Freer::getId).collect(Collectors.toList());
 
         Map<String, Map<String, Long>> aggsMaps = FchUtils.aggsTxoByAddrs(esClient, addrList);
 
@@ -441,7 +440,7 @@ public class FchUtils {
 
         if(addrSet.isEmpty())return;
 
-        for(Cid cid:cidList) {
+        for(Freer cid:cidList) {
             if(cid==null)continue;
             String addr = cid.getId();
             if(txoSumMap.get(addr)!=null) {

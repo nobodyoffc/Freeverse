@@ -1,9 +1,10 @@
 package api;
 
-import server.ApipApiNames;
-import constants.CodeMessage;
 import data.fcData.ReplyBody;
+import constants.ApipApiNames;
+import constants.CodeMessage;
 import initial.Initiator;
+import server.DiskApiNames;
 import server.FcHttpRequestHandler;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -16,7 +17,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApipApiNames.GET_SERVICE, value = "/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.GET_SERVICE)
+@WebServlet(name = DiskApiNames.GET_SERVICE, value =  "/"+ DiskApiNames.GET_SERVICE+"/"+ DiskApiNames.VER_1)
 public class GetService extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;

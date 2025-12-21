@@ -164,7 +164,7 @@ public class ContactHandler extends Handler<ContactDetail> {
         if (op == null) return null;
         ContactOpData contactOpData = new ContactOpData();
         contactOpData.setOp(op.toLowerCase());
-        ContactDetail contactDetail = new ContactDetail();
+        ContactDetail contact = new ContactDetail();
         byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
         if (priKey == null) {
             System.out.println("Failed to get the priKey of " + mainFid);
@@ -173,18 +173,18 @@ public class ContactHandler extends Handler<ContactDetail> {
 
         if (op.equals(ContactOp.ADD) || op.equals(ContactOp.UPDATE)) {
             if (contactId != null) {
-                contactDetail.setFid(contactId);
+                contact.setFid(contactId);
             } else {
                 String fid = apipClient.chooseFid(br);
                 if (fid == null) return null;
-                contactDetail.setFid(fid);
+                contact.setFid(fid);
             }
-            contactDetail.setMemo(Inputer.inputString(br, "Input memo:"));
-            contactDetail.setSeeStatement(Inputer.askIfYes(br, "See its statements?"));
-            contactDetail.setSeeWritings(Inputer.askIfYes(br, "See its writings?"));
+            contact.setMemo(Inputer.inputString(br, "Input memo:"));
+            contact.setSeeStatement(Inputer.askIfYes(br, "See its statements?"));
+            contact.setSeeWritings(Inputer.askIfYes(br, "See its writings?"));
 
             Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
-            CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonTools.toJson(contactDetail).getBytes(), myPubKey);
+            CryptoDataByte cryptoDataByte = encryptor.encryptByAsyOneWay(JsonTools.toJson(contact).getBytes(), myPubKey);
             if (cryptoDataByte.getCode() != 0) {
                 log.error("Failed to encrypt.");
                 return null;
@@ -222,16 +222,16 @@ public class ContactHandler extends Handler<ContactDetail> {
     public void checkContacts(BufferedReader br) {
         long lastHeight = (long) getMeta("lastHeight");
         List<Contact> contactList = loadAllContactList(lastHeight, true);
-        List<ContactDetail> contactDetailList = contactToContactDetail(contactList);
+        List<ContactDetail> contactList = contactToContactDetail(contactList);
 
         if (!contactList.isEmpty()) {
             putMeta("lastHeight", contactList.get(0).getBirthHeight());
             deleteUnreadableContacts(br);
         }
 
-        System.out.println("You have " + contactDetailList.size() + " updated contacts.");
-        if (!contactDetailList.isEmpty()) {
-            showItemList("Updated Contacts", contactDetailList, 0);
+        System.out.println("You have " + contactList.size() + " updated contacts.");
+        if (!contactList.isEmpty()) {
+            showItemList("Updated Contacts", contactList, 0);
         }
     }
 
@@ -248,19 +248,19 @@ public class ContactHandler extends Handler<ContactDetail> {
     }
 
     private List<ContactDetail> contactToContactDetail(List<Contact> contactList) {
-        List<ContactDetail> contactDetailList = new ArrayList<>();
+        List<ContactDetail> contactList = new ArrayList<>();
         byte[] priKey = Client.decryptPriKey(myPriKeyCipher, symKey);
         for (Contact contact : contactList) {
-            ContactDetail contactDetail = ContactDetail.fromContact(contact, priKey, apipClient);
-            if (contactDetail == null) {
+            ContactDetail contact = ContactDetail.fromContact(contact, priKey, apipClient);
+            if (contact == null) {
                 putInMap(FAKE_CONTACT_DETAIL, contact.getContactId(), contact.getContactId(), org.mapdb.Serializer.STRING);
                 continue;
             }
-            put(contactDetail.getFid(), contactDetail);
-            contactDetailList.add(contactDetail);
+            put(contact.getFid(), contact);
+            contactList.add(contact);
         }
         BytesTools.clearByteArray(priKey);
-        return contactDetailList;
+        return contactList;
     }
     @Override
     public void opItems(List<ContactDetail> items, String ask, BufferedReader br) {

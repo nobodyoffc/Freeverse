@@ -1,5 +1,6 @@
 package mempool;
 
+import constants.FieldNames;
 import data.fchData.Cash;
 import data.fchData.Tx;
 import data.fchData.TxHasInfo;
@@ -106,8 +107,8 @@ public class MempoolScanner implements Runnable {
 
     private void addSpendCashesToRedis(List<Cash> inList, Jedis jedis) {
         for(Cash cash:inList){
-            if(jedis.hget(SPEND_CASHES,cash.getId())==null) {
-                jedis.hset(SPEND_CASHES, cash.getId(), JsonUtils.toNiceJson(cash));
+            if(jedis.hget(FieldNames.SPENT_CASHES,cash.getId())==null) {
+                jedis.hset(FieldNames.SPENT_CASHES, cash.getId(), JsonUtils.toNiceJson(cash));
             }
             else{
                 log.debug("Double spend : "+ JsonUtils.toNiceJson(cash));
@@ -146,7 +147,7 @@ public class MempoolScanner implements Runnable {
             if ( spendCountStr!= null) {
                 spendCount = Integer.parseInt(spendCountStr);
                 spendValue = Long.parseLong(spendValueStr);
-                spendCashes = gson.fromJson(jedis.hget(fid,SPEND_CASHES),String[].class);
+                spendCashes = gson.fromJson(jedis.hget(fid, FieldNames.SPENT_CASHES),String[].class);
                 if(spendCashes==null)spendCashes = new String[0];
             }
             spendValue += cash.getValue();
@@ -171,7 +172,7 @@ public class MempoolScanner implements Runnable {
 
             jedis.hset(fid, SPEND_VALUE, String.valueOf(spendValue));
             jedis.hset(fid, SPEND_COUNT, String.valueOf(spendCount));
-            jedis.hset(fid,SPEND_CASHES, JsonUtils.toNiceJson(newSpendCashes));
+            jedis.hset(fid, FieldNames.SPENT_CASHES, JsonUtils.toNiceJson(newSpendCashes));
             jedis.hset(fid, NET, String.valueOf(net));
             jedis.hset(fid, TX_VALUE_MAP, JsonUtils.toNiceJson(txValueMap));
         }

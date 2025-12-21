@@ -1,5 +1,6 @@
 package finance;
 
+import constants.OpNames;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -12,6 +13,9 @@ import data.feipData.TokenHistory;
 import utils.JsonUtils;
 
 import java.util.*;
+
+import static constants.FieldNames.*;
+import static constants.OpNames.DESTROY;
 
 public class FinanceRollbacker {
 
@@ -37,7 +41,7 @@ public class FinanceRollbacker {
 		if(histIdList==null||histIdList.isEmpty())return error;
 		deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY,histIdList);
 
-		List<ProofHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,"gid",itemIdList, ProofHistory.class);
+		List<ProofHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,PROOF_ID,PROOF_IDS , itemIdList, ProofHistory.class);
 
 		reparseProof(esClient,reparseHistList);
 
@@ -49,7 +53,7 @@ public class FinanceRollbacker {
 				.index(IndicesNames.PROOF_HISTORY)
 				.query(q->q
 						.range(r->r
-								.field("height")
+								.field(HEIGHT)
 								.gt(JsonData.of(height)))),ProofHistory.class);
 
 		Set<String> itemSet = new HashSet<String>();
@@ -58,11 +62,35 @@ public class FinanceRollbacker {
 		for(Hit<ProofHistory> hit: resultSearch.hits().hits()) {
 
 			ProofHistory item = hit.source();
-			if(item.getOp().equals("create")) {
-				itemSet.add(item.getId());
-			}else {
-				itemSet.add(item.getProofId());
+			if(item==null || item.getOp()==null){
+				continue;
 			}
+			String op = item.getOp();
+			switch (op) {
+				case OpNames.ISSUE -> {
+					if(item.getId()==null){
+						continue;
+					}
+					itemSet.add(item.getId());
+				}
+				case DESTROY ->{
+					if(item.getProofIds()==null || item.getProofIds().isEmpty()){
+						continue;
+					}
+					for(String proofId: item.getProofIds()){
+						if(proofId==null){
+							continue;
+						}
+						itemSet.add(proofId);
+					}
+				}
+				default -> {
+					if(item.getProofId()!=null){
+						itemSet.add(item.getProofId());
+					}
+				}
+			}
+
 			histList.add(hit.id());
 		}
 
@@ -99,7 +127,7 @@ public class FinanceRollbacker {
 
 		deleteRolledHists(esClient, IndicesNames.TOKEN_HISTORY,histIdList);
 
-		List<TokenHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY,"tokenId",tokenIdList, TokenHistory.class);
+		List<TokenHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY, TOKEN_ID, TOKEN_IDS, tokenIdList, TokenHistory.class);
 
 		deleteEffectedTokenHolders(esClient,tokenIdList);
 
@@ -122,11 +150,35 @@ public class FinanceRollbacker {
 		for(Hit<TokenHistory> hit: resultSearch.hits().hits()) {
 
 			TokenHistory item = hit.source();
-			if(item.getOp().equals("deploy")) {
-				tokenIdSet.add(item.getId());
-			}else {
-				tokenIdSet.add(item.getTokenId());
+			if(item==null || item.getOp()==null){
+				continue;
 			}
+			String op = item.getOp();
+			switch (op) {
+				case OpNames.DEPLOY -> {
+					if(item.getId()==null){
+						continue;
+					}
+					tokenIdSet.add(item.getId());
+				}
+				case OpNames.CLOSE -> {
+					if(item.getTokenIds()==null || item.getTokenIds().isEmpty()){
+						continue;
+					}
+					for(String tokenId: item.getTokenIds()){
+						if(tokenId==null){
+							continue;
+						}
+						tokenIdSet.add(tokenId);
+					}
+				}
+				default -> {
+					if(item.getTokenId()!=null){
+						tokenIdSet.add(item.getTokenId());
+					}
+				}
+			}
+
 			histList.add(hit.id());
 		}
 

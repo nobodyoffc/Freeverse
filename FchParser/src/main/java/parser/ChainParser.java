@@ -9,7 +9,7 @@ import core.crypto.Hash;
 import core.fch.BlockFileUtils;
 import core.fch.OpReFileUtils;
 import data.fchData.Block;
-import data.fchData.BlockMark;
+import data.fchData.BlockMask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.BytesUtils;
@@ -56,7 +56,7 @@ public class ChainParser {
 		while(true) {
 
 			CheckResult checkResult = checkBlock(fis);
-			BlockMark blockMark = checkResult.getBlockMark();
+			BlockMask blockMask = checkResult.getBlockMark();
 			byte[] blockBytes = checkResult.getBlockBytes();
 
 			blockLength = checkResult.getBlockLength();
@@ -109,7 +109,7 @@ public class ChainParser {
 				Preparer.Pointer += blockLength;
 			} else {
 
-				linkToChain(esClient, blockMark,blockBytes);
+				linkToChain(esClient, blockMask,blockBytes);
 
 				recheckOrphans(esClient);
 
@@ -245,9 +245,9 @@ public class ChainParser {
 
 	private CheckResult checkBlock(FileInputStream fis) throws Exception {
 
-		BlockMark blockMark = new BlockMark();
-		blockMark.set_pointer(Preparer.Pointer);
-		blockMark.set_fileOrder(getFileOrder());
+		BlockMask blockMask = new BlockMask();
+		blockMask.set_pointer(Preparer.Pointer);
+		blockMask.set_fileOrder(getFileOrder());
 
 		CheckResult checkResult = new CheckResult();
 
@@ -288,7 +288,7 @@ public class ChainParser {
 
 		b4 = Arrays.copyOfRange(b8, 4, 8);
 		long blockSize = BytesUtils.bytes4ToLongLE(b4);
-		blockMark.setSize(blockSize);
+		blockMask.setSize(blockSize);
 
 		if(blockSize==0) {
 			checkResult.setBlockLength(WAIT_MORE);
@@ -323,13 +323,13 @@ public class ChainParser {
 		}
 
 		String blockId = BytesUtils.bytesToHexStringLE(Hash.sha256x2(blockHeadBytes));
-		blockMark.setId(blockId);
+		blockMask.setId(blockId);
 
 		String preId =  BytesUtils.bytesToHexStringLE(Arrays.copyOfRange(blockHeadBytes, 4, 4+32));
-		blockMark.setPreBlockId(preId);
+		blockMask.setPreBlockId(preId);
 
 		Long time = BytesUtils.bytes4ToLongLE(Arrays.copyOfRange(blockHeadBytes, 4+32+32, 4+32+32+4));
-		blockMark.setTime(time);
+		blockMask.setTime(time);
 
 		byte[] blockBodyBytes = new byte[(int) (blockSize-80)];
 		result = blockInputStream.read(blockBodyBytes);
@@ -351,7 +351,7 @@ public class ChainParser {
 			return checkResult;
 		}
 		checkResult.setBlockLength(blockSize+8);
-		checkResult.setBlockMark(blockMark);
+		checkResult.setBlockMark(blockMask);
 		checkResult.setBlockBytes(blockBytes);
 		return checkResult;
 	}
@@ -362,7 +362,7 @@ public class ChainParser {
 
 	private static class CheckResult{
 		long blockLength;
-		BlockMark blockMark;
+		BlockMask blockMask;
 		byte[] blockBytes;
 
 		public long getBlockLength() {
@@ -373,12 +373,12 @@ public class ChainParser {
 			this.blockLength = blockLength;
 		}
 
-		public BlockMark getBlockMark() {
-			return blockMark;
+		public BlockMask getBlockMark() {
+			return blockMask;
 		}
 
-		public void setBlockMark(BlockMark blockMark) {
-			this.blockMark = blockMark;
+		public void setBlockMark(BlockMask blockMask) {
+			this.blockMask = blockMask;
 		}
 
 		public byte[] getBlockBytes() {
@@ -390,24 +390,24 @@ public class ChainParser {
 		}
 	}
 
-	private void linkToChain(ElasticsearchClient esClient, BlockMark blockMark, byte[] blockBytes) throws Exception {
+	private void linkToChain(ElasticsearchClient esClient, BlockMask blockMask, byte[] blockBytes) throws Exception {
 
-		if(isRepeatBlockIgnore(blockMark))
+		if(isRepeatBlockIgnore(blockMask))
 			return;
-		if(isLinkToMainChainWriteItToEs(esClient, blockMark, blockBytes))
+		if(isLinkToMainChainWriteItToEs(esClient, blockMask, blockBytes))
 			return;
-		if(isNewForkAddMarkToEs(esClient, blockMark))
+		if(isNewForkAddMarkToEs(esClient, blockMask))
 			return;
-		if(isLinkedToForkWriteMarkToEs(esClient, blockMark)){
+		if(isLinkedToForkWriteMarkToEs(esClient, blockMask)){
 
-			if(isForkOverMain(blockMark)) {
-				HashMap<String, ArrayList<BlockMark>> chainMap = findLoseChainAndWinChain(blockMark);
+			if(isForkOverMain(blockMask)) {
+				HashMap<String, ArrayList<BlockMask>> chainMap = findLoseChainAndWinChain(blockMask);
 				if(chainMap == null)return;
 				reorganize(esClient,chainMap);
 			}
 			return;
 		}
-		writeOrphanMark(esClient, blockMark);
+		writeOrphanMark(esClient, blockMask);
 
 		int orphanListSize = Preparer.orphanList.size();
 
@@ -417,29 +417,29 @@ public class ChainParser {
 				+". Height: "+ Preparer.BestHeight);
 	}
 
-	private void writeBlockMark(ElasticsearchClient esClient,BlockMark blockMark) throws ElasticsearchException, IOException {
+	private void writeBlockMark(ElasticsearchClient esClient, BlockMask blockMask) throws ElasticsearchException, IOException {
 		esClient.index(i->i
-				.index(BLOCK_MARK).id(blockMark.getId()).document(blockMark));
+				.index(BLOCK_MARK).id(blockMask.getId()).document(blockMask));
 	}
 
-	private boolean isForkOverMain(BlockMark blockMark) {
+	private boolean isForkOverMain(BlockMask blockMask) {
 
-		return blockMark.getHeight() > Preparer.BestHeight;
+		return blockMask.getHeight() > Preparer.BestHeight;
 	}
 
-	private HashMap<String, ArrayList<BlockMark>> findLoseChainAndWinChain(BlockMark blockMark) {
+	private HashMap<String, ArrayList<BlockMask>> findLoseChainAndWinChain(BlockMask blockMask) {
 		System.out.println("findLoseChainAndWinChain");
 
-		BlockMark forkBlock;
-		BlockMark mainBlock;
+		BlockMask forkBlock;
+		BlockMask mainBlock;
 
-		ArrayList<BlockMark> winList = new ArrayList<>();
-		ArrayList<BlockMark> loseList = new ArrayList<>();
+		ArrayList<BlockMask> winList = new ArrayList<>();
+		ArrayList<BlockMask> loseList = new ArrayList<>();
 
-		HashMap<String, ArrayList<BlockMark>> findMap = new HashMap<>();
+		HashMap<String, ArrayList<BlockMask>> findMap = new HashMap<>();
 
-		winList.add(blockMark);
-		String preId = blockMark.getPreBlockId();
+		winList.add(blockMask);
+		String preId = blockMask.getPreBlockId();
 
 		boolean foundFormerForkBlockMark;
 
@@ -474,10 +474,10 @@ public class ChainParser {
 		}
 	}
 
-	private void reorganize(ElasticsearchClient esClient, HashMap<String, ArrayList<BlockMark>> chainMap) throws Exception {
+	private void reorganize(ElasticsearchClient esClient, HashMap<String, ArrayList<BlockMask>> chainMap) throws Exception {
 
-		ArrayList<BlockMark> loseList = chainMap.get("lose");
-		ArrayList<BlockMark> winList = chainMap.get("win");
+		ArrayList<BlockMask> loseList = chainMap.get("lose");
+		ArrayList<BlockMask> winList = chainMap.get("win");
 
 		if(loseList == null || loseList.isEmpty()) throw new Exception("loseList is null when reorganizing. ");
 
@@ -495,13 +495,13 @@ public class ChainParser {
 		System.out.println("Reorganized. Fork: "+Preparer.forkList.size()+" Height: "+heightBeforeFork);
 	}
 
-	private void treatLoseList( ElasticsearchClient esClient,ArrayList<BlockMark> loseList) throws ElasticsearchException, IOException {
+	private void treatLoseList( ElasticsearchClient esClient,ArrayList<BlockMask> loseList) throws ElasticsearchException, IOException {
 
 		BulkRequest.Builder br = new BulkRequest.Builder();
 		Preparer.mainList.removeAll(loseList);
 
 		for(int i=loseList.size()-1;i>=0;i--) {
-			BlockMark bm = loseList.get(i);
+			BlockMask bm = loseList.get(i);
 			bm.setStatus(Preparer.FORK);
 			Preparer.forkList.add(bm);
 			br.operations(op->op.index(in->in
@@ -512,37 +512,37 @@ public class ChainParser {
 		esClient.bulk(br.build());
 	}
 
-	private void treatWinList(ElasticsearchClient esClient, ArrayList<BlockMark> winList) throws Exception {
+	private void treatWinList(ElasticsearchClient esClient, ArrayList<BlockMask> winList) throws Exception {
 
 		Preparer.forkList.removeAll(winList);
 
 		for(int i=winList.size()-1;i>=0;i--) {
-			BlockMark blockMark = winList.get(i);
+			BlockMask blockMask = winList.get(i);
 
-			blockMark.setStatus(Preparer.MAIN);
-			Preparer.mainList.add(blockMark);
+			blockMask.setStatus(Preparer.MAIN);
+			Preparer.mainList.add(blockMask);
 
-			byte[] blockBytes = getBlockBytes(blockMark);
-			ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes,blockMark);
+			byte[] blockBytes = getBlockBytes(blockMask);
+			ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes, blockMask);
 			ReadyBlock readyBlock = new BlockMaker().makeReadyBlock(esClient, rawBlock);
 			new BlockWriter().writeIntoEs(esClient, readyBlock,opReFile);
 
 			System.out.println("writeWinListToEs. i:"+i
-					+" blockId:"+blockMark.getId()
-					+" height"+blockMark.getHeight()
-					+" blockSize:"+blockMark.getSize()
-					+" pointer:"+blockMark.get_pointer()
+					+" blockId:"+ blockMask.getId()
+					+" height"+ blockMask.getHeight()
+					+" blockSize:"+ blockMask.getSize()
+					+" pointer:"+ blockMask.get_pointer()
 					+" blockBytes length:"+blockBytes.length);
 		}
 
 		dropOldFork(winList.get(0).getHeight());
 	}
 
-	private boolean isRepeatBlockIgnore(BlockMark blockMark) {
+	private boolean isRepeatBlockIgnore(BlockMask blockMask) {
 
 		if(Preparer.mainList!=null && !Preparer.mainList.isEmpty())
-			for (BlockMark mark : Preparer.mainList) {
-				if (blockMark.getId().equals(mark.getId())) {
+			for (BlockMask mark : Preparer.mainList) {
+				if (blockMask.getId().equals(mark.getId())) {
 					System.out.println("Repeat block...");
 					log.info("Repeat block...");
 					return true;
@@ -551,13 +551,13 @@ public class ChainParser {
 		return false;
 	}
 
-	private boolean isLinkToMainChainWriteItToEs(ElasticsearchClient esClient, BlockMark blockMark, byte[] blockBytes) throws Exception {
+	private boolean isLinkToMainChainWriteItToEs(ElasticsearchClient esClient, BlockMask blockMask, byte[] blockBytes) throws Exception {
 
-		if(blockMark.getPreBlockId().equals(Preparer.BestHash)){
-			blockMark.setStatus(Preparer.MAIN);
+		if(blockMask.getPreBlockId().equals(Preparer.BestHash)){
+			blockMask.setStatus(Preparer.MAIN);
 			long newHeight = Preparer.BestHeight+1;
-			blockMark.setHeight(newHeight);
-			ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes, blockMark);
+			blockMask.setHeight(newHeight);
+			ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes, blockMask);
 			ReadyBlock readyBlock = new BlockMaker().makeReadyBlock(esClient, rawBlock);
 			new BlockWriter().writeIntoEs(esClient, readyBlock,opReFile);
 			dropOldFork(newHeight);
@@ -570,36 +570,36 @@ public class ChainParser {
 		Preparer.forkList.removeIf(bm -> bm.getHeight() < newHeight - 30);
 	}
 
-	private boolean isNewForkAddMarkToEs(ElasticsearchClient esClient,BlockMark blockMark) throws ElasticsearchException, IOException {
+	private boolean isNewForkAddMarkToEs(ElasticsearchClient esClient, BlockMask blockMask) throws ElasticsearchException, IOException {
 
-		for(BlockMark bm:Preparer.mainList) {
+		for(BlockMask bm:Preparer.mainList) {
 
-			if(blockMark.getPreBlockId().equals(bm.getId()) && !bm.getId().equals(Preparer.BestHash)){
+			if(blockMask.getPreBlockId().equals(bm.getId()) && !bm.getId().equals(Preparer.BestHash)){
 
-				blockMark.setHeight(bm.getHeight()+1);
-				blockMark.setStatus(Preparer.FORK);
-				Preparer.forkList.add(blockMark);
-				writeBlockMark(esClient, blockMark);
+				blockMask.setHeight(bm.getHeight()+1);
+				blockMask.setStatus(Preparer.FORK);
+				Preparer.forkList.add(blockMask);
+				writeBlockMark(esClient, blockMask);
 
-				System.out.println("New fork block. Height: "+blockMark.getHeight()+"forkList size:" + Preparer.forkList.size());
-				log.info("New fork block. Height: "+blockMark.getHeight());
+				System.out.println("New fork block. Height: "+ blockMask.getHeight()+"forkList size:" + Preparer.forkList.size());
+				log.info("New fork block. Height: "+ blockMask.getHeight());
 				return true;
 			}
 		}
 		return false;
 	}
 
-	private boolean isLinkedToForkWriteMarkToEs(ElasticsearchClient esClient,BlockMark blockMark1) throws ElasticsearchException, IOException {
+	private boolean isLinkedToForkWriteMarkToEs(ElasticsearchClient esClient, BlockMask blockMask1) throws ElasticsearchException, IOException {
 
-		for (BlockMark bm : Preparer.forkList) {
-			if (blockMark1.getPreBlockId().equals(bm.getId())) {
-				blockMark1.setHeight(bm.getHeight() + 1);
-				blockMark1.setStatus(Preparer.FORK);
-				writeBlockMark(esClient, blockMark1);
-				Preparer.forkList.add(blockMark1);
+		for (BlockMask bm : Preparer.forkList) {
+			if (blockMask1.getPreBlockId().equals(bm.getId())) {
+				blockMask1.setHeight(bm.getHeight() + 1);
+				blockMask1.setStatus(Preparer.FORK);
+				writeBlockMark(esClient, blockMask1);
+				Preparer.forkList.add(blockMask1);
 
-				System.out.println("Linked to fork block. Height: " + blockMark1.getHeight() + " fork size:" + Preparer.forkList.size());
-				log.info("Linked to fork block. Height: " + blockMark1.getHeight());
+				System.out.println("Linked to fork block. Height: " + blockMask1.getHeight() + " fork size:" + Preparer.forkList.size());
+				log.info("Linked to fork block. Height: " + blockMask1.getHeight());
 
 				return true;
 			}
@@ -608,7 +608,7 @@ public class ChainParser {
 		return false;
 	}
 
-	private byte[] getBlockBytes(BlockMark bm) throws IOException {
+	private byte[] getBlockBytes(BlockMask bm) throws IOException {
 
 		File file = new File(Preparer.Path, BlockFileUtils.getFileNameWithOrder(bm.get_fileOrder()));
 		FileInputStream fis = new FileInputStream(file);
@@ -619,12 +619,12 @@ public class ChainParser {
 		return blockBytes;
 	}
 
-	private void writeOrphanMark(ElasticsearchClient esClient,BlockMark blockMark) throws ElasticsearchException, IOException {
+	private void writeOrphanMark(ElasticsearchClient esClient, BlockMask blockMask) throws ElasticsearchException, IOException {
 
-		blockMark.setStatus(Preparer.ORPHAN);
-		blockMark.setOrphanHeight(Preparer.BestHeight);
-		writeBlockMark(esClient, blockMark);
-		Preparer.orphanList.add(blockMark);
+		blockMask.setStatus(Preparer.ORPHAN);
+		blockMask.setOrphanHeight(Preparer.BestHeight);
+		writeBlockMark(esClient, blockMask);
+		Preparer.orphanList.add(blockMask);
 
 
 	}
@@ -633,49 +633,49 @@ public class ChainParser {
 
 		boolean found = false;
 
-		BlockMark bestBlockMark;
+		BlockMask bestBlockMask;
 
 		while(!found) {
-			Iterator<BlockMark> iter = Preparer.orphanList.iterator();
+			Iterator<BlockMask> iter = Preparer.orphanList.iterator();
 			while(iter.hasNext()){
-				BlockMark blockMark = iter.next();
+				BlockMask blockMask = iter.next();
 
 				//If linked to main;
-				if(blockMark.getPreBlockId().equals(Preparer.BestHash)) {
-					blockMark.setHeight(Preparer.BestHeight+1);
-					blockMark.setStatus(Preparer.MAIN);
-					byte[] blockBytes = getBlockBytes(blockMark);
+				if(blockMask.getPreBlockId().equals(Preparer.BestHash)) {
+					blockMask.setHeight(Preparer.BestHeight+1);
+					blockMask.setStatus(Preparer.MAIN);
+					byte[] blockBytes = getBlockBytes(blockMask);
 
-					ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes,blockMark);
+					ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes, blockMask);
 					ReadyBlock readyBlock = new BlockMaker().makeReadyBlock(esClient, rawBlock);
 					new BlockWriter().writeIntoEs(esClient, readyBlock,opReFile);
 
-					bestBlockMark = Preparer.mainList.get(Preparer.mainList.size()-1);
+					bestBlockMask = Preparer.mainList.get(Preparer.mainList.size()-1);
 
-					if(!bestBlockMark.getId().equals(BestHash)) {
-						System.out.println("BestHash "+Preparer.BestHash+" is not the same as mainList:"+bestBlockMark.getId());
-						throw new Exception("BestHash "+Preparer.BestHash+" is not the same as mainList:"+bestBlockMark.getId());
+					if(!bestBlockMask.getId().equals(BestHash)) {
+						System.out.println("BestHash "+Preparer.BestHash+" is not the same as mainList:"+ bestBlockMask.getId());
+						throw new Exception("BestHash "+Preparer.BestHash+" is not the same as mainList:"+ bestBlockMask.getId());
 					}
 					iter.remove();
 					found = true;
 					continue;
 				}
 				//If new fork
-				for(BlockMark bm:Preparer.mainList) {
-					if (blockMark.getId().equals(bm.getId())) {
+				for(BlockMask bm:Preparer.mainList) {
+					if (blockMask.getId().equals(bm.getId())) {
 						iter.remove();
 						found=true;
 						break;
 					}
-					if(blockMark.getPreBlockId().equals(bm.getId()) && !bm.getId().equals(Preparer.BestHash)){
-						blockMark.setHeight(bm.getHeight()+1);
-						blockMark.setStatus(Preparer.FORK);
-						Preparer.forkList.add(blockMark);
+					if(blockMask.getPreBlockId().equals(bm.getId()) && !bm.getId().equals(Preparer.BestHash)){
+						blockMask.setHeight(bm.getHeight()+1);
+						blockMask.setStatus(Preparer.FORK);
+						Preparer.forkList.add(blockMask);
 						iter.remove();
-						writeBlockMark(esClient, blockMark);
+						writeBlockMark(esClient, blockMask);
 
-						System.out.println("New fork block. Height: "+blockMark.getHeight()+". ForkList size:" + Preparer.forkList.size());
-						log.info("New fork block. Height: "+blockMark.getHeight());
+						System.out.println("New fork block. Height: "+ blockMask.getHeight()+". ForkList size:" + Preparer.forkList.size());
+						log.info("New fork block. Height: "+ blockMask.getHeight());
 						found = true;
 						break;
 					}
@@ -683,19 +683,19 @@ public class ChainParser {
 				if(found)continue;
 
 				//If linked to a fork;
-				for(BlockMark fm: Preparer.forkList) {
-					if (blockMark.getId().equals(fm.getId())) {
+				for(BlockMask fm: Preparer.forkList) {
+					if (blockMask.getId().equals(fm.getId())) {
 						iter.remove();
 						found=true;
 						break;
 					}
-					if(blockMark.getPreBlockId().equals(fm.getId())) {
-						blockMark.setHeight(fm.getHeight()+1);
-						blockMark.setStatus(Preparer.FORK);
-						Preparer.forkList.add(blockMark);
+					if(blockMask.getPreBlockId().equals(fm.getId())) {
+						blockMask.setHeight(fm.getHeight()+1);
+						blockMask.setStatus(Preparer.FORK);
+						Preparer.forkList.add(blockMask);
 						iter.remove();
-						if(isForkOverMain(blockMark)) {
-							HashMap<String, ArrayList<BlockMark>> chainMap = findLoseChainAndWinChain(blockMark);
+						if(isForkOverMain(blockMask)) {
+							HashMap<String, ArrayList<BlockMask>> chainMap = findLoseChainAndWinChain(blockMask);
 							if(chainMap == null)return;
 							reorganize(esClient,chainMap);
 						}

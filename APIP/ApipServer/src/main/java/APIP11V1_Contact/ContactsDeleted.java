@@ -1,7 +1,7 @@
 package APIP11V1_Contact;
 
+import constants.ApipApiNames;
 import data.apipData.Sort;
-import server.ApipApiNames;
 import constants.IndicesNames;
 import data.feipData.Contact;
 import initial.Initiator;
@@ -23,7 +23,7 @@ import static constants.Strings.ACTIVE;
 import static constants.Values.TRUE;
 
 
-@WebServlet(name = ApipApiNames.CONTACTS_DELETED, value = "/"+ ApipApiNames.SN_11+"/"+ ApipApiNames.VERSION_1 +"/"+ ApipApiNames.CONTACTS_DELETED)
+@WebServlet(name = ApipApiNames.CONTACTS_DELETED, value = "/"+ ApipApiNames.SN_11+"/"+ ApipApiNames.CONTACTS_DELETED +"/"+ ApipApiNames.VER_1)
 public class ContactsDeleted extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 
@@ -33,7 +33,7 @@ public class ContactsDeleted extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.FC_SIGN_BODY;
+        AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.CONTACT, Contact.class, null,null,ACTIVE,TRUE,defaultSort, request,response,authType);
     }

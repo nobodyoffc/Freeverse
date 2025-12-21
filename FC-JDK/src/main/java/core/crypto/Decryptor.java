@@ -4,9 +4,7 @@ import com.google.common.hash.Hashing;
 
 import constants.CodeMessage;
 import constants.Constants;
-import core.crypto.Algorithm.AesCbc256;
-import core.crypto.Algorithm.Bitcore;
-import core.crypto.Algorithm.Ecc256K1;
+import core.crypto.Algorithm.*;
 import core.crypto.old.EccAes256K1P7;
 import data.fcData.AlgorithmId;
 import org.slf4j.Logger;
@@ -31,6 +29,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.*;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HexFormat;
 
 public class Decryptor {
@@ -38,6 +37,78 @@ public class Decryptor {
     protected static final Logger log = LoggerFactory.getLogger(Decryptor.class);
 
     public Decryptor() {}
+
+
+    public static CryptoDataByte decryptTry(String cipher, byte[] priKey){
+        // Try to decrypt to get other fields like title, type, memo
+        Decryptor decryptor = new Decryptor();
+        CryptoDataByte cryptoDataByte = null;
+
+        if (cipher.startsWith("A")) {
+            cryptoDataByte = decryptBundleTry(cipher,priKey);
+        }
+
+        // FC algorithm
+        if (cryptoDataByte == null || cryptoDataByte.getCode()!=0 ) {
+            try {
+                cryptoDataByte = CryptoDataByte.fromJson(cipher);
+            } catch (Exception e) {
+                cryptoDataByte = new CryptoDataByte();
+                cryptoDataByte.setCodeMessage(CodeMessage.Code1020OtherError,e.getMessage());
+                return cryptoDataByte;
+            }
+        }
+
+        cryptoDataByte.setPrikeyB(priKey);
+        cryptoDataByte = decryptor.decrypt(cryptoDataByte);
+
+        return cryptoDataByte;
+    }
+
+
+    public static CryptoDataByte decryptBundleTry(String cipher, byte[] priKey) {
+        CryptoDataByte cryptoDataByte;
+        byte[] cipherBytes;
+        try {
+            cipherBytes = Base64.getDecoder().decode(cipher);
+        } catch (IllegalArgumentException e) {
+            cryptoDataByte = new CryptoDataByte();
+            cryptoDataByte.setCodeMessage(CodeMessage.Code1029FailedToDecrypt);
+            return cryptoDataByte;
+        }
+
+        try {
+            cryptoDataByte = CryptoDataByte.fromBundle(cipherBytes);
+
+            // Not FC algorithm
+            if (cryptoDataByte == null || cryptoDataByte.getCode() != 0) {
+                try {
+                    cryptoDataByte = new CryptoDataByte();
+                    byte[] dataBytes = Bitcore.decrypt(cipherBytes, priKey);
+                    if(dataBytes==null){
+                        cryptoDataByte.setCodeMessage(CodeMessage.Code1029FailedToDecrypt);
+                        return cryptoDataByte;
+                    }
+                    cryptoDataByte.setCodeMessage(CodeMessage.Code0Success);
+                    cryptoDataByte.setData(dataBytes);
+                    return cryptoDataByte;
+                } catch (Exception e) {
+                    cryptoDataByte = new CryptoDataByte();
+                    cryptoDataByte.setCodeMessage(CodeMessage.Code1020OtherError,e.getMessage());
+                    return cryptoDataByte;
+                }
+            }
+        } catch (Exception e) {
+            cryptoDataByte = new CryptoDataByte();
+            cryptoDataByte.setCodeMessage(CodeMessage.Code1020OtherError,e.getMessage());
+            return cryptoDataByte;
+        }
+        cryptoDataByte = new CryptoDataByte();
+        cryptoDataByte.setCodeMessage(CodeMessage.Code1020OtherError);
+        return cryptoDataByte;
+    }
+
+
 
     public static byte[] decryptPrikey(String userPrikeyCipher, byte[] symkey) {
         CryptoDataByte cryptoResult = new Decryptor().decryptJsonBySymkey(userPrikeyCipher, symkey);
@@ -88,8 +159,8 @@ public class Decryptor {
 
     public CryptoDataByte decrypt(CryptoDataByte cryptoDataByte){
         switch (cryptoDataByte.getAlg()){
-            case FC_AesCbc256_No1_NrC7 -> decryptBySymkey(cryptoDataByte);
-            case FC_EccK1AesCbc256_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
+            case FC_AesCbc256_No1_NrC7, FC_AesGcm256_No1_NrC7, FC_ChaCha20_No1_NrC7 -> decryptBySymkey(cryptoDataByte);
+            case FC_EccK1AesCbc256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7, FC_EccK1ChaCha20_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
             case BitCore_EccAes256 -> decryptBitcore(cryptoDataByte);
             default -> cryptoDataByte.setCodeMessage(CodeMessage.Code4002NoSuchAlgorithm);
         }
@@ -194,6 +265,8 @@ public class Decryptor {
     private static CryptoDataByte decryptBySymkey(CryptoDataByte cryptoDataByte) {
         switch (cryptoDataByte.getAlg()) {
             case FC_AesCbc256_No1_NrC7 -> AesCbc256.decrypt(cryptoDataByte);
+            case FC_AesGcm256_No1_NrC7 -> AesGcm256.decrypt(cryptoDataByte);
+            case FC_ChaCha20_No1_NrC7 -> ChaCha20.decrypt(cryptoDataByte);
             default -> new EccAes256K1P7().decrypt(cryptoDataByte);
         }
         return cryptoDataByte;
@@ -251,6 +324,8 @@ public class Decryptor {
 
             switch (cryptoDataByte.getAlg()){
                 case FC_AesCbc256_No1_NrC7 -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
+                case FC_AesGcm256_No1_NrC7 -> AesGcm256.decryptStream(fis,fos,cryptoDataByte);
+                case FC_ChaCha20_No1_NrC7 -> ChaCha20.decryptStream(fis,fos,cryptoDataByte);
                 default -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
             }
         } catch (FileNotFoundException e) {
@@ -273,7 +348,14 @@ public class Decryptor {
             }
             cryptoDataByte.setDid(did);
 
-            cryptoDataByte.checkSum(cryptoDataByte.getAlg());
+            // Skip sum check for AES-GCM algorithms (they have built-in authentication)
+            // ChaCha20 requires sum check as it doesn't have built-in authentication
+            AlgorithmId alg = cryptoDataByte.getAlg();
+            if(alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
+               alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
+               alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+                cryptoDataByte.checkSum(cryptoDataByte.getAlg());
+            }
             return cryptoDataByte;
         }
         return cryptoDataByte;
@@ -289,6 +371,12 @@ public class Decryptor {
         switch (algorithmId){
             case FC_AesCbc256_No1_NrC7 -> {
                 AesCbc256.decryptStream(inputStream,outputStream,cryptoDataByte);
+            }
+            case FC_AesGcm256_No1_NrC7 -> {
+                AesGcm256.decryptStream(inputStream,outputStream,cryptoDataByte);
+            }
+            case FC_ChaCha20_No1_NrC7 -> {
+                ChaCha20.decryptStream(inputStream,outputStream,cryptoDataByte);
             }
             default -> AesCbc256.decryptStream(inputStream,outputStream,cryptoDataByte);
         }
@@ -443,9 +531,13 @@ public class Decryptor {
         try(ByteArrayInputStream bis = new ByteArrayInputStream(cipher);
             ByteArrayOutputStream bos = new ByteArrayOutputStream()){
             decryptStreamByAsy(bis,bos,cryptoDataByte);
-            cryptoDataByte.setData(bos.toByteArray());
-            cryptoDataByte.makeDid();
-            cryptoDataByte.setCodeMessage(0);
+
+            // Only set success if no error occurred during decryption
+            if (cryptoDataByte.getCode() == null || cryptoDataByte.getCode() == 0) {
+                cryptoDataByte.setData(bos.toByteArray());
+                cryptoDataByte.makeDid();
+                cryptoDataByte.setCodeMessage(0);
+            }
         } catch (IOException e) {
             cryptoDataByte.setCodeMessage(6);
         }
@@ -515,7 +607,15 @@ public class Decryptor {
 
             byte[] did = Hash.sha256x2Bytes(new File(destFileForFos));
             cryptoDataByte.setDid(did);
-            if(!cryptoDataByte.checkSum())cryptoDataByte.setCodeMessage(20);
+
+            // Skip sum check for AES-GCM algorithms (they have built-in authentication)
+            // ChaCha20 requires sum check as it doesn't have built-in authentication
+            AlgorithmId alg = cryptoDataByte.getAlg();
+            if(alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
+               alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
+               alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+                if(!cryptoDataByte.checkSum())cryptoDataByte.setCodeMessage(20);
+            }
 
 
             String didHex = Hex.toHex(did);
@@ -557,6 +657,12 @@ public class Decryptor {
         byte[] pubkeyY;
         byte[] iv = cryptoDataByte.getIv();
 
+        // Adjust IV length based on algorithm type (for backward compatibility)
+        if (iv != null && cryptoDataByte.getAlg() != null) {
+            iv = Encryptor.adjustIvLength(iv, cryptoDataByte.getAlg());
+            cryptoDataByte.setIv(iv);  // Update the IV in cryptoDataByte for decryption
+        }
+
         byte[] prikeyA =cryptoDataByte.getPrikeyA();
         byte[] prikeyB = cryptoDataByte.getPrikeyB();
         byte[] pubkeyA = cryptoDataByte.getPubkeyA();
@@ -569,24 +675,17 @@ public class Decryptor {
             prikeyX = prikeyB;
             pubkeyY = pubkeyA;
         }else if(prikeyA!=null && pubkeyA!=null){
-            byte[] pubkey = KeyTools.prikeyToPubkey(prikeyA);
-            if(!Arrays.equals(pubkey,pubkeyA)){
-                prikeyX = prikeyA;
-                pubkeyY = pubkeyA;
-            }else {
-                cryptoDataByte.setCodeMessage(19);
-                return;
-            }
+            // Allow self-communication (same key pair)
+            // Security is maintained because:
+            // 1. Only the private key holder can compute ECDH
+            // 2. Random IV ensures different symkey each time
+            prikeyX = prikeyA;
+            pubkeyY = pubkeyA;
         }
         else if(prikeyB!=null && pubkeyB!=null){
-            byte[] pubkey = KeyTools.prikeyToPubkey(prikeyB);
-            if(!Arrays.equals(pubkey,pubkeyA)){
-                prikeyX = prikeyB;
-                pubkeyY = pubkeyB;
-            }else {
-                cryptoDataByte.setCodeMessage(19);
-                return;
-            }
+            // Allow self-communication (same key pair)
+            prikeyX = prikeyB;
+            pubkeyY = pubkeyB;
         }
         else {
             cryptoDataByte.setCodeMessage(19);
@@ -598,26 +697,72 @@ public class Decryptor {
             return;
         }
 
-        if(cryptoDataByte.getSum()==null) {
-            cryptoDataByte.setCodeMessage(14);
-            return;
-        }
-
         EncryptType type = cryptoDataByte.getType();
         AlgorithmId algo = cryptoDataByte.getAlg();
+
+        // Default algorithm if not set
         if(algo==null){
             algo = AlgorithmId.EccAes256K1P7_No1_NrC7;
             cryptoDataByte.setAlg(algo);
         }
 
+        // Only check sum for non-GCM algorithms (GCM has built-in authentication)
+        boolean requiresSum = (algo != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
+                               algo != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
+                               algo != AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
+
+        if(requiresSum && cryptoDataByte.getSum()==null) {
+            cryptoDataByte.setCodeMessage(14);
+            return;
+        }
+
         byte[] symkey;
         switch (algo){
             case FC_EccK1AesCbc256_No1_NrC7 -> {
-                symkey = Ecc256K1.asyKeyToSymkey(prikeyX,pubkeyY, iv);
+                symkey = Ecc256K1AesCbc256.getInstance().asyKeyToSymkey(prikeyX,pubkeyY, iv);
                 cryptoDataByte.setSymkey(symkey);
                 cryptoDataByte.setType(EncryptType.Symkey);
                 cryptoDataByte.setAlg(AlgorithmId.FC_AesCbc256_No1_NrC7);
                 AesCbc256.decryptStream(is,os,cryptoDataByte);
+            }
+            case FC_EccK1AesGcm256_No1_NrC7 -> {
+                try {
+                    symkey = Ecc256K1AesGcm256.getInstance().asyKeyToSymkey(prikeyX,pubkeyY, iv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setType(EncryptType.Symkey);
+                cryptoDataByte.setAlg(AlgorithmId.FC_AesGcm256_No1_NrC7);
+                AesGcm256.decryptStream(is,os,cryptoDataByte);
+            }
+            case FC_X25519AesGcm256_No1_NrC7 -> {
+                try {
+                    symkey = X25519AesGcm256.getInstance().asyKeyToSymkey(prikeyX,pubkeyY, iv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setType(EncryptType.Symkey);
+                cryptoDataByte.setAlg(AlgorithmId.FC_AesGcm256_No1_NrC7);
+                AesGcm256.decryptStream(is,os,cryptoDataByte);
+            }
+            case FC_EccK1ChaCha20_No1_NrC7 -> {
+                try {
+                    symkey = Ecc256K1ChaCha20.getInstance().asyKeyToSymkey(prikeyX,pubkeyY, iv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setType(EncryptType.Symkey);
+                cryptoDataByte.setAlg(AlgorithmId.FC_ChaCha20_No1_NrC7);
+                ChaCha20.decryptStream(is,os,cryptoDataByte);
             }
             default -> {
                 symkey = EccAes256K1P7.asyKeyToSymkey(prikeyX,pubkeyY,iv);

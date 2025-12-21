@@ -137,7 +137,7 @@ public class TalkClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
 
     private void pay(Map<String,Integer> payToForBytes) {
         try{
-            String priceStr = talkClient.getApiProvider().getApiParams().getPricePerKBytes();
+            String priceStr = talkClient.getApiProvider().getApiParams().getPricePerKB();
             Long price = FchUtils.coinStrToSatoshi(priceStr);
             if(price==null)return;
             Map<String,Long> payList = new HashMap<>();
