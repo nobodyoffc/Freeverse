@@ -3,9 +3,7 @@ package finance;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import constants.OpNames;
-import constants.Values;
 import data.fcData.News;
-import data.fchData.Cash;
 import data.feipData.*;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
@@ -57,10 +55,12 @@ public class FinanceParser {
 
         switch(tokenRaw.getOp()) {
             case OpNames.DEPLOY:
-                if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100)
-                {
-                    System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-                    return null;
+                if (opre.getHeight() > StartFEIP.CddCheckHeight) {
+                    Long cdd = opre.getCdd();
+                    if (cdd == null || cdd < StartFEIP.CddRequired * 100L) {
+                        System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired * 100");
+                        return null;
+                    }
                 }
                 if(tokenRaw.getName()==null){
                     System.out.println("Name is null");
@@ -83,26 +83,14 @@ public class FinanceParser {
                 }
 
                 if(tokenRaw.getTransferable()!=null){
-                    if (tokenRaw.getTransferable()==null){
-                        System.out.println("Transferable is null");
-                        return null;
-                    }
                     tokenHist.setTransferable(tokenRaw.getTransferable());
                 }
 
                 if(tokenRaw.getClosable()!=null){
-                    if (tokenRaw.getClosable()==null){
-                        System.out.println("Closable is null");
-                        return null;
-                    }
                     tokenHist.setClosable(tokenRaw.getClosable());
                 }
 
                 if(tokenRaw.getOpenIssue()!=null){
-                    if (tokenRaw.getOpenIssue()==null){
-                        System.out.println("Open issue is null");
-                        return null;
-                    }
                     tokenHist.setOpenIssue(tokenRaw.getOpenIssue());
                 }
 
@@ -139,7 +127,20 @@ public class FinanceParser {
                 tokenHist.setTransferTo(tokenRaw.getTransferTo());
                 break;
 
-            case OpNames.DESTROY, OpNames.CLOSE:
+            case OpNames.DESTROY:
+                if(tokenRaw.getTokenIds()==null||tokenRaw.getTokenIds().isEmpty()){
+                    System.out.println("Token ids is null or empty");
+                    return null;
+                }
+                if(tokenRaw.getTokenIds().size()!=1){
+                    System.out.println("Destroy requires exactly one tokenId in tokenIds");
+                    return null;
+                }
+                tokenHist.setTokenIds(tokenRaw.getTokenIds());
+                tokenHist.setTokenId(tokenRaw.getTokenIds().get(0));
+                setTxInfo(opre, tokenHist);
+                break;
+            case OpNames.CLOSE:
                 if(tokenRaw.getTokenIds()==null||tokenRaw.getTokenIds().isEmpty()){
                     System.out.println("Token ids is null or empty");
                     return null;
@@ -321,7 +322,7 @@ public class FinanceParser {
 
             case OpNames.ISSUE:
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(Boolean.TRUE)){
+                if(token==null || Boolean.TRUE.equals(token.getClosed())){
                     System.out.println("Token is null or closed");
                     return false;
                 }
@@ -340,9 +341,13 @@ public class FinanceParser {
                     return false;
                 }
 
-                for (Cash issueTo : tokenHist.getIssueTo()) {
-                    if(!KeyTools.isGoodFid(issueTo.getOwner())){
+                for (TokenHistory.FidAmount issueTo : tokenHist.getIssueTo()) {
+                    if(!KeyTools.isGoodFid(issueTo.getFid())){
                         System.out.println("Issue to owner is not good");
+                        return false;
+                    }
+                    if(issueTo.getAmount()==null){
+                        System.out.println("Issue to amount is null");
                         return false;
                     }
                     if(isBadDecimal(token, issueTo)){
@@ -350,13 +355,13 @@ public class FinanceParser {
                         return false;
                     }
                     amount += issueTo.getAmount();
-                    receiverAmountMapIssue.put(issueTo.getOwner(),issueTo.getAmount());
-                    String tokenHolderId = TokenHolder.getTokenHolderId(issueTo.getOwner(), tokenHist.getTokenId());
-                    idReceiverMapIssue.put(tokenHolderId,issueTo.getOwner());
+                    receiverAmountMapIssue.put(issueTo.getFid(),issueTo.getAmount());
+                    String tokenHolderId = TokenHolder.getTokenHolderId(issueTo.getFid(), tokenHist.getTokenId());
+                    idReceiverMapIssue.put(tokenHolderId,issueTo.getFid());
                     tokenRecipientIdListIssue.add(tokenHolderId);
                 }
 
-                if(token.getOpenIssue().equals(Boolean.TRUE)){
+                if(Boolean.TRUE.equals(token.getOpenIssue())){
                     if(token.getMaxAmtPerIssue()!=null){
                         if(amount>Double.parseDouble(token.getMaxAmtPerIssue())){
                             System.out.println("Amount is greater than max amount per issue");
@@ -364,8 +369,9 @@ public class FinanceParser {
                         }
                     }
                     if(token.getMinCddPerIssue()!=null){
-                        if(tokenHist.getCdd()<Long.parseLong(token.getMinCddPerIssue())){
-                            System.out.println("Cdd is less than min cdd per issue");
+                        Long histCdd = tokenHist.getCdd();
+                        if(histCdd==null || histCdd<Long.parseLong(token.getMinCddPerIssue())){
+                            System.out.println("Cdd is null or less than min cdd per issue");
                             return false;
                         }
                     }
@@ -380,8 +386,9 @@ public class FinanceParser {
                                                 .must(m3->m3.term(t3->t3.field("tokenId").value(tokenHist.getTokenId())))
                                                 .must(m2 -> m2.term(t2 -> t2.field("op").value("issue")))))
                                 , void.class);
-                        if(search!=null && search.hits().total()!=null){
-                            if(search.hits().total().value()>=times){
+                        if (search != null) {
+                            var totalHits = search.hits().total();
+                            if (totalHits != null && totalHits.value() >= times) {
                                 System.out.println("Times is greater than max issues per addr");
                                 return false;
                             }
@@ -403,10 +410,14 @@ public class FinanceParser {
                 //Set balances of the holders
 
                 EsUtils.MgetResult<TokenHolder> resultMultiGet = EsUtils.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenRecipientIdListIssue, TokenHolder.class);
+                if (resultMultiGet == null) {
+                    System.out.println("Token holder mget result is null");
+                    return false;
+                }
 
                 ArrayList<TokenHolder> newHolderList = new ArrayList<>();
 
-                for(String tokenHolderId:resultMultiGet.getMissList()) {
+                for (String tokenHolderId : resultMultiGet.getMissList()) {
                     TokenHolder tokenHolder = new TokenHolder();
 
                     tokenHolder.setId(tokenHolderId);
@@ -416,15 +427,14 @@ public class FinanceParser {
                     tokenHolder.setFirstHeight(tokenHist.getHeight());
                     tokenHolder.setLastHeight(tokenHist.getHeight());
 
-                    tokenHolder.setBalance(amount);
+                    Double perFid = receiverAmountMapIssue.get(toFid);
+                    tokenHolder.setBalance(perFid != null ? perFid : 0d);
                     newHolderList.add(tokenHolder);
-                    break;
-
                 }
 
                 for( TokenHolder tokenHolder: resultMultiGet.getResultList()) {
                     String fid = tokenHolder.getFid();
-                    double oldBalance = tokenHolder.getBalance();
+                    double oldBalance = tokenHolder.getBalance() != null ? tokenHolder.getBalance() : 0d;
                     tokenHolder.setBalance(oldBalance + receiverAmountMapIssue.get(fid));
                     tokenHolder.setLastHeight(tokenHist.getHeight());
                     newHolderList.add(tokenHolder);
@@ -438,7 +448,7 @@ public class FinanceParser {
 
             case OpNames.TRANSFER:
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(Boolean.TRUE)){
+                if(token==null || Boolean.TRUE.equals(token.getClosed())){
                     System.out.println("Token is null or closed");
                     return false;
                 }
@@ -450,7 +460,7 @@ public class FinanceParser {
                     System.out.println("Token holder is null");
                     return false;
                 }
-                double senderOldBalance = tokenHolder.getBalance();
+                double senderOldBalance = tokenHolder.getBalance() != null ? tokenHolder.getBalance() : 0d;
 
                 ArrayList<TokenHolder> newHolderListTransfer = new ArrayList<>();
                 ArrayList<String> tokenHolderIdListTransfer = new ArrayList<>();
@@ -459,20 +469,24 @@ public class FinanceParser {
                 double sum = 0;
                 Map<String,Double> receiverAmountMap = new HashMap<>();
 
-                for (Cash sendTo : tokenHist.getTransferTo()) {
-                    if(!KeyTools.isGoodFid(sendTo.getOwner())){
+                for (TokenHistory.FidAmount sendTo : tokenHist.getTransferTo()) {
+                    if(!KeyTools.isGoodFid(sendTo.getFid())){
                         System.out.println("Send to owner is not good");
+                        return false;
+                    }
+                    if(sendTo.getAmount()==null){
+                        System.out.println("Transfer amount is null");
                         return false;
                     }
                     if(isBadDecimal(token, sendTo)){
                         System.out.println("Send to amount is bad");
                         return false;
                     }
-                    String id = TokenHolder.getTokenHolderId(sendTo.getOwner(), tokenHist.getTokenId());
+                    String id = TokenHolder.getTokenHolderId(sendTo.getFid(), tokenHist.getTokenId());
                     tokenHolderIdListTransfer.add(id);
                     sum+=sendTo.getAmount();
-                    receiverAmountMap.put(sendTo.getOwner(),sendTo.getAmount());
-                    idReceiverMapTransfer.put(id,sendTo.getOwner());
+                    receiverAmountMap.put(sendTo.getFid(),sendTo.getAmount());
+                    idReceiverMapTransfer.put(id,sendTo.getFid());
                 }
 
                 if(sum>senderOldBalance){
@@ -484,6 +498,10 @@ public class FinanceParser {
                 tokenHolder.setLastHeight(tokenHist.getHeight());
 
                 EsUtils.MgetResult<TokenHolder> resultTransfer = EsUtils.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderIdListTransfer, TokenHolder.class);
+                if (resultTransfer == null) {
+                    System.out.println("Token holder mget result is null");
+                    return false;
+                }
 
                 for(String id:resultTransfer.getMissList()) {
                     TokenHolder tokenReceiver = new TokenHolder();
@@ -501,7 +519,7 @@ public class FinanceParser {
 
                 for( TokenHolder tokenReceiver: resultTransfer.getResultList()) {
                     String toFid = tokenReceiver.getFid();
-                    double oldBalance = tokenReceiver.getBalance();
+                    double oldBalance = tokenReceiver.getBalance() != null ? tokenReceiver.getBalance() : 0d;
                     tokenReceiver.setBalance(receiverAmountMap.get(toFid) + oldBalance);
                     tokenReceiver.setLastHeight(tokenHist.getHeight());
                     newHolderListTransfer.add(tokenReceiver);
@@ -522,7 +540,7 @@ public class FinanceParser {
             case OpNames.DESTROY:
 
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(Boolean.TRUE)){
+                if(token==null || Boolean.TRUE.equals(token.getClosed())){
                     System.out.println("Token is null or closed");
                     return false;
                 }
@@ -539,9 +557,9 @@ public class FinanceParser {
                     return false;
                 }
 
-                double balance = tokenHolderDestroy.getBalance();
+                double balance = tokenHolderDestroy.getBalance() != null ? tokenHolderDestroy.getBalance() : 0d;
                 if(balance <=0){
-                    System.out.println("Balance is less than 0");
+                    System.out.println("Balance is zero or negative");
                     return false;
                 }
 
@@ -567,33 +585,41 @@ public class FinanceParser {
                 System.out.println(IndicesNames.TOKEN+":"+result4.result());
                 return true;
             case OpNames.CLOSE:
-
-                token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
-                if(token==null || token.getClosed().equals(Boolean.TRUE)){
-                    System.out.println("Token is null or closed");
+                if (tokenHist.getTokenIds() == null || tokenHist.getTokenIds().isEmpty()) {
+                    System.out.println("Token ids is null or empty");
                     return false;
                 }
+                for (String tid : tokenHist.getTokenIds()) {
+                    token = EsUtils.getById(esClient, IndicesNames.TOKEN, tid, Token.class);
+                    if(token==null || Boolean.TRUE.equals(token.getClosed())){
+                        System.out.println("Token is null or closed: " + tid);
+                        return false;
+                    }
 
-                if(!tokenHist.getSigner().equals(token.getDeployer())){
-                    System.out.println("Token signer is not the same as the deployer");
-                    return false;
+                    if(!tokenHist.getSigner().equals(token.getDeployer())){
+                        System.out.println("Token signer is not the same as the deployer");
+                        return false;
+                    }
+
+                    token.setClosed(Boolean.TRUE);
+                    updateTokenLastInfo(tokenHist, token);
+
+                    Token finalToken = token;
+                    IndexResponse result5 = esClient.index(i->i.index(IndicesNames.TOKEN).id(tid).document(finalToken));
+                    if(result5==null || result5.result()==null){
+                        System.out.println("Failed to index token");
+                        return false;
+                    }
+                    System.out.println(result5.result());
+                    if (!CREATED.equals(result5.result().jsonValue()) && !UPDATED.equals(result5.result().jsonValue())) {
+                        return false;
+                    }
                 }
-
-                token.setClosed(Boolean.TRUE);
-                updateTokenLastInfo(tokenHist, token);
-
-                Token finalToken = token;
-                IndexResponse result5 = esClient.index(i->i.index(IndicesNames.TOKEN).id(tokenHist.getTokenId()).document(finalToken));
-                if(result5==null || result5.result()==null){
-                    System.out.println("Failed to index token");
-                    return false;
-                }
-                System.out.println(result5.result());
 
                 // Create News
                 News.createNews(esClient, tokenHist.getId(), tokenHist.getSigner(), CLOSE, Feip.FeipProtocol.TOKEN.getName(),
                         null, null, StringUtils.listToString(tokenHist.getTokenIds()), tokenHist.getHeight(), tokenHist.getTime());
-                return CREATED.equals(result5.result().jsonValue()) || UPDATED.equals(result5.result().jsonValue());
+                return true;
         }
         return false;
     }
@@ -605,7 +631,7 @@ public class FinanceParser {
         token.setLastTxId(tokenHist.getId());
     }
 
-    private static boolean isBadDecimal(Token token, Cash issueTo) {
+    private static boolean isBadDecimal(Token token, TokenHistory.FidAmount issueTo) {
         try {
             int decimalPlaces = NumberUtils.getDecimalPlaces(issueTo.getAmount());
             int maxDecimal = Integer.parseInt(token.getDecimal());

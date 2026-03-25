@@ -2,7 +2,7 @@ package data.apipData;
 
 import com.google.gson.Gson;
 import data.fcData.FcSession;
-import handlers.SessionManager;
+import managers.SessionManager;
 import org.jetbrains.annotations.Nullable;
 
 import static data.fcData.Signature.symSign;

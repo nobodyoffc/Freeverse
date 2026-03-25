@@ -351,7 +351,7 @@ public class TestFcdsl {
     private static void askIndex(RequestBody dataRequestBody) {
         System.out.println("General request need the name of index. Input it:");
         String index = Inputer.inputString(br);
-        dataRequestBody.getFcdsl().setIndex(index);
+        dataRequestBody.getFcdsl().setEntity(index);
     }
 
     private static void askQuery(RequestBody dataRequestBody) {

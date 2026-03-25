@@ -4,6 +4,7 @@ import clients.NaSaClient.NaSaRpcClient;
 import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.JsonUtils;
 import utils.http.AuthType;
@@ -16,7 +17,6 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import config.Settings;
-import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.FREECASH_INFO, value = "/"+ ApipApiNames.FREECASH_INFO)
 public class FreecashInfo extends HttpServlet {
@@ -32,7 +32,7 @@ public class FreecashInfo extends HttpServlet {
 
     protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
         //Check authorization
-        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
 
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings);
         ReplyBody replier = httpRequestChecker.getReplyBody();

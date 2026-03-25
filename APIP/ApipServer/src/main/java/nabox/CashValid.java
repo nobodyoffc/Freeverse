@@ -2,6 +2,7 @@ package nabox;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import config.Settings;
+import constants.ApiNames;
 import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.FieldNames;
@@ -10,11 +11,11 @@ import data.apipData.RequestBody;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
 import data.fchData.Cash;
-import data.feipData.Service;
-import handlers.CashManager;
-import handlers.CashManager.SearchResult;
-import handlers.Manager.ManagerType;
-import handlers.MempoolManager;
+import data.feipData.ServiceType;
+import managers.CashManager;
+import managers.CashManager.SearchResult;
+import managers.Manager.ManagerType;
+import managers.MempoolManager;
 import initial.Initiator;
 import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
@@ -36,7 +37,7 @@ import static constants.Values.FALSE;
 import static constants.Values.TRUE;
 import static utils.FchUtils.coinToSatoshi;
 
-@WebServlet(name = ApipApiNames.CASH_VALID+"nabox", value = "/"+ "sn18" + ApipApiNames.VER_1 +"/"+ ApipApiNames.CASH_VALID +"/")
+@WebServlet(name = ApipApiNames.CASH_VALID+ ApiNames.NABOX, value = "/"+ "sn18" +"/"+ ApipApiNames.VER_1 +"/"+ ApipApiNames.CASH_VALID )
 public class CashValid extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -76,7 +77,7 @@ public class CashValid extends HttpServlet {
         int msgSize = 0;
         int outputSize = 0;
         long sinceHeight = 0;
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         if (requestBody != null && requestBody.getFcdsl() != null) {
             if (requestBody.getFcdsl().getOther() == null) {
                 ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME, false, ID, true, null, null);

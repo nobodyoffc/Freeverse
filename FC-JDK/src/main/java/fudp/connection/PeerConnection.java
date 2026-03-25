@@ -1,6 +1,7 @@
 package fudp.connection;
 
 import fudp.packet.Frame;
+import fudp.packet.frames.StreamFrame;
 import fudp.stream.Stream;
 import fudp.stream.StreamManager;
 import fudp.transport.*;
@@ -87,7 +88,15 @@ public class PeerConnection {
      * ACK-only packets don't need acknowledgment and should not be counted as lost.
      */
     public void recordSentPacket(long packetNumber, List<Frame> frames, int size, boolean ackEliciting) {
+        recordSentPacket(packetNumber, frames, size, ackEliciting, 0);
+    }
+
+    /**
+     * Record a sent packet, optionally inheriting a retransmit count from a previous attempt.
+     */
+    public void recordSentPacket(long packetNumber, List<Frame> frames, int size, boolean ackEliciting, int retransmitCount) {
         SentPacket sent = new SentPacket(packetNumber, frames, size, ackEliciting);
+        sent.retransmitCount = retransmitCount;
         // Only track ACK-eliciting packets for loss detection
         // ACK-only packets don't need acknowledgment and shouldn't be counted as lost
         if (ackEliciting) {
@@ -101,9 +110,12 @@ public class PeerConnection {
      * Process received ACK.
      */
     public void onAckReceived(long largestAcked, long ackDelay, List<Long> ackedPackets) {
+        int found = 0;
+        int notFound = 0;
         for (long pn : ackedPackets) {
             SentPacket sent = sentPackets.remove(pn);
             if (sent != null) {
+                found++;
                 // Update RTT estimation
                 if (pn == largestAcked) {
                     long rttSample = System.currentTimeMillis() - sent.sentTime;
@@ -112,6 +124,8 @@ public class PeerConnection {
 
                 // Update congestion control
                 congestionControl.onAck(sent.size);
+            } else {
+                notFound++;
             }
             
             // Check if this packet was previously marked as suspected lost
@@ -124,16 +138,42 @@ public class PeerConnection {
         if (largestAcked > largestAckedPacketNumber) {
             largestAckedPacketNumber = largestAcked;
         }
+        
+        // Debug: log ACK processing stats periodically 
+//        totalAcksProcessed += ackedPackets.size();
+//        totalAcksFound += found;
+//        totalAcksNotFound += notFound;
+//        if (totalAcksProcessed % 50 == 0 || notFound > 0) {
+//            System.err.println("[ACK-DBG] peer=" + peerId.substring(0, 8) +
+//                    " thisAck: found=" + found + " notFound=" + notFound +
+//                    " total: processed=" + totalAcksProcessed +
+//                    " found=" + totalAcksFound + " notFound=" + totalAcksNotFound +
+//                    " sentPkts=" + sentPackets.size() + " " + congestionControl);
+//        }
     }
+    
+    // Debug counters
+    private long totalAcksProcessed = 0;
+    private long totalAcksFound = 0;
+    private long totalAcksNotFound = 0;
 
     // Track packets that were marked as suspected lost (for accurate loss tracking)
     private final Set<Long> suspectedLostPacketNumbers = ConcurrentHashMap.newKeySet();
 
     // Loss detection configuration
     // Time-based threshold multiplier (RFC 9002 recommends 9/8 = 1.125, but we use more conservative value)
-    private static final double TIME_THRESHOLD_MULTIPLIER = 1.5;  // More conservative than QUIC's 1.125
+    private static final double TIME_THRESHOLD_MULTIPLIER = 2.0;  // Conservative multiplier
     // Minimum time threshold in milliseconds (prevents false positives on fast networks)
-    private static final long MIN_TIME_THRESHOLD_MS = 50;
+    // Loss detection time threshold.  A packet is considered lost only when it has
+    // been unacknowledged for longer than this threshold.
+    //
+    // 2000ms is conservative but avoids false positives that plagued lower values:
+    //  - On localhost (RTT < 1ms): packets are ACK'd within a few ms, so 2000ms
+    //    means zero false losses.  This prevents the "congestion collapse" where
+    //    phantom onLoss() calls reduce cwnd below inFlight, blocking the sender.
+    //  - On WAN (RTT ~ 100-200ms): threshold = max(2000, 2*RTT + RTTvar).
+    //    Real losses are detected within 2 seconds, which is acceptable.
+    private static final long MIN_TIME_THRESHOLD_MS = 2000;
     // Packet reordering threshold (number of packets that can arrive out of order)
     private static final long PACKET_THRESHOLD = 3;
 
@@ -159,30 +199,87 @@ public class PeerConnection {
                 continue;
             }
 
-            // Lost if:
-            // 1. More than PACKET_THRESHOLD packets have been acknowledged after it (packet reordering)
-            // 2. More than timeThreshold has passed (time-based loss detection)
-            boolean lostByPacketNumber = largestAckedPacketNumber - pn >= PACKET_THRESHOLD;
+            // Lost if more than timeThreshold has passed (time-based loss detection).
+            //
+            // NOTE: Packet-number-based loss detection (largestAcked - pn >= PACKET_THRESHOLD)
+            // is DISABLED because ACKs arrive out of order due to multi-threaded processing
+            // on the receiver.  E.g., ACK for packet 50 may arrive before ACK for packet 1,
+            // causing packet 1 to be falsely marked as lost.  This leads to:
+            //   1. Unnecessary retransmissions
+            //   2. Original packets removed from sentPackets; when real ACKs arrive,
+            //      bytesInFlight never decreases → sender deadlocks
+            //   3. Repeated onLoss() calls that collapse the congestion window
+            //
+            // Time-based detection (500ms+ default) gives ample time for all ACKs to arrive.
             boolean lostByTime = System.currentTimeMillis() - packet.sentTime > timeThreshold;
             
-            if (lostByPacketNumber || lostByTime) {
+            if (lostByTime) {
                 lost.add(packet);
             }
         }
 
-        // Remove lost packets from tracking and update stats
-        for (SentPacket packet : lost) {
-            sentPackets.remove(packet.packetNumber);
-            suspectedLostCount++;
-            suspectedLostPacketNumbers.add(packet.packetNumber);
+        // NOTE: Do NOT remove lost packets here. They are removed by the caller
+        // (retransmitTask) only after they are actually retransmitted or abandoned.
+        // Previously, removing all detected lost packets here caused permanent data loss
+        // when the retransmit task was rate-limited and couldn't retransmit all of them.
+
+        return lost;
+    }
+
+    /**
+     * Remove a sent packet from tracking after it has been retransmitted or abandoned.
+     * 
+     * IMPORTANT: This also decrements bytesInFlight for the removed packet.
+     * Without this, each retransmission leaks the old packet's size from bytesInFlight
+     * (the retransmit sends a NEW packet which adds to bytesInFlight, but the OLD
+     * entry's size was never subtracted), eventually causing bytesInFlight to exceed
+     * congestionWindow permanently and deadlocking the sender.
+     */
+    /**
+     * Remove a sent packet from tracking for retransmission.
+     * @return the removed SentPacket, or null if the packet was already removed (e.g. by an ACK).
+     */
+    public SentPacket removeSentPacket(long packetNumber) {
+        SentPacket removed = sentPackets.remove(packetNumber);
+        if (removed != null) {
+            // Decrement bytesInFlight for the old packet.
+            // Uses onRetransmitRemove (NOT onAck) to avoid congestion window growth.
+            // The retransmit will add its own bytes via onSend().
+            congestionControl.onRetransmitRemove(removed.size);
             
-            // If this packet has been retransmitted too many times, consider it confirmed lost
-            if (packet.retransmitCount >= 3) {
+            suspectedLostCount++;
+            suspectedLostPacketNumbers.add(packetNumber);
+            if (removed.retransmitCount >= 3) {
                 confirmedLostCount++;
             }
         }
+        return removed;
+    }
 
-        return lost;
+    /**
+     * Abandon all sent packets that carry frames for the given stream.
+     * Stops FUDP-level retransmissions for data that the application no longer
+     * cares about (e.g. after an ACK timeout in sendBytesWaitAck).
+     *
+     * @return number of packets abandoned
+     */
+    public int abandonPacketsForStream(long streamId) {
+        List<Long> toRemove = new ArrayList<>();
+        for (Map.Entry<Long, SentPacket> entry : sentPackets.entrySet()) {
+            for (Frame frame : entry.getValue().frames) {
+                if (frame instanceof StreamFrame sf && sf.getStreamId() == streamId) {
+                    toRemove.add(entry.getKey());
+                    break;
+                }
+            }
+        }
+        for (long pn : toRemove) {
+            SentPacket removed = sentPackets.remove(pn);
+            if (removed != null) {
+                congestionControl.onRetransmitRemove(removed.size);
+            }
+        }
+        return toRemove.size();
     }
 
     /**

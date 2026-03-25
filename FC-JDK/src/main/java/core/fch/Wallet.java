@@ -5,7 +5,7 @@ import clients.ApipClient;
 import data.fchData.Block;
 import data.fchData.Cash;
 import data.fchData.RawTxForCsV1;
-import handlers.CashManager;
+import managers.CashManager;
 import data.fcData.ReplyBody;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.fch.FchMainNetwork;
@@ -35,7 +35,7 @@ import java.io.IOException;
 import java.util.*;
 
 import static constants.FieldNames.COINBASE;
-import static handlers.CashManager.*;
+import static managers.CashManager.*;
 import static server.ApipApi.VER_1;
 import static constants.Constants.*;
 import static constants.FieldNames.*;
@@ -56,40 +56,7 @@ public class Wallet {
         this.nasaClient = nasaClient;
     }
 
-    public static void main(String[] args) {
-        long num = 899996620;
-        byte[] numBytes = BytesUtils.longToBytes(num);
-        System.out.println(numBytes);
 
-        long number = BytesUtils.bytes8ToLong(numBytes,false);
-        System.out.println(number);
-
-
-        String str = "/wABAAAAAAX14QACAAAAATBmNWOPwTCoczuJI1aWkKK8rP+qzzpnNd7b53YxHPgNAAAAAAD/////A4CWmAAAAAAAGXapFGHEKrtuNDXmO9iIYvN0aj+LhjVCiKwAAAAAAAAAAFZqTFN7InR5cGUiOiJGRUlQIiwic24iOiIzIiwidmVyIjoiNCIsIm5hbWUiOiJDSUQiLCJkYXRhIjp7Im9wIjoicmVnaXN0ZXIiLCJuYW1lIjoiYyJ9fUZJXQUAAAAAGXapFGHEKrtuNDXmO9iIYvN0aj+LhjVCiKwAAAAA";
-        System.out.println(str);
-        System.out.println("Base64 size:"+str.length());
-        String hex = Hex.toHex(Base64.getDecoder().decode(str));
-        System.out.println(hex);
-        System.out.println("Hex size:"+hex.length());
-
-        String strHex = "02000000010f7d38cd088bfd1432e2974668462ba6b042682c223c67e45529b17df97688e40200000000ffffffff0300e1f505000000001976a91461c42abb6e3435e63bd88862f3746a3f8b86354288ac0000000000000000566a4c537b2274797065223a2246454950222c22736e223a2233222c22766572223a2234222c226e616d65223a22434944222c2264617461223a7b226f70223a227265676973746572222c226e616d65223a2263227d7d92f9ae2f000000001976a91461c42abb6e3435e63bd88862f3746a3f8b86354288ac00000000";
-        System.out.println("hex:"+strHex);
-        System.out.println("Unsigned Tx:");
-        System.out.println(TxCreator.decodeTxFch(strHex, FchMainNetwork.MAINNETWORK));
-
-        System.out.println("Unsigned Tx from Base64:");
-        System.out.println(TxCreator.decodeTxFch(str, FchMainNetwork.MAINNETWORK));
-        byte[] priKey = Hex.fromHex("a048f6c843f92bfe036057f7fc2bf2c27353c624cf7ad97e98ed41432f700575");
-
-
-        String signedTx = TxCreator.signRawTx(str, priKey, FchMainNetwork.MAINNETWORK);
-        System.out.println(signedTx);
-        System.out.println(StringUtils.base64ToHex(signedTx));
-
-        System.out.println("Signed Tx:");
-
-        System.out.println(TxCreator.decodeTxFch(signedTx, FchMainNetwork.MAINNETWORK));
-    }
 
     public static String carve(String myFid, byte[] priKey, String opReturnStr, long cd, ApipClient apipClient, CashManager cashHandler, BufferedReader br) {
         String txSigned;
@@ -112,7 +79,7 @@ public class Wallet {
         sendTo.setAmount(toAmount);
         List<Cash> sendToList = new ArrayList<>();
         sendToList.add(sendTo);
-        String txSigned = createTxFch(cashList, priKey, sendToList, msg, FchMainNetwork.MAINNETWORK);
+        String txSigned = createAndSignFchTx(cashList, priKey, sendToList, msg, FchMainNetwork.MAINNETWORK);
         return apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
     }
 
@@ -211,7 +178,7 @@ public class Wallet {
         if (!(valueSum >= (amount + fee) && cdSum >= cd)) return null;
 
         if (priKey != null) {
-                return createTxFch(spendCashList, priKey, sendToList, opReturnStr, FchMainNetwork.MAINNETWORK);
+                return createAndSignFchTx(spendCashList, priKey, sendToList, opReturnStr, FchMainNetwork.MAINNETWORK);
             }
         else {
 //            return makeTxForOfflineSign(sendToList, opReturnStr, cashList);
@@ -365,7 +332,7 @@ public class Wallet {
         sendTo1.setValue(lastCashValue);
         sendToList.add(sendTo1);
 
-        String txSigned = createTxFch(cashList, priKey, sendToList, null, FchMainNetwork.MAINNETWORK);
+        String txSigned = createAndSignFchTx(cashList, priKey, sendToList, null, FchMainNetwork.MAINNETWORK);
 
         if (apipClient != null) {
             apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);

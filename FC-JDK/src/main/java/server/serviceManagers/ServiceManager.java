@@ -4,7 +4,6 @@ import clients.ApipClient;
 import data.feipData.Feip;
 import data.feipData.Service;
 import data.feipData.ServiceOpData;
-import data.feipData.serviceParams.Params;
 import ui.Menu;
 import ui.Shower;
 import com.google.gson.Gson;
@@ -12,7 +11,6 @@ import com.google.gson.GsonBuilder;
 import config.ApiAccount;
 import constants.OpNames;
 import utils.JsonUtils;
-import config.Configure;
 
 import java.io.BufferedReader;
 import java.util.ArrayList;
@@ -22,21 +20,19 @@ import static clients.ApipClient.checkBalance;
 public abstract class ServiceManager {
     protected Service service;
     protected ApiAccount apipAccount;
-    protected Class<?> paramsClass;
     protected BufferedReader br;
     protected byte[] symKey;
 
-    public ServiceManager(Service service,ApiAccount apipAccount, BufferedReader br, byte[] symKey, Class<?> paramsClass) {
+    public ServiceManager(Service service, ApiAccount apipAccount, BufferedReader br, byte[] symKey) {
         this.service=service;
         this.br = br;
         this.symKey = symKey;
-        this.paramsClass = paramsClass;
         this.apipAccount =apipAccount;
     }
 
-    protected abstract Params inputParams(byte[] symKey, BufferedReader br);
+    protected abstract Object inputParams(byte[] symKey, BufferedReader br);
 
-    protected abstract Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey);
+    protected abstract Object updateParams(Object serviceParams, BufferedReader br, byte[] symKey);
 
 
     public void menu() {
@@ -94,20 +90,23 @@ public abstract class ServiceManager {
 
         data.setOp(OpNames.PUBLISH);
 
-        data.inputTypes(br);
+        data.inputType(br);
 
         data.inputDealerPubkey(br);
 
         if(symKey!=null) {
             ApipClient apipClient=null;
             if (apipAccount != null)apipClient = apipAccount.getApipClient();
-            data.inputServiceHead(br, symKey,apipClient );
+            data.inputService(br);
         }
-        else data.inputServiceHead(br);
+        else data.inputService(br);
+
+        System.out.println("Set the pricing fields...");
+        data.inputPricingFields(br);
 
         System.out.println("Set the service parameters...");
 
-        Params serviceParams = inputParams(symKey, br);
+        Object serviceParams = inputParams(symKey, br);
 
         data.setParams(serviceParams);
 
@@ -126,9 +125,9 @@ public abstract class ServiceManager {
     private static Feip setFcInfoForService() {
         Feip dataOnChain = new Feip();
         dataOnChain.setType("FEIP");
-        dataOnChain.setSn("5");
-        dataOnChain.setVer("2");
-        dataOnChain.setName("Service");
+        dataOnChain.setSn(Feip.FeipProtocol.SERVICE.getSn());
+        dataOnChain.setVer(Feip.FeipProtocol.SERVICE.getVer());
+        dataOnChain.setName(Feip.FeipProtocol.SERVICE.getName());
         return dataOnChain;
     }
 
@@ -144,20 +143,23 @@ public abstract class ServiceManager {
 
         ServiceOpData data = new ServiceOpData();
 
-        serviceToServiceData(service,data);
+        ServiceOpData.serviceToServiceData(service,data);
 
         data.setOp(OpNames.UPDATE);
 
-        data.updateTypes(br);
+        data.updateType(br);
 
         if(symKey!=null) {
             ApipClient apipClient = null;
             if(apipAccount!=null)apipClient = (ApipClient) apipAccount.getClient();
-            data.updateServiceHead(br, symKey, apipClient);
+            data.updateService(br, symKey, apipClient);
         }
-        else data.updateServiceHead(br);
+        else data.updateService(br);
 
-        Params serviceParams = (Params) data.getParams();
+        System.out.println("Update the pricing fields...");
+        data.updatePricingFields(br);
+
+        Object serviceParams = data.getParams();
 
         serviceParams = updateParams(serviceParams,br,symKey);
 
@@ -173,20 +175,6 @@ public abstract class ServiceManager {
         Menu.anyKeyToContinue(br);
     }
 
-
-    private void serviceToServiceData(Service service, ServiceOpData data) {
-        data.setTypes(service.getTypes());
-        data.setSid(service.getId());
-        data.setUrls(service.getUrls());
-        data.setStdName(service.getStdName());
-        data.setLocalNames(service.getLocalNames());
-        data.setProtocols(service.getProtocols());
-        data.setDesc(service.getDesc());
-        data.setWaiters(service.getWaiters());
-        data.setServices(service.getServices());
-        data.setCodes(service.getCodes());
-        data.setParams(Configure.parseMyServiceParams(service, paramsClass));
-    }
     private void stopService(BufferedReader br) {
         System.out.println("Stop service services...");
         operateService(br,OpNames.STOP);
@@ -237,14 +225,6 @@ public abstract class ServiceManager {
 
     public void setApipAccount(ApiAccount apipAccount) {
         this.apipAccount = apipAccount;
-    }
-
-    public Class<?> getParamsClass() {
-        return paramsClass;
-    }
-
-    public void setParamsClass(Class<?> paramsClass) {
-        this.paramsClass = paramsClass;
     }
 
 }

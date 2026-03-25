@@ -4,6 +4,7 @@ import config.Configure;
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.feipData.Service;
+import data.feipData.ServiceType;
 import fudp.message.ResponseMessage;
 import fudp.node.FudpNode;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +48,7 @@ class FapiServerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        when(settings.getClient(Service.ServiceType.ES)).thenReturn(esClient);
+        when(settings.getClient(ServiceType.ES)).thenReturn(esClient);
         when(settings.getMainFid()).thenReturn("test-fid");
         when(settings.getConfig()).thenReturn(configure);
         when(settings.getBestHeight()).thenReturn(1000L);
@@ -74,7 +75,7 @@ class FapiServerTest {
         List<Service> mockServices = new ArrayList<>();
         Service service1 = new Service();
         service1.setId("service-id-1");
-        service1.setTypes(new String[]{"FAPI"});
+        service1.makeServiceType(ServiceType.FAPI_No1_NrC7);
         service1.setStdName("Test FAPI Service");
         mockServices.add(service1);
         
@@ -99,20 +100,21 @@ class FapiServerTest {
         // FAPI 服务
         Service fapiService1 = new Service();
         fapiService1.setId("fapi-service-1");
-        fapiService1.setTypes(new String[]{"FAPI"});
+        fapiService1.makeServiceType(ServiceType.FAPI_No1_NrC7);
         mockServices.add(fapiService1);
         
         // 非 FAPI 服务（应该被过滤）
         Service nonFapiService = new Service();
         nonFapiService.setId("non-fapi-service");
-        nonFapiService.setTypes(new String[]{"DISK"});
+        nonFapiService.makeServiceType(ServiceType.APIP);
         mockServices.add(nonFapiService);
         
         // 包含 FAPI 但还有其他类型的服务
         Service mixedService = new Service();
         mixedService.setId("mixed-service");
-        mixedService.setTypes(new String[]{"FAPI", "DISK"});
+        mixedService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         mockServices.add(mixedService);
+        mixedService.setComponents(List.of(new String[]{"BASE", "DISK"}));
         
         configureMock.when(() -> Configure.getServiceListByDealerFromEs(
                 eq("test-fid"),
@@ -136,7 +138,7 @@ class FapiServerTest {
         List<Service> mockServices = new ArrayList<>();
         Service service1 = new Service();
         service1.setId("service-id-1");
-        service1.setTypes(new String[]{"FAPI"});
+        service1.makeServiceType(ServiceType.FAPI_No1_NrC7);
         mockServices.add(service1);
         
         configureMock.when(() -> Configure.getServiceListByDealerFromEs(anyString(), any()))
@@ -146,7 +148,7 @@ class FapiServerTest {
         assertEquals(1, fapiServer.getServiceMap().size());
         
         // 更新服务（清空并重新加载）
-        fapiServer.updateServices();
+        fapiServer.updateService(settings.getSymkey(),null);
         
         // 验证服务映射已重新加载
         Map<String, Service> serviceMap = fapiServer.getServiceMap();
@@ -184,7 +186,7 @@ class FapiServerTest {
         // 先添加一个非 FAPI 服务
         Service nonFapiService = new Service();
         nonFapiService.setId("non-fapi-service");
-        nonFapiService.setTypes(new String[]{"DISK"});
+        nonFapiService.makeServiceType(ServiceType.DISK);
         
         fapiServer.getServiceMap().put("non-fapi-service", nonFapiService);
         
@@ -214,7 +216,7 @@ class FapiServerTest {
         // 添加一个 types 为 null 的服务
         Service serviceWithNullTypes = new Service();
         serviceWithNullTypes.setId("service-null-types");
-        serviceWithNullTypes.setTypes(null);
+        serviceWithNullTypes.makeServiceType(null);
         
         fapiServer.getServiceMap().put("service-null-types", serviceWithNullTypes);
         
@@ -244,7 +246,7 @@ class FapiServerTest {
         // 添加一个有效的 FAPI 服务
         Service fapiService = new Service();
         fapiService.setId("fapi-service-1");
-        fapiService.setTypes(new String[]{"FAPI"});
+        fapiService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         this.fapiServer.getServiceMap().put("fapi-service-1", fapiService);
         this.fapiServer.setFudpNode(null); // 设置为 null
@@ -270,7 +272,7 @@ class FapiServerTest {
         // 手动添加服务
         Service service = new Service();
         service.setId("test-service");
-        service.setTypes(new String[]{"FAPI"});
+        service.makeServiceType(ServiceType.FAPI_No1_NrC7);
         serviceMap.put("test-service", service);
         
         assertEquals(1, fapiServer.getServiceMap().size());

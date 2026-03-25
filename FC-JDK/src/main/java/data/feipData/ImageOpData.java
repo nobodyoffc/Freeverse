@@ -97,7 +97,7 @@ public class ImageOpData {
 
 	public static ImageOpData makeRecover(String[] imageIds) {
 		ImageOpData data = new ImageOpData();
-		data.setOp(Op.DELETE.toLowerCase());
+		data.setOp(Op.RECOVER.toLowerCase());
 		data.setImageIds(imageIds);
 		return data;
 	}

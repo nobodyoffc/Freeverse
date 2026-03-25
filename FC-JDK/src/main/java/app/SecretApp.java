@@ -1,7 +1,8 @@
 package app;
 
-import handlers.Manager;
-import handlers.SecretManager;
+import data.feipData.ServiceType;
+import managers.Manager;
+import managers.SecretManager;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -30,7 +31,7 @@ public class SecretApp {
         settingsMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.SECRET.name()));
 

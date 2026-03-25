@@ -150,9 +150,9 @@ public class Decryptor {
             return cryptoDataByte;
         }
         switch (cryptoDataByte.getType()) {
-            case Symkey: cryptoDataByte.setSymkey(key);
-            case Password: cryptoDataByte.setPassword(key);
-            case AsyOneWay,AsyTwoWay: cryptoDataByte.setPrikeyB(key);
+            case Symkey -> cryptoDataByte.setSymkey(key);
+            case Password -> cryptoDataByte.setPassword(key);
+            case AsyOneWay, AsyTwoWay -> cryptoDataByte.setPrikeyB(key);
         }
         return decrypt(cryptoDataByte);
     }
@@ -380,7 +380,8 @@ public class Decryptor {
             }
             default -> AesCbc256.decryptStream(inputStream,outputStream,cryptoDataByte);
         }
-        cryptoDataByte.setCodeMessage(1);
+        if(cryptoDataByte.getCode()==null)
+            cryptoDataByte.set0CodeMessage();
         return cryptoDataByte;
     }
 
@@ -500,7 +501,7 @@ public class Decryptor {
             return cryptoDataByte;
         } catch (IOException e) {
             cryptoDataByte=new CryptoDataByte();
-            cryptoDataByte.setCodeMessage(6);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4001FailedToEncrypt);
             return cryptoDataByte;
         }
     }
@@ -513,7 +514,7 @@ public class Decryptor {
     private CryptoDataByte decryptJsonByAsy(@NotNull String cryptoDataJson, @NotNull byte[]prikey, byte[] pubkey){
         CryptoDataByte cryptoDataByte = CryptoDataByte.fromJson(cryptoDataJson);
         if(cryptoDataByte.getType().equals(EncryptType.AsyTwoWay)&& pubkey==null){
-            cryptoDataByte.setCodeMessage(12);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4010KeyPairMismatch);
             return cryptoDataByte;
         }
         cryptoDataByte.setPrikeyA(prikey);
@@ -525,7 +526,7 @@ public class Decryptor {
     public void decryptByAsyKey(CryptoDataByte cryptoDataByte){
         byte[] cipher = cryptoDataByte.getCipher();
         if(cipher==null){
-            cryptoDataByte.setCodeMessage(17);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4013BadCipher);
             return;
         }
         try(ByteArrayInputStream bis = new ByteArrayInputStream(cipher);
@@ -536,10 +537,10 @@ public class Decryptor {
             if (cryptoDataByte.getCode() == null || cryptoDataByte.getCode() == 0) {
                 cryptoDataByte.setData(bos.toByteArray());
                 cryptoDataByte.makeDid();
-                cryptoDataByte.setCodeMessage(0);
+                cryptoDataByte.setCodeMessage(CodeMessage.Code0Success);
             }
         } catch (IOException e) {
-            cryptoDataByte.setCodeMessage(6);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4001FailedToEncrypt);
         }
     }
     public CryptoDataByte decryptFileByAsyOneWay(@NotNull String cipherFile, String dataFile, @NotNull byte[]prikeyX){
@@ -565,7 +566,7 @@ public class Decryptor {
 
         if(srcFullName==null){
             cryptoDataByte = new CryptoDataByte();
-            cryptoDataByte.setCodeMessage(21);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code1011DataNotFound);
             return cryptoDataByte;
         }
 
@@ -584,16 +585,16 @@ public class Decryptor {
             cryptoDataByte = CryptoDataByte.readFromFileStream(fis);
             if(cryptoDataByte ==null){
                 cryptoDataByte = new CryptoDataByte();
-                cryptoDataByte.setCodeMessage(8);
+                cryptoDataByte.setCodeMessage(CodeMessage.Code4013BadCipher);
                 return cryptoDataByte;
             }
 
             if(cryptoDataByte.getIv()==null){
-                cryptoDataByte.setCodeMessage(13);
+                cryptoDataByte.setCodeMessage(CodeMessage.Code4009MissingIv);
                 return cryptoDataByte;
             }
             if(prikeyX==null){
-                cryptoDataByte.setCodeMessage(15);
+                cryptoDataByte.setCodeMessage(CodeMessage.Code1033MissPrikey);
                 return cryptoDataByte;
             }
             if(cryptoDataByte.getPubkeyA()!=null)
@@ -614,7 +615,7 @@ public class Decryptor {
             if(alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
                alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
                alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
-                if(!cryptoDataByte.checkSum())cryptoDataByte.setCodeMessage(20);
+                if(!cryptoDataByte.checkSum())cryptoDataByte.setCodeMessage(CodeMessage.Code4011BadSum);
             }
 
 
@@ -634,11 +635,11 @@ public class Decryptor {
 
         } catch (FileNotFoundException e) {
             cryptoDataByte = new CryptoDataByte();
-            cryptoDataByte.setCodeMessage(11);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code1011DataNotFound);
             return cryptoDataByte;
         } catch (IOException e) {
             cryptoDataByte = new CryptoDataByte();
-            cryptoDataByte.setCodeMessage(6);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4001FailedToEncrypt);
             return cryptoDataByte;
         }
     }
@@ -688,12 +689,12 @@ public class Decryptor {
             pubkeyY = pubkeyB;
         }
         else {
-            cryptoDataByte.setCodeMessage(19);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4010KeyPairMismatch);
             return;
         }
 
         if(cryptoDataByte.getIv()==null) {
-            cryptoDataByte.setCodeMessage(13);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4009MissingIv);
             return;
         }
 
@@ -712,7 +713,7 @@ public class Decryptor {
                                algo != AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
 
         if(requiresSum && cryptoDataByte.getSum()==null) {
-            cryptoDataByte.setCodeMessage(14);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4011BadSum);
             return;
         }
 
@@ -789,7 +790,7 @@ public class Decryptor {
     public static void checkSum(CryptoDataByte cryptoDataByte) {
         byte[] newSum = CryptoDataByte.makeSum4(cryptoDataByte.getSymkey(), cryptoDataByte.getIv(), cryptoDataByte.getDid());
         if(cryptoDataByte.getSum()!=null && !Arrays.equals(newSum, cryptoDataByte.getSum())){
-            cryptoDataByte.setCodeMessage(20);
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4011BadSum);
         }else cryptoDataByte.set0CodeMessage();
     }
 

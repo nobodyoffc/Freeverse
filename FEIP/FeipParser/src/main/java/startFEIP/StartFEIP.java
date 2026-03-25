@@ -1,6 +1,7 @@
 package startFEIP;
 
 import data.fcData.Module;
+import data.feipData.ServiceType;
 import ui.Menu;
 import config.Settings;
 import config.Starter;
@@ -49,14 +50,14 @@ public class StartFEIP {
 		settingMap.put(Settings.LISTEN_PATH,settingMap.get(Settings.OP_RETURN_PATH));
 
 		List<Module> modules = new ArrayList<>();
-		modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+		modules.add(new Module(Service.class.getSimpleName(), ServiceType.ES.name()));
 
 		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules,null);
 		if(settings ==null)return;
 		String opReturnJsonPath = (String) settings.getSettingMap().get(Settings.OP_RETURN_PATH);
 
 		//Prepare API clients
-		ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+		ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
 		Menu menu = new Menu("FEIP Parser");
 		menu.add("Start New Parse from file", () -> startNewParse(opReturnJsonPath, br, esClient));

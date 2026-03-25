@@ -38,7 +38,11 @@ public enum MessageType {
     NAT_REGISTER(0x50),            // Register with relay for NAT traversal
     NAT_KEEPALIVE(0x51),           // Keep NAT mapping alive
     NAT_PROBE(0x52),               // Probe for direct connectivity
-    NAT_PROBE_RESPONSE(0x53);      // Response to connectivity probe
+    NAT_PROBE_RESPONSE(0x53),      // Response to connectivity probe
+
+    // General Data
+    BYTES(0x60),                   // General-purpose byte array
+    BYTES_ACK(0x61);               // Bytes delivery confirmed
 
     private final int code;
 

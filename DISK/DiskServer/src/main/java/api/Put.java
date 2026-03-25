@@ -7,10 +7,10 @@ import constants.CodeMessage;
 import data.fcData.DiskItem;
 import data.fcData.Hat;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import data.feipData.serviceParams.DiskParams;
-import handlers.DiskManager;
-import handlers.Manager;
+import managers.DiskManager;
+import managers.Manager;
 import initial.Initiator;
 import server.DiskApiNames;
 import server.HttpRequestChecker;
@@ -74,7 +74,7 @@ public class Put extends HttpServlet {
         Long expire = saveDate + DateUtils.dayToLong(dataLifeDays);
         DiskItem diskItem = new DiskItem(did, saveDate,expire, bytesLength);
 
-        ElasticsearchClient esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient)settings.getClient(ServiceType.ES);
 
         try {
             IndexResponse result = esClient.index(i -> i.index(Settings.addSidBriefToName(settings.getSid(), DATA)).id(did).document(diskItem));

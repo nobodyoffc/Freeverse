@@ -3,9 +3,9 @@ package APIP2V1_Blockchain;
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApipApiNames;
-import data.feipData.Service;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.ObjectUtils;
 import utils.http.AuthType;
@@ -46,7 +46,7 @@ public class HashRateHistory extends HttpServlet {
     protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws ServletException, IOException {
         ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
         boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
         if (!isOk) {

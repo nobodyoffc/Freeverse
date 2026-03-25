@@ -1,6 +1,8 @@
 package fudp.stream;
 
 import fudp.connection.PeerConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Map;
@@ -11,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * Manages streams within a connection
  */
 public class StreamManager {
+    private static final Logger log = LoggerFactory.getLogger(StreamManager.class);
 
     private final PeerConnection connection;
     private final Map<Long, Stream> streams;
@@ -32,10 +35,22 @@ public class StreamManager {
     }
 
     /**
-     * Open a new bidirectional stream
+     * Open a new bidirectional stream.
+     * Skips IDs already occupied by remote-initiated streams (created via getOrCreateStream)
+     * to avoid overwriting their receive state.
      */
     public Stream openStream() {
-        long streamId = nextLocalStreamId.getAndAdd(4); // Increment by 4 (bits 0-1 are flags)
+        long streamId;
+        int skipped = 0;
+        do {
+            streamId = nextLocalStreamId.getAndAdd(4); // Increment by 4 (bits 0-1 are flags)
+            if (!streams.containsKey(streamId)) break;
+            skipped++;
+            if (skipped <= 3) {
+                log.debug("[StreamManager] Skipping stream ID {} (occupied by remote), trying next", streamId);
+            }
+        } while (skipped < 1000); // safety bound
+
         Stream stream = new Stream(streamId);
         streams.put(streamId, stream);
         return stream;

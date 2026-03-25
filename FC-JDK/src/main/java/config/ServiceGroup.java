@@ -6,11 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import data.feipData.Service;
+import data.feipData.ServiceType;
 
 public class ServiceGroup {
     private String groupAlias;
-    private Service.ServiceType serviceType;
+    private ServiceType serviceType;
     private List<String> accountIds;
     private Map<String, Object> clientMap; // accountId -> client mapping
     private ServiceGroupStrategy strategy;
@@ -23,7 +23,7 @@ public class ServiceGroup {
         USE_ONE_ROUND_ROBIN
     }
 
-    public ServiceGroup(String groupAlias, Service.ServiceType serviceType) {
+    public ServiceGroup(String groupAlias, ServiceType serviceType) {
         this.groupAlias = groupAlias;
         this.serviceType = serviceType;
         this.accountIds = new ArrayList<>();
@@ -75,7 +75,7 @@ public class ServiceGroup {
         return groupAlias;
     }
 
-    public Service.ServiceType getServiceType() {
+    public ServiceType getServiceType() {
         return serviceType;
     }
 

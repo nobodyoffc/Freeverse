@@ -4,7 +4,6 @@ import data.feipData.Service;
 import server.ApipApi;
 import ui.Shower;
 import constants.FieldNames;
-import data.feipData.serviceParams.Params;
 import ui.Inputer;
 import clients.ApipClient;
 import config.ApiAccount;
@@ -60,9 +59,9 @@ public class Order {
         return orderOpReturn;
     }
 
-    public static boolean checkWebhook(String hookMethod, Service service, Params params, ApiAccount apipAccount, BufferedReader br, JedisPool jedisPool) {
+    public static boolean checkWebhook(String hookMethod, Service service, ApiAccount apipAccount, BufferedReader br, JedisPool jedisPool) {
         System.out.println("Check webhook...");
-        String urlHead = params.getUrlHead();
+        String urlHead = service.getApiUrl();
         if(!urlHead.endsWith("/"))urlHead=urlHead+"/";
         String endpoint = urlHead+ ApipApi.VER_1 +"/"+ NEW_ORDER;
         ApipClient apipClient = (ApipClient) apipAccount.getClient();

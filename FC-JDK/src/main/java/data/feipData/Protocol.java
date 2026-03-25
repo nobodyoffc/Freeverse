@@ -2,6 +2,9 @@ package data.feipData;
 
 import data.fcData.FcObject;
 
+import java.util.List;
+import java.util.Map;
+
 public class Protocol extends FcObject {
 
 	private String type;
@@ -12,10 +15,10 @@ public class Protocol extends FcObject {
 	private String lang;
 	private String desc;
 	private String prePid;
-	private String[] fileUrls;
+	private Map<String, String> home;
 	private String title;
 	private String owner;
-	private String[] waiters;
+	private List<String> waiters;
 	private Long birthTime;
 	private Long birthHeight;
 	private String lastTxId;
@@ -69,11 +72,11 @@ public class Protocol extends FcObject {
 	public void setPrePid(String prePid) {
 		this.prePid = prePid;
 	}
-	public String[] getFileUrls() {
-		return fileUrls;
+	public Map<String, String> getHome() {
+		return home;
 	}
-	public void setFileUrls(String[] fileUrls) {
-		this.fileUrls = fileUrls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 	public String getTitle() {
 		return title;
@@ -155,11 +158,11 @@ public class Protocol extends FcObject {
 	}
 
 
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
 
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 

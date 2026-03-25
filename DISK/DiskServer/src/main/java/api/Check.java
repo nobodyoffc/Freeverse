@@ -4,9 +4,9 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import config.Settings;
 import data.fcData.DiskItem;
-import data.feipData.Service;
-import handlers.DiskManager;
-import handlers.Manager;
+import data.feipData.ServiceType;
+import managers.DiskManager;
+import managers.Manager;
 import initial.Initiator;
 import server.DiskApiNames;
 import utils.Hex;
@@ -66,7 +66,7 @@ public class Check extends HttpServlet {
         DiskManager diskManager = (DiskManager) settings.getManager(Manager.ManagerType.DISK);
         Boolean isFileExists = Boolean.TRUE.equals(diskManager.checkFileOfDisk( did));
         if(isFileExists){
-            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
             try {
                 GetResponse<DiskItem> result = esClient.get(g -> g.index(Settings.addSidBriefToName(settings.getSid(), DATA)).id(did), DiskItem.class);
                 if(result!=null && result.source()!=null)

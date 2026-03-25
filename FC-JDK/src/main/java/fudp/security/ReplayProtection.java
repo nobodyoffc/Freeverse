@@ -23,7 +23,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ReplayProtection {
     private static final Logger log = LoggerFactory.getLogger(ReplayProtection.class);
 
-    private static final long WINDOW_SIZE = 1024;
+    // Window must be large enough to handle out-of-order packet processing
+    // in the multi-threaded executor.  With 14000+ packets for a 17MB file
+    // and 4 executor threads, a window of 1024 caused 85%+ of packets to be
+    // falsely marked as "too old" and dropped.
+    // 65536 covers even very large transfers with ample margin (~85MB at 1350-byte MTU).
+    private static final long WINDOW_SIZE = 65536;
     private static final long TIMESTAMP_TOLERANCE_MS = 500000; // ±5 seconds
 
     // Per-peer packet windows

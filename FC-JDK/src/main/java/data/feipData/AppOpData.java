@@ -12,19 +12,19 @@ import java.util.HashMap;
 public class AppOpData{
 
 	private String aid;
-	private String[] aids;
+	private List<String> aids;
 	private String op;
 	private String ver;
 	private String stdName;
-	private String[] localNames;
+	private Map<String, String> localNames;
 	private String desc;
-	private String[] types;
-	private String[] urls;
-	private App.Download[] downloads;
-	private String[] waiters;
-	private String[] protocols;
-	private String[] codes;
-	private String[] services;
+	private List<String> types;
+	private Map<String, String> home;
+	private List<App.Download> downloads;
+	private List<String> waiters;
+	private List<String> protocols;
+	private List<String> codes;
+	private List<String> services;
 	private Integer rate;
 	private String closeStatement;
 
@@ -63,8 +63,8 @@ public class AppOpData{
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.TYPES, FieldNames.URLS, FieldNames.DOWNLOADS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.AID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.TYPES, FieldNames.URLS, FieldNames.DOWNLOADS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.TYPES, FieldNames.HOME, FieldNames.DOWNLOADS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.AID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, Values.DESC, FieldNames.TYPES, FieldNames.HOME, FieldNames.DOWNLOADS, FieldNames.WAITERS, FieldNames.PROTOCOLS, FieldNames.CODES, FieldNames.SERVICES});
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.AIDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.AIDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.AIDS});
@@ -95,11 +95,11 @@ public class AppOpData{
 		this.stdName = stdName;
 	}
 
-	public String[] getLocalNames() {
+	public Map<String, String> getLocalNames() {
 		return localNames;
 	}
 
-	public void setLocalNames(String[] localNames) {
+	public void setLocalNames(Map<String, String> localNames) {
 		this.localNames = localNames;
 	}
 
@@ -111,43 +111,43 @@ public class AppOpData{
 		this.desc = desc;
 	}
 
-	public String[] getUrls() {
-		return urls;
+	public Map<String, String> getHome() {
+		return home;
 	}
 
-	public void setUrls(String[] urls) {
-		this.urls = urls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
 
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 
-	public String[] getProtocols() {
+	public List<String> getProtocols() {
 		return protocols;
 	}
 
-	public void setProtocols(String[] protocols) {
+	public void setProtocols(List<String> protocols) {
 		this.protocols = protocols;
 	}
 
-	public String[] getServices() {
+	public List<String> getServices() {
 		return services;
 	}
 
-	public void setServices(String[] services) {
+	public void setServices(List<String> services) {
 		this.services = services;
 	}
 
-	public String[] getTypes() {
+	public List<String> getTypes() {
 		return types;
 	}
 
-	public void setTypes(String[] types) {
+	public void setTypes(List<String> types) {
 		this.types = types;
 	}
 
@@ -159,11 +159,11 @@ public class AppOpData{
 		this.rate = rate;
 	}
 
-	public String[] getCodes() {
+	public List<String> getCodes() {
 		return codes;
 	}
 
-	public void setCodes(String[] codes) {
+	public void setCodes(List<String> codes) {
 		this.codes = codes;
 	}
 
@@ -175,34 +175,32 @@ public class AppOpData{
 		this.closeStatement = closeStatement;
 	}
 
-	public App.Download[] getDownloads() {
+	public List<App.Download> getDownloads() {
 		return downloads;
 	}
 
-	public void setDownloads(App.Download[] downloads) {
+	public void setDownloads(List<App.Download> downloads) {
 		this.downloads = downloads;
 	}
 
-	public String[] getAids() {
+	public List<String> getAids() {
 		return aids;
 	}
 
-	public void setAids(String[] aids) {
+	public void setAids(List<String> aids) {
 		this.aids = aids;
 	}
 
-	// Factory method for PUBLISH operation
-	public static AppOpData makePublish(String aid, String stdName, String[] localNames,
-										String desc, String[] types, String[] urls, App.Download[] downloads,
-										String[] waiters, String[] protocols, String[] codes, String[] services) {
+	public static AppOpData makePublish(String stdName, Map<String, String> localNames,
+										String desc, List<String> types, Map<String, String> home, List<App.Download> downloads,
+										List<String> waiters, List<String> protocols, List<String> codes, List<String> services) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.PUBLISH.toLowerCase());
-		data.setAid(aid);
 		data.setStdName(stdName);
 		data.setLocalNames(localNames);
 		data.setDesc(desc);
 		data.setTypes(types);
-		data.setUrls(urls);
+		data.setHome(home);
 		data.setDownloads(downloads);
 		data.setWaiters(waiters);
 		data.setProtocols(protocols);
@@ -211,10 +209,9 @@ public class AppOpData{
 		return data;
 	}
 
-	// Factory method for UPDATE operation
-	public static AppOpData makeUpdate(String aid, String stdName, String[] localNames,
-									   String desc, String[] types, String[] urls, App.Download[] downloads,
-									   String[] waiters, String[] protocols, String[] codes, String[] services) {
+	public static AppOpData makeUpdate(String aid, String stdName, Map<String, String> localNames,
+									   String desc, List<String> types, Map<String, String> home, List<App.Download> downloads,
+									   List<String> waiters, List<String> protocols, List<String> codes, List<String> services) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.UPDATE.toLowerCase());
 		data.setAid(aid);
@@ -222,7 +219,7 @@ public class AppOpData{
 		data.setLocalNames(localNames);
 		data.setDesc(desc);
 		data.setTypes(types);
-		data.setUrls(urls);
+		data.setHome(home);
 		data.setDownloads(downloads);
 		data.setWaiters(waiters);
 		data.setProtocols(protocols);
@@ -231,16 +228,14 @@ public class AppOpData{
 		return data;
 	}
 
-	// Factory method for STOP operation
-	public static AppOpData makeStop(String[] aids) {
+	public static AppOpData makeStop(List<String> aids) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.STOP.toLowerCase());
 		data.setAids(aids);
 		return data;
 	}
 
-	// Factory method for CLOSE operation
-	public static AppOpData makeClose(String[] aids, String closeStatement) {
+	public static AppOpData makeClose(List<String> aids, String closeStatement) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.CLOSE.toLowerCase());
 		data.setAids(aids);
@@ -248,15 +243,13 @@ public class AppOpData{
 		return data;
 	}
 
-	// Factory method for RECOVER operation
-	public static AppOpData makeRecover(String[] aids) {
+	public static AppOpData makeRecover(List<String> aids) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.RECOVER.toLowerCase());
 		data.setAids(aids);
 		return data;
 	}
 
-	// Factory method for RATE operation
 	public static AppOpData makeRate(String aid, Integer rate) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.RATE.toLowerCase());

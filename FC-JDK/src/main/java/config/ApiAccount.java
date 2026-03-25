@@ -5,19 +5,19 @@ import data.fcData.CidInfo;
 import clients.*;
 import data.fcData.FcSession;
 import data.fchData.Cash;
-import handlers.AccountManager;
+import data.feipData.ServiceType;
+import fapi.client.FapiClient;
+import fudp.node.FudpNode;
+import managers.AccountManager;
 import ui.Inputer;
 import ui.Menu;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import data.fcData.ReplyBody;
-import handlers.CashManager;
+import managers.CashManager;
 import org.bitcoinj.fch.FchMainNetwork;
-import utils.IdNameUtils;
 import core.fch.TxCreator;
 import data.feipData.Service;
-import data.feipData.serviceParams.ApipParams;
-import data.feipData.serviceParams.Params;
 import utils.*;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
@@ -61,7 +61,6 @@ public class ApiAccount {
     private Map<String,Double> payments;
     private transient byte[] sessionKey;
     private transient Service service;
-    private transient Params serviceParams;
     private String apiUrl;
     private String via;
     private long bestHeight;
@@ -70,32 +69,13 @@ public class ApiAccount {
     private transient Object client;
     private transient EsClientMaker esClientMaker;
     private transient ApipClient apipClient;
+    private transient FapiClient fapiClient;
 
-    public static void updateSession(ApiAccount apipAccount, byte[] symkey, FcSession fcSession, byte[] newSessionKey) {
-        String newSessionKeyCipher = new Encryptor(FC_EccK1AesCbc256_No1_NrC7).encryptToJsonBySymkey(newSessionKey, symkey);
-        if(newSessionKeyCipher.contains("Error"))return;
-        fcSession.setKeyCipher(newSessionKeyCipher);
-        apipAccount.fcSession.setKeyCipher(newSessionKeyCipher);
-        String newSessionName = IdNameUtils.makeKeyName(newSessionKey);
-        apipAccount.fcSession.setId(newSessionName);
-        System.out.println("SessionName:" + newSessionName);
-        System.out.println("SessionKeyCipher: " + fcSession.getKeyCipher());
-    }
-
-    public boolean isBalanceSufficient(){
-        long price;
-        if(serviceParams.getPricePerKB()!=null){
-            price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerKB()))*COIN_TO_SATOSHI);
-        }else price= (long) (NumberUtils.roundDouble8(Double.parseDouble(serviceParams.getPricePerRequest()))*COIN_TO_SATOSHI);
-
-        return balance < price * minRequestTimes;
-    }
-
-    public Object connectApi(ApiProvider apiProvider, byte[] symkey, BufferedReader br, @Nullable ApipClient apipClient, Map<String, CidInfo> fidCipherMap) {
+    public Object connectApi(ApiProvider apiProvider, byte[] symkey, BufferedReader br, @Nullable ApipClient apipClient, FapiClient fapiClient, Map<String, CidInfo> fidCipherMap) {
 
         if (!checkApiGeneralParams(apiProvider, br)) return null;
 
-        switch (apiProvider.getType()){
+        switch (apiProvider.fetchServiceType()){
             case APIP -> {
                 return connectApip(apiProvider,symkey,br);
             }
@@ -111,30 +91,31 @@ public class ApiAccount {
             case DISK -> {
                 return connectDisk(apiProvider,symkey, apipClient, br, fidCipherMap);
             }
-            case TALK -> {
-                return connectTalk(apiProvider,symkey,apipClient,br,fidCipherMap);
+            case FAPI, FAPI_No1_NrC7 -> {
+                return connectFapi(apiProvider, symkey, br);
             }
             case OTHER -> {
                 return connectOtherApi(apiProvider, symkey);
             }
             default -> {
-                System.out.println("The type of apiProvider is not supported:"+apiProvider.getType());
+                System.out.println("The type of apiProvider is not supported:"+apiProvider.fetchServiceType());
                 return null;
             }
         }
     }
 
 
-    public Object connectApi(ApiProvider apiProvider, byte[] symkey, BufferedReader br){
+    public Object connectApi(ApiProvider apiProvider, byte[] symkey, FudpNode fudpNode, BufferedReader br){
 
         if (!checkApiGeneralParams(apiProvider)) return null;
         try {
-            return switch (apiProvider.getType()) {
+            return switch (apiProvider.fetchServiceType()) {
                 case APIP -> connectApip(apiProvider, symkey, br);
                 case NASA_RPC -> connectNaSaRPC(symkey);
                 case ES -> connectEs(symkey);
                 case REDIS -> connectRedis();
                 case DISK -> connectDisk(apiProvider, symkey, apipClient, br, null);
+                case FAPI, FAPI_No1_NrC7 -> connectFapi(apiProvider, fudpNode, br);
                 default -> connectOtherApi(apiProvider, symkey);
             };
         }catch (Exception e){
@@ -146,7 +127,9 @@ public class ApiAccount {
 
     public void showApipBalance(){
         System.out.println("APIP balance: "+(double) balance/ COIN_TO_SATOSHI + " F");
-        System.out.println("Rest request: "+balance/(Double.parseDouble(serviceParams.getPricePerKB()) * COIN_TO_SATOSHI)+" times");
+        if(service != null && service.getPricePerKB() != null) {
+            System.out.println("Rest request: "+balance/(Double.parseDouble(service.getPricePerKB()) * COIN_TO_SATOSHI)+" times");
+        }
     }
 
     private byte[] connectOtherApi(ApiProvider apiProvider, byte[] symkey) {
@@ -270,16 +253,16 @@ public class ApiAccount {
         }
         else diskClient = (DiskClient) client;
 
-        if(!apiProvider.getType().equals(Service.ServiceType.DISK)){
+        if(!apiProvider.fetchServiceType().equals(ServiceType.DISK)){
             System.out.println("It's not Disk provider.");
             if(br!=null)
-                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ Service.ServiceType.DISK +"?")){
-                apiProvider.setType(Service.ServiceType.DISK);
+                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ ServiceType.DISK +"?")){
+                apiProvider.makeServiceType(ServiceType.DISK);
                 }else return null;
             return null;
         }
 
-        if(checkFcApiProvider(apiProvider, Service.ServiceType.DISK, apipClient)==null){
+        if(checkFcApiProvider(apiProvider, ServiceType.DISK, apipClient)==null){
             log.debug("Failed to check service with APIP service {}.", apipClient.getApiProvider().getApiUrl());
             if(br!=null)Menu.anyKeyToContinue(br);
             return null;
@@ -306,54 +289,6 @@ public class ApiAccount {
         log.debug("Connected to the Disk service: " + providerId + " on " + apiUrl);
         System.out.println("Disk client on "+apiUrl +" is created.\n");
         return diskClient;
-    }
-
-    private TalkClient connectTalk(ApiProvider apiProvider, byte[] symkey, ApipClient apipClient, BufferedReader br, Map<String, CidInfo> fidCipherMap) {
-        if(apipClient==null){
-            System.out.println("APIP client is required for the TALK service.");
-            System.exit(-1);
-            return null;
-        }
-
-        if(!apiProvider.getType().equals(Service.ServiceType.TALK)){
-            System.out.println("It's not Talk provider.");
-            if(br!=null)
-                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ Service.ServiceType.TALK +"?")){
-                    apiProvider.setType(Service.ServiceType.TALK);
-                }else return null;
-            return null;
-        }
-
-        if(checkFcApiProvider(apiProvider, Service.ServiceType.TALK, apipClient)==null){
-            log.debug("Failed to check service with APIP service {}.", apipClient.getApiProvider().getApiUrl());
-            if(br!=null)Menu.anyKeyToContinue(br);
-            return null;
-        }
-        String accountPubkey = apiProvider.getDealerPubkey();
-
-        if (accountPubkey != null) {
-            apiProvider.setDealerPubkey(accountPubkey);
-        }
-
-        if(this.sessionKey==null && this.fcSession!=null && this.fcSession.getKeyCipher()!=null){
-            this.sessionKey = decryptSessionKey(this.fcSession.getKeyCipher(),symkey);
-        }
-
-        if (userPrikeyCipher == null) {
-            System.out.println("Set requester prikey...");
-            if(br!=null)inputPrikeyCipher(symkey,br,fidCipherMap);
-            else return null;
-        }
-
-
-        TalkClient talkClient;
-        if(client==null){
-            talkClient = new TalkClient(apiProvider,this,symkey,apipClient, br);
-            client = talkClient;
-        }
-        else talkClient = (TalkClient) client;
-
-        return talkClient;
     }
 
     public void closeEs(){
@@ -445,7 +380,7 @@ public class ApiAccount {
 //            if (sessionKey == null) return null;
 //            revised = true;
 
-            Object result = ((ApipClient)apiAccount.getClient()).ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, Service.ServiceType.APIP);
+            Object result = ((ApipClient)apiAccount.getClient()).ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, ServiceType.APIP);
             if(result!=null) {
                 System.out.println("OK! " + result + " KB/requests are available.");
             }else
@@ -479,10 +414,9 @@ public class ApiAccount {
         }
         apiAccount.setProviderId(service.getId());
         apiAccount.setService(service);
-        ApipParams serviceParams1 = ApipParams.fromObject(service.getParams());
-        apiAccount.setApipParams(serviceParams1);
         try {
-            apiAccount.setMinPayment(Double.valueOf(serviceParams1.getMinPayment()));
+            if(service.getMinPayment() != null)
+                apiAccount.setMinPayment(Double.valueOf(service.getMinPayment()));
         }catch (Exception ignore){}
 
         apiAccount.inputVia(br);
@@ -502,7 +436,7 @@ public class ApiAccount {
     }
 
     static Service getService(String urlHead) {
-        ReplyBody replier = ApipClient.getService(urlHead, VER_1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(urlHead, VER_1);
         if(replier==null)return null;
         Service service = (Service) replier.getData();
         if(service!=null) {
@@ -561,8 +495,8 @@ public class ApiAccount {
         try  {
             this.providerId =apiProvider.getId();
             this.apiUrl = apiProvider.getApiUrl();
-            Service.ServiceType type = apiProvider.getType();
-            if(type==null)type = chooseOne(Service.ServiceType.values(), null, "Choose the type:",br);
+            ServiceType type = apiProvider.fetchServiceType();
+            if(type==null)type = chooseOne(ServiceType.values(), null, "Choose the type:",br);
             this.userId= userFid;
             switch (type) {
                 case ES -> {
@@ -580,7 +514,7 @@ public class ApiAccount {
                         inputPasswordCipher(symkey, br);
                     }
                 }
-                case APIP, DISK,TALK -> {
+                case APIP, DISK, FAPI, FAPI_No1_NrC7 -> {
                     if(providerId ==null)inputSid(br);
 
                     userPrikeyCipher = fidInfoMap.get(userFid).getPrikeyCipher();
@@ -784,11 +718,7 @@ public class ApiAccount {
     public boolean updateService(String sid, ApipClient apipClient) {
         Service service = apipClient.serviceById(sid);
         if(service == null)return false;
-        Params params = Params.getParamsFromService(service,Params.class);
-        if(params==null)return false;
-        service.setParams(params);
         this.service= service;
-        this.serviceParams=params;
         return true;
     }
 
@@ -796,11 +726,11 @@ public class ApiAccount {
         if(apipClient==null) apipClient = Settings.getDefaultApipClient();
 
         byte[] prikey = decryptUserPrikey(userPrikeyCipher, symkey);
-        Long minPay = utils.FchUtils.coinStrToSatoshi(serviceParams.getMinPayment());
+        Long minPay = service != null ? utils.FchUtils.coinStrToSatoshi(service.getMinPayment()) : null;
         if(minPay==null)minPay= AccountManager.DEFAULT_MIN_PAYMENT;
 
         Long price;
-        price = FchUtils.coinStrToSatoshi(serviceParams.getPricePerKB());
+        price = service != null ? FchUtils.coinStrToSatoshi(service.getPricePerKB()) : null;
         if(price==null) {
             System.out.println("The price of APIP service is 0.");
             price = 0L;
@@ -824,7 +754,7 @@ public class ApiAccount {
         if(prikey==null){
             signedTx = CashManager.makeOffLineTx(this.userId, cashList,sendToList, 0L, TxCreator.DEFAULT_FEE_RATE,null, "2", br);
         }else {
-            signedTx = TxCreator.createTxFch(cashList, prikey, sendToList, null, FchMainNetwork.MAINNETWORK);
+            signedTx = TxCreator.createAndSignFchTx(cashList, prikey, sendToList, null, FchMainNetwork.MAINNETWORK);
         }
         if(signedTx==null)return null;
 
@@ -846,11 +776,11 @@ public class ApiAccount {
 
     public ApipClient connectApip(ApiProvider apiProvider, byte[] symkey, BufferedReader br){
 
-        if(!apiProvider.getType().equals(Service.ServiceType.APIP)){
+        if(!apiProvider.fetchServiceType().equals(ServiceType.APIP)){
             System.out.println("It's not APIP provider.");
             if(br!=null)
-                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ Service.ServiceType.APIP+"?")){
-                apiProvider.setType(Service.ServiceType.APIP);
+                if(Inputer.askIfYes(br,"Reset the type of apiProvider to "+ ServiceType.APIP+"?")){
+                apiProvider.makeServiceType(ServiceType.APIP);
                 }else return null;
         }
 
@@ -866,16 +796,8 @@ public class ApiAccount {
             apipClient = new ApipClient(apiProvider,this,symkey);
             client = apipClient;
         }else apipClient=(ApipClient) client;
-//
-//        byte[] sessionKey1 = checkSessionKey(symkey, apiProvider.getType(), br);
-//
-//        if(sessionKey1==null) {
-//            System.out.println("Failed to get the sessionKey of APIP service from "+apiUrl+". Only free APIs are available.");
-//            return null;
-//        }
-//        sessionKey = sessionKey1;
-//        System.out.println("Connected to the APIP service: " + providerId + " on " + apiUrl);
-        apipClient.ping(VER_1, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, Service.ServiceType.APIP);
+
+        apipClient.ping(VER_1, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ServiceType.APIP);
 
         apipClient.setUrlHead(apiUrl);
         apipClient.setVia(via);
@@ -884,22 +806,21 @@ public class ApiAccount {
     }
 
     public boolean checkApipProvider(ApiProvider apiProvider,String apiUrl) {
-        ReplyBody replier = ApipClient.getService(apiUrl, VER_1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(apiUrl, VER_1);
         if(replier==null || replier.getData()==null) {
             return false;
         }
         service = (Service) replier.getData();
-        serviceParams = (ApipParams) service.getParams();
 
         try {
-            if (serviceParams != null) {
-                this.minPayment = Double.valueOf(serviceParams.getMinPayment());
+            if (service.getMinPayment() != null) {
+                this.minPayment = Double.valueOf(service.getMinPayment());
             }
         }catch (Exception ignore){}
 
         providerId = service.getId();
 
-        apiProvider.fromFcService(service,ApipParams.class);
+        apiProvider.fromFcService(service);
 
 //        ApipParams apipParams = (ApipParams) service.getParams();
 //        if(apipParams!=null && apipParams.getUrlHead()!=null)
@@ -913,18 +834,190 @@ public class ApiAccount {
         return true;
     }
 
-    public ApiProvider checkFcApiProvider(ApiProvider apiProvider, Service.ServiceType type, ApipClient apipClient) {
+    /**
+     * Connect to FAPI service using HELLO and PING protocol.
+     * 
+     * @param apiProvider the FAPI service provider
+     * @param fudpNode the FUDP node for communication (can be null to create a new one)
+     * @param br BufferedReader for user interaction (can be null for non-interactive mode)
+     * @return FapiClient if successful, null otherwise
+     */
+    public FapiClient connectFapi(ApiProvider apiProvider, @Nullable FudpNode fudpNode, @Nullable BufferedReader br) {
+        if (!ServiceType.isFapi(apiProvider.fetchServiceType())) {
+            log.error("Provider type is not FAPI: {}", apiProvider.fetchServiceType());
+            if (br != null) {
+                if (Inputer.askIfYes(br, "Reset the type of apiProvider to " + ServiceType.FAPI_No1_NrC7 + "?")) {
+                    apiProvider.makeServiceType(ServiceType.FAPI_No1_NrC7);
+                } else {
+                    return null;
+                }
+            } else {
+                return null;
+            }
+        }
+
+        // Parse host and port from apiUrl
+        String host;
+        int port;
+        try {
+            String url = apiUrl != null ? apiUrl : apiProvider.getApiUrl();
+            if (url == null) {
+                log.error("No API URL configured for FAPI service");
+                return null;
+            }
+            
+            FapiClient.Endpoint endpoint = FapiClient.parseEndpoint(url);
+            if (endpoint == null) {
+                log.error("Failed to parse FAPI endpoint from: {}", url);
+                return null;
+            }
+            host = endpoint.host();
+            port = endpoint.port();
+        } catch (Exception e) {
+            log.error("Failed to parse FAPI URL: {}", e.getMessage());
+            return null;
+        }
+
+        // FudpNode must be provided for FAPI connection
+        if (fudpNode == null) {
+            log.error("FudpNode is required for FAPI connection. Please provide a valid FudpNode instance.");
+            return null;
+        }
+
+        try {
+            // Discover service via HELLO and PING
+            FapiClient.DiscoveryResult result = FapiClient.discoverViaHelloAndPing(
+                    fudpNode,
+                    host,
+                    port,
+                    FapiClient.DEFAULT_HELLO_TIMEOUT_MS,
+                    FapiClient.DEFAULT_PING_TIMEOUT_MS
+            );
+
+            if (result == null) {
+                log.error("Failed to discover FAPI service at {}:{}", host, port);
+                return null;
+            }
+
+            // Check if we got any FAPI services
+            List<Service> services = result.getServices();
+            if (services == null || services.isEmpty()) {
+                log.error("No FAPI services found at {}:{}", host, port);
+                return null;
+            }
+
+            // Use the first available service, or match by providerId if specified
+            Service selectedService = null;
+            if (providerId != null && !providerId.isEmpty()) {
+                for (Service svc : services) {
+                    if (providerId.equals(svc.getId())) {
+                        selectedService = svc;
+                        break;
+                    }
+                }
+            }
+            if (selectedService == null) {
+                selectedService = services.get(0);
+            }
+
+            // Update local state
+            this.service = selectedService;
+            this.providerId = selectedService.getId();
+            apiProvider.fromFcService(selectedService);
+
+            try {
+                if (selectedService.getMinPayment() != null) {
+                    this.minPayment = Double.valueOf(selectedService.getMinPayment());
+                }
+            } catch (Exception ignore) {}
+
+            // Create FapiClient
+            FapiClient newFapiClient = new FapiClient(
+                    fudpNode,
+                    result.getPeerId(),
+                    selectedService.getId(),
+                    30  // default timeout seconds
+            );
+
+            this.fapiClient = newFapiClient;
+            this.client = newFapiClient;
+
+            log.info("Connected to FAPI service: {} at {}:{}, peerId={}", 
+                    selectedService.getId(), host, port, result.getPeerId());
+            System.out.println("FAPI client connected to " + host + ":" + port);
+
+            return newFapiClient;
+
+        } catch (Throwable e) {
+            log.error("Failed to connect FAPI service at {}:{} - {}", host, port, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Connect to FAPI service with symkey (for creating FudpNode if needed).
+     * 
+     * @param apiProvider the FAPI service provider
+     * @param symkey symmetric key to decrypt user private key for creating FudpNode
+     * @param br BufferedReader for user interaction (can be null for non-interactive mode)
+     * @return FapiClient if successful, null otherwise
+     */
+    public FapiClient connectFapi(ApiProvider apiProvider, byte[] symkey, @Nullable BufferedReader br) {
+        // Try to create FudpNode from user's private key
+        if (userPrikeyCipher == null || symkey == null) {
+            log.error("User private key cipher and symkey are required to create FudpNode for FAPI connection");
+            return null;
+        }
+
+        byte[] prikey = decryptUserPrikey(userPrikeyCipher, symkey);
+        if (prikey == null) {
+            log.error("Failed to decrypt user private key for FAPI connection");
+            return null;
+        }
+
+        FudpNode fudpNode = null;
+        try {
+            // Create NodeConfig with default settings
+            fudp.node.NodeConfig nodeConfig = new fudp.node.NodeConfig()
+                    .setPort(0)  // Use port 0 to let system assign an available port
+                    .setDataDir("fudp_client_data");
+
+            // Create FudpNode with user's private key
+            fudpNode = new FudpNode(prikey, nodeConfig);
+            fudpNode.start();
+
+            // Connect to FAPI service
+            FapiClient result = connectFapi(apiProvider, fudpNode, br);
+            
+            if (result == null && fudpNode.isRunning()) {
+                fudpNode.stop();
+            }
+            
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to create FudpNode for FAPI connection: {}", e.getMessage());
+            if (fudpNode != null && fudpNode.isRunning()) {
+                fudpNode.stop();
+            }
+            return null;
+        } finally {
+            BytesUtils.clearByteArray(prikey);
+        }
+    }
+
+    public ApiProvider checkFcApiProvider(ApiProvider apiProvider, ServiceType type, ApipClient apipClient) {
 
         System.out.println("Update API provider from APIP service...");
         Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, apiProvider.getId());
         if(serviceMap==null || serviceMap.get(apiProvider.getId())==null)return null;
 
         this.service = serviceMap.get(apiProvider.getId());
-        apiProvider.fromFcService(service, Params.getParamsClassByApiType(type) );
+        apiProvider.fromFcService(service);
 
-        this.serviceParams = (Params) service.getParams();
         try{
-            this.minPayment = Double.valueOf(this.serviceParams.getMinPayment());
+            if(this.service.getMinPayment() != null)
+                this.minPayment = Double.valueOf(this.service.getMinPayment());
         }catch (Exception ignore){}
         this.providerId = service.getId();
         this.apiUrl = apiProvider.getApiUrl();
@@ -1143,13 +1236,6 @@ public class ApiAccount {
         this.service = service;
     }
 
-    public Params getApipParams() {
-        return serviceParams;
-    }
-
-    public void setApipParams(ApipParams serviceParams) {
-        this.serviceParams = serviceParams;
-    }
 
     public String getApiUrl() {
         return apiUrl;
@@ -1191,13 +1277,6 @@ public class ApiAccount {
         this.client = client;
     }
 
-    public Params getServiceParams() {
-        return serviceParams;
-    }
-
-    public void setServiceParams(Params serviceParams) {
-        this.serviceParams = serviceParams;
-    }
 
     public ApipClient getApipClient() {
         return apipClient;
@@ -1237,5 +1316,12 @@ public class ApiAccount {
 
     public void setMinPayment(Double minPayment) {
         this.minPayment = minPayment;
+    }
+    public FapiClient getFapiClient() {
+        return fapiClient;
+    }
+
+    public void setFapiClient(FapiClient fapiClient) {
+        this.fapiClient = fapiClient;
     }
 }

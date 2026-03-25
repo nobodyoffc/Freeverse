@@ -1,29 +1,25 @@
 package server.serviceManagers;
 
 import data.feipData.Service;
-import data.feipData.serviceParams.ApipParams;
-import data.feipData.serviceParams.Params;
 import config.ApiAccount;
 
 import java.io.BufferedReader;
 
 public class ApipManager extends ServiceManager {
 
-    public ApipManager(Service service, ApiAccount apipAccount, BufferedReader br, byte[] symKey, Class<ApipParams> paramsClass) {
-        super(service, apipAccount, br, symKey, paramsClass);
+    public ApipManager(Service service, ApiAccount apipAccount, BufferedReader br, byte[] symKey) {
+        super(service, apipAccount, br, symKey);
     }
 
     @Override
-    protected Params inputParams(byte[] symKey, BufferedReader br) {
-        ApipParams apipParams = new ApipParams();
-        apipParams.inputParams(br, symKey,null);
-        return apipParams;
+    protected Object inputParams(byte[] symKey, BufferedReader br) {
+        // APIP services use pricing fields in Service directly, no special params needed
+        return null;
     }
 
     @Override
-    protected Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
-        ApipParams apipParams = (ApipParams)serviceParams;
-        apipParams.updateParams(br,symKey,null);
-        return apipParams;
+    protected Object updateParams(Object serviceParams, BufferedReader br, byte[] symKey) {
+        // APIP services use pricing fields in Service directly, no special params needed
+        return serviceParams;
     }
 }

@@ -13,7 +13,6 @@
         <module>FC-JDK</module>
         <module>DISK</module>
         <module>APIP</module>
-        <module>TALK</module>
         <module>FEIP</module>
         <module>FchParser</module>
     </modules>
@@ -25,7 +24,7 @@
         <!-- Dependency versions -->
         <junit.version>5.10.1</junit.version>
         <jedis.version>5.1.0</jedis.version>
-        <elasticsearch.version>8.4.1</elasticsearch.version>
+        <elasticsearch.version>8.8.0</elasticsearch.version>
         <jackson.version>2.15.2</jackson.version>
         <zxing.version>3.5.2</zxing.version>
         <leveldb.version>0.12</leveldb.version>

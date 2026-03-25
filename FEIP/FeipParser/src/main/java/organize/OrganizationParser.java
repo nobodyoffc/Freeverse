@@ -25,330 +25,338 @@ import static constants.Values.UPDATED;
 
 public class OrganizationParser {
 
-	public GroupHistory makeGroup(OpReturn opre, Feip feip) {
+	public SquareHistory makeSquare(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
 
-		GroupOpData groupRaw = new GroupOpData();
+		try {
+			int ver = Integer.parseInt(feip.getVer());
+			if(ver < 4){
+				System.out.println("Ignored old version");
+				return null;
+			}
+		}catch (Exception ignore){}
+
+		SquareOpData squareRaw = new SquareOpData();
 
 		try {
-			groupRaw = gson.fromJson(gson.toJson(feip.getData()), GroupOpData.class);
-			if(groupRaw==null){
-				System.out.println("Bad group data");
+			squareRaw = gson.fromJson(gson.toJson(feip.getData()), SquareOpData.class);
+			if(squareRaw==null){
+				System.out.println("Bad square data");
 				return null;
 			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			System.out.println("Bad group data");
+			System.out.println("Bad square data");
 			return null;
 		}
 
-		GroupHistory groupHist = new GroupHistory();
+		SquareHistory squareHist = new SquareHistory();
 
-		if(groupRaw.getOp()==null){
+		if(squareRaw.getOp()==null){
 			System.out.println("OP is null");
 			return null;
 		}
-		groupHist.setOp(groupRaw.getOp());
+		squareHist.setOp(squareRaw.getOp());
 
-		switch(groupRaw.getOp()) {
+		switch(squareRaw.getOp()) {
 
 			case "create":
-				if(groupRaw.getName()==null){
+				if(squareRaw.getName()==null){
 					System.out.println("Name is null");
 					return null;
 				}
-				if(groupRaw.getGid()!=null){
-					System.out.println("GID is not null");
+				if(squareRaw.getSquareId()!=null){
+					System.out.println("SquareId is not null");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
 					System.out.println("CDD is less than required");
 					return null;
 				}
-				groupHist.setId(opre.getId());
-				groupHist.setGid(opre.getId());
-				groupHist.setHeight(opre.getHeight());
-				groupHist.setIndex(opre.getTxIndex());
-				groupHist.setTime(opre.getTime());
-				groupHist.setSigner(opre.getSigner());
-				groupHist.setCdd(opre.getCdd());
+				squareHist.setId(opre.getId());
+				squareHist.setSquareId(opre.getId());
+				squareHist.setHeight(opre.getHeight());
+				squareHist.setIndex(opre.getTxIndex());
+				squareHist.setTime(opre.getTime());
+				squareHist.setSigner(opre.getSigner());
+				squareHist.setCdd(opre.getCdd());
 
-				groupHist.setName(groupRaw.getName());
-				if(groupRaw.getDesc()!=null)groupHist.setDesc(groupRaw.getDesc());
+				squareHist.setName(squareRaw.getName());
+				if(squareRaw.getDesc()!=null)squareHist.setDesc(squareRaw.getDesc());
+				if(squareRaw.getHome()!=null)squareHist.setHome(squareRaw.getHome());
 
 				break;
 
 			case "update":
-				if(groupRaw.getGid()==null){
-					System.out.println("GID is null");
+				if(squareRaw.getSquareId()==null){
+					System.out.println("SquareId is null");
 					return null;
 				}
-				if(groupRaw.getName()==null){
-					System.out.println("Name is null");
+				if(squareRaw.getName()==null && squareRaw.getHome()==null){
+					System.out.println("Name and home are both null");
 					return null;
 				}
-				groupHist.setGid(groupRaw.getGid());
-				groupHist.setId(opre.getId());
-				groupHist.setHeight(opre.getHeight());
-				groupHist.setIndex(opre.getTxIndex());
-				groupHist.setTime(opre.getTime());
-				groupHist.setSigner(opre.getSigner());
-				groupHist.setCdd(opre.getCdd());
+				squareHist.setSquareId(squareRaw.getSquareId());
+				squareHist.setId(opre.getId());
+				squareHist.setHeight(opre.getHeight());
+				squareHist.setIndex(opre.getTxIndex());
+				squareHist.setTime(opre.getTime());
+				squareHist.setSigner(opre.getSigner());
+				squareHist.setCdd(opre.getCdd());
 
-				groupHist.setName(groupRaw.getName());
-				if(groupRaw.getDesc()!=null)groupHist.setDesc(groupRaw.getDesc());
+				if(squareRaw.getName()!=null)squareHist.setName(squareRaw.getName());
+				if(squareRaw.getDesc()!=null)squareHist.setDesc(squareRaw.getDesc());
+				if(squareRaw.getHome()!=null)squareHist.setHome(squareRaw.getHome());
 
 				break;
 
 			case "join":
-				if(groupRaw.getGid()==null){
-					System.out.println("GID is null");
+				if(squareRaw.getSquareId()==null){
+					System.out.println("SquareId is null");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
 					System.out.println("CDD is less than required");
 					return null;
 				}
-				groupHist.setGid(groupRaw.getGid());
+				squareHist.setSquareId(squareRaw.getSquareId());
 
-				groupHist.setId(opre.getId());
-				groupHist.setHeight(opre.getHeight());
-				groupHist.setIndex(opre.getTxIndex());
-				groupHist.setTime(opre.getTime());
-				groupHist.setSigner(opre.getSigner());
-				groupHist.setCdd(opre.getCdd());
+				squareHist.setId(opre.getId());
+				squareHist.setHeight(opre.getHeight());
+				squareHist.setIndex(opre.getTxIndex());
+				squareHist.setTime(opre.getTime());
+				squareHist.setSigner(opre.getSigner());
+				squareHist.setCdd(opre.getCdd());
 				break;
 			case "leave":
-				if(groupRaw.getGids()==null || groupRaw.getGids().isEmpty()){
-					System.out.println("GIDs are null or empty");
+				if(squareRaw.getSquareIds()==null || squareRaw.getSquareIds().isEmpty()){
+					System.out.println("SquareIds are null or empty");
 					return null;
 				}
-				groupHist.setGids(groupRaw.getGids());
+				squareHist.setSquareIds(squareRaw.getSquareIds());
 
-				groupHist.setId(opre.getId());
-				groupHist.setHeight(opre.getHeight());
-				groupHist.setIndex(opre.getTxIndex());
-				groupHist.setTime(opre.getTime());
-				groupHist.setSigner(opre.getSigner());
+				squareHist.setId(opre.getId());
+				squareHist.setHeight(opre.getHeight());
+				squareHist.setIndex(opre.getTxIndex());
+				squareHist.setTime(opre.getTime());
+				squareHist.setSigner(opre.getSigner());
 				break;
 			default:
 				System.out.println("Invalid operation");
 				return null;
 		}
-		return groupHist;
+		return squareHist;
 	}
 
-	public boolean parseGroup(ElasticsearchClient esClient, GroupHistory groupHist) throws Exception {
+	public boolean parseSquare(ElasticsearchClient esClient, SquareHistory squareHist) throws Exception {
 
-		if(groupHist==null || groupHist.getOp()==null){
-			System.out.println("Group history is null or OP is null");
+		if(squareHist==null || squareHist.getOp()==null){
+			System.out.println("Square history is null or OP is null");
 			return false;
 		}
-		Group group;
+		Square square;
 
-		switch(groupHist.getOp()) {
+		switch(squareHist.getOp()) {
 			case CREATE:
-				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
-				if(group==null) {
-					group = new Group();
-					group.setId(groupHist.getId());
-					group.setName(groupHist.getName());
-					group.setDesc(groupHist.getDesc());
+				square = EsUtils.getById(esClient, IndicesNames.SQUARE, squareHist.getSquareId(), Square.class);
+				if(square==null) {
+					square = new Square();
+					square.setId(squareHist.getId());
+					square.setName(squareHist.getName());
+					square.setDesc(squareHist.getDesc());
+					if(squareHist.getHome()!=null)square.setHome(squareHist.getHome());
 
 					String[] namers = new String[1];
 					String[] activeMembers = new String[1];
 
-					namers[0]=groupHist.getSigner();
-					activeMembers[0]=groupHist.getSigner();
+					namers[0]=squareHist.getSigner();
+					activeMembers[0]=squareHist.getSigner();
 
-					group.setNamers(namers);
-					group.setMembers(activeMembers);
-					group.setMemberNum((long) activeMembers.length);
+					square.setNamers(namers);
+					square.setMembers(activeMembers);
+					square.setMemberNum((long) activeMembers.length);
 
-					group.setBirthTime(groupHist.getTime());
-					group.setBirthHeight(groupHist.getHeight());
+					square.setBirthTime(squareHist.getTime());
+					square.setBirthHeight(squareHist.getHeight());
 
-					group.setLastTxId(groupHist.getId());
-					group.setLastTime(groupHist.getTime());
-					group.setLastHeight(groupHist.getHeight());
+					square.setLastTxId(squareHist.getId());
+					square.setLastTime(squareHist.getTime());
+					square.setLastHeight(squareHist.getHeight());
 
-					if(groupHist.getCdd()==null){
-						group.setCddToUpdate(1L);
+					if(squareHist.getCdd()==null){
+						square.setCddToUpdate(1L);
 					} else {
-						group.setCddToUpdate(groupHist.getCdd()+1);
-						if(group.gettCdd()==null)group.settCdd(groupHist.getCdd());
-						else group.settCdd(group.gettCdd()+groupHist.getCdd());
+						square.setCddToUpdate(squareHist.getCdd()+1);
+						if(square.gettCdd()==null)square.settCdd(squareHist.getCdd());
+						else square.settCdd(square.gettCdd()+squareHist.getCdd());
 					}
 
-					Group group1=group;
-					IndexResponse result = esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group1));
+					Square square1=square;
+					IndexResponse result = esClient.index(i->i.index(IndicesNames.SQUARE).id(squareHist.getSquareId()).document(square1));
 					System.out.println(result.result());
 					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
-						System.out.println("Failed to create group");
+						System.out.println("Failed to create square");
 						return false;
 					}
 
 					// Create News
-					News.createNews(esClient, groupHist.getId(), groupHist.getSigner(), CREATE, Feip.FeipProtocol.GROUP.getName(),
-							groupHist.getId(), groupHist.getName(), groupHist.getDesc(), groupHist.getHeight(), groupHist.getTime());
+					News.createNews(esClient, squareHist.getId(), squareHist.getSigner(), CREATE, Feip.FeipProtocol.SQUARE.getName(),
+							squareHist.getId(), squareHist.getName(), squareHist.getDesc(), squareHist.getHeight(), squareHist.getTime());
 					return true;
 				}else {
-					System.out.println("Group is not found");
+					System.out.println("Square has existed.");
 					return false;
 				}
 
 
 			case "join":
 
-				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
+				square = EsUtils.getById(esClient, IndicesNames.SQUARE, squareHist.getSquareId(), Square.class);
 
-				if(group==null) {
-					System.out.println("Group is not found");
+				if(square==null) {
+					System.out.println("Square is not found");
 					return false;
 				}
-				String [] activeMembers = new String[group.getMembers().length+1];
+				String [] activeMembers = new String[square.getMembers().length+1];
 
 				Set<String>memberSet = new HashSet<String>();
 
-				for(String member:group.getMembers()) {
+				for(String member:square.getMembers()) {
 					memberSet.add(member);
 				}
-				memberSet.add(groupHist.getSigner());
+				memberSet.add(squareHist.getSigner());
 				activeMembers = memberSet.toArray(new String[memberSet.size()]);
 
-				group.setMembers(activeMembers);
-				group.setMemberNum((long) activeMembers.length);
+				square.setMembers(activeMembers);
+				square.setMemberNum((long) activeMembers.length);
 
-				group.setLastTxId(groupHist.getId());
-				group.setLastTime(groupHist.getTime());
-				group.setLastHeight(groupHist.getHeight());
+				square.setLastTxId(squareHist.getId());
+				square.setLastTime(squareHist.getTime());
+				square.setLastHeight(squareHist.getHeight());
 
-				if(groupHist.getCdd()!=null) {
+				if(squareHist.getCdd()!=null) {
 					Long tCdd = 0L;
-					if(group.gettCdd()!=null)tCdd = group.gettCdd();
-					group.settCdd(tCdd + groupHist.getCdd());
+					if(square.gettCdd()!=null)tCdd = square.gettCdd();
+					square.settCdd(tCdd + squareHist.getCdd());
 				}
-				Group group2 = group;
+				Square square2 = square;
 
-				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group2));
+				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.SQUARE).id(squareHist.getSquareId()).document(square2));
 				System.out.println(result2.result());
 
 				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 
 			case "update":
 
-				group = EsUtils.getById(esClient, IndicesNames.GROUP, groupHist.getGid(), Group.class);
+				square = EsUtils.getById(esClient, IndicesNames.SQUARE, squareHist.getSquareId(), Square.class);
 
-				if(group==null) {
-					System.out.println("Group is not found");
+				if(square==null) {
+					System.out.println("Square is not found");
 					return false;
 				}
 
-				if(groupHist.getCdd()==null || groupHist.getCdd() < group.getCddToUpdate()){
+				if(squareHist.getCdd()==null || squareHist.getCdd() < square.getCddToUpdate()){
 					System.out.println("CDD is less than required");
 					return false;
 				}
-				group.setCddToUpdate(groupHist.getCdd()+1);
+				square.setCddToUpdate(squareHist.getCdd()+1);
 
 				Long tCdd = 0L;
-				if(group.gettCdd()!=null) tCdd = group.gettCdd();
-				group.settCdd(tCdd + groupHist.getCdd());
+				if(square.gettCdd()!=null) tCdd = square.gettCdd();
+				square.settCdd(tCdd + squareHist.getCdd());
 
 				boolean found =false;
-				for(String member:group.getMembers()) {
-					if(member.equals(groupHist.getSigner())) {
+				for(String member:square.getMembers()) {
+					if(member.equals(squareHist.getSigner())) {
 						found=true;
 						break;
 					}
 				}
 				if(!found){
-					System.out.println("Signer is not found in group");
+					System.out.println("Signer is not found in square");
 					return false;
 				}
 
-				group.setName(groupHist.getName());
-				group.setDesc(groupHist.getDesc());
+				if(squareHist.getName()!=null)square.setName(squareHist.getName());
+				if(squareHist.getDesc()!=null)square.setDesc(squareHist.getDesc());
+				if(squareHist.getHome()!=null)square.setHome(squareHist.getHome());
 
 				Set<String> namerSet = new HashSet<String>();
-				for(String namer: group.getNamers()) {
+				for(String namer: square.getNamers()) {
 					namerSet.add(namer);
 				}
-				namerSet.add(groupHist.getSigner());
+				namerSet.add(squareHist.getSigner());
 				String[] namers = namerSet.toArray(new String[namerSet.size()]);
 
-				group.setNamers(namers);
+				square.setNamers(namers);
 
-				group.setLastTxId(groupHist.getId());
-				group.setLastTime(groupHist.getTime());
-				group.setLastHeight(groupHist.getHeight());
+				square.setLastTxId(squareHist.getId());
+				square.setLastTime(squareHist.getTime());
+				square.setLastHeight(squareHist.getHeight());
 
-				Group group3 = group;
+				Square square3 = square;
 
-				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.GROUP).id(groupHist.getGid()).document(group3));
+				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.SQUARE).id(squareHist.getSquareId()).document(square3));
 				System.out.println(result1.result());
 				return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
 
 			case "leave":
 
-				if(groupHist.getGids()==null || groupHist.getGids().isEmpty()){
-					System.out.println("GIDs are null or empty");
+				if(squareHist.getSquareIds()==null || squareHist.getSquareIds().isEmpty()){
+					System.out.println("SquareIds are null or empty");
 					return false;
 				}
 
-				EsUtils.MgetResult<Group> result = EsUtils.getMultiByIdList(esClient, IndicesNames.GROUP, groupHist.getGids(), Group.class);
-				if(result==null||result.getResultList()==null||result.getResultList().isEmpty()){
-					System.out.println("Group list is empty");
+				EsUtils.MgetResult<Square> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SQUARE, squareHist.getSquareIds(), Square.class);
+				if(result.getResultList() == null || result.getResultList().isEmpty()){
+					System.out.println("Square list is empty");
 					return false;
 				}
 
 				BulkRequest.Builder br = new BulkRequest.Builder();
-				for(Group group1:result.getResultList()){
+				for(Square square1:result.getResultList()){
 
-					String [] activeMembers1 = new String[group1.getMembers().length+1];
+					String [] activeMembers1 = new String[square1.getMembers().length+1];
 
 					Set<String>memberSet1 = new HashSet<String>();
 
 					boolean found1 =false;
-					for(String member:group1.getMembers()) {
-						if(!member.equals(groupHist.getSigner())) {
+					for(String member:square1.getMembers()) {
+						if(!member.equals(squareHist.getSigner())) {
 							memberSet1.add(member);
 						}else found1=true;
 					}
 
 					if(!found1){
-						System.out.println("Signer is not found in group");
+						System.out.println("Signer is not found in square");
 						return false;
 					}
 
 					activeMembers1 = memberSet1.toArray(new String[0]);
-					group1.setMembers(activeMembers1);
-					group1.setMemberNum((long) activeMembers1.length);
+					square1.setMembers(activeMembers1);
+					square1.setMemberNum((long) activeMembers1.length);
 
-					//TODO Important: If no one is in this group, delete the group and its history.
 					if(activeMembers1.length==0){
-						Group finalGroup = group1;
-						esClient.delete(d->d.index(IndicesNames.GROUP).id(finalGroup.getId()));
-						Group finalGroup1 = group1;
-						esClient.deleteByQuery(d->d.index(IndicesNames.GROUP_HISTORY).query(q->q.term(t->t.field("gid").value(finalGroup1.getId()))));
-						System.out.println("Group and group history are deleted");
-						return false;
+						esClient.delete(d->d.index(IndicesNames.SQUARE).id(square1.getId()));
+						esClient.deleteByQuery(d->d.index(IndicesNames.SQUARE_HISTORY).query(q->q.term(t->t.field("squareId").value(square1.getId()))));
+						System.out.println("Square and square history are deleted");
+						return true;
 					}
 
-					group1.setLastTxId(groupHist.getId());
-					group1.setLastTime(groupHist.getTime());
-					group1.setLastHeight(groupHist.getHeight());
+					square1.setLastTxId(squareHist.getId());
+					square1.setLastTime(squareHist.getTime());
+					square1.setLastHeight(squareHist.getHeight());
 
-					if(groupHist.getCdd()!=null) {
-						if(group1.gettCdd()==null)group1.settCdd(groupHist.getCdd());
-						else group1.settCdd(group1.gettCdd() + groupHist.getCdd());
+					if(squareHist.getCdd()!=null) {
+						if(square1.gettCdd()==null)square1.settCdd(squareHist.getCdd());
+						else square1.settCdd(square1.gettCdd() + squareHist.getCdd());
 					}
 
-					Group group4 = group1;
 					br.operations(op -> op
 							.index(idx -> idx
-									.index(IndicesNames.GROUP)
-									.id(group4.getId())
-									.document(group4)
+									.index(IndicesNames.SQUARE)
+									.id(square1.getId())
+									.document(square1)
 							)
 					);
 				}
@@ -357,8 +365,7 @@ public class OrganizationParser {
 				if(result3.errors()){
 					System.out.println("Failed");
 					return false;
-				}
-				else {
+				} else {
 					System.out.println("Done");
 					return true;
 				}
@@ -426,6 +433,7 @@ public class OrganizationParser {
 				if(teamRaw.getAccounts()!=null)teamHist.setAccounts(teamRaw.getAccounts());
 				if(teamRaw.getDesc()!=null)teamHist.setDesc(teamRaw.getDesc());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
+				if(teamRaw.getHome()!=null)teamHist.setHome(teamRaw.getHome());
 
 				break;
 
@@ -451,8 +459,8 @@ public class OrganizationParser {
 					System.out.println("Transferee is null");
 					return null;
 				}
-				if(!teamRaw.getConfirm().equals("I transfer the team to the transferee.")){
-					System.out.println("Confirm is not 'I transfer the team to the transferee.'");
+				if(teamRaw.getConfirm()==null || !teamRaw.getConfirm().equals("I transfer the team to the transferee.")){
+					System.out.println("Confirm absents or is not 'I transfer the team to the transferee.'");
 					return null;
 				}
 				teamHist.setTid(teamRaw.getTid());
@@ -510,6 +518,7 @@ public class OrganizationParser {
 				if(teamRaw.getAccounts()!=null)teamHist.setAccounts(teamRaw.getAccounts());
 				if(teamRaw.getDesc()!=null)teamHist.setDesc(teamRaw.getDesc());
 				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
+				if(teamRaw.getHome()!=null)teamHist.setHome(teamRaw.getHome());
 
 				break;
 			case "agree consensus":
@@ -578,12 +587,12 @@ public class OrganizationParser {
 					System.out.println("TID is null");
 					return null;
 				}
-				if(teamRaw.getRate()<0 ||teamRaw.getRate()>5){
+				if(teamRaw.getRate()==null || teamRaw.getRate()<0 ||teamRaw.getRate()>5){
 					System.out.println("Rate is less than 0 or greater than 5");
 					return null;
 				}
-				if (opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("CDD is less than required");
+				if (opre.getCdd()==null || opre.getCdd() < StartFEIP.CddRequired){
+					System.out.println("CDD is null or less than required");
 					return null;
 				}
 				teamHist.setTid(teamRaw.getTid());
@@ -623,6 +632,7 @@ public class OrganizationParser {
 					if(teamHist.getAccounts()!=null)team.setAccounts(teamHist.getAccounts());
 					if(teamHist.getConsensusId() !=null)team.setConsensusId(teamHist.getConsensusId());
 					if(teamHist.getDesc() !=null)team.setDesc(teamHist.getDesc());
+					if(teamHist.getHome() !=null)team.setHome(teamHist.getHome());
 
 					String[] activeMembers = new String[1];
 					activeMembers[0]=teamHist.getSigner();
@@ -655,7 +665,7 @@ public class OrganizationParser {
 							teamHist.getId(), teamHist.getStdName(), teamHist.getDesc(), teamHist.getHeight(), teamHist.getTime());
 					return true;
 				}else {
-					System.out.println("Team is not found");
+					System.out.println("Team has existed");
 					return false;
 				}
 
@@ -721,15 +731,15 @@ public class OrganizationParser {
 					return false;
 				}
 
-				if(! team.getOwner().equals(teamHist.getSigner())) {
+				if(!team.getOwner().equals(teamHist.getSigner())) {
 					Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, teamHist.getSigner(), Freer.class);
-					if(resultCid.getMaster()!=null) {
-						if(! resultCid.getMaster().equals(teamHist.getSigner())) {
+					if(resultCid!=null && resultCid.getMaster()!=null) {
+						if(!resultCid.getMaster().equals(teamHist.getSigner())) {
 							System.out.println("Signer is not the master");
 							return false;
 						}
 					}else {
-						System.out.println("Signer is not the master");
+						System.out.println("Signer is not the owner or the master");
 						return false;
 					}
 				}
@@ -812,7 +822,8 @@ public class OrganizationParser {
 
 					return true;
 				}
-
+				System.out.println("Taker is not the transferee.");
+				return false;
 			case UPDATE:
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
 
@@ -836,6 +847,7 @@ public class OrganizationParser {
 				if(teamHist.getWaiters()!=null)team.setWaiters(teamHist.getWaiters());
 				if(teamHist.getAccounts()!=null)team.setAccounts(teamHist.getAccounts());
 				if(teamHist.getDesc() !=null) team.setDesc(teamHist.getDesc());
+				if(teamHist.getHome() !=null) team.setHome(teamHist.getHome());
 
 				if(teamHist.getConsensusId() !=null) {
 					if(team.getConsensusId()!=null) {
@@ -975,7 +987,8 @@ public class OrganizationParser {
 						}
 					}
 				}
-
+				System.out.println("No manager.");
+				return false;
 			case "withdraw invitation":
 
 				team = EsUtils.getById(esClient, IndicesNames.TEAM, teamHist.getTid(), Team.class);
@@ -1169,8 +1182,7 @@ public class OrganizationParser {
 					if(result6.errors()){
 						System.out.println("Failed");
 						return false;
-					}
-					else {
+					} else {
 						System.out.println("Done");
 						return true;
 					}
@@ -1379,7 +1391,10 @@ public class OrganizationParser {
 						}
 						team.settCdd(team.gettCdd() + teamHist.getCdd());
 					}
-
+				else {
+						System.out.println("CDD is null");
+						return false;
+				}
 				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());

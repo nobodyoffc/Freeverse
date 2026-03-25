@@ -1,8 +1,6 @@
 package server;
 
 import constants.ApipApiNames;
-import utils.http.AuthType;
-import utils.http.RequestMethod;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +14,9 @@ public enum ApipApi {
     GET_SERVICE("", ApipApiNames.GET_SERVICE),
 
     // APIP1 - FCDSL
-    GENERAL(ApipApiNames.SN_1, ApipApiNames.GENERAL),
+    GENERAL("", ApipApiNames.GENERAL),
+    ENTITY_BY_IDS("", ApipApiNames.ENTITY_BY_IDS),
+    ENTITY_SEARCH("", ApipApiNames.ENTITY_SEARCH),
 
     // APIP2 - Blockchain
     BLOCK_BY_IDS(ApipApiNames.SN_2, ApipApiNames.BLOCK_BY_IDS),
@@ -47,7 +47,7 @@ public enum ApipApi {
     FREER_SEARCH(ApipApiNames.SN_3, ApipApiNames.FREER_SEARCH),
     FREER_HISTORY(ApipApiNames.SN_3, ApipApiNames.FREER_HISTORY),
     CID_AVATAR_BY_IDS(ApipApiNames.SN_3, ApipApiNames.CID_AVATAR_BY_IDS),
-    HOMEPAGE_HISTORY(ApipApiNames.SN_3, ApipApiNames.HOMEPAGE_HISTORY),
+    HOME_HISTORY(ApipApiNames.SN_3, ApipApiNames.HOME_HISTORY),
     NOTICE_FEE_HISTORY(ApipApiNames.SN_3, ApipApiNames.NOTICE_FEE_HISTORY),
     REPUTATION_HISTORY(ApipApiNames.SN_3, ApipApiNames.REPUTATION_HISTORY),
     NOBODY_SEARCH(ApipApiNames.SN_3, ApipApiNames.NOBODY_SEARCH),
@@ -87,13 +87,13 @@ public enum ApipApi {
     APP_OP_HISTORY(ApipApiNames.SN_7, ApipApiNames.APP_OP_HISTORY),
     APP_RATE_HISTORY(ApipApiNames.SN_7, ApipApiNames.APP_RATE_HISTORY),
 
-    // APIP8 - Group
-    GROUP_BY_IDS(ApipApiNames.SN_8, ApipApiNames.GROUP_BY_IDS),
-    GROUP_SEARCH(ApipApiNames.SN_8, ApipApiNames.GROUP_SEARCH),
-    GROUP_MEMBERS(ApipApiNames.SN_8, ApipApiNames.GROUP_MEMBERS),
-    GROUP_EX_MEMBERS(ApipApiNames.SN_8, ApipApiNames.GROUP_EX_MEMBERS),
-    MY_GROUPS(ApipApiNames.SN_8, ApipApiNames.MY_GROUPS),
-    GROUP_OP_HISTORY(ApipApiNames.SN_8, ApipApiNames.GROUP_OP_HISTORY),
+    // APIP8 - Square
+    SQUARE_BY_IDS(ApipApiNames.SN_8, ApipApiNames.SQUARE_BY_IDS),
+    SQUARE_SEARCH(ApipApiNames.SN_8, ApipApiNames.SQUARE_SEARCH),
+    SQUARE_MEMBERS(ApipApiNames.SN_8, ApipApiNames.SQUARE_MEMBERS),
+    SQUARE_EX_MEMBERS(ApipApiNames.SN_8, ApipApiNames.SQUARE_EX_MEMBERS),
+    MY_SQUARES(ApipApiNames.SN_8, ApipApiNames.MY_SQUARES),
+    SQUARE_OP_HISTORY(ApipApiNames.SN_8, ApipApiNames.SQUARE_OP_HISTORY),
 
     // APIP9 - Team
     TEAM_BY_IDS(ApipApiNames.SN_9, ApipApiNames.TEAM_BY_IDS),
@@ -320,12 +320,12 @@ public enum ApipApi {
                 FREER_SEARCH, FREER_BY_IDS,CID_BY_IDS, FREER_HISTORY,
                 FID_CID_SEEK, GET_FID_CID,
                 NOBODY_SEARCH, NOBODY_BY_IDS,
-                HOMEPAGE_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
+                HOME_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
                 GET_AVATAR, AVATARS
         };
 
         organizeAPIs = new ApipApi[]{
-                GROUP_SEARCH, GROUP_BY_IDS, GROUP_MEMBERS, GROUP_OP_HISTORY, MY_GROUPS,
+                SQUARE_SEARCH, SQUARE_BY_IDS, SQUARE_MEMBERS, SQUARE_OP_HISTORY, MY_SQUARES,
                 TEAM_SEARCH, TEAM_BY_IDS, TEAM_MEMBERS, TEAM_EX_MEMBERS,
                 TEAM_OP_HISTORY, TEAM_RATE_HISTORY, TEAM_OTHER_PERSONS, MY_TEAMS
         };

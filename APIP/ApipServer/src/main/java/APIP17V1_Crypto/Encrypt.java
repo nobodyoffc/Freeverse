@@ -11,6 +11,7 @@ import constants.IndicesNames;
 import core.crypto.CryptoDataByte;
 import core.crypto.Encryptor;
 import data.fcData.ReplyBody;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.Hex;
@@ -23,7 +24,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.Map;
 
 import config.Settings;
-import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.ENCRYPT, value = "/"+ ApipApiNames.SN_17+"/"+ ApipApiNames.ENCRYPT +"/"+ ApipApiNames.VER_1)
 public class Encrypt extends HttpServlet {
@@ -68,7 +68,7 @@ public class Encrypt extends HttpServlet {
                         if(encryptInput.getPubkey()!=null)
                             cryptoDataByte = encryptor.encryptByAsyOneWay(encryptInput.getMsg().getBytes(), Hex.fromHex(encryptInput.getPubkey()));
                         else if(encryptInput.getFid()!=null){
-                            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+                            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
                             GetResponse<Freer> result = esClient.get(g -> g.index(IndicesNames.FREER).id(encryptInput.getFid()), Freer.class);
                             Freer cid = result.source();
                             if(cid ==null|| cid.getPubkey()==null){

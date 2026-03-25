@@ -170,7 +170,7 @@ public class PublishParser {
 				break;
 			case RECOVER:
 			case DELETE:
-				if (textRaw.getTextIds() == null || textRaw.getTextIds().length == 0) {
+				if (textRaw.getTextIds() == null || textRaw.getTextIds().size() == 0) {
 					System.out.println("TextIds is null or empty");
 					return null;
 				}
@@ -188,8 +188,18 @@ public class PublishParser {
 					System.out.println("TextId is null");
 					return null;
 				}
+				if (opre.getCdd() == null) {
+					System.out.println("Cdd is null");
+					return null;
+				}
+
 				if (opre.getCdd() < StartFEIP.CddRequired) {
 					System.out.println("Cdd is less than CddRequired");
+					return null;
+				}
+
+				if (textRaw.getRate() == null) {
+					System.out.println("Rate is null");
 					return null;
 				}
 				textHist.setTextId(textRaw.getTextId());
@@ -224,7 +234,7 @@ public class PublishParser {
 					text = new Text();
 
 					text.setId(textHist.getTextId());
-					text.setVer("1");
+					text.setVer(textHist.getVer());
 					text.setType(textHist.getType());
 					text.setDid(textHist.getDid());
 
@@ -305,8 +315,8 @@ public class PublishParser {
 
 			case DELETE, RECOVER -> {
 				List<String> idList = new ArrayList<>();
-				if (textHist.getTextIds() != null && textHist.getTextIds().length > 0) {
-					idList.addAll(Arrays.asList(textHist.getTextIds()));
+				if (textHist.getTextIds() != null && textHist.getTextIds().size() > 0) {
+					idList.addAll(textHist.getTextIds());
 				} else {
 					System.out.println("TextIds is null or empty");
 					return false;
@@ -332,6 +342,7 @@ public class PublishParser {
 						case RECOVER:
 							textItem.setDeleted(false);
 							break;
+						default:continue;
 					}
 
 					textItem.setLastTxId(textHist.getId());
@@ -359,6 +370,8 @@ public class PublishParser {
 					}
 					return true;
 				}
+				System.out.println("No text matched publisher/master filter");
+				return false;
 			}
 
 			case RATE -> {
@@ -431,9 +444,12 @@ public class PublishParser {
 					System.out.println("Title is null or empty");
 					return null;
 				}
-				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) {
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-					return null;
+				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
+					Long cdd = opre.getCdd();
+					if (cdd == null || cdd < StartFEIP.CddRequired) {
+						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						return null;
+					}
 				}
 				remarkHist.setId(opre.getId());
 
@@ -495,13 +511,22 @@ public class PublishParser {
 					System.out.println("RemarkId is null");
 					return null;
 				}
-				if (opre.getCdd() < StartFEIP.CddRequired) {
+				if (remarkRaw.getRate() == null) {
+					System.out.println("Rate is null");
+					return null;
+				}
+				Long remarkRateCdd = opre.getCdd();
+				if (remarkRateCdd == null) {
+					System.out.println("Cdd is null");
+					return null;
+				}
+				if (remarkRateCdd < StartFEIP.CddRequired) {
 					System.out.println("Cdd is less than CddRequired");
 					return null;
 				}
 				remarkHist.setRemarkId(remarkRaw.getRemarkId());
 				remarkHist.setRate(remarkRaw.getRate());
-				remarkHist.setCdd(opre.getCdd());
+				remarkHist.setCdd(remarkRateCdd);
 
 				remarkHist.setId(opre.getId());
 				remarkHist.setHeight(opre.getHeight());
@@ -604,11 +629,19 @@ public class PublishParser {
 					idList.addAll(Arrays.asList(remarkHist.getRemarkIds()));
 				} else {
 					System.out.println("RemarkIds is null or empty");
-					break;
+					return false;
 				}
 
 				EsUtils.MgetResult<Remark> result = EsUtils.getMultiByIdList(esClient, IndicesNames.REMARK, idList, Remark.class);
+				if (result == null) {
+					System.out.println("Remark mget result is null");
+					return false;
+				}
 				List<Remark> remarks = result.getResultList();
+				if (remarks == null || remarks.isEmpty()) {
+					System.out.println("Remarks is null or empty");
+					return false;
+				}
 
 				List<Remark> updatedRemarks = new ArrayList<>();
 				for (Remark remarkItem : remarks) {
@@ -654,6 +687,8 @@ public class PublishParser {
 					}
 					return true;
 				}
+				System.out.println("No remark matched publisher/master filter; delete/recover skipped");
+				return false;
 			}
 
 			case RATE -> {
@@ -845,9 +880,12 @@ public class PublishParser {
 					System.out.println("Title is null or empty");
 					return null;
 				}
-				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired ){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-					return null;
+				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
+					Long cdd = opre.getCdd();
+					if (cdd == null || cdd < StartFEIP.CddRequired) {
+						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						return null;
+					}
 				}
 				soundHist.setId(opre.getId());
 
@@ -907,13 +945,22 @@ public class PublishParser {
 					System.out.println("SoundId is null");
 					return null;
 				}
-				if (opre.getCdd() < StartFEIP.CddRequired) {
+				if (soundRaw.getRate() == null) {
+					System.out.println("Rate is null");
+					return null;
+				}
+				Long rateCdd = opre.getCdd();
+				if (rateCdd == null) {
+					System.out.println("Cdd is null");
+					return null;
+				}
+				if (rateCdd < StartFEIP.CddRequired) {
 					System.out.println("Cdd is less than CddRequired");
 					return null;
 				}
 				soundHist.setSoundId(soundRaw.getSoundId());
 				soundHist.setRate(soundRaw.getRate());
-				soundHist.setCdd(opre.getCdd());
+				soundHist.setCdd(rateCdd);
 
 				soundHist.setId(opre.getId());
 				soundHist.setHeight(opre.getHeight());
@@ -988,15 +1035,15 @@ public class PublishParser {
 				sound = EsUtils.getById(esClient, IndicesNames.SOUND, soundHist.getSoundId(), Sound.class);
 				if (sound == null) {
 					System.out.println("Sound not found");
-					break;
+					return false;
 				}
 				if (Boolean.TRUE.equals(sound.isDeleted())) {
 					System.out.println("Sound is deleted");
-					break;
+					return false;
 				}
 				if (!sound.getPublisher().equals(soundHist.getSigner())) {
 					System.out.println("Sound publisher is not the same as the signer");
-					break;
+					return false;
 				}
 				sound.setVer(String.valueOf(Integer.parseInt(sound.getVer())+1));
 				sound.setDid(soundHist.getDid());
@@ -1020,10 +1067,14 @@ public class PublishParser {
 					idList.addAll(Arrays.asList(soundHist.getSoundIds()));
 				} else {
 					System.out.println("SoundIds is null or empty");
-					break;
+					return false;
 				}
 
 				EsUtils.MgetResult<Sound> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SOUND, idList, Sound.class);
+				if (result == null) {
+					System.out.println("Sound mget result is null");
+					return false;
+				}
 				List<Sound> sounds = result.getResultList();
 				if(sounds==null||sounds.isEmpty()){
 					System.out.println("Sounds is null or empty");
@@ -1056,6 +1107,7 @@ public class PublishParser {
 					updatedSounds.add(soundItem);
 				}
 
+
 				if (!updatedSounds.isEmpty()) {
 					BulkRequest.Builder br = new BulkRequest.Builder();
 					for (Sound updatedSound : updatedSounds) {
@@ -1074,6 +1126,8 @@ public class PublishParser {
 					}
 					return true;
 				}
+				System.out.println("No sound matched publisher/master filter");
+				return false;
 			}
 
 			case RATE -> {
@@ -1147,9 +1201,12 @@ public class PublishParser {
 					System.out.println("Title is null or empty");
 					return null;
 				}
-				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-					return null;
+				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
+					Long cdd = opre.getCdd();
+					if (cdd == null || cdd < StartFEIP.CddRequired) {
+						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						return null;
+					}
 				}
 				imageHist.setId(opre.getId());
 
@@ -1209,13 +1266,22 @@ public class PublishParser {
 					System.out.println("ImageId is null");
 					return null;
 				}
-				if (opre.getCdd() < StartFEIP.CddRequired){
+				if (imageRaw.getRate() == null) {
+					System.out.println("Rate is null");
+					return null;
+				}
+				Long imageRateCdd = opre.getCdd();
+				if (imageRateCdd == null) {
+					System.out.println("Cdd is null");
+					return null;
+				}
+				if (imageRateCdd < StartFEIP.CddRequired){
 					System.out.println("Cdd is less than CddRequired");
 					return null;
 				}
 				imageHist.setImageId(imageRaw.getImageId());
 				imageHist.setRate(imageRaw.getRate());
-				imageHist.setCdd(opre.getCdd());
+				imageHist.setCdd(imageRateCdd);
 
 				imageHist.setId(opre.getId());
 				imageHist.setHeight(opre.getHeight());
@@ -1326,7 +1392,15 @@ public class PublishParser {
 				}
 
 				EsUtils.MgetResult<Image> result = EsUtils.getMultiByIdList(esClient, IndicesNames.IMAGE, idList, Image.class);
+				if (result == null) {
+					System.out.println("Image mget result is null");
+					return false;
+				}
 				List<Image> images = result.getResultList();
+				if (images == null || images.isEmpty()) {
+					System.out.println("Images is null or empty");
+					return false;
+				}
 
 				List<Image> updatedImages = new ArrayList<>();
 				for (Image imageItem : images) {
@@ -1372,6 +1446,8 @@ public class PublishParser {
 					}
 					return true;
 				}
+				System.out.println("No image matched publisher/master filter; delete/recover skipped");
+				return false;
 			}
 
 			case RATE -> {
@@ -1444,9 +1520,12 @@ public class PublishParser {
 					System.out.println("Title is null or empty");
 					return null;
 				}
-				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-					return null;
+				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
+					Long cdd = opre.getCdd();
+					if (cdd == null || cdd < StartFEIP.CddRequired) {
+						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						return null;
+					}
 				}
 				videoHist.setId(opre.getId());
 
@@ -1506,13 +1585,22 @@ public class PublishParser {
 					System.out.println("VideoId is null");
 					return null;
 				}
-				if (opre.getCdd() < StartFEIP.CddRequired){
+				if (videoRaw.getRate() == null) {
+					System.out.println("Rate is null");
+					return null;
+				}
+				Long videoRateCdd = opre.getCdd();
+				if (videoRateCdd == null) {
+					System.out.println("Cdd is null");
+					return null;
+				}
+				if (videoRateCdd < StartFEIP.CddRequired){
 					System.out.println("Cdd is less than CddRequired");
 					return null;
 				}
 				videoHist.setVideoId(videoRaw.getVideoId());
 				videoHist.setRate(videoRaw.getRate());
-				videoHist.setCdd(opre.getCdd());
+				videoHist.setCdd(videoRateCdd);
 
 				videoHist.setId(opre.getId());
 				videoHist.setHeight(opre.getHeight());
@@ -1521,6 +1609,7 @@ public class PublishParser {
 				videoHist.setSigner(opre.getSigner());
 				break;
 			default:
+				System.out.println("Invalid operation");
 				return null;
 		}
 		return videoHist;
@@ -1586,15 +1675,15 @@ public class PublishParser {
 				video = EsUtils.getById(esClient, IndicesNames.VIDEO, videoHist.getVideoId(), Video.class);
 				if (video == null) {
 					System.out.println("Video not found");
-					break;
+					return false;
 				}
 				if (Boolean.TRUE.equals(video.isDeleted())) {
 					System.out.println("Video is deleted");
-					break;
+					return false;
 				}
 				if (!video.getPublisher().equals(videoHist.getSigner())) {
 					System.out.println("Video publisher is not the same as the signer");
-					break;
+					return false;
 				}
 				video.setVer(String.valueOf(Integer.parseInt(video.getVer())+1));
 				video.setDid(videoHist.getDid());
@@ -1622,7 +1711,15 @@ public class PublishParser {
 				}
 
 				EsUtils.MgetResult<Video> result = EsUtils.getMultiByIdList(esClient, IndicesNames.VIDEO, idList, Video.class);
+				if (result == null) {
+					System.out.println("Video mget result is null");
+					return false;
+				}
 				List<Video> videos = result.getResultList();
+				if (videos == null || videos.isEmpty()) {
+					System.out.println("Videos is null or empty");
+					return false;
+				}
 
 				List<Video> updatedVideos = new ArrayList<>();
 				for (Video videoItem : videos) {
@@ -1668,6 +1765,8 @@ public class PublishParser {
 					}
 					return true;
 				}
+				System.out.println("No video matched publisher/master filter; delete/recover skipped");
+				return false;
 			}
 
 			case RATE -> {

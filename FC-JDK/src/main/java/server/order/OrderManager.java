@@ -1,5 +1,6 @@
 package server.order;
 
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.json.JsonData;
 import data.feipData.Service;
@@ -11,7 +12,6 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.IndicesNames;
 import core.crypto.KeyTools;
-import data.feipData.serviceParams.Params;
 import utils.FchUtils;
 import utils.JsonUtils;
 import utils.NumberUtils;
@@ -174,14 +174,15 @@ public class OrderManager {
             if(result.hits()==null||result.hits().hits()==null)return;
             int size = result.hits().hits().size();
             if(size<100)return;
-            List<String> last = result.hits().hits().get(size - 1).sort();
+            List<FieldValue> last = result.hits().hits().get(size - 1).sort();
             while(true){
+                List<FieldValue> finalLast = last;
                 result = esClient.search(s -> s
                                 .index(addSidBriefToName(sid, IndicesNames.ORDER))
                                 .query(q -> q.range(r -> r.field(HEIGHT).gte(JsonData.of(height))))
                                 .sort(so -> so.field(f -> f.field(TIME).order(SortOrder.Desc)))
                                 .size(100)
-                                .searchAfter(last)
+                                .searchAfter(finalLast)
                         , Order.class);
                 if(result==null)return;
                 showEsOrderResult(null,result);
@@ -253,9 +254,8 @@ public class OrderManager {
 
     private void howToBuyService(BufferedReader br) {
 
-        Params params = (Params) service.getParams();
         Shower.printUnderline(20);
-        System.out.println("Send at lest "+ params.getMinPayment()+"f to " +service.getDealer()+ " to buy the service. The price is " + NumberUtils.numberToPlainString(params.getPricePerKB(),"8")+"f/KB.");
+        System.out.println("Send at lest "+ service.getMinPayment()+"f to " +service.getDealer()+ " to buy the service. The price is " + NumberUtils.numberToPlainString(service.getPricePerKB(),"8")+"f/KB.");
         System.out.println("If you want to set the 'via' FID, write below into the OP_RETURN of the TX:");
         Shower.printUnderline(20);
         System.out.println(JsonUtils.toNiceJson(Order.getJsonBuyOrder(sid)));

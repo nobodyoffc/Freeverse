@@ -50,34 +50,7 @@ public class FchChainInfo extends FcObject {
     private String year;
     private String daysToNextYear;
     private String heightOfNextYear;
-//
-//    public static void main(String[] args) throws IOException {
-//
-//        long height1 = 2000000;
-//        ChainInfo freecashInfo = new ChainInfo();
-//        freecashInfo.infoBest("http://localhost:8332","username","password");
-//        System.out.println(freecashInfo.toNiceJson());
-//
-//        ChainInfo freecashInfo1 = new ChainInfo();
-//        NewEsClient newEsClient = new NewEsClient();
-//        ElasticsearchClient esClient = newEsClient.getSimpleEsClient();
-//        freecashInfo1.infoByHeight(height1,esClient);
-//        System.out.println(freecashInfo1.toNiceJson());
-//
-//        Map<Long, String> timeDiffMap = difficultyHistory(0, 1704321137,100 ,esClient);
-//        JsonTools.gsonPrint(timeDiffMap);
-//
-//        Map<Long, String> timeHashRateMap = hashRateHistory(0, 1704321137,18 ,esClient);
-//        JsonTools.gsonPrint(timeHashRateMap);
-//
-//        Map<Long, Long> blockTimefMap = blockTimeHistory(0, 1704321137,1000 ,esClient);
-//
-//        System.out.println(timeDiffMap.size());
-//        System.out.println(timeHashRateMap.size());
-//        System.out.println(blockTimefMap.size());
-//
-//        newEsClient.shutdownClient();
-//    }
+
 
     public String toNiceJson(){
         return JsonUtils.toNiceJson(this);

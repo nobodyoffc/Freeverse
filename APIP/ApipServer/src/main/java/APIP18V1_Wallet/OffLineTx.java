@@ -5,17 +5,18 @@ import constants.ApipApiNames;
 import core.fch.RawTxInfo;
 import core.fch.TxCreator;
 import data.fchData.Cash;
-import handlers.CashManager;
-import handlers.MempoolManager;
+import data.feipData.ServiceType;
+import managers.CashManager;
+import managers.MempoolManager;
 import org.jetbrains.annotations.Nullable;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
-import handlers.CashManager.SearchResult;
+import managers.CashManager.SearchResult;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.FchUtils;
 import utils.http.AuthType;
-import handlers.Manager.ManagerType;
+import managers.Manager.ManagerType;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -30,14 +31,13 @@ import static constants.Constants.Dust;
 import static constants.FieldNames.*;
 import static core.fch.TxCreator.parseDataForOffLineTxFromOther;
 import config.Settings;
-import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.OFF_LINE_TX, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.OFF_LINE_TX +"/"+ ApipApiNames.VER_1)
 public class OffLineTx extends HttpServlet {
     private final Settings settings = Initiator.settings;
     private final ReplyBody replier = new ReplyBody(settings);
     //Check authorization
-    private final ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+    private final ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
     //Do FCDSL other request
     private final HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
 

@@ -12,6 +12,7 @@ import co.elastic.clients.elasticsearch.core.search.TotalHits;
 import data.apipData.Fcdsl;
 import data.fchData.Block;
 import data.feipData.Service;
+import data.feipData.ServiceType;
 import fudp.message.ResponseMessage;
 import fudp.node.FudpNode;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,7 @@ class FapiServerIntegrationTest {
     
     @BeforeEach
     void setUp() {
-        lenient().when(settings.getClient(Service.ServiceType.ES)).thenReturn(esClient);
+        lenient().when(settings.getClient(ServiceType.ES)).thenReturn(esClient);
         lenient().when(settings.getMainFid()).thenReturn("test-fid");
         lenient().when(settings.getConfig()).thenReturn(configure);
         lenient().when(settings.getBestHeight()).thenReturn(1000L);
@@ -77,7 +78,7 @@ class FapiServerIntegrationTest {
         // 1. 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         testService.setStdName("Test FAPI Service");
         
         List<Service> services = new ArrayList<>();
@@ -136,7 +137,7 @@ class FapiServerIntegrationTest {
         // 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         fapiServer.getServiceMap().put("test-service-id", testService);
         
@@ -170,7 +171,7 @@ class FapiServerIntegrationTest {
         // 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         fapiServer.getServiceMap().put("test-service-id", testService);
         
@@ -204,7 +205,7 @@ class FapiServerIntegrationTest {
         // 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         fapiServer.getServiceMap().put("test-service-id", testService);
         
@@ -238,13 +239,13 @@ class FapiServerIntegrationTest {
         // 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         fapiServer.getServiceMap().put("test-service-id", testService);
         
         // 使用 index 而非 entity
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex(IndicesNames.BLOCK);
+        fcdsl.setEntity(IndicesNames.BLOCK);
         fcdsl.setSize("10");
         byte[] requestData = JsonUtils.toJson(fcdsl).getBytes(StandardCharsets.UTF_8);
         
@@ -272,7 +273,7 @@ class FapiServerIntegrationTest {
         // 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         fapiServer.getServiceMap().put("test-service-id", testService);
         
@@ -303,7 +304,7 @@ class FapiServerIntegrationTest {
         // 初始化服务
         Service testService = new Service();
         testService.setId("test-service-id");
-        testService.setTypes(new String[]{"FAPI"});
+        testService.makeServiceType(ServiceType.FAPI_No1_NrC7);
         
         fapiServer.getServiceMap().put("test-service-id", testService);
         

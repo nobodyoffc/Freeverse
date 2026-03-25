@@ -3,8 +3,8 @@ package api;
 
 import data.apipData.Fcdsl;
 import config.Settings;
-import handlers.DiskManager;
-import handlers.Manager;
+import managers.DiskManager;
+import managers.Manager;
 import constants.CodeMessage;
 import initial.Initiator;
 import server.DiskApiNames;

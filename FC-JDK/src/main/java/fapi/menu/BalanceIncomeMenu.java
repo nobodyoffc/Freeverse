@@ -1,29 +1,28 @@
 package fapi.menu;
 
-import handlers.BalanceManager;
+import fapi.FapiBalanceManager;
 import ui.Menu;
 import ui.Inputer;
 import utils.FchUtils;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.util.List;
 
 /**
- * Balance & Income Management Menu backed by BalanceManager (FAPI economics model).
+ * Balance & Income Management Menu backed by FapiBalanceManager (FAPI economics model).
  */
 public class BalanceIncomeMenu {
-    private final BalanceManager balanceManager;
+    private final FapiBalanceManager balanceManager;
     private final BufferedReader br;
 
-    public BalanceIncomeMenu(BalanceManager balanceManager, BufferedReader br) {
+    public BalanceIncomeMenu(FapiBalanceManager balanceManager, BufferedReader br) {
         this.balanceManager = balanceManager;
         this.br = br;
     }
 
     public void showMenu() {
         if (balanceManager == null) {
-            System.out.println("\nEconomics module is not available. BalanceManager was not initialized.");
+            System.out.println("\nEconomics module is not available. FapiBalanceManager was not initialized.");
             Menu.anyKeyToContinue(br);
             return;
         }
@@ -39,7 +38,7 @@ public class BalanceIncomeMenu {
     }
 
     private void showPricing() {
-        BalanceManager.Pricing pricing = balanceManager.getPricing();
+        FapiBalanceManager.Pricing pricing = balanceManager.getPricing();
         System.out.println("\nCurrent pricing (from Service params):");
         System.out.println("pricePerKB: " + pricing.getPricePerKb() + " sat (" + FchUtils.satoshiToCoin(pricing.getPricePerKb()) + " FCH)");
         System.out.println("orderViaShare: " + pricing.getOrderViaShareBps() + " bps");
@@ -49,7 +48,7 @@ public class BalanceIncomeMenu {
 
     private void queryBalance() {
         String peerId = promptString("PeerId:");
-        BalanceManager.BalanceView view = balanceManager.getBalance(peerId);
+        FapiBalanceManager.BalanceView view = balanceManager.getBalance(peerId);
         System.out.println("\nBalance for " + view.getPeerId());
         System.out.println("  balance: " + view.getBalance() + " sat (" + FchUtils.satoshiToCoin(view.getBalance()) + " FCH)");
         System.out.println("  creditLimit: " + view.getCreditLimit() + " sat");
@@ -61,7 +60,7 @@ public class BalanceIncomeMenu {
         String requestKey = promptString("requestKey:");
         String peerId = promptString("peerId:");
         long amount = promptLong("amount(satoshi):");
-        BalanceManager.ChargeResult result = balanceManager.charge(requestKey, peerId, amount, null);
+        FapiBalanceManager.ChargeResult result = balanceManager.charge(requestKey, peerId, amount, null);
         System.out.println("\nCharge result: " + result.getCode());
         System.out.println("Status: " + result.getStatus());
         System.out.println("Balance: " + result.getBalance() + " sat (creditLimit " + result.getCreditLimit() + ")");
@@ -76,12 +75,12 @@ public class BalanceIncomeMenu {
         String userId = promptString("userId:");
         long amount = promptLong("amount(satoshi):");
         String statusInput = promptString("status (pending/confirmed/reverted):").toLowerCase();
-        BalanceManager.CreditStatus status = switch (statusInput) {
-            case "confirmed" -> BalanceManager.CreditStatus.CONFIRMED;
-            case "reverted" -> BalanceManager.CreditStatus.REVERTED;
-            default -> BalanceManager.CreditStatus.PENDING;
+        FapiBalanceManager.CreditStatus status = switch (statusInput) {
+            case "confirmed" -> FapiBalanceManager.CreditStatus.CONFIRMED;
+            case "reverted" -> FapiBalanceManager.CreditStatus.REVERTED;
+            default -> FapiBalanceManager.CreditStatus.PENDING;
         };
-        BalanceManager.CreditResult result = balanceManager.credit(userId, cashId, amount, "manual", status, null, null);
+        FapiBalanceManager.CreditResult result = balanceManager.credit(userId, cashId, amount, "manual", status, null, null);
         System.out.println("\nCredit result: " + result.getCode());
         System.out.println("Status: " + result.getStatus());
         System.out.println("Balance: " + result.getBalance() + " sat (creditLimit " + result.getCreditLimit() + ")");
@@ -92,9 +91,9 @@ public class BalanceIncomeMenu {
     }
 
     private void tailAudit() {
-        List<BalanceManager.AuditRecord> records = balanceManager.getRecentAudit(20);
+        List<FapiBalanceManager.AuditRecord> records = balanceManager.getRecentAudit(20);
         System.out.println("\nRecent audit entries (newest last):");
-        for (BalanceManager.AuditRecord record : records) {
+        for (FapiBalanceManager.AuditRecord record : records) {
             System.out.println("ts=" + record.getTs() +
                 ", type=" + record.getType() +
                 ", requestKey=" + record.getRequestKey() +

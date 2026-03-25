@@ -3,9 +3,9 @@ package APIP18V1_Wallet;
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApipApiNames;
-import data.feipData.Service;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -49,7 +49,7 @@ public class BalanceByIds extends HttpServlet {
         }
 
         List<String> fids = httpRequestChecker.getRequestBody().getFcdsl().getIds();
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
         Map<String,Long> balanceMap = FcHttpRequestHandler.sumCashValueByOwners(fids, esClient);

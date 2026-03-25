@@ -6,9 +6,9 @@ import data.fcData.FcSession;
 import data.fchData.*;
 import config.Settings;
 import data.feipData.Service;
-import data.feipData.serviceParams.ApipParams;
-import handlers.Manager;
-import handlers.SessionManager;
+import data.feipData.ServiceType;
+import managers.Manager;
+import managers.SessionManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.EsUtils;
@@ -63,8 +63,8 @@ public class FcHttpRequestHandler {
         this.requestBody = null;
         // if(this.requestBody.getFcdsl()==null)
         //     this.requestBody.setFcdsl(new Fcdsl());
-        if(settings.getClient(Service.ServiceType.ES)!=null)
-          this.esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+        if(settings.getClient(ServiceType.ES)!=null)
+          this.esClient = (ElasticsearchClient)settings.getClient(ServiceType.ES);
         else this.esClient = null;
     }
 
@@ -74,8 +74,8 @@ public class FcHttpRequestHandler {
         this.requestBody = replyBody.getRequestChecker().getRequestBody();
         if(this.requestBody.getFcdsl()==null)
             this.requestBody.setFcdsl(new Fcdsl());
-        if(settings.getClient(Service.ServiceType.ES)!=null)
-          this.esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+        if(settings.getClient(ServiceType.ES)!=null)
+          this.esClient = (ElasticsearchClient)settings.getClient(ServiceType.ES);
         else this.esClient = null;
     }
 
@@ -99,11 +99,8 @@ public class FcHttpRequestHandler {
         }
         Service service;
         try {
-            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
             service = EsUtils.getById(esClient, SERVICE, settings.getSid(), Service.class);
-            if (service != null && service.getParams() != null) {
-                service.setParams(ApipParams.fromObject(service.getParams()));
-            }
         } catch (IOException e) {
             replier.replyOtherErrorHttp("EsClient wrong:" + e.getMessage(), response);
             return;
@@ -267,7 +264,7 @@ public class FcHttpRequestHandler {
             }
             if (fcdsl.getAfter() != null) {
                 List<String> after = fcdsl.getAfter();
-                searchBuilder.searchAfter(after);
+                searchBuilder.searchAfter(EsUtils.toFieldValueList(after));
             }
 
             // Handle field filtering with _source
@@ -325,9 +322,9 @@ public class FcHttpRequestHandler {
             tList.add(hit.source());
         }
 
-        List<String> sortList = hitList.get(hitList.size()-1).sort();
+        List<String> sortList = EsUtils.toStringList(hitList.get(hitList.size()-1).sort());
 
-        if(sortList.size()>0)
+        if(sortList != null && sortList.size()>0)
             replyBody.setLast(sortList);
 
         replyBody.setGot((long)tList.size());
@@ -476,7 +473,7 @@ public class FcHttpRequestHandler {
                     idList.add(block.getId());
                 }
 
-                ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+                ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
                 if(esClient == null) {
                     replyBody.replyOtherErrorHttp("Failed to get ES client.", response);
                     return;
@@ -588,7 +585,7 @@ public class FcHttpRequestHandler {
                 .buckets().array();
 
             for (StringTermsBucket bucket : buckets) {
-                String owner = bucket.key();
+                String owner = bucket.key().stringValue();
                 long sum = (long) bucket.aggregations().get("value_sum").sum().value();
                 result.put(owner, sum);
             }

@@ -3,7 +3,7 @@ package APIP3V1_Freer;
 import constants.ApipApiNames;
 import data.apipData.Sort;
 import constants.IndicesNames;
-import data.feipData.CidHist;
+import data.feipData.FreerHist;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.FcHttpRequestHandler;
@@ -33,12 +33,12 @@ public class NoticeFeeHistory extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.SYMKEY_ENCRYPT;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcHttpRequestHandler.doSearchRequest(IndicesNames.FREER_HISTORY, CidHist.class,"sn","10", null, null, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.FREER_HISTORY, FreerHist.class,"sn","10", null, null, defaultSort, request,response,authType);
     }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcHttpRequestHandler.doSearchRequest(IndicesNames.FREER_HISTORY, CidHist.class,"sn","10", null, null, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.FREER_HISTORY, FreerHist.class,"sn","10", null, null, defaultSort, request,response,authType);
     }
 }

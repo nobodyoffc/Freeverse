@@ -11,8 +11,7 @@ import java.util.concurrent.ExecutorService;
 
 import config.Settings;
 import constants.Constants;
-import handlers.AccountManager;
-import handlers.Manager;
+import managers.Manager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

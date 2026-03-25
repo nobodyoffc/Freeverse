@@ -14,7 +14,7 @@ public class TextHistory extends FcObject {
 	private String signer;
 
 	private String textId;
-	private String[] textIds;
+	private List<String> textIds;
 	private String type;
 
 	private String op;
@@ -121,14 +121,6 @@ public class TextHistory extends FcObject {
 		this.cdd = cdd;
 	}
 
-	public String[] getTextIds() {
-		return textIds;
-	}
-
-	public void setTextIds(String[] textIds) {
-		this.textIds = textIds;
-	}
-
 	public List<String> getAuthors() {
 		return authors;
 	}
@@ -167,5 +159,13 @@ public class TextHistory extends FcObject {
 
 	public void setType(String type) {
 		this.type = type;
+	}
+
+	public List<String> getTextIds() {
+		return textIds;
+	}
+
+	public void setTextIds(List<String> textIds) {
+		this.textIds = textIds;
 	}
 }

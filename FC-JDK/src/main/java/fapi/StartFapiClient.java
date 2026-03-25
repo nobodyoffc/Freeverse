@@ -1,176 +1,296 @@
 package fapi;
 
-import clients.ClientGroup;
 import com.google.gson.Gson;
-import config.ApiAccount;
-import config.ApiProvider;
-import config.Configure;
-import config.Starter;
 import config.Settings;
 import data.apipData.Fcdsl;
-import data.fcData.FcEntity;
-import data.fcData.Module;
-import data.fchData.*;
+import data.fchData.Cash;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
 import fapi.client.FapiClient;
+import fapi.client.FapiClient.DiscoveryResult;
 import fapi.message.FapiResponse;
+import core.crypto.Hash;
+import data.fcData.DockItem;
+import fudp.message.AppMessage;
+import fudp.message.BytesMessage;
 import fudp.node.FudpNode;
-import fudp.message.PongMessage;
-import fudp.node.NodeConfig;
-import fudp.node.NodeStats;
-import fudp.node.Peer;
+import fudp.node.NodeEventListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import ui.Inputer;
 import ui.Menu;
+import ui.ProgressBar;
+import utils.FchUtils;
 import utils.JsonUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
- * FAPI 客户端启动类
- * 参考 StartApipClient 的设计，提供交互式测试界面
+ * FAPI客户端启动类（重构版）
+ * <p>
+ * 基于新的 ServiceBootstrap 框架启动 FAPI 客户端。
+ * <p>
+ * 主要改进：
+ * 1. 使用 ServiceBootstrap.bootstrapClient() 替代 Starter.startClient()
+ * 2. 统一的配置和启动流程
+ * 3. 自动服务发现（默认端点 → 链上服务列表 → 手动输入）
+ * <p>
+ * 注意：StartFapiClientOld.java 保留作为参考。
  */
 public class StartFapiClient {
-    public static final int DEFAULT_SIZE = 20;
-    public static Settings settings;
-    public static FudpNode fudpNode;
-    public static FapiClient fapiClient;
-    public static BufferedReader br;
-    public static String clientName = "FAPI Client";
+    private static final Logger log = LoggerFactory.getLogger(StartFapiClient.class);
 
+    public static final String CLIENT_NAME = "FAPI Client";
+    
+    private static BufferedReader br;
+    private static ServiceBootstrap.ClientBootstrapResult bootstrapResult;
+    private static FudpNode fudpNode;
+    private static Settings settings;
+    private static FapiClient fapiClient;
 
     public static void main(String[] args) {
-        Menu.welcome(clientName);
-
-        List<Module> modules = new ArrayList<>();
-        modules.add(new Module(Module.ModuleType.NODE.name(), "FUDP"));
-        modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.FAPI.name()));
-
+        Menu.welcome(CLIENT_NAME);
         br = new BufferedReader(new InputStreamReader(System.in));
-        System.out.println("Initializing FUDP Node...");
-
-        Map<String,Object> settingMap = new HashMap<>();
-
-        settings = Starter.startClient(clientName, settingMap, br, modules, null);
-
-        setDefaultSettingMap(settings != null ? settings.getSettingMap() : settingMap);
-
-        if (settings == null) return;
-
-        fudpNode = settings.getFudpNode();
-        fapiClient = (FapiClient) settings.getClient(Service.ServiceType.FAPI);
-
-        Menu menu = new Menu("FAPI Client", StartFapiClient::close);
-
-        menu.add("Basic APIs", StartFapiClient::basicApi);
-        menu.add("Wallet APIs", StartFapiClient::walletApi);
-        menu.add("Entity By ID", StartFapiClient::entityByIds);
-        menu.add("Entity Search", StartFapiClient::entitySearch);
-        menu.add("General Query", StartFapiClient::generalQuery);
-        menu.add("Settings", StartFapiClient::settings);
-
-        menu.showAndSelect(br);
-
-    }
-
-    private static void close() {
-        if (fudpNode != null) {
-            fudpNode.stop();
-        }
-        if (settings != null) {
-            try {
-                settings.close();
-            } catch (Exception e) {
-                System.out.println("Error closing settings:"+e.getMessage());
+        
+        try {
+            // 1. 使用新的统一启动框架初始化 FudpNode
+            ServiceBootstrapStarter config = ServiceBootstrapStarter.forFapiClient()
+                .setBr(br);
+            
+            bootstrapResult = ServiceBootstrap.bootstrapClient(config);
+            if (bootstrapResult == null) {
+                log.error("Failed to initialize FAPI client");
+                return;
             }
+            
+            fudpNode = bootstrapResult.getFudpNode();
+            settings = bootstrapResult.getSettings();
+            
+            // Set event listener so the client can receive incoming messages (e.g. relayed data)
+            fudpNode.setEventListener(new ClientEventListener());
+            
+            // 2. 服务发现与连接（新的自动发现逻辑）
+            fapiClient = bootstrapFapiClient();
+            if (fapiClient == null) {
+                System.out.println("Failed to connect to any FAPI service. Exiting.");
+                cleanup();
+                return;
+            }
+            
+            System.out.println("Connected to FAPI service: " + fapiClient.getServicePeerId());
+            
+            // 3. 主菜单
+            showMainMenu();
+            
+        } catch (Exception e) {
+            log.error("Failed to start FAPI Client", e);
+        } finally {
+            cleanup();
         }
-    }
-
-    private static void setDefaultSettingMap(Map<String, Object> settingMap) {
-        if (settingMap == null) {
-            return;
-        }
-        settingMap.putIfAbsent(Settings.BALANCE_TOLERANCE_PCT, Settings.DEFAULT_BALANCE_TOLERANCE_PCT);
-        settingMap.putIfAbsent(Settings.BALANCE_TOLERANCE_SAT_MIN, Settings.DEFAULT_BALANCE_TOLERANCE_SAT_MIN);
-        settingMap.putIfAbsent(Settings.BALANCE_DRIFT_ACCUM_PCT, Settings.DEFAULT_BALANCE_DRIFT_ACCUM_PCT);
-        settingMap.putIfAbsent(Settings.BALANCE_DRIFT_ACCUM_SAT, Settings.DEFAULT_BALANCE_DRIFT_ACCUM_SAT);
-        settingMap.putIfAbsent(Settings.BALANCE_DRIFT_STOP_PCT, Settings.DEFAULT_BALANCE_DRIFT_STOP_PCT);
-        settingMap.putIfAbsent(Settings.BALANCE_DRIFT_STOP_SAT, Settings.DEFAULT_BALANCE_DRIFT_STOP_SAT);
-        settingMap.putIfAbsent(Settings.BALANCE_MAX_CONSECUTIVE_DRIFT, Settings.DEFAULT_BALANCE_MAX_CONSECUTIVE_DRIFT);
-        settingMap.putIfAbsent(Settings.BALANCE_DRIFT_ACTION, Settings.DEFAULT_BALANCE_DRIFT_ACTION);
-        settingMap.putIfAbsent(Settings.BALANCE_DISPLAY_PRECISION, Settings.DEFAULT_BALANCE_DISPLAY_PRECISION);
-        settingMap.putIfAbsent(NodeConfig.FUDP_PORT, 8501L);
-        settingMap.putIfAbsent(NodeConfig.FUDP_DATA_DIR, "~/.fudp_client");
-    }
-
-    private static boolean tryBootstrap() {
-        if (fapiClient != null) {
-            return true;
-        }
-        System.out.println("Bootstrapping FAPI service via default seeds...");
-        if (bootstrapAndPersist(FapiClient.loadDefaultEndpoints(), "bootstrap")) {
-            return true;
-        }
-        System.out.println("Bootstrap failed. Please configure manually.");
-        return false;
     }
     
-    public static void basicApi() {
-        Menu menu = new Menu("Basic APIs");
-        menu.add("ping", StartFapiClient::ping);
-        menu.add("bestBlock", StartFapiClient::bestBlock);
-        menu.add("bestHeight", StartFapiClient::bestHeight);
-        menu.add("chainInfo", StartFapiClient::chainInfo);
-        menu.add("blockTimeHistory", StartFapiClient::blockTimeHistory);
-        menu.add("difficultyHistory", StartFapiClient::difficultyHistory);
-        menu.add("hashRateHistory", StartFapiClient::hashRateHistory);
-        menu.add("totals", StartFapiClient::totals);
-
+    /**
+     * 服务发现与连接
+     * 优先级：1.默认服务 → 2.链上服务列表 → 3.手动输入
+     */
+    private static FapiClient bootstrapFapiClient() {
+        System.out.println("Discovering FAPI services...");
+        
+        // 1. 尝试默认服务端点
+        DiscoveryResult discovery = FapiServiceDiscovery.discoverViaDefaults(fudpNode);
+        
+        if (discovery != null && discovery.getServices() != null && !discovery.getServices().isEmpty()) {
+            // 创建临时客户端
+            FapiClient tempClient = new FapiClient(fudpNode, discovery.getPeerId(),
+                    discovery.getServices().get(0).getId(), 
+                    FapiDefaults.DEFAULT_REQUEST_TIMEOUT_SEC, settings);
+            
+            // 2. 查询链上FAPI服务商列表
+            List<Service> providers = FapiServiceDiscovery.fetchFapiProviders(tempClient);
+            
+            if (!providers.isEmpty()) {
+                // 显示服务列表供用户选择
+                Service selected = selectService(providers);
+                if (selected != null) {
+                    FapiClient client = connectToService(selected);
+                    if (client != null) {
+                        return client;
+                    }
+                }
+            }
+            
+            // 没有链上服务或用户选择当前连接
+            System.out.println("Using current connection: " + discovery.getPeerId());
+            return tempClient;
+        }
+        
+        // 3. 默认服务全部失败，提示手动输入
+        System.out.println("\nCould not connect to default services.");
+        System.out.println("Default endpoints tried:");
+        for (String ep : FapiDefaults.DEFAULT_ENDPOINTS) {
+            System.out.println("  - " + ep);
+        }
+        
+        return manualConnect();
+    }
+    
+    /**
+     * 显示服务列表供用户选择
+     */
+    private static Service selectService(List<Service> services) {
+        System.out.println("\n=== Available FAPI Services ===");
+        for (int i = 0; i < services.size(); i++) {
+            Service s = services.get(i);
+            String url = s.getApiUrl() != null ? s.getApiUrl() : "N/A";
+            String name = s.getStdName() != null ? s.getStdName() : "Unknown";
+            String sidBrief = s.getId() != null && s.getId().length() >= 8 
+                    ? s.getId().substring(0, 8) + "..." : s.getId();
+            System.out.printf("%2d) %-20s  SID: %s  URL: %s\n", i + 1, name, sidBrief, url);
+        }
+        System.out.println(" 0) Use current connection");
+        System.out.println("-1) Enter address manually");
+        
+        Long choice = Inputer.inputLong(br, "Select service (default 0)", 0L);
+        
+        if (choice == null || choice == 0) {
+            return null; // 使用当前连接
+        } else if (choice > 0 && choice <= services.size()) {
+            return services.get(choice.intValue() - 1);
+        }
+        return null; // 其他情况返回null
+    }
+    
+    /**
+     * 连接到指定服务
+     */
+    private static FapiClient connectToService(Service service) {
+        if (service == null || service.getApiUrl() == null) {
+            return null;
+        }
+        
+        String host = FapiDefaults.getHost(service.getApiUrl());
+        int port = FapiDefaults.getPort(service.getApiUrl());
+        
+        System.out.println("Connecting to " + host + ":" + port + "...");
+        
+        DiscoveryResult result = FapiServiceDiscovery.discoverViaEndpoint(fudpNode, host, port);
+        if (result != null && result.getServices() != null && !result.getServices().isEmpty()) {
+            System.out.println("Connected successfully!");
+            return new FapiClient(fudpNode, result.getPeerId(), service.getId(),
+                    FapiDefaults.DEFAULT_REQUEST_TIMEOUT_SEC, settings);
+        }
+        
+        System.out.println("Failed to connect to " + service.getStdName());
+        return null;
+    }
+    
+    /**
+     * 手动输入服务地址
+     */
+    private static FapiClient manualConnect() {
+        while (true) {
+            String input = Inputer.inputString(br,
+                    "Enter FAPI service address (host:port, or 'q' to quit):");
+            
+            if (input == null || "q".equalsIgnoreCase(input.trim())) {
+                return null;
+            }
+            
+            String host = FapiDefaults.getHost(input);
+            int port = FapiDefaults.getPort(input);
+            
+            System.out.println("Connecting to " + host + ":" + port + "...");
+            
+            DiscoveryResult result = FapiServiceDiscovery.discoverViaEndpoint(fudpNode, host, port);
+            if (result != null && result.getServices() != null && !result.getServices().isEmpty()) {
+                System.out.println("Connected successfully!");
+                return new FapiClient(fudpNode, result.getPeerId(),
+                        result.getServices().get(0).getId(),
+                        FapiDefaults.DEFAULT_REQUEST_TIMEOUT_SEC, settings);
+            }
+            
+            System.out.println("Failed to connect. Please try again.");
+        }
+    }
+    
+    /**
+     * 显示主菜单
+     */
+    private static void showMainMenu() {
+        Menu menu = new Menu(CLIENT_NAME, StartFapiClient::cleanup);
+        menu.add("Basic APIs", StartFapiClient::basicApis);
+        menu.add("Entity Search", StartFapiClient::search);
+        menu.add("Entity By IDs", StartFapiClient::entityByIds);
+        menu.add("Wallet APIs", StartFapiClient::walletApis);
+        menu.add("Disk APIs", StartFapiClient::diskApis);
+        menu.add("DOCK APIs", StartFapiClient::dockApis);
+        menu.add("MAP APIs", StartFapiClient::mapApis);
+        menu.add("ROAD APIs", StartFapiClient::roadApis);
+        menu.add("Switch Service", StartFapiClient::switchService);
+        menu.add("FUDP Node Info", StartFapiClient::showFudpNodeInfo);
+        menu.add("Settings", StartFapiClient::showSettings);
         
         menu.showAndSelect(br);
     }
     
-    public static void walletApi() {
+    // ==================== API 菜单 ====================
+    
+    private static void basicApis() {
+        Menu menu = new Menu("Basic APIs");
+        menu.add("bestHeight", StartFapiClient::bestHeight);
+        menu.add("bestBlock", StartFapiClient::bestBlock);
+        menu.add("chainInfo", StartFapiClient::chainInfo);
+        menu.add("totals", StartFapiClient::totals);
+        menu.showAndSelect(br);
+    }
+    
+    private static void walletApis() {
         Menu menu = new Menu("Wallet APIs");
         menu.add("balanceByIds", StartFapiClient::balanceByIds);
         menu.add("broadcastTx", StartFapiClient::broadcastTx);
-        menu.add("decodeTx", StartFapiClient::decodeTx);
         menu.add("estimateFee", StartFapiClient::estimateFee);
         menu.add("cashValid", StartFapiClient::cashValid);
-        menu.add("getUtxo", StartFapiClient::getUtxo);
-        
         menu.showAndSelect(br);
     }
     
-    private static void bestBlock() {
-        if (fapiClient == null) {
-            System.out.println("FAPI Client not configured.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-        
-        System.out.println("Requesting bestBlock...");
-        Block block = fapiClient.bestBlock();
-        if (block != null) {
-            JsonUtils.printJson(block);
-        } else {
-            System.out.println("Failed to get best block.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
-        }
-        Menu.anyKeyToContinue(br);
+    private static void diskApis() {
+        Menu menu = new Menu("Disk APIs");
+        menu.add("put (temporary storage)", StartFapiClient::diskPut);
+        menu.add("carve (permanent storage)", StartFapiClient::diskCarve);
+        menu.add("get (download by DID)", StartFapiClient::diskGet);
+        menu.add("check (file info)", StartFapiClient::diskCheck);
+        menu.add("list (query files)", StartFapiClient::diskList);
+        menu.showAndSelect(br);
     }
+    
+    private static void dockApis() {
+        Menu menu = new Menu("DOCK APIs (Store-and-Forward Messaging)");
+        menu.add("put (store for recipients)", StartFapiClient::dockPut);
+        menu.add("get (retrieve by dockId)", StartFapiClient::dockGet);
+        menu.add("list (list items)", StartFapiClient::dockList);
+        menu.add("check (item status)", StartFapiClient::dockCheck);
+        menu.add("delete (remove item)", StartFapiClient::dockDelete);
+        menu.add("extend (extend TTL)", StartFapiClient::dockExtend);
+        menu.showAndSelect(br);
+    }
+    
+    private static void mapApis() {
+        Menu menu = new Menu("MAP APIs (FID-to-Address Mapping)");
+        menu.add("register (register self)", StartFapiClient::mapRegister);
+        menu.add("find (find FID)", StartFapiClient::mapFind);
+        menu.add("unregister (unregister self)", StartFapiClient::mapUnregister);
+        menu.add("list (all registered)", StartFapiClient::mapList);
+        menu.add("stats (service statistics)", StartFapiClient::mapStats);
+        menu.showAndSelect(br);
+    }
+    
+    // ==================== API 实现 ====================
     
     private static void bestHeight() {
         if (fapiClient == null) {
-            System.out.println("FAPI Client not configured.");
+            System.out.println("Not connected to FAPI service.");
             Menu.anyKeyToContinue(br);
             return;
         }
@@ -178,222 +298,77 @@ public class StartFapiClient {
         System.out.println("Requesting bestHeight...");
         Long height = fapiClient.bestHeight();
         if (height != null) {
-        System.out.println("Best height: " + height);
+            System.out.println("Best height: " + height);
+            System.out.println(fapiClient.getLastResponse().toNiceJson());
+            if (fapiClient.getLastBalance() != null) {
+                System.out.println("Balance: " + FchUtils.satoshiToCoin(fapiClient.getLastBalance()) + " FCH");
+            }
         } else {
             System.out.println("Failed to get best height.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
     }
-
-    private static void chainInfo() {
-        if (!ensureClientConfigured()) {
+    
+    private static void bestBlock() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
             return;
         }
-
-        String heightInput = Inputer.inputString(br, "Input height (optional, Enter for best):");
-        Long height = null;
-        if (heightInput != null && !heightInput.isBlank()) {
-            try {
-                height = Long.parseLong(heightInput.trim());
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid height.");
-                Menu.anyKeyToContinue(br);
-                return;
-            }
+        
+        System.out.println("Requesting bestBlock...");
+        Object block = fapiClient.bestBlock();
+        if (block != null) {
+            JsonUtils.printJson(block);
+        } else {
+            System.out.println("Failed to get best block.");
+            printLastError();
         }
-
-        System.out.println("Requesting chainInfo" + (height != null ? (" at height " + height) : " (best)") + "...");
-        FchChainInfo info = fapiClient.chainInfo(height);
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void chainInfo() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Requesting chainInfo...");
+        Object info = fapiClient.chainInfo(null);
         if (info != null) {
             JsonUtils.printJson(info);
         } else {
             System.out.println("Failed to get chain info.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
-    }
-
-    private static void blockTimeHistory() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-
-        HistoryParams params = inputHistoryParams();
-        if (params == null) {
-            return;
-        }
-
-        System.out.println("Requesting blockTimeHistory...");
-        Map<Long, Long> result = fapiClient.blockTimeHistory(params.startTime, params.endTime, params.count);
-        printHistoryResult("blockTimeHistory", result);
-    }
-
-    private static void difficultyHistory() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-
-        HistoryParams params = inputHistoryParams();
-        if (params == null) {
-            return;
-        }
-
-        System.out.println("Requesting difficultyHistory...");
-        Map<Long, String> result = fapiClient.difficultyHistory(params.startTime, params.endTime, params.count);
-        printHistoryResult("difficultyHistory", result);
-    }
-
-    private static void hashRateHistory() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-
-        HistoryParams params = inputHistoryParams();
-        if (params == null) {
-            return;
-        }
-
-        System.out.println("Requesting hashRateHistory...");
-        Map<Long, String> result = fapiClient.hashRateHistory(params.startTime, params.endTime, params.count);
-        printHistoryResult("hashRateHistory", result);
-    }
-    
-    private static void ping() {
-        if (fudpNode == null) {
-            System.out.println("FUDP Node not started.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-        
-        String peerId;
-        // Use configured service peer ID if available
-        if (fapiClient != null && fapiClient.getServicePeerId() != null) {
-            peerId = fapiClient.getServicePeerId();
-            System.out.println("Using configured service peer ID: " + peerId);
-        } else {
-            // Only ask if no service is configured
-            peerId = Inputer.inputString(br, "Input peer FID to ping:");
-            if (peerId.isEmpty()) {
-                System.out.println("No peer ID provided.");
-                Menu.anyKeyToContinue(br);
-                return;
-            }
-        }
-        
-        try {
-            fudpNode.ping(peerId);
-            System.out.println("Ping sent to " + peerId);
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-        }
-        Menu.anyKeyToContinue(br);
-    }
-    
-
-    
-    private static boolean ensureClientConfigured() {
-        if (fapiClient != null) {
-            return true;
-        }
-        System.out.println("FAPI Client not configured.");
-        Menu.anyKeyToContinue(br);
-        return false;
-    }
-
-    private static <T> void entityByIds() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-
-        String entityName = Inputer.inputString(br, "Input entity name:");
-        if (entityName == null || entityName.isBlank()) {
-            System.out.println("Entity name is required.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        entityName = entityName.trim().toLowerCase();
-        @SuppressWarnings("unchecked")
-        Class<T> clazz = (Class<T>) FcEntity.getEntityClass(entityName);
-        if (clazz == null) {
-            System.out.println("Unsupported entity: " + entityName);
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        String[] ids = Inputer.inputStringArrayWithSeparator(br, "IDs", ",");
-        if (ids.length == 0) {
-            System.out.println("At least one ID is required.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-        System.out.println("Requesting entityByIds for " + entityName + "...");
-        Map<String, T> result = fapiClient.entityByIds(entityName, clazz, ids);
-        if (result != null) {
-            System.out.println("Got " + result.size() + " items.");
-            JsonUtils.printJson(fapiClient.getLastResponse());
-        } else {
-            System.out.println("Failed to get " + entityName + " items.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static <T> void entitySearch() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-
-        String entityName = Inputer.inputString(br, "Input entity name:");
-        if (entityName == null || entityName.isBlank()) {
-            System.out.println("Entity name is required.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        entityName = entityName.trim().toLowerCase();
-        @SuppressWarnings("unchecked")
-        Class<T> clazz = (Class<T>) FcEntity.getEntityClass(entityName);
-        if (clazz == null) {
-            System.out.println("Unsupported entity: " + entityName);
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        entitySearch(entityName, clazz, DEFAULT_SIZE, "id:asc");
     }
     
     private static void totals() {
-        if (!ensureClientConfigured()) {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
             return;
         }
         
-        System.out.println("Requesting entity list (totals)...");
+        System.out.println("Requesting totals...");
         Map<String, String> result = fapiClient.totals();
-        if (result != null && !result.isEmpty()) {
-            System.out.println("Got " + result.size() + " entities:");
-            if (fapiClient.getLastResponse() != null) {
-                System.out.println("\nResponse details:");
-                JsonUtils.printJson(fapiClient.getLastResponse());
-            }
+        if (result != null) {
+            System.out.println("Entity counts:");
+            JsonUtils.printJson(result);
         } else {
-            System.out.println("Failed to get entity list.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            System.out.println("Failed to get totals.");
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
     }
     
     private static void balanceByIds() {
-        if (!ensureClientConfigured()) {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
             return;
         }
         
@@ -407,27 +382,27 @@ public class StartFapiClient {
         System.out.println("Requesting balances...");
         Map<String, Long> result = fapiClient.balanceByIds(fids);
         if (result != null) {
-            System.out.println("Got " + result.size() + " balances:");
+            System.out.println("Balances:");
             for (Map.Entry<String, Long> entry : result.entrySet()) {
-                System.out.println(entry.getKey() + ": " + utils.FchUtils.satoshiToCoin(entry.getValue()) + " FCH");
+                System.out.println("  " + entry.getKey() + ": " + FchUtils.satoshiToCoin(entry.getValue()) + " FCH");
             }
         } else {
             System.out.println("Failed to get balances.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
     }
     
     private static void broadcastTx() {
-        if (!ensureClientConfigured()) {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
             return;
         }
         
-        String rawTx = Inputer.inputString(br, "Input raw transaction (hex):");
+        String rawTx = Inputer.inputString(br, "Enter raw transaction (hex):");
         if (rawTx == null || rawTx.isEmpty()) {
-            System.out.println("Raw transaction is required.");
+            System.out.println("Transaction is required.");
             Menu.anyKeyToContinue(br);
             return;
         }
@@ -439,735 +414,1157 @@ public class StartFapiClient {
             System.out.println("TX ID: " + txId);
         } else {
             System.out.println("Failed to broadcast transaction.");
-            if(fapiClient.getLastResponse()!=null)
-                System.out.println(new Gson().toJson(fapiClient.getLastResponse()));
-            else if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
-        }
-        Menu.anyKeyToContinue(br);
-    }
-    
-    private static void decodeTx() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-        
-        String rawTx = Inputer.inputString(br, "Input raw transaction (hex):");
-        if (rawTx == null || rawTx.isEmpty()) {
-            System.out.println("Raw transaction is required.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-        
-        System.out.println("Decoding transaction...");
-        Object decoded = fapiClient.decodeTx(rawTx);
-        if (decoded != null) {
-            System.out.println("Decoded transaction:");
-            JsonUtils.printJson(decoded);
-        } else {
-            System.out.println("Failed to decode transaction.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
     }
     
     private static void estimateFee() {
-        if (!ensureClientConfigured()) {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
             return;
         }
         
-        System.out.println("Note: Specifying blocks uses estimatesmartfee, leaving empty uses estimatefee");
-        String nBlocksStr = Inputer.inputString(br, "Input number of blocks (optional, Enter for default):");
-        Integer nBlocks = null;
-        if (nBlocksStr != null && !nBlocksStr.isEmpty()) {
-            try {
-                nBlocks = Integer.parseInt(nBlocksStr);
-                if (nBlocks <= 0) {
-                    System.out.println("Invalid number, using default (no blocks specified).");
-                    nBlocks = null;
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid number, using default (no blocks specified).");
-                nBlocks = null;
-            }
-        }
-        
-        System.out.println("Estimating fee" + (nBlocks != null ? " for " + nBlocks + " blocks..." : "..."));
-        Double feeRate = fapiClient.estimateFee(nBlocks);
+        System.out.println("Estimating fee...");
+        Double feeRate = fapiClient.estimateFee(null);
         if (feeRate != null) {
             System.out.println("Estimated fee rate: " + feeRate + " FCH/KB");
         } else {
             System.out.println("Failed to estimate fee.");
-            if(fapiClient.getLastResponse()!=null)
-                System.out.println(new Gson().toJson(fapiClient.getLastResponse()));
-            else if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
     }
     
     private static void cashValid() {
-        if (!ensureClientConfigured()) {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
             return;
         }
         
-        String fid = Inputer.inputString(br, "Input FID:");
+        String fid = Inputer.inputString(br, "Enter FID:");
         if (fid == null || fid.isEmpty()) {
             System.out.println("FID is required.");
             Menu.anyKeyToContinue(br);
             return;
         }
         
-        String amountStr = Inputer.inputString(br, "Input amount (FCH, optional):");
-        Double amount = null;
-        if (amountStr != null && !amountStr.isEmpty()) {
-            try {
-                amount = Double.parseDouble(amountStr);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid amount.");
-                Menu.anyKeyToContinue(br);
-                return;
-            }
-        }
-        
-        String cdStr = Inputer.inputString(br, "Input CD (optional):");
-        Long cd = null;
-        if (cdStr != null && !cdStr.isEmpty()) {
-            try {
-                cd = Long.parseLong(cdStr);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid CD.");
-                Menu.anyKeyToContinue(br);
-                return;
-            }
-        }
-        
         System.out.println("Requesting valid cashes...");
-        List<Cash> result = fapiClient.cashValid(fid, amount, cd, null, 1, 0);
+        List<Cash> result = fapiClient.cashValid(fid, null, null, null, 1, 0);
         if (result != null) {
-            System.out.println("Got " + result.size() + " valid cashes:");
+            System.out.println("Found " + result.size() + " valid cashes:");
             JsonUtils.printJson(result);
         } else {
             System.out.println("Failed to get valid cashes.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
+            printLastError();
         }
         Menu.anyKeyToContinue(br);
     }
     
-    private static void getUtxo() {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-        
-        String address = Inputer.inputString(br, "Input address (FID):");
-        if (address == null || address.isEmpty()) {
-            System.out.println("Address is required.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-        
-        String amountStr = Inputer.inputString(br, "Input amount (FCH, optional):");
-        Double amount = null;
-        if (amountStr != null && !amountStr.isEmpty()) {
-            try {
-                amount = Double.parseDouble(amountStr);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid amount.");
-                Menu.anyKeyToContinue(br);
-                return;
-            }
-        }
-        
-        String cdStr = Inputer.inputString(br, "Input CD (optional):");
-        Long cd = null;
-        if (cdStr != null && !cdStr.isEmpty()) {
-            try {
-                cd = Long.parseLong(cdStr);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid CD.");
-                Menu.anyKeyToContinue(br);
-                return;
-            }
-        }
-        
-        System.out.println("Requesting UTXOs...");
-        List<data.apipData.Utxo> result = fapiClient.getUtxo(address, amount, cd);
-        if (result != null) {
-            System.out.println("Got " + result.size() + " UTXOs:");
-            JsonUtils.printJson(result);
-        } else {
-            System.out.println("Failed to get UTXOs.");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static <T> void entitySearch(String entityName, Class<T> clazz, int defaultSize, String defaultSort) {
-        if (!ensureClientConfigured()) {
-            return;
-        }
-
-        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
-        if (fcdsl == null) return;
-
-        System.out.println("Requesting entitySearch for " + entityName + "...");
-        List<T> result = fapiClient.entitySearch(entityName, fcdsl, clazz);
-        if (result != null) {
-            System.out.println("Got " + result.size() + " items.");
-            JsonUtils.printJson(fapiClient.getLastResponse());
-        } else {
-            System.out.println("Failed to search " + entityName + ".");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static HistoryParams inputHistoryParams() {
-        HistoryParams params = new HistoryParams();
-
-        String startTimeInput = Inputer.inputString(br, "Start time (unix seconds, optional):");
-        if (startTimeInput != null && !startTimeInput.isBlank()) {
-            try {
-                params.startTime = Long.parseLong(startTimeInput.trim());
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid start time.");
-                Menu.anyKeyToContinue(br);
-                return null;
-            }
-        }
-
-        String endTimeInput = Inputer.inputString(br, "End time (unix seconds, optional):");
-        if (endTimeInput != null && !endTimeInput.isBlank()) {
-            try {
-                params.endTime = Long.parseLong(endTimeInput.trim());
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid end time.");
-                Menu.anyKeyToContinue(br);
-                return null;
-            }
-        }
-
-        String countInput = Inputer.inputString(br, "Count (optional, default " + FchChainInfo.DEFAULT_COUNT + "):");
-        if (countInput != null && !countInput.isBlank()) {
-            try {
-                params.count = Integer.parseInt(countInput.trim());
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid count.");
-                Menu.anyKeyToContinue(br);
-                return null;
-            }
-        }
-
-        return params;
-    }
-
-    private static <K, V> void printHistoryResult(String name, Map<K, V> result) {
-        if (result != null) {
-            System.out.println("Got " + result.size() + " items.");
-            JsonUtils.printJson(result);
-        } else {
-            System.out.println("Failed to get " + name + ".");
-            if (fapiClient.getLastError() != null) {
-                System.out.println("Error: " + fapiClient.getLastError().getMessage());
-            }
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static class HistoryParams {
-        Long startTime;
-        Long endTime;
-        Integer count;
-    }
-
-    public static void generalQuery() {
+    // ==================== Disk API 实现 ====================
+    
+    private static void diskPut() {
         if (fapiClient == null) {
-            System.out.println("FAPI Client not configured.");
+            System.out.println("Not connected to FAPI service.");
             Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String filePath = Inputer.inputString(br, "Enter file path to upload:");
+        if (filePath == null || filePath.isEmpty()) {
+            System.out.println("File path is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+            if (!java.nio.file.Files.exists(path)) {
+                System.out.println("File not found: " + filePath);
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+            
+            long fileSize = java.nio.file.Files.size(path);
+            System.out.println("Uploading " + ProgressBar.formatBytes(fileSize) + " (temporary storage)...");
+            
+            ProgressBar progressBar = new ProgressBar("Uploading", fileSize);
+            data.fcData.DiskItem result = fapiClient.diskPut(path.toFile(), null, progressBar::update);
+            
+            if (result != null) {
+                progressBar.finish();
+                System.out.println("Upload successful!");
+                System.out.println("DID: " + result.getId());
+                System.out.println("Size: " + result.getSize() + " bytes");
+                System.out.println("Since: " + result.getSince());
+                System.out.println("Expires: " + result.getExpire());
+            } else {
+                progressBar.fail();
+                System.out.println("Upload failed.");
+                printLastError();
+            }
+        } catch (java.io.IOException e) {
+            System.out.println("Error reading file: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void diskCarve() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String filePath = Inputer.inputString(br, "Enter file path to upload (permanent):");
+        if (filePath == null || filePath.isEmpty()) {
+            System.out.println("File path is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+            if (!java.nio.file.Files.exists(path)) {
+                System.out.println("File not found: " + filePath);
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+            
+            long fileSize = java.nio.file.Files.size(path);
+            System.out.println("Uploading " + ProgressBar.formatBytes(fileSize) + " (permanent storage)...");
+            
+            ProgressBar progressBar = new ProgressBar("Carving", fileSize);
+            data.fcData.DiskItem result = fapiClient.diskCarve(path.toFile(), progressBar::update);
+            
+            if (result != null) {
+                progressBar.finish();
+                System.out.println("Upload successful (permanent)!");
+                System.out.println("DID: " + result.getId());
+                System.out.println("Size: " + result.getSize() + " bytes");
+                System.out.println("Since: " + result.getSince());
+                System.out.println("Expires: " + (result.getExpire() == null ? "Never (permanent)" : result.getExpire()));
+            } else {
+                progressBar.fail();
+                System.out.println("Upload failed.");
+                printLastError();
+            }
+        } catch (java.io.IOException e) {
+            System.out.println("Error reading file: " + e.getMessage());
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void diskGet() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String did = Inputer.inputString(br, "Enter DID (64 hex chars):");
+        if (did == null || did.isEmpty()) {
+            System.out.println("DID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String savePath = Inputer.inputString(br, "Enter save path:");
+        if (savePath == null || savePath.isEmpty()) {
+            System.out.println("Save path is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        // First check the file to get the expected size for the progress bar
+        System.out.println("Checking file metadata...");
+        data.fcData.DiskItem checkResult = fapiClient.diskCheck(did);
+        long expectedSize = (checkResult != null && checkResult.getSize() > 0) 
+                ? checkResult.getSize() : -1;
+        
+        if (expectedSize > 0) {
+            System.out.println("File size: " + ProgressBar.formatBytes(expectedSize));
+        }
+        System.out.println("Downloading file...");
+        
+        ProgressBar progressBar = new ProgressBar("Downloading", expectedSize);
+        java.io.File outputFile = new java.io.File(savePath);
+        data.fcData.DiskItem metadata = fapiClient.diskGet(did, outputFile, progressBar::update);
+        
+        if (metadata != null && outputFile.exists()) {
+            progressBar.finish();
+            System.out.println("Download successful!");
+            System.out.println("DID: " + metadata.getId());
+            System.out.println("Size: " + ProgressBar.formatBytes(outputFile.length()));
+            System.out.println("Since: " + metadata.getSince());
+            System.out.println("Expires: " + metadata.getExpire());
+            System.out.println("File saved to: " + savePath);
+        } else {
+            progressBar.fail();
+            System.out.println("Download failed or file not found.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void diskCheck() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String did = Inputer.inputString(br, "Enter DID (64 hex chars):");
+        if (did == null || did.isEmpty()) {
+            System.out.println("DID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Checking file...");
+        data.fcData.DiskItem result = fapiClient.diskCheck(did);
+        if (result != null) {
+            System.out.println("File found!");
+            System.out.println("DID: " + result.getId());
+            System.out.println("Size: " + result.getSize() + " bytes");
+            System.out.println("Since: " + result.getSince());
+            System.out.println("Expires: " + (result.getExpire() == null ? "Never (permanent)" : result.getExpire()));
+        } else {
+            System.out.println("File not found or check failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void diskList() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Query stored files (Enter for default query)...");
+        
+        Fcdsl fcdsl = new Fcdsl();
+        Long sizeLimit = Inputer.inputLong(br, "Max results (default 20)", 20L);
+        if (sizeLimit != null && sizeLimit > 0) {
+            fcdsl.addSize(sizeLimit.intValue());
+        }
+        
+        System.out.println("Listing files...");
+        java.util.List<data.fcData.DiskItem> result = fapiClient.diskList(fcdsl);
+        
+        if (result != null) {
+            System.out.println("Found " + result.size() + " files:");
+            for (data.fcData.DiskItem item : result) {
+                String expire = item.getExpire() == null ? "permanent" : String.valueOf(item.getExpire());
+                System.out.printf("  DID: %s  Size: %d  Expire: %s%n", 
+                        item.getId(), item.getSize(), expire);
+            }
+        } else {
+            System.out.println("Query failed or returned null.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    // ==================== DOCK API 实现 ====================
+    
+    private static void dockPut() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        // Get input data (file or text)
+        System.out.println("Enter data to store:");
+        System.out.println("  1) Text input");
+        System.out.println("  2) File input");
+        Long choice = Inputer.inputLong(br, "Choose input type", 1L);
+        
+        byte[] data;
+        if (choice != null && choice == 2) {
+            String filePath = Inputer.inputString(br, "Enter file path:");
+            if (filePath == null || filePath.isEmpty()) {
+                System.out.println("File path is required.");
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+            try {
+                java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+                if (!java.nio.file.Files.exists(path)) {
+                    System.out.println("File not found: " + filePath);
+                    Menu.anyKeyToContinue(br);
+                    return;
+                }
+                data = java.nio.file.Files.readAllBytes(path);
+            } catch (java.io.IOException e) {
+                System.out.println("Error reading file: " + e.getMessage());
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+        } else {
+            String text = Inputer.inputString(br, "Enter text to store:");
+            if (text == null || text.isEmpty()) {
+                System.out.println("Data is required.");
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+            data = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
+        
+        // Get recipients
+        String[] recipientsArray = Inputer.inputStringArrayWithSeparator(br, "Recipients FIDs (comma-separated)", ",");
+        if (recipientsArray.length == 0) {
+            System.out.println("At least one recipient is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        java.util.List<String> recipients = java.util.Arrays.asList(recipientsArray);
+        
+        // Get maxDays
+        Long maxDays = Inputer.inputLong(br, "Max days to store (default = server default, 0 = default)", 0L);
+        Integer maxDaysInt = (maxDays != null && maxDays > 0) ? maxDays.intValue() : null;
+        
+        // Get target DOCK URL for forwarding (optional)
+        String targetDockUrl = Inputer.inputString(br, "Target DOCK URL for forwarding (Enter to skip, e.g., host:port):");
+        if (targetDockUrl != null && targetDockUrl.isEmpty()) {
+            targetDockUrl = null;
+        }
+        
+        // Confirm forwarding
+        if (targetDockUrl != null) {
+            System.out.println("\n*** FORWARDING MODE ***");
+            System.out.println("Data will be forwarded to: " + targetDockUrl);
+            System.out.println("You will be charged: local forwarding fee + remote DOCK storage fee");
+            if (!Inputer.askIfYes(br, "Continue with forwarding?")) {
+                System.out.println("Cancelled.");
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+        }
+        
+        System.out.println("Storing " + data.length + " bytes for " + recipients.size() + " recipient(s)...");
+        if (targetDockUrl != null) {
+            System.out.println("Forwarding to: " + targetDockUrl);
+        }
+        
+        DockItem result = fapiClient.dockPut(data, recipients, maxDaysInt, targetDockUrl);
+        if (result != null) {
+            System.out.println("\nStore successful!");
+            System.out.println("Dock ID: " + result.getId());
+            System.out.println("Size: " + result.getSize() + " bytes");
+            System.out.println("Max Days: " + result.getMaxDays());
+            System.out.println("Expire Height: " + result.getExpireHeight());
+            if (result.getStorageFee() != null) {
+                System.out.println("Storage Fee: " + result.getStorageFee() + " satoshi");
+            }
+            if (result.getIngressFee() != null) {
+                System.out.println("Ingress Fee: " + result.getIngressFee() + " satoshi");
+            }
+            // Check if response data has forwarding info (via lastResponse)
+            if (fapiClient.getLastResponse() != null && fapiClient.getLastResponse().getData() != null) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> respData = utils.ObjectUtils.objectToMap(
+                            fapiClient.getLastResponse().getData(), String.class, Object.class);
+                    if (respData != null) {
+                        if (Boolean.TRUE.equals(respData.get("forwarded"))) {
+                            System.out.println("\n--- Forwarding Details ---");
+                            System.out.println("Target DOCK: " + respData.get("targetDockUrl"));
+                            System.out.println("Local Fee: " + respData.get("localFee") + " satoshi");
+                            System.out.println("Remote Fee: " + respData.get("remoteFee") + " satoshi");
+                            System.out.println("Total Fee: " + respData.get("totalFee") + " satoshi");
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore parsing errors
+                }
+            }
+        } else {
+            System.out.println("Store failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void dockGet() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String dockId = Inputer.inputString(br, "Enter Dock ID:");
+        if (dockId == null || dockId.isEmpty()) {
+            System.out.println("Dock ID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String savePath = Inputer.inputString(br, "Enter save path (or Enter to display as text):");
+        
+        System.out.println("Retrieving data...");
+        
+        fapi.client.FapiClient.DockGetResult result = fapiClient.dockGetWithMetadata(dockId);
+        if (result != null && result.content() != null) {
+            System.out.println("\nRetrieve successful!");
+            System.out.println("Size: " + result.content().length + " bytes");
+            if (result.metadata() != null) {
+                System.out.println("Sender: " + result.metadata().getSender());
+            }
+            
+            if (savePath != null && !savePath.isEmpty()) {
+                try {
+                    java.nio.file.Files.write(java.nio.file.Paths.get(savePath), result.content());
+                    System.out.println("File saved to: " + savePath);
+                } catch (java.io.IOException e) {
+                    System.out.println("Error saving file: " + e.getMessage());
+                }
+            } else {
+                // Display as text if small enough
+                if (result.content().length <= 1000) {
+                    System.out.println("\nContent:");
+                    System.out.println(new String(result.content(), java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    System.out.println("\n(Content too large to display, use save path to save to file)");
+                }
+            }
+        } else {
+            System.out.println("Retrieve failed or item not found.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void dockList() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Listing DOCK items...");
+        
+        Fcdsl fcdsl = new Fcdsl();
+        Long sizeLimit = Inputer.inputLong(br, "Max results (default 20)", 20L);
+        if (sizeLimit != null && sizeLimit > 0) {
+            fcdsl.addSize(sizeLimit.intValue());
+        }
+        
+        java.util.List<DockItem> result = fapiClient.dockList(fcdsl);
+        if (result != null) {
+            System.out.println("Found " + result.size() + " items:");
+            for (DockItem item : result) {
+                System.out.printf("  ID: %s  Sender: %s  Size: %d  ExpireHeight: %s%n", 
+                        item.getId(), item.getSender(), item.getSize(), item.getExpireHeight());
+            }
+        } else {
+            System.out.println("Query failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void dockCheck() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String dockId = Inputer.inputString(br, "Enter Dock ID:");
+        if (dockId == null || dockId.isEmpty()) {
+            System.out.println("Dock ID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Checking item status...");
+        DockItem result = fapiClient.dockCheck(dockId);
+        if (result != null) {
+            System.out.println("\nItem found!");
+            System.out.println("ID: " + result.getId());
+            System.out.println("Sender: " + result.getSender());
+            System.out.println("Size: " + result.getSize() + " bytes");
+            System.out.println("Max Days: " + result.getMaxDays());
+            System.out.println("Create Height: " + result.getCreateHeight());
+            System.out.println("Expire Height: " + result.getExpireHeight());
+            System.out.println("Recipients: " + result.getRecipients());
+        } else {
+            System.out.println("Item not found or check failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void dockDelete() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String dockId = Inputer.inputString(br, "Enter Dock ID to delete:");
+        if (dockId == null || dockId.isEmpty()) {
+            System.out.println("Dock ID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        if (!Inputer.askIfYes(br, "Are you sure you want to delete this item?")) {
+            System.out.println("Cancelled.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Deleting item...");
+        java.util.Map<String, Object> result = fapiClient.dockDelete(dockId);
+        if (result != null) {
+            System.out.println("Delete successful!");
+            System.out.println("ID: " + result.get("id"));
+            System.out.println("Deleted: " + result.get("deleted"));
+            System.out.println("Refund: " + result.get("refund") + " satoshi");
+        } else {
+            System.out.println("Delete failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void dockExtend() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String dockId = Inputer.inputString(br, "Enter Dock ID to extend:");
+        if (dockId == null || dockId.isEmpty()) {
+            System.out.println("Dock ID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        Long extraDays = Inputer.inputLong(br, "Extra days to add:", 7L);
+        if (extraDays == null || extraDays <= 0) {
+            System.out.println("Extra days must be positive.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Extending TTL...");
+        java.util.Map<String, Object> result = fapiClient.dockExtend(dockId, extraDays.intValue());
+        if (result != null) {
+            System.out.println("Extend successful!");
+            System.out.println("ID: " + result.get("id"));
+            System.out.println("Extra Days: " + result.get("extraDays"));
+            System.out.println("New Expire Height: " + result.get("newExpireHeight"));
+            System.out.println("Additional Fee: " + result.get("additionalFee") + " satoshi");
+        } else {
+            System.out.println("Extend failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    // ==================== MAP API 实现 ====================
+    
+    private static void mapRegister() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Registering on MAP service...");
+        fapi.components.map.MapEntry entry = fapiClient.mapRegister();
+        if (entry != null) {
+            System.out.println("Registration successful!");
+            System.out.println("FID: " + entry.getFid());
+            System.out.println("Observed IP: " + entry.getObservedIp());
+            System.out.println("Observed Port: " + entry.getObservedPort());
+            System.out.println("Last Seen: " + new java.util.Date(entry.getLastSeen()));
+            System.out.println("Registered At: " + new java.util.Date(entry.getRegisteredAt()));
+            System.out.println("\nNote: Call register every ~25 seconds to maintain NAT mapping.");
+        } else {
+            System.out.println("Registration failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void mapFind() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String fid = Inputer.inputString(br, "Enter FID to find:");
+        if (fid == null || fid.isEmpty()) {
+            System.out.println("FID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Finding " + fid + "...");
+        fapi.components.map.MapEntry entry = fapiClient.mapFind(fid);
+        if (entry != null) {
+            System.out.println("Found!");
+            System.out.println("FID: " + entry.getFid());
+            System.out.println("Public Key: " + entry.getPubkey());
+            System.out.println("Observed IP: " + entry.getObservedIp());
+            System.out.println("Observed Port: " + entry.getObservedPort());
+            System.out.println("Last Seen: " + new java.util.Date(entry.getLastSeen()));
+            if (entry.getStale() != null && entry.getStale()) {
+                System.out.println("Status: STALE (may be unreachable)");
+            } else {
+                System.out.println("Status: Fresh");
+            }
+        } else {
+            System.out.println("FID not found or query failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void mapUnregister() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Unregistering from MAP service...");
+        boolean success = fapiClient.mapUnregister();
+        if (success) {
+            System.out.println("Unregistration successful!");
+        } else {
+            System.out.println("Unregistration failed (may not be registered).");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void mapList() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Listing all registered FIDs...");
+        java.util.List<fapi.components.map.MapEntry> entries = fapiClient.mapList();
+        if (entries != null) {
+            System.out.println("Found " + entries.size() + " registered FIDs:");
+            System.out.println();
+            System.out.printf("%-35s %-15s %-6s %s%n", "FID", "IP", "Port", "Last Seen");
+            System.out.println("-".repeat(80));
+            for (fapi.components.map.MapEntry entry : entries) {
+                String fidShort = entry.getFid().length() > 34 
+                        ? entry.getFid().substring(0, 34) + "..." 
+                        : entry.getFid();
+                String lastSeen = new java.text.SimpleDateFormat("MM-dd HH:mm:ss")
+                        .format(new java.util.Date(entry.getLastSeen()));
+                System.out.printf("%-35s %-15s %-6d %s%n", 
+                        fidShort, entry.getObservedIp(), entry.getObservedPort(), lastSeen);
+            }
+        } else {
+            System.out.println("Query failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void mapStats() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Getting MAP service statistics...");
+        java.util.Map<String, Object> stats = fapiClient.mapStats();
+        if (stats != null) {
+            System.out.println("=== MAP Service Statistics ===");
+            System.out.println("Total Entries: " + stats.get("totalEntries"));
+            System.out.println("Fresh Entries: " + stats.get("freshEntries"));
+            System.out.println("Stale Entries: " + stats.get("staleEntries"));
+            System.out.println("Fresh Threshold: " + stats.get("freshThresholdMs") + " ms");
+            System.out.println("Cleanup Threshold: " + stats.get("cleanupThresholdMs") + " ms");
+        } else {
+            System.out.println("Query failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    // ==================== ROAD API 菜单 ====================
+    
+    private static void roadApis() {
+        Menu menu = new Menu("ROAD APIs (Data Relay)");
+        menu.add("relay (send data to FID)", StartFapiClient::roadRelay);
+        menu.add("stats (service statistics)", StartFapiClient::roadStats);
+        menu.showAndSelect(br);
+    }
+    
+    // ==================== ROAD API 实现 ====================
+    
+    private static void roadRelay() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        // Support multiple target FIDs
+        System.out.println("Enter target FIDs (comma-separated for multiple):");
+        String targetFidsInput = Inputer.inputString(br, "Target FID(s):");
+        if (targetFidsInput == null || targetFidsInput.isEmpty()) {
+            System.out.println("Target FID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        // Parse comma-separated FIDs
+        java.util.List<String> targetFids = java.util.Arrays.stream(targetFidsInput.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(java.util.stream.Collectors.toList());
+        
+        if (targetFids.isEmpty()) {
+            System.out.println("At least one target FID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Enter data to relay:");
+        System.out.println("  1) Text input");
+        System.out.println("  2) File input");
+        Long choice = Inputer.inputLong(br, "Choose input type", 1L);
+        
+        byte[] data;
+        if (choice != null && choice == 2) {
+            // File input
+            String filePath = Inputer.inputString(br, "Enter file path:");
+            if (filePath == null || filePath.isEmpty()) {
+                System.out.println("File path is required.");
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+            try {
+                java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+                if (!java.nio.file.Files.exists(path)) {
+                    System.out.println("File not found: " + filePath);
+                    Menu.anyKeyToContinue(br);
+                    return;
+                }
+                data = java.nio.file.Files.readAllBytes(path);
+            } catch (java.io.IOException e) {
+                System.out.println("Error reading file: " + e.getMessage());
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+        } else {
+            // Text input
+            String text = Inputer.inputString(br, "Enter text to relay:");
+            if (text == null || text.isEmpty()) {
+                System.out.println("Data is required.");
+                Menu.anyKeyToContinue(br);
+                return;
+            }
+            data = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
+        
+        Long maxCost = Inputer.inputLong(br, "Max cost in satoshi (0 = no limit)", 0L);
+        if (maxCost == null) maxCost = 0L;
+
+        String targetRoad = Inputer.inputString(br, "Target ROAD URL (from freer.home.ROAD, empty for local only):");
+        if (targetRoad != null && targetRoad.isEmpty()) targetRoad = null;
+        
+        System.out.println("Relaying " + data.length + " bytes to " + targetFids.size() + " target(s)...");
+        
+        FapiClient.RoadRelayResult result = fapiClient.roadRelay(targetFids, data, maxCost, targetRoad);
+        if (result != null) {
+            System.out.println("\n=== Relay Result ===");
+            System.out.println("Overall success: " + result.success());
+            System.out.println("Code: " + result.code());
+            System.out.println("Message: " + result.message());
+            System.out.println("Success count: " + result.successCount() + "/" + result.totalTargets());
+            System.out.println("Failed count: " + result.failCount());
+            System.out.println("Total charged (in): " + result.chargedIn() + " satoshi");
+            System.out.println("Total charged (out): " + result.chargedOut() + " satoshi");
+            System.out.println("Total charged: " + result.totalCharged() + " satoshi");
+            
+            // Show per-target results
+            if (result.relayResults() != null && !result.relayResults().isEmpty()) {
+                System.out.println("\n--- Per-target Results ---");
+                for (java.util.Map.Entry<String, FapiClient.TargetRelayResult> entry : result.relayResults().entrySet()) {
+                    FapiClient.TargetRelayResult targetResult = entry.getValue();
+                    String status = targetResult.success() ? "OK" : "FAILED";
+                    System.out.println("  " + entry.getKey() + ": " + status + " - " + targetResult.message());
+                    if (targetResult.chainRelayed()) {
+                        System.out.println("    (chain relayed via: " + targetResult.relayedVia() + ")");
+                    }
+                    System.out.println("    Charged: in=" + targetResult.chargedIn() + ", out=" + targetResult.chargedOut());
+                }
+            }
+        } else {
+            System.out.println("Relay failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void roadStats() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Getting ROAD service statistics...");
+        java.util.Map<String, Object> stats = fapiClient.roadStats();
+        if (stats != null) {
+            System.out.println("=== ROAD Service Statistics ===");
+            System.out.println("Total Relays: " + stats.get("totalRelays"));
+            System.out.println("Successful Relays: " + stats.get("successfulRelays"));
+            System.out.println("Failed Relays: " + stats.get("failedRelays"));
+            System.out.println("Chain Relays: " + stats.get("chainRelays"));
+            System.out.println("Bytes In: " + stats.get("bytesIn"));
+            System.out.println("Bytes Out: " + stats.get("bytesOut"));
+            System.out.println("Total Charged In: " + stats.get("totalChargedIn") + " satoshi");
+            System.out.println("Total Charged Out: " + stats.get("totalChargedOut") + " satoshi");
+            System.out.println("Price per KB In: " + stats.get("pricePerKBIn") + " satoshi");
+            System.out.println("Price per KB Out: " + stats.get("pricePerKBOut") + " satoshi");
+            
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> errors = (java.util.Map<String, Object>) stats.get("errorCounts");
+            if (errors != null && !errors.isEmpty()) {
+                System.out.println("\nError Counts:");
+                for (java.util.Map.Entry<String, Object> e : errors.entrySet()) {
+                    System.out.println("  " + e.getKey() + ": " + e.getValue());
+                }
+            }
+        } else {
+            System.out.println("Query failed.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+    
+    private static void entityByIds() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String entityName = Inputer.inputString(br, "Entity name (e.g. block, tx, service):");
+        if (entityName == null || entityName.isBlank()) {
+            System.out.println("Entity name is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "IDs (comma separated)", ",");
+        if (ids.length == 0) {
+            System.out.println("At least one ID is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Requesting entityByIds for " + entityName + "...");
+        Map<String, Object> result = fapiClient.entityByIds(entityName, Object.class, ids);
+        if (result != null) {
+            System.out.println("Found " + result.size() + " items:");
+            JsonUtils.printJson(result);
+        } else {
+            System.out.println("Failed to get entities.");
+            printLastError();
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    private static void search() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        
+        System.out.println("Enter entity name (Enter to exit):");
+        String entityName = Inputer.inputString(br);
+        if (entityName == null || entityName.isEmpty()) {
             return;
         }
         
         Fcdsl fcdsl = new Fcdsl();
-        System.out.println("Input the index name. Enter to exit:");
-        String input = Inputer.inputString(br);
-        if ("".equals(input)) return;
-        fcdsl.setIndex(input);
-        
+        fcdsl.setEntity(entityName);
         fcdsl.promoteInput(br);
         
         if (fcdsl.isBadFcdsl()) {
-            System.out.println("FCDSL wrong:");
-            System.out.println(JsonUtils.toNiceJson(fcdsl));
+            System.out.println("Invalid FCDSL:");
+            JsonUtils.printJson(fcdsl);
             return;
         }
         
-        System.out.println(JsonUtils.toNiceJson(fcdsl));
+        System.out.println("FCDSL: " + JsonUtils.toNiceJson(fcdsl));
         Menu.anyKeyToContinue(br);
         
-        System.out.println("Requesting...");
-        FapiResponse response = fapiClient.general(fcdsl);
+        System.out.println("Executing query...");
+        FapiResponse response = fapiClient.query("base.search", fcdsl);
         JsonUtils.printJson(response);
         Menu.anyKeyToContinue(br);
     }
     
-    public static void settings() {
-        Menu menu = new Menu("Settings");
-        menu.add("Configure Service", StartFapiClient::configureService);
-        menu.add("Show Current Config", StartFapiClient::showConfig);
-        menu.add("Edit Setting Map", StartFapiClient::editSettingMap);
-        menu.add("FUDP Performance", StartFapiClient::showPerformanceStats);
+    /**
+     * 切换FAPI服务
+     */
+    private static void switchService() {
+        System.out.println("Discovering available FAPI services...");
+        List<Service> providers = FapiServiceDiscovery.fetchFapiProviders(fapiClient);
         
-        menu.showAndSelect(br);
-    }
-
-    // ==================== FUDP Performance Monitoring ====================
-    
-    private static void showPerformanceStats() {
-        if (fudpNode == null || !fudpNode.isRunning()) {
-            System.out.println("FUDP Node is not running.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        Menu statsMenu = new Menu("FUDP Performance Stats");
-        statsMenu.add("Node Overview", StartFapiClient::showNodeOverview);
-        statsMenu.add("Peer Details", StartFapiClient::showPeerDetails);
-        statsMenu.add("Ping Test", StartFapiClient::pingTestWithStats);
-        statsMenu.add("List Connected Peers", StartFapiClient::listConnectedPeers);
-
-        statsMenu.showAndSelect(br);
-    }
-
-    private static void showNodeOverview() {
-        if (fudpNode == null || !fudpNode.isRunning()) {
-            System.out.println("FUDP Node is not running.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        NodeStats stats = fudpNode.getNodeStats();
-        System.out.println("\n" + stats.toString());
-
-        if (!stats.getPeerStatsList().isEmpty()) {
-            System.out.println("\n--- Per-Peer Summary ---");
-            for (NodeStats.PeerStats ps : stats.getPeerStatsList()) {
-                System.out.println(ps.toString());
-            }
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static void showPeerDetails() {
-        if (fudpNode == null || !fudpNode.isRunning()) {
-            System.out.println("FUDP Node is not running.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        try {
-            System.out.print("Peer FID or alias: ");
-            String peer = br.readLine().trim();
-
-            NodeStats.PeerStats stats = fudpNode.getPeerStats(peer);
-            if (stats == null) {
-                System.out.println("Peer not found or not connected: " + peer);
-                Menu.anyKeyToContinue(br);
-                return;
-            }
-
-            System.out.println("\n=== Peer Statistics: " + stats.getPeerId() + " ===");
-            System.out.println("Connection State: " + stats.getState());
-            System.out.println();
-            System.out.println("--- Packet Stats ---");
-            System.out.println("  Sent:     " + stats.getPacketsSent());
-            System.out.println("  Received: " + stats.getPacketsReceived());
-            System.out.println("  Bytes Out: " + formatBytes(stats.getBytesOut()));
-            System.out.println("  Bytes In:  " + formatBytes(stats.getBytesIn()));
-            System.out.println();
-            System.out.println("--- Retransmit & Loss Stats ---");
-            System.out.println("  Retransmits:      " + stats.getRetransmitCount() + " (" + stats.getRetransmitRatePercent() + " retransmit rate)");
-            System.out.println("  Suspected Lost:   " + stats.getSuspectedLostCount() + " (triggered retransmit)");
-            System.out.println("  Recovered (ACKed):" + stats.getAckedAfterSuspectedLost() + " (false positives)");
-            System.out.println("  Effective Lost:   " + stats.getLostPacketCount() + " (" + stats.getLossRatePercent() + " loss rate)");
-            System.out.println();
-            System.out.println("--- RTT Stats ---");
-            System.out.println("  Smoothed RTT: " + stats.getSmoothedRttMs() + " ms");
-            System.out.println("  Min RTT:      " + stats.getMinRttMs() + " ms");
-            System.out.println("  RTT Variance: " + stats.getRttVarianceMs() + " ms");
-            System.out.println("  RTO:          " + stats.getRtoMs() + " ms");
-            System.out.println();
-            System.out.println("--- Congestion Control ---");
-            System.out.println("  State:           " + stats.getCcState());
-            System.out.println("  Congestion Wnd:  " + formatBytes(stats.getCongestionWindow()));
-            System.out.println("  Bytes In Flight: " + formatBytes(stats.getBytesInFlight()));
-
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static void pingTestWithStats() {
-        if (fudpNode == null || !fudpNode.isRunning()) {
-            System.out.println("FUDP Node is not running.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-
-        try {
-            // Use configured service peer ID if available
-            String peer;
-            if (fapiClient != null && fapiClient.getServicePeerId() != null) {
-                peer = fapiClient.getServicePeerId();
-                System.out.println("Using configured service peer ID: " + peer);
-            } else {
-                System.out.print("Peer FID or alias: ");
-                peer = br.readLine().trim();
-                if (peer.isEmpty()) {
-                    System.out.println("No peer ID provided.");
-                    Menu.anyKeyToContinue(br);
-                    return;
+        if (providers.isEmpty()) {
+            System.out.println("No FAPI services found on chain.");
+            
+            // 允许手动输入
+            String input = Inputer.inputString(br, "Enter service address manually (or Enter to cancel):");
+            if (input != null && !input.isBlank()) {
+                FapiClient newClient = manualConnectOnce(input);
+                if (newClient != null) {
+                    fapiClient = newClient;
+                    System.out.println("Switched to: " + fapiClient.getServicePeerId());
                 }
             }
-
-            System.out.print("Number of pings (default 5): ");
-            String countStr = br.readLine().trim();
-            int count = countStr.isEmpty() ? 5 : Integer.parseInt(countStr);
-
-            System.out.println("\nPinging " + peer + " with " + count + " packets...\n");
-
-            long totalRtt = 0;
-            long minRtt = Long.MAX_VALUE;
-            long maxRtt = 0;
-            int success = 0;
-            int failed = 0;
-
-            for (int i = 0; i < count; i++) {
-                try {
-                    long start = System.currentTimeMillis();
-                    PongMessage pong = fudpNode.pingAwaitPong(peer, false, 5000).get(5, TimeUnit.SECONDS);
-                    long rtt = System.currentTimeMillis() - start;
-
-                    System.out.printf("  Reply from %s: time=%d ms%n", peer, rtt);
-
-                    totalRtt += rtt;
-                    if (rtt < minRtt) minRtt = rtt;
-                    if (rtt > maxRtt) maxRtt = rtt;
-                    success++;
-                } catch (Exception e) {
-                    System.out.println("  Request timed out.");
-                    failed++;
-                }
-
-                // Wait 1 second between pings
-                if (i < count - 1) {
-                    Thread.sleep(1000);
-                }
-            }
-
-            System.out.println();
-            System.out.println("--- Ping Statistics for " + peer + " ---");
-            System.out.println("  Packets: Sent=" + count + ", Received=" + success + ", Lost=" + failed
-                    + " (" + (failed * 100 / count) + "% loss)");
-            if (success > 0) {
-                System.out.println("  RTT: min=" + minRtt + "ms, avg=" + (totalRtt / success) + "ms, max=" + maxRtt + "ms");
-            }
-
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-        }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static void listConnectedPeers() {
-        if (fudpNode == null) {
-            System.out.println("FUDP Node is not initialized.");
             Menu.anyKeyToContinue(br);
             return;
         }
-
-        List<Peer> peers = fudpNode.listPeers();
-        if (peers.isEmpty()) {
-            System.out.println("No connected peers.");
-        } else {
-            System.out.println("\n=== Connected Peers (" + peers.size() + ") ===");
-            for (int i = 0; i < peers.size(); i++) {
-                Peer peer = peers.get(i);
-                String alias = peer.getAlias() != null ? " (" + peer.getAlias() + ")" : "";
-                String address = peer.hasAddress() ? peer.getHost() + ":" + peer.getPort() : "no address";
-                System.out.println((i + 1) + ". " + peer.getId() + alias);
-                System.out.println("   Address: " + address);
+        
+        Service selected = selectService(providers);
+        if (selected != null) {
+            FapiClient newClient = connectToService(selected);
+            if (newClient != null) {
+                fapiClient = newClient;
+                System.out.println("Switched to: " + selected.getStdName());
             }
         }
-        Menu.anyKeyToContinue(br);
-    }
-
-    private static String formatBytes(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
-        if (bytes < 1024 * 1024 * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
-        return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
-    }
-
-    // ==================== End FUDP Performance Monitoring ====================
-
-    private static void editSettingMap() {
-        if (settings == null) {
-            System.out.println("Settings not loaded.");
-            Menu.anyKeyToContinue(br);
-            return;
-        }
-        setDefaultSettingMap(settings.getSettingMap());
-        settings.checkSetting(br);
         Menu.anyKeyToContinue(br);
     }
     
-    private static void configureService() {
-        configureFapiService();
-        Menu.anyKeyToContinue(br);
-    }
-
-    public static boolean bootstrapAndPersist(List<FapiClient.Endpoint> endpoints, String source) {
-        if (endpoints == null) return false;
-        for (FapiClient.Endpoint endpoint : endpoints) {
-            if (configureViaEndpoint(endpoint.host(), endpoint.port(), source)) {
-                return true;
-            }
+    /**
+     * 手动连接一次
+     */
+    private static FapiClient manualConnectOnce(String input) {
+        String host = FapiDefaults.getHost(input);
+        int port = FapiDefaults.getPort(input);
+        
+        System.out.println("Connecting to " + host + ":" + port + "...");
+        DiscoveryResult result = FapiServiceDiscovery.discoverViaEndpoint(fudpNode, host, port);
+        if (result != null && result.getServices() != null && !result.getServices().isEmpty()) {
+            System.out.println("Connected successfully!");
+            return new FapiClient(fudpNode, result.getPeerId(),
+                    result.getServices().get(0).getId(),
+                    FapiDefaults.DEFAULT_REQUEST_TIMEOUT_SEC, settings);
         }
-        return false;
-    }
-
-    public static boolean configureViaEndpoint(String host, int port, String source) {
-        if (fudpNode == null) {
-            System.out.println("FUDP node not ready, skip configuration.");
-            return false;
-        }
-        try {
-            System.out.println("Discovering peer via HELLO+PING at " + host + ":" + port + " (" + source + ")...");
-            FapiClient.DiscoveryResult discovery = FapiClient.discoverViaHelloAndPing(
-                    fudpNode,
-                    host,
-                    port,
-                    FapiClient.DEFAULT_HELLO_TIMEOUT_MS,
-                    FapiClient.DEFAULT_PING_TIMEOUT_MS
-            );
-            if (discovery == null) {
-                System.err.println("Discovery returned null for " + host + ":" + port);
-                return false;
-            }
-            System.out.println("Discovered peer FID: " + discovery.getPeerId());
-
-            List<Service> services = discovery.getServices();
-            if (services == null || services.isEmpty()) {
-                System.out.println("No FAPI services advertised in PONG. Ensure the server enables pong info.");
-                System.out.println("Pong data: " + (discovery.getPong() != null && discovery.getPong().getData() != null ? 
-                    new String(discovery.getPong().getData()) : "null"));
-                return false;
-            }
-            System.out.println("Found " + services.size() + " FAPI service(s).");
-
-            Service selected = "bootstrap".equalsIgnoreCase(source) ? services.get(0) : selectService(services);
-            if (selected == null) {
-                System.out.println("No service selected. FAPI Client not configured.");
-                return false;
-            }
-
-            System.out.println("Using service SID: " + selected.getId());
-            System.out.println("Service name: " + selected.getStdName());
-            fapiClient = new FapiClient(fudpNode, discovery.getPeerId(), selected.getId(), 30, settings);
-            persistFapiConfiguration(host, port, discovery, selected);
-            System.out.println("FAPI Client configured successfully.");
-            return true;
-        } catch (Exception e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            String msg = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
-            System.err.println("Failed to configure FAPI Client via HELLO/PING (" + host + ":" + port + "): " + msg);
-            System.err.println("Exception type: " + cause.getClass().getName());
-            cause.printStackTrace(System.err);
-        } catch (Throwable e) {
-            System.err.println("Unexpected error during FAPI configuration: " + e.getClass().getName());
-            e.printStackTrace(System.err);
-            throw new RuntimeException(e);
-        }
-        return false;
-    }
-    
-    private static void persistFapiConfiguration(String host, int port, FapiClient.DiscoveryResult discovery, Service selected) {
-        if (settings == null || settings.getConfig() == null) {
-            return;
-        }
-        Configure config = settings.getConfig();
-        if (config.getApiProviderMap() == null) {
-            config.setApiProviderMap(new HashMap<>());
-        }
-        if (config.getApiAccountMap() == null) {
-            config.setApiAccountMap(new HashMap<>());
-        }
-        ApiProvider provider = buildFapiProvider(host, port, selected);
-        config.getApiProviderMap().put(provider.getId(), provider);
-
-        ApiAccount account = buildFapiAccount(host, port, discovery, selected, provider);
-        config.getApiAccountMap().entrySet().removeIf(entry ->
-                entry.getValue() != null
-                        && provider.getId().equals(entry.getValue().getProviderId())
-                        && !entry.getKey().equals(account.getId()));
-        config.getApiAccountMap().put(account.getId(), account);
-
-        if (settings.getClientGroups() == null) {
-            settings.setClientGroups(new HashMap<>());
-        }
-        ClientGroup group = settings.getClientGroups().get(Service.ServiceType.FAPI);
-        if (group == null) {
-            group = new ClientGroup(Service.ServiceType.FAPI);
-        }
-        if (!group.getAccountIds().contains(account.getId())) {
-            group.getAccountIds().add(account.getId());
-        }
-        group.addApiAccount(account);
-        group.addClient(account.getId(), fapiClient);
-        settings.getClientGroups().put(Service.ServiceType.FAPI, group);
-
-        Configure.saveConfig();
-        if (settings.getMainFid() != null) {
-            settings.saveClientSettings(settings.getMainFid(), clientName);
-        }
-    }
-
-    private static ApiProvider buildFapiProvider(String host, int port, Service selected) {
-        ApiProvider provider = new ApiProvider();
-        provider.setId(selected.getId());
-        provider.setName(selected.getStdName());
-        provider.setType(Service.ServiceType.FAPI);
-        provider.setApiUrl(host + ":" + port);
-        provider.setService(selected);
-        provider.setApiParams(Params.getParamsFromService(selected, Params.class));
-        provider.setDealer(selected.getDealer());
-        provider.setDealerPubkey(selected.getDealerPubkey());
-        provider.setOwner(selected.getOwner());
-        provider.setProtocols(selected.getProtocols());
-        return provider;
-    }
-
-    private static ApiAccount buildFapiAccount(String host, int port, FapiClient.DiscoveryResult discovery, Service selected, ApiProvider provider) {
-        ApiAccount account = new ApiAccount();
-        account.setUserName(settings.getMainFid());
-        String newId = account.makeApiAccountId(provider.getId(), account.getUserName());
-        account.setId(newId);
-        account.setProviderId(provider.getId());
-        account.setApiUrl(provider.getApiUrl());
-        account.setService(selected);
-        account.setServiceParams(Params.getParamsFromService(selected, Params.class));
-        account.setUserId(settings.getMainFid());
-        account.setUserPubkey(settings.getMyPubkey());
-        account.setUserPrikeyCipher(settings.getMyPrikeyCipher());
-        account.setClient(fapiClient);
-        return account;
-    }
-
-    private static String findExistingFapiAccountId(String providerId) {
-        if (settings == null || settings.getConfig() == null || settings.getConfig().getApiAccountMap() == null) {
-            return null;
-        }
-        for (Map.Entry<String, ApiAccount> entry : settings.getConfig().getApiAccountMap().entrySet()) {
-            ApiAccount account = entry.getValue();
-            if (account != null && providerId.equals(account.getProviderId())) {
-                return entry.getKey();
-            }
-        }
+        System.out.println("Failed to connect.");
         return null;
     }
     
     /**
-     * 配置 FAPI 服务连接信息
-     * 仅需提供 host 和 port，客户端会通过 HELLO+PING 自动发现公钥和可用服务
+     * 显示FUDP节点信息
      */
-    private static void configureFapiService() {
-        String host = Inputer.inputString(br, "Input FAPI service host (IP or hostname, default: 127.0.0.1):");
-        if (host.isEmpty()) {
-            host = "127.0.0.1";
-        }
-
-        String portStr = Inputer.inputString(br, "Input FAPI service port (default: 8500):");
-        int port;
-        if (portStr.isEmpty()) {
-            port = 8500;  // 默认端口，与 StartFapiManager 保持一致
-        } else {
-            try {
-                port = Integer.parseInt(portStr);
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid port number. Using default 8500.");
-                port = 8500;
-            }
-        }
-
-        if (!configureViaEndpoint(host, port, "manual input")) {
-            fapiClient = null;
-        }
-    }
-
-    private static Service selectService(List<Service> services) {
-        if (services == null || services.isEmpty()) {
-            return null;
-        }
-        if (services.size() == 1) {
-            Service service = services.get(0);
-            System.out.println("Found FAPI service: " + service.getStdName() + " (SID=" + service.getId() + ")");
-            return service;
-        }
-        System.out.println("Multiple FAPI services found on peer:");
-        for (int i = 0; i < services.size(); i++) {
-            Service svc = services.get(i);
-            System.out.println((i + 1) + ") SID=" + svc.getId() + ", name=" + svc.getStdName() + ", ver=" + svc.getVer());
-        }
-        Long index = Inputer.inputLong(br, "Select a service (default 1)", 1L);
-        if (index == null || index < 1 || index > services.size()) {
-            System.out.println("Invalid selection. Defaulting to the first service.");
-            return services.get(0);
-        }
-        return services.get(index.intValue() - 1);
-    }
-    
-    private static void showConfig() {
+    private static void showFudpNodeInfo() {
+        System.out.println("\n=== Current Configuration ===");
         if (fapiClient != null) {
             System.out.println("Service Peer ID: " + fapiClient.getServicePeerId());
             System.out.println("Service SID: " + fapiClient.getServiceSid());
         } else {
-            System.out.println("FAPI Client not configured.");
-            if (settings != null) {
-                ApiAccount stored = settings.getApiAccount(Service.ServiceType.FAPI);
-                if (stored != null) {
-                    System.out.println("Stored provider: " + stored.getProviderId() + " at " + stored.getApiUrl());
-                }
-            }
+            System.out.println("Not connected to any service.");
         }
         if (fudpNode != null) {
             System.out.println("Local FID: " + fudpNode.getLocalFid());
+            System.out.println("Local Port: " + fudpNode.getConfig().getPort());
         }
-        // 可以显示已添加的 peers（如果需要）
+        System.out.println("\nDefault endpoints:");
+        for (String ep : FapiDefaults.DEFAULT_ENDPOINTS) {
+            System.out.println("  - " + ep);
+        }
         Menu.anyKeyToContinue(br);
     }
     
-    public static Fcdsl inputFcdsl(int defaultSize, String defaultSort) {
-        Fcdsl fcdsl = new Fcdsl();
-        fcdsl.promoteSearch(defaultSize, defaultSort, br);
-        
-        if (fcdsl.isBadFcdsl()) {
-            System.out.println("FCDSL wrong:");
-            System.out.println(JsonUtils.toNiceJson(fcdsl));
-            return null;
+    /**
+     * 显示设置菜单（使用Settings.setting方法）
+     */
+    private static void showSettings() {
+        if (settings == null) {
+            System.out.println("Settings not initialized.");
+            Menu.anyKeyToContinue(br);
+            return;
         }
-        System.out.println("fcdsl:\n" + JsonUtils.toNiceJson(fcdsl));
-        Menu.anyKeyToContinue(br);
-        return fcdsl;
+        // 调用Settings的setting方法，传入null表示这是客户端（不是服务器）
+        settings.setting(br, null);
+    }
+    
+    /**
+     * 打印最后的错误
+     */
+    private static void printLastError() {
+        if (fapiClient != null && fapiClient.getLastError() != null) {
+            Exception err = fapiClient.getLastError();
+            System.out.println("Error type: " + err.getClass().getSimpleName());
+            System.out.println("Error message: " + err.getMessage());
+        }
+        if (fapiClient != null && fapiClient.getLastResponse() != null) {
+            var resp = fapiClient.getLastResponse();
+            System.out.println("Response code: " + resp.getCode() + ", message: " + resp.getMessage());
+            if (resp.getData() != null) {
+                System.out.println("Response data: " + new Gson().toJson(resp.getData()));
+            }
+        }
+    }
+    
+    /**
+     * 清理资源
+     */
+    private static void cleanup() {
+        if (bootstrapResult != null) {
+            bootstrapResult.cleanup();
+        } else {
+            // 如果 bootstrapResult 为 null，单独清理
+            if (fudpNode != null) {
+                try {
+                    fudpNode.stop();
+                } catch (Exception e) {
+                    log.error("Error stopping FUDP node", e);
+                }
+            }
+            
+            if (settings != null) {
+                try {
+                    settings.close();
+                } catch (Exception e) {
+                    log.error("Error closing settings", e);
+                }
+            }
+        }
+    }
+
+    // ==================== 客户端事件监听器 ====================
+
+    /**
+     * Default directory for storing received relay files.
+     */
+    private static final String RECEIVED_FILES_DIR = "received";
+
+    /**
+     * Event listener for the client's FudpNode.
+     * Handles incoming messages such as relayed data from other peers.
+     * Files are saved to the received directory named by their DID (sha256x2).
+     */
+    private static class ClientEventListener implements NodeEventListener {
+
+        @Override
+        public void onBytesReceived(String peerId, long messageId, int dataType, byte[] data) {
+            String did = saveReceivedData(data);
+            String typeStr = switch (dataType) {
+                case BytesMessage.DATA_TYPE_RAW -> "raw";
+                case BytesMessage.DATA_TYPE_JSON -> "json";
+                case BytesMessage.DATA_TYPE_PROTOBUF -> "protobuf";
+                case BytesMessage.DATA_TYPE_MSGPACK -> "msgpack";
+                default -> "type-" + dataType;
+            };
+            System.out.println("\n╔══════════════════════════════════════╗");
+            System.out.println("║  Incoming Message                    ║");
+            System.out.println("╠══════════════════════════════════════╣");
+            System.out.println("║ From: " + peerId);
+            System.out.println("║ Message ID: " + messageId);
+            System.out.println("║ Data type: " + typeStr);
+            System.out.println("║ Size: " + data.length + " bytes");
+            System.out.println("║ DID: " + did);
+            System.out.println("║ Saved to: " + RECEIVED_FILES_DIR + "/" + did);
+            System.out.println("╚══════════════════════════════════════╝");
+        }
+
+        @Override
+        public void onRelayedMessageReceived(String relayPeerId, AppMessage message) {
+            System.out.println("\n╔══════════════════════════════════════╗");
+            System.out.println("║  Incoming Relayed Message            ║");
+            System.out.println("╠══════════════════════════════════════╣");
+            System.out.println("║ Relay peer: " + relayPeerId);
+            System.out.println("║ Message type: " + message.getType());
+            if (message instanceof BytesMessage bytesMsg) {
+                byte[] data = bytesMsg.getData();
+                String did = saveReceivedData(data);
+                System.out.println("║ Size: " + data.length + " bytes");
+                System.out.println("║ DID: " + did);
+                System.out.println("║ Saved to: " + RECEIVED_FILES_DIR + "/" + did);
+            } else {
+                System.out.println("║ Message: " + message);
+            }
+            System.out.println("╚══════════════════════════════════════╝");
+        }
+
+        @Override
+        public void onRelayedMessageReceived(String relayPeerId, String senderFid, long sessionId, AppMessage message) {
+            System.out.println("\n╔══════════════════════════════════════╗");
+            System.out.println("║  Incoming Relayed Message            ║");
+            System.out.println("╠══════════════════════════════════════╣");
+            System.out.println("║ Relay peer: " + relayPeerId);
+            System.out.println("║ Sender FID: " + senderFid);
+            System.out.println("║ Session ID: " + sessionId);
+            System.out.println("║ Message type: " + message.getType());
+            if (message instanceof BytesMessage bytesMsg) {
+                byte[] data = bytesMsg.getData();
+                String did = saveReceivedData(data);
+                System.out.println("║ Size: " + data.length + " bytes");
+                System.out.println("║ DID: " + did);
+                System.out.println("║ Saved to: " + RECEIVED_FILES_DIR + "/" + did);
+            } else {
+                System.out.println("║ Message: " + message);
+            }
+            System.out.println("╚══════════════════════════════════════╝");
+        }
+
+        @Override
+        public void onBytesAck(String peerId, long messageId, long rttMs) {
+            log.debug("Bytes ACK from {}, messageId={}, RTT={}ms", peerId, messageId, rttMs);
+        }
+
+        @Override
+        public void onPeerConnected(String peerId) {
+            log.debug("Peer connected: {}", peerId);
+        }
+
+        @Override
+        public void onPeerDisconnected(String peerId) {
+            log.debug("Peer disconnected: {}", peerId);
+        }
+
+        @Override
+        public void onError(String peerId, int errorCode, String message) {
+            log.warn("Error from peer {}: code={}, message={}", peerId, errorCode, message);
+        }
+
+        /**
+         * Compute DID (sha256x2) of data, save to received directory, and return the DID hex string.
+         */
+        private String saveReceivedData(byte[] data) {
+            byte[] didBytes = Hash.sha256x2(data);
+            String did = utils.Hex.toHex(didBytes);
+            try {
+                java.nio.file.Path dir = java.nio.file.Paths.get(RECEIVED_FILES_DIR);
+                java.nio.file.Files.createDirectories(dir);
+                java.nio.file.Path filePath = dir.resolve(did);
+                java.nio.file.Files.write(filePath, data);
+            } catch (java.io.IOException e) {
+                log.error("Failed to save received data to {}/{}: {}", RECEIVED_FILES_DIR, did, e.getMessage());
+            }
+            return did;
+        }
     }
 }

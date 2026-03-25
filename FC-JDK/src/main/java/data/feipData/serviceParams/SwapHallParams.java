@@ -2,7 +2,7 @@ package data.feipData.serviceParams;
 
 import com.google.gson.Gson;
 
-public class SwapHallParams extends Params{
+public class SwapHallParams {
     private String urlHead;
     private String currency;
     private String pricePerRequest;

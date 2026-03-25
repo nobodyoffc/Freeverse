@@ -6,7 +6,7 @@ import core.fch.TxCreator;
 import core.fch.Wallet;
 import data.fchData.Cash;
 import data.feipData.Feip;
-import data.feipData.serviceParams.Params;
+import data.feipData.Service;
 import clients.ApipClient;
 import data.apipData.Sort;
 import core.fch.Inputer;
@@ -16,7 +16,6 @@ import config.ApiAccount;
 import org.bitcoinj.fch.FchMainNetwork;
 import utils.FchUtils;
 import utils.JsonUtils;
-import utils.NumberUtils;
 import clients.NaSaClient.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,21 +62,21 @@ public class Rewarder {
         unpaidCostMap=new HashMap<>();
     }
 
-    public static void checkRewarderParams(String sid, Params params, JedisPool jedisPool, BufferedReader br) {
+    public static void checkRewarderParams(String sid, Service service, JedisPool jedisPool, BufferedReader br) {
         RewardParams rewardParams = Rewarder.getRewardParams(sid, jedisPool);
 
         if(rewardParams==null) {
-            rewardParams = Rewarder.setRewardParameters(sid, params.getConsumeViaShare(), params.getOrderViaShare(),jedisPool,br);
+            rewardParams = Rewarder.setRewardParameters(sid, service.getConsumeViaShare(), service.getOrderViaShare(),jedisPool,br);
             writeRewardParamsToRedis(sid,rewardParams,jedisPool);
         }
 
         if(rewardParams.getOrderViaShare()==null){
-            rewardParams.setOrderViaShare(params.getOrderViaShare());
+            rewardParams.setOrderViaShare(service.getOrderViaShare());
             writeRewardParamsToRedis(sid,rewardParams,jedisPool);
         }
 
         if(rewardParams.getConsumeViaShare()==null){
-            rewardParams.setConsumeViaShare(params.getConsumeViaShare());
+            rewardParams.setConsumeViaShare(service.getConsumeViaShare());
             writeRewardParamsToRedis(sid,rewardParams,jedisPool);
         }
 
@@ -163,7 +162,7 @@ public class Rewarder {
         addQualifiedPendingToPay(sendToMap);
         backUpPending();
 
-        String txSigned = TxCreator.createTxFch(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate, FchMainNetwork.MAINNETWORK);
+        String txSigned = new TxCreator().createAndSignTx(cashList, priKey, sendToMap.values().stream().toList(), opReturn, feeRate, FchMainNetwork.MAINNETWORK);
 
         ReplyBody replyBody = Wallet.sendTx(txSigned, apipClient, naSaRpcClient);
         if (replyBody.getCode() != 0) {

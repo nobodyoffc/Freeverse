@@ -80,30 +80,64 @@ The system follows a **modular microservices architecture** with the following k
 ### FC-JDK (Foundation Library)
 - **Location**: `FC-JDK/`
 - **Purpose**: Core library providing cryptographic operations, blockchain integration, client frameworks, and utilities
-- **Key packages**: 
+- **Key packages**:
   - `core.crypto.*` - ECC, AES, digital signatures, key management
-  - `clients.*` - Abstract client framework with authentication
-  - `fcData.*` - Data models for blockchain and protocol data
-  - `config.*` - Configuration and service management
-  - `javaTools.*` - Utilities (HTTP, JSON, database wrappers)
-  - `server.*` - Web server framework
+  - `clients.*` - Abstract client framework (ApipClient, TalkClient, DiskClient) with authentication
+  - `data.*` - Data models organized by domain:
+    - `fcData.*` - Core framework data (Module, FcEntity, ReplyBody, etc.)
+    - `fchData.*` - Blockchain data (Block, Tx, OpReturn, Cash, plus Mask classes for marking/filtering)
+    - `feipData.*` - Protocol data (Contact, Mail, Secret, Service, etc.)
+    - `apipData.*` - API-specific data models
+    - `nasa.*` - NASA (Native API Service Access) data models
+  - `config.*` - Configuration and service management (Settings, Starter)
+  - `utils.*` - Utilities (FcUtils, FcDate, HttpUtils, JsonUtils, etc.)
+  - `db.*` - Database utilities (EsUtils, RedisUtils, LevelDbUtils)
+  - `server.*` - Web server framework (FcHttpRequestHandler, HttpRequestChecker)
+  - `handlers.*` - Business logic handlers (ContactManager, MailManager, SecretManager)
+  - `exception.*` - Custom exception classes
 
 ### APIP (API Provider Service)
 - **Location**: `APIP/`
 - **Purpose**: RESTful API service for blockchain data access and operations
 - **Modules**:
-  - `ApipServer` - Web service with 27+ API modules (APIP0-APIP26)
+  - `ApipServer` - Web service with 27 API modules (APIP0-APIP26), packaged as WAR for Tomcat deployment
   - `ApipClient` - Client library for consuming APIP services
   - `ApipManager` - Service management and monitoring
-- **API Categories**: Blockchain data, identity management, publishing protocols, crypto utilities, wallet operations
+- **API Modules** (each in its own package):
+  - APIP0: OpenAPI - Service info, ping, totals
+  - APIP1: FCDSL - Freecash Domain Specific Language for queries
+  - APIP2: Blockchain - Block and transaction data
+  - APIP3: Cid - Crypto ID management
+  - APIP4-7: Protocols, Code, Service, App
+  - APIP8-9: Group, Team - Organization management
+  - APIP10-12: Box, Contact, Secret - Personal data management
+  - APIP13: Mail - Messaging
+  - APIP14-15: Proof, Statement - Publishing
+  - APIP16: Token - Token management
+  - APIP17: Crypto - Cryptographic utilities
+  - APIP18: Wallet - Wallet operations (cashValid, broadcastTx)
+  - APIP19: Nid - Name ID management
+  - APIP20: Webhook - Event notifications
+  - APIP21-25: Essay, Report, Paper, Book, Artwork - Publishing protocols
+  - APIP26: Remark - Comments and annotations
 
 ### FEIP (Freecash Extension Identity Protocol)
 - **Location**: `FEIP/`
 - **Purpose**: Blockchain-based protocol parser and client for identity and metadata operations
 - **Modules**:
-  - `FeipParser` - Parses blockchain operations, maintains protocol state
+  - `FeipParser` - Parses blockchain OpReturn operations, maintains protocol state in Elasticsearch
   - `FeipClient` - Creates and manages FEIP operations
-- **Protocols**: Identity (CID, NID), organizations (groups, teams), publishing (papers, artwork), personal (contacts, mail), financial (tokens, services)
+- **Protocol Categories** (each with Parser and Rollbacker):
+  - `identity/` - CID (Crypto ID), NID (Name ID), reputation
+  - `personal/` - Contacts, Mail, Secret (encrypted messages)
+  - `organize/` - Groups, Teams, organizational structures
+  - `publish/` - Papers, Essays, Reports, Books, Artwork, Statements, Proofs
+  - `finance/` - Tokens, Services, Apps
+  - `construct/` - Protocols, Code definitions
+- **Key Concepts**:
+  - Reads from `opreturn/` directory (opreturn*.byte files)
+  - Each protocol has rollback capabilities for blockchain reorganizations
+  - Uses `ParseMark` to track parsing progress (fileName, pointer, lastHeight, lastIndex)
 
 ### DISK (Decentralized Storage Service)
 - **Location**: `DISK/`
@@ -143,10 +177,15 @@ The system follows a **modular microservices architecture** with the following k
 ## Database and Storage
 
 The system uses multiple storage backends:
-- **LevelDB** - Local key-value storage (in `db/` directory)
-- **Elasticsearch** - Full-text search and blockchain data indexing
-- **Redis** - Caching and session storage
-- **File System** - Configuration, logs, and temporary files
+- **LevelDB** - Local key-value storage (in `db/` directory) for persistent state
+- **Elasticsearch** - Full-text search and blockchain data indexing (indices named in `constants.IndicesNames`)
+- **Redis** - Caching, session storage, and real-time data
+- **File System**:
+  - `config/` - Configuration files (JSON format)
+  - `logs/` - Application logs
+  - `opreturn/` - Blockchain OpReturn data files (opreturn*.byte)
+  - `db/` - LevelDB databases
+  - `out/` - Build artifacts (JARs and WARs)
 
 ## Security Architecture
 
@@ -196,8 +235,20 @@ Services communicate through:
 ## Development Notes
 
 - The codebase uses **Java 17** with Maven for dependency management
-- **Blockchain integration** is handled through custom libraries (`freecashj`, `shadeBitcoinj159`)
-- **Web services** are designed for deployment to **Tomcat** or similar servlet containers
-- **Client applications** are standalone Java applications with CLI interfaces
+- **Module dependencies**: All modules depend on FC-JDK; APIP modules depend on ApipManager; ApipServer depends on FC-JDK
+- **Blockchain integration** is handled through custom libraries (`freecashj`, `shadeBitcoinj159`) from JitPack
+- **Web services** are designed for deployment to **Tomcat** or similar servlet containers (WAR files)
+- **Client applications** are standalone Java applications with CLI interfaces using `Menu` class
 - The system is designed for **distributed deployment** across multiple servers
 - **Protocol parsing** is event-driven with rollback capabilities for blockchain reorganizations
+- **Naming conventions**:
+  - `*Mask` classes (BlockMask, TxMask, CashMask) - Used for marking/filtering blockchain data
+  - `*Manager` classes - Business logic handlers
+  - `Start*` classes - Entry points for applications
+  - `*Settings` classes - Configuration management
+- **Key dependencies**:
+  - Elasticsearch 8.4.1 for indexing
+  - Jedis 5.1.0 for Redis
+  - Jackson 2.15.2 for JSON
+  - Netty 4.1.114 for networking
+  - LevelDB 0.12 for local storage

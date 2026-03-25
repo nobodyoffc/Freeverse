@@ -1,28 +1,29 @@
 package server.serviceManagers;
 
-import clients.ApipClient;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
 import data.feipData.serviceParams.SwapParams;
 import config.ApiAccount;
 
 import java.io.BufferedReader;
 
 public class SwapHallManager extends ServiceManager {
-    public SwapHallManager(Service service, ApiAccount apipAccount, BufferedReader br, byte[] symKey, Class<?> paramsClass) {
-        super(service, apipAccount, br, symKey, paramsClass);
+    public SwapHallManager(Service service, ApiAccount apipAccount, BufferedReader br, byte[] symKey) {
+        super(service, apipAccount, br, symKey);
     }
 
     @Override
-    public Params inputParams(byte[] symKey, BufferedReader br) {
+    public Object inputParams(byte[] symKey, BufferedReader br) {
         SwapParams swapParams = new SwapParams();
-        swapParams.inputParams(br, symKey,(ApipClient) apipAccount.getClient());
+        swapParams.inputParams(br, symKey);
         return swapParams;
     }
 
     @Override
-    public Params updateParams(Params serviceParams, BufferedReader br, byte[] symKey) {
-        serviceParams.updateParams(br,symKey,(ApipClient) apipAccount.getClient());
+    public Object updateParams(Object serviceParams, BufferedReader br, byte[] symKey) {
+        if(serviceParams instanceof SwapParams swapParams) {
+            swapParams.updateParams(br, symKey);
+            return swapParams;
+        }
         return serviceParams;
     }
 }

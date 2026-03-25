@@ -197,6 +197,7 @@ public class FinanceRollbacker {
 		tokenIdList.forEach(tokenId->fieldValueList.add(FieldValue.of(tokenId)));
 
 		esClient.deleteByQuery(d->d.index(IndicesNames.TOKEN_HOLDER)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
 				.query(q->q
 						.terms(t->t
 								.field("tokenId")

@@ -5,12 +5,6 @@ public class FcObject extends FcEntity {
     protected transient byte[] bytes;
     protected String objName;
 
-//    public String makeId() {
-//        if(this.bytes==null)this.bytes = this.toBytes();
-//        this.id = Hex.toHex(Hash.sha256(bytes));
-//        return id;
-//    }
-
     public void setBytes(byte[] bytes) {
         this.bytes = bytes;
     }

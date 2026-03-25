@@ -4,15 +4,13 @@ import clients.ApipClient;
 import constants.Constants;
 import core.crypto.old.EccAes256K1P7;
 import data.fcData.AlgorithmId;
-import handlers.ContactManager;
+import managers.ContactManager;
 import ui.Shower;
 
 
 import data.feipData.Contact;
 import data.fcData.FcSession;
-import data.fcData.TalkIdInfo;
-import handlers.SessionManager;
-import handlers.TalkIdManager;
+import managers.SessionManager;
 import org.bitcoinj.core.*;
 import org.bitcoinj.core.Base58;
 import utils.BytesUtils;
@@ -57,18 +55,14 @@ public class KeyTools {
         return ECKey.fromPrivate(hash);
     }
 
-    public static String getPubkey(String fid, SessionManager sessionHandler, TalkIdManager talkIdHandler, ContactManager contactHandler, ApipClient apipClient) {
+    public static String getPubkey(String fid, SessionManager sessionHandler, ContactManager contactHandler, ApipClient apipClient) {
         String pubkey = null;
         if(sessionHandler!=null){
             FcSession session = sessionHandler.getSessionByUserId(fid);
             if(session!=null)pubkey = session.getPubkey();
             if(pubkey!=null)return pubkey;
         }
-        if(talkIdHandler!=null){
-            TalkIdInfo talkIdInfo = talkIdHandler.get(fid);
-            if(talkIdInfo!=null)pubkey = talkIdInfo.getPubkey();
-            if(pubkey!=null)return pubkey;
-        }
+
         if(contactHandler!=null){
             Contact contact = contactHandler.getContact(fid);
             if(contact!=null)pubkey = contact.getPubkey();

@@ -2,9 +2,13 @@ package data.fcData;
 
 import utils.JsonUtils;
 
+import java.util.Map;
+
 public class RoomInfo extends FcObject{
     private String name;
     private String owner;
+    private Map<String,String> home;
+
     private String[] members;
 
     public byte[] toBytes() {
@@ -53,5 +57,13 @@ public class RoomInfo extends FcObject{
 
     public void setMembers(String[] members) {
         this.members = members;
+    }
+
+    public Map<String, String> getHome() {
+        return home;
+    }
+
+    public void setHome(Map<String, String> home) {
+        this.home = home;
     }
 }

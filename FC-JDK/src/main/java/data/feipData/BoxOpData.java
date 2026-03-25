@@ -74,10 +74,6 @@ public class BoxOpData{
         return contain;
     }
 
-    public void setContain(String contain) {
-        this.contain = contain;
-    }
-
     public List<String> getBids() {
         return bids;
     }

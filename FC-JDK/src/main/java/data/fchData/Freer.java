@@ -33,7 +33,7 @@ public class Freer extends FcSubject {
     protected String master;
     protected String guide;    //the address of the address which sent the first fch to this address
     protected String noticeFee;
-    protected List<String> homepages;
+    protected Map<String, String> home;
 
     protected String btcAddr;    //the btc address
     protected String ethAddr;    //the eth address
@@ -212,12 +212,12 @@ public class Freer extends FcSubject {
         this.noticeFee = noticeFee;
     }
 
-    public List<String> getHomepages() {
-        return homepages;
+    public Map<String, String> getHome() {
+        return home;
     }
 
-    public void setHomepages(List<String> homepages) {
-        this.homepages = homepages;
+    public void setHome(Map<String, String> home) {
+        this.home = home;
     }
 
     public String getBtcAddr() {

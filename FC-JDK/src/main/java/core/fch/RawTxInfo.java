@@ -30,7 +30,7 @@ public class RawTxInfo extends FcEntity {
     private String changeTo;
     private Long lockTime;
     private Long cd;
-    private Multisig multisig;
+    private Multisig senderMultisig;
     private String ver;
     private CidInfo senderInfo;
     private Long cdd;
@@ -42,16 +42,16 @@ public class RawTxInfo extends FcEntity {
 
     }
 
-    public RawTxInfo(byte[] rawTx, Multisig multisig, List<Cash> inputs) {
+    public RawTxInfo(byte[] rawTx, Multisig senderMultisig, List<Cash> inputs) {
 //        this.rawTx = rawTx;
-        this.multisig = multisig;
+        this.senderMultisig = senderMultisig;
         this.inputs = inputs;
         this.id = Hex.toHex(Hash.sha256x2(rawTx));
     }
 
     public RawTxInfo(byte[] rawTx, RawTxInfo rawTxInfo) {
 //        this.rawTx = rawTx;
-        this.multisig = rawTxInfo.getMultisig();
+        this.senderMultisig = rawTxInfo.getSenderMultisig();
         this.inputs = rawTxInfo.getInputs();
         this.id = Hex.toHex(Hash.sha256x2(rawTx));
         this.feeRate = rawTxInfo.getFeeRate();
@@ -61,19 +61,19 @@ public class RawTxInfo extends FcEntity {
     }
 
     public RawTxInfo(String multisignJson, String cashListJson) {
-        this.multisig = new Gson().fromJson(multisignJson, Multisig.class);
+        this.senderMultisig = new Gson().fromJson(multisignJson, Multisig.class);
         this.inputs = ObjectUtils.objectToList(cashListJson, Cash.class);//DataGetter.getCashList(cashList);
     }
 
 
-    public RawTxInfo(String sender, List<Cash> cashList, List<Cash> sendToList, String opReturn, Long cd, Double feeRate, Multisig multisig, String ver) {
+    public RawTxInfo(String sender, List<Cash> cashList, List<Cash> sendToList, String opReturn, Long cd, Double feeRate, Multisig senderMultisig, String ver) {
         super();
         this.sender = sender;
         this.setOutputs(sendToList);
         this.setOpReturn(opReturn);
         this.setCd(cd);
         this.setFeeRate(feeRate);
-        this.setMultisig(multisig);
+        this.setSenderMultisig(senderMultisig);
         this.setVer(ver);
         this.setInputs(Cash.makeCashListForPay(cashList));
     }
@@ -118,7 +118,7 @@ public class RawTxInfo extends FcEntity {
 //    }
 
     public static Transaction createMultisigTx(RawTxInfo rawTxInfo, Multisig multisig, MainNetParams mainNetwork) {
-        rawTxInfo.setMultisig(multisig);
+        rawTxInfo.setSenderMultisig(multisig);
         return TxCreator.createUnsignedTx(rawTxInfo, mainNetwork);
     }
 
@@ -150,12 +150,12 @@ public class RawTxInfo extends FcEntity {
         this.opReturn = opReturn;
     }
 
-    public Multisig getMultisig() {
-        return multisig;
+    public Multisig getSenderMultisig() {
+        return senderMultisig;
     }
 
-    public void setMultisig(Multisig multisig) {
-        this.multisig = multisig;
+    public void setSenderMultisig(Multisig senderMultisig) {
+        this.senderMultisig = senderMultisig;
     }
 
     public static RawTxInfo fromUserInput(BufferedReader br, @Nullable String sender) {

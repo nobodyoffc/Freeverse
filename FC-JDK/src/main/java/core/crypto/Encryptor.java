@@ -689,4 +689,12 @@ public class Encryptor {
     public void setAlgorithmType(AlgorithmId algorithmId) {
         this.algorithmId = algorithmId;
     }
+    public CryptoDataByte encryptByPasswordHash(@NotNull byte[] msg, @NotNull byte[] passwordHash){
+        byte[] iv = generateRandomIv();
+        byte[] symkey = Decryptor.sha256(BytesUtils.addByteArray(passwordHash, iv));
+        CryptoDataByte cryptoDataByte = encryptBySymkey(msg,symkey,iv);
+        cryptoDataByte.setType(EncryptType.Password);
+        return cryptoDataByte;
+    }
+
 }

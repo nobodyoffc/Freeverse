@@ -97,7 +97,7 @@ public class VideoOpData {
 
 	public static VideoOpData makeRecover(String[] videoIds) {
 		VideoOpData data = new VideoOpData();
-		data.setOp(Op.DELETE.toLowerCase());
+		data.setOp(Op.RECOVER.toLowerCase());
 		data.setVideoIds(videoIds);
 		return data;
 	}

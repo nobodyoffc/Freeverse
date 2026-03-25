@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.security.SecureRandom;
 
 public class StringUtils {
@@ -142,6 +143,22 @@ public class StringUtils {
         }
 
         return stringBuilder.toString();
+    }
+
+    public static String mapToString(Map<String, String> map) {
+        if (map == null || map.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, String> e : map.entrySet()) {
+            if (!first) {
+                sb.append(",");
+            }
+            first = false;
+            sb.append(e.getKey()).append("=").append(e.getValue() != null ? e.getValue() : "");
+        }
+        return sb.toString();
     }
 
     @NotNull

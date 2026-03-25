@@ -12,14 +12,11 @@ import data.fcData.FcSession;
 import data.fcData.ReplyBody;
 import data.fcData.Signature;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
-import handlers.*;
-import handlers.Manager;
-import handlers.SessionManager;
-import org.bitcoinj.core.ECKey;
+import managers.*;
+import managers.Manager;
+import managers.SessionManager;
 import org.jetbrains.annotations.Nullable;
 import utils.Hex;
-import utils.ObjectUtils;
 import utils.http.AuthType;
 import utils.http.HttpUtils;
 
@@ -28,7 +25,6 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
-import java.security.SignatureException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -53,7 +49,6 @@ public class HttpRequestChecker {
     private AuthType authType;
     private final Settings settings;
     private final Service service;
-    private final Params params;
     private final AccountManager accountHandler;
     private final SessionManager sessionHandler;
     private final NonceManager nonceHandler;
@@ -81,7 +76,6 @@ public class HttpRequestChecker {
         this.sessionHandler = (SessionManager) settings.getManager(Manager.ManagerType.SESSION);
         this.nonceHandler = (NonceManager)settings.getManager(Manager.ManagerType.NONCE);
         this.service = settings.getService();
-        this.params = ObjectUtils.objectToClass(settings.getService().getParams(),Params.class) ;
         Object windowTimeRaw = settings.getSettingMap().get(Settings.WINDOW_TIME);
         this.windowTime = ((Number) windowTimeRaw).longValue();
 
@@ -334,7 +328,7 @@ public class HttpRequestChecker {
      */
     private boolean validateBalanceAndNonce(String fid, String sid, Integer nonce, HttpServletResponse response) {
         if (fid != null && accountHandler != null && accountHandler.isBadBalance(fid)) {
-            String data = "Send at lest " + params.getMinPayment() + " F to " + service.getDealer() + " to buy the service #" + sid + ".";
+            String data = "Send at lest " + service.getMinPayment() + " F to " + service.getDealer() + " to buy the service #" + sid + ".";
             replyBody.replyHttp(CodeMessage.Code1004InsufficientBalance, data, response);
             return false;
         }

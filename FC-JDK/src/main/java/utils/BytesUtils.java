@@ -128,6 +128,7 @@ public class BytesUtils {
     }
 
     public static byte[] utf8CharArrayToByteArray(char[] chars) {
+        if(chars==null)return null;
         Charset charset = StandardCharsets.UTF_8;
         CharBuffer charBuffer = CharBuffer.wrap(chars);
         ByteBuffer byteBuffer = charset.encode(charBuffer);

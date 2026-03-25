@@ -3,9 +3,9 @@ package endpoint;
 import config.Settings;
 import constants.ApipApiNames;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
 import data.fchData.FchChainInfo;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -36,7 +36,7 @@ public class Circulating extends HttpServlet {
         httpRequestChecker.checkRequestHttp(request, response, authType);
         ReplyBody replier = httpRequestChecker.getReplyBody();
         FchChainInfo freecashInfo = new FchChainInfo();
-        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
         freecashInfo.infoBest(naSaRpcClient);
         replier.replyHttp(freecashInfo.getCirculating(),response);
     }

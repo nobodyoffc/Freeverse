@@ -3,7 +3,7 @@ package webhook;
 import data.apipData.WebhookPushBody;
 import data.fchData.Cash;
 import data.fchData.OpReturn;
-import handlers.WebhookManager;
+import managers.WebhookManager;
 import server.ApipApi;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -184,7 +184,7 @@ public class Pusher implements Runnable{
             String nPrice = jedis.hget(Settings.addSidBriefToName(sid,Strings.N_PRICE), method);
             double nPriceF = Double.parseDouble(nPrice);
 
-            String pricePerKB = jedis.hget(Settings.addSidBriefToName(sid,PARAMS), FieldNames.PRICE_PER_K_Bytes);
+            String pricePerKB = jedis.hget(Settings.addSidBriefToName(sid,PARAMS), FieldNames.PRICE_PER_K_B);
             Long price = FchUtils.coinStrToSatoshi(pricePerKB);
             if(price==null)price=0L;
 

@@ -5,7 +5,7 @@ import data.apipData.*;
 import data.fcData.*;
 import data.fchData.*;
 import data.feipData.*;
-import handlers.WebhookManager;
+import managers.WebhookManager;
 import server.ApipApi;
 import ui.Menu;
 import constants.*;
@@ -430,12 +430,12 @@ public class ApipClient extends FcClient {
         Object data = requestJsonByFcdsl(FREER_SEARCH, VER_1, fcdsl, authType,sessionKey, requestMethod);
         return objectToList(data, Freer.class);
     }
-    public List<CidHist> freerHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+    public List<FreerHist> freerHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         fcdsl = Fcdsl.makeTermsFilter(fcdsl, SN, "3");
         if (fcdsl == null) return null;
 
         Object data = requestJsonByFcdsl(FREER_HISTORY, VER_1, fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,CidHist.class);
+        return objectToList(data, FreerHist.class);
     }
 
     public Map<String, String[]> fidCidSeek(String searchStr, RequestMethod requestMethod, AuthType authType){
@@ -472,25 +472,25 @@ public class ApipClient extends FcClient {
         return objectToMap(data,String.class,Boolean.class);
     }
 
-    public List<CidHist> homepageHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+    public List<FreerHist> homeHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         fcdsl = Fcdsl.makeTermsFilter(fcdsl, SN, "9");
         if (fcdsl == null) return null;
 
-        Object data = requestJsonByFcdsl(HOMEPAGE_HISTORY, VER_1, fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,CidHist.class);
+        Object data = requestJsonByFcdsl(HOME_HISTORY, VER_1, fcdsl, authType,sessionKey, requestMethod);
+        return objectToList(data, FreerHist.class);
     }
 
-    public List<CidHist> noticeFeeHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+    public List<FreerHist> noticeFeeHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         fcdsl = Fcdsl.makeTermsFilter(fcdsl, SN, "10");
         if (fcdsl == null) return null;
 
         Object data = requestJsonByFcdsl(NOTICE_FEE_HISTORY, VER_1, fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,CidHist.class);
+        return objectToList(data, FreerHist.class);
     }
 
-    public List<CidHist> reputationHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+    public List<FreerHist> reputationHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
         Object data = requestJsonByFcdsl(REPUTATION_HISTORY, VER_1, fcdsl, authType,sessionKey, requestMethod);
-        return objectToList(data,CidHist.class);
+        return objectToList(data, FreerHist.class);
     }
 
     public Map<String, String> avatars(String[] fids, RequestMethod requestMethod, AuthType authType){
@@ -615,28 +615,28 @@ public class ApipClient extends FcClient {
     public List<Service> getServiceListByType(String type) {
         List<Service> serviceList;
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addNewQuery().addNewMatch().addNewFields(FieldNames.TYPES).addNewValue(type);
+        fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(type);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ACTIVE).addNewValues(FALSE);
         serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         return serviceList;
     }
 
-    public List<Service> getServiceListByOwnerAndType(String owner, @Nullable Service.ServiceType type) {
+    public List<Service> getServiceListByOwnerAndType(String owner, @Nullable ServiceType type) {
         List<Service> serviceList;
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(owner);
         fcdsl.addNewExcept().addNewTerms().addNewFields(CLOSED).addNewValues(TRUE);
-        if(type!=null)fcdsl.addNewFilter().addNewMatch().addNewFields(FieldNames.TYPES).setValue(type.name());
+        if(type!=null)fcdsl.addNewFilter().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(type.name());
         serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         return serviceList;
     }
 
-    public List<Service> getServiceListByDealerAndType(String dealer, @Nullable Service.ServiceType type) {
+    public List<Service> getServiceListByDealerAndType(String dealer, @Nullable ServiceType type) {
         List<Service> serviceList;
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(DEALER).addNewValues(dealer);
         fcdsl.addNewExcept().addNewTerms().addNewFields(CLOSED).addNewValues(TRUE);
-        if(type!=null)fcdsl.addNewFilter().addNewMatch().addNewFields(FieldNames.TYPES).setValue(type.name());
+        if(type!=null)fcdsl.addNewFilter().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(type.toString());
         serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         return serviceList;
     }
@@ -690,39 +690,39 @@ public class ApipClient extends FcClient {
         return objectToList(data,AppHistory.class);
     }
 //Organize
-    public Map<String, Group> groupByIds(RequestMethod requestMethod, AuthType authType, String... ids){
-        Object data = requestByIds(GROUP_BY_IDS, VER_1, requestMethod, authType, ids);
-        return ObjectUtils.objectToMap(data,String.class, Group.class);
+    public Map<String, Square> squareByIds(RequestMethod requestMethod, AuthType authType, String... ids){
+        Object data = requestByIds(SQUARE_BY_IDS, VER_1, requestMethod, authType, ids);
+        return ObjectUtils.objectToMap(data,String.class, Square.class);
     }
-    public List<Group> groupSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(GROUP_SEARCH, VER_1, fcdsl, authType, sessionKey, requestMethod);
+    public List<Square> squareSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SQUARE_SEARCH, VER_1, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
-        return objectToList(data, Group.class);
+        return objectToList(data, Square.class);
     }
 
-    public List<GroupHistory> groupOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(GROUP_OP_HISTORY, VER_1, fcdsl, authType, sessionKey, requestMethod);
+    public List<SquareHistory> squareOpHistory(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
+        Object data = requestJsonByFcdsl(SQUARE_OP_HISTORY, VER_1, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
-        return objectToList(data,GroupHistory.class);
+        return objectToList(data,SquareHistory.class);
     }
-    public Map<String, String[]> groupMembers(RequestMethod requestMethod, AuthType authType, String... ids){
-        Object data = requestByIds(GROUP_MEMBERS, VER_1, requestMethod, authType, ids);
+    public Map<String, String[]> squareMembers(RequestMethod requestMethod, AuthType authType, String... ids){
+        Object data = requestByIds(SQUARE_MEMBERS, VER_1, requestMethod, authType, ids);
         return ObjectUtils.objectToMap(data,String.class,String[].class);
     }
 
-    public List<Group> myGroups(String fid, Long sinceHeight, Integer size, @NotNull final List<String> last, RequestMethod requestMethod, AuthType authType){
+    public List<Square> mySquares(String fid, Long sinceHeight, Integer size, @NotNull final List<String> last, RequestMethod requestMethod, AuthType authType){
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.MEMBERS).addNewValues(fid);
         if(sinceHeight!=null)
             fcdsl.getQuery().addNewRange().addNewFields(LAST_HEIGHT).addGt(String.valueOf(sinceHeight));
         if(size!=null)fcdsl.addSize(size);
         if(!last.isEmpty())fcdsl.addAfter(last);
-        Object data = requestJsonByFcdsl(MY_GROUPS, VER_1, fcdsl, authType, sessionKey, requestMethod);
+        Object data = requestJsonByFcdsl(MY_SQUARES, VER_1, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
         List<String> newLast = this.getFcClientEvent().getResponseBody().getLast();
         last.clear();
         last.addAll(newLast);
-        return objectToList(data, Group.class);
+        return objectToList(data, Square.class);
     }
 
     public Map<String, Team> teamByIds(RequestMethod requestMethod, AuthType authType, String... ids){
@@ -809,7 +809,7 @@ public class ApipClient extends FcClient {
 
     public List<Contact> freshContactSinceHeight(String myFid, Long lastHeight, Integer size, final List<String> last, Boolean active) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex(CONTACT);
+        fcdsl.setEntity(CONTACT);
         String heightStr = String.valueOf(lastHeight);
         fcdsl.addNewQuery().addNewRange().addNewFields(LAST_HEIGHT).addGt(heightStr);
 
@@ -870,7 +870,7 @@ public class ApipClient extends FcClient {
 
     public <T> List<T> loadSinceHeight(String index,String idField,String sortField,String termField,String myFid, Long lastHeight, Integer size, List<String> last, Boolean active,Class<T> tClass) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex(index);
+        fcdsl.setEntity(index);
         String heightStr = String.valueOf(lastHeight);
         fcdsl.addNewQuery().addNewRange().addNewFields(LAST_HEIGHT).addGt(heightStr);
 
@@ -922,7 +922,7 @@ public class ApipClient extends FcClient {
 
     public List<Mail> freshMailSinceHeight(String myFid, long lastHeight, Integer defaultRequestSize, List<String> last, Boolean active) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex(MAIL);
+        fcdsl.setEntity(MAIL);
         String heightStr = String.valueOf(lastHeight);
         fcdsl.addNewQuery().addNewRange().addNewFields(LAST_HEIGHT).addGt(heightStr);
 
@@ -999,12 +999,12 @@ public class ApipClient extends FcClient {
         return objectToList(data,TokenHistory.class);
     }
 
-    public List<Group> myTokens(String fid, RequestMethod requestMethod, AuthType authType){
+    public List<Token> myTokens(String fid, RequestMethod requestMethod, AuthType authType){
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.FID).addNewValues(fid);
         Object data = requestJsonByFcdsl(MY_TOKENS, VER_1, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
-        return objectToList(data, Group.class);
+        return objectToList(data, Token.class);
     }
 
     public Map<String, TokenHolder> tokenHoldersByIds(RequestMethod requestMethod, AuthType authType, String... tokenIds){
@@ -1325,7 +1325,7 @@ public class ApipClient extends FcClient {
     @Nullable
     public static List<?> simpleSearch(ApipClient apipClient, Class<?> dataClass, String indexName, String searchFieldName, String searchValue, String sinceFieldName, long sinceHeight, List<Sort> sortList, int size, final List<String> last) {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.addIndex(indexName);
+        fcdsl.addEntity(indexName);
         if(searchFieldName!=null)fcdsl.addNewQuery().addNewTerms().addNewFields(searchFieldName).addNewValues(searchValue);
         if(sinceFieldName!=null)fcdsl.getQuery().addNewRange().addNewFields(sinceFieldName).addGt(String.valueOf(sinceHeight));
         for(Sort sort: sortList)fcdsl.addSort(sort.getField(),sort.getOrder());
@@ -1372,7 +1372,7 @@ public class ApipClient extends FcClient {
         
         // Create Fcdsl object
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex(index);
+        fcdsl.setEntity(index);
         fcdsl.addIds(ids);
 
         // Make request
@@ -1488,5 +1488,76 @@ public class ApipClient extends FcClient {
         Object data = requestJsonByFcdsl(NEWS_SEARCH, VER_1, fcdsl, authType, sessionKey, requestMethod);
         if(data==null)return null;
         return objectToList(data,News.class);
+    }
+
+    // Entity APIs - Generic entity access
+    /**
+     * Get entities by IDs with specified entity class
+     * @param entityName the entity/index name (e.g., "cash", "block", "freer")
+     * @param entityClass the class to deserialize to
+     * @param requestMethod HTTP request method
+     * @param authType authentication type
+     * @param ids the entity IDs to fetch
+     * @return Map of ID to entity
+     */
+    public <T> Map<String, T> entityByIds(String entityName, Class<T> entityClass, RequestMethod requestMethod, AuthType authType, String... ids) {
+        Fcdsl fcdsl = new Fcdsl();
+        fcdsl.setEntity(entityName);
+        fcdsl.addIds(ids);
+        Object data = requestJsonByFcdsl(ENTITY_BY_IDS, VER_1, fcdsl, authType, sessionKey, requestMethod);
+        if(data == null) return null;
+        return objectToMap(data, String.class, entityClass);
+    }
+
+    /**
+     * Get entities by IDs, returning raw Object map
+     * @param entityName the entity/index name
+     * @param requestMethod HTTP request method
+     * @param authType authentication type
+     * @param ids the entity IDs to fetch
+     * @return Map of ID to Object
+     */
+    public Map<String, Object> entityByIds(String entityName, RequestMethod requestMethod, AuthType authType, String... ids) {
+        return entityByIds(entityName, Object.class, requestMethod, authType, ids);
+    }
+
+    /**
+     * Search entities with specified entity class
+     * @param entityName the entity/index name (e.g., "cash", "block", "freer")
+     * @param entityClass the class to deserialize to
+     * @param fcdsl the search criteria
+     * @param requestMethod HTTP request method
+     * @param authType authentication type
+     * @return List of entities
+     */
+    public <T> List<T> entitySearch(String entityName, Class<T> entityClass, Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType) {
+        if (fcdsl == null) fcdsl = new Fcdsl();
+        fcdsl.setEntity(entityName);
+        
+        // Add default sorts if sort is null or empty
+        if (fcdsl.getSort() == null || fcdsl.getSort().isEmpty()) {
+            Map<String, String> defaultSorts = EntityProperty.getDefaultSortsByName(entityName);
+            if (defaultSorts != null) {
+                for (Map.Entry<String, String> entry : defaultSorts.entrySet()) {
+                    fcdsl.addSort(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        
+        Object data = requestJsonByFcdsl(ENTITY_SEARCH, VER_1, fcdsl, authType, sessionKey, requestMethod);
+        if(data == null) return null;
+        return objectToList(data, entityClass);
+    }
+
+    /**
+     * Search entities, returning raw Object list
+     * @param entityName the entity/index name
+     * @param fcdsl the search criteria
+     * @param requestMethod HTTP request method
+     * @param authType authentication type
+     * @return List of Objects
+     */
+    public List<Object> entitySearch(String entityName, Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType) {
+        return entitySearch(entityName, Object.class, fcdsl, requestMethod, authType);
     }
 }

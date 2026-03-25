@@ -1,7 +1,7 @@
 # FAPI 及其他 FUDP 上层服务经济模型设计方案
 
 ## 范围与目标
-- 适用于 FAPI 及基于 FUDP/Freeverse 生态的其他上层 API 服务。
+- 适用于 FAPI 服务。
 - FUDP 仅提供加密/可靠传输与计量，经济模型完全在上层实现。
 - 提供可验证、可恢复、低耦合的计费/结算能力，支持多种上链数据源。
 
@@ -25,7 +25,7 @@
 - 审计/快照目录固定，权限仅限服务账号；WAL/审计损坏时向后截断到最后一条有效记录并写告警。
 
 ## 核心组件
-- **BalanceManager（新实现，LevelDB/KV）**
+- **FapiBalanceManager（新实现，LevelDB/KV）**
   - 按 peerId 记录余额、序列号、信用额度、黑名单标记。
   - 原子接口：`checkAndCharge(meter)`、`charge(requestKey, peerId, amount, meta)`、`credit(userId, cashId, amount, src, status)`、`settle(cycleId)`、`getBalance(peerId)`。
   - 存储模型与事务：
@@ -61,7 +61,7 @@
   - 监听链上/索引数据，更新余额或生成入账事件。
 
 ## 响应与客户端余额校验（新增）
-- 服务端响应体：`FapiResponse` 显式包含 `balance`（Long，可为 null；服务端内部账本余额，单位聪）及可选 `balanceSeq`（Long，可为 null，幂等/回放序列号）。在 `ResponseBuilder` 内从 `BalanceManager.getBalance(peerId)` 读取权威值；读取失败返回 `null` 并告警，但不阻塞业务响应。服务完全免费或关闭计费时可返回 null。
+- 服务端响应体：`FapiResponse` 显式包含 `balance`（Long，可为 null；服务端内部账本余额，单位聪）及可选 `balanceSeq`（Long，可为 null，幂等/回放序列号）。在 `ResponseBuilder` 内从 `FapiBalanceManager.getBalance(peerId)` 读取权威值；读取失败返回 `null` 并告警，但不阻塞业务响应。服务完全免费或关闭计费时可返回 null。
 - `bestHeight` 反映链上数据，`balance` 来源于内部账本，不要求同事务同步（余额变动更频繁，链上高度约 1 分钟变一次；回滚仅影响充值部分，不回滚消费）。错误响应也要带上当前 `bestHeight` 和可用的 `balance`，便于客户端对账。
 - 客户端接收：`FapiClient` 反序列化后缓存最近的 `balance/bestHeight/balanceSeq`。交互 CLI（StartFapiClient）在查询完成后展示最新余额及获取时间，便于人工核对。
 - 余额验真器：新增轻量 `BalanceVerifier`（客户端侧），对比“预期余额”与服务端权威余额，公式 `abs(serverBalance - expectedBalance) > tolerance` 触发漂移事件；连续或累积超阈值按策略停用。
@@ -93,7 +93,7 @@
 ## 数据源与优先级
 - **bestBlock（bestHeight, bestBlockId）**
   1. ES block 索引（FAPI 服务需要以 ES 作为可信源）。
-  2. FAPI 服务提供的区块数据接口（非 FAPI 服务以已经运行的FAPI服务为可信链上数据源）。
+  2. BASE 服务提供的区块数据接口（非 BASE 服务以已经运行的BASE服务为可信链上数据源）。
   - 需校验高度单调、哈希连续，避免回滚污染。
 - **充值/支付获取来源（无 mempool）**
   - FAPI服务监听 LISTEN_PATH（本地区块存储目录）文件变动，表示有新区块落盘；此时主动向 ES 拉取自上次 bestHeight 后的新 cash 列表。非FAPI服务订阅FAPI服务的newCashAlert服务，获取新收入通知（如果数据源大于1，则查询其他源验证）入账。充值需 1 个区块确认才入账。
@@ -107,7 +107,7 @@
 - 原子性：计费与余额扣减在同一 KV 事务或批次中完成；若失败，外部应重试或拒绝服务。
 - 防回滚：记录 bestHeight/bestBlockId，支持回滚后重扫；若检测到回滚（同高度 blockId 变化），对相关确认入账追加冲减记录（不直接修改原记录），重扫充值，余额为负但未超信用时可继续服务，否则拒绝。
 - 审计：可选启用 append-only 审计日志（建议行级 JSON，含 hash 链 prevHash + 当前记录哈希，字段见下）；充值、分配、回滚必须记录；消费扣费默认不逐笔写审计（量太大），仅写计数/聚合指标，必要时可配置按采样或阈值写详细行。
-- 黑名单/信用：由上层配置，BalanceManager 执行；避免在传输层做拒绝。
+- 黑名单/信用：由上层配置，FapiBalanceManager 执行；避免在传输层做拒绝。
 
 ## 性能与效率
 - LevelDB/嵌入式 KV，批量写（WriteBatch）+ 顺序日志，避免 Redis/ES 运行时依赖。
@@ -117,7 +117,71 @@
 ## 模型简化与扩展
 - 单余额模型：不采用双余额，余额 = 服务商视角的可用金额，信用额度/黑名单可选。
 - 服务商购买其他服务的余额由 `config/ApiAccount.java` 缓存，按请求从响应中更新；为其他用户提供服务时在 response 中写入用户 balance（提示用，上层余额以 AccountManager 记录为准）。
-- 支出模块：支持“购买其他服务”扣费，按ApiProvider的pricePerKB计价，按minPayment配置基于minPayment的乘数付费。
+- 支出模块：支持"购买其他服务"扣费，按ApiProvider的pricePerKB计价，按minPayment配置基于minPayment的乘数付费。
+
+## 客户端自动充值（AutoRechargeManager）
+当客户端余额低于阈值时，自动触发充值流程，确保服务不中断。
+
+### 充值触发条件
+- 服务端响应中返回的 `balance` ≤ 配置的 `autoRechargeThreshold`（默认 0 聪）。
+- 不在冷却期内（距离上次充值尝试 ≥ `autoRechargeCooldownMs`）。
+- 没有正在进行的充值操作。
+- 没有因价格过高而停止（`stoppedDueToPriceLimit = false`）。
+
+### 充值流程
+1. **获取服务定价**：从 Service 获取 `pricePerKB`、`minPayment`、`dealer`（收款地址）。
+2. **计算支付金额**：`paymentAmount = max(purchaseKb × pricePerKB, minPayment)`。
+3. **安全检查**：若 `paymentAmount > maxPayment`，停止充值并触发价格告警。
+4. **获取 UTXOs**：调用 `cashValid` API 获取可用余额。
+5. **构造交易**：使用 `TxCreator.createAndSignFchTx()` 签名交易。
+6. **广播交易**：调用 `broadcastTx` API 广播。
+7. **通知回调**：成功或失败后触发回调通知上层应用。
+
+### 重试策略
+- UTXO 可能因在其他未确认交易中被使用而无效，需要重试。
+- 最多重试 `autoRechargeMaxRetries` 次（默认 3 次）。
+- 使用指数退避：延迟 = `autoRechargeRetryDelayMs × 2^(attempt-1)`。
+- 每次重试重新获取 UTXOs，避免使用已失效的 cash。
+
+### 价格保护机制
+防止服务商设置过高价格导致用户损失：
+- 若计算的支付金额超过 `maxPayment`（默认 1 FCH = 1亿聪），立即停止充值。
+- 设置 `stoppedDueToPriceLimit = true`，阻止后续自动充值。
+- 记录详细告警消息，触发回调通知。
+- 用户需手动调用 `resetPriceAlert()` 确认后才能恢复自动充值。
+
+### 配置参数（Settings）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `autoRechargeEnabled` | `true` | 是否启用自动充值 |
+| `autoRechargeThreshold` | `0` | 触发阈值（聪），余额 ≤ 阈值时触发 |
+| `autoRechargeKb` | `1000` | 购买量（KB） |
+| `autoRechargeCooldownMs` | `60000` | 冷却时间（毫秒），防止短时间重复充值 |
+| `autoRechargeMaxRetries` | `3` | 最大重试次数 |
+| `autoRechargeRetryDelayMs` | `2000` | 重试基础延迟（毫秒） |
+| `autoRechargeMaxPayment` | `100000000` | 最大支付额（聪），超过则停止并告警 |
+
+### 充值结果类型
+```java
+enum ResultType {
+  SUCCESS,      // 充值成功，返回 txId
+  FAILURE,      // 充值失败（UTXO 不足、广播失败等）
+  PRICE_ALERT   // 价格告警，充值被阻止
+}
+```
+
+### 手动充值
+除自动充值外，`FapiClient` 提供手动充值接口：
+- `manualRecharge(Double amountFch)`：指定金额充值。
+- `manualRecharge()`：使用默认计算金额充值。
+- `RechargeMenu`：提供命令行交互界面，包含查看余额、定价、手动充值、重置告警等功能。
+
+### 与服务端的配合
+- 服务端设置信用阈值（`creditLimit`，通常 > 100 聪），允许余额为负但不超信用。
+- 充值广播成功后，下一次请求响应会返回更新后的余额（服务端从 mempool 或链上检测到充值）。
+- 客户端无需等待链上确认，只需确保交易广播成功。
+
+## 分成策略与分配
 - 分成策略：
   - 充值渠道：收到订单时按 `orderViaShare` 比例记账（确认/待确认分别标记）。
   - 消费渠道：消费时按 `consumeViaShare` 比例记账；若消费额很小（如 1 聪），分成可能 <1 聪，提高内部精度为万分之一聪，并在实际发放时向下取整到聪，余数累计到下次分配；避免 long 溢出和负值。
@@ -184,7 +248,7 @@
 - 短时间大量用户超过信用被拒绝时触发告警/限流，可临时禁止非正余额用户访问。
 
 ## 接口与并发/持久化
-- BalanceManager 对外接口（幂等）：  
+- FapiBalanceManager 对外接口（幂等）：  
   - `credit(userId, cashId, amount, src, status)`：入账，幂等键为 cashId（全局唯一）；`userId`/`peerId` 指明记账对象，可校验 `cash.issuer` 等匹配。  
   - `charge(requestKey, peerId, amount, meta)`：扣费，requestKey 稳定且全局唯一（推荐 `messageId|peerId|serviceId` 或业务请求唯一 ID），防重复扣费；返回值需区分“余额不足但未超信用”（可提示充值/继续）与“超信用拒绝”（需停止服务）。  
   - `checkAndCharge(meter)`：基于计量扣费，返回同样的信用区分错误码。  
@@ -266,7 +330,7 @@
 
 ## 迁移与复用原则
 - 不复用 `handlers/AccountManager`、`IncomeManager`、`Manager` 现有实现，仅参考其经济规则（双余额、信用、分发）。
-- 新的 BalanceManager 需：
+- 新的 FapiBalanceManager 需：
   - 无 CLI/Menu 交互。
   - 无 Redis/ES/HTTP 客户端硬依赖。
   - 明确线程模型和错误处理。

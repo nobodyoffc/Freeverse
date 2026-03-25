@@ -11,12 +11,12 @@ import constants.ApipApiNames;
 import constants.FieldNames;
 import data.fcData.ReplyBody;
 import data.fchData.Freer;
+import data.feipData.ServiceType;
 import initial.Initiator;
 
 import server.HttpRequestChecker;
 import utils.http.AuthType;
 import data.feipData.Nid;
-import data.feipData.Service;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -70,7 +70,7 @@ public class OidByNids extends HttpServlet {
             }
 
             Map<String, String> nidOidMap = new HashMap<>();
-            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
 //            Map<String, String[]> nidNameIdMap = new HashMap<>();
             Map<String,String> nidCidMap = new HashMap<>();

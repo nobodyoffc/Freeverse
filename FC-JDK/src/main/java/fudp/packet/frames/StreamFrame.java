@@ -99,8 +99,12 @@ public class StreamFrame extends Frame {
         if (hasLength) {
             length = (int) Varint.decode(buffer);
         } else {
-            // If no length field, read to end of buffer
             length = buffer.remaining();
+        }
+
+        if (length < 0 || length > buffer.remaining()) {
+            throw new IllegalArgumentException(
+                    "Invalid StreamFrame data length: " + length + " (remaining=" + buffer.remaining() + ")");
         }
 
         frame.data = new byte[length];

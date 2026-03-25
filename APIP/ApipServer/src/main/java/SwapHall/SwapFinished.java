@@ -13,7 +13,7 @@ import constants.FieldNames;
 import constants.Strings;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import feature.swap.SwapAffair;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
@@ -43,12 +43,12 @@ public class SwapFinished extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         ReplyBody replier = new ReplyBody();
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         try(Jedis jedis = jedisPool.getResource()) {
             replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
         }
 
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
         String sid = request.getParameter(SID);
         if(sid==null){
@@ -66,7 +66,7 @@ public class SwapFinished extends HttpServlet {
         searchBuilder.size(20);
         if(lastStr!=null) {
             String[] last = lastStr.split(",");
-            searchBuilder.searchAfter(Arrays.asList(last));
+            searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));
         }
 
         Query query = EsUtils.getTermsQuery(SID,sid.toLowerCase());
@@ -83,7 +83,7 @@ public class SwapFinished extends HttpServlet {
             replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
             return;
         }
-        String[] last = result.hits().hits().get(result.hits().hits().size() - 1).sort().toArray(new String[0]);
+        String[] last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
         long total = result.hits().total().value();
         List<Hit<SwapAffair>> hitList = result.hits().hits();
         List<SwapAffair> swapAffairList = new ArrayList<>();

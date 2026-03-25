@@ -3,7 +3,6 @@ package data.fcData;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import core.crypto.Hash;
-import org.junit.Test;
 import utils.BytesUtils;
 import utils.Hex;
 import core.crypto.KeyTools;
@@ -99,29 +98,11 @@ public class Signature extends FcObject{
         return (sign.equals(doubleSha256Hash));
     }
 
-    @Test
-    public void test(){
-        String keyStr = "db91fc9c16fcc9ae9330ac51b6a30442ab348ce61a43394c34c2612f88fa6019";
-        byte[] key = Hex.fromHex(keyStr);
-
-        Signature signature1 = new Signature();
-        signature1.sign("hello",key,AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7);
-
-        System.out.println(signature1.toJson());
-
-        signature1.strToBytes();
-
-        byte[] bytes = signature1.toBundle();
-
-        Signature signature2 = Signature.fromBundle(bytes);
-
-        System.out.println(signature2.toJson());
-    }
-
     public void strToBytes() {
         if(alg!=null)algBytes = switch (alg) {
-            case FC_Sha256SymSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 2};
-            case BTC_EcdsaSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 3};
+            case FC_Sha256SymSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 3};
+            case BTC_EcdsaSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 4};
+            case FC_SchnorrSignMsg_No1_NrC7 -> new byte[]{0, 0, 0, 0, 0, 5};
             default -> algBytes;
         };
 
@@ -139,8 +120,9 @@ public class Signature extends FcObject{
 
     public void bytesToStr() {
         if(algBytes!=null)alg = switch (Arrays.toString(algBytes)) {
-            case "[0, 0, 0, 0, 0, 3]" ->AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 3]" -> AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7;
             case "[0, 0, 0, 0, 0, 4]" -> AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+            case "[0, 0, 0, 0, 0, 5]" -> AlgorithmId.FC_SchnorrSignMsg_No1_NrC7;
             default -> alg;
         };
 
@@ -176,6 +158,13 @@ public class Signature extends FcObject{
                 }
                 case BTC_EcdsaSignMsg_No1_NrC7 -> {
                     algBytes = new byte[]{0, 0, 0, 0, 0, 4};
+                    outputStream.write(algBytes);
+
+                    if(fidBytes==null)return null;
+                    outputStream.write(fidBytes);
+                }
+                case FC_SchnorrSignMsg_No1_NrC7 -> {
+                    algBytes = new byte[]{0, 0, 0, 0, 0, 5};
                     outputStream.write(algBytes);
 
                     if(fidBytes==null)return null;
@@ -231,11 +220,19 @@ public class Signature extends FcObject{
             }
             case "[0, 0, 0, 0, 0, 4]" -> {
                 alg = AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
-                byte[] hash120 = new byte[20];
-                System.arraycopy(bundle, offset, hash120, 0, 20);
+                byte[] hash160 = new byte[20];
+                System.arraycopy(bundle, offset, hash160, 0, 20);
                 offset+=20;
-                signature.setFidBytes(hash120);
-                signature.setFid(KeyTools.hash160ToFchAddr(hash120));
+                signature.setFidBytes(hash160);
+                signature.setFid(KeyTools.hash160ToFchAddr(hash160));
+            }
+            case "[0, 0, 0, 0, 0, 5]" -> {
+                alg = AlgorithmId.FC_SchnorrSignMsg_No1_NrC7;
+                byte[] hash160Schnorr = new byte[20];
+                System.arraycopy(bundle, offset, hash160Schnorr, 0, 20);
+                offset+=20;
+                signature.setFidBytes(hash160Schnorr);
+                signature.setFid(KeyTools.hash160ToFchAddr(hash160Schnorr));
             }
             default -> {
                 return null;

@@ -2,11 +2,11 @@ package APIP2V1_Blockchain;
 
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
 import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.ObjectUtils;
 import utils.http.AuthType;
@@ -61,11 +61,11 @@ public class ChainInfo extends HttpServlet {
 
             FchChainInfo freecashInfo = new FchChainInfo();
             if (height == null) {
-                NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+                NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
                 freecashInfo.infoBest(naSaRpcClient);
                 replier.setBestHeight(Long.valueOf(freecashInfo.getHeight()));
             } else {
-                ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+                ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
                 freecashInfo.infoByHeight(Long.parseLong(height), esClient);
                 replier.setBestBlock();
             }

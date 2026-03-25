@@ -17,7 +17,6 @@ import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static constants.OpNames.*;
@@ -77,7 +76,7 @@ public class ConstructParser {
 				if(protocolRaw.getName()!=null)protocolHist.setName(protocolRaw.getName());
 				if(protocolRaw.getDesc()!=null)protocolHist.setDesc(protocolRaw.getDesc());
 				if(protocolRaw.getLang()!=null)protocolHist.setLang(protocolRaw.getLang());
-				if(protocolRaw.getFileUrls()!=null)protocolHist.setFileUrls(protocolRaw.getFileUrls());
+				if(protocolRaw.getHome()!=null)protocolHist.setHome(protocolRaw.getHome());
 				if(protocolRaw.getPreDid()!=null)protocolHist.setPrePid(protocolRaw.getPreDid());
 				if(protocolRaw.getWaiters()!=null)protocolHist.setWaiters(protocolRaw.getWaiters());
 
@@ -104,7 +103,7 @@ public class ConstructParser {
 				if(protocolRaw.getName()!=null)protocolHist.setName(protocolRaw.getName());
 				if(protocolRaw.getDesc()!=null)protocolHist.setDesc(protocolRaw.getDesc());
 				if(protocolRaw.getLang()!=null)protocolHist.setLang(protocolRaw.getLang());
-				if(protocolRaw.getFileUrls()!=null)protocolHist.setFileUrls(protocolRaw.getFileUrls());
+				if(protocolRaw.getHome()!=null)protocolHist.setHome(protocolRaw.getHome());
 				if(protocolRaw.getPreDid()!=null)protocolHist.setPrePid(protocolRaw.getPreDid());
 				if(protocolRaw.getWaiters()!=null)protocolHist.setWaiters(protocolRaw.getWaiters());
 
@@ -112,7 +111,7 @@ public class ConstructParser {
 			case STOP:
 			case RECOVER:
 			case CLOSE:
-				if (protocolRaw.getPids() == null || protocolRaw.getPids().length == 0) {
+				if (protocolRaw.getPids() == null || protocolRaw.getPids().isEmpty()) {
 					System.out.println("Pids is null or empty");
 					return null;
 				}
@@ -203,8 +202,9 @@ public class ConstructParser {
 				if(serviceRaw.getStdName()!=null)serviceHist.setStdName(serviceRaw.getStdName());
 				if(serviceRaw.getLocalNames()!=null)serviceHist.setLocalNames(serviceRaw.getLocalNames());
 				if(serviceRaw.getDesc()!=null)serviceHist.setDesc(serviceRaw.getDesc());
-				if(serviceRaw.getTypes()!=null)serviceHist.setTypes(serviceRaw.getTypes());
-				if(serviceRaw.getUrls()!=null)serviceHist.setUrls(serviceRaw.getUrls());
+				if(serviceRaw.getType()!=null)serviceHist.setType(serviceRaw.getType());
+				if(serviceRaw.getComponents()!=null)serviceHist.setComponents(serviceRaw.getComponents());
+				if(serviceRaw.getHome()!=null)serviceHist.setHome(serviceRaw.getHome());
 				if(serviceRaw.getWaiters()!=null)serviceHist.setWaiters(serviceRaw.getWaiters());
 				if(serviceRaw.getProtocols()!=null)serviceHist.setProtocols(serviceRaw.getProtocols());
 				if(serviceRaw.getServices()!=null)serviceHist.setServices(serviceRaw.getServices());
@@ -220,6 +220,21 @@ public class ConstructParser {
 					serviceHist.setDealer(serviceRaw.getDealer());
 					serviceHist.setDealerPubkey(serviceRaw.getDealerPubkey());
 				}
+				// Pricing fields
+				if(serviceRaw.getPricePerKB()!=null)serviceHist.setPricePerKB(serviceRaw.getPricePerKB());
+				if(serviceRaw.getPricePerKBIn()!=null)serviceHist.setPricePerKBIn(serviceRaw.getPricePerKBIn());
+				if(serviceRaw.getPricePerKBOut()!=null)serviceHist.setPricePerKBOut(serviceRaw.getPricePerKBOut());
+				if(serviceRaw.getPricePerKBDay()!=null)serviceHist.setPricePerKBDay(serviceRaw.getPricePerKBDay());
+				if(serviceRaw.getMinPayment()!=null)serviceHist.setMinPayment(serviceRaw.getMinPayment());
+				if(serviceRaw.getPricePerRequest()!=null)serviceHist.setPricePerRequest(serviceRaw.getPricePerRequest());
+				if(serviceRaw.getSessionDays()!=null)serviceHist.setSessionDays(serviceRaw.getSessionDays());
+				if(serviceRaw.getConsumeViaShare()!=null)serviceHist.setConsumeViaShare(serviceRaw.getConsumeViaShare());
+				if(serviceRaw.getOrderViaShare()!=null)serviceHist.setOrderViaShare(serviceRaw.getOrderViaShare());
+				if(serviceRaw.getCurrency()!=null)serviceHist.setCurrency(serviceRaw.getCurrency());
+				if(serviceRaw.getMinCredit()!=null)serviceHist.setMinCredit(serviceRaw.getMinCredit());
+				if(serviceRaw.getMaxDataSize()!=null)serviceHist.setMaxDataSize(serviceRaw.getMaxDataSize());
+				if(serviceRaw.getDataExpiresInDays()!=null)serviceHist.setDataExpiresInDays(serviceRaw.getDataExpiresInDays());
+
 
 				break;
 			case UPDATE:
@@ -242,8 +257,9 @@ public class ConstructParser {
 				if(serviceRaw.getStdName()!=null)serviceHist.setStdName(serviceRaw.getStdName());
 				if(serviceRaw.getLocalNames()!=null)serviceHist.setLocalNames(serviceRaw.getLocalNames());
 				if(serviceRaw.getDesc()!=null)serviceHist.setDesc(serviceRaw.getDesc());
-				if(serviceRaw.getTypes()!=null)serviceHist.setTypes(serviceRaw.getTypes());
-				if(serviceRaw.getUrls()!=null)serviceHist.setUrls(serviceRaw.getUrls());
+				if(serviceRaw.getType()!=null)serviceHist.setType(serviceRaw.getType());
+				if(serviceRaw.getComponents()!=null)serviceHist.setComponents(serviceRaw.getComponents());
+				if(serviceRaw.getHome()!=null)serviceHist.setHome(serviceRaw.getHome());
 				if(serviceRaw.getWaiters()!=null)serviceHist.setWaiters(serviceRaw.getWaiters());
 				if(serviceRaw.getProtocols()!=null)serviceHist.setProtocols(serviceRaw.getProtocols());
 				if(serviceRaw.getServices()!=null)serviceHist.setServices(serviceRaw.getServices());
@@ -259,11 +275,25 @@ public class ConstructParser {
 					serviceHist.setDealer(serviceRaw.getDealer());
 					serviceHist.setDealerPubkey(serviceRaw.getDealerPubkey());
 				}
+				// Pricing fields
+				if(serviceRaw.getPricePerKB()!=null)serviceHist.setPricePerKB(serviceRaw.getPricePerKB());
+				if(serviceRaw.getPricePerKBIn()!=null)serviceHist.setPricePerKBIn(serviceRaw.getPricePerKBIn());
+				if(serviceRaw.getPricePerKBOut()!=null)serviceHist.setPricePerKBOut(serviceRaw.getPricePerKBOut());
+				if(serviceRaw.getPricePerKBDay()!=null)serviceHist.setPricePerKBDay(serviceRaw.getPricePerKBDay());
+				if(serviceRaw.getMinPayment()!=null)serviceHist.setMinPayment(serviceRaw.getMinPayment());
+				if(serviceRaw.getPricePerRequest()!=null)serviceHist.setPricePerRequest(serviceRaw.getPricePerRequest());
+				if(serviceRaw.getSessionDays()!=null)serviceHist.setSessionDays(serviceRaw.getSessionDays());
+				if(serviceRaw.getConsumeViaShare()!=null)serviceHist.setConsumeViaShare(serviceRaw.getConsumeViaShare());
+				if(serviceRaw.getOrderViaShare()!=null)serviceHist.setOrderViaShare(serviceRaw.getOrderViaShare());
+				if(serviceRaw.getCurrency()!=null)serviceHist.setCurrency(serviceRaw.getCurrency());
+				if(serviceRaw.getMinCredit()!=null)serviceHist.setMinCredit(serviceRaw.getMinCredit());
+				if(serviceRaw.getMaxDataSize()!=null)serviceHist.setMaxDataSize(serviceRaw.getMaxDataSize());
+				if(serviceRaw.getDataExpiresInDays()!=null)serviceHist.setDataExpiresInDays(serviceRaw.getDataExpiresInDays());
 				break;
 			case STOP:
 			case "recover":
 			case "close":
-				if(serviceRaw.getSids()==null||serviceRaw.getSids().length==0){
+				if(serviceRaw.getSids()==null||serviceRaw.getSids().isEmpty()){
 					System.out.println("Sids is null or empty");
 					return null;
 				}
@@ -359,7 +389,7 @@ public class ConstructParser {
 				if(appRaw.getDesc()!=null)appHist.setDesc(appRaw.getDesc());
 				if(appRaw.getTypes()!=null)appHist.setTypes(appRaw.getTypes());
 				if(appRaw.getVer()!=null)appHist.setVer(appRaw.getVer());
-				if(appRaw.getUrls()!=null)appHist.setUrls(appRaw.getUrls());
+				if(appRaw.getHome()!=null)appHist.setHome(appRaw.getHome());
 				if(appRaw.getDownloads()!=null)appHist.setDownloads(appRaw.getDownloads());
 				if(appRaw.getWaiters()!=null)appHist.setWaiters(appRaw.getWaiters());
 				if(appRaw.getProtocols()!=null)appHist.setProtocols(appRaw.getProtocols());
@@ -390,7 +420,7 @@ public class ConstructParser {
 				if(appRaw.getDesc()!=null)appHist.setDesc(appRaw.getDesc());
 				if(appRaw.getTypes()!=null)appHist.setTypes(appRaw.getTypes());
 				if(appRaw.getVer()!=null)appHist.setVer(appRaw.getVer());
-				if(appRaw.getUrls()!=null)appHist.setUrls(appRaw.getUrls());
+				if(appRaw.getHome()!=null)appHist.setHome(appRaw.getHome());
 				if(appRaw.getDownloads()!=null)appHist.setDownloads(appRaw.getDownloads());
 				if(appRaw.getWaiters()!=null)appHist.setWaiters(appRaw.getWaiters());
 				if(appRaw.getProtocols()!=null)appHist.setProtocols(appRaw.getProtocols());
@@ -402,7 +432,7 @@ public class ConstructParser {
 			case STOP:
 			case RECOVER:
 			case CLOSE:
-				if(appRaw.getAids()==null||appRaw.getAids().length==0){
+				if(appRaw.getAids()==null||appRaw.getAids().isEmpty()){
 					System.out.println("Aids is null or empty");
 					return null;
 				}
@@ -483,10 +513,7 @@ public class ConstructParser {
 					System.out.println("CodeId is not null");
 					return null;
 				}
-				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * 100){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-					return null;
-				}
+
 				codeHist.setId(opre.getId());
 				codeHist.setCodeId(opre.getId());
 				codeHist.setHeight(opre.getHeight());
@@ -498,7 +525,7 @@ public class ConstructParser {
 				if(codeRaw.getVer()!=null)codeHist.setVer(codeRaw.getVer());
 				if(codeRaw.getDid()!=null)codeHist.setDid(codeRaw.getDid());
 				if(codeRaw.getDesc()!=null)codeHist.setDesc(codeRaw.getDesc());
-				if(codeRaw.getUrls()!=null)codeHist.setUrls(codeRaw.getUrls());
+				if(codeRaw.getHome()!=null)codeHist.setHome(codeRaw.getHome());
 				if(codeRaw.getLangs()!=null)codeHist.setLangs(codeRaw.getLangs());
 				if(codeRaw.getProtocols()!=null)codeHist.setProtocols(codeRaw.getProtocols());
 				if(codeRaw.getWaiters()!=null)codeHist.setWaiters(codeRaw.getWaiters());
@@ -524,7 +551,7 @@ public class ConstructParser {
 				if(codeRaw.getVer()!=null)codeHist.setVer(codeRaw.getVer());
 				if(codeRaw.getDid()!=null)codeHist.setDid(codeRaw.getDid());
 				if(codeRaw.getDesc()!=null)codeHist.setDesc(codeRaw.getDesc());
-				if(codeRaw.getUrls()!=null)codeHist.setUrls(codeRaw.getUrls());
+				if(codeRaw.getHome()!=null)codeHist.setHome(codeRaw.getHome());
 				if(codeRaw.getLangs()!=null)codeHist.setLangs(codeRaw.getLangs());
 				if(codeRaw.getProtocols()!=null)codeHist.setProtocols(codeRaw.getProtocols());
 				if(codeRaw.getWaiters()!=null)codeHist.setWaiters(codeRaw.getWaiters());
@@ -532,7 +559,7 @@ public class ConstructParser {
 			case STOP:
 			case RECOVER:
 			case CLOSE:
-				if (codeRaw.getCodeIds() == null || codeRaw.getCodeIds().length == 0) {
+				if (codeRaw.getCodeIds() == null || codeRaw.getCodeIds().isEmpty()) {
 					System.out.println("CodeIds is null or empty");
 					return null;
 				}
@@ -599,7 +626,7 @@ public class ConstructParser {
 					protocol.setLang(protocolHist.getLang());
 					protocol.setDesc(protocolHist.getDesc());
 					protocol.setPrePid(protocolHist.getPrePid());
-					protocol.setFileUrls(protocolHist.getFileUrls());
+					protocol.setHome(protocolHist.getHome());
 
 					protocol.setTitle(protocolHist.getType() + protocolHist.getSn() + "V" + protocolHist.getVer() + "_" + protocolHist.getName() + "(" + protocolHist.getLang() + ")");
 					protocol.setOwner(protocolHist.getSigner());
@@ -665,7 +692,7 @@ public class ConstructParser {
 				protocol.setLang(protocolHist.getLang());
 				protocol.setDesc(protocolHist.getDesc());
 				protocol.setPrePid(protocolHist.getPrePid());
-				protocol.setFileUrls(protocolHist.getFileUrls());
+				protocol.setHome(protocolHist.getHome());
 				protocol.setTitle(protocolHist.getType() + protocolHist.getSn() + "V" + protocolHist.getVer() + "_" + protocolHist.getName() + "(" + protocolHist.getLang() + ")");
 				protocol.setLastTxId(protocolHist.getId());
 				protocol.setLastTime(protocolHist.getTime());
@@ -682,8 +709,8 @@ public class ConstructParser {
 			}
 			case STOP, RECOVER, CLOSE -> {
 				List<String> idList = new ArrayList<>();
-				if (protocolHist.getPids() != null && protocolHist.getPids().length > 0) {
-					idList.addAll(Arrays.asList(protocolHist.getPids()));
+				if (protocolHist.getPids() != null && !protocolHist.getPids().isEmpty()) {
+					idList.addAll(protocolHist.getPids());
 				} else {
 					System.out.println("Pids is null or empty");
 					return false;
@@ -743,7 +770,7 @@ public class ConstructParser {
 					}else System.out.println("Done");
 					// Create news
 					News.createNews(esClient, protocolHist.getId(), protocolHist.getSigner(), protocolHist.getOp(),
-							Feip.FeipProtocol.PROTOCOL.getName(), null, null, StringUtils.arrayToString(protocolHist.getPids()),
+							Feip.FeipProtocol.PROTOCOL.getName(), null, null, StringUtils.listToString(protocolHist.getPids()),
 							protocolHist.getHeight(), protocolHist.getTime());
 
 					return true;
@@ -811,7 +838,7 @@ public class ConstructParser {
 					service.setStdName(serviceHist.getStdName());
 					service.setLocalNames(serviceHist.getLocalNames());
 					service.setDesc(serviceHist.getDesc());
-					service.setTypes(serviceHist.getTypes());
+					service.setType(serviceHist.getType());
 					service.setVer(serviceHist.getVer());
 					service.setDealer(serviceHist.getDealer());
 
@@ -821,13 +848,29 @@ public class ConstructParser {
 						service.setDealer(dealer);
 					}
 
-					service.setUrls(serviceHist.getUrls());
+					service.setHome(serviceHist.getHome());
+					service.setComponents(serviceHist.getComponents());
 					service.setWaiters(serviceHist.getWaiters());
 					service.setProtocols(serviceHist.getProtocols());
 					service.setCodes(serviceHist.getCodes());
 					service.setServices(serviceHist.getServices());
 					service.setParams(serviceHist.getParams());
 					service.setOwner(serviceHist.getSigner());
+
+					// Pricing fields
+					service.setPricePerKB(serviceHist.getPricePerKB());
+					service.setPricePerKBIn(serviceHist.getPricePerKBIn());
+					service.setPricePerKBOut(serviceHist.getPricePerKBOut());
+					service.setPricePerKBDay(serviceHist.getPricePerKBDay());
+					service.setMinPayment(serviceHist.getMinPayment());
+					service.setPricePerRequest(serviceHist.getPricePerRequest());
+					service.setSessionDays(serviceHist.getSessionDays());
+					service.setConsumeViaShare(serviceHist.getConsumeViaShare());
+					service.setOrderViaShare(serviceHist.getOrderViaShare());
+					service.setCurrency(serviceHist.getCurrency());
+					service.setMinCredit(serviceHist.getMinCredit());
+					service.setMaxDataSize(serviceHist.getMaxDataSize());
+					service.setDataExpiresInDays(serviceHist.getDataExpiresInDays());
 
 
 					service.setLastTxId(serviceHist.getId());
@@ -864,12 +907,12 @@ public class ConstructParser {
 					return false;
 				}
 			case STOP, RECOVER, CLOSE : {
-				if(serviceHist.getSids()==null||serviceHist.getSids().length==0){
+				if(serviceHist.getSids()==null||serviceHist.getSids().isEmpty()){
 					System.out.println("Sids is null or empty");
 					return false;
 				}
 
-				EsUtils.MgetResult<Service> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SERVICE, List.of(serviceHist.getSids()), Service.class);
+				EsUtils.MgetResult<Service> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SERVICE, serviceHist.getSids(), Service.class);
 				List<Service> services = result.getResultList();
 
 				List<Service> updatedServices = new ArrayList<>();
@@ -925,7 +968,7 @@ public class ConstructParser {
 
 					// Create news
 					News.createNews(esClient, serviceHist.getId(), serviceHist.getSigner(), serviceHist.getOp(),
-							Feip.FeipProtocol.SERVICE.getName(), null, null, StringUtils.arrayToString(serviceHist.getSids()),
+							Feip.FeipProtocol.SERVICE.getName(), null, null, StringUtils.listToString(serviceHist.getSids()),
 							serviceHist.getHeight(), serviceHist.getTime());
 					return true;
 				}
@@ -952,7 +995,7 @@ public class ConstructParser {
 				service.setStdName(serviceHist.getStdName());
 				service.setLocalNames(serviceHist.getLocalNames());
 				service.setDesc(serviceHist.getDesc());
-				service.setTypes(serviceHist.getTypes());
+				service.setType(serviceHist.getType());
 				service.setVer(serviceHist.getVer());
 				service.setDealer(serviceHist.getDealer());
 
@@ -962,12 +1005,29 @@ public class ConstructParser {
 					service.setDealer(dealer);
 				}
 
-				service.setUrls(serviceHist.getUrls());
+				service.setHome(serviceHist.getHome());
+				service.setComponents(serviceHist.getComponents());
 				service.setWaiters(serviceHist.getWaiters());
 				service.setProtocols(serviceHist.getProtocols());
 				service.setCodes(serviceHist.getCodes());
 				service.setServices(serviceHist.getServices());
 				service.setParams(serviceHist.getParams());
+
+				// Pricing fields
+				if(serviceHist.getPricePerKB()!=null)service.setPricePerKB(serviceHist.getPricePerKB());
+				if(serviceHist.getPricePerKBIn()!=null)service.setPricePerKBIn(serviceHist.getPricePerKBIn());
+				if(serviceHist.getPricePerKBOut()!=null)service.setPricePerKBOut(serviceHist.getPricePerKBOut());
+				if(serviceHist.getPricePerKBDay()!=null)service.setPricePerKBDay(serviceHist.getPricePerKBDay());
+				if(serviceHist.getMinPayment()!=null)service.setMinPayment(serviceHist.getMinPayment());
+				if(serviceHist.getPricePerRequest()!=null)service.setPricePerRequest(serviceHist.getPricePerRequest());
+				if(serviceHist.getSessionDays()!=null)service.setSessionDays(serviceHist.getSessionDays());
+				if(serviceHist.getConsumeViaShare()!=null)service.setConsumeViaShare(serviceHist.getConsumeViaShare());
+				if(serviceHist.getOrderViaShare()!=null)service.setOrderViaShare(serviceHist.getOrderViaShare());
+				if(serviceHist.getCurrency()!=null)service.setCurrency(serviceHist.getCurrency());
+				if(serviceHist.getMinCredit()!=null)service.setMinCredit(serviceHist.getMinCredit());
+				if(serviceHist.getMaxDataSize()!=null)service.setMaxDataSize(serviceHist.getMaxDataSize());
+				if(serviceHist.getDataExpiresInDays()!=null)service.setDataExpiresInDays(serviceHist.getDataExpiresInDays());
+
 
 				service.setLastTxId(serviceHist.getId());
 				service.setLastTime(serviceHist.getTime());
@@ -1047,7 +1107,7 @@ public class ConstructParser {
 					app.setDesc(appHist.getDesc());
 					app.setTypes(appHist.getTypes());
 					app.setVer(appHist.getVer());
-					app.setUrls(appHist.getUrls());
+					app.setHome(appHist.getHome());
 					app.setDownloads(appHist.getDownloads());
 					app.setWaiters(appHist.getWaiters());
 					app.setOwner(appHist.getSigner());
@@ -1087,12 +1147,12 @@ public class ConstructParser {
 				}
 
 			case STOP, RECOVER, CLOSE:
-				if(appHist.getAids()==null||appHist.getAids().length==0){
+				if(appHist.getAids()==null||appHist.getAids().isEmpty()){
 					System.out.println("Aids is null or empty");
 					return false;
 				}
 
-				EsUtils.MgetResult<App> result = EsUtils.getMultiByIdList(esClient, IndicesNames.APP, List.of(appHist.getAids()), App.class);
+				EsUtils.MgetResult<App> result = EsUtils.getMultiByIdList(esClient, IndicesNames.APP, appHist.getAids(), App.class);
 				List<App> apps = result.getResultList();
 
 				List<App> updatedApps = new ArrayList<>();
@@ -1148,7 +1208,7 @@ public class ConstructParser {
 
 					// Create news
 					News.createNews(esClient, appHist.getId(), appHist.getSigner(), appHist.getOp(),
-							Feip.FeipProtocol.APP.getName(), null, null, StringUtils.arrayToString(appHist.getAids()),
+							Feip.FeipProtocol.APP.getName(), null, null, StringUtils.listToString(appHist.getAids()),
 							appHist.getHeight(), appHist.getTime());
 					return true;
 				}
@@ -1181,7 +1241,7 @@ public class ConstructParser {
 				app.setDesc(appHist.getDesc());
 				app.setTypes(appHist.getTypes());
 				app.setVer(appHist.getVer());
-				app.setUrls(appHist.getUrls());
+				app.setHome(appHist.getHome());
 				app.setDownloads(appHist.getDownloads());
 				app.setWaiters(appHist.getWaiters());
 				app.setOwner(appHist.getSigner());
@@ -1266,7 +1326,7 @@ public class ConstructParser {
 					code.setDid(codeHist.getDid());
 					code.setDesc(codeHist.getDesc());
 					code.setLangs(codeHist.getLangs());
-					code.setUrls(codeHist.getUrls());
+					code.setHome(codeHist.getHome());
 					code.setProtocols(codeHist.getProtocols());
 					code.setWaiters(codeHist.getWaiters());
 
@@ -1304,12 +1364,12 @@ public class ConstructParser {
 				}
 
 			case STOP, RECOVER, CLOSE:
-				if (codeHist.getCodeIds() == null || codeHist.getCodeIds().length == 0) {
+				if (codeHist.getCodeIds() == null || codeHist.getCodeIds().isEmpty()) {
 					System.out.println("CodeIds is null or empty");
 					return false;
 				}
 
-				EsUtils.MgetResult<Code> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CODE, Arrays.asList(codeHist.getCodeIds()), Code.class);
+				EsUtils.MgetResult<Code> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CODE, codeHist.getCodeIds(), Code.class);
 				List<Code> codes = result.getResultList();
 
 				List<Code> updatedCodes = new ArrayList<>();
@@ -1364,7 +1424,7 @@ public class ConstructParser {
 				} else System.out.println("Done");
 				// Create news
 				News.createNews(esClient, codeHist.getId(), codeHist.getSigner(), codeHist.getOp(),
-						Feip.FeipProtocol.CODE.getName(), null, null,StringUtils.arrayToString(codeHist.getCodeIds()),
+						Feip.FeipProtocol.CODE.getName(), null, null,StringUtils.listToString(codeHist.getCodeIds()),
 						codeHist.getHeight(), codeHist.getTime());
 				return true;
 
@@ -1396,7 +1456,7 @@ public class ConstructParser {
 				code.setDid(codeHist.getDid());
 				code.setDesc(codeHist.getDesc());
 				code.setLangs(codeHist.getLangs());
-				code.setUrls(codeHist.getUrls());
+				code.setHome(codeHist.getHome());
 				code.setProtocols(codeHist.getProtocols());
 				code.setWaiters(codeHist.getWaiters());
 

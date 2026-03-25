@@ -7,6 +7,7 @@ import clients.ApipClient;
 import constants.Values;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.SortOptions;
 import co.elastic.clients.elasticsearch.core.DeleteResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -88,7 +89,7 @@ public class RewardManager {
         List<SortOptions> sort = Sort.makeTwoFieldsSort(TIME, Values.DESC, REWARD_ID, Values.ASC);
         ArrayList<RewardInfo> rewardInfoList = new ArrayList<>();
         SearchResponse<RewardInfo> result;
-        List<String> last = null;
+        List<FieldValue> last = null;
         int size;
         try {
             result = esClient.search(s -> s
@@ -112,7 +113,7 @@ public class RewardManager {
 
         while(size == EsUtils.READ_MAX / 10){
             try {
-                List<String> finalLast = last;
+                List<FieldValue> finalLast = last;
                 result = esClient.search(s -> s
                                 .index(addSidBriefToName(sid,REWARD).toLowerCase())
                                 .size(EsUtils.READ_MAX / 10)

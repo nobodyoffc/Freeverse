@@ -1,14 +1,24 @@
 package fudp.congestion;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
- * CUBIC-based congestion control
+ * CUBIC-based congestion control.
+ *
+ * Thread safety: onSend() is called from the sender thread, onAck() from the
+ * ACK-processing thread, and canSend() from the sender thread.  All methods
+ * that mutate shared state are synchronized to prevent lost updates on
+ * compound read-modify-write sequences (e.g. bytesInFlight += n).
  */
 public class CongestionControl {
 
-    // Initial window: 10 * MSS (typical MSS = 1200 bytes)
-    private static final long INITIAL_WINDOW = 12000;
-    private static final long MIN_WINDOW = 2400;
-    private static final long MAX_WINDOW = 100000000; // 100 MB
+    // Initial window: generous to avoid slow ramp-up (especially localhost)
+    private static final long INITIAL_WINDOW = 120000;
+    // Minimum window: must allow at least several MTU-sized packets in flight.
+    // Too small (e.g. 2400 = less than 2 packets for 1350-byte MTU) causes
+    // the sender to stall after a congestion collapse with almost no recovery.
+    private static final long MIN_WINDOW = 14400; // ~10 packets for 1350-byte MTU
+    private static final long MAX_WINDOW = 100_000_000; // 100 MB
 
     // CUBIC parameters
     private static final double BETA = 0.7;
@@ -16,7 +26,7 @@ public class CongestionControl {
 
     private long congestionWindow;
     private long ssthresh;
-    private long bytesInFlight;
+    private final AtomicLong bytesInFlight = new AtomicLong(0);
 
     // CUBIC state
     private long wMax;
@@ -32,16 +42,16 @@ public class CongestionControl {
     public CongestionControl() {
         this.congestionWindow = INITIAL_WINDOW;
         this.ssthresh = Long.MAX_VALUE;
-        this.bytesInFlight = 0;
         this.state = State.SLOW_START;
         this.epochStart = System.currentTimeMillis();
     }
 
     /**
-     * Called when bytes are acknowledged
+     * Called when bytes are acknowledged.
      */
-    public void onAck(int ackedBytes) {
-        bytesInFlight = Math.max(0, bytesInFlight - ackedBytes);
+    public synchronized void onAck(int ackedBytes) {
+        bytesInFlight.addAndGet(-ackedBytes);
+        if (bytesInFlight.get() < 0) bytesInFlight.set(0);
 
         switch (state) {
             case SLOW_START -> {
@@ -73,9 +83,9 @@ public class CongestionControl {
     }
 
     /**
-     * Called when packet loss is detected
+     * Called when packet loss is detected.
      */
-    public void onLoss() {
+    public synchronized void onLoss() {
         wMax = congestionWindow;
         congestionWindow = (long) (congestionWindow * BETA);
         congestionWindow = Math.max(congestionWindow, MIN_WINDOW);
@@ -85,54 +95,58 @@ public class CongestionControl {
     }
 
     /**
-     * Called when bytes are sent
+     * Called when bytes are sent.  Uses AtomicLong so it never races with
+     * onAck's decrement.
      */
     public void onSend(int sentBytes) {
-        bytesInFlight += sentBytes;
+        bytesInFlight.addAndGet(sentBytes);
     }
 
     /**
-     * Check if we can send more data
+     * Called when a packet is removed for retransmission (not a successful ACK).
+     * Only decrements bytesInFlight without any congestion window growth.
+     * This prevents bytesInFlight leaks when packets are retransmitted:
+     * the old packet's bytes are subtracted, and the new retransmitted packet
+     * will add its bytes via onSend().
      */
-    public boolean canSend(int bytes) {
-        return bytesInFlight + bytes <= congestionWindow;
+    public void onRetransmitRemove(int removedBytes) {
+        bytesInFlight.addAndGet(-removedBytes);
+        if (bytesInFlight.get() < 0) bytesInFlight.set(0);
     }
 
     /**
-     * Get available window
+     * Check if we can send more data.
      */
-    public long getAvailableWindow() {
-        return Math.max(0, congestionWindow - bytesInFlight);
+    public synchronized boolean canSend(int bytes) {
+        return bytesInFlight.get() + bytes <= congestionWindow;
     }
 
     /**
-     * Get congestion window
+     * Get available window.
      */
-    public long getCongestionWindow() {
+    public synchronized long getAvailableWindow() {
+        return Math.max(0, congestionWindow - bytesInFlight.get());
+    }
+
+    public synchronized long getCongestionWindow() {
         return congestionWindow;
     }
 
-    /**
-     * Get bytes in flight
-     */
     public long getBytesInFlight() {
-        return bytesInFlight;
+        return bytesInFlight.get();
     }
 
-    /**
-     * Get current state
-     */
-    public State getState() {
+    public synchronized State getState() {
         return state;
     }
 
     /**
-     * Reset to initial state
+     * Reset to initial state.
      */
-    public void reset() {
+    public synchronized void reset() {
         this.congestionWindow = INITIAL_WINDOW;
         this.ssthresh = Long.MAX_VALUE;
-        this.bytesInFlight = 0;
+        this.bytesInFlight.set(0);
         this.state = State.SLOW_START;
         this.epochStart = System.currentTimeMillis();
     }
@@ -140,6 +154,6 @@ public class CongestionControl {
     @Override
     public String toString() {
         return String.format("CC[cwnd=%d, ssthresh=%d, inFlight=%d, state=%s]",
-                congestionWindow, ssthresh, bytesInFlight, state);
+                congestionWindow, ssthresh, bytesInFlight.get(), state);
     }
 }

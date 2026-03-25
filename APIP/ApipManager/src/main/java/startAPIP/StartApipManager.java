@@ -3,12 +3,13 @@ package startAPIP;
 
 import data.apipData.WebhookInfo;
 import config.Starter;
+import data.feipData.ServiceType;
 import feature.swap.SwapAffair;
 import feature.swap.SwapLpData;
 import feature.swap.SwapPendingData;
 import feature.swap.SwapStateData;
-import handlers.AccountManager;
-import handlers.Manager;
+import managers.AccountManager;
+import managers.Manager;
 import server.serviceManagers.ApipManager;
 import ui.Inputer;
 import ui.Menu;
@@ -21,7 +22,6 @@ import co.elastic.clients.elasticsearch.core.BulkResponse;
 import config.Configure;
 import server.ApipApi;
 import data.feipData.Service;
-import data.feipData.serviceParams.ApipParams;
 import clients.NaSaClient.NaSaRpcClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +31,6 @@ import server.balance.BalanceInfo;
 import server.order.Order;
 import server.reward.RewardInfo;
 import utils.FchUtils;
-import utils.ObjectUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -61,17 +60,16 @@ public class StartApipManager {
 	public static JedisPool jedisPool;
 	public static NaSaRpcClient naSaRpcClient;
 	public static String sid;
-	public static ApipParams params;
 	private static Settings settings;
-	public static final Service.ServiceType serverType = Service.ServiceType.APIP;
+	public static final ServiceType serverType = ServiceType.APIP;
 
 
 
 	public static void main(String[] args) {
 		List<data.fcData.Module> modules = new ArrayList<>();
-		modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
-		modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.NASA_RPC.name()));
-		modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+		modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.REDIS.name()));
+		modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.NASA_RPC.name()));
+		modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.ES.name()));
 		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.MEMPOOL.name()));
 		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.CASH.name()));
 		modules.add(new data.fcData.Module(Manager.class.getSimpleName(), Manager.ManagerType.ACCOUNT.name()));
@@ -106,12 +104,11 @@ public class StartApipManager {
 		byte[] symkey = settings.getSymkey();
 		service =settings.getService();
 		sid = service.getId();
-		params = ObjectUtils.objectToClass(service.getParams(),ApipParams.class);
 
 		//Prepare API clients
-		esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-		jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
-		naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+		esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
+		jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
+		naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
 
 		Configure.checkWebConfig(settings);
 
@@ -124,7 +121,7 @@ public class StartApipManager {
 		while(true) {
 			Menu menu = new Menu("APIP Manager", () -> close(br));
 
-			menu.add("Manage service", () -> new ApipManager(service,null,br,symkey,ApipParams.class).menu());
+			menu.add("Manage service", () -> new ApipManager(service,null,br,symkey).menu());
 			menu.add("Manage account", () -> accountHandler.menu(br, false));
 			menu.add("Manage indices", () -> new IndicesApip(esClient,br).menu());
 			menu.add("Repair address", () -> repairAddress());

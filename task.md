@@ -1,4 +1,106 @@
-Freeverse
+# Freeverse
+
+[x] PROTOCOL("1","7", "Protocol")
+[x] CODE("2","1", "Code")
+[x] CID("3","4", "CID")
+[x] NOBODY("4","1", "Nobody")
+[x] SERVICE("5","3", "Service")
+[x] MASTER("6","1", "Master")
+[x] STATEMENT("8","1", "Statement")
+[x] HOME("9","1", "Home")
+[x] NOTICE_FEE("10","1", "NoticeFee")
+[x] NID("11","1", "NID")
+[x] MAIL("7","4", "Mail")
+[x] CONTACT("12","3", "Contact")
+[x] BOX("13","1", "Box")
+[x] PROOF("14","1", "Proof")
+[x] APP("15","1", "APP")
+[x] REPUTATION("16","1", "Reputation")
+[x] SECRET("17","3", "Secret")
+[x] TEAM("18","1", "Team")
+[x] SQUARE("19","4", "Square")
+[x] TOKEN("20","1", "Token")
+[x] TEXT("21","1", "Text")
+[x] REMARK("22","1", "Remark")
+[x] SOUND("23","1", "Sound")
+[x] IMAGE("24","1", "Image")
+[x] VIDEO("25","1", "Video");
+
+[x] fudp://
+[] nasa swap, linode
+
+[] default FAPI server
+
+[] No DISK
+
+[] rewrite startFapiServer and startFapiClient
+
+[] FapiServer income and distribute.
+
+[] FAPI: BASE (FEIP_API,FCH_API)，DISK，MAP，TALK，ROAD(relay)，DOCK(save and IO)，BANK(settle)
+[] DISK:put,get,check,list
+[] DOCK:put,get,consume
+[] ROAD:relay
+[] MAP:register fudp peer:fid -> ip,port,pubkey. probe heart beats. last seeing. RTT
+[] BANK:deposit, pay, withdraw, settle
+[] TALK: 
+
+BASE，DISK，MAP，TALK，ROAD，DOCK，BANK
+
+[] relay function in FUDP node.
+
+[x] Freer.homepage -> locationMap
+[x] apiProvider,service,params 扁平化
+[x] when node2 restarted and node1 send msg to node2, they only communicate with AsyTwoWay.
+    1. node1 send to node2 with encrypted msg with the symkey
+    2. node2 failed to decrypt due to the absent of the symkey
+    3. node2 send the error to node1 with AsyTwoWay
+    4. node1 send msg to node2 with AsyTwoWay
+    5. ...
+    * plan
+        1. only negotiate symkey with AsyTwoWay?
+        2. only resend msg with AsyTwoWay when symkey error.
+[x] when node2 was breakdown, node1 resend too many times.
+[x] when node2 restarted, it failed to send msg to node2.
+[x] 检查balance付费
+
+[x] make output: if cltv, replace owner
+[x] cash + lockTime, redeemScript
+[x] parser + p2sh, cltv
+[x] indices + p2sh
+[x] news
+
+[x] sound, image, video
+[x] fields in fcdsl
+1. name
+2. categories 
+3. regions
+4. sites
+
+
+[] disk box: newBox, toBox, boxList, showBox. 好像不必要，用户自己设置就可以了。
+
+[x] didByNid
+[x] cidAvatarByIds
+[x] publish
+[x] multisig -> multisig
+[x] 新用户未输入dealer私钥
+[x] 新建disk client，初始设置DISK服务失败
+[x] 修改默认API，不能立即使用，重启后才生效。
+[x] DISK put 失败。
+以上三个的原因可能是diskClient未添加。
+Exception in thread "main" java.lang.NullPointerException: Cannot invoke "clients.DiskClient.put(String)" because "startClient.StartDiskClient.diskClient" is null
+at startClient.StartDiskClient.put(StartDiskClient.java:139)
+at startClient.StartDiskClient.disk(StartDiskClient.java:82)
+at startClient.StartDiskClient.main(StartDiskClient.java:68)
+18:43:50.442 [Thread-0] INFO config.Settings -- Shutdown hook completed
+
+[x] remove 'Stop' promote
+[x] 当前api服务不可用时转向或添加其他。
+[x] reset API service
+[x] APIP在DISK前加载 tomcat: 名称更换为'1-APIP.war' 和 '2-DISK.war'
+
+
 [x] the price should be 10s instead of 1s in order to pay to via. 
 [x] how to broadcast?
 [x] payoffMap test
@@ -225,4 +327,11 @@ file -> contact,mail,roomInfo,talkUnits,sessionKeyCipher
 
 * 输入密文，解密，重新加密保存，返回明文字节
 * 解密symKey加密密文
-* 
+
+java.lang.NullPointerException: Cannot invoke "data.fchData.Freer.getCid()" because the return value of "java.util.Map.get(Object)" is null
+APIP3V1_Freer.CidAvatarByIds.doRequest(CidAvatarByIds.java:98)
+APIP3V1_Freer.CidAvatarByIds.doGet(CidAvatarByIds.java:44)
+javax.servlet.http.HttpServlet.service(HttpServlet.java:502)
+javax.servlet.http.HttpServlet.service(HttpServlet.java:596)
+org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:53)
+initial.CorsFilter.doFilter(CorsFilter.java:20)

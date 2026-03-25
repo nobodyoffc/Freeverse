@@ -74,7 +74,7 @@ public class PublishRollbacker {
                     itemSet.add(item.getId());
                 }
                 case DELETE, RECOVER -> {
-                    if(item.getTextIds()==null || item.getTextIds().length==0){
+                    if(item.getTextIds()==null || item.getTextIds().size()==0){
                         continue;
                     }
                     for(String textId: item.getTextIds()){
@@ -113,7 +113,9 @@ public class PublishRollbacker {
 	public boolean rollbackStatement(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		List<String> indexList = new ArrayList<>();
 		indexList.add(IndicesNames.STATEMENT);
-		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
+		esClient.deleteByQuery(d->d.index(indexList)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
+				.query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
 		return false;
 	}
 

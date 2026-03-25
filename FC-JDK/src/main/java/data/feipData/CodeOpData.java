@@ -1,6 +1,7 @@
 package data.feipData;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import constants.FieldNames;
@@ -9,17 +10,17 @@ import constants.Values;
 public class CodeOpData {
 	
 	private String codeId;
-	private String[] codeIds;
+	private List<String> codeIds;
 
 	private String op;
 	private String name;
 	private String did;
 	private String ver;
 	private String desc;
-	private String[] langs;
-	private String[] urls;
-	private String[] protocols;
-	private String[] waiters;
+	private List<String> langs;
+	private Map<String, String> home;
+	private List<String> protocols;
+	private List<String> waiters;
 	private Integer rate;
 	private String closeStatement;
 
@@ -58,17 +59,16 @@ public class CodeOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.URLS, FieldNames.PROTOCOLS, FieldNames.WAITERS});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.URLS, FieldNames.PROTOCOLS, FieldNames.WAITERS});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.HOME, FieldNames.PROTOCOLS, FieldNames.WAITERS});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.NAME, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANGS, FieldNames.HOME, FieldNames.PROTOCOLS, FieldNames.WAITERS});
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.CODE_IDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.CODE_IDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.CODE_IDS});
 		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.RATE});
 	}
 
-	// Factory methods
 	public static CodeOpData makePublish(String name, String version, String did, String desc,
-                                         String[] langs, String[] urls, String[] protocols, String[] waiters) {
+                                         List<String> langs, Map<String, String> home, List<String> protocols, List<String> waiters) {
 		CodeOpData data = new CodeOpData();
 		data.setOp(Op.PUBLISH.toLowerCase());
 		data.setName(name);
@@ -76,14 +76,14 @@ public class CodeOpData {
 		data.setVer(version);
 		data.setDesc(desc);
 		data.setLangs(langs);
-		data.setUrls(urls);
+		data.setHome(home);
 		data.setProtocols(protocols);
 		data.setWaiters(waiters);
 		return data;
 	}
 
 	public static CodeOpData makeUpdate(String codeId, String name, String version, String did, String desc,
-                                        String[] langs, String[] urls, String[] protocols, String[] waiters) {
+                                        List<String> langs, Map<String, String> home, List<String> protocols, List<String> waiters) {
 		CodeOpData data = new CodeOpData();
 		data.setOp(Op.UPDATE.toLowerCase());
 		data.setCodeId(codeId);
@@ -92,20 +92,20 @@ public class CodeOpData {
 		data.setVer(version);
 		data.setDesc(desc);
 		data.setLangs(langs);
-		data.setUrls(urls);
+		data.setHome(home);
 		data.setProtocols(protocols);
 		data.setWaiters(waiters);
 		return data;
 	}
 
-	public static CodeOpData makeStop(String[] codeIds) {
+	public static CodeOpData makeStop(List<String> codeIds) {
 		CodeOpData data = new CodeOpData();
 		data.setOp(Op.STOP.toLowerCase());
 		data.setCodeIds(codeIds);
 		return data;
 	}
 
-	public static CodeOpData makeClose(String[] codeIds, String closeStatement) {
+	public static CodeOpData makeClose(List<String> codeIds, String closeStatement) {
 		CodeOpData data = new CodeOpData();
 		data.setOp(Op.CLOSE.toLowerCase());
 		data.setCodeIds(codeIds);
@@ -113,7 +113,7 @@ public class CodeOpData {
 		return data;
 	}
 
-	public static CodeOpData makeRecover(String[] codeIds) {
+	public static CodeOpData makeRecover(List<String> codeIds) {
 		CodeOpData data = new CodeOpData();
 		data.setOp(Op.RECOVER.toLowerCase());
 		data.setCodeIds(codeIds);
@@ -158,28 +158,28 @@ public class CodeOpData {
 	public void setDesc(String desc) {
 		this.desc = desc;
 	}
-	public String[] getLangs() {
+	public List<String> getLangs() {
 		return langs;
 	}
-	public void setLangs(String[] langs) {
+	public void setLangs(List<String> langs) {
 		this.langs = langs;
 	}
-	public String[] getUrls() {
-		return urls;
+	public Map<String, String> getHome() {
+		return home;
 	}
-	public void setUrls(String[] urls) {
-		this.urls = urls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
-	public String[] getProtocols() {
+	public List<String> getProtocols() {
 		return protocols;
 	}
-	public void setProtocols(String[] protocols) {
+	public void setProtocols(List<String> protocols) {
 		this.protocols = protocols;
 	}
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 	public Integer getRate() {
@@ -205,11 +205,11 @@ public class CodeOpData {
 		this.ver = ver;
 	}
 
-	public String[] getCodeIds() {
+	public List<String> getCodeIds() {
 		return codeIds;
 	}
 
-	public void setCodeIds(String[] codeIds) {
+	public void setCodeIds(List<String> codeIds) {
 		this.codeIds = codeIds;
 	}
 }

@@ -8,7 +8,7 @@ import constants.CodeMessage;
 import constants.IndicesNames;
 import constants.Strings;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import feature.swap.SwapAffair;
 import feature.swap.SwapPendingData;
 import initial.Initiator;
@@ -33,12 +33,12 @@ public class SwapPending extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         ReplyBody replier = new ReplyBody();
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         try(Jedis jedis = jedisPool.getResource()) {
             replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
         }
 
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
         String sid = request.getParameter(Strings.SID);
         if(sid==null){

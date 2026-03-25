@@ -171,10 +171,10 @@ public class EsUtils {
             }
             long hitSize = result.hits().hits().size();
             if (hitSize == 0) return list;
-            List<String> last = result.hits().hits().get((int) (hitSize - 1)).sort();
+            List<FieldValue> last = result.hits().hits().get((int) (hitSize - 1)).sort();
 
             while (hitSize >= size) {
-                List<String> finalLast = last;
+                List<FieldValue> finalLast = last;
                 result = esClient.search(s -> s
                                 .index(index)
                                 .sort(so -> so.field(f -> f
@@ -285,7 +285,7 @@ public class EsUtils {
         return result;
     }
 
-    public static <T> ArrayList<T> getListByTermsSinceHeight(ElasticsearchClient esClient, String index, String termField, List<String> termValues, Long sinceHeight, String sortField, SortOrder order, Class<T> clazz, List<String> last) throws IOException {
+    public static <T> ArrayList<T> getListByTermsSinceHeight(ElasticsearchClient esClient, String index, String termField, List<String> termValues, Long sinceHeight, String sortField, SortOrder order, Class<T> clazz, List<FieldValue> last) throws IOException {
         // Convert term values to FieldValue list
         List<FieldValue> values = new ArrayList<>();
         for (String v : termValues) {
@@ -339,7 +339,7 @@ public class EsUtils {
 
         if (result.hits().hits().isEmpty()) return null;
 
-        List<String> lastSort = result.hits().hits().get(result.hits().hits().size() - 1).sort();
+        List<FieldValue> lastSort = result.hits().hits().get(result.hits().hits().size() - 1).sort();
 
         ArrayList<T> itemList = new ArrayList<T>();
 
@@ -350,7 +350,7 @@ public class EsUtils {
 
             if (result.hits().hits().size() == EsUtils.READ_MAX) {
 
-                List<String> lastSort1 = lastSort;
+                List<FieldValue> lastSort1 = lastSort;
 
                 result = esClient.search(s -> s.index(index)
                         .query(q -> q.range(r -> r.field(field).gt(JsonData.of(height))))
@@ -384,7 +384,7 @@ public class EsUtils {
 
         if (result.hits().hits().isEmpty()) return null;
 
-        List<String> lastSort = result.hits().hits().get(result.hits().hits().size() - 1).sort();
+        List<FieldValue> lastSort = result.hits().hits().get(result.hits().hits().size() - 1).sort();
 
         ArrayList<T> itemList = new ArrayList<T>();
 
@@ -395,7 +395,7 @@ public class EsUtils {
 
             if (result.hits().hits().size() == EsUtils.READ_MAX) {
 
-                List<String> lastSort1 = lastSort;
+                List<FieldValue> lastSort1 = lastSort;
 
                 result = esClient.search(s -> s.index(index)
                         .query(q -> q.matchAll(m -> m))
@@ -541,7 +541,7 @@ public class EsUtils {
         SortOptions so2 = SortOptions.of(s -> s.field(fs2));
         soList.add(so2);
 
-        List<String> lastSort;
+        List<FieldValue> lastSort;
 
         SearchRequest.Builder searchBuilder = new SearchRequest.Builder()
                 .index(index)
@@ -571,7 +571,7 @@ public class EsUtils {
         while (true) {
 
             if (result.hits().hits().size() == EsUtils.READ_MAX) {
-                List<String> lastSort1 = lastSort;
+                List<FieldValue> lastSort1 = lastSort;
 
                 result = esClient.search(s -> s.index(index)
                         .query(q -> q.terms(t -> t.field(termsField1).terms(t1 -> t1.value(itemValueList))))
@@ -592,6 +592,39 @@ public class EsUtils {
         return historyList;
     }
 
+    /**
+     * Convert List<String> to List<FieldValue> for ES 8.8+ searchAfter
+     */
+    public static List<FieldValue> toFieldValueList(List<String> stringList) {
+        if (stringList == null) return null;
+        List<FieldValue> result = new ArrayList<>();
+        for (String s : stringList) {
+            result.add(FieldValue.of(s));
+        }
+        return result;
+    }
+
+    /**
+     * Convert List<FieldValue> to List<String> for backward compatibility.
+     * Also handles the case where the list actually contains String objects due to type erasure.
+     */
+    public static List<String> toStringList(List<FieldValue> fieldValueList) {
+        if (fieldValueList == null) return null;
+        List<String> result = new ArrayList<>();
+        for (Object obj : (List<?>) fieldValueList) {
+            if (obj instanceof String) {
+                // Handle case where list actually contains String objects (type erasure issue)
+                result.add((String) obj);
+            } else if (obj instanceof FieldValue) {
+                FieldValue fv = (FieldValue) obj;
+                result.add(fv.isString() ? fv.stringValue() : fv._toJsonString());
+            } else if (obj != null) {
+                result.add(obj.toString());
+            }
+        }
+        return result;
+    }
+
     public static Query getTermsQuery(String field, String value) {
         TermsQuery.Builder termsBuilder = new TermsQuery.Builder();
         termsBuilder.field(field);
@@ -601,6 +634,36 @@ public class EsUtils {
         termsBuilder.terms(t -> t.value(fieldValueList));
         TermsQuery termsQuery = termsBuilder.build();
         return new Query.Builder().terms(termsQuery).build();
+    }
+
+    /**
+     * Convert entity name to Elasticsearch index name.
+     * Handles camelCase and uppercase letters by converting to lowercase with underscores.
+     * Examples:
+     *   "block" -> "block"
+     *   "blockMark" -> "block_mark"
+     *   "BLOCK" -> "block"
+     *   "SwapState" -> "swap_state"
+     */
+    public static String convertEntityNameToIndexName(String entityName) {
+        if (entityName == null || entityName.isEmpty()) {
+            return entityName;
+        }
+
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < entityName.length(); i++) {
+            char c = entityName.charAt(i);
+            if (Character.isUpperCase(c)) {
+                // Add underscore before uppercase letter (except the first character)
+                if (i > 0) {
+                    result.append('_');
+                }
+                result.append(Character.toLowerCase(c));
+            } else {
+                result.append(c);
+            }
+        }
+        return result.toString();
     }
 
     public static class MgetResult<E> {

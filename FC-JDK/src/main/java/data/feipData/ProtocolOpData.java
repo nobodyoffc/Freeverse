@@ -1,6 +1,7 @@
 package data.feipData;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import constants.FieldNames;
@@ -9,7 +10,7 @@ import constants.Values;
 public class ProtocolOpData {
 
 	private String pid;
-	private String[] pids;
+	private List<String> pids;
 	private String op;
 	private String type;
 	private String sn;
@@ -17,10 +18,10 @@ public class ProtocolOpData {
 	private String did;
 	private String name;
 	private String desc;
-	private String[] waiters;
+	private List<String> waiters;
 	private String lang;
 	private String preDid;
-	private String[] fileUrls;
+	private Map<String, String> home;
 	private int rate;
 	private String closeStatement;
 
@@ -59,8 +60,8 @@ public class ProtocolOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.SN, FieldNames.NAME, FieldNames.TYPE, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANG, FieldNames.FILE_URLS, FieldNames.PRE_DID, FieldNames.WAITERS});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.PID, FieldNames.SN, FieldNames.NAME, FieldNames.TYPE, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANG, FieldNames.FILE_URLS, FieldNames.PRE_DID, FieldNames.WAITERS});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.SN, FieldNames.NAME, FieldNames.TYPE, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANG, FieldNames.HOME, FieldNames.PRE_DID, FieldNames.WAITERS});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.PID, FieldNames.SN, FieldNames.NAME, FieldNames.TYPE, FieldNames.VER, FieldNames.DID, Values.DESC, FieldNames.LANG, FieldNames.HOME, FieldNames.PRE_DID, FieldNames.WAITERS});
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.PIDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.PIDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.PIDS});
@@ -68,7 +69,7 @@ public class ProtocolOpData {
 	}
 
 	public static ProtocolOpData makePublish(String sn, String name, String type, String ver, String did,
-                                             String desc, String lang, String[] fileUrls, String preDid, String[] waiters) {
+                                             String desc, String lang, Map<String, String> home, String preDid, List<String> waiters) {
 		ProtocolOpData data = new ProtocolOpData();
 		data.setOp(Op.PUBLISH.toLowerCase());
 		data.setSn(sn);
@@ -78,14 +79,14 @@ public class ProtocolOpData {
 		data.setDid(did);
 		data.setDesc(desc);
 		data.setLang(lang);
-		data.setFileUrls(fileUrls);
+		data.setHome(home);
 		data.setPreDid(preDid);
 		data.setWaiters(waiters);
 		return data;
 	}
 
 	public static ProtocolOpData makeUpdate(String pid, String sn, String name, String type, String ver,
-                                            String did, String desc, String lang, String[] fileUrls, String preDid, String[] waiters) {
+                                            String did, String desc, String lang, Map<String, String> home, String preDid, List<String> waiters) {
 		ProtocolOpData data = new ProtocolOpData();
 		data.setOp(Op.UPDATE.toLowerCase());
 		data.setPid(pid);
@@ -96,20 +97,20 @@ public class ProtocolOpData {
 		data.setDid(did);
 		data.setDesc(desc);
 		data.setLang(lang);
-		data.setFileUrls(fileUrls);
+		data.setHome(home);
 		data.setPreDid(preDid);
 		data.setWaiters(waiters);
 		return data;
 	}
 
-	public static ProtocolOpData makeStop(String[] pids) {
+	public static ProtocolOpData makeStop(List<String> pids) {
 		ProtocolOpData data = new ProtocolOpData();
 		data.setOp(Op.STOP.toLowerCase());
 		data.setPids(pids);
 		return data;
 	}
 
-	public static ProtocolOpData makeClose(String[] pids, String closeStatement) {
+	public static ProtocolOpData makeClose(List<String> pids, String closeStatement) {
 		ProtocolOpData data = new ProtocolOpData();
 		data.setOp(Op.CLOSE.toLowerCase());
 		data.setPids(pids);
@@ -117,7 +118,7 @@ public class ProtocolOpData {
 		return data;
 	}
 
-	public static ProtocolOpData makeRecover(String[] pids) {
+	public static ProtocolOpData makeRecover(List<String> pids) {
 		ProtocolOpData data = new ProtocolOpData();
 		data.setOp(Op.RECOVER.toLowerCase());
 		data.setPids(pids);
@@ -132,11 +133,11 @@ public class ProtocolOpData {
 		return data;
 	}
 
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
 
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 	public String getPid() {
@@ -193,11 +194,11 @@ public class ProtocolOpData {
 	public void setPreDid(String preDid) {
 		this.preDid = preDid;
 	}
-	public String[] getFileUrls() {
-		return fileUrls;
+	public Map<String, String> getHome() {
+		return home;
 	}
-	public void setFileUrls(String[] fileUrls) {
-		this.fileUrls = fileUrls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 	public int getRate() {
 		return rate;
@@ -218,11 +219,11 @@ public class ProtocolOpData {
 		this.closeStatement = closeStatement;
 	}
 
-	public String[] getPids() {
+	public List<String> getPids() {
 		return pids;
 	}
 
-	public void setPids(String[] pids) {
+	public void setPids(List<String> pids) {
 		this.pids = pids;
 	}
 }

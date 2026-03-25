@@ -3,6 +3,7 @@ package data.feipData;
 import data.fcData.FcObject;
 
 import java.util.List;
+import java.util.Map;
 
 public class ServiceHistory extends FcObject {
 
@@ -16,19 +17,35 @@ public class ServiceHistory extends FcObject {
 	protected String dealerPubkey;
 	
 	private String stdName;
-	private String[] localNames;
+	private Map<String, String> localNames;
 	private String desc;
-	private String[] types;
-	private String[] urls;
-	private String[] waiters;
-	private String[] protocols;
-	private String[] services;
-	private String[] codes;
+	private String type;
+	private List<String> components;
+	private Map<String, String> home;
+	private List<String> waiters;
+	private List<String> protocols;
+	private List<String> services;
+	private List<String> codes;
 	private Object params;
 	private String closeStatement;
+
+	// Pricing and service configuration fields (moved from Params)
+	private String pricePerKB;
+	private String pricePerKBIn;   // Price for incoming data (requests) - FCH per KB
+	private String pricePerKBOut;  // Price for outgoing data (responses) - FCH per KB
+	private String pricePerKBDay;  // Price for storage - FCH per KB per day
+	private String minPayment;
+	private String pricePerRequest;
+	private String sessionDays;
+	private String consumeViaShare;
+	private String orderViaShare;
+	private String currency;
+	private String minCredit;
+	private String maxDataSize;
+	private String dataExpiresInDays;
 	
 	private String sid;
-	private String[] sids;
+	private List<String> sids;
 	private String op;
 	private Integer rate;
 	private Long cdd;
@@ -81,69 +98,6 @@ public class ServiceHistory extends FcObject {
 		this.stdName = stdName;
 	}
 
-	public String[] getLocalNames() {
-		return localNames;
-	}
-
-	public void setLocalNames(String[] localNames) {
-		this.localNames = localNames;
-	}
-
-	public String getDesc() {
-		return desc;
-	}
-
-	public void setDesc(String desc) {
-		this.desc = desc;
-	}
-
-	public String[] getTypes() {
-		return types;
-	}
-
-	public void setTypes(String[] types) {
-		this.types = types;
-	}
-
-	public String[] getUrls() {
-		return urls;
-	}
-
-	public void setUrls(String[] urls) {
-		this.urls = urls;
-	}
-
-	public String[] getWaiters() {
-		return waiters;
-	}
-
-	public void setWaiters(String[] waiters) {
-		this.waiters = waiters;
-	}
-
-	public String[] getProtocols() {
-		return protocols;
-	}
-
-	public void setProtocols(String[] protocols) {
-		this.protocols = protocols;
-	}
-
-	public String[] getServices() {
-		return services;
-	}
-
-	public void setServices(String[] services) {
-		this.services = services;
-	}
-
-	public String[] getCodes() {
-		return codes;
-	}
-
-	public void setCodes(String[] codes) {
-		this.codes = codes;
-	}
 
 	public Object getParams() {
 		return params;
@@ -167,14 +121,6 @@ public class ServiceHistory extends FcObject {
 
 	public void setSid(String sid) {
 		this.sid = sid;
-	}
-
-	public String[] getSids() {
-		return sids;
-	}
-
-	public void setSids(String[] sids) {
-		this.sids = sids;
 	}
 
 	public String getOp() {
@@ -215,5 +161,190 @@ public class ServiceHistory extends FcObject {
 
 	public void setDealerPubkey(String dealerPubkey) {
 		this.dealerPubkey = dealerPubkey;
+	}
+
+	// Pricing field getters and setters
+	public String getPricePerKB() {
+		return pricePerKB;
+	}
+
+	public void setPricePerKB(String pricePerKB) {
+		this.pricePerKB = pricePerKB;
+	}
+
+	public String getPricePerKBIn() {
+		return pricePerKBIn;
+	}
+
+	public void setPricePerKBIn(String pricePerKBIn) {
+		this.pricePerKBIn = pricePerKBIn;
+	}
+
+	public String getPricePerKBOut() {
+		return pricePerKBOut;
+	}
+
+	public void setPricePerKBOut(String pricePerKBOut) {
+		this.pricePerKBOut = pricePerKBOut;
+	}
+
+	public String getPricePerKBDay() {
+		return pricePerKBDay;
+	}
+
+	public void setPricePerKBDay(String pricePerKBDay) {
+		this.pricePerKBDay = pricePerKBDay;
+	}
+
+	public String getMinPayment() {
+		return minPayment;
+	}
+
+	public void setMinPayment(String minPayment) {
+		this.minPayment = minPayment;
+	}
+
+	public String getPricePerRequest() {
+		return pricePerRequest;
+	}
+
+	public void setPricePerRequest(String pricePerRequest) {
+		this.pricePerRequest = pricePerRequest;
+	}
+
+	public String getSessionDays() {
+		return sessionDays;
+	}
+
+	public void setSessionDays(String sessionDays) {
+		this.sessionDays = sessionDays;
+	}
+
+	public String getConsumeViaShare() {
+		return consumeViaShare;
+	}
+
+	public void setConsumeViaShare(String consumeViaShare) {
+		this.consumeViaShare = consumeViaShare;
+	}
+
+	public String getOrderViaShare() {
+		return orderViaShare;
+	}
+
+	public void setOrderViaShare(String orderViaShare) {
+		this.orderViaShare = orderViaShare;
+	}
+
+	public String getCurrency() {
+		return currency;
+	}
+
+	public void setCurrency(String currency) {
+		this.currency = currency;
+	}
+
+	public String getMinCredit() {
+		return minCredit;
+	}
+
+	public void setMinCredit(String minCredit) {
+		this.minCredit = minCredit;
+	}
+
+	public String getMaxDataSize() {
+		return maxDataSize;
+	}
+
+	public void setMaxDataSize(String maxDataSize) {
+		this.maxDataSize = maxDataSize;
+	}
+
+	public Map<String, String> getLocalNames() {
+		return localNames;
+	}
+
+	public void setLocalNames(Map<String, String> localNames) {
+		this.localNames = localNames;
+	}
+
+	public String getDesc() {
+		return desc;
+	}
+
+	public void setDesc(String desc) {
+		this.desc = desc;
+	}
+
+	public String getType() {
+		return type;
+	}
+
+	public void setType(String type) {
+		this.type = type;
+	}
+
+	public List<String> getComponents() {
+		return components;
+	}
+
+	public void setComponents(List<String> components) {
+		this.components = components;
+	}
+
+	public Map<String, String> getHome() {
+		return home;
+	}
+
+	public void setHome(Map<String, String> home) {
+		this.home = home;
+	}
+
+	public List<String> getWaiters() {
+		return waiters;
+	}
+
+	public void setWaiters(List<String> waiters) {
+		this.waiters = waiters;
+	}
+
+	public List<String> getProtocols() {
+		return protocols;
+	}
+
+	public void setProtocols(List<String> protocols) {
+		this.protocols = protocols;
+	}
+
+	public List<String> getServices() {
+		return services;
+	}
+
+	public void setServices(List<String> services) {
+		this.services = services;
+	}
+
+	public List<String> getCodes() {
+		return codes;
+	}
+
+	public void setCodes(List<String> codes) {
+		this.codes = codes;
+	}
+
+	public List<String> getSids() {
+		return sids;
+	}
+
+	public void setSids(List<String> sids) {
+		this.sids = sids;
+	}
+
+	public String getDataExpiresInDays() {
+		return dataExpiresInDays;
+	}
+
+	public void setDataExpiresInDays(String dataExpiresInDays) {
+		this.dataExpiresInDays = dataExpiresInDays;
 	}
 }

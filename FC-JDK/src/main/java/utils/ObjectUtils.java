@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import data.fcData.ReplyBody;
 import data.fchData.Freer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -14,6 +16,7 @@ import java.util.*;
 
 public class ObjectUtils {
 
+    private static final Logger log = LoggerFactory.getLogger(ObjectUtils.class);
     private static final Gson gson = new Gson();
 
     public static void main(String[] args) {
@@ -44,7 +47,8 @@ public class ObjectUtils {
         try {
             String jsonString = (obj instanceof String) ? (String) obj : gson.toJson(obj);
             return gson.fromJson(jsonString, type);
-        } catch (Exception ignore) {
+        } catch (Exception e) {
+            log.debug("Failed to convert object to {}: {}", type, e.getMessage());
             return null;
         }
     }

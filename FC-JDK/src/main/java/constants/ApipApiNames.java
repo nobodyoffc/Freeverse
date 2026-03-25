@@ -45,6 +45,8 @@ public class ApipApiNames {
     public static final String SIGN_IN_ECC = "signInEcc";
     public static final String GENERAL = "general";
     public static final String TOTALS = "totals";
+    public static final String ENTITY_BY_IDS = "entityByIds";
+    public static final String ENTITY_SEARCH = "entitySearch";
     public static final String BLOCK_BY_IDS = "blockByIds";
     public static final String BLOCK_SEARCH = "blockSearch";
     public static final String BEST_BLOCK = "bestBlock";
@@ -75,7 +77,7 @@ public class ApipApiNames {
     public static final String FREER_SEARCH = "freerSearch";
     public static final String FREER_HISTORY = "freerHistory";
     public static final String CID_AVATAR_BY_IDS = "cidAvatarByIds";
-    public static final String HOMEPAGE_HISTORY = "homepageHistory";
+    public static final String HOME_HISTORY = "homeHistory";
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
     public static final String REPUTATION_HISTORY = "reputationHistory";
     public static final String NOBODY_SEARCH = "nobodySearch";
@@ -106,12 +108,12 @@ public class ApipApiNames {
     public static final String APP_SEARCH = "appSearch";
     public static final String APP_OP_HISTORY = "appOpHistory";
     public static final String APP_RATE_HISTORY = "appRateHistory";
-    public static final String GROUP_BY_IDS = "groupByIds";
-    public static final String GROUP_SEARCH = "groupSearch";
-    public static final String GROUP_MEMBERS = "groupMembers";
-    public static final String GROUP_EX_MEMBERS = "groupExMembers";
-    public static final String MY_GROUPS = "myGroups";
-    public static final String GROUP_OP_HISTORY = "groupOpHistory";
+    public static final String SQUARE_BY_IDS = "squareByIds";
+    public static final String SQUARE_SEARCH = "squareSearch";
+    public static final String SQUARE_MEMBERS = "squareMembers";
+    public static final String SQUARE_EX_MEMBERS = "squareExMembers";
+    public static final String MY_SQUARES = "mySquares";
+    public static final String SQUARE_OP_HISTORY = "squareOpHistory";
     public static final String TEAM_BY_IDS = "teamByIds";
     public static final String TEAM_SEARCH = "teamSearch";
     public static final String TEAM_MEMBERS = "teamMembers";
@@ -191,6 +193,7 @@ public class ApipApiNames {
     public static final String RICHLIST = "richlist";
     public static final String FREECASH_INFO = "freecashInfo";
     public static final String TOTAL_SUPPLY = "totalSupply";
+    public static final String NODE_LIST = "nodeList";
 
     public static final String CHAIN_INFO ="chainInfo";
     public static final String DIFFICULTY_HISTORY ="difficultyHistory";
@@ -223,6 +226,10 @@ public class ApipApiNames {
     public static final String SwapPending = "swapPending";
     public static final String SwapFinished = "swapFinished";
     public static final String SwapPrice = "swapPrice";
+    public static final String SwapServiceByIds = "swapServiceByIds";
+    public static final String SwapServiceSearch = "swapServiceSearch";
+    public static final String SwapFidSearch = "swapFidSearch";
+    public static final String SwapCashByIds = "swapCashByIds";
 
     public static final String SING_IN = "signIn";
 }

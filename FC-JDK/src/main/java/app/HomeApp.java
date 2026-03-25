@@ -10,6 +10,7 @@ import core.fch.Wallet;
 import data.fchData.Cash;
 import data.fchData.Freer;
 import data.fchData.Multisig;
+import data.feipData.ServiceType;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -21,7 +22,7 @@ import data.fcData.AlgorithmId;
 import data.fcData.FidTxMask;
 import data.fcData.Signature;
 import data.feipData.Service;
-import handlers.*;
+import managers.*;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.fch.FchMainNetwork;
@@ -69,7 +70,7 @@ public class HomeApp extends FcApp {
 
     public HomeApp(Settings settings, BufferedReader br) {
         this.settings = settings;
-        this.apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        this.apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         this.myFid = settings.getMainFid();
         this.myPubkey = settings.getMyPubkey();
         this.myPrikeyCipher = settings.getMyPrikeyCipher();
@@ -83,7 +84,7 @@ public class HomeApp extends FcApp {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.SECRET.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CONTACT.name()));
@@ -1097,7 +1098,7 @@ public class HomeApp extends FcApp {
 
     public static void multiSig(Settings settings) {
         BufferedReader br = settings.getBr();
-        ApipClient apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        ApipClient apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
 
         Menu menu = new Menu("Multi Signature");
         menu.add("List my multisig FIDs", () -> myMultiFids(settings.getMainFid(), apipClient, br));

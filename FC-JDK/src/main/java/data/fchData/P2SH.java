@@ -12,6 +12,7 @@ import org.bitcoinj.script.Script;
 import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.script.ScriptChunk;
 import org.bitcoinj.script.ScriptOpCodes;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import utils.Hex;
@@ -1202,6 +1203,46 @@ public class P2SH extends FcEntity {
             log.error("Error parsing redeemScript from unlockScript: " + e.getMessage());
             return null;
         }
+    }
+
+
+    /**
+     * Create a map of hash160Hex to redeemScriptHex for opReturn
+     * This is the NEW format that eliminates duplicates for outputs to the same P2SH address
+     *
+     * @param p2SHOutputs List of P2SH outputs to include in the map
+     * @return JSON string representing the hash160->redeemScript map
+     */
+    @NotNull
+    public static String makeRedeemScriptListJsonForOpReturn(List<P2SH> p2SHOutputs) {
+        List<String> hash160ToRedeemScript = new ArrayList<>();
+
+        for (P2SH p2sh : p2SHOutputs) {
+            if (p2sh.getRedeemScript() == null || p2sh.getRedeemScript().isEmpty()) {
+                log.debug( "Skipping P2SH with null/empty redeemScript");
+                continue;
+            }
+
+            // Validate redeemScript syntax strictly
+            if (!validateRedeemScriptSyntax(p2sh.getRedeemScript())) {
+                throw new IllegalArgumentException("Invalid redeemScript syntax - script would be unspendable: "
+                        + p2sh.getRedeemScript().substring(0, Math.min(40, p2sh.getRedeemScript().length())) + "...");
+            }
+
+            // Calculate hash160 of the redeemScript
+            byte[] redeemScriptBytes = Hex.fromHex(p2sh.getRedeemScript());
+            String scriptHex = Hex.toHex(redeemScriptBytes);
+
+            // Only add if not already present (automatic de-duplication)
+            if (!hash160ToRedeemScript.contains(scriptHex)) {
+                hash160ToRedeemScript.add(p2sh.getRedeemScript());
+                log.debug( "Added P2SH to map.");
+            } else {
+                log.debug( "Skipped duplicate P2SH");
+            }
+        }
+
+        return new Gson().toJson(hash160ToRedeemScript);
     }
 
     public String getRedeemScriptHex() {

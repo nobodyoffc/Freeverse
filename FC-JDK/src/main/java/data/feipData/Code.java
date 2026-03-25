@@ -2,15 +2,18 @@ package data.feipData;
 
 import data.fcData.FcObject;
 
+import java.util.List;
+import java.util.Map;
+
 public class Code extends FcObject {
 	private String name;
 	private String ver;
 	private String did;
 	private String desc;
-	private String[] langs;
-	private String[] urls;
-	private String[] protocols;
-	private String[] waiters;
+	private List<String> langs;
+	private Map<String, String> home;
+	private List<String> protocols;
+	private List<String> waiters;
 	
 	private String owner;
 	private Long birthTime;
@@ -48,28 +51,28 @@ public class Code extends FcObject {
 	public void setDesc(String desc) {
 		this.desc = desc;
 	}
-	public String[] getLangs() {
+	public List<String> getLangs() {
 		return langs;
 	}
-	public void setLangs(String[] langs) {
+	public void setLangs(List<String> langs) {
 		this.langs = langs;
 	}
-	public String[] getUrls() {
-		return urls;
+	public Map<String, String> getHome() {
+		return home;
 	}
-	public void setUrls(String[] urls) {
-		this.urls = urls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
-	public String[] getProtocols() {
+	public List<String> getProtocols() {
 		return protocols;
 	}
-	public void setProtocols(String[] protocols) {
+	public void setProtocols(List<String> protocols) {
 		this.protocols = protocols;
 	}
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 	public String getOwner() {

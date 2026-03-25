@@ -96,7 +96,7 @@ public class ApipApiNames {
     public static final String CID_SEARCH = "cidSearch";
     public static final String CID_HISTORY = "cidHistory";
     public static final String CID_AVATAR_BY_IDS = "cidAvatarByIds";
-    public static final String HOMEPAGE_HISTORY = "homepageHistory";
+    public static final String HOME_HISTORY = "homeHistory";
     public static final String NOTICE_FEE_HISTORY = "noticeFeeHistory";
     public static final String REPUTATION_HISTORY = "reputationHistory";
     public static final String NOBODY_SEARCH = "nobodySearch";
@@ -125,12 +125,11 @@ public class ApipApiNames {
     public static final String APP_SEARCH = "appSearch";
     public static final String APP_OP_HISTORY = "appOpHistory";
     public static final String APP_RATE_HISTORY = "appRateHistory";
-    public static final String GROUP_BY_IDS = "groupByIds";
-    public static final String GROUP_SEARCH = "groupSearch";
-    public static final String GROUP_MEMBERS = "groupMembers";
-    public static final String GROUP_EX_MEMBERS = "groupExMembers";
-    public static final String MY_GROUPS = "myGroups";
-    public static final String GROUP_OP_HISTORY = "groupOpHistory";
+    public static final String SQUARE_BY_IDS = "squareByIds";
+    public static final String SQUARE_SEARCH = "squareSearch";
+    public static final String SQUARE_MEMBERS = "squareMembers";
+    public static final String MY_SQUARES = "mySquares";
+    public static final String SQUARE_OP_HISTORY = "squareOpHistory";
     public static final String TEAM_BY_IDS = "teamByIds";
     public static final String TEAM_SEARCH = "teamSearch";
     public static final String TEAM_MEMBERS = "teamMembers";
@@ -273,13 +272,13 @@ public class ApipApiNames {
                 CID_SEARCH,CID_BY_IDS, CID_INFO_BY_IDS, CID_HISTORY,
                  FID_CID_SEEK, GET_FID_CID,
                 NOBODY_SEARCH, NOBODY_BY_IDS,CHECK_NOBODIES,
-                HOMEPAGE_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
+                HOME_HISTORY, NOTICE_FEE_HISTORY, REPUTATION_HISTORY,
                 NID_SEARCH, OID_BY_NIDS,
                 GET_AVATAR, AVATARS, CID_AVATAR_BY_IDS
         };
 
         organizeAPIs = new String[]{
-                GROUP_SEARCH, GROUP_BY_IDS, GROUP_MEMBERS, GROUP_OP_HISTORY, MY_GROUPS,
+                SQUARE_SEARCH, SQUARE_BY_IDS, SQUARE_MEMBERS, SQUARE_OP_HISTORY, MY_SQUARES,
                 TEAM_SEARCH, TEAM_BY_IDS, TEAM_MEMBERS, TEAM_EX_MEMBERS,
                 TEAM_OP_HISTORY, TEAM_RATE_HISTORY, TEAM_OTHER_PERSONS, MY_TEAMS
         };

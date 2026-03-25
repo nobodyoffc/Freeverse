@@ -5,9 +5,9 @@ import constants.CodeMessage;
 import core.crypto.CryptoDataByte;
 import core.crypto.Encryptor;
 import data.fchData.Block;
-import handlers.AccountManager;
-import handlers.Manager;
-import handlers.SessionManager;
+import managers.AccountManager;
+import managers.Manager;
+import managers.SessionManager;
 import server.HttpRequestChecker;
 import utils.FchUtils;
 import utils.Hex;
@@ -65,7 +65,8 @@ public class ReplyBody extends FcObject {
 
         setBestBlock();
 
-        updateBalance(httpRequestChecker.getApiName());
+        if(httpRequestChecker!=null)
+            updateBalance(httpRequestChecker.getApiName());
 
         finalJson = this.toJson();
 

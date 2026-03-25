@@ -16,7 +16,7 @@ import constants.FieldNames;
 import constants.Strings;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import feature.swap.SwapPriceData;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
@@ -52,12 +52,12 @@ public class SwapPrices extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         ReplyBody replier = new ReplyBody();
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         try(Jedis jedis = jedisPool.getResource()) {
             replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
         }
 
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
         String sid = request.getParameter(SID);
 
@@ -79,7 +79,7 @@ public class SwapPrices extends HttpServlet {
         else searchBuilder.size(50);
         if(lastStr!=null) {
             String[] last = lastStr.split(",");
-            searchBuilder.searchAfter(Arrays.asList(last));
+            searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));
         }
 
         BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
@@ -126,7 +126,7 @@ public class SwapPrices extends HttpServlet {
 
         String[] last = null;
         if(result.hits().hits().size() >0){
-            last = result.hits().hits().get(result.hits().hits().size() - 1).sort().toArray(new String[0]);
+            last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
         }
 
         List<Hit<SwapPriceData>> hitList = result.hits().hits();

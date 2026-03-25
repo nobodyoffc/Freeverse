@@ -104,7 +104,7 @@ public class Address extends FcObject {
 				.buckets().array();
 
 		for (StringTermsBucket bucket: utxoBuckets) {
-			String addr = bucket.key();
+			String addr = bucket.key().stringValue();
 			long value1 = (long)bucket.aggregations().get("utxoSum").sum().value();
 			utxoCountMap.put(addr, bucket.docCount());
 			utxoSumMap.put(addr, value1);
@@ -122,7 +122,7 @@ public class Address extends FcObject {
 				.buckets().array();
 
 		for (StringTermsBucket bucket: stxoBuckets) {
-			String addr = bucket.key();
+			String addr = bucket.key().stringValue();
 			long value1 = (long)bucket.aggregations().get("stxoSum").sum().value();
 			stxoSumMap.put(addr, value1);
 			long cddSum = (long)bucket.aggregations().get("cddSum").sum().value();
@@ -138,7 +138,7 @@ public class Address extends FcObject {
 				.buckets().array();
 
 		for (StringTermsBucket bucket: txoBuckets) {
-			String addr = bucket.key();
+			String addr = bucket.key().stringValue();
 			long value1 = (long)bucket.aggregations().get("txoSum").sum().value();
 			txoSumMap.put(addr, value1);
 		}

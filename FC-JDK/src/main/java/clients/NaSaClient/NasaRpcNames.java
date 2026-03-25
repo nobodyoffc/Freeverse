@@ -18,4 +18,6 @@ public class NasaRpcNames {
     public static final String LISTUNSPENT = "listunspent";
     public static final String SENDRAWTRANSACTION = "sendrawtransaction";
     public static final String DECODERAWTRANSACTION = "decoderawtransaction";
+    public static final String GETPEERINFO = "getpeerinfo";
+    public static final String GETNETWORKINFO = "getnetworkinfo";
 }

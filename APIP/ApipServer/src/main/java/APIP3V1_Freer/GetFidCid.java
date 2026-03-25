@@ -7,7 +7,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import constants.*;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import constants.ApipApiNames;
 import utils.http.AuthType;
@@ -45,7 +45,7 @@ public class GetFidCid extends HttpServlet {
     public static void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
         boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
         if (!isOk) {

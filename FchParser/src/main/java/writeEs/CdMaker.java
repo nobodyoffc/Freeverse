@@ -102,7 +102,7 @@ public class CdMaker {
 			Hit<Freer> last = response.hits().hits().get(response.hits().hits().size() - 1);
 			String lastId = last.id();
 			response = esClient.search(s -> s.index(FREER).size(EsUtils.READ_MAX)
-					.sort(sort -> sort.field(f -> f.field(ID))).searchAfter(lastId), Freer.class);
+					.sort(sort -> sort.field(f -> f.field(ID))).searchAfter(FieldValue.of(lastId)), Freer.class);
 
 			addrOldList = getResultAddrList(response);
 			addrOldMap = new HashMap<>();
@@ -172,7 +172,7 @@ public class CdMaker {
 				.get("termByAddr").sterms().buckets().array();
 
 		for (StringTermsBucket bucket : utxoBuckets) {
-			String addr = bucket.key();
+			String addr = bucket.key().stringValue();
 			long value1 = (long) bucket.aggregations().get("cdSum").sum().value();
 			addrCdMap.put(addr, value1);
 		}

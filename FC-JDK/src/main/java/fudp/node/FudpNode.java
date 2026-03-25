@@ -1,9 +1,13 @@
 package fudp.node;
 
+import core.crypto.Hash;
+import core.crypto.KeyTools;
 import fudp.Protocol;
 import fudp.connection.ConnectionState;
 import fudp.connection.PeerConnection;
+import fudp.handler.FileHandler;
 import fudp.handler.MessageHandler;
+import fudp.handler.RelayHandler;
 import fudp.message.*;
 import fudp.metrics.MeterListener;
 import fudp.metrics.MeterRecord;
@@ -12,6 +16,8 @@ import fudp.packet.frames.StreamFrame;
 import fudp.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -31,18 +37,35 @@ public class FudpNode implements Protocol.PacketListener {
     private final NodeConfig config;
     private final PeerBook peerBook;
     private MessageHandler messageHandler;
+    private FileHandler fileHandler;
+    private RelayHandler relayHandler;
+    private static final long EPOCH_2024 = 1704067200L; // 2024-01-01 00:00:00 UTC in seconds
+
+    private final int fidHash;
     private final AtomicLong messageIdGenerator;
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> cleanupTask;
     private final Map<String, Long> lastPongInfoSent;
     private final List<MeterListener> meterListeners = new CopyOnWriteArrayList<>();
+    
+    /** Pending bytes ACKs for RTT measurement */
+    private final Map<Long, Long> pendingBytesAcks = new ConcurrentHashMap<>();
+
+    /** Pending ACK futures for blocking sendBytesWaitAck calls */
+    private final Map<Long, CompletableFuture<Boolean>> pendingAckFutures = new ConcurrentHashMap<>();
+
+    /** Per-stream message assemblers for reassembling chunked messages */
+    private final Map<Long, MessageFrameAssembler> streamAssemblers = new ConcurrentHashMap<>();
 
     private NodeEventListener eventListener;
     private volatile boolean running = false;
     
     public FudpNode(byte[] privateKey, NodeConfig config) throws IOException {
         this.config = config;
-        this.protocol = new Protocol(privateKey, config.getPort(), config.getResolvedDataDir());
+        this.protocol = new Protocol(privateKey, config.getPort(), config.getResolvedDataDir(),
+                config.getMaxPacketSize());
+        // Share the NodeConfig's DDoSConfig with Protocol so runtime toggling takes effect immediately
+        this.protocol.initDDoSDefense(config.getDdosConfig());
         this.protocol.addPacketListener(this);
 
         String dataDir = config.getResolvedDataDir();
@@ -52,7 +75,15 @@ public class FudpNode implements Protocol.PacketListener {
         // Create message handler
         this.messageHandler = createMessageHandler(null);
         
-        this.messageIdGenerator = new AtomicLong(System.currentTimeMillis());
+        // Create file handler (with bulk-send support for file transfers)
+        this.fileHandler = new FileHandler(null, createFileMessageSender());
+        
+        // Create relay handler
+        this.relayHandler = new RelayHandler(localFid, peerBook, null, this::sendMessageToPeer);
+        
+        byte[] fidHashBytes = Hash.sha256(localFid.getBytes());
+        this.fidHash = ((fidHashBytes[30] & 0xFF) << 8) | (fidHashBytes[31] & 0xFF);
+        this.messageIdGenerator = new AtomicLong(0);
         this.scheduler = Executors.newScheduledThreadPool(1);
         this.lastPongInfoSent = new ConcurrentHashMap<>();
     }
@@ -92,7 +123,7 @@ public class FudpNode implements Protocol.PacketListener {
             try {
                 listener.onMeter(record);
             } catch (Exception e) {
-                log.debug("Meter listener threw exception: {}", e.getMessage());
+                // Ignore
             }
         }
     }
@@ -121,6 +152,33 @@ public class FudpNode implements Protocol.PacketListener {
                 .build());
     }
 
+    /**
+     * Send pre-encoded bytes on a single stream.
+     * Used for file transfers to avoid per-chunk stream creation overhead.
+     */
+    private void sendRawOnSingleStream(String peerId, byte[] concatenatedData) throws IOException {
+        PeerConnection conn = getOrConnectPeer(peerId);
+        Stream stream = conn.openStream();
+        protocol.sendAndClose(stream, concatenatedData);
+    }
+
+    /**
+     * Create a FileHandler.MessageSender that supports both per-message and bulk sending.
+     */
+    private FileHandler.MessageSender createFileMessageSender() {
+        return new FileHandler.MessageSender() {
+            @Override
+            public void send(String peerId, AppMessage message) throws IOException {
+                sendMessageToPeer(peerId, message);
+            }
+
+            @Override
+            public void sendRawOnSingleStream(String peerId, byte[] concatenatedEncodedMessages) throws IOException {
+                FudpNode.this.sendRawOnSingleStream(peerId, concatenatedEncodedMessages);
+            }
+        };
+    }
+
     // Lifecycle
 
     /**
@@ -138,16 +196,15 @@ public class FudpNode implements Protocol.PacketListener {
                 () -> {
                     try {
                         messageHandler.getChatHandler().cleanupOldMessages();
-                        log.debug("[FudpNode] Cleanup completed: receivedMsgIds={}, sentAckCache={}, pendingAcks={}",
-                                messageHandler.getChatHandler().getReceivedMessageIdCount(),
-                                messageHandler.getChatHandler().getSentAckCacheSize(),
-                                messageHandler.getChatHandler().getPendingAckCount());
                     } catch (Exception e) {
                         log.warn("[FudpNode] Cleanup failed: {}", e.getMessage());
                     }
                 },
                 5, 5, TimeUnit.MINUTES
         );
+        
+        // Start relay handler cleanup
+        relayHandler.startCleanup(scheduler);
     }
 
     /**
@@ -159,6 +216,16 @@ public class FudpNode implements Protocol.PacketListener {
 
         if (cleanupTask != null) {
             cleanupTask.cancel(true);
+        }
+
+        // Shutdown file handler
+        if (fileHandler != null) {
+            fileHandler.shutdown();
+        }
+        
+        // Stop relay handler cleanup
+        if (relayHandler != null) {
+            relayHandler.stopCleanup();
         }
 
         scheduler.shutdown();
@@ -184,10 +251,10 @@ public class FudpNode implements Protocol.PacketListener {
     // Messaging
 
     /**
-     * Generate next message ID.
+     * Generate a globally unique message ID (public API).
      */
     public long generateMessageId() {
-        return messageIdGenerator.incrementAndGet();
+        return nextMessageId();
     }
 
     /**
@@ -251,8 +318,22 @@ public class FudpNode implements Protocol.PacketListener {
         CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
         messageHandler.registerPendingRequest(messageId, future);
 
+        log.debug("[FudpNode] Sending request to {} (messageId={}, streamId={}, service={}, dataLen={})",
+                peerId, messageId, stream.getStreamId(), serviceName, data.length);
+
         byte[] encoded = MessageCodec.encode(request);
-        protocol.send(stream, encoded);
+        protocol.sendAndClose(stream, encoded);
+
+        emitMeter(MeterRecord.builder()
+                .peerId(peerId)
+                .streamId(stream.getStreamId())
+                .messageType(MessageType.REQUEST)
+                .direction(fudp.metrics.MeterDirection.OUTBOUND)
+                .payloadBytes(encoded.length)
+                .sendTimestampMillis(System.currentTimeMillis())
+                .receiveTimestampMillis(0)
+                .retransmitCount(0)
+                .build());
 
         // Timeout
         scheduler.schedule(() -> {
@@ -273,6 +354,145 @@ public class FudpNode implements Protocol.PacketListener {
     }
 
     /**
+     * Send a request with streaming binary data.
+     * The headerData is the UnifiedCodec header (4-byte length + JSON),
+     * and dataStream provides the binary payload which is streamed without full memory load.
+     *
+     * @param peerId      Target peer FID
+     * @param serviceName Service name (SID)
+     * @param headerData  The small header bytes (UnifiedCodec header, no binary payload)
+     * @param dataStream  InputStream for the binary data to stream
+     * @param dataStreamLength Number of bytes to read from dataStream
+     * @return CompletableFuture for the response
+     * @throws IOException if connection or sending fails
+     */
+    public CompletableFuture<ResponseMessage> requestWithStream(
+            String peerId, String serviceName, byte[] headerData,
+            java.io.InputStream dataStream, long dataStreamLength) throws IOException {
+
+        PeerConnection conn = getOrConnectPeer(peerId);
+        Stream stream = conn.openStream();
+
+        long messageId = nextMessageId();
+
+        // Build the message envelope manually for streaming.
+        // Format: type(1) + messageId(8) + flags(1) + payloadLen(varint) + payload
+        // payload = serviceNameLen(varint) + serviceName + headerData + streamedBinaryData
+        byte[] serviceNameBytes = serviceName.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] serviceNameLenVarint = fudp.util.Varint.encode(serviceNameBytes.length);
+
+        long payloadLength = serviceNameLenVarint.length + serviceNameBytes.length
+                + headerData.length + dataStreamLength;
+        byte[] payloadLenVarint = fudp.util.Varint.encode(payloadLength);
+
+        // Build the fixed envelope + header part
+        java.io.ByteArrayOutputStream envelopeOut = new java.io.ByteArrayOutputStream();
+        envelopeOut.write(MessageType.REQUEST.getCode());
+        java.nio.ByteBuffer idBuf = java.nio.ByteBuffer.allocate(8);
+        idBuf.putLong(messageId);
+        envelopeOut.write(idBuf.array());
+        envelopeOut.write(0); // flags
+        envelopeOut.write(payloadLenVarint);
+        envelopeOut.write(serviceNameLenVarint);
+        envelopeOut.write(serviceNameBytes);
+        envelopeOut.write(headerData);
+        byte[] envelopeBytes = envelopeOut.toByteArray();
+
+        // Register pending request
+        CompletableFuture<ResponseMessage> future = new CompletableFuture<>();
+        messageHandler.registerPendingRequest(messageId, future);
+
+        // Combine envelope + binary stream into a single SequenceInputStream
+        long totalOnWire = envelopeBytes.length + dataStreamLength;
+        java.io.SequenceInputStream combined = new java.io.SequenceInputStream(
+                new java.io.ByteArrayInputStream(envelopeBytes),
+                dataStream
+        );
+        protocol.sendAndCloseFromInputStream(stream, combined, totalOnWire);
+
+        emitMeter(MeterRecord.builder()
+                .peerId(peerId)
+                .streamId(stream.getStreamId())
+                .messageType(MessageType.REQUEST)
+                .direction(fudp.metrics.MeterDirection.OUTBOUND)
+                .payloadBytes((int) Math.min(totalOnWire, Integer.MAX_VALUE))
+                .sendTimestampMillis(System.currentTimeMillis())
+                .receiveTimestampMillis(0)
+                .retransmitCount(0)
+                .build());
+
+        // Timeout
+        scheduler.schedule(() -> {
+            if (!future.isDone()) {
+                messageHandler.cancelPendingRequest(messageId);
+                future.completeExceptionally(new TimeoutException("Request timed out"));
+            }
+        }, config.getRequestTimeoutMs(), TimeUnit.MILLISECONDS);
+
+        return future;
+    }
+
+    /**
+     * Send a streaming response to a request.
+     * The headerData is the UnifiedCodec response header (4-byte length + JSON),
+     * and dataStream provides the binary payload which is streamed without full memory load.
+     *
+     * @param peerId          Target peer FID
+     * @param requestId       The request ID to respond to
+     * @param statusCode      FUDP status code (0=success)
+     * @param headerData      The small header bytes (UnifiedCodec response header)
+     * @param dataStream      InputStream for the binary data to stream
+     * @param dataStreamLength Number of bytes to read from dataStream
+     * @throws IOException if connection or sending fails
+     */
+    public void respondWithStream(
+            String peerId, long requestId, int statusCode,
+            byte[] headerData, java.io.InputStream dataStream, long dataStreamLength) throws IOException {
+
+        PeerConnection conn = getOrConnectPeer(peerId);
+        Stream stream = conn.openStream();
+
+        // Build the response message envelope manually.
+        // Format: type(1) + messageId(8) + flags(1) + payloadLen(varint) + payload
+        // payload = statusCode(2) + headerData + streamedBinaryData
+        long payloadLength = 2 + headerData.length + dataStreamLength;
+        byte[] payloadLenVarint = fudp.util.Varint.encode(payloadLength);
+
+        // Build the envelope + header part
+        java.io.ByteArrayOutputStream envelopeOut = new java.io.ByteArrayOutputStream();
+        envelopeOut.write(MessageType.RESPONSE.getCode());
+        java.nio.ByteBuffer idBuf = java.nio.ByteBuffer.allocate(8);
+        idBuf.putLong(requestId);
+        envelopeOut.write(idBuf.array());
+        envelopeOut.write(0); // flags
+        envelopeOut.write(payloadLenVarint);
+        // Status code (2 bytes, big-endian)
+        envelopeOut.write((statusCode >> 8) & 0xFF);
+        envelopeOut.write(statusCode & 0xFF);
+        envelopeOut.write(headerData);
+        byte[] envelopeBytes = envelopeOut.toByteArray();
+
+        // Combine envelope + binary stream
+        long totalOnWire = envelopeBytes.length + dataStreamLength;
+        java.io.SequenceInputStream combined = new java.io.SequenceInputStream(
+                new java.io.ByteArrayInputStream(envelopeBytes),
+                dataStream
+        );
+        protocol.sendAndCloseFromInputStream(stream, combined, totalOnWire);
+
+        emitMeter(MeterRecord.builder()
+                .peerId(peerId)
+                .streamId(stream.getStreamId())
+                .messageType(MessageType.RESPONSE)
+                .direction(fudp.metrics.MeterDirection.OUTBOUND)
+                .payloadBytes((int) Math.min(totalOnWire, Integer.MAX_VALUE))
+                .sendTimestampMillis(System.currentTimeMillis())
+                .receiveTimestampMillis(0)
+                .retransmitCount(0)
+                .build());
+    }
+
+    /**
      * Send a ping to measure latency.
      */
     public void ping(String peerId) throws IOException {
@@ -287,11 +507,14 @@ public class FudpNode implements Protocol.PacketListener {
         Stream stream = conn.openStream();
 
         PingMessage ping = new PingMessage();
-        ping.setMessageId(nextMessageId());
+        long msgId = nextMessageId();
+        ping.setMessageId(msgId);
         ping.setWantInfo(wantInfo);
 
+        log.debug("[FudpNode] Sending ping to peer {} (messageId={}, wantInfo={})", peerId, msgId, wantInfo);
         byte[] encoded = MessageCodec.encode(ping);
         protocol.sendAndClose(stream, encoded);
+        log.debug("[FudpNode] Ping sent to peer {} (messageId={})", peerId, msgId);
     }
 
     /**
@@ -306,9 +529,11 @@ public class FudpNode implements Protocol.PacketListener {
         ping.setMessageId(msgId);
         ping.setWantInfo(wantInfo);
 
+        log.debug("[FudpNode] Sending ping to peer {} (messageId={}, wantInfo={}, timeoutMs={})", peerId, msgId, wantInfo, timeoutMs);
         CompletableFuture<PongMessage> future = messageHandler.awaitPong(msgId);
         scheduler.schedule(() -> {
             if (!future.isDone()) {
+                log.warn("[FudpNode] Ping timeout for peer {} (messageId={}, timeoutMs={})", peerId, msgId, timeoutMs);
                 messageHandler.cancelPong(msgId);
                 future.completeExceptionally(new TimeoutException("Ping timeout"));
             }
@@ -316,7 +541,388 @@ public class FudpNode implements Protocol.PacketListener {
 
         byte[] encoded = MessageCodec.encode(ping);
         protocol.sendAndClose(stream, encoded);
+        log.debug("[FudpNode] Ping sent to peer {} (messageId={}), waiting for pong", peerId, msgId);
         return future;
+    }
+
+    // Bytes Transfer
+
+    /**
+     * Send raw bytes to a peer (fire-and-forget).
+     * @param peerId the peer ID or alias
+     * @param data the byte array to send
+     * @return the message ID
+     */
+    public long sendBytes(String peerId, byte[] data) throws IOException {
+        return sendBytes(peerId, data, BytesMessage.DATA_TYPE_RAW);
+    }
+
+    /**
+     * Send bytes to a peer with type hint (fire-and-forget).
+     * @param peerId the peer ID or alias
+     * @param data the byte array to send
+     * @param dataType the data type hint (0=raw, 1=json, 2=protobuf, etc.)
+     * @return the message ID
+     */
+    public long sendBytes(String peerId, byte[] data, int dataType) throws IOException {
+        PeerConnection conn = getOrConnectPeer(peerId);
+        Stream stream = conn.openStream();
+
+        long messageId = nextMessageId();
+        BytesMessage msg = new BytesMessage(data, dataType);
+        msg.setMessageId(messageId);
+
+        byte[] encoded = MessageCodec.encode(msg);
+        protocol.sendAndClose(stream, encoded);
+        return messageId;
+    }
+
+    /**
+     * Send bytes to a peer with delivery confirmation.
+     * @param peerId the peer ID or alias
+     * @param data the byte array to send
+     * @return the message ID
+     */
+    public long sendBytesWithAck(String peerId, byte[] data) throws IOException {
+        return sendBytesWithAck(peerId, data, BytesMessage.DATA_TYPE_RAW);
+    }
+
+    /**
+     * Send bytes to a peer with delivery confirmation and type hint.
+     * @param peerId the peer ID or alias
+     * @param data the byte array to send
+     * @param dataType the data type hint
+     * @return the message ID
+     */
+    public long sendBytesWithAck(String peerId, byte[] data, int dataType) throws IOException {
+        PeerConnection conn = getOrConnectPeer(peerId);
+        Stream stream = conn.openStream();
+
+        long messageId = nextMessageId();
+        BytesMessage msg = new BytesMessage(data, dataType);
+        msg.setMessageId(messageId);
+        msg.setFlag(AppMessage.FLAG_NEED_ACK);
+
+        byte[] encoded = MessageCodec.encode(msg);
+        protocol.sendAndClose(stream, encoded);
+        
+        // Register for ACK tracking
+        pendingBytesAcks.put(messageId, System.currentTimeMillis());
+        return messageId;
+    }
+
+    /**
+     * Send bytes and block until the peer ACKs or timeout expires.
+     * <p>
+     * WARNING: Do NOT call from the FUDP receive thread. The ACK arrives on
+     * the same receive thread, so blocking it here causes a deadlock where
+     * the ACK can never be processed. Use this only from application threads.
+     *
+     * @param peerId the peer ID or alias
+     * @param data the byte array to send
+     * @param timeoutMs max milliseconds to wait for ACK
+     * @return true if ACK received within timeout, false otherwise
+     */
+    public boolean sendBytesWaitAck(String peerId, byte[] data, long timeoutMs) throws IOException {
+        return sendBytesWaitAck(peerId, data, BytesMessage.DATA_TYPE_RAW, timeoutMs);
+    }
+
+    /**
+     * Send bytes with type hint and block until the peer ACKs or timeout expires.
+     * @param peerId the peer ID or alias
+     * @param data the byte array to send
+     * @param dataType the data type hint
+     * @param timeoutMs max milliseconds to wait for ACK
+     * @return true if ACK received within timeout, false otherwise
+     */
+    public boolean sendBytesWaitAck(String peerId, byte[] data, int dataType, long timeoutMs) throws IOException {
+        PeerConnection conn = getOrConnectPeer(peerId);
+        Stream stream = conn.openStream();
+        long streamId = stream.getStreamId();
+
+        long messageId = nextMessageId();
+        BytesMessage msg = new BytesMessage(data, dataType);
+        msg.setMessageId(messageId);
+        msg.setFlag(AppMessage.FLAG_NEED_ACK);
+
+        CompletableFuture<Boolean> ackFuture = new CompletableFuture<>();
+        pendingAckFutures.put(messageId, ackFuture);
+        pendingBytesAcks.put(messageId, System.currentTimeMillis());
+
+        byte[] encoded = MessageCodec.encode(msg);
+        protocol.sendAndClose(stream, encoded);
+
+        try {
+            return ackFuture.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            log.debug("[FudpNode] ACK timeout for messageId={} to {}, abandoning retransmissions", messageId, peerId);
+            int abandoned = conn.abandonPacketsForStream(streamId);
+            if (abandoned > 0) {
+                log.debug("[FudpNode] Abandoned {} packets for stream {} to {}", abandoned, streamId, peerId);
+            }
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            conn.abandonPacketsForStream(streamId);
+            return false;
+        } catch (ExecutionException e) {
+            conn.abandonPacketsForStream(streamId);
+            return false;
+        } finally {
+            pendingAckFutures.remove(messageId);
+            pendingBytesAcks.remove(messageId);
+        }
+    }
+
+    // Relay
+
+    /**
+     * Send a message via relay node (privacy-preserving: target won't know origin).
+     * @param relayPeerId the relay node peer ID or alias
+     * @param targetFid the target FID (final destination)
+     * @param innerMessage the message to relay
+     * @return the relay message ID
+     */
+    public long sendViaRelay(String relayPeerId, String targetFid, AppMessage innerMessage) throws IOException {
+        return sendViaRelay(relayPeerId, targetFid, innerMessage, RelayMessage.MAX_HOP_COUNT);
+    }
+
+    /**
+     * Send a message via relay node with custom hop count.
+     * @param relayPeerId the relay node peer ID or alias
+     * @param targetFid the target FID (final destination)
+     * @param innerMessage the message to relay
+     * @param hopCount maximum number of hops
+     * @return the relay message ID
+     */
+    public long sendViaRelay(String relayPeerId, String targetFid, AppMessage innerMessage, int hopCount) throws IOException {
+        PeerConnection conn = getOrConnectPeer(relayPeerId);
+        Stream stream = conn.openStream();
+
+        // Encode inner message
+        byte[] innerPayload = MessageCodec.encode(innerMessage);
+        
+        // Check payload size
+        if (innerPayload.length > RelayMessage.MAX_RELAY_PAYLOAD) {
+            throw new IOException("Relay payload too large: " + innerPayload.length + " > " + RelayMessage.MAX_RELAY_PAYLOAD);
+        }
+
+        long messageId = nextMessageId();
+        RelayMessage relay = new RelayMessage(targetFid, hopCount, innerPayload);
+        relay.setMessageId(messageId);
+
+        byte[] encoded = MessageCodec.encode(relay);
+        protocol.sendAndClose(stream, encoded);
+        
+        // Register for ACK tracking
+        relayHandler.registerPendingRelayAck(messageId);
+        return messageId;
+    }
+
+    /**
+     * Get relay statistics.
+     */
+    public RelayHandler.RelayStats getRelayStats() {
+        return relayHandler.getStats();
+    }
+
+    /**
+     * Send an identified relay message (sender identity revealed).
+     * Used for bidirectional protocols like file transfer.
+     * @param relayPeerId the relay node peer ID or alias
+     * @param targetFid the target FID (final destination)
+     * @param sessionId the session ID (groups related messages)
+     * @param innerMessage the message to relay
+     * @return the relay message ID
+     */
+    public long sendViaRelayIdentified(String relayPeerId, String targetFid, long sessionId, 
+            AppMessage innerMessage) throws IOException {
+        PeerConnection conn = getOrConnectPeer(relayPeerId);
+        Stream stream = conn.openStream();
+
+        // Encode inner message
+        byte[] innerPayload = MessageCodec.encode(innerMessage);
+        
+        // Check payload size
+        if (innerPayload.length > RelayMessage.MAX_RELAY_PAYLOAD) {
+            throw new IOException("Relay payload too large: " + innerPayload.length + " > " + RelayMessage.MAX_RELAY_PAYLOAD);
+        }
+
+        long messageId = nextMessageId();
+        RelayMessage relay = RelayMessage.createIdentified(targetFid, getLocalFid(), sessionId, innerPayload);
+        relay.setMessageId(messageId);
+
+        byte[] encoded = MessageCodec.encode(relay);
+        protocol.sendAndClose(stream, encoded);
+        
+        // Register for ACK tracking
+        relayHandler.registerPendingRelayAck(messageId);
+        return messageId;
+    }
+
+    /**
+     * Generate a new relay session ID.
+     * @return unique session ID
+     */
+    public long generateRelaySessionId() {
+        return nextMessageId();
+    }
+
+    /**
+     * Send a file offer via relay node.
+     * Uses identified relay with session for bidirectional communication.
+     * @param relayPeerId the relay node peer ID or alias
+     * @param targetFid the target FID (final destination)
+     * @param file the file to send
+     * @return the relay session ID (use this for subsequent file messages)
+     */
+    public long sendFileOfferViaRelay(String relayPeerId, String targetFid, File file) throws IOException {
+        if (!file.exists() || !file.isFile()) {
+            throw new IOException("File not found or not a file: " + file.getAbsolutePath());
+        }
+
+        // Generate session ID for this file transfer
+        long sessionId = generateRelaySessionId();
+        
+        // Create file offer message
+        String transferId = "relay-" + sessionId;
+        FileOfferMessage offer = new FileOfferMessage();
+        offer.setMessageId(nextMessageId());
+        offer.setTransferId(transferId);
+        offer.setFileName(file.getName());
+        offer.setFileSize(file.length());
+        offer.setChunkSize(fileHandler.getDefaultChunkSize());
+        
+        // Calculate file hash
+        try {
+            String hash = FileHandler.calculateFileHash(file);
+            offer.setFileHash(hash);
+        } catch (Exception e) {
+            log.warn("[FudpNode] Failed to calculate file hash: {}", e.getMessage());
+            offer.setFileHash("");
+        }
+        
+        // Send via identified relay
+        sendViaRelayIdentified(relayPeerId, targetFid, sessionId, offer);
+        
+        // Register transfer with file handler for tracking
+        fileHandler.registerRelayedFileOffer(transferId, sessionId, relayPeerId, targetFid, file);
+        
+        log.info("[FudpNode] Sent file offer via relay {} to {} (session={})", 
+                relayPeerId, targetFid, sessionId);
+        
+        return sessionId;
+    }
+
+    /**
+     * Accept a relayed file offer.
+     * @param relayPeerId the relay node to use for response
+     * @param senderFid the sender's FID
+     * @param sessionId the relay session ID
+     * @param transferId the transfer ID from the file offer
+     * @param saveDir the directory to save the file
+     */
+    public void acceptRelayedFile(String relayPeerId, String senderFid, long sessionId, 
+            String transferId, String saveDir) throws IOException {
+        // Create accept message
+        FileAcceptMessage accept = new FileAcceptMessage();
+        accept.setMessageId(nextMessageId());
+        accept.setTransferId(transferId);
+        
+        // Send via identified relay (response to sender)
+        sendViaRelayIdentified(relayPeerId, senderFid, sessionId, accept);
+        
+        // Register with file handler for receiving chunks
+        fileHandler.registerRelayedFileReceive(transferId, sessionId, relayPeerId, senderFid, saveDir);
+        
+        log.info("[FudpNode] Accepted relayed file {} (session={})", transferId, sessionId);
+    }
+
+    /**
+     * Reject a relayed file offer.
+     * @param relayPeerId the relay node to use for response
+     * @param senderFid the sender's FID
+     * @param sessionId the relay session ID
+     * @param transferId the transfer ID from the file offer
+     * @param reason rejection reason
+     */
+    public void rejectRelayedFile(String relayPeerId, String senderFid, long sessionId, 
+            String transferId, String reason) throws IOException {
+        // Create reject message
+        FileRejectMessage reject = new FileRejectMessage();
+        reject.setMessageId(nextMessageId());
+        reject.setTransferId(transferId);
+        reject.setReason(reason != null ? reason : "User rejected");
+        
+        // Send via identified relay (response to sender)
+        sendViaRelayIdentified(relayPeerId, senderFid, sessionId, reject);
+        
+        log.info("[FudpNode] Rejected relayed file {} (session={})", transferId, sessionId);
+    }
+
+    // File Transfer
+
+    /**
+     * Send a file to a peer.
+     * @param peerId the peer ID or alias
+     * @param file the file to send
+     * @return transfer ID for tracking
+     */
+    public String sendFile(String peerId, File file) throws IOException {
+        Peer peer = peerBook.getByIdOrAlias(peerId);
+        if (peer == null) {
+            throw new IOException("Unknown peer: " + peerId);
+        }
+        return fileHandler.sendFile(peer.getId(), file);
+    }
+
+    /**
+     * Send a file to a peer with custom chunk size.
+     * @param peerId the peer ID or alias
+     * @param file the file to send
+     * @param chunkSize the chunk size in bytes
+     * @return transfer ID for tracking
+     */
+    public String sendFile(String peerId, File file, int chunkSize) throws IOException {
+        Peer peer = peerBook.getByIdOrAlias(peerId);
+        if (peer == null) {
+            throw new IOException("Unknown peer: " + peerId);
+        }
+        return fileHandler.sendFile(peer.getId(), file, chunkSize);
+    }
+
+    /**
+     * Accept a pending file offer.
+     * @param transferId the transfer ID from the file offer
+     * @param saveDir the directory to save the file
+     */
+    public void acceptFile(String transferId, String saveDir) throws IOException {
+        fileHandler.acceptFile(transferId, saveDir);
+    }
+
+    /**
+     * Reject a pending file offer.
+     * @param transferId the transfer ID from the file offer
+     * @param reason optional rejection reason
+     */
+    public void rejectFile(String transferId, String reason) throws IOException {
+        fileHandler.rejectFile(transferId, reason);
+    }
+
+    /**
+     * Cancel an ongoing file transfer.
+     * @param transferId the transfer ID
+     * @param reason optional cancellation reason
+     */
+    public void cancelTransfer(String transferId, String reason) throws IOException {
+        fileHandler.cancelTransfer(transferId, reason);
+    }
+
+    /**
+     * Get pending file offers.
+     */
+    public java.util.Map<String, FileHandler.PendingOffer> getPendingFileOffers() {
+        return fileHandler.getPendingOffers();
     }
 
     // Peer Management
@@ -427,6 +1033,10 @@ public class FudpNode implements Protocol.PacketListener {
         this.eventListener = listener;
         // Recreate message handler with the new listener and balance management components
         this.messageHandler = createMessageHandler(listener);
+        // Recreate file handler with the new listener (with bulk-send support)
+        this.fileHandler = new FileHandler(listener, createFileMessageSender());
+        // Recreate relay handler with the new listener
+        this.relayHandler = new RelayHandler(getLocalFid(), peerBook, listener, this::sendMessageToPeer);
     }
 
     // Protocol.PacketListener implementation
@@ -445,14 +1055,46 @@ public class FudpNode implements Protocol.PacketListener {
                 if (stream != null) {
                     // Only poll if stream is still receiving data (not closed)
                     if (stream.getRecvState() != fudp.stream.StreamState.CLOSED) {
-                        // Poll all available data chunks from the queue
-                        byte[] data;
-                        while ((data = stream.poll()) != null) {
-                            if (data.length > 0) {
-                                log.trace("[FudpNode] Stream data from {} streamId={} len={}", 
-                                        peerId, sf.getStreamId(), data.length);
-                                handleIncomingData(peerId, data);
+                        // Get or create the assembler for this stream
+                        long streamId = sf.getStreamId();
+                        MessageFrameAssembler assembler = streamAssemblers
+                                .computeIfAbsent(streamId, k -> new MessageFrameAssembler());
+
+                        // Synchronize on the assembler: MessageFrameAssembler is NOT thread-safe,
+                        // and onPacketReceived can be called from multiple threads concurrently
+                        // for frames belonging to the same stream.
+                        List<byte[]> completeMessages;
+                        boolean cleanUp = false;
+                        synchronized (assembler) {
+                            // Poll all available data chunks and feed into assembler
+                            byte[] chunk;
+                            while ((chunk = stream.poll()) != null) {
+                                if (chunk.length > 0) {
+                                    assembler.addData(chunk);
+                                }
                             }
+
+                            // Extract and handle all complete messages
+                            completeMessages = assembler.extractMessages();
+
+                            // Clean up assembler when stream is finished and buffer is empty
+                            if (sf.isFin() && !assembler.hasPendingData()) {
+                                cleanUp = true;
+                            }
+                        }
+
+                        // Handle messages outside the synchronized block to avoid holding
+                        // the lock during potentially slow message processing
+                        if (!completeMessages.isEmpty()) {
+                            log.debug("[FudpNode] Assembled {} message(s) from stream {} (peer={})",
+                                    completeMessages.size(), streamId, peerId);
+                        }
+                        for (byte[] message : completeMessages) {
+                            handleIncomingData(peerId, message);
+                        }
+
+                        if (cleanUp) {
+                            streamAssemblers.remove(streamId);
                         }
                     }
                 } else {
@@ -466,7 +1108,6 @@ public class FudpNode implements Protocol.PacketListener {
      * Handle incoming data from a peer.
      */
     private void handleIncomingData(String peerId, byte[] data) {
-        long startTime = System.currentTimeMillis();
         try {
             MessageType type = null;
             long msgId = 0;
@@ -485,7 +1126,6 @@ public class FudpNode implements Protocol.PacketListener {
                 if (!messageHandler.getChatHandler().tryMarkAsProcessed(peerId, msgId)) {
                     // Already processed by another thread
                     // Only send ACK if we haven't sent one for this message yet
-                    log.debug("[FudpNode] Duplicate CHAT message from {} messageId={}", peerId, msgId);
                     try {
                         AppMessage message = MessageCodec.decode(data);
                         if (message.hasFlag(AppMessage.FLAG_NEED_ACK)) {
@@ -495,19 +1135,13 @@ public class FudpNode implements Protocol.PacketListener {
                     } catch (Exception ignore) {}
                     return;
                 }
-                // First time seeing this message
-                log.info("[FudpNode] New CHAT message from {} messageId={} len={}", peerId, msgId, data.length);
             } else if (type == MessageType.CHAT_ACK) {
                 // Deduplication for CHAT_ACK - only log and process once
                 // The actual dedup is done in ChatHandler.handleChatAck via pendingAcks.remove()
                 // Here we use a similar mechanism to avoid duplicate logs
                 if (!messageHandler.getChatHandler().tryMarkAckReceived(peerId, msgId)) {
-                    log.trace("[FudpNode] Duplicate CHAT_ACK from {} messageId={}", peerId, msgId);
                     return;
                 }
-                log.debug("[FudpNode] Received CHAT_ACK from {} messageId={} len={}", peerId, msgId, data.length);
-            } else if (type != null) {
-                log.debug("[FudpNode] Received {} from {} messageId={} len={}", type, peerId, msgId, data.length);
             }
             
             AppMessage message = MessageCodec.decode(data);
@@ -520,18 +1154,76 @@ public class FudpNode implements Protocol.PacketListener {
 
             // Handle chat ACK - use sendChatAckOnce to avoid duplicate ACKs
             if (message.getType() == MessageType.CHAT && message.hasFlag(AppMessage.FLAG_NEED_ACK)) {
-                long ackStart = System.currentTimeMillis();
                 sendChatAckOnce(peerId, message.getMessageId());
-                log.debug("[TIMING] sendChatAckOnce took {}ms", System.currentTimeMillis() - ackStart);
             }
 
-            // Route to message handler
-            long handlerStart = System.currentTimeMillis();
+            // Handle file transfer messages
+            switch (message.getType()) {
+                case FILE_OFFER -> {
+                    fileHandler.handleFileOffer(peerId, (FileOfferMessage) message);
+                    return;
+                }
+                case FILE_ACCEPT -> {
+                    fileHandler.handleFileAccept(peerId, (FileAcceptMessage) message);
+                    return;
+                }
+                case FILE_REJECT -> {
+                    fileHandler.handleFileReject(peerId, (FileRejectMessage) message);
+                    return;
+                }
+                case FILE_CHUNK -> {
+                    fileHandler.handleFileChunk(peerId, (FileChunkMessage) message);
+                    return;
+                }
+                case FILE_COMPLETE -> {
+                    fileHandler.handleFileComplete(peerId, (FileCompleteMessage) message);
+                    return;
+                }
+                case FILE_CANCEL -> {
+                    fileHandler.handleFileCancel(peerId, (FileCancelMessage) message);
+                    return;
+                }
+                default -> {}
+            }
+
+            // Handle bytes messages
+            switch (message.getType()) {
+                case BYTES -> {
+                    handleBytesMessage(peerId, (BytesMessage) message);
+                    return;
+                }
+                case BYTES_ACK -> {
+                    handleBytesAck(peerId, (BytesAckMessage) message);
+                    return;
+                }
+                default -> {}
+            }
+
+            // Handle relay messages
+            switch (message.getType()) {
+                case RELAY -> {
+                    relayHandler.handleRelayMessage(peerId, (RelayMessage) message);
+                    return;
+                }
+                case RELAY_ACK -> {
+                    relayHandler.handleRelayAck(peerId, (RelayAckMessage) message);
+                    return;
+                }
+                case RELAY_FAIL -> {
+                    relayHandler.handleRelayFail(peerId, (RelayFailMessage) message);
+                    return;
+                }
+                default -> {}
+            }
+
+            // Route to message handler (REQUEST, RESPONSE, PONG routed here)
+            if (type == MessageType.RESPONSE) {
+                log.debug("[FudpNode] Routing RESPONSE from {} to messageHandler (messageId={})", peerId, msgId);
+            }
             messageHandler.handleIncomingData(peerId, data);
-            log.debug("[TIMING] messageHandler took {}ms, total handleIncomingData {}ms", 
-                    System.currentTimeMillis() - handlerStart, System.currentTimeMillis() - startTime);
 
         } catch (Exception e) {
+            log.warn("[FudpNode] Error processing message from {}: {}", peerId, e.getMessage(), e);
             if (eventListener != null) {
                 eventListener.onError(peerId, 1, "Error processing message: " + e.getMessage());
             }
@@ -540,34 +1232,39 @@ public class FudpNode implements Protocol.PacketListener {
 
     /**
      * Handle ping message by sending pong.
+     * Only includes pong data when the client explicitly requests it (wantInfo=true).
      */
     private void handlePing(String peerId, PingMessage ping) {
+        long messageId = ping.getMessageId();
+//        log.debug("[FudpNode] Received ping from peer {} (messageId={}, wantInfo={})", peerId, messageId, ping.isWantInfo());
         try {
             PeerConnection conn = protocol.getConnectionManager().getByPeerId(peerId);
-            if (conn == null) return;
+            if (conn == null) {
+                log.warn("[FudpNode] Cannot send pong to peer {} (messageId={}): connection not found", peerId, messageId);
+                return;
+            }
 
             Stream stream = conn.openStream();
             PongMessage pong = new PongMessage(ping.getTimestamp());
-            pong.setMessageId(ping.getMessageId());
+            pong.setMessageId(messageId);
+            
+            // Only include pong data when client explicitly requests info
             if (ping.isWantInfo()) {
                 byte[] pongData = buildPongData(peerId, true);
                 if (pongData.length > 0) {
                     pong.setData(pongData);
                 }
-                log.debug("handlePing: built pong data {} bytes for {}", pongData.length, peerId);
-            } else {
-                byte[] pongData = buildPongData(peerId, false);
-                if (pongData.length > 0) {
-                    pong.setData(pongData);
-                }
+//                log.debug("[FudpNode] Pong data attached for peer {} (messageId={}, dataSize={})", peerId, messageId, pongData.length);
             }
+            // When wantInfo=false, don't include any data in pong
 
             byte[] encoded = MessageCodec.encode(pong);
             protocol.sendAndClose(stream, encoded);
+//            log.debug("[FudpNode] Pong sent to peer {} (messageId={})", peerId, messageId);
         } catch (IOException e) {
-            // Ignore
+            log.warn("[FudpNode] Failed to send pong to peer {} (messageId={}): {}", peerId, messageId, e.getMessage());
         } catch (Throwable t) {
-            log.warn("handlePing: failed to respond pong for peer {}: {}", peerId, t.getMessage());
+            log.warn("[FudpNode] Failed to respond pong for peer {} (messageId={}): {}", peerId, messageId, t.getMessage());
         }
     }
 
@@ -582,7 +1279,6 @@ public class FudpNode implements Protocol.PacketListener {
     private void sendChatAckOnce(String peerId, long messageId) {
         // Check if ACK already sent for this (peerId, messageId) pair
         if (!messageHandler.getChatHandler().tryMarkAckSent(peerId, messageId)) {
-            log.debug("[FudpNode] ACK already sent for {} messageId={}, skipping", peerId, messageId);
             return;
         }
         sendChatAck(peerId, messageId);
@@ -602,9 +1298,64 @@ public class FudpNode implements Protocol.PacketListener {
 
             byte[] encoded = MessageCodec.encode(ack);
             protocol.sendAndClose(stream, encoded);
-            log.debug("[FudpNode] Sent CHAT_ACK for messageId={} to {}", messageId, peerId);
         } catch (IOException e) {
-            log.debug("[FudpNode] Failed to send CHAT_ACK for messageId={}: {}", messageId, e.getMessage());
+            // Ignore
+        }
+    }
+
+    /**
+     * Handle incoming bytes message.
+     */
+    private void handleBytesMessage(String peerId, BytesMessage message) {
+        // Send ACK if requested
+        if (message.hasFlag(AppMessage.FLAG_NEED_ACK)) {
+            sendBytesAck(peerId, message.getMessageId());
+        }
+        
+        // Notify listener
+        if (eventListener != null) {
+            eventListener.onBytesReceived(peerId, message.getMessageId(), 
+                    message.getDataType(), message.getData());
+        }
+    }
+
+    /**
+     * Handle bytes acknowledgment.
+     */
+    private void handleBytesAck(String peerId, BytesAckMessage ack) {
+        long ackedId = ack.getAckedMessageId();
+        Long sendTime = pendingBytesAcks.remove(ackedId);
+        
+        if (sendTime != null) {
+            long rttMs = System.currentTimeMillis() - sendTime;
+            if (eventListener != null) {
+                eventListener.onBytesAck(peerId, ackedId, rttMs);
+            }
+            log.debug("[FudpNode] Bytes ACK received for {}, RTT={}ms", ackedId, rttMs);
+        }
+
+        CompletableFuture<Boolean> future = pendingAckFutures.remove(ackedId);
+        if (future != null) {
+            future.complete(true);
+        }
+    }
+
+    /**
+     * Send bytes acknowledgment.
+     */
+    private void sendBytesAck(String peerId, long messageId) {
+        try {
+            PeerConnection conn = protocol.getConnectionManager().getByPeerId(peerId);
+            if (conn == null) return;
+
+            Stream stream = conn.openStream();
+            BytesAckMessage ack = new BytesAckMessage(messageId);
+            ack.setMessageId(nextMessageId());
+
+            byte[] encoded = MessageCodec.encode(ack);
+            protocol.sendAndClose(stream, encoded);
+        } catch (IOException e) {
+            // Ignore
         }
     }
 
@@ -657,7 +1408,9 @@ public class FudpNode implements Protocol.PacketListener {
 
         if (conn == null) {
             protocol.connect(publicKey, address);
-            conn = protocol.getConnectionManager().getByPeerId(peer.getId());
+            // Derive peer ID from the public key we used to connect (must match what protocol.connect() used)
+            String actualPeerId = KeyTools.pubkeyToFchAddr(publicKey);
+            conn = protocol.getConnectionManager().getByPeerId(actualPeerId);
             if (conn == null) {
                 throw new IOException("Failed to connect to peer: " + peerId);
             }
@@ -674,7 +1427,6 @@ public class FudpNode implements Protocol.PacketListener {
     private byte[] buildPongData(String peerId, boolean forceInfo) {
         NodeConfig.PongDataProvider provider = config.getPongDataProvider();
         if (provider == null) {
-            log.debug("buildPongData: no provider configured, send empty pong for {}", peerId);
             return new byte[0];
         }
 
@@ -682,7 +1434,6 @@ public class FudpNode implements Protocol.PacketListener {
         long minInterval = config.getPongInfoMinIntervalMs();
         Long last = lastPongInfoSent.get(peerId);
         if (!forceInfo && last != null && now - last < minInterval) {
-            log.debug("buildPongData: throttled for {} ({} ms < {} ms)", peerId, now - last, minInterval);
             return new byte[0];
         }
 
@@ -699,7 +1450,6 @@ public class FudpNode implements Protocol.PacketListener {
         int max = Math.max(0, config.getMaxPongDataBytes());
         if (raw.length > max) {
             raw = Arrays.copyOf(raw, max);
-            log.debug("buildPongData: truncated pong data for {} to {} bytes (max {})", peerId, raw.length, max);
         }
 
         if (!forceInfo) {
@@ -712,10 +1462,16 @@ public class FudpNode implements Protocol.PacketListener {
     }
 
     /**
-     * Generate next message ID.
+     * Generate a globally unique message ID.
+     * Structure (8 bytes / 64 bits):
+     *   Bits 63-48: SHA256(localFid)[30..31] (sender hash, 16 bits)
+     *   Bits 47-16: seconds since epoch 2024-01-01 (32 bits, ~136 years)
+     *   Bits 15-0:  per-second sequence counter (16 bits, up to 65535/sec)
      */
     private long nextMessageId() {
-        return messageIdGenerator.incrementAndGet();
+        long epochSeconds = (System.currentTimeMillis() / 1000) - EPOCH_2024;
+        int seq = (int) (messageIdGenerator.incrementAndGet() & 0xFFFF);
+        return ((long) fidHash << 48) | ((epochSeconds & 0xFFFFFFFFL) << 16) | seq;
     }
 
     // Getters

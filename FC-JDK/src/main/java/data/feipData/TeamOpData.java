@@ -13,11 +13,12 @@ public class TeamOpData {
 	private List<String> tids;
 	private String op;
 	private String stdName;
-	private String[] localNames;
+	private Map<String, String> localNames;
 	private String[] waiters;
 	private String[] accounts;
 	private String consensusId;
 	private String desc;
+	private Map<String, String> home;
 	private String transferee;
 	private String confirm;
 	private String[] list;
@@ -81,7 +82,7 @@ public class TeamOpData {
 		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{TID, "rate"});
 	}
 
-	public static TeamOpData makeCreate(String stdName, String consensusId, String[] localNames, String[] waiters, String[] accounts, String desc) {
+	public static TeamOpData makeCreate(String stdName, String consensusId, Map<String, String> localNames, String[] waiters, String[] accounts, String desc, Map<String, String> home) {
 		TeamOpData data = new TeamOpData();
 		data.setOp(Op.CREATE.toLowerCase());
 		data.setStdName(stdName);
@@ -90,10 +91,11 @@ public class TeamOpData {
 		data.setWaiters(waiters);
 		data.setAccounts(accounts);
 		data.setDesc(desc);
+		data.setHome(home);
 		return data;
 	}
 
-	public static TeamOpData makeUpdate(String tid, String stdName, String consensusId, String[] localNames, String[] waiters, String[] accounts, String desc) {
+	public static TeamOpData makeUpdate(String tid, String stdName, String consensusId, Map<String, String> localNames, String[] waiters, String[] accounts, String desc, Map<String, String> home) {
 		TeamOpData data = new TeamOpData();
 		data.setOp(Op.UPDATE.toLowerCase());
 		data.setTid(tid);
@@ -103,6 +105,7 @@ public class TeamOpData {
 		data.setWaiters(waiters);
 		data.setAccounts(accounts);
 		data.setDesc(desc);
+		data.setHome(home);
 		return data;
 	}
 
@@ -232,10 +235,10 @@ public class TeamOpData {
 	public void setStdName(String stdName) {
 		this.stdName = stdName;
 	}
-	public String[] getLocalNames() {
+	public Map<String, String> getLocalNames() {
 		return localNames;
 	}
-	public void setLocalNames(String[] localNames) {
+	public void setLocalNames(Map<String, String> localNames) {
 		this.localNames = localNames;
 	}
 	public String getConsensusId() {
@@ -290,5 +293,13 @@ public class TeamOpData {
 
 	public void setAccounts(String[] accounts) {
 		this.accounts = accounts;
+	}
+
+	public Map<String, String> getHome() {
+		return home;
+	}
+
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 }

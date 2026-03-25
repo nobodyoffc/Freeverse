@@ -24,7 +24,9 @@ public class PersonalRollbacker {
 		indexList.add(IndicesNames.CONTACT);
 		indexList.add(IndicesNames.MAIL);
 		indexList.add(IndicesNames.SECRET);
-		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
+		esClient.deleteByQuery(d->d.index(indexList)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
+				.query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
 	}
 
 

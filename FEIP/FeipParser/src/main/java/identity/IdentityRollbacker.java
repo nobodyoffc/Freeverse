@@ -9,7 +9,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import data.feipData.CidHist;
+import data.feipData.FreerHist;
 import data.feipData.RepuHist;
 import utils.JsonUtils;
 
@@ -35,7 +35,9 @@ public class IdentityRollbacker {
 		List<String> indexList = new ArrayList<String>();
 		indexList.add(IndicesNames.NID);
 
-		esClient.deleteByQuery(d->d.index(indexList).query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
+		esClient.deleteByQuery(d->d.index(indexList)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
+				.query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
 
 		return false;
 	}
@@ -55,7 +57,7 @@ public class IdentityRollbacker {
 		
 		deleteRolledHists(esClient, IndicesNames.FREER_HISTORY,histIdList);
 		
-		List<CidHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY,SIGNER, null, signerList, CidHist.class);
+		List<FreerHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY,SIGNER, null, signerList, FreerHist.class);
 		
 		reparse(esClient,reparseList);
 		
@@ -64,17 +66,17 @@ public class IdentityRollbacker {
 
 	private Map<String, ArrayList<String>> getEffectedCidAndHistory(ElasticsearchClient esClient, long height) throws Exception {
 	
-		SearchResponse<CidHist> resultSearch = esClient.search(s->s
+		SearchResponse<FreerHist> resultSearch = esClient.search(s->s
 				.index(IndicesNames.FREER_HISTORY)
 				.query(q->q
 						.range(r->r
 								.field("height")
-								.gt(JsonData.of(height)))), CidHist.class);
+								.gt(JsonData.of(height)))), FreerHist.class);
 		
 		Set<String> signerSet = new HashSet<String>();
 		ArrayList<String> idList = new ArrayList<String>();
 
-		for(Hit<CidHist> hit: resultSearch.hits().hits()) {
+		for(Hit<FreerHist> hit: resultSearch.hits().hits()) {
 			if(hit.source()==null){
 				System.out.println("Cid hist is null");
 				continue;
@@ -103,11 +105,11 @@ public class IdentityRollbacker {
 		
 	}
 
-	private void reparse(ElasticsearchClient esClient, List<CidHist> reparseList) throws Exception {
+	private void reparse(ElasticsearchClient esClient, List<FreerHist> reparseList) throws Exception {
 		
 		if(reparseList==null)return;
-		for(CidHist cidHist: reparseList) {
-			new IdentityParser().parseCidInfo(esClient,cidHist);
+		for(FreerHist freerHist : reparseList) {
+			new IdentityParser().parseCidInfo(esClient, freerHist);
 		}
 	}
 
@@ -205,7 +207,7 @@ public class IdentityRollbacker {
 		 Map<String,HashMap<String,Long>> reviseMapMap = new  HashMap<String,HashMap<String,Long>>();
 		 
 		 for(StringTermsBucket bucket:rateeBucketList) {
-			String ratee = bucket.key();
+			String ratee = bucket.key().stringValue();
 			HashMap<String,Long> values = new HashMap<String,Long>();
 			long repuSum = 0;
 			long hotSum = 0;

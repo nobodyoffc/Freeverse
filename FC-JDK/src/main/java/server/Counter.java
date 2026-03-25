@@ -1,10 +1,10 @@
 package server;
 
 import data.apipData.WebhookPushBody;
+import data.feipData.ServiceType;
 import ui.Inputer;
 import data.fchData.Block;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
 import clients.ApipClient;
 import data.apipData.Fcdsl;
 import co.elastic.clients.elasticsearch._types.SortOrder;
@@ -76,18 +76,18 @@ public class Counter implements Runnable {
     protected byte[] counterPriKey;
 
 
-    public Counter(Settings settings, byte[] counterPriKey, Service service,Params params) {
+    public Counter(Settings settings, byte[] counterPriKey, Service service) {
         this.sid = settings.getSid();
         this.listenPath = (String) settings.getSettingMap().get(LISTEN_PATH);
         if(settings.getSettingMap().get(FROM_WEBHOOK)!=null)
             this.fromWebhook = (Boolean) settings.getSettingMap().get(FROM_WEBHOOK);
         this.account= service.getDealer();
-        this.minPayment  = params.getMinPayment();
+        this.minPayment  = service.getMinPayment();
 
-        this.esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
-        this.naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
-        this.apipClient =(ApipClient)settings.getClient(Service.ServiceType.APIP);
-        this.jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        this.esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
+        this.naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
+        this.apipClient =(ApipClient)settings.getClient(ServiceType.APIP);
+        this.jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         this.paidApiAccountList = settings.getPaidAccountList();
         this.counterPriKey=counterPriKey;
     }

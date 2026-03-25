@@ -16,6 +16,8 @@ import utils.BytesUtils;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -355,6 +357,54 @@ public class Hash {
         } catch (NoSuchAlgorithmException | IOException e) {
             return null;
         }
+    }
+
+    /**
+     * Compute SHA256x2 hash from an InputStream (streaming, no full-file memory load).
+     * Reads the stream in 8KB chunks, computing SHA256 incrementally, then applies SHA256 again.
+     *
+     * @param input the input stream to hash
+     * @return SHA256x2 hash bytes, or null on error
+     */
+    public static byte[] sha256x2FromStream(InputStream input) {
+        try {
+            Hasher hasher = Hashing.sha256().newHasher();
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = input.read(buffer)) != -1) {
+                hasher.putBytes(buffer, 0, bytesRead);
+            }
+            byte[] firstHash = hasher.hash().asBytes();
+            return Hashing.sha256().hashBytes(firstHash).asBytes();
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Compute SHA256x2 hash from an InputStream while copying data to an OutputStream.
+     * This allows computing the hash and writing data in a single pass (no double read).
+     *
+     * @param input  source stream to read from
+     * @param output destination stream to write to (can be null if only hash is needed)
+     * @return SHA256x2 hash bytes, or null on error
+     * @throws IOException if an I/O error occurs
+     */
+    public static byte[] sha256x2CopyStream(InputStream input, OutputStream output) throws IOException {
+        Hasher hasher = Hashing.sha256().newHasher();
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = input.read(buffer)) != -1) {
+            hasher.putBytes(buffer, 0, bytesRead);
+            if (output != null) {
+                output.write(buffer, 0, bytesRead);
+            }
+        }
+        if (output != null) {
+            output.flush();
+        }
+        byte[] firstHash = hasher.hash().asBytes();
+        return Hashing.sha256().hashBytes(firstHash).asBytes();
     }
 }
 

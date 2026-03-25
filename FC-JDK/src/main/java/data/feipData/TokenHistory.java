@@ -1,7 +1,6 @@
 package data.feipData;
 
 import data.fcData.FcObject;
-import data.fchData.Cash;
 
 import java.util.List;
 
@@ -28,8 +27,29 @@ public class TokenHistory extends FcObject {
 	private String maxAmtPerIssue;
 	private String minCddPerIssue;
 	private String maxIssuesPerAddr;
-	private List<Cash> issueTo;
-	private List<Cash> transferTo;
+	private List<FidAmount> issueTo;
+	private List<FidAmount> transferTo;
+
+	public static class FidAmount{
+		private String fid;
+		private Double amount;
+
+		public String getFid() {
+			return fid;
+		}
+
+		public void setFid(String fid) {
+			this.fid = fid;
+		}
+
+		public Double getAmount() {
+			return amount;
+		}
+
+		public void setAmount(Double amount) {
+			this.amount = amount;
+		}
+	}
 
 	public Long getHeight() {
 		return height;
@@ -191,19 +211,19 @@ public class TokenHistory extends FcObject {
 		this.maxIssuesPerAddr = maxIssuesPerAddr;
 	}
 
-	public List<Cash> getIssueTo() {
+	public List<FidAmount> getIssueTo() {
 		return issueTo;
 	}
 
-	public void setIssueTo(List<Cash> issueTo) {
+	public void setIssueTo(List<FidAmount> issueTo) {
 		this.issueTo = issueTo;
 	}
 
-	public List<Cash> getTransferTo() {
+	public List<FidAmount> getTransferTo() {
 		return transferTo;
 	}
 
-	public void setTransferTo(List<Cash> transferTo) {
+	public void setTransferTo(List<FidAmount> transferTo) {
 		this.transferTo = transferTo;
 	}
 }

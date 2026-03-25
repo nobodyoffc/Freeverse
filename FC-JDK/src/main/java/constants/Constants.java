@@ -5,6 +5,8 @@ public class Constants {
     public static final String HASH160_F_FCH = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFCgHbzz";
     public static final String HASH160_1_BTC = "1111111111111111111114oLvT2";
     public static final int EMPTY_BLOCK_SIZE = 273;
+    public static final long CHANGE_P2SH_OUTPUT_FEE = 32;
+    public static final long CHANGE_OUTPUT_FEE = 34;
     public static final Double MIN_FEE_RATE = 0.00001;
     public static final int DEFAULT_DISPLAY_LIST_SIZE = 200;
     public static final int DEFAULT_SESSION_DAYS = 100;

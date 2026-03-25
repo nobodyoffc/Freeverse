@@ -15,6 +15,7 @@ public class NodeConfig {
     // Network
     private int port = 9000;
     private String bindAddress = "0.0.0.0";
+    private int maxPacketSize = 1350; // Default safe for internet; increase for LAN/localhost
 
     // File Transfer
     private int chunkSize = 32768;           // 32KB
@@ -23,9 +24,9 @@ public class NodeConfig {
     private long maxFileSize = 1073741824;   // 1GB
 
     // Timeouts
-    private long requestTimeoutMs = 3000000;//30000;   // 30 seconds
+    private long requestTimeoutMs = 30000;   // 30 seconds
     private long transferTimeoutMs = 300000; // 5 minutes
-    private long connectionTimeoutMs = 1000000;//10000; // 10 seconds
+    private long connectionTimeoutMs = 10000; // 10 seconds
 
     // Storage
     private String dataDir = "~/.fudp";
@@ -83,6 +84,9 @@ public class NodeConfig {
     private boolean auditLogEnablePersistence = false; // Enable persistence (default: disabled)
     private long auditLogRetentionDays = 30;           // Persisted log retention days (if enabled)
 
+    // DDoS Defense
+    private fudp.security.DDoSConfig ddosConfig = new fudp.security.DDoSConfig();
+
     // Getters and Setters
 
     public int getPort() {
@@ -100,6 +104,21 @@ public class NodeConfig {
 
     public NodeConfig setBindAddress(String bindAddress) {
         this.bindAddress = bindAddress;
+        return this;
+    }
+
+    public int getMaxPacketSize() {
+        return maxPacketSize;
+    }
+
+    /**
+     * Set the maximum UDP packet size.
+     * Default is 1350 bytes (safe for internet/MTU). For localhost or LAN transfers,
+     * set to a larger value (e.g., 60000) to reduce per-packet encryption overhead
+     * and dramatically improve file transfer throughput.
+     */
+    public NodeConfig setMaxPacketSize(int maxPacketSize) {
+        this.maxPacketSize = maxPacketSize;
         return this;
     }
 
@@ -520,6 +539,23 @@ public class NodeConfig {
 
     public NodeConfig setAuditLogRetentionDays(long auditLogRetentionDays) {
         this.auditLogRetentionDays = auditLogRetentionDays;
+        return this;
+    }
+
+    // DDoS Defense getters/setters
+
+    /**
+     * Get the DDoS defense configuration.
+     */
+    public fudp.security.DDoSConfig getDdosConfig() {
+        return ddosConfig;
+    }
+
+    /**
+     * Set the DDoS defense configuration.
+     */
+    public NodeConfig setDdosConfig(fudp.security.DDoSConfig ddosConfig) {
+        this.ddosConfig = ddosConfig;
         return this;
     }
 

@@ -3,7 +3,7 @@ package api;
 import config.Settings;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -69,7 +69,7 @@ public class Paste extends HttpServlet {
     }
 
     private void retrieveFromRedis(String sessionName, ReplyBody replier, HttpServletResponse response) throws IOException {
-        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         if (jedisPool == null) {
             replier.replyOtherErrorHttp("Redis service is not available.", response);
             return;

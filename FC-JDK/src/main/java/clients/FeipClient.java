@@ -15,8 +15,7 @@ import core.fch.Inputer;
 import core.fch.Wallet;
 import utils.FeipUtils;
 import data.feipData.Feip.FeipProtocol;
-import data.feipData.serviceParams.Params;
-import handlers.MailManager;
+import managers.MailManager;
 import utils.Hex;
 import utils.JsonUtils;
 import utils.http.AuthType;
@@ -257,15 +256,11 @@ public class FeipClient {
      * The method is similar to protocol.
      */
     public static String service(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
-                                 @Nullable ServiceOpData data, Class<? extends Params> paramsClass, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+                                 @Nullable ServiceOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
         try {
             // Create ServiceData with op field handling
             ServiceOpData serviceOpData = Inputer.createFromUserInput(br, ServiceOpData.class, "op", ServiceOpData.OP_FIELDS);
             if(serviceOpData ==null)return null;
-
-            // Create Params without op field handling
-            Params params = Inputer.createFromUserInput(br, paramsClass, null, null);
-            serviceOpData.setParams(params);
 
             Feip feip = Feip.fromProtocolName(FeipProtocol.SERVICE);
             feip.setData(serviceOpData);
@@ -331,9 +326,9 @@ public class FeipClient {
     /**
      * The method is similar to protocol.
      */
-    public static String homepage(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
-                                  @Nullable HomepageOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, HomepageOpData.class, FeipProtocol.HOMEPAGE, apipClient, nasaClient, br, null, null);
+    public static String home(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                              @Nullable HomeOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, null, data, HomeOpData.class, FeipProtocol.HOME, apipClient, nasaClient, br, null, null);
     }
 
     /**
@@ -411,9 +406,9 @@ public class FeipClient {
     /**
      * The method is similar to protocol.
      */
-    public static String group(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
-                               Long cd, @Nullable GroupOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, cd, data, GroupOpData.class, FeipProtocol.GROUP, apipClient, nasaClient, br, GroupOpData.Op.class, GroupOpData.OP_FIELDS);
+    public static String square(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
+                               Long cd, @Nullable SquareOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
+        return sendFeip(prikey, offLineFid, sendToList, cd, data, SquareOpData.class, FeipProtocol.SQUARE, apipClient, nasaClient, br, SquareOpData.Op.class, SquareOpData.OP_FIELDS);
     }
 
     /**

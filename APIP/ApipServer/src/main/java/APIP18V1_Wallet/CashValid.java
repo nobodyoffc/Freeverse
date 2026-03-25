@@ -4,13 +4,14 @@ import constants.ApipApiNames;
 import data.apipData.Fcdsl;
 import data.apipData.RequestBody;
 import data.apipData.Sort;
-import handlers.CashManager;
-import handlers.MempoolManager;
+import data.feipData.ServiceType;
+import managers.CashManager;
+import managers.MempoolManager;
 import constants.FieldNames;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
-import handlers.CashManager.SearchResult;
-import handlers.Manager.ManagerType;
+import managers.CashManager.SearchResult;
+import managers.Manager.ManagerType;
 import data.fchData.Cash;
 import initial.Initiator;
 import utils.ObjectUtils;
@@ -35,7 +36,6 @@ import static utils.FchUtils.coinToSatoshi;
 
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.CASH_VALID, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.CASH_VALID +"/"+ ApipApiNames.VER_1)
 public class CashValid extends HttpServlet {
@@ -77,7 +77,7 @@ public class CashValid extends HttpServlet {
         int msgSize = 0;
         int outputSize = 0;
         long sinceHeight = 0;
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         if (requestBody != null && requestBody.getFcdsl() != null) {
             if (requestBody.getFcdsl().getOther() == null) {
                 ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME, false, ID, true, null, null);

@@ -266,7 +266,7 @@ public class TxTest {
 
         String opreturn = "text";
         long fee = 1000;
-        String signed = createTxFch(inputs, outputs, opreturn, addr);
+        String signed = createTx(inputs, outputs, opreturn, addr);
         System.out.println(signed);
     }
 

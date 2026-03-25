@@ -2,13 +2,11 @@ package api;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
-import constants.ApipApiNames;
 import data.fcData.DiskItem;
 import data.fcData.Hat;
-import data.feipData.Service;
-import handlers.DiskManager;
-import handlers.Manager;
-import server.ApipApi;
+import data.feipData.ServiceType;
+import managers.DiskManager;
+import managers.Manager;
 import constants.CodeMessage;
 import data.fcData.ReplyBody;
 import initial.Initiator;
@@ -109,7 +107,7 @@ public class Carve extends HttpServlet {
         long saveDate = System.currentTimeMillis();
         Long expire = null;
         DiskItem diskItem = new DiskItem(hat.getId(), saveDate,expire,hat.getSize());
-        ElasticsearchClient esClient = (ElasticsearchClient)settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient)settings.getClient(ServiceType.ES);
 
         try {
             IndexResponse result = esClient.index(i -> i.index(Settings.addSidBriefToName(settings.getSid(), DATA)).id(hat.getId()).document(diskItem));

@@ -3,11 +3,14 @@ package data.feipData;
 import data.fcData.FcObject;
 import utils.JsonUtils;
 
+import java.util.Map;
+
 public class Team extends FcObject {
 
 	private String owner;
+	private Map<String, String> home;
 	private String stdName;
-	private String[] localNames;
+	private Map<String, String> localNames;
 	private String[] waiters;
 	private String[] accounts;
 	private String consensusId;
@@ -50,10 +53,10 @@ public class Team extends FcObject {
 	public void setStdName(String stdName) {
 		this.stdName = stdName;
 	}
-	public String[] getLocalNames() {
+	public Map<String, String> getLocalNames() {
 		return localNames;
 	}
-	public void setLocalNames(String[] localNames) {
+	public void setLocalNames(Map<String, String> localNames) {
 		this.localNames = localNames;
 	}
 	public String getConsensusId() {
@@ -175,5 +178,13 @@ public class Team extends FcObject {
 
 	public void setAccounts(String[] accounts) {
 		this.accounts = accounts;
+	}
+
+	public Map<String, String> getHome() {
+		return home;
+	}
+
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 }

@@ -1,17 +1,17 @@
 package server;
 
-import data.feipData.Service;
+import data.feipData.ServiceType;
 
 public class FreeApi {
     private String urlHead;
     private Boolean active;
     private String sid;
-    private Service.ServiceType serviceType;
+    private ServiceType serviceType;
 
     public FreeApi() {
     }
 
-    public FreeApi(String urlHead, Boolean active, Service.ServiceType serviceType) {
+    public FreeApi(String urlHead, Boolean active, ServiceType serviceType) {
         this.active = active;
         this.urlHead = urlHead;
         this.serviceType = serviceType;
@@ -41,11 +41,11 @@ public class FreeApi {
         this.sid = sid;
     }
 
-    public Service.ServiceType getApiType() {
+    public ServiceType getApiType() {
         return serviceType;
     }
 
-    public void setApiType(Service.ServiceType serviceType) {
+    public void setApiType(ServiceType serviceType) {
         this.serviceType = serviceType;
     }
 }

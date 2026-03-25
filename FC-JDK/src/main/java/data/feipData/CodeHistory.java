@@ -3,6 +3,9 @@ package data.feipData;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import data.fcData.FcObject;
 
+import java.util.List;
+import java.util.Map;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CodeHistory extends FcObject {
 	//txId
@@ -12,16 +15,16 @@ public class CodeHistory extends FcObject {
 	private String signer;
 
 	private String codeId;
-	private String[] codeIds;
+	private List<String> codeIds;
 	private String op;
 	private String name;
 	private String ver;
 	private String did;
 	private String desc;
-	private String[] langs;
-	private String[] urls;
-	private String[] protocols;
-	private String[] waiters;
+	private List<String> langs;
+	private Map<String, String> home;
+	private List<String> protocols;
+	private List<String> waiters;
 	private Integer rate;
 	private String closeStatement;
 	
@@ -107,35 +110,35 @@ public class CodeHistory extends FcObject {
 		this.desc = desc;
 	}
 
-	public String[] getLangs() {
+	public List<String> getLangs() {
 		return langs;
 	}
 
-	public void setLangs(String[] langs) {
+	public void setLangs(List<String> langs) {
 		this.langs = langs;
 	}
 
-	public String[] getUrls() {
-		return urls;
+	public Map<String, String> getHome() {
+		return home;
 	}
 
-	public void setUrls(String[] urls) {
-		this.urls = urls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 
-	public String[] getProtocols() {
+	public List<String> getProtocols() {
 		return protocols;
 	}
 
-	public void setProtocols(String[] protocols) {
+	public void setProtocols(List<String> protocols) {
 		this.protocols = protocols;
 	}
 
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
 
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 
@@ -163,11 +166,11 @@ public class CodeHistory extends FcObject {
 		this.closeStatement = closeStatement;
 	}
 
-	public String[] getCodeIds() {
+	public List<String> getCodeIds() {
 		return codeIds;
 	}
 
-	public void setCodeIds(String[] codeIds) {
+	public void setCodeIds(List<String> codeIds) {
 		this.codeIds = codeIds;
 	}
 }

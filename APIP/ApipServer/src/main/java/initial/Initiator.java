@@ -1,6 +1,6 @@
 package initial;
 
-import data.feipData.Service.ServiceType;
+import data.feipData.ServiceType;
 import server.FcWebServerInitiator;
 
 

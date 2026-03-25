@@ -1,18 +1,16 @@
 package server.reward;
 
 import data.fchData.Cash;
-import handlers.CashManager;
+import managers.CashManager;
 import data.fcData.Affair;
 import data.fcData.DataSignTx;
 import data.fcData.Op;
 import core.fch.*;
-import handlers.CashManager.SearchResult;
+import managers.CashManager.SearchResult;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
 import data.feipData.Feip;
-import utils.FchUtils;
 import utils.JsonUtils;
-import utils.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;

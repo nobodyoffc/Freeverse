@@ -44,11 +44,19 @@ public class Bitcore {
     }
 
     public static byte[] encrypt(byte[] message, PublicKey recipientPublicKey) throws Exception {
+        return encrypt(message, recipientPublicKey, new SecureRandom());
+    }
+
+    /**
+     * Same as {@link #encrypt(byte[], PublicKey)} but uses {@code rng} for the ephemeral secp256k1 key pair
+     * and the 16-byte AES IV (for tests and reproducible protocol vectors).
+     */
+    public static byte[] encrypt(byte[] message, PublicKey recipientPublicKey, SecureRandom rng) throws Exception {
         // Generate ephemeral key pair
         ECNamedCurveParameterSpec params = ECNamedCurveTable.getParameterSpec("secp256k1");
         ECDomainParameters domainParams = new ECDomainParameters(params.getCurve(), params.getG(), params.getN(), params.getH());
         ECKeyPairGenerator keyPairGenerator = new ECKeyPairGenerator();
-        keyPairGenerator.init(new ECKeyGenerationParameters(domainParams, new SecureRandom()));
+        keyPairGenerator.init(new ECKeyGenerationParameters(domainParams, rng));
         AsymmetricCipherKeyPair ephemeralKeyPair = keyPairGenerator.generateKeyPair();
 
         ECPrivateKeyParameters ephemeralPrivateKey = (ECPrivateKeyParameters) ephemeralKeyPair.getPrivate();
@@ -65,7 +73,7 @@ public class Bitcore {
 
         // Generate IV
         byte[] iv = new byte[16];
-        new SecureRandom().nextBytes(iv);
+        rng.nextBytes(iv);
 
         // Encrypt message
         byte[] c = encryptAESCBC(message, kE, iv);

@@ -86,6 +86,7 @@ public class FieldNames {
     public static final String RESULT = "result";
     public static final String HAT = "hat";
     public static final String INDEX = "index";
+    public static final String ENTITY = "entity";
     public static final String SINCE = "since";
     public static final String HOOK_SESSION_NAME_KEY = "hookSessionNameKey";
     public static final String SENDER = "sender";
@@ -116,7 +117,6 @@ public class FieldNames {
     public static final String PID = "pid";
     public static final String CODE_ID = "codeId";
     public static final String AID = "aid";
-    public static final String GID = "gid";
     public static final String TID = "tid";
     public static final String TIDS = "tids";
     public static final String NID = "nid";
@@ -162,7 +162,7 @@ public class FieldNames {
     public static final String PUB_KEY = "pubkey";
     public static final String TEAM = "team";
     public static final String ROOM = "room";
-    public static final String GROUP = "group";
+    public static final String SQUARE = "square";
     public static final String BIRTH_INDEX = "birthIndex";
     public static final String BIRTH_TX_INDEX = "birthTxIndex";
     public static final String MEMBER_NUM = "memberNum";
@@ -173,9 +173,13 @@ public class FieldNames {
     public static final String CONSUME_VIA = "consumeVia";
     public static final String ORDER_VIA = "orderVia";
     public static final String MIN_PAYMENT = "minPayment";
+    public static final String MIN_CREDIT = "minCredit";
     public static final String SESSION_KEY = "sessionKey";
-    public static final String PRICE_PER_K_Bytes = "pricePerKBytes";
-    public static final String PRICE_PER_K_BYTES_CARVE = "pricePerKBytesCarve";
+    public static final String PRICE_PER_K_B = "pricePerKB";
+    public static final String PRICE_PER_K_B_IN = "pricePerKBIn";
+    public static final String PRICE_PER_K_B_OUT = "pricePerKBOut";
+    public static final String PRICE_PER_DAY_K_B = "pricePerDayKB";
+    public static final String PRICE_PER_K_BYTES_CARVE = "pricePerKBCarve";
     public static final String PRICE_PER_REQUEST = "pricePerRequest";
     public static final String BALANCE = "balance";
     public static final String SESSION_KEY_CIPHER = "sessionKeyCipher";
@@ -188,7 +192,7 @@ public class FieldNames {
     public static final String CONTACT_ID = "contactId";
     public static final String CID_ID = "cidId";
     public static final String DISK_ID = "diskId";
-    public static final String GROUP_ID = "groupId";
+    public static final String SQUARE_ID = "squareId";
     public static final String HAT_ID = "hatId";
     public static final String MAIL_ID = "mailId";
     public static final String NONCE_ID = "nonceId";
@@ -234,9 +238,9 @@ public class FieldNames {
     public static final String KEYWORDS = "keywords";
     public static final String SUMMARY = "summary";
 
-    public static final String GIDS = "gids";
+    public static final String SQUARE_IDS = "squareIds";
 
-    public static final String HOMEPAGES = "homepages";
+    public static final String LINKS = "links";
 
     public static final String MAIL_IDS = "mailIds";
 
@@ -364,5 +368,50 @@ public class FieldNames {
     public static final String DEALER = "dealer";
     public static final String DEALER_PUBKEY = "dealerPubkey";
     public static final String ACTIVE = "active";
+    public static final String COMPONENTS = "components";
+    public static final String MAX_DATA_SIZE = "maxDataSize";
+    
+    // DOCK fields
+    public static final String DOCK_ID = "dockId";
+    public static final String RECIPIENTS = "recipients";
+    public static final String RETRIEVED = "retrieved";
+    public static final String CREATE_HEIGHT = "createHeight";
+    public static final String EXPIRE_HEIGHT = "expireHeight";
+    public static final String CREATE_TIME = "createTime";
+    public static final String MAX_DAYS = "maxDays";
+    public static final String EXTRA_DAYS = "extraDays";
+    public static final String STORAGE_FEE = "storageFee";
+    public static final String INGRESS_FEE = "ingressFee";
+    public static final String EGRESS_FEE = "egressFee";
+    public static final String COMPLETED = "completed";
+    public static final String PENDING_RECIPIENTS = "pendingRecipients";
+    public static final String REMAINING_DAYS = "remainingDays";
+    public static final String REFUND = "refund";
+    public static final String PRICE_PER_K_B_DAY = "pricePerKBDay";
+    public static final String DEFAULT_MAX_DAYS = "defaultMaxDays";
+    public static final String DATA_EXPIRES_IN_DAYS = "dataExpiresInDays";
+    public static final String DATA_TYPE = "dataType";
+    public static final String DATA_BASE64 = "dataBase64";
+    public static final String RECIPIENT_IDS = "recipientIds";
+    
+    // ROAD fields
+    public static final String TARGET_FID = "targetFid";
+    public static final String TARGET_FIDS = "targetFids";
+    public static final String TARGET_ROAD = "targetRoad";
+    public static final String RELAY_RESULTS = "relayResults";
+    public static final String MAX_COST = "maxCost";
+    public static final String ORIGIN_SID = "originSid";
+    public static final String CHAIN_RELAYED = "chainRelayed";
+    public static final String RELAYED_VIA = "relayedVia";
+    public static final String CHARGED_IN = "chargedIn";
+    public static final String CHARGED_OUT = "chargedOut";
+    public static final String TOTAL_CHARGED = "totalCharged";
+    public static final String HOME = "home";
+    
+    // DOCK forwarding fields
+    public static final String TARGET_DOCK_URL = "targetDockUrl";
+    public static final String LOCAL_FEE = "localFee";
+    public static final String REMOTE_FEE = "remoteFee";
+    public static final String FORWARDED = "forwarded";
 }
 

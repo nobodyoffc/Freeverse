@@ -1,5 +1,6 @@
 package organize;
 
+import constants.FieldNames;
 import constants.OpNames;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -8,7 +9,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
-import data.feipData.GroupHistory;
+import data.feipData.SquareHistory;
 import data.feipData.TeamHistory;
 import utils.JsonUtils;
 
@@ -21,50 +22,50 @@ public class OrganizationRollbacker {
 
 	public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = false;
-		error = rollbackGroup(esClient,lastHeight);
+		error = rollbackSquare(esClient,lastHeight);
 		error = rollbackTeam(esClient,lastHeight);
 		
 		return error;
 		
 	}
 	
-	private boolean rollbackGroup(ElasticsearchClient esClient, long lastHeight) throws Exception {
+	private boolean rollbackSquare(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = false;
-		Map<String, ArrayList<String>> resultMap = getEffectedGroups(esClient,lastHeight);
+		Map<String, ArrayList<String>> resultMap = getEffectedSquares(esClient,lastHeight);
 		ArrayList<String> itemIdList = resultMap.get("itemIdList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 		
 		
 		if(itemIdList==null||itemIdList.isEmpty())return error;
-		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'group': ");
+		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'square': ");
 		JsonUtils.printJson(itemIdList);
-		deleteEffectedItems(esClient, IndicesNames.GROUP, itemIdList);
+		deleteEffectedItems(esClient, IndicesNames.SQUARE, itemIdList);
 		if(histIdList==null||histIdList.isEmpty())return error;
-		deleteRolledHists(esClient, IndicesNames.GROUP_HISTORY,histIdList);
+		deleteRolledHists(esClient, IndicesNames.SQUARE_HISTORY,histIdList);
 		
-		List<GroupHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.GROUP_HISTORY,GID, GIDS, itemIdList, GroupHistory.class);
+		List<SquareHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SQUARE_HISTORY, FieldNames.SQUARE_ID, SQUARE_IDS, itemIdList, SquareHistory.class);
 		
-		reparseGroup(esClient,reparseHistList);
+		reparseSquare(esClient,reparseHistList);
 		
 		return error;
 	}
 
-	private Map<String, ArrayList<String>> getEffectedGroups(ElasticsearchClient esClient,long height) throws Exception {
-		SearchResponse<GroupHistory> resultSearch = esClient.search(s->s
-				.index(IndicesNames.GROUP_HISTORY)
+	private Map<String, ArrayList<String>> getEffectedSquares(ElasticsearchClient esClient,long height) throws Exception {
+		SearchResponse<SquareHistory> resultSearch = esClient.search(s->s
+				.index(IndicesNames.SQUARE_HISTORY)
 				.query(q->q
 						.range(r->r
 								.field("height")
-								.gt(JsonData.of(height)))),GroupHistory.class);
+								.gt(JsonData.of(height)))),SquareHistory.class);
 		
 		Set<String> itemSet = new HashSet<String>();
 		ArrayList<String> histList = new ArrayList<String>();
 
-		for(Hit<GroupHistory> hit: resultSearch.hits().hits()) {
+		for(Hit<SquareHistory> hit: resultSearch.hits().hits()) {
 			
-			GroupHistory item = hit.source();
+			SquareHistory item = hit.source();
 			if(item==null){
-				System.out.println("Group hist is null");
+				System.out.println("Square hist is null");
 				continue;
 			}
 			String op = item.getOp();
@@ -77,10 +78,10 @@ public class OrganizationRollbacker {
 				}
 
 				case OpNames.LEAVE -> {
-					if(item.getGids()==null || item.getGids().isEmpty()){
+					if(item.getSquareIds()==null || item.getSquareIds().isEmpty()){
 						continue;
 					}
-					for(String gid: item.getGids()){
+					for(String gid: item.getSquareIds()){
 						if(gid==null){
 							continue;
 						}
@@ -89,8 +90,8 @@ public class OrganizationRollbacker {
 				}
 
 				default -> {
-					if(item.getGid()!=null){
-						itemSet.add(item.getGid());
+					if(item.getSquareId()!=null){
+						itemSet.add(item.getSquareId());
 					}
 				}
 			}
@@ -107,10 +108,10 @@ public class OrganizationRollbacker {
 		return resultMap;
 	}
 	
-	private void reparseGroup(ElasticsearchClient esClient, List<GroupHistory> reparseHistList) throws Exception {
+	private void reparseSquare(ElasticsearchClient esClient, List<SquareHistory> reparseHistList) throws Exception {
 		if(reparseHistList==null)return;
-		for(GroupHistory groupHist: reparseHistList) {
-			new OrganizationParser().parseGroup(esClient, groupHist);
+		for(SquareHistory squareHist: reparseHistList) {
+			new OrganizationParser().parseSquare(esClient, squareHist);
 		}
 	}
 	

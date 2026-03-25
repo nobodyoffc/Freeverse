@@ -42,25 +42,25 @@ public class Inputer {
         }
         return console.readPassword(ask);
     }
-//    public static char[] inputPassword(BufferedReader br, String ask) {
-//        return inputPassword(ask);
-//    }
     public static char[] inputPassword(BufferedReader br, String ask) {
-        System.out.println(ask);
-        char[] input = new char[64];
-        int num = 0;
-        try {
-            num = br.read(input);
-        } catch (IOException e) {
-            System.out.println("BufferReader wrong.");
-            return null;
-        }
-        if (num == 0) return null;
-        char[] password = new char[num - 1];
-        System.arraycopy(input, 0, password, 0, num - 1);
-        if(password.length==0)password=null;
-        return password;
+        return inputPassword(ask);
     }
+//    public static char[] inputPassword(BufferedReader br, String ask) {
+//        System.out.println(ask);
+//        char[] input = new char[64];
+//        int num = 0;
+//        try {
+//            num = br.read(input);
+//        } catch (IOException e) {
+//            System.out.println("BufferReader wrong.");
+//            return null;
+//        }
+//        if (num == 0) return null;
+//        char[] password = new char[num - 1];
+//        System.arraycopy(input, 0, password, 0, num - 1);
+//        if(password.length==0)password=null;
+//        return password;
+//    }
 
     public static String inputString(BufferedReader br) {
         String input = null;
@@ -493,6 +493,7 @@ public class Inputer {
         String ask = "Input the password:";
         char[] password = inputPassword(br, ask);
         byte[] passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
+        if(passwordBytes==null)return null;
         BytesUtils.clearCharArray(password);
         return passwordBytes;
     }
@@ -606,10 +607,10 @@ public class Inputer {
     }
 
 
-    public static String[] promptAndSet(BufferedReader reader, String fieldName, String[] currentValues) throws IOException {
+    public static List<String> promptAndSet(BufferedReader reader, String fieldName, List<String> currentValues) throws IOException {
         String ask = "Enter " + fieldName + " (Press Enter to skip): ";
-        String[] newValue = inputStringArray(reader, ask, 0);
-        return newValue.length == 0 ? currentValues : newValue;
+        List<String> newValue = inputStringList(reader, ask, 0);
+        return newValue.isEmpty() ? currentValues : newValue;
     }
 
     public static String promptAndSet(BufferedReader reader, String fieldName, String currentValue) throws IOException {
@@ -637,13 +638,13 @@ public class Inputer {
         return newValue.isEmpty() ? currentValue : Long.parseLong(newValue);
     }
 
-    public static String[] promptAndUpdate(BufferedReader reader, String fieldName, String[] currentValue) throws IOException {
-        System.out.println(fieldName + " current value: " + Arrays.toString(currentValue));
+    public static List<String> promptAndUpdate(BufferedReader reader, String fieldName, List<String> currentValue) throws IOException {
+        System.out.println(fieldName + " current value: " + StringUtils.listToString(currentValue));
         System.out.print("Do you want to update it? (y/n): ");
 
         if ("y".equalsIgnoreCase(reader.readLine())) {
             String ask = "Set new values for " + fieldName + ": ";
-            return inputStringArray(reader, ask, 0);
+            return inputStringList(reader, ask, 0);
         }
         return currentValue;
     }

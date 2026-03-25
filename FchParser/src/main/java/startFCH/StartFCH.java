@@ -1,5 +1,6 @@
 package startFCH;
 
+import data.feipData.ServiceType;
 import ui.Menu;
 import config.Settings;
 import config.Starter;
@@ -47,13 +48,13 @@ public class StartFCH {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.ES.name()));
 
         Settings settings = Starter.startTool(UpStrings.CHAIN, settingMap, br, modules, null);
         if(settings==null) return;
 
         //Prepare API clients
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         log.debug("Freecash blockchain parser is starting...");
         checkOpReturnFile();
 

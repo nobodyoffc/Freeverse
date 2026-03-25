@@ -3,20 +3,20 @@ package APIP18V1_Wallet;
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.apipData.Utxo;
-import data.feipData.Service;
-import handlers.CashManager;
+import data.feipData.ServiceType;
+import managers.CashManager;
 import constants.*;
 import core.crypto.KeyTools;
 import data.fcData.ReplyBody;
-import handlers.CashManager.SearchResult;
-import handlers.Manager.ManagerType;
+import managers.CashManager.SearchResult;
+import managers.Manager.ManagerType;
 import data.fchData.Cash;
 import initial.Initiator;
 import constants.ApipApiNames;
 import utils.FchUtils;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
-import handlers.MempoolManager;
+import managers.MempoolManager;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -68,7 +68,7 @@ public class GetUtxo extends HttpServlet {
         }else{
             cd=0L;
         }
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
         SearchResult<Cash> searchResult = CashManager.getValidCashes(idRequested,amount,cd,null,0,0,null,esClient, mempoolHandler);
         if (searchResult.hasError()) {

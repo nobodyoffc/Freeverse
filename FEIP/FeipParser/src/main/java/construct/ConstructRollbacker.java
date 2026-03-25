@@ -75,7 +75,7 @@ public class ConstructRollbacker {
 					itemSet.add(item.getId());
 				}
 				case OpNames.STOP, RECOVER, CLOSE -> {
-					if (item.getPids() == null || item.getPids().length == 0) {
+					if (item.getPids() == null || item.getPids().size() == 0) {
 						continue;
 					}
 					for(String pid: item.getPids()){
@@ -171,7 +171,7 @@ public class ConstructRollbacker {
 					itemSet.add(item.getId());
 				}
 				case OpNames.STOP, RECOVER, CLOSE -> {
-					if (item.getSids() == null || item.getSids().length == 0) {
+					if (item.getSids() == null || item.getSids().isEmpty()) {
 						continue;
 					}
 					for(String sid: item.getSids()){
@@ -253,7 +253,7 @@ public class ConstructRollbacker {
 					itemSet.add(item.getId());
 				}
 				case OpNames.STOP, RECOVER, CLOSE -> {
-					if (item.getAids() == null || item.getAids().length == 0) {
+					if (item.getAids() == null || item.getAids().size() == 0) {
 						continue;
 					}
 					for(String aid: item.getAids()){
@@ -336,7 +336,7 @@ public class ConstructRollbacker {
 					itemSet.add(item.getId());
 				}
 				case OpNames.STOP, RECOVER, CLOSE -> {
-					if (item.getCodeIds() == null || item.getCodeIds().length == 0) {
+					if (item.getCodeIds() == null || item.getCodeIds().size() == 0) {
 						continue;
 					}
 					for(String codeId: item.getCodeIds()){

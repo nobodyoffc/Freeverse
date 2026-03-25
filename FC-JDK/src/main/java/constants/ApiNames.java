@@ -3,6 +3,7 @@ package constants;
 import java.util.ArrayList;
 
 public class ApiNames {
+    public static final String NABOX = "/nabox";
     public static ArrayList<String> freeApiList = new ArrayList<>();
     public static ArrayList<String> DiskApiList = new ArrayList<>();
     public static ArrayList<String> TalkApiList = new ArrayList<>();
@@ -33,6 +34,7 @@ public class ApiNames {
     public static final String SN_20 = "sn20";
     public static final String SN_21 = "sn21";
     public static final String Carve = "carve";
+    public static final String NERVE = "/nerve/";
 
     public static String makeUrlTailPath(String sn,String ver){
         return "/"+sn+"/"+ver+"/";
@@ -112,7 +114,7 @@ public class ApiNames {
     public static final String CidInfoByIds = "cidInfoByIds";
     public static final String CidInfoSearch = "cidInfoSearch";
     public static final String CidHistory = "cidHistory";
-    public static final String HomepageHistory = "homepageHistory";
+    public static final String HomeHistory = "homeHistory";
     public static final String NoticeFeeHistory = "noticeFeeHistory";
     public static final String ReputationHistory = "reputationHistory";
     public static final String NobodySearch = "nobodySearch";
@@ -139,12 +141,12 @@ public class ApiNames {
     public static final String AppSearch = "appSearch";
     public static final String AppOpHistory = "appOpHistory";
     public static final String AppRateHistory = "appRateHistory";
-    public static final String GroupByIds = "groupByIds";
-    public static final String GroupSearch = "groupSearch";
-    public static final String GroupMembers = "groupMembers";
-    public static final String GroupExMembers = "groupExMembers";
-    public static final String MyGroups = "myGroups";
-    public static final String GroupOpHistory = "groupOpHistory";
+    public static final String SquareByIds = "squareByIds";
+    public static final String SquareSearch = "squareSearch";
+    public static final String SquareMembers = "squareMembers";
+    public static final String SquareExMembers = "squareExMembers";
+    public static final String MySquares = "mySquares";
+    public static final String SquareOpHistory = "squareOpHistory";
     public static final String TeamByIds = "teamByIds";
     public static final String TeamSearch = "teamSearch";
     public static final String TeamMembers = "teamMembers";
@@ -222,6 +224,17 @@ public class ApiNames {
     public static final String Get = "get";
     public static final String Check = "check";
     public static final String LIST = "list";
+    public static final String Delete = "delete";
+    public static final String Extend = "extend";
+    
+    // DOCK APIs
+    public static final String DockPut = "dock.put";
+    public static final String DockGet = "dock.get";
+    public static final String DockList = "dock.list";
+    public static final String DockCheck = "dock.check";
+    public static final String DockDelete = "dock.delete";
+    public static final String DockExtend = "dock.extend";
+    public static String[] DockAPIs;
 
     public static final String ChainInfo ="chainInfo";
     public static final String DifficultyHistory ="difficultyHistory";
@@ -260,12 +273,12 @@ public class ApiNames {
                 CidInfoSearch,CidInfoByIds,  CidHistory,
                 FidCidSeek, GetFidCid,
                 NobodySearch,NobodyByIds,
-                HomepageHistory, NoticeFeeHistory, ReputationHistory,
+                HomeHistory, NoticeFeeHistory, ReputationHistory,
                 GetAvatar,Avatars
         };
 
         OrganizeAPIs = new String[]{
-                GroupSearch,GroupByIds,  GroupMembers, GroupOpHistory, MyGroups,
+                SquareSearch,SquareByIds,  SquareMembers, SquareOpHistory, MySquares,
                 TeamSearch,TeamByIds,  TeamMembers, TeamExMembers,
                 TeamOpHistory, TeamRateHistory, TeamOtherPersons, MyTeams
         };
@@ -321,6 +334,10 @@ public class ApiNames {
         ApipAPIs = ApipApiList.toArray(new String[0]);
         DiskAPIs = new String[]{
                 Put, Get, Check, LIST, Ping, SignIn, SignInEcc, WebhookPoint
+        };
+        
+        DockAPIs = new String[]{
+                DockPut, DockGet, DockList, DockCheck, DockDelete, DockExtend, Ping, SignIn, SignInEcc
         };
         EndpointAPIs = new String[]{
                 TotalSupply,Circulating,Richlist,FreecashInfo
@@ -399,7 +416,7 @@ public class ApiNames {
         ApiNames.apiList.add(ApiNames.FidCidSeek);
         ApiNames.apiList.add(ApiNames.CidInfoSearch);
         ApiNames.apiList.add(ApiNames.CidHistory);
-        ApiNames.apiList.add(ApiNames.HomepageHistory);
+        ApiNames.apiList.add(ApiNames.HomeHistory);
         ApiNames.apiList.add(ApiNames.NoticeFeeHistory);
         ApiNames.apiList.add(ApiNames.ReputationHistory);
         ApiNames.apiList.add(ApiNames.NobodySearch);
@@ -425,12 +442,12 @@ public class ApiNames {
         ApiNames.apiList.add(ApiNames.AppOpHistory);
         ApiNames.apiList.add(ApiNames.AppRateHistory);
 
-        ApiNames.apiList.add(ApiNames.GroupByIds);
-        ApiNames.apiList.add(ApiNames.GroupSearch);
-        ApiNames.apiList.add(ApiNames.GroupOpHistory);
-        ApiNames.apiList.add(ApiNames.GroupMembers);
-        ApiNames.apiList.add(ApiNames.GroupExMembers);
-        ApiNames.apiList.add(ApiNames.MyGroups);
+        ApiNames.apiList.add(ApiNames.SquareByIds);
+        ApiNames.apiList.add(ApiNames.SquareSearch);
+        ApiNames.apiList.add(ApiNames.SquareOpHistory);
+        ApiNames.apiList.add(ApiNames.SquareMembers);
+        ApiNames.apiList.add(ApiNames.SquareExMembers);
+        ApiNames.apiList.add(ApiNames.MySquares);
 
         ApiNames.apiList.add(ApiNames.TeamByIds);
         ApiNames.apiList.add(ApiNames.TeamSearch);

@@ -1,7 +1,7 @@
 package startClient;
 
-import data.apipData.SignInMode;
-import handlers.Manager;
+import data.feipData.ServiceType;
+import managers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import ui.Shower;
@@ -16,7 +16,6 @@ import core.crypto.CryptoDataStr;
 import core.crypto.Hash;
 import data.fcData.ReplyBody;
 import data.feipData.Service;
-import data.feipData.serviceParams.ApipParams;
 import utils.Hex;
 import utils.JsonUtils;
 import utils.http.AuthType;
@@ -31,7 +30,6 @@ import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-import static config.Configure.saveConfig;
 import static server.ApipApi.VER_1;
 
 public class StartDiskClient {
@@ -39,7 +37,7 @@ public class StartDiskClient {
     public static ApipClient apipClient;
     public static DiskClient diskClient;
     private static Settings settings;
-    public static String clientName= Service.ServiceType.DISK.name();
+    public static String clientName= ServiceType.DISK.name();
 
 //    public static Service.ServiceType[] serviceAliases = new Service.ServiceType[]{Service.ServiceType.APIP, Service.ServiceType.DISK};
     public static Map<String,Object> settingMap = new HashMap<>();
@@ -51,15 +49,15 @@ public class StartDiskClient {
         Menu.welcome(clientName);
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.DISK.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.DISK.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.HAT.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.DISK.name()));
 
         settings = Starter.startClient(clientName, settingMap, br, modules, null);
         if(settings==null)return;
-        apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);//settings.getApipAccount().getClient();
-        diskClient = (DiskClient) settings.getClient(Service.ServiceType.DISK);//settings.getDiskAccount().getClient();
+        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);//settings.getApipAccount().getClient();
+        diskClient = (DiskClient) settings.getClient(ServiceType.DISK);//settings.getDiskAccount().getClient();
         byte[] symkey = settings.getSymkey();
         while(true) {
             try {
@@ -109,14 +107,14 @@ public class StartDiskClient {
 
     public static void getService() {
         System.out.println("Getting the service information...");
-        ReplyBody replier = DiskClient.getService(diskClient.getUrlHead(), VER_1, ApipParams.class);
+        ReplyBody replier = DiskClient.getService(diskClient.getUrlHead(), VER_1);
         if(replier!=null) JsonUtils.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
     }
 
     public static void pingFree(BufferedReader br){
-        boolean done = (boolean) diskClient.ping(VER_1, RequestMethod.GET,AuthType.FREE, Service.ServiceType.DISK);
+        boolean done = (boolean) diskClient.ping(VER_1, RequestMethod.GET,AuthType.FREE, ServiceType.DISK);
         if(done) System.out.println("OK!");
         else System.out.println("Failed!");
         Menu.anyKeyToContinue(br);
@@ -350,7 +348,7 @@ public class StartDiskClient {
         }
         for(DiskItem diskItem : dataResponse){
             List<Object> valueList = new ArrayList<>();
-            if(diskItem.getDid()!=null)valueList.add(diskItem.getDid());
+            if(diskItem.getId()!=null)valueList.add(diskItem.getId());
             else valueList.add("");
             if(diskItem.getSince()!=null)valueList.add(formatter.format(diskItem.getSince()));
             else valueList.add("");

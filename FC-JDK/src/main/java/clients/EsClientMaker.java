@@ -18,9 +18,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.security.*;
+import java.security.cert.X509Certificate;
 
 public class EsClientMaker {
 
@@ -240,12 +244,24 @@ public class EsClientMaker {
         final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
 
         credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(username, password));
-
+        // 创建SSL上下文
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(null, new TrustManager[]{new X509TrustManager() {
+            public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+            public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+            public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+        }}, new SecureRandom());
+        //
         restClient = RestClient.builder(new HttpHost(host, port, "https"))
-                .setHttpClientConfigCallback(h -> h.setDefaultCredentialsProvider(credentialsProvider))
+                .setHttpClientConfigCallback(h -> h
+                        .setDefaultCredentialsProvider(credentialsProvider)
+                        //
+                        .setSSLContext(sslContext)
+                        .setSSLHostnameVerifier((hostname, session) -> true))
+                        //
                 .setRequestConfigCallback(requestConfigBuilder -> {
-                    return requestConfigBuilder.setConnectTimeout(5000 * 1000) // 连接超时（默认为1秒）
-                            .setSocketTimeout(6000 * 1000);// 套接字超时（默认为30秒）//更改客户端的超时限制默认30秒现在改为100*1000分钟
+                    return requestConfigBuilder.setConnectTimeout(5000 * 1000)
+                            .setSocketTimeout(6000 * 1000);
                 })
                 .build();
 

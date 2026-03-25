@@ -9,6 +9,7 @@ import data.fcData.ReplyBody;
 import data.fchData.Freer;
 import constants.FieldNames;
 import constants.IndicesNames;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.FchUtils;
 import utils.JsonUtils;
@@ -24,7 +25,6 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import config.Settings;
-import data.feipData.Service;
 
 @WebServlet(name = ApipApiNames.RICHLIST, value = "/"+ ApipApiNames.RICHLIST)
 public class Richlist extends HttpServlet {
@@ -53,7 +53,7 @@ public class Richlist extends HttpServlet {
             ReplyBody replier = httpRequestChecker.getReplyBody();
 
             int finalNumber = number;
-            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
             SearchResponse<Freer> result = esClient.search(s -> s.index(IndicesNames.FREER).size(finalNumber).sort(so -> so.field(f -> f.field(FieldNames.BALANCE).order(SortOrder.Desc))), Freer.class);
             if(result==null||result.hits()==null||result.hits().hits()==null){
                 replier.replyHttp("Failed to get data.",response);

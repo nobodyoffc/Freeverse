@@ -575,6 +575,11 @@ public class CryptoDataByte {
         return true;
     }
 
+    public static CryptoDataByte fromBase64(String base64) {
+        byte[] bundle = Base64.getDecoder().decode(base64);
+        return fromBundle(bundle);
+    }
+
     public void printCodeMessage() {
         System.out.println(code+" : "+ message);
     }

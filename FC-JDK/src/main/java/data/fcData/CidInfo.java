@@ -147,7 +147,7 @@ public class CidInfo extends Freer {
         cidInfo.setWeight(cid.getWeight());
         cidInfo.setGuide(cid.getGuide());
         cidInfo.setNoticeFee(cid.getNoticeFee());
-        cidInfo.setHomepages(cid.getHomepages());
+        cidInfo.setHome(cid.getHome());
         cidInfo.setBtcAddr(cid.getBtcAddr());
         cidInfo.setEthAddr(cid.getEthAddr());
         cidInfo.setLtcAddr(cid.getLtcAddr());

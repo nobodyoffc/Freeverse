@@ -7,6 +7,6 @@
 </head>
 <body>
 <h2>欢迎！</h2>
-<a href="v1/getService">Service</a>
+<a href="getService/v1">Service</a>
 </body>
 </html>

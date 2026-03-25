@@ -13,6 +13,7 @@ import constants.Strings;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
 import data.feipData.Service;
+import data.feipData.ServiceType;
 import feature.swap.SwapInfoData;
 import feature.swap.SwapParams;
 import feature.swap.SwapStateData;
@@ -46,12 +47,12 @@ public class SwapInfo extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         ReplyBody replier = new ReplyBody();
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         try(Jedis jedis = jedisPool.getResource()) {
             replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
         }
 
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
         String sidStr = request.getParameter(SID);
 
@@ -99,7 +100,7 @@ public class SwapInfo extends HttpServlet {
         String lastStr = request.getParameter(LAST);
         if(lastStr!=null){
             String[] last = lastStr.split(",");
-            searchBuilder.searchAfter(Arrays.asList(last));
+            searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));
         }
 
         SearchResponse<SwapStateData> result = esClient.search(searchBuilder.build(), SwapStateData.class);
@@ -109,7 +110,7 @@ public class SwapInfo extends HttpServlet {
             replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
             return;
         }
-        String[] last = result.hits().hits().get(result.hits().hits().size() - 1).sort().toArray(new String[0]);
+        String[] last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
 
         List<SwapStateData> swapStateList = new ArrayList<>();
         for(Hit<SwapStateData> hit : result.hits().hits()){
@@ -159,7 +160,7 @@ public class SwapInfo extends HttpServlet {
         List<Service> swapServiceList = mgetResult1.getResultList();
 
         for(Service service:swapServiceList){
-            if(service.isActive()){
+            if(service.getActive()){
                 SwapParams swapParams = gson.fromJson(gson.toJson(service.getParams()),SwapParams.class);
                 if(swapParams!=null){
                     service.setParams(swapParams);

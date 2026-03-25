@@ -12,12 +12,11 @@ import ui.Shower;
 import clients.ApipClient;
 import config.ApiAccount;
 import data.feipData.*;
-import data.feipData.Service.ServiceType;
+import data.feipData.ServiceType;
 import config.Configure;
 import core.crypto.EncryptType;
 import core.crypto.KeyTools;
 
-import data.feipData.serviceParams.ApipParams;
 import utils.BytesUtils;
 import utils.Hex;
 import utils.JsonUtils;
@@ -151,7 +150,7 @@ public class StartApipClient {
 
     public static void getService() {
         System.out.println("Getting the default service information...");
-        ReplyBody replier = ApipClient.getService(apipClient.getUrlHead(), server.ApipApi.VER_1, ApipParams.class);
+        ReplyBody replier = ApipClient.getService(apipClient.getUrlHead(), server.ApipApi.VER_1);
         if(replier!=null) JsonUtils.printJson(replier);
         else System.out.println("Failed to get service.");
         Menu.anyKeyToContinue(br);
@@ -166,6 +165,8 @@ public class StartApipClient {
         menu.add("TotalsGet", () -> totalsGet());
         menu.add("TotalsPost", () -> totalsPost());
         menu.add("generalPost", () -> generalPost());
+        menu.add("entityByIds", () -> entityByIds());
+        menu.add("entitySearch", () -> entitySearch(DEFAULT_SIZE, "id:asc"));
 
         System.out.println(" << Maker manager>>");
         menu.showAndSelect(br);
@@ -176,7 +177,7 @@ public class StartApipClient {
         System.out.println("Input the index name. Enter to exit:");
         String input = Inputer.inputString(br);
         if ("".equals(input)) return;
-        fcdsl.setIndex(input);
+        fcdsl.setEntity(input);
 
         fcdsl.promoteInput(br);
 
@@ -190,6 +191,44 @@ public class StartApipClient {
         System.out.println("Requesting ...");
         ReplyBody replier = apipClient.general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         JsonUtils.printJson(replier);
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void entityByIds() {
+        System.out.println("Input the entity name (e.g., cash, block, freer). Enter to exit:");
+        String entityName = Inputer.inputString(br);
+        if ("".equals(entityName)) return;
+
+        String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input IDs, separated by ',':", ",");
+        if (ids == null || ids.length == 0) return;
+
+        System.out.println("Requesting entityByIds for " + entityName + "...");
+        Map<String, Object> result = apipClient.entityByIds(entityName, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        if (result == null) {
+            System.out.println("No results found.");
+            return;
+        }
+        System.out.println("Got " + result.size() + " items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    public static void entitySearch(int defaultSize, String defaultSort) {
+        System.out.println("Input the entity name (e.g., cash, block, freer). Enter to exit:");
+        String entityName = Inputer.inputString(br);
+        if ("".equals(entityName)) return;
+
+        Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
+        if (fcdsl == null) return;
+
+        System.out.println("Requesting entitySearch for " + entityName + "...");
+        List<Object> result = apipClient.entitySearch(entityName, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        if (result == null) {
+            System.out.println("No results found.");
+            return;
+        }
+        System.out.println("Got " + result.size() + " items.");
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
@@ -262,7 +301,7 @@ public class StartApipClient {
     public static void blockByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input blockIds,separated by ',':", ",");
         System.out.println("Requesting blockByIds...");
-        Map<String, Block> result = apipClient.blockByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,ids);
+        Map<String, Block> result = apipClient.entityByIds("block", Block.class, RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -273,7 +312,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting blockSearch...");
-        List<Block> result = apipClient.blockSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Block> result = apipClient.entitySearch("block", Block.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -301,7 +340,7 @@ public class StartApipClient {
     public static void cashByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input cashIds,separated by ',':", ",");
         System.out.println("Requesting cashByIds...");
-        Map<String, Cash> result = apipClient.cashByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,ids);
+        Map<String, Cash> result = apipClient.entityByIds("cash", Cash.class, RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -323,7 +362,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting cashSearch...");
-        List<Cash> result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Cash> result = apipClient.entitySearch("cash", Cash.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -334,7 +373,7 @@ public class StartApipClient {
     public static void opReturnByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input opReturnIds,separated by ',':", ",");
         System.out.println("Requesting opReturnByIds...");
-        Map<String, OpReturn> result = apipClient.opReturnByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, OpReturn> result = apipClient.entityByIds("opReturn", OpReturn.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -345,7 +384,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting opReturnSearch...");
-        List<OpReturn> result = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<OpReturn> result = apipClient.entitySearch("opReturn", OpReturn.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -355,7 +394,7 @@ public class StartApipClient {
     public static void multisigByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input multisigIds,separated by ',':", ",");
         System.out.println("Requesting multisigByIds...");
-        Map<String, Multisig> result = apipClient.multisigByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Multisig> result = apipClient.entityByIds("multisig", Multisig.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -366,7 +405,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting multisigSearch...");
-        List<Multisig> result = apipClient.multisigSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Multisig> result = apipClient.entitySearch("multisig", Multisig.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -376,7 +415,7 @@ public class StartApipClient {
     public static void p2shByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input p2shIds,separated by ',':", ",");
         System.out.println("Requesting p2shByIds...");
-        Map<String, P2SH> result = apipClient.p2shByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, P2SH> result = apipClient.entityByIds("p2sh", P2SH.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -387,7 +426,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting p2shSearch...");
-        List<P2SH> result = apipClient.p2shSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<P2SH> result = apipClient.entitySearch("p2sh", P2SH.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -397,7 +436,7 @@ public class StartApipClient {
     public static void txByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input txIds,separated by ',':", ",");
         System.out.println("Requesting txByIds...");
-        Map<String, Tx> result = apipClient.txByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Tx> result = apipClient.entityByIds("tx", Tx.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -408,7 +447,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting txSearch...");
-        List<Tx> result = apipClient.txSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Tx> result = apipClient.entitySearch("tx", Tx.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -501,7 +540,7 @@ public class StartApipClient {
         menu.add("nobodySearch", () -> nobodySearch(DEFAULT_SIZE, "deathHeight:desc->deathTxIndex:desc"));
         menu.add("nobodyByIds", () -> nobodyByIds());
         menu.add("checkNobodies", () -> checkNobodies());
-        menu.add("homepageHistory", () -> homepageHistory(DEFAULT_SIZE, "height:desc->index:desc"));
+        menu.add("homepageHistory", () -> homeHistory(DEFAULT_SIZE, "height:desc->index:desc"));
         menu.add("noticeFeeHistory", () -> noticeFeeHistory(DEFAULT_SIZE, "height:desc->index:desc"));
         menu.add("reputationHistory", () -> reputationHistory(DEFAULT_SIZE, "height:desc->index:desc"));
         menu.add("nidSearch", () -> nidSearch(DEFAULT_SIZE, "birthHeight:desc->id:asc"));
@@ -516,7 +555,7 @@ public class StartApipClient {
     public static void cidInfoByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting cidByIds...");
-        Map<String, Freer> result = apipClient.freerByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Freer> result = apipClient.entityByIds("freer", Freer.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -553,7 +592,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting cidSearch...");
-        List<Freer> result = apipClient.freerSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Freer> result = apipClient.entitySearch("freer", Freer.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -584,7 +623,7 @@ public class StartApipClient {
     public static void nobodyByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input FIDs,separated by ',':", ",");
         System.out.println("Requesting nobodyByIds...");
-        Map<String, Nobody> result = apipClient.nobodyByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Nobody> result = apipClient.entityByIds("nobody", Nobody.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -605,7 +644,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting nobodySearch...");
-        List<Nobody> result = apipClient.nobodySearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Nobody> result = apipClient.entitySearch("nobody", Nobody.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -616,18 +655,18 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting cidHistory...");
-        List<CidHist> result = apipClient.freerHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<FreerHist> result = apipClient.freerHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
-    public static void homepageHistory(int defaultSize, String defaultSort) {
+    public static void homeHistory(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
-        System.out.println("Requesting homepageHistory...");
-        List<CidHist> result = apipClient.homepageHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        System.out.println("Requesting homeHistory...");
+        List<FreerHist> result = apipClient.homeHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -638,7 +677,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting noticeFeeHistory...");
-        List<CidHist> result = apipClient.noticeFeeHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<FreerHist> result = apipClient.noticeFeeHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -649,7 +688,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting reputationHistory...");
-        List<CidHist> result = apipClient.reputationHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<FreerHist> result = apipClient.reputationHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -690,11 +729,11 @@ public class StartApipClient {
     public static void organize( ) {
         System.out.println("Organize...");
         Menu menu = new Menu("Organize");
-        menu.add("groupSearch", () -> groupSearch(DEFAULT_SIZE, "tCdd:desc->id:asc"));
-        menu.add("groupByIds", () -> groupByIds());
-        menu.add("groupMembers", () -> groupMembers());
-        menu.add("groupOpHistory", () -> groupOpHistory(DEFAULT_SIZE, "height:desc->index:desc"));
-        menu.add("myGroups", () -> myGroups(DEFAULT_SIZE));
+        menu.add("squareSearch", () -> squareSearch(DEFAULT_SIZE, "tCdd:desc->id:asc"));
+        menu.add("squareByIds", () -> squareByIds());
+        menu.add("squareMembers", () -> squareMembers());
+        menu.add("squareOpHistory", () -> squareOpHistory(DEFAULT_SIZE, "height:desc->index:desc"));
+        menu.add("mySquares", () -> mySquares(DEFAULT_SIZE));
         menu.add("teamSearch", () -> teamSearch(DEFAULT_SIZE, "active:desc->tRate:desc->id:asc"));
         menu.add("teamByIds", () -> teamByIds());
         menu.add("teamMembers", () -> teamMembers());
@@ -707,53 +746,60 @@ public class StartApipClient {
         menu.showAndSelect(br);
     }
 
-    public static void groupByIds( ) {
+    public static void squareByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input GIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
-        apipClient.groupByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Square> result = apipClient.entityByIds("square", Square.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
-    public static void groupSearch(int defaultSize, String defaultSort) {
+    public static void squareSearch(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        apipClient.groupSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Square> result = apipClient.entitySearch("square", Square.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
-    public static void groupMembers( ) {
+    public static void squareMembers( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input GIDs,separated by ',':", ",");
         System.out.println("Requesting ...");
-        apipClient.groupMembers(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        apipClient.squareMembers(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
-    public static void groupOpHistory(int defaultSize, String defaultSort) {
+    public static void squareOpHistory(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
-        apipClient.groupOpHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        apipClient.squareOpHistory(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
-    public static void myGroups(Integer size) {
+    public static void mySquares(Integer size) {
         System.out.println("Input the FID. Enter to exit:");
         String id = Inputer.inputString(br);
         if ("".equals(id)) return;
         List<String> last = Inputer.inputStringList(br, "Input the last:", 0);
         System.out.println("Requesting ...");
-        apipClient.myGroups(id, null, size, last, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        apipClient.mySquares(id, null, size, last, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
 
     public static void teamByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input TIDs,separated by ',':", ",");
-        apipClient.teamByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        System.out.println("Requesting ...");
+        Map<String, Team> result = apipClient.entityByIds("team", Team.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -762,7 +808,9 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting ...");
-        apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Team> result = apipClient.entitySearch("team", Team.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        if(result==null)return;
+        System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
         Menu.anyKeyToContinue(br);
     }
@@ -850,7 +898,7 @@ public class StartApipClient {
     public static void protocolByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input PIDs,separated by ',':", ",");
         System.out.println("Requesting protocolByIds...");
-        Map<String, Protocol> result = apipClient.protocolByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Protocol> result = apipClient.entityByIds("protocol", Protocol.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -861,7 +909,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting protocolSearch...");
-        List<Protocol> result = apipClient.protocolSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Protocol> result = apipClient.entitySearch("protocol", Protocol.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -891,7 +939,7 @@ public class StartApipClient {
     public static void codeByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Code_IDs,separated by ',':", ",");
         System.out.println("Requesting codeByIds...");
-        Map<String, Code> result = apipClient.codeByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Code> result = apipClient.entityByIds("code", Code.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -901,8 +949,8 @@ public class StartApipClient {
     public static void codeSearch(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
-        System.out.println("Requesting protocolSearch...");
-        List<Code> result = apipClient.codeSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        System.out.println("Requesting codeSearch...");
+        List<Code> result = apipClient.entitySearch("code", Code.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -932,8 +980,8 @@ public class StartApipClient {
     }
     public static void serviceByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input SIDs,separated by ',':", ",");
-        System.out.println("Requesting ...");
-        Map<String, Service> result = apipClient.serviceByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        System.out.println("Requesting serviceByIds...");
+        Map<String, Service> result = apipClient.entityByIds("service", Service.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -942,8 +990,8 @@ public class StartApipClient {
     public static void serviceSearch(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
-        System.out.println("Requesting ...");
-        List<Service> result = apipClient.serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        System.out.println("Requesting serviceSearch...");
+        List<Service> result = apipClient.entitySearch("service", Service.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -974,8 +1022,8 @@ public class StartApipClient {
 
     public static void appByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input AIDs,separated by ',':", ",");
-        System.out.println("Requesting ...");
-        Map<String, App> result = apipClient.appByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        System.out.println("Requesting appByIds...");
+        Map<String, App> result = apipClient.entityByIds("app", App.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -985,8 +1033,8 @@ public class StartApipClient {
     public static void appSearch(int defaultSize, String defaultSort) {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
-        System.out.println("Requesting ...");
-        List<App> result = apipClient.appSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        System.out.println("Requesting appSearch...");
+        List<App> result = apipClient.entitySearch("app", App.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1039,7 +1087,7 @@ public class StartApipClient {
     public static void boxByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input BIDs,separated by ',':", ",");
         System.out.println("Requesting boxByIds...");
-        Map<String, Box> result = apipClient.boxByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Box> result = apipClient.entityByIds("box", Box.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1050,7 +1098,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting boxSearch...");
-        List<Box> result = apipClient.boxSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Box> result = apipClient.entitySearch("box", Box.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1072,7 +1120,7 @@ public class StartApipClient {
     public static void contactByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Contact_Ids,separated by ',':", ",");
         System.out.println("Requesting contactByIds...");
-        Map<String, Contact> result = apipClient.contactByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Contact> result = apipClient.entityByIds("contact", Contact.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1083,7 +1131,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting contactSearch...");
-        List<Contact> result = apipClient.contactSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Contact> result = apipClient.entitySearch("contact", Contact.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1104,7 +1152,7 @@ public class StartApipClient {
     public static void secretByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Secret_Ids,separated by ',':", ",");
         System.out.println("Requesting secretByIds...");
-        Map<String, Secret> result = apipClient.secretByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Secret> result = apipClient.entityByIds("secret", Secret.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1115,7 +1163,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting secretSearch...");
-        List<Secret> result = apipClient.secretSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Secret> result = apipClient.entitySearch("secret", Secret.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1136,7 +1184,7 @@ public class StartApipClient {
     public static void mailByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Mail_Ids,separated by ',':", ",");
         System.out.println("Requesting mailByIds...");
-        Map<String, Mail> result = apipClient.mailByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Mail> result = apipClient.entityByIds("mail", Mail.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1147,7 +1195,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting mailSearch...");
-        List<Mail> result = apipClient.mailSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Mail> result = apipClient.entitySearch("mail", Mail.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1183,7 +1231,7 @@ public class StartApipClient {
     public static void proofByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Proof_Ids,separated by ',':", ",");
         System.out.println("Requesting proofByIds...");
-        Map<String, Proof> result = apipClient.proofByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Proof> result = apipClient.entityByIds("proof", Proof.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1194,7 +1242,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting proofSearch...");
-        List<Proof> result = apipClient.proofSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Proof> result = apipClient.entitySearch("proof", Proof.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1214,7 +1262,7 @@ public class StartApipClient {
     public static void statementByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Statement_Ids,separated by ',':", ",");
         System.out.println("Requesting statementByIds...");
-        Map<String, Statement> result = apipClient.statementByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Statement> result = apipClient.entityByIds("statement", Statement.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1225,7 +1273,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting statementSearch...");
-        List<Statement> result = apipClient.statementSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Statement> result = apipClient.entitySearch("statement", Statement.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1235,7 +1283,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting nidSearch...");
-        List<Nid> result = apipClient.nidSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Nid> result = apipClient.entitySearch("nid", Nid.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1270,7 +1318,7 @@ public class StartApipClient {
     public static void tokenByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Token_Ids,separated by ',':", ",");
         System.out.println("Requesting tokenByIds...");
-        Map<String, Token> result = apipClient.tokenByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Token> result = apipClient.entityByIds("token", Token.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1281,7 +1329,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting tokenSearch...");
-        List<Token> result = apipClient.tokenSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Token> result = apipClient.entitySearch("token", Token.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1303,7 +1351,7 @@ public class StartApipClient {
         String id = Inputer.inputString(br);
         if ("".equals(id)) return;
         System.out.println("Requesting myTokens...");
-        List<Group> result = apipClient.myTokens(id, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Token> result = apipClient.myTokens(id, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1323,7 +1371,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting tokenHolderSearch...");
-        List<TokenHolder> result = apipClient.tokenHolderSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<TokenHolder> result = apipClient.entitySearch("tokenHolder", TokenHolder.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1351,7 +1399,7 @@ public class StartApipClient {
     public static void remarkByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Remark_Ids,separated by ',':", ",");
         System.out.println("Requesting remarkByIds...");
-        Map<String, Remark> result = apipClient.remarkByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Remark> result = apipClient.entityByIds("remark", Remark.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1362,7 +1410,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting remarkSearch...");
-        List<Remark> result = apipClient.remarkSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Remark> result = apipClient.entitySearch("remark", Remark.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1394,7 +1442,7 @@ public class StartApipClient {
     public static void textByIds( ) {
         String[] ids = Inputer.inputStringArrayWithSeparator(br, "Input Text_Ids,separated by ',':", ",");
         System.out.println("Requesting textByIds...");
-        Map<String, Text> result = apipClient.textByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
+        Map<String, Text> result = apipClient.entityByIds("text", Text.class, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ids);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
@@ -1405,7 +1453,7 @@ public class StartApipClient {
         Fcdsl fcdsl = inputFcdsl(defaultSize, defaultSort);
         if (fcdsl == null) return;
         System.out.println("Requesting textSearch...");
-        List<Text> result = apipClient.textSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Text> result = apipClient.entitySearch("text", Text.class, fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
         if(result==null)return;
         System.out.println("Got "+result.size()+" items.");
         JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());

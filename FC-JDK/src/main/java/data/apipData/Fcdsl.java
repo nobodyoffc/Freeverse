@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.util.*;
 
-import static constants.FieldNames.INDEX;
+import static constants.FieldNames.ENTITY;
 import static constants.Values.ASC;
 import static constants.Values.DESC;
 
@@ -21,7 +21,6 @@ public class Fcdsl {
     private static final Logger log = LoggerFactory.getLogger(Fcdsl.class);
     private String ver;
     private String entity;
-    private String index;
     private String endpoint;  // For special API endpoints (e.g., "totals") that are not entity/index queries
     private List<String> ids;
     private FcQuery query;
@@ -86,7 +85,7 @@ public class Fcdsl {
                 return null;
             }
             switch (method){
-                case INDEX -> fcdsl.addIndex(valueStr);
+                case ENTITY -> fcdsl.addEntity(valueStr);
                 case IDS-> fcdsl.addIds(valueStr.split(","));
                 case FcQuery.TERMS-> {
                     if(fcdsl.getQuery()==null)fcdsl.addNewQuery();
@@ -234,8 +233,8 @@ public class Fcdsl {
         boolean started = false;
         StringBuilder stringBuilder = new StringBuilder();
 
-        if(fcdsl.getIndex()!=null) {
-            stringBuilder.append(INDEX + "=").append(fcdsl.getIndex());
+        if(fcdsl.getEntity()!=null) {
+            stringBuilder.append(ENTITY + "=").append(fcdsl.getEntity());
             started = true;
         }
 
@@ -537,8 +536,8 @@ public class Fcdsl {
         return false;
     }
 
-    public void addIndex(String index) {
-        this.index = index;
+    public void addEntity(String entity) {
+        this.entity = entity;
     }
 
     public void addIds(String... ids) {
@@ -723,14 +722,6 @@ public class Fcdsl {
         this.after = after;
     }
 
-    public String getIndex() {
-        return index;
-    }
-
-    public void setIndex(String index) {
-        this.index = index;
-    }
-
     public Except getExcept() {
         return except;
     }
@@ -757,7 +748,7 @@ public class Fcdsl {
     @Test
     public void test() {
         Fcdsl fcdsl = new Fcdsl();
-        fcdsl.setIndex("cid");
+        fcdsl.setEntity("cid");
         fcdsl.setSize("2");
         JsonUtils.printJson(fcdsl);
     }

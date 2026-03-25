@@ -455,7 +455,7 @@ public class CryptoSign extends FcApp {
 
         transaction = TxCreator.createUnsignedTx(rawTxInfo, mainnetwork);
         if(transaction==null)return;
-        String signedTxHex = TxCreator.signTx(prikey,transaction);
+        String signedTxHex = new TxCreator().signTx(prikey,transaction,rawTxInfo.getInputs());
 
         System.out.println("Signed by "+ cidInfo.getId()+".");
         String txBase64 = Base64.getEncoder().encodeToString(Hex.fromHex(signedTxHex));
@@ -1329,7 +1329,7 @@ public class CryptoSign extends FcApp {
         }
         if(rawTxInfo ==null)return;
 
-        rawTxInfo.setMultisig(multisig);
+        rawTxInfo.setSenderMultisig(multisig);
         Transaction transaction = TxCreator.createUnsignedTx(rawTxInfo, mainnetwork);
         if(transaction==null){
             System.out.println("Create unsigned tx failed.");

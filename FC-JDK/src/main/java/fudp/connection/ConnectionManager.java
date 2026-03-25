@@ -31,11 +31,23 @@ public class ConnectionManager {
      * If the peer's address changed, update it automatically.
      * With AsyTwoWay encryption, address changes are handled seamlessly
      * since identity is verified by cryptographic signature, not IP address.
+     * 
+     * When a different peer connects from the same address (e.g., node stops
+     * and a new node starts on the same IP:port), the old connection is cleaned up.
      */
     public PeerConnection getOrCreate(String peerId, SocketAddress address) {
         PeerConnection conn = connectionsByPeerId.get(peerId);
 
         if (conn == null) {
+            // Check if this address is already mapped to a different peer ID
+            // This can happen when a node stops and a new node (different peer ID)
+            // starts on the same address (e.g., same IP:port but different key)
+            String existingPeerId = addressToPeerId.get(address);
+            if (existingPeerId != null && !existingPeerId.equals(peerId)) {
+                // Clean up the old connection for the previous peer at this address
+                removeConnection(existingPeerId);
+            }
+            
             long connectionId = generateConnectionId();
             conn = new PeerConnection(peerId, address, connectionId);
 
@@ -48,6 +60,14 @@ public class ConnectionManager {
             if (!address.equals(oldAddress)) {
                 addressToPeerId.remove(oldAddress);
                 conn.updateAddress(address);
+                
+                // Check if new address is already mapped to a different peer ID
+                String existingPeerId = addressToPeerId.get(address);
+                if (existingPeerId != null && !existingPeerId.equals(peerId)) {
+                    // Clean up the old connection for the previous peer at this address
+                    removeConnection(existingPeerId);
+                }
+                
                 addressToPeerId.put(address, peerId);
             }
         }
@@ -142,14 +162,17 @@ public class ConnectionManager {
         Map<String, Object> stats = new HashMap<>();
         stats.put("total", connectionsByPeerId.size());
 
-        int idle = 0, establishing = 0, established = 0, closing = 0, closed = 0;
+        int idle = 0, establishing = 0, established = 0, closing = 0;
         for (PeerConnection conn : connectionsByPeerId.values()) {
             switch (conn.getState()) {
                 case IDLE -> idle++;
                 case ESTABLISHING -> establishing++;
                 case ESTABLISHED -> established++;
                 case CLOSING -> closing++;
-                case CLOSED -> closed++;
+                case CLOSED -> {
+                    // Closed connections are not tracked in the map (they are removed)
+                    // So this case should not occur, but we handle it for completeness
+                }
             }
         }
 

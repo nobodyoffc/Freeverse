@@ -1,7 +1,8 @@
 package app;
 
-import handlers.AccountManager;
-import handlers.Manager;
+import data.feipData.ServiceType;
+import managers.AccountManager;
+import managers.Manager;
 import server.ApipApi;
 import ui.Inputer;
 import ui.Menu;
@@ -42,15 +43,15 @@ public class AccountApp {
         autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "saveMapsToLocalDB", 5));
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.NASA_RPC.name()));
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.REDIS.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.NASA_RPC.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.ES.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.ACCOUNT.name()));
 
 
         while(true) {
-            Settings settings = Starter.startServer(Service.ServiceType.APIP, settingMap, ApipApi.apiNameList,modules, br, autoTaskList);
+            Settings settings = Starter.startServer(ServiceType.APIP, settingMap, ApipApi.apiNameList,modules, br, autoTaskList);
 
             if (settings == null) return;
 

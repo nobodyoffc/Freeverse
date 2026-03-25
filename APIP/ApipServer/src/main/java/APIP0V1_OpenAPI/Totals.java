@@ -5,8 +5,8 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
 import constants.ApipApiNames;
-import data.feipData.Service;
 import data.fcData.ReplyBody;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -44,7 +44,7 @@ public class Totals extends HttpServlet {
     }
     protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws IOException {
         //Check authorization
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
         if (!isOk) {
                 return;

@@ -51,7 +51,7 @@ public class General extends HttpServlet {
         List<Object> meetList;
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
         ArrayList<Sort> defaultSortList = null;
-        String index = httpRequestChecker.getRequestBody().getFcdsl().getIndex();
+        String index = httpRequestChecker.getRequestBody().getFcdsl().getEntity();
         meetList = fcHttpRequestHandler.doRequest(index, defaultSortList, Object.class);
         if(meetList==null){
             replier.replyHttp(CodeMessage.Code1011DataNotFound,response);

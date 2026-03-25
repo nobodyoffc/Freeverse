@@ -1,9 +1,6 @@
 package utils;
 
-import core.crypto.Hash;
-
-import data.feipData.Service;
-import handlers.DiskManager;
+import data.feipData.ServiceType;
 import org.jetbrains.annotations.NotNull;
 import org.junit.Test;
 
@@ -188,7 +185,7 @@ public class FileUtils {
         return System.getProperty("user.home");
     }
 
-    public static String makeServerDataDir(String sid, Service.ServiceType serviceType) {
+    public static String makeServerDataDir(String sid, ServiceType serviceType) {
         return getHomeDir()+"/data/"+sid+"/"+serviceType.toString();
     }
 

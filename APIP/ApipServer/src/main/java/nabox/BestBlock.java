@@ -2,10 +2,11 @@ package nabox;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import config.Settings;
+import constants.ApiNames;
 import constants.ApipApiNames;
 import data.fcData.ReplyBody;
 import data.fchData.Block;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.EsUtils;
@@ -18,7 +19,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
-@WebServlet(name = ApipApiNames.BEST_BLOCK+"nabox", value = "/"+ "sn2" +"/"+ ApipApiNames.VER_1+"/"+ ApipApiNames.BEST_BLOCK )
+@WebServlet(name = ApipApiNames.BEST_BLOCK+ ApiNames.NABOX, value = "/"+ "sn2" +"/"+ ApipApiNames.VER_1+"/"+ ApipApiNames.BEST_BLOCK )
 public class BestBlock extends HttpServlet {
     private final Settings settings;
     private final ReplyBody replier;
@@ -47,7 +48,7 @@ public class BestBlock extends HttpServlet {
             return;
         }
 
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         if (esClient == null) {
             replier.replyOtherErrorHttp("Elasticsearch client not available", response);
             return;

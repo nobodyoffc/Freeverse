@@ -3,6 +3,7 @@ package data.feipData;
 import data.fcData.FcObject;
 
 import java.util.List;
+import java.util.Map;
 
 public class AppHistory extends FcObject {
 
@@ -13,19 +14,19 @@ public class AppHistory extends FcObject {
 
 	private String stdName;
 	private String ver;
-	private String[] localNames;
+	private Map<String, String> localNames;
 	private String desc;
-	private String[] types;
-	private String[] urls;
-	private App.Download[] downloads;
-	private String[] waiters;
-	private String[] protocols;
-	private String[] codes;
-	private String[] services;
+	private List<String> types;
+	private Map<String, String> home;
+	private List<App.Download> downloads;
+	private List<String> waiters;
+	private List<String> protocols;
+	private List<String> codes;
+	private List<String> services;
 	private String closeStatement;
 	
 	private String aid;
-	private String[] aids;
+	private List<String> aids;
 	private String op;
 	private Integer rate;
 	private Long cdd;
@@ -60,10 +61,10 @@ public class AppHistory extends FcObject {
 	public void setStdName(String stdName) {
 		this.stdName = stdName;
 	}
-	public String[] getLocalNames() {
+	public Map<String, String> getLocalNames() {
 		return localNames;
 	}
-	public void setLocalNames(String[] localNames) {
+	public void setLocalNames(Map<String, String> localNames) {
 		this.localNames = localNames;
 	}
 	public String getDesc() {
@@ -72,34 +73,34 @@ public class AppHistory extends FcObject {
 	public void setDesc(String desc) {
 		this.desc = desc;
 	}
-	public String[] getTypes() {
+	public List<String> getTypes() {
 		return types;
 	}
-	public void setTypes(String[] types) {
+	public void setTypes(List<String> types) {
 		this.types = types;
 	}
-	public String[] getUrls() {
-		return urls;
+	public Map<String, String> getHome() {
+		return home;
 	}
-	public void setUrls(String[] urls) {
-		this.urls = urls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
-	public String[] getProtocols() {
+	public List<String> getProtocols() {
 		return protocols;
 	}
-	public void setProtocols(String[] protocols) {
+	public void setProtocols(List<String> protocols) {
 		this.protocols = protocols;
 	}
-	public String[] getServices() {
+	public List<String> getServices() {
 		return services;
 	}
-	public void setServices(String[] services) {
+	public void setServices(List<String> services) {
 		this.services = services;
 	}
 	public String getAid() {
@@ -126,10 +127,10 @@ public class AppHistory extends FcObject {
 	public void setCdd(Long cdd) {
 		this.cdd = cdd;
 	}
-	public String[] getCodes() {
+	public List<String> getCodes() {
 		return codes;
 	}
-	public void setCodes(String[] codes) {
+	public void setCodes(List<String> codes) {
 		this.codes = codes;
 	}
 	public String getCloseStatement() {
@@ -138,18 +139,18 @@ public class AppHistory extends FcObject {
 	public void setCloseStatement(String closeStatement) {
 		this.closeStatement = closeStatement;
 	}
-	public App.Download[] getDownloads() {
+	public List<App.Download> getDownloads() {
 		return downloads;
 	}
-	public void setDownloads(App.Download[] downloads) {
+	public void setDownloads(List<App.Download> downloads) {
 		this.downloads = downloads;
 	}
 
-	public String[] getAids() {
+	public List<String> getAids() {
 		return aids;
 	}
 
-	public void setAids(String[] aids) {
+	public void setAids(List<String> aids) {
 		this.aids = aids;
 	}
 

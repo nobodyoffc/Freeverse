@@ -4,7 +4,7 @@ import config.Settings;
 import constants.CodeMessage;
 import constants.Constants;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -137,7 +137,7 @@ public class Copy extends HttpServlet {
     }
 
     private void saveToRedis(String sessionName, String data, int expiry, ReplyBody replier, HttpServletResponse response) throws IOException {
-        JedisPool jedisPool = (JedisPool) settings.getClient(Service.ServiceType.REDIS);
+        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
         if (jedisPool == null) {
             replier.replyOtherErrorHttp("Redis service is not available.", response);
             return;

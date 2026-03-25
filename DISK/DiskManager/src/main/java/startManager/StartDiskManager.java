@@ -8,10 +8,10 @@ import constants.FieldNames;
 import data.fcData.AutoTask;
 import data.fcData.Module;
 import data.feipData.Service;
+import data.feipData.ServiceType;
 import data.feipData.serviceParams.DiskParams;
-import handlers.AccountManager;
-import handlers.Manager;
-import server.ApipApi;
+import managers.AccountManager;
+import managers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import data.fcData.DiskItem;
@@ -36,10 +36,10 @@ import java.util.*;
 
 import static config.Settings.*;
 import static constants.Constants.SEC_PER_DAY;
-import static data.feipData.Service.ServiceType.*;
+import static data.feipData.ServiceType.*;
 import static constants.IndicesNames.ORDER;
 import static constants.Strings.*;
-import static data.feipData.Service.ServiceType.APIP;
+import static data.feipData.ServiceType.APIP;
 
 public class StartDiskManager {
     public static  String diskDir;
@@ -50,16 +50,16 @@ public class StartDiskManager {
     public static DiskParams params;
 
     public static String sid;
-    public static final Service.ServiceType serverType = Service.ServiceType.DISK;
+    public static final ServiceType serverType = ServiceType.DISK;
 
 
 
 
     public static void main(String[] args) throws IOException {
          List<Module> modules = new ArrayList<>();
-         modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.REDIS.name()));
-         modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.ES.name()));
-         modules.add(new Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+         modules.add(new Module(Service.class.getSimpleName(), ServiceType.REDIS.name()));
+         modules.add(new Module(Service.class.getSimpleName(), ServiceType.ES.name()));
+         modules.add(new Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
          modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.CASH.name()));
          modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.SESSION.name()));
          modules.add(new Module(Manager.class.getSimpleName(), Manager.ManagerType.NONCE.name()));
@@ -119,10 +119,10 @@ public class StartDiskManager {
             menu.show();
             int choice = menu.choose(br);
             switch (choice) {
-                case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symkey, DiskParams.class).menu();
+                case 1 -> new DiskManager(service, settings.getApiAccount(APIP), br,symkey).menu();
                 case 2 -> accountHandler.menu(br, false);
                 case 3 -> new RewardManager(sid,service.getDealer(),apipClient,esClient,null, jedisPool, br)
-                        .menu(params.getConsumeViaShare(), params.getOrderViaShare());
+                        .menu(service.getConsumeViaShare(), service.getOrderViaShare());
                 case 4 -> Order.resetNPrices(br, sid, jedisPool);
                 case 5 -> manageIndices(br);
                 case 6 -> settings.setting(br, serverType);

@@ -12,8 +12,8 @@ import data.fcData.AutoTask;
 import data.fcData.Module;
 import data.fchData.Freer;
 import clients.ApipClient;
-import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
+import data.feipData.ServiceType;
 import fapi.client.FapiClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,14 +43,15 @@ public class Starter {
         settings.initiateClient(fid, clientName, symkey, configure, br);
         ElasticsearchClient esClient ;
         NaSaRpcClient naSaRpcClient;
-        ApipClient apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
-        FapiClient fapiClient = (FapiClient) settings.getClient(Service.ServiceType.FAPI);
+        ApipClient apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
+        FapiClient fapiClient = (FapiClient) settings.getClient(ServiceType.FAPI);
+        if(fapiClient == null) fapiClient = (FapiClient) settings.getClient(ServiceType.FAPI_No1_NrC7);
 
         if(fapiClient==null) {
             if (apipClient == null) {
-                esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+                esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
                 if (esClient == null) {
-                    naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+                    naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
                     if (naSaRpcClient == null) {
                         log.info("Failed to fresh bestHeight due to the absence of apipClient, nasaClient, and esClient.");
                         return settings;
@@ -101,7 +102,7 @@ public class Starter {
         return settings;
     }
 
-    public static Settings startServer(Service.ServiceType serverType,
+    public static Settings startServer(ServiceType serverType,
                                        Map<String, Object> settingMap, List<String> apiList, List<Module> modules, BufferedReader br, List<AutoTask> autoTaskList) {
         // Load config info from the file of config.json
         Configure.loadConfig(br);

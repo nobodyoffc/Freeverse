@@ -27,8 +27,9 @@ public class Stream {
     // Received data queue for application
     private final LinkedBlockingQueue<byte[]> receivedData;
 
-    // Flow control
-    private static final long INITIAL_MAX_STREAM_DATA = 1048576; // 1 MB
+    // Flow control - generous limit to allow large file transfers on a single stream.
+    // Connection-level flow control (StreamManager.maxData) provides the real limit.
+    private static final long INITIAL_MAX_STREAM_DATA = 100_000_000; // 100 MB
 
     public Stream(long streamId) {
         this.streamId = streamId;
@@ -61,10 +62,19 @@ public class Stream {
      * Process received stream data
      * @return assembled data if continuous, null otherwise
      */
+    // Debug counters
+    private long dataReceivedCalls = 0;
+    private long duplicateCount = 0;
+    private long assembledCount = 0;
+    private long bufferedCount = 0;
+
     public synchronized byte[] onDataReceived(long offset, byte[] data, boolean fin) {
+        dataReceivedCalls++;
+        
         // Duplicate detection: ignore data that has already been processed
         // (offset is before current recvOffset)
         if (offset < recvOffset) {
+            duplicateCount++;
             // This is duplicate/retransmitted data we've already processed
             if (fin) {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
@@ -74,6 +84,7 @@ public class Stream {
         
         // Check if this exact offset is already in buffer (retransmission of pending data)
         if (recvBuffer.containsKey(offset)) {
+            duplicateCount++;
             // Already have this data, ignore duplicate
             if (fin) {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
@@ -106,8 +117,18 @@ public class Stream {
 
         byte[] assembled = output.toByteArray();
         if (assembled.length > 0) {
+            assembledCount++;
             receivedData.offer(assembled);
             return assembled;
+        } else {
+            bufferedCount++;
+            if (bufferedCount <= 5 || bufferedCount % 100 == 0) {
+                System.err.println("[STREAM-DBG] stream=" + streamId + 
+                        " buffered: offset=" + offset + " recvOffset=" + recvOffset + 
+                        " bufSize=" + recvBuffer.size() + 
+                        " calls=" + dataReceivedCalls + " dup=" + duplicateCount +
+                        " assembled=" + assembledCount + " buffered=" + bufferedCount);
+            }
         }
         return null;
     }

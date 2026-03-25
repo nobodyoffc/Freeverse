@@ -6,7 +6,7 @@ import data.fchData.Cash;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
-import handlers.MempoolManager;
+import managers.MempoolManager;
 
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import config.Settings;
-import handlers.Manager.ManagerType;
+import managers.Manager.ManagerType;
 
 @WebServlet(name = ApipApiNames.UNCONFIRMED_CASHES, value = "/"+ ApipApiNames.SN_18+"/"+ ApipApiNames.UNCONFIRMED_CASHES +"/"+ ApipApiNames.VER_1)
 public class UnconfirmedCashes extends HttpServlet {

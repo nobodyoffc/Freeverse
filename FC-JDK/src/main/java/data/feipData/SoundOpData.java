@@ -97,7 +97,7 @@ public class SoundOpData {
 
 	public static SoundOpData makeRecover(String[] soundIds) {
 		SoundOpData data = new SoundOpData();
-		data.setOp(Op.DELETE.toLowerCase());
+		data.setOp(Op.RECOVER.toLowerCase());
 		data.setSoundIds(soundIds);
 		return data;
 	}

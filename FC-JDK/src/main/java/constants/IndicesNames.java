@@ -26,9 +26,9 @@ public class IndicesNames {
     public static final String SECRET = "secret";
     public static final String BOX = "box";
     public static final String BOX_HISTORY = "box_history";
-    public static final String GROUP = "group";
+    public static final String SQUARE = "square";
     public static final String TEAM = "team";
-    public static final String GROUP_HISTORY = "group_history";
+    public static final String SQUARE_HISTORY = "square_history";
     public static final String TEAM_HISTORY = "team_history";
     public static final String STATEMENT = "statement";
     public static final String TEXT = "text";
@@ -62,7 +62,7 @@ public class IndicesNames {
     public static final String VIDEO_HISTORY = "video_history";
 
     public static void printIndices() {
-        Indices indices = Indices.CID;
+        Indices indices = Indices.FREER;
         System.out.println(indices.name()+indices.ordinal());
 
         for(Indices in : Indices.values()){
@@ -80,8 +80,8 @@ public class IndicesNames {
         MULTISIG(IndicesNames.MULTISIG,8),
         BLOCK_MARK(IndicesNames.BLOCK_MARK,9),
 
-        CID(IndicesNames.FREER,10),
-        CID_HISTORY(IndicesNames.FREER_HISTORY,11),
+        FREER(IndicesNames.FREER,10),
+        FREER_HISTORY(IndicesNames.FREER_HISTORY,11),
         REPUTATION_HISTORY(IndicesNames.REPUTATION_HISTORY,12),
 
         PROTOCOL(IndicesNames.PROTOCOL,13),
@@ -99,9 +99,9 @@ public class IndicesNames {
         BOX(IndicesNames.BOX,24),
         BOX_HISTORY(IndicesNames.BOX_HISTORY,25),
 
-        GROUP(IndicesNames.GROUP,26),
+        SQUARE(IndicesNames.SQUARE,26),
         TEAM(IndicesNames.TEAM,27),
-        GROUP_HISTORY(IndicesNames.GROUP_HISTORY,28),
+        SQUARE_HISTORY(IndicesNames.SQUARE_HISTORY,28),
         TEAM_HISTORY(IndicesNames.TEAM_HISTORY,29),
 
         STATEMENT(IndicesNames.STATEMENT,30),

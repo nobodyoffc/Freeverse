@@ -169,7 +169,7 @@ public class Secret extends FcObject {
             List<Object> showList = new ArrayList<>();
             showList.add(secret.getId());
             if (secret.getLastHeight() != null)
-                showList.add(showList.add(FcUtils.heightToLongDate(secret.getLastHeight())));
+                showList.add(FcUtils.heightToLongDate(secret.getLastHeight()));
             else showList.add(null);
             showList.add(secret.getTitle());
             showList.add(secret.getType());

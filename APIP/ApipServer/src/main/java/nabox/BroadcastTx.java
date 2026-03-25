@@ -2,9 +2,10 @@ package nabox;
 
 import clients.NaSaClient.NaSaRpcClient;
 import config.Settings;
+import constants.ApiNames;
 import constants.ApipApiNames;
 import data.fcData.ReplyBody;
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.Hex;
@@ -19,7 +20,7 @@ import java.util.Map;
 import static constants.FieldNames.RAW_TX;
 
 
-@WebServlet(name = ApipApiNames.BROADCAST_TX+"nabox", value = "/"+ "sn18" +"/"+ ApipApiNames.VER_1+"/"+ ApipApiNames.BROADCAST_TX )
+@WebServlet(name = ApipApiNames.BROADCAST_TX + ApiNames.NABOX, value = "/"+ "sn18" +"/"+ ApipApiNames.VER_1+"/"+ ApipApiNames.BROADCAST_TX )
 public class BroadcastTx extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -39,7 +40,7 @@ public class BroadcastTx extends HttpServlet {
         if (other == null) return;
         //Do this request
         String rawTx = other.get(RAW_TX);
-        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
         String result = naSaRpcClient.sendRawTransaction(rawTx);
         if(result.startsWith("\""))result=result.substring(1);
         if(result.endsWith("\""))result=result.substring(0,result.length()-1);

@@ -68,7 +68,7 @@ public class FileParser {
 	}
 
 	enum FEIP_NAME{
-		CID,NOBODY,MASTER,HOMEPAGE,NOTICE_FEE,REPUTATION,SERVICE,PROTOCOL,APP,CODE,NID, CONTACT,MAIL, SECRET,STATEMENT,GROUP,TEAM, BOX, TOKEN, PROOF,TEXT,REMARK,SOUND,IMAGE,VIDEO
+		CID,NOBODY,MASTER,HOME,NOTICE_FEE,REPUTATION,SERVICE,PROTOCOL,APP,CODE,NID, CONTACT,MAIL, SECRET,STATEMENT,GROUP,TEAM, BOX, TOKEN, PROOF,TEXT,REMARK,SOUND,IMAGE,VIDEO
 	}
 
 	private static final Logger log = LoggerFactory.getLogger(FileParser.class);
@@ -97,10 +97,8 @@ public class FileParser {
 		OrganizationParser organizationParser = new OrganizationParser();
 		OrganizationRollbacker organizationRollbacker = new OrganizationRollbacker();
 
-		// NewsRollbacker newsRollbacker = new NewsRollbacker();
 
 		if(isRollback) {
-//			newsRollbacker.rollback(esClient, lastHeight);
 			cidRollbacker.rollback(esClient, lastHeight);
 			constructRollbacker.rollback(esClient, lastHeight);
 			personalRollbacker.rollback(esClient, lastHeight);
@@ -188,191 +186,195 @@ public class FileParser {
 			System.out.println();
 
 			showFound(protocolName.name(), opre);
+			try {
+				switch (protocolName) {
+					case CID -> {
+						FreerHist identityHist = identityParser.makeCid(opre, feip);
+						if (identityHist == null) break;
+						isValid = identityParser.parseCidInfo(esClient, identityHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist.getId()).document(identityHist));
+					}
+					case NOBODY -> {
 
-			switch (protocolName) {
-				case CID -> {
-					CidHist identityHist = identityParser.makeCid(opre, feip);
-					if (identityHist == null) break;
-					isValid = identityParser.parseCidInfo(esClient, identityHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist.getId()).document(identityHist));
-				}
-				case NOBODY -> {
+						FreerHist identityHist4 = identityParser.makeNobody(opre, feip);
+						if (identityHist4 == null) break;
+						isValid = identityParser.parseCidInfo(esClient, identityHist4);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist4.getId()).document(identityHist4));
+					}
+					case MASTER -> {
 
-					CidHist identityHist4 = identityParser.makeNobody(opre, feip);
-					if (identityHist4 == null) break;
-					isValid = identityParser.parseCidInfo(esClient, identityHist4);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist4.getId()).document(identityHist4));
-				}
-				case MASTER -> {
+						FreerHist identityHist1 = identityParser.makeMaster(opre, feip);
+						if (identityHist1 == null) break;
+						isValid = identityParser.parseCidInfo(esClient, identityHist1);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist1.getId()).document(identityHist1));
+					}
+					case HOME -> {
 
-					CidHist identityHist1 = identityParser.makeMaster(opre, feip);
-					if (identityHist1 == null) break;
-					isValid = identityParser.parseCidInfo(esClient, identityHist1);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist1.getId()).document(identityHist1));
-				}
-				case HOMEPAGE -> {
+						FreerHist identityHist2 = identityParser.makeHome(opre, feip);
+						if (identityHist2 == null) break;
+						isValid = identityParser.parseCidInfo(esClient, identityHist2);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist2.getId()).document(identityHist2));
+					}
+					case NOTICE_FEE -> {
 
-					CidHist identityHist2 = identityParser.makeHomepage(opre, feip);
-					if (identityHist2 == null) break;
-					isValid = identityParser.parseCidInfo(esClient, identityHist2);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist2.getId()).document(identityHist2));
-				}
-				case NOTICE_FEE -> {
+						FreerHist identityHist3 = identityParser.makeNoticeFee(opre, feip);
+						if (identityHist3 == null) break;
+						isValid = identityParser.parseCidInfo(esClient, identityHist3);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist3.getId()).document(identityHist3));
+					}
+					case REPUTATION -> {
 
-					CidHist identityHist3 = identityParser.makeNoticeFee(opre, feip);
-					if (identityHist3 == null) break;
-					isValid = identityParser.parseCidInfo(esClient, identityHist3);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.FREER_HISTORY).id(identityHist3.getId()).document(identityHist3));
-				}
-				case REPUTATION -> {
+						RepuHist repuHist = identityParser.makeReputation(opre, feip);
+						if (repuHist == null) break;
+						isValid = identityParser.parseReputation(esClient, repuHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.REPUTATION_HISTORY).id(repuHist.getId()).document(repuHist));
+					}
+					case PROTOCOL -> {
 
-					RepuHist repuHist = identityParser.makeReputation(opre, feip);
-					if (repuHist == null) break;
-					isValid = identityParser.parseReputation(esClient, repuHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.REPUTATION_HISTORY).id(repuHist.getId()).document(repuHist));
-				}
-				case PROTOCOL -> {
+						ProtocolHistory freeProtocolHist = constructParser.makeProtocol(opre, feip);
+						if (freeProtocolHist == null) break;
+						isValid = constructParser.parseProtocol(esClient, freeProtocolHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.PROTOCOL_HISTORY).id(freeProtocolHist.getId()).document(freeProtocolHist));
+					}
+					case SERVICE -> {
 
-					ProtocolHistory freeProtocolHist = constructParser.makeProtocol(opre, feip);
-					if (freeProtocolHist == null) break;
-					isValid = constructParser.parseProtocol(esClient, freeProtocolHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.PROTOCOL_HISTORY).id(freeProtocolHist.getId()).document(freeProtocolHist));
-				}
-				case SERVICE -> {
+						ServiceHistory serviceHist = constructParser.makeService(opre, feip);
+						if (serviceHist == null) break;
+						isValid = constructParser.parseService(esClient, serviceHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.SERVICE_HISTORY).id(serviceHist.getId()).document(serviceHist));
+					}
+					case APP -> {
 
-					ServiceHistory serviceHist = constructParser.makeService(opre, feip);
-					if (serviceHist == null) break;
-					isValid = constructParser.parseService(esClient, serviceHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.SERVICE_HISTORY).id(serviceHist.getId()).document(serviceHist));
-				}
-				case APP -> {
+						AppHistory appHist = constructParser.makeApp(opre, feip);
+						if (appHist == null) break;
+						isValid = constructParser.parseApp(esClient, appHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.APP_HISTORY).id(appHist.getId()).document(appHist));
+					}
+					case CODE -> {
 
-					AppHistory appHist = constructParser.makeApp(opre, feip);
-					if (appHist == null) break;
-					isValid = constructParser.parseApp(esClient, appHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.APP_HISTORY).id(appHist.getId()).document(appHist));
-				}
-				case CODE -> {
+						CodeHistory codeHist = constructParser.makeCode(opre, feip);
+						if (codeHist == null) break;
+						isValid = constructParser.parseCode(esClient, codeHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.CODE_HISTORY).id(codeHist.getId()).document(codeHist));
+					}
+					case NID -> {
 
-					CodeHistory codeHist = constructParser.makeCode(opre, feip);
-					if (codeHist == null) break;
-					isValid = constructParser.parseCode(esClient, codeHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.CODE_HISTORY).id(codeHist.getId()).document(codeHist));
-				}
-				case NID -> {
+						isValid = identityParser.parseNid(esClient, opre, feip);
+					}
+					case CONTACT -> {
 
-					isValid = identityParser.parseNid(esClient, opre, feip);
-				}
-				case CONTACT -> {
+						isValid = personalParser.parseContact(esClient, opre, feip);
+					}
+					case MAIL -> {
 
-					isValid = personalParser.parseContact(esClient, opre, feip);
-				}
-				case MAIL -> {
+						isValid = personalParser.parseMail(esClient, opre, feip);
+					}
+					case SECRET -> {
 
-					isValid = personalParser.parseMail(esClient, opre, feip);
-				}
-				case SECRET -> {
+						isValid = personalParser.parseSecret(esClient, opre, feip);
+					}
+					case STATEMENT -> {
 
-					isValid = personalParser.parseSecret(esClient, opre, feip);
-				}
-				case STATEMENT -> {
+						isValid = publishParser.parseStatement(esClient, opre, feip);
+					}
+					case TEXT -> {
 
-					isValid = publishParser.parseStatement(esClient, opre, feip);
-				}
-				case TEXT -> {
+						TextHistory textHist = publishParser.makeText(opre, feip);
+						if (textHist == null) break;
+						isValid = publishParser.parseText(esClient, textHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.TEXT_HISTORY).id(textHist.getId()).document(textHist));
+					}
+					case REMARK -> {
 
-					TextHistory textHist = publishParser.makeText(opre, feip);
-					if (textHist == null) break;
-					isValid = publishParser.parseText(esClient, textHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.TEXT_HISTORY).id(textHist.getId()).document(textHist));
-				}
-				case REMARK -> {
+						RemarkHistory remarkHist = publishParser.makeRemark(opre, feip);
+						if (remarkHist == null) break;
+						isValid = publishParser.parseRemark(esClient, remarkHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.REMARK_HISTORY).id(remarkHist.getId()).document(remarkHist));
+					}
+					case SQUARE -> {
 
-					RemarkHistory remarkHist = publishParser.makeRemark(opre, feip);
-					if (remarkHist == null) break;
-					isValid = publishParser.parseRemark(esClient, remarkHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.REMARK_HISTORY).id(remarkHist.getId()).document(remarkHist));
-				}
-				case GROUP -> {
+						SquareHistory squareHist = organizationParser.makeSquare(opre, feip);
+						if (squareHist == null) break;
+						isValid = organizationParser.parseSquare(esClient, squareHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.SQUARE_HISTORY).id(squareHist.getId()).document(squareHist));
+					}
+					case TEAM -> {
 
-					GroupHistory groupHist = organizationParser.makeGroup(opre, feip);
-					if (groupHist == null) break;
-					isValid = organizationParser.parseGroup(esClient, groupHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.GROUP_HISTORY).id(groupHist.getId()).document(groupHist));
-				}
-				case TEAM -> {
+						TeamHistory teamHist = organizationParser.makeTeam(opre, feip);
+						if (teamHist == null) break;
+						isValid = organizationParser.parseTeam(esClient, teamHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.TEAM_HISTORY).id(teamHist.getId()).document(teamHist));
+					}
+					case BOX -> {
 
-					TeamHistory teamHist = organizationParser.makeTeam(opre, feip);
-					if (teamHist == null) break;
-					isValid = organizationParser.parseTeam(esClient, teamHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.TEAM_HISTORY).id(teamHist.getId()).document(teamHist));
-				}
-				case BOX -> {
+						BoxHistory boxHist = personalParser.makeBox(opre, feip);
+						if (boxHist == null) break;
+						isValid = personalParser.parseBox(esClient, boxHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.BOX_HISTORY).id(boxHist.getId()).document(boxHist));
+					}
+					case PROOF -> {
 
-					BoxHistory boxHist = personalParser.makeBox(opre, feip);
-					if (boxHist == null) break;
-					isValid = personalParser.parseBox(esClient, boxHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.BOX_HISTORY).id(boxHist.getId()).document(boxHist));
-				}
-				case PROOF -> {
+						ProofHistory proofHist = financeParser.makeProof(opre, feip);
+						if (proofHist == null) break;
+						isValid = financeParser.parseProof(esClient, proofHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.PROOF_HISTORY).id(proofHist.getId()).document(proofHist));
+					}
+					case TOKEN -> {
 
-					ProofHistory proofHist = financeParser.makeProof(opre, feip);
-					if (proofHist == null) break;
-					isValid = financeParser.parseProof(esClient, proofHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.PROOF_HISTORY).id(proofHist.getId()).document(proofHist));
-				}
-				case TOKEN -> {
+						TokenHistory tokenHist = financeParser.makeToken(opre, feip);
+						if (tokenHist == null) break;
+						try {
+							isValid = financeParser.parseToken(esClient, tokenHist);
+						} catch (NumberFormatException ignore) {
+						}
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.TOKEN_HISTORY).id(tokenHist.getId()).document(tokenHist));
+					}
+					case SOUND -> {
 
-					TokenHistory tokenHist = financeParser.makeToken(opre, feip);
-					if (tokenHist == null) break;
-					try {
-						isValid = financeParser.parseToken(esClient, tokenHist);
-					}catch (NumberFormatException ignore) {}
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.TOKEN_HISTORY).id(tokenHist.getId()).document(tokenHist));
-				}
-				case SOUND -> {
+						SoundHistory soundHist = publishParser.makeSound(opre, feip);
+						if (soundHist == null) break;
+						isValid = publishParser.parseSound(esClient, soundHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.SOUND_HISTORY).id(soundHist.getId()).document(soundHist));
+					}
+					case IMAGE -> {
 
-					SoundHistory soundHist = publishParser.makeSound(opre, feip);
-					if (soundHist == null) break;
-					isValid = publishParser.parseSound(esClient, soundHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.SOUND_HISTORY).id(soundHist.getId()).document(soundHist));
-				}
-				case IMAGE -> {
+						ImageHistory imageHist = publishParser.makeImage(opre, feip);
+						if (imageHist == null) break;
+						isValid = publishParser.parseImage(esClient, imageHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.IMAGE_HISTORY).id(imageHist.getId()).document(imageHist));
+					}
+					case VIDEO -> {
 
-					ImageHistory imageHist = publishParser.makeImage(opre, feip);
-					if (imageHist == null) break;
-					isValid = publishParser.parseImage(esClient, imageHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.IMAGE_HISTORY).id(imageHist.getId()).document(imageHist));
+						VideoHistory videoHist = publishParser.makeVideo(opre, feip);
+						if (videoHist == null) break;
+						isValid = publishParser.parseVideo(esClient, videoHist);
+						if (isValid)
+							esClient.index(i -> i.index(IndicesNames.VIDEO_HISTORY).id(videoHist.getId()).document(videoHist));
+					}
+					default -> {
+					}
 				}
-				case VIDEO -> {
-
-					VideoHistory videoHist = publishParser.makeVideo(opre, feip);
-					if (videoHist == null) break;
-					isValid = publishParser.parseVideo(esClient, videoHist);
-					if (isValid)
-						esClient.index(i -> i.index(IndicesNames.VIDEO_HISTORY).id(videoHist.getId()).document(videoHist));
-				}
-				default -> {
-				}
+			}catch (Exception e){
+				log.debug("Parsing failed.",e);
 			}
 			if(isValid)writeParseMark(esClient,readOpResult.getLength());
 		}
@@ -498,9 +500,9 @@ public class FileParser {
 				EsUtils.bulkDeleteList(esClient, IndicesNames.FREER, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
-				ArrayList<CidHist> reparseCidList = getReparseHistList(esClient, IndicesNames.FREER_HISTORY,idList,"signer", CidHist.class);
+				ArrayList<FreerHist> reparseCidList = getReparseHistList(esClient, IndicesNames.FREER_HISTORY,idList,"signer", FreerHist.class);
 
-				for(CidHist idHist: reparseCidList) {
+				for(FreerHist idHist: reparseCidList) {
 					new IdentityParser().parseCidInfo(esClient,idHist);
 				}
 				new IdentityRollbacker().reviseCidRepuAndHot(esClient, (ArrayList<String>) idList);
@@ -544,13 +546,13 @@ public class FileParser {
 					new ConstructParser().parseService(esClient, idHist);
 				}
 				break;
-			case IndicesNames.GROUP:
-				EsUtils.bulkDeleteList(esClient, IndicesNames.GROUP, (ArrayList<String>) idList);
+			case IndicesNames.SQUARE:
+				EsUtils.bulkDeleteList(esClient, IndicesNames.SQUARE, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
-				ArrayList<GroupHistory> reparseGroupList = getReparseHistList(esClient, IndicesNames.GROUP_HISTORY,idList,"gid",GroupHistory.class);
+				ArrayList<SquareHistory> reparseSquareList = getReparseHistList(esClient, IndicesNames.SQUARE_HISTORY,idList,"gid",SquareHistory.class);
 
-				for(GroupHistory idHist: reparseGroupList) {
-					new OrganizationParser().parseGroup(esClient, idHist);
+				for(SquareHistory idHist: reparseSquareList) {
+					new OrganizationParser().parseSquare(esClient, idHist);
 				}
 				break;
 			case IndicesNames.TEAM:

@@ -11,19 +11,21 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-public class DiskParams extends Params {
+public class DiskParams {
     private String dataLifeDays;
     private String pricePerKBCarve;
+    private String maxDataSize;
     private transient ApipClient apipClient;
 
     public DiskParams(){
         super();
-    };
+    }
 
     public static DiskParams fromObject(Object data) {
         Gson gson = new Gson();
         return gson.fromJson(gson.toJson(data), DiskParams.class);
     }
+    
     public void writeParamsToRedis(String key, Jedis jedis) {
         Map<String, String> paramMap = toMap();
         jedis.hmset(key, paramMap);
@@ -31,32 +33,31 @@ public class DiskParams extends Params {
 
     public Map<String, String> toMap() {
         Map<String, String> map = new HashMap<>();
-        toMap(map);
         if (this.dataLifeDays != null) map.put("dataLifeDays", this.dataLifeDays);
         if (this.pricePerKBCarve != null) map.put("pricePerKBytesPermanent", this.pricePerKBCarve);
+        if (this.maxDataSize != null) map.put("maxDataSize", this.maxDataSize);
         return map;
     }
 
-    // Method to create DiskParams from Map
     public static DiskParams fromMap(Map<String, String> map) {
         DiskParams params = new DiskParams();
-        params.fromMap(map, params);
         params.dataLifeDays = map.get("dataLifeDays");
         params.pricePerKBCarve = map.get("pricePerKBytesPermanent");
+        params.maxDataSize = map.get("maxDataSize");
         return params;
     }
 
     public void inputParams(BufferedReader br, byte[]symKey){
-        inputParams(br,symKey,apipClient);
         this.dataLifeDays = Inputer.inputString(br,"Input the dataLifeDays:");
         this.pricePerKBCarve = Inputer.inputDoubleAsString(br,"Input the pricePerKBytesPermanent:");
+        this.maxDataSize = Inputer.inputString(br,"Input the maxDataSize (bytes, e.g. 104857600 for 100MB):");
     }
 
-    public Params updateParams(BufferedReader br, byte[] symKey) {
+    public DiskParams updateParams(BufferedReader br, byte[] symKey) {
         try {
-            updateParams(br, symKey,apipClient );
             this.dataLifeDays = Inputer.promptAndUpdate(br,"dataLifeDays",this.dataLifeDays);
             this.pricePerKBCarve = Inputer.promptAndUpdate(br,"pricePerKBytesPermanent",this.pricePerKBCarve);
+            this.maxDataSize = Inputer.promptAndUpdate(br,"maxDataSize",this.maxDataSize);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -92,6 +93,14 @@ public class DiskParams extends Params {
     public void setPricePerKBCarve(String pricePerKBCarve) {
         this.pricePerKBCarve = pricePerKBCarve;
     }
+    public String getMaxDataSize() {
+        return maxDataSize;
+    }
+
+    public void setMaxDataSize(String maxDataSize) {
+        this.maxDataSize = maxDataSize;
+    }
+
     public ApipClient getApipClient() {
         return apipClient;
     }

@@ -1,12 +1,12 @@
 package initial;
 
-import data.feipData.Service;
+import data.feipData.ServiceType;
 import server.FcWebServerInitiator;
 
 public class Initiator extends FcWebServerInitiator {
 
     @Override
     protected void setServiceName() {
-        this.serverName = Service.ServiceType.DISK.name();
+        this.serverName = ServiceType.DISK.name();
     }
 }

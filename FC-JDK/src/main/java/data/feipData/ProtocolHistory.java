@@ -2,6 +2,9 @@ package data.feipData;
 
 import data.fcData.FcObject;
 
+import java.util.List;
+import java.util.Map;
+
 public class ProtocolHistory extends FcObject {
 	
 	private Long height;
@@ -18,15 +21,15 @@ public class ProtocolHistory extends FcObject {
 	private String desc;
 	private String lang;
 	private String prePid;
-	private String[] fileUrls;
+	private Map<String, String> home;
 	private String pid;
-	private String[] pids;
+	private List<String> pids;
 	private String op;
 	private Integer rate;
 	private Long cdd;
 	private String closeStatement;
 
-	private String[] waiters;
+	private List<String> waiters;
 
 	public Long getHeight() {
 		return height;
@@ -124,12 +127,12 @@ public class ProtocolHistory extends FcObject {
 		this.prePid = prePid;
 	}
 
-	public String[] getFileUrls() {
-		return fileUrls;
+	public Map<String, String> getHome() {
+		return home;
 	}
 
-	public void setFileUrls(String[] fileUrls) {
-		this.fileUrls = fileUrls;
+	public void setHome(Map<String, String> home) {
+		this.home = home;
 	}
 
 	public String getPid() {
@@ -140,11 +143,11 @@ public class ProtocolHistory extends FcObject {
 		this.pid = pid;
 	}
 
-	public String[] getPids() {
+	public List<String> getPids() {
 		return pids;
 	}
 
-	public void setPids(String[] pids) {
+	public void setPids(List<String> pids) {
 		this.pids = pids;
 	}
 
@@ -180,11 +183,11 @@ public class ProtocolHistory extends FcObject {
 		this.closeStatement = closeStatement;
 	}
 
-	public String[] getWaiters() {
+	public List<String> getWaiters() {
 		return waiters;
 	}
 
-	public void setWaiters(String[] waiters) {
+	public void setWaiters(List<String> waiters) {
 		this.waiters = waiters;
 	}
 }

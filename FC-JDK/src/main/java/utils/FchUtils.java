@@ -223,6 +223,16 @@ public class FchUtils {
         return NumberUtils.roundDouble8((double) satoshis / Constants.COIN_TO_SATOSHI);
     }
 
+    /**
+     * Convert satoshi to FCH coin string (plain decimal, no scientific notation).
+     * E.g. 1 -> "0.00000001", 100000 -> "0.001", 100000000 -> "1"
+     */
+    public static String satoshiToCoinStr(long satoshis) {
+        BigDecimal coins = BigDecimal.valueOf(satoshis)
+                .divide(new BigDecimal(Constants.COIN_TO_SATOSHI), 8, RoundingMode.HALF_UP);
+        return coins.stripTrailingZeros().toPlainString();
+    }
+
     public static double satoshiToCash(long satoshis) {
         return NumberUtils.roundDouble2((double) satoshis / Constants.CASH_TO_SATOSHI);
     }
@@ -378,7 +388,7 @@ public class FchUtils {
                 .buckets().array();
 
         for (StringTermsBucket bucket: utxoBuckets) {
-            String addr = bucket.key();
+            String addr = bucket.key().stringValue();
             long value1 = (long)bucket.aggregations().get(UTXO_SUM).sum().value();
             utxoCountMap.put(addr, bucket.docCount());
             utxoSumMap.put(addr, value1);
@@ -396,7 +406,7 @@ public class FchUtils {
                 .buckets().array();
 
         for (StringTermsBucket bucket: stxoBuckets) {
-            String addr = bucket.key();
+            String addr = bucket.key().stringValue();
             long value1 = (long)bucket.aggregations().get(STXO_SUM).sum().value();
             stxoSumMap.put(addr, value1);
             long cddSum = (long)bucket.aggregations().get(CDD_SUM).sum().value();
@@ -412,7 +422,7 @@ public class FchUtils {
                 .buckets().array();
 
         for (StringTermsBucket bucket: txoBuckets) {
-            String addr = bucket.key();
+            String addr = bucket.key().stringValue();
             long value1 = (long)bucket.aggregations().get(TXO_SUM).sum().value();
             txoSumMap.put(addr, value1);
         }

@@ -9,7 +9,7 @@ import java.util.Map;
 public class TextOpData {
 
 	private String textId;
-	private String[] textIds;
+	private List<String> textIds;
 	private String type;
 
 	private String op;
@@ -88,7 +88,7 @@ public class TextOpData {
 		return data;
 	}
 
-	public static TextOpData makeDelete(String[] textIds) {
+	public static TextOpData makeDelete(List<String> textIds) {
 		TextOpData data = new TextOpData();
 		data.setOp(Op.DELETE.toLowerCase());
 		data.setTextIds(textIds);
@@ -96,7 +96,7 @@ public class TextOpData {
 	}
 
 
-	public static TextOpData makeRecover(String[] textIds) {
+	public static TextOpData makeRecover(List<String> textIds) {
 		TextOpData data = new TextOpData();
 		data.setOp(Op.RECOVER.toLowerCase());
 		data.setTextIds(textIds);
@@ -144,11 +144,11 @@ public class TextOpData {
 		this.ver = ver;
 	}
 
-	public String[] getTextIds() {
+	public List<String> getTextIds() {
 		return textIds;
 	}
 
-	public void setTextIds(String[] textIds) {
+	public void setTextIds(List<String> textIds) {
 		this.textIds = textIds;
 	}
 

@@ -1,10 +1,10 @@
 package APIP18V1_Wallet;
 
 import config.Settings;
-import data.feipData.Service;
 import clients.NaSaClient.NaSaRpcClient;
 import constants.ApipApiNames;
 import data.fcData.ReplyBody;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import server.HttpRequestChecker;
 import utils.Hex;
@@ -39,7 +39,7 @@ public class BroadcastTx extends HttpServlet {
         if (other == null) return;
         //Do this request
         String rawTx = other.get(RAW_TX);
-        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(Service.ServiceType.NASA_RPC);
+        NaSaRpcClient naSaRpcClient = (NaSaRpcClient) settings.getClient(ServiceType.NASA_RPC);
         String result = naSaRpcClient.sendRawTransaction(rawTx);
         if(result.startsWith("\""))result=result.substring(1);
         if(result.endsWith("\""))result=result.substring(0,result.length()-1);

@@ -7,12 +7,12 @@ import config.Settings;
 import config.Starter;
 import clients.ApipClient;
 import data.feipData.Service;
-import handlers.CashManager;
-import handlers.ContactManager;
+import managers.CashManager;
+import managers.ContactManager;
 import config.ApiAccount;
 import config.Configure;
-import data.feipData.Service.ServiceType;
-import handlers.Manager;
+import data.feipData.ServiceType;
+import managers.Manager;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;

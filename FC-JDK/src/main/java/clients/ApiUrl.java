@@ -254,7 +254,7 @@ public class ApiUrl{
         int index = 0;
 
         // Check if first segment is sn number (starts with 'sn')
-        if(index < segments.length && segments[index].startsWith("sn")) {
+        if(segments[index].startsWith("sn")) {
             this.sn = segments[index];
             index++;
         }
@@ -298,6 +298,12 @@ public class ApiUrl{
         if(urlHead == null || urlHead.isEmpty()) return;
 
         // Remove trailing slash if present
+        if(!urlHead.contains("://")) {
+            if(urlHead.startsWith("127.0.0.1")||urlHead.startsWith("localhost"))
+                urlHead = "http://" + urlHead;
+            else urlHead = "https://" + urlHead;
+        }
+
         String urlHeadClean = urlHead.endsWith("/") ? urlHead.substring(0, urlHead.length() - 1) : urlHead;
 
         URL urlObj;

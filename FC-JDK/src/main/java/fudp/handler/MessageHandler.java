@@ -136,9 +136,16 @@ public class MessageHandler {
      * Handle incoming response (as consumer).
      */
     private void handleResponse(String peerId, ResponseMessage response) {
-        CompletableFuture<ResponseMessage> future = pendingRequests.remove(response.getMessageId());
+        long responseId = response.getMessageId();
+        CompletableFuture<ResponseMessage> future = pendingRequests.remove(responseId);
         if (future != null) {
+            log.debug("[MessageHandler] Response matched pending request (peer={}, messageId={}, status={}, dataLen={})",
+                    peerId, responseId, response.getStatusCode(),
+                    response.getData() != null ? response.getData().length : 0);
             future.complete(response);
+        } else {
+            log.warn("[MessageHandler] Response has NO matching pending request (peer={}, messageId={}, pending={})",
+                    peerId, responseId, pendingRequests.keySet());
         }
     }
 
@@ -198,6 +205,8 @@ public class MessageHandler {
      */
     public void registerPendingRequest(long messageId, CompletableFuture<ResponseMessage> future) {
         pendingRequests.put(messageId, future);
+        log.debug("[MessageHandler] Registered pending request (messageId={}, totalPending={})",
+                messageId, pendingRequests.size());
     }
 
     /**

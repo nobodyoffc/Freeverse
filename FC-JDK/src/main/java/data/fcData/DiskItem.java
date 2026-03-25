@@ -1,29 +1,18 @@
 package data.fcData;
 
 public class DiskItem extends FcObject{
-    private String did;
     private Long since;
     private Long expire;
     private Long size;
 
-    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"did\":{\"type\":\"keyword\"},\"since\":{\"type\":\"long\"},\"expire\":{\"type\":\"long\"},\"size\":{\"type\":\"long\"}}}}";
+    public static final String MAPPINGS = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"since\":{\"type\":\"long\"},\"expire\":{\"type\":\"long\"},\"size\":{\"type\":\"long\"}}}}";
     public DiskItem() {}
 
     public DiskItem(String did, Long since, Long expire, long size) {
-        this.did = did;
+        this.id = did;
         this.since = since;
         this.expire = expire;
         this.size = size;
-    }
-
-
-
-    public String getDid() {
-        return did;
-    }
-
-    public void setDid(String did) {
-        this.did = did;
     }
 
     public Long getSince() {

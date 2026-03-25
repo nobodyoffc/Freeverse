@@ -3,9 +3,9 @@ package APIP2V1_Blockchain;
 import config.Settings;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApipApiNames;
-import data.feipData.Service;
 import data.fcData.ReplyBody;
 import data.fchData.FchChainInfo;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.ObjectUtils;
 import utils.http.AuthType;
@@ -72,7 +72,7 @@ public class BlockTimeHistory extends HttpServlet {
             return;
         }
 
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         Map<Long, Long> hist = FchChainInfo.blockTimeHistory(startTime, endTime, count, esClient);
 
         if (hist == null){

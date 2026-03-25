@@ -5,6 +5,7 @@ import core.crypto.*;
 import data.apipData.RequestBody;
 import data.apipData.SignInMode;
 import data.fcData.*;
+import data.feipData.ServiceType;
 import server.ApipApi;
 import ui.Shower;
 import data.apipData.Fcdsl;
@@ -14,7 +15,6 @@ import config.ApiAccount;
 import config.ApiProvider;
 import core.fch.Inputer;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
 import utils.*;
 import utils.http.AuthType;
 import utils.http.RequestMethod;
@@ -52,7 +52,7 @@ public abstract class FcClient {
     protected ApipClient apipClient;
     protected DiskClient diskClient;
     protected boolean isAllowFreeRequest;
-    protected Service.ServiceType serviceType;
+    protected ServiceType serviceType;
     protected Gson gson = new Gson();
     protected boolean sessionFreshen=false;
     protected Long bestHeight;
@@ -65,7 +65,7 @@ public abstract class FcClient {
         this.symkey = symkey;
         this.urlHead = apiAccount.getApiUrl();
         this.via = apiAccount.getVia();
-        this.serviceType = apiProvider.getType();
+        this.serviceType = apiProvider.fetchServiceType();
     }
     public FcClient(ApiProvider apiProvider, ApiAccount apiAccount, byte[] symkey, ApipClient apipClient) {
         this.symkey = symkey;
@@ -78,10 +78,10 @@ public abstract class FcClient {
         this.via = apiAccount.getVia();
 
         this.apiProvider = apiProvider;
-        this.serviceType = apiProvider.getType();
+        this.serviceType = apiProvider.fetchServiceType();
     }
 
-    public static ReplyBody getService(String urlHead, String apiVersion, Class<? extends Params> paramsClass){
+    public static ReplyBody getService(String urlHead, String apiVersion){
         ApiUrl apiUrl = new ApiUrl(urlHead,null, apiVersion, ApipApi.GET_SERVICE.getName(), null,false,null);
         ApipClientEvent clientEvent = FcClient.get(apiUrl.getUrl());
         if(clientEvent.checkResponse()!=0){
@@ -90,7 +90,6 @@ public abstract class FcClient {
         }
         ReplyBody responseBody = clientEvent.getResponseBody();
         Service service = new Gson().fromJson((String) responseBody.getData(), Service.class);
-        Params.getParamsFromService(service, paramsClass);
         responseBody.setData(service);
         return responseBody;
     }
@@ -253,7 +252,7 @@ public abstract class FcClient {
         itsPubkey = apiProvider.getDealerPubkey();
         String dealer = null;
         if(itsPubkey==null){
-            ReplyBody replyBody = getService(this.urlHead, VER_1, Params.class);
+            ReplyBody replyBody = getService(this.urlHead, VER_1);
             if(replyBody!=null && replyBody.getCode()==0){
                 Service service = (Service) replyBody.getData();
                 dealer = service.getDealer();
@@ -292,7 +291,7 @@ public abstract class FcClient {
 
             if (apipClientEvent.getCode() == CodeMessage.Code1004InsufficientBalance) {
 
-                if(apipClient==null && this.serviceType.equals(Service.ServiceType.APIP)){
+                if(apipClient==null && this.serviceType.equals(ServiceType.APIP)){
                     apipClient = (ApipClient) this;
                 }
 
@@ -313,7 +312,7 @@ public abstract class FcClient {
 
                 while(true){
                     waitSeconds(10);
-                    Object result = ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, Service.ServiceType.APIP);
+                    Object result = ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, ServiceType.APIP);
                     if(result!=null) {
                         System.out.println("OK! " + result + " KB/requests are available.");
                         break;
@@ -394,13 +393,14 @@ public abstract class FcClient {
         apiAccount.setBalance(balance);
 
         String priceStr;
-        if(apiAccount.getServiceParams()==null) {
-            System.out.println("The service parameters is null in the API account.");
+        Service service = apiAccount.getService();
+        if(service==null) {
+            System.out.println("The service is null in the API account.");
             return null;
         }
-        else if(apiAccount.getServiceParams().getPricePerKB()==null)
-            priceStr=apiAccount.getApipParams().getPricePerRequest();
-        else priceStr =apiAccount.getApipParams().getPricePerKB();
+        else if(service.getPricePerKB()==null)
+            priceStr=service.getPricePerRequest();
+        else priceStr =service.getPricePerKB();
         Long price = FchUtils.coinStrToSatoshi(priceStr);
         if(price==null)price=0L;
 
@@ -430,7 +430,7 @@ public abstract class FcClient {
         return HexFormat.of().formatHex(Arrays.copyOf(sessionKey, 6));
     }
 
-    private void setFreeApiState(Object data, Service.ServiceType serviceType) {
+    private void setFreeApiState(Object data, ServiceType serviceType) {
         Map<String, FreeApi> freeApiMap = listToMap(Settings.freeApiListMap.get(serviceType),URL_HEAD);//listToMap(config.getFreeApipUrlList(),URL_HEAD);
 
         if(data ==null){
@@ -461,7 +461,7 @@ public abstract class FcClient {
         return serverSession;
     }
 
-    public Object ping(String ver, RequestMethod requestMethod, AuthType authType, Service.ServiceType serviceType) {
+    public Object ping(String ver, RequestMethod requestMethod, AuthType authType, ServiceType serviceType) {
         String urlTail = ApiUrl.makeUrlTail(null,PING.getName(),ver);//"/"+ ver +"/"+ PING;
         Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, null, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, authType, sessionKey, requestMethod);
         if(requestMethod.equals(RequestMethod.POST)) {
@@ -680,11 +680,11 @@ public abstract class FcClient {
         this.apipClientEvent = apipClientEvent;
     }
 
-    public Service.ServiceType getApiType() {
+    public ServiceType getApiType() {
         return serviceType;
     }
 
-    public void setApiType(Service.ServiceType serviceType) {
+    public void setApiType(ServiceType serviceType) {
         this.serviceType = serviceType;
     }
 
@@ -748,11 +748,11 @@ public abstract class FcClient {
         this.diskClient = diskClient;
     }
 
-    public Service.ServiceType getServiceType() {
+    public ServiceType getServiceType() {
         return serviceType;
     }
 
-    public void setServiceType(Service.ServiceType serviceType) {
+    public void setServiceType(ServiceType serviceType) {
         this.serviceType = serviceType;
     }
 

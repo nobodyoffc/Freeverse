@@ -2,6 +2,7 @@ package writeEs;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -131,12 +132,12 @@ public class RollBacker {
 			}
 		}
 		int hitSize = response.hits().hits().size();
-		List<String> last;
+		List<FieldValue> last;
 
 		last= response.hits().hits().get(hitSize - 1).sort();
 
 		while(hitSize>=size){
-			List<String> finalLast = last;
+			List<FieldValue> finalLast = last;
 			response = esClient.search(s -> s.index(IndicesNames.CASH)
 							.size(size)
 							.sort(s1 -> s1.field(f -> f.field(ID).order(SortOrder.Asc)))
@@ -268,6 +269,7 @@ public class RollBacker {
 	private void deleteBlockMarks(ElasticsearchClient esClient, long lastHeight) throws IOException {
 		esClient.deleteByQuery(d->d
 				.index(IndicesNames.BLOCK_MARK)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
 				.query(q->q
 						.bool(b->b
 								.should(s->s
@@ -285,6 +287,7 @@ public class RollBacker {
 
 		esClient.deleteByQuery(d->d
 				.index(index)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
 				.query(q->q
 						.range(r->r
 								.field(rangeField)

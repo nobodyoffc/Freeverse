@@ -67,12 +67,12 @@ public class Inputer extends ui.Inputer {
         }
     }
 
-    public static String[] inputOrCreateFidArray(BufferedReader br,byte[] symkey,ApipClient apipClient){
+    public static List<String> inputOrCreateFidArray(BufferedReader br,byte[] symkey,ApipClient apipClient){
         List<String> fidList = new ArrayList<>();
         do {
             fidList.add(inputOrCreateFid("Set FIDs...", br, symkey, apipClient));
         }while(askIfYes(br,"Add more?"));
-        return fidList.toArray(new String[0]);
+        return fidList;
     }
     public static Map<String,String> inputGoodFidValueStrMap(BufferedReader br, String mapName, boolean checkFullShare)  {
         Map<String,String> map = new HashMap<>();

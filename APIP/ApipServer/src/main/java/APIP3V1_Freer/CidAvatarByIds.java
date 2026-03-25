@@ -5,8 +5,8 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.MgetResponse;
 import constants.ApipApiNames;
 import data.fchData.Freer;
-import data.feipData.Service;
 import data.fcData.ReplyBody;
+import data.feipData.ServiceType;
 import initial.Initiator;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
@@ -47,7 +47,7 @@ public class CidAvatarByIds extends HttpServlet {
     public static void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
         //Check authorization
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(Service.ServiceType.ES);
+        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
         boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
         if (!isOk) {
@@ -95,7 +95,10 @@ public class CidAvatarByIds extends HttpServlet {
 
         for (String id : idList) {
             Map<String,String > cidAvatar = new HashMap<>();
-            cidAvatar.put(CID,cidMap.get(id).getCid());
+
+            if(cidMap.get(id)!=null)
+                cidAvatar.put(CID,cidMap.get(id).getCid());
+
             File file = new File(avatarPngPath + id + ".png");
             if (file.exists()) {
                 try (FileInputStream fis = new FileInputStream(file)) {

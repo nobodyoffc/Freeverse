@@ -1,12 +1,15 @@
 package data.fcData;
 
 import java.util.List;
+import java.util.Map;
 
 import utils.JsonUtils;
 
 public class Room extends FcObject{
 	private String owner;
 	private String name;
+	private String desc;
+	private Map<String,String> home;
 	private List<String> members;
 	private Long memberNum;
 	private Long birthTime;
@@ -71,4 +74,19 @@ public class Room extends FcObject{
 		this.birthTime = birthTime;
 	}
 
+	public String getDesc() {
+		return desc;
+	}
+
+	public Map<String, String> getHome() {
+		return home;
+	}
+
+	public void setHome(Map<String, String> home) {
+		this.home = home;
+	}
+
+	public void setDesc(String desc) {
+		this.desc = desc;
+	}
 }

@@ -15,9 +15,9 @@ public class Hat extends FcObject {
     //extend
     private String name;
     private String desc;
-    private String[] types;
-    private String[] aids;
-    private String[] pids;
+    private List<String> types;
+    private List<String> aids;
+    private List<String> pids;
 
     //version
     private String srcDid;
@@ -74,27 +74,27 @@ public class Hat extends FcObject {
         this.name = name;
     }
 
-    public String[] getTypes() {
+    public List<String> getTypes() {
         return types;
     }
 
-    public void setTypes(String[] types) {
+    public void setTypes(List<String> types) {
         this.types = types;
     }
 
-    public String[] getAids() {
+    public List<String> getAids() {
         return aids;
     }
 
-    public void setAids(String[] aids) {
+    public void setAids(List<String> aids) {
         this.aids = aids;
     }
 
-    public String[] getPids() {
+    public List<String> getPids() {
         return pids;
     }
 
-    public void setPids(String[] pids) {
+    public void setPids(List<String> pids) {
         this.pids = pids;
     }
 

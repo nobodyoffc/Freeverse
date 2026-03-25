@@ -1518,4 +1518,141 @@ public class NaSaRpcClient {
         this.bestHeight = bestHeight;
     }
 
+    public PeerInfo[] getPeerInfo() {
+        RpcRequest jsonRPC2Request = new RpcRequest(NasaRpcNames.GETPEERINFO, null);
+        Object result = RpcRequest.requestRpc(url, username, password, NasaRpcNames.GETPEERINFO, jsonRPC2Request);
+        return ObjectUtils.objectToClass(result, PeerInfo[].class);
+    }
+
+    public static class PeerInfo {
+        private int id;
+        private String addr;
+        private String addrlocal;
+        private String services;
+        private boolean relaytxes;
+        private long lastsend;
+        private long lastrecv;
+        private long bytessent;
+        private long bytesrecv;
+        private long conntime;
+        private int timeoffset;
+        private double pingtime;
+        private double minping;
+        private int version;
+        private String subver;
+        private boolean inbound;
+        private long startingheight;
+        private int synced_headers;
+        private int synced_blocks;
+        private boolean whitelisted;
+        private double minfeefilter;
+
+        public int getId() { return id; }
+        public void setId(int id) { this.id = id; }
+        public String getAddr() { return addr; }
+        public void setAddr(String addr) { this.addr = addr; }
+        public String getAddrlocal() { return addrlocal; }
+        public void setAddrlocal(String addrlocal) { this.addrlocal = addrlocal; }
+        public String getServices() { return services; }
+        public void setServices(String services) { this.services = services; }
+        public boolean isRelaytxes() { return relaytxes; }
+        public void setRelaytxes(boolean relaytxes) { this.relaytxes = relaytxes; }
+        public long getLastsend() { return lastsend; }
+        public void setLastsend(long lastsend) { this.lastsend = lastsend; }
+        public long getLastrecv() { return lastrecv; }
+        public void setLastrecv(long lastrecv) { this.lastrecv = lastrecv; }
+        public long getBytessent() { return bytessent; }
+        public void setBytessent(long bytessent) { this.bytessent = bytessent; }
+        public long getBytesrecv() { return bytesrecv; }
+        public void setBytesrecv(long bytesrecv) { this.bytesrecv = bytesrecv; }
+        public long getConntime() { return conntime; }
+        public void setConntime(long conntime) { this.conntime = conntime; }
+        public int getTimeoffset() { return timeoffset; }
+        public void setTimeoffset(int timeoffset) { this.timeoffset = timeoffset; }
+        public double getPingtime() { return pingtime; }
+        public void setPingtime(double pingtime) { this.pingtime = pingtime; }
+        public double getMinping() { return minping; }
+        public void setMinping(double minping) { this.minping = minping; }
+        public int getVersion() { return version; }
+        public void setVersion(int version) { this.version = version; }
+        public String getSubver() { return subver; }
+        public void setSubver(String subver) { this.subver = subver; }
+        public boolean isInbound() { return inbound; }
+        public void setInbound(boolean inbound) { this.inbound = inbound; }
+        public long getStartingheight() { return startingheight; }
+        public void setStartingheight(long startingheight) { this.startingheight = startingheight; }
+        public int getSynced_headers() { return synced_headers; }
+        public void setSynced_headers(int synced_headers) { this.synced_headers = synced_headers; }
+        public int getSynced_blocks() { return synced_blocks; }
+        public void setSynced_blocks(int synced_blocks) { this.synced_blocks = synced_blocks; }
+        public boolean isWhitelisted() { return whitelisted; }
+        public void setWhitelisted(boolean whitelisted) { this.whitelisted = whitelisted; }
+        public double getMinfeefilter() { return minfeefilter; }
+        public void setMinfeefilter(double minfeefilter) { this.minfeefilter = minfeefilter; }
+    }
+
+    public NetworkInfo getNetworkInfo() {
+        RpcRequest jsonRPC2Request = new RpcRequest(NasaRpcNames.GETNETWORKINFO, null);
+        Object result = RpcRequest.requestRpc(url, username, password, NasaRpcNames.GETNETWORKINFO, jsonRPC2Request);
+        return ObjectUtils.objectToClass(result, NetworkInfo.class);
+    }
+
+    public static class NetworkInfo {
+        private int version;
+        private String subversion;
+        private int protocolversion;
+        private String localservices;
+        private boolean localrelay;
+        private int timeoffset;
+        private boolean networkactive;
+        private int connections;
+        private List<Network> networks;
+        private double relayfee;
+        private double incrementalfee;
+        private String warnings;
+
+        public int getVersion() { return version; }
+        public void setVersion(int version) { this.version = version; }
+        public String getSubversion() { return subversion; }
+        public void setSubversion(String subversion) { this.subversion = subversion; }
+        public int getProtocolversion() { return protocolversion; }
+        public void setProtocolversion(int protocolversion) { this.protocolversion = protocolversion; }
+        public String getLocalservices() { return localservices; }
+        public void setLocalservices(String localservices) { this.localservices = localservices; }
+        public boolean isLocalrelay() { return localrelay; }
+        public void setLocalrelay(boolean localrelay) { this.localrelay = localrelay; }
+        public int getTimeoffset() { return timeoffset; }
+        public void setTimeoffset(int timeoffset) { this.timeoffset = timeoffset; }
+        public boolean isNetworkactive() { return networkactive; }
+        public void setNetworkactive(boolean networkactive) { this.networkactive = networkactive; }
+        public int getConnections() { return connections; }
+        public void setConnections(int connections) { this.connections = connections; }
+        public List<Network> getNetworks() { return networks; }
+        public void setNetworks(List<Network> networks) { this.networks = networks; }
+        public double getRelayfee() { return relayfee; }
+        public void setRelayfee(double relayfee) { this.relayfee = relayfee; }
+        public double getIncrementalfee() { return incrementalfee; }
+        public void setIncrementalfee(double incrementalfee) { this.incrementalfee = incrementalfee; }
+        public String getWarnings() { return warnings; }
+        public void setWarnings(String warnings) { this.warnings = warnings; }
+    }
+
+    public static class Network {
+        private String name;
+        private boolean limited;
+        private boolean reachable;
+        private String proxy;
+        private boolean proxy_randomize_credentials;
+
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
+        public boolean isLimited() { return limited; }
+        public void setLimited(boolean limited) { this.limited = limited; }
+        public boolean isReachable() { return reachable; }
+        public void setReachable(boolean reachable) { this.reachable = reachable; }
+        public String getProxy() { return proxy; }
+        public void setProxy(String proxy) { this.proxy = proxy; }
+        public boolean isProxy_randomize_credentials() { return proxy_randomize_credentials; }
+        public void setProxy_randomize_credentials(boolean proxy_randomize_credentials) { this.proxy_randomize_credentials = proxy_randomize_credentials; }
+    }
 }

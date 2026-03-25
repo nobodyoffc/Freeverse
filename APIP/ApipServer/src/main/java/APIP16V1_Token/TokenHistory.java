@@ -38,6 +38,6 @@ public class TokenHistory extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         AuthType authType = AuthType.FC_SIGN_URL;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
-        fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN_HISTORY,TokenHistory.class, defaultSort, request,response,authType);
+        fcHttpRequestHandler.doSearchRequest(IndicesNames.TOKEN_HISTORY,data.feipData.TokenHistory.class, defaultSort, request,response,authType);
     }
 }

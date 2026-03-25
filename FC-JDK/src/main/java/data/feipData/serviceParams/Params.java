@@ -39,21 +39,6 @@ public class Params {
         return null;  // Field not found
     }
 
-    public static Class<? extends Params> getParamsClassByApiType(Service.ServiceType type) {
-        return switch (type){
-            case NASA_RPC -> null;
-            case APIP -> ApipParams.class;
-            case FAPI -> Params.class;
-            case ES -> null;
-            case REDIS -> null;
-            case DISK -> DiskParams.class;
-            case OTHER -> null;
-            case TALK -> TalkParams.class;
-            case MAP -> null;
-            case SWAP_HALL -> null;
-            case FEIP -> null;
-        };
-    }
 
     public static <T> T getParamsFromService(Service service, Class<T> tClass) {
         T params;

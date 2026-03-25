@@ -1,7 +1,8 @@
 package app;
 
-import handlers.ContactManager;
-import handlers.Manager;
+import data.feipData.ServiceType;
+import managers.ContactManager;
+import managers.Manager;
 import ui.Inputer;
 import ui.Menu;
 import config.Settings;
@@ -26,7 +27,7 @@ public class ContactApp {
 //        settingsMap.put(LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CASH.name()));
         modules.add(new data.fcData.Module(Manager.class.getSimpleName(),Manager.ManagerType.CONTACT.name()));
 

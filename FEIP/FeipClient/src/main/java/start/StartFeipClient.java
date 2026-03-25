@@ -13,8 +13,7 @@ import config.Configure;
 import core.crypto.Decryptor;
 import data.feipData.Feip.FeipProtocol;
 import data.feipData.Service;
-import data.feipData.serviceParams.Params;
-import data.feipData.Service.ServiceType;
+import data.feipData.ServiceType;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -32,7 +31,7 @@ public class StartFeipClient {
     public static ApiAccount apipAccount;
     public static ApipClient apipClient;
     public static BufferedReader br ;
-    public static String clientName= Service.ServiceType.APIP.name();
+    public static String clientName= ServiceType.APIP.name();
     public static String myFid;
     public static String sid;
     public static String myPriKeyCipher;
@@ -47,7 +46,7 @@ public class StartFeipClient {
         br = new BufferedReader(new InputStreamReader(System.in));
 
         List<data.fcData.Module> modules = new ArrayList<>();
-        modules.add(new data.fcData.Module(Service.class.getSimpleName(),Service.ServiceType.APIP.name()));
+        modules.add(new data.fcData.Module(Service.class.getSimpleName(), ServiceType.APIP.name()));
 
         settings = Starter.startClient(clientName, settingMap, br, modules,null);
         if(settings==null)return;
@@ -55,7 +54,7 @@ public class StartFeipClient {
         myFid = settings.getMainFid();
 
         byte[] symKey = settings.getSymkey();
-        apipClient = (ApipClient) settings.getClient(Service.ServiceType.APIP);
+        apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
         configure = settings.getConfig();
         apipAccount = settings.getApiAccount(ServiceType.APIP);
 
@@ -94,13 +93,13 @@ public class StartFeipClient {
                         case NOBODY -> FeipClient.nobody(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case NID -> FeipClient.nid(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case MASTER -> FeipClient.master(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case HOMEPAGE -> FeipClient.homepage(priKey, watchFid, sendToList, null, apipClient, null, br);
+                        case HOME -> FeipClient.home(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case NOTICE_FEE -> FeipClient.noticeFee(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case REPUTATION -> FeipClient.reputation(priKey, watchFid, sendToList, null, apipClient, null, br);
                        
                         case PROTOCOL -> FeipClient.protocol(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case CODE -> FeipClient.code(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case SERVICE -> FeipClient.service(priKey, watchFid, sendToList, null, Params.class, apipClient, null, br);
+                        case SERVICE -> FeipClient.service(priKey, watchFid, sendToList, null,  apipClient, null, br);
                         case APP -> FeipClient.app(priKey, watchFid, sendToList, null, apipClient, null, br);
  
                         case MAIL -> FeipClient.mail(priKey, watchFid, sendToList, null, apipClient, null, br);
@@ -116,7 +115,7 @@ public class StartFeipClient {
                         case VIDEO -> FeipClient.video(priKey, watchFid, sendToList, null, apipClient, null, br);
 
                         case TEAM -> FeipClient.team(priKey, watchFid, sendToList, null, apipClient, null, br);
-                        case GROUP -> FeipClient.group(priKey, watchFid, sendToList, null, null, apipClient, null, br);
+                        case SQUARE -> FeipClient.square(priKey, watchFid, sendToList, null, null, apipClient, null, br);
 
                         case PROOF -> FeipClient.proof(priKey, watchFid, sendToList, null, apipClient, null, br);
                         case TOKEN -> FeipClient.token(priKey, watchFid, sendToList, null, apipClient, null, br);

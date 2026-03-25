@@ -1,6 +1,7 @@
 package nabox;
 
 import config.Settings;
+import constants.ApiNames;
 import constants.ApipApiNames;
 import initial.Initiator;
 import server.FcHttpRequestHandler;
@@ -15,7 +16,7 @@ import java.io.IOException;
 
 import static constants.FieldNames.ID;
 
-@WebServlet(name = ApipApiNames.TX_BY_IDS+"nabox", value = "/"+ "sn2" +"/"+ ApipApiNames.VER_1+"/"+ ApipApiNames.TX_BY_IDS )
+@WebServlet(name = ApipApiNames.TX_BY_IDS+ ApiNames.NABOX, value = "/"+ "sn2" +"/"+ ApipApiNames.VER_1+"/"+ ApipApiNames.TX_BY_IDS )
 public class TxByIds extends HttpServlet {
     private final FcHttpRequestHandler fcHttpRequestHandler;
 

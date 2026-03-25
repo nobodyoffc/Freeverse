@@ -3,6 +3,7 @@ package config;
 import core.crypto.*;
 import data.fcData.CidInfo;
 import data.fcData.Module;
+import data.feipData.ServiceType;
 import fapi.client.FapiClient;
 import fapi.service.FapiServer;
 import fudp.node.FudpNode;
@@ -16,7 +17,6 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.Constants;
 import constants.IndicesNames;
 import constants.Strings;
-import data.feipData.serviceParams.*;
 import db.LocalDB;
 import data.fcData.AlgorithmId;
 import data.fcData.AutoTask;
@@ -24,7 +24,7 @@ import data.fchData.Block;
 import data.fchData.Freer;
 import data.feipData.Service;
 import data.feipData.ServiceMask;
-import handlers.*;
+import managers.*;
 import clients.NaSaClient.NaSaRpcClient;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -34,7 +34,6 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import server.FreeApi;
 import server.serviceManagers.ApipManager;
-import server.serviceManagers.SwapHallManager;
 import server.serviceManagers.TalkManager;
 import utils.*;
 import utils.http.AuthType;
@@ -48,13 +47,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.CancellationException;
 
 import static ui.Inputer.askIfYes;
 import static config.Configure.*;
 import static constants.Constants.UserDir;
 import static constants.Strings.*;
-import static data.feipData.Service.ServiceType.*;
+import static data.feipData.ServiceType.*;
 import static server.ApipApi.VER_1;
 
 public class Settings {
@@ -73,30 +71,14 @@ public class Settings {
     public static final String MIN_DISTRIBUTE_BALANCE = "minDistributeBalance";
     public static final String AVATAR_ELEMENTS_PATH = "avatarElementsPath";
     public static final String AVATAR_PNG_PATH = "avatarPngPath";
-    public static final String BALANCE_TOLERANCE_PCT = "balanceTolerancePct";
-    public static final String BALANCE_TOLERANCE_SAT_MIN = "balanceToleranceSatMin";
-    public static final String BALANCE_DRIFT_ACCUM_PCT = "balanceDriftAccumPct";
-    public static final String BALANCE_DRIFT_ACCUM_SAT = "balanceDriftAccumSat";
-    public static final String BALANCE_DRIFT_STOP_PCT = "balanceDriftStopPct";
-    public static final String BALANCE_DRIFT_STOP_SAT = "balanceDriftStopSat";
-    public static final String BALANCE_MAX_CONSECUTIVE_DRIFT = "balanceMaxConsecutiveDrift";
-    public static final String BALANCE_DRIFT_ACTION = "balanceDriftAction";
-    public static final String BALANCE_DISPLAY_PRECISION = "balanceDisplayPrecision";
-    public static final String LOG_BALANCE_READ_ERROR = "logBalanceReadError";
+    // 注意：FAPI 相关的配置键常量和默认值常量已移至各自的类中：
+    // - BalanceVerifier 类：余额验证相关配置
+    // - AutoRechargeManager 类：自动充值相关配置
+    // - FapiBalanceManager 类：信用额度和充值保留天数等配置
     public static final Long DEFAULT_WINDOW_TIME = 300000L;
     public static final String DISK_DATA_PATH = System.getProperty(Constants.UserHome)+"/diskData";
-    public static final double DEFAULT_BALANCE_TOLERANCE_PCT = 0.02d;
-    public static final long DEFAULT_BALANCE_TOLERANCE_SAT_MIN = 10_000L;
-    public static final double DEFAULT_BALANCE_DRIFT_ACCUM_PCT = 0.05d;
-    public static final long DEFAULT_BALANCE_DRIFT_ACCUM_SAT = 50_000L;
-    public static final double DEFAULT_BALANCE_DRIFT_STOP_PCT = 0.1d;
-    public static final long DEFAULT_BALANCE_DRIFT_STOP_SAT = 100_000L;
-    public static final long DEFAULT_BALANCE_MAX_CONSECUTIVE_DRIFT = 3L;
-    public static final String DEFAULT_BALANCE_DRIFT_ACTION = "warn";
-    public static final long DEFAULT_BALANCE_DISPLAY_PRECISION = 8L;
-    public static final boolean DEFAULT_LOG_BALANCE_READ_ERROR = true;
 
-    public static Map<Service.ServiceType,List<FreeApi>> freeApiListMap;
+    public static Map<ServiceType,List<FreeApi>> freeApiListMap;
     private static String fileName;
     private transient Configure config;
     private transient BufferedReader br;
@@ -109,8 +91,8 @@ public class Settings {
     private transient Map<String, Object> nodes;
     private transient FudpNode fudpNode;
 
-    private Map<Service.ServiceType, ClientGroup> clientGroups;
-    private Service.ServiceType serverType;
+    private Map<ServiceType, ClientGroup> clientGroups;
+    private ServiceType serverType;
     private Map<String,Long> bestHeightMap;
     private Service service;
     private String clientName;
@@ -147,7 +129,21 @@ public class Settings {
             addShutdownHook();
         }
     }
-    public Settings(Configure configure, Service.ServiceType serverType, Map<String,Object> settingMap, List<Module> modules, List<AutoTask> autoTaskList) {
+
+    public Settings(Configure configure, String clientName, List<Module> modules, Map<String, Object> settingMap) {
+        if(configure!=null) {
+            this.config = configure;
+            this.br = configure.getBr();
+            freeApiListMap = configure.getFreeApiListMap();
+            clientGroups = new HashMap<>();
+            checkDbDir(null);
+            this.clientName = clientName;
+            this.modules = modules;
+            this.settingMap = settingMap;
+            addShutdownHook();
+        }
+    }
+    public Settings(Configure configure, ServiceType serverType, Map<String,Object> settingMap, List<Module> modules, List<AutoTask> autoTaskList) {
         if(configure!=null) {
             this.config = configure;
             this.br =configure.getBr();
@@ -158,6 +154,20 @@ public class Settings {
             this.modules = modules;
             this.autoTaskList = autoTaskList;
             checkSetting(br);
+            checkDbDir(settingMap);
+            addShutdownHook();
+        }
+    }
+
+    public Settings(Configure configure, ServiceType serverType, Map<String,Object> settingMap, List<Module> modules) {
+        if(configure!=null) {
+            this.config = configure;
+            this.br =configure.getBr();
+            freeApiListMap = configure.getFreeApiListMap();
+            clientGroups = new HashMap<>();
+            this.settingMap = settingMap;
+            this.serverType = serverType;
+            this.modules = modules;
             checkDbDir(settingMap);
             addShutdownHook();
         }
@@ -223,7 +233,13 @@ public class Settings {
     }
 
 
-    public static Block getBestBlock(JedisPool jedisPool,ApipClient apipClient,ElasticsearchClient esClient,NaSaRpcClient naSaRpcClient) {
+    public Block getBestBlock(JedisPool jedisPool,ApipClient apipClient,ElasticsearchClient esClient,NaSaRpcClient naSaRpcClient) {
+        if(getClient(ServiceType.FAPI)!=null){
+            return ((FapiClient)getClient(FAPI)).bestBlock();
+        }
+        if(getClient(ServiceType.FAPI_No1_NrC7)!=null){
+            return ((FapiClient)getClient(FAPI_No1_NrC7)).bestBlock();
+        }
 
         if(jedisPool!=null){
             try(Jedis jedis = jedisPool.getResource()) {
@@ -261,6 +277,9 @@ public class Settings {
     public Long getBestHeight() {
         if(getClient(FAPI)!=null){
             return ((FapiClient)getClient(FAPI)).bestHeight();
+        }
+        if(getClient(FAPI_No1_NrC7)!=null){
+            return ((FapiClient)getClient(FAPI_No1_NrC7)).bestHeight();
         }
 
         if(getClient(APIP)!=null){
@@ -365,7 +384,7 @@ public class Settings {
 
         if(cidInfo==null){
             System.out.println("The mainFid is new.");
-            ApipClient apipClient = (ApipClient)getClient(Service.ServiceType.APIP);
+            ApipClient apipClient = (ApipClient)getClient(ServiceType.APIP);
             if(apipClient!=null) {
                 Freer cid = apipClient.freerById(mainFid);
                 if(cid!=null){
@@ -418,9 +437,9 @@ public class Settings {
         this.mainFid = fid;
         this.myPrikeyCipher = config.getMainCidInfoMap().get(fid).getPrikeyCipher();
         if(this.config==null)this.config = config;
-        this.myPubkey = ApiAccount.makePubkey(myPrikeyCipher,symkey);
+        this.myPubkey = config.getMainCidInfoMap().get(fid).getPubkey();
+        if(this.myPubkey==null) this.myPubkey = ApiAccount.makePubkey(myPrikeyCipher,symkey);
         if(clientGroups==null)clientGroups = new HashMap<>();
-
         freeApiListMap = config.getFreeApiListMap();
         if(bestHeightMap==null)
             bestHeightMap=new HashMap<>();
@@ -539,21 +558,12 @@ public class Settings {
 
     @Nullable
     public Service loadMyService(String sid, byte[] symkey, Configure config) {
-        Class<? extends Params> paramClass =
-                switch (serverType){
-                    case APIP -> ApipParams.class;
-                    case DISK -> DiskParams.class;
-                    case TALK -> TalkParams.class;
-                    case FAPI,OTHER, MAP, SWAP_HALL -> Params.class;
-                    default -> null;
-                };
-
         ApipClient apipClient = (ApipClient) getClient(APIP);
         if(apipClient!=null) {
-            service = getMyService(sid, symkey, config, br, apipClient, paramClass, this.serverType);
+            service = getMyService(sid, symkey, config, br, apipClient, this.serverType);
         }else {
             ElasticsearchClient esClient = (ElasticsearchClient) getClient(ES);
-            service = getMyService(sid, symkey, config, br, esClient, paramClass, this.serverType);
+            service = getMyService(sid, symkey, config, br, esClient, this.serverType);
         }
 
         if(service==null){
@@ -561,23 +571,21 @@ public class Settings {
             return null;
         }
 
-        if (isWrongServiceType(service, serverType.name())) return null;
-
         System.out.println("\nYour service:\n"+ JsonUtils.toNiceJson(service));
         Menu.anyKeyToContinue(br);
 
-        if(jedisPool!=null)writeServiceToRedis(service, ApipParams.class);
+        if(jedisPool!=null)writeServiceToRedis(service);
         this.sid = service.getId();
         return service;
     }
 
-    public Object getClient(Service.ServiceType serviceType) {
-        ClientGroup group = clientGroups.get(Service.ServiceType.valueOf(serviceType.name()));
+    public Object getClient(ServiceType serviceType) {
+        ClientGroup group = clientGroups.get(ServiceType.valueOf(serviceType.name()));
         return group != null ? group.getClient() : null;
     }
 
-    public ApiAccount getApiAccount(Service.ServiceType serviceType) {
-        ClientGroup group = clientGroups.get(Service.ServiceType.valueOf(serviceType.name()));
+    public ApiAccount getApiAccount(ServiceType serviceType) {
+        ClientGroup group = clientGroups.get(ServiceType.valueOf(serviceType.name()));
         if (group != null && !group.getAccountIds().isEmpty()) {
             String accountId = group.getAccountIds().get(0);
             return config.getApiAccountMap().get(accountId);
@@ -585,8 +593,8 @@ public class Settings {
         return null;
     }
 
-    public String getApiAccountId(Service.ServiceType serviceType) {
-        ClientGroup group = clientGroups.get(Service.ServiceType.valueOf(serviceType.name()));
+    public String getApiAccountId(ServiceType serviceType) {
+        ClientGroup group = clientGroups.get(ServiceType.valueOf(serviceType.name()));
         if (group != null && !group.getAccountIds().isEmpty()) {
             return group.getAccountIds().get(0); // Returns first account ID by default
         }
@@ -631,9 +639,10 @@ public class Settings {
         return null;
     }
 
-    public FapiClient getDefaultFapiClient() {
+    public static FapiClient getDefaultFapiClient(Settings settings) {
+        FudpNode fudpNode = settings.getFudpNode();
         if (fudpNode == null) {
-            initNode("FUDP");
+            settings.initNode("FUDP");
         }
         if (fudpNode == null) return null;
         List<FapiClient.Endpoint> endpoints = FapiClient.loadDefaultEndpoints();
@@ -650,12 +659,12 @@ public class Settings {
                     continue;
                 }
                 Service target = discovery.getServices().stream()
-                        .filter(s -> Arrays.stream(s.getTypes()).anyMatch(t -> FAPI.name().equalsIgnoreCase(t)))
+                        .filter(s -> ServiceType.isFapi(s.fetchServiceType()))
                         .findFirst()
                         .orElse(discovery.getServices().get(0));
-                return new FapiClient(fudpNode, discovery.getPeerId(), target.getId(), 30, this);
+                return new FapiClient(fudpNode, discovery.getPeerId(), target.getId(), 30, settings);
             } catch (Throwable e) {
-                log.warn("Failed to connect default FAPI {}:{} ({})", endpoint.host(), endpoint.port(), e.getMessage());
+                log.warn("Failed to connect default FAPI_No1_NrC7 {}:{} ({})", endpoint.host(), endpoint.port(), e.getMessage());
             }
         }
         return null;
@@ -712,7 +721,7 @@ public class Settings {
         return fidInfo;
     }
 
-    public void initClientGroup(Service.ServiceType groupType) {
+    public void initClientGroup(ServiceType groupType) {
         System.out.println("Initiate "+ groupType +" accounts and clients...");
 
         // Preserve existing group if it exists
@@ -729,43 +738,20 @@ public class Settings {
         do {
             FapiClient fapiClient = null;
             ApipClient apipClient = null;
-            if (groupType == Service.ServiceType.FAPI) {
-                clientGroups.put(groupType, group);
-                System.out.println("Initializing FAPI node & client...");
-                if (fudpNode == null) {
-                    initNode("FUDP");
-                }
-                if (fudpNode == null) {
-                    System.out.println("FUDP node not ready. Skip FAPI init.");
-                    return;
-                }
-                boolean ok = connectFapiWithEndpoints(FapiClient.loadDefaultEndpoints(), group, "initClientGroup");
-                if (!ok && br != null && Inputer.askIfYes(br, "FAPI bootstrap failed. Input host:port manually?")) {
-                    String host = Inputer.inputString(br, "Host (default 127.0.0.1):");
-                    if (host == null || host.isBlank()) host = "127.0.0.1";
-                    Long port = Inputer.inputLong(br, "Port (default 8500):", 8500L);
-                    int resolvedPort = port == null ? 8500 : port.intValue();
-                    ok = connectFapiViaEndpoint(host, resolvedPort, group, "manual");
-                }
-                if (!ok) {
-                    System.out.println("No FAPI service connected. You can configure it later in the client menu.");
-                }
-                return;
-            }
+
             switch (groupType) {
-                case ES, REDIS, NASA_RPC -> {
+                case ES, REDIS, NASA_RPC,FAPI,FAPI_No1_NrC7 -> {
                 }
                 default -> {
-                    fapiClient = getDefaultFapiClient();
-                    apipClient = (ApipClient) getClient(APIP);
-                    if (fapiClient == null && apipClient == null)
-                        apipClient = getDefaultApipClient();
-                    if(fapiClient==null && apipClient ==null ){
+                    apipClient = getDefaultApipClient();
+
+                    if(apipClient ==null ){
                         System.out.println("Failed to get default FapiClient and ApipClient");
                         return;
                     }
                 }
             }
+
             ApiAccount apiAccount = config.getApiAccount(symkey, mainFid, groupType, apipClient, fapiClient);
             if (apiAccount == null) {
                 System.out.println(groupType + " module is ignored.");
@@ -783,18 +769,18 @@ public class Settings {
         clientGroups.put(groupType, group);
         if(groupType == REDIS)jedisPool = (JedisPool) group.getClient();
         if(sid==null && serverType!=null) {
-            if(groupType == APIP || groupType == ES && (this.serverType == APIP || this.serverType == FAPI))
+            if(groupType == APIP || groupType == ES && (this.serverType == APIP || ServiceType.isFapi(this.serverType)))
                 loadMyService(null, symkey, config);
         }
     }
 
-    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ApipClient apipClient, Class<?> paramsClass, Service.ServiceType serviceType) {
-        return getMyService(sid, symkey, config, br, apipClient,null,paramsClass, serviceType);
+    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ApipClient apipClient, ServiceType serviceType) {
+        return getMyService(sid, symkey, config, br, apipClient,null, serviceType);
     }
-    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ElasticsearchClient esClient,  Class<?> paramsClass, Service.ServiceType serviceType) {
-        return getMyService(sid, symkey, config, br, null,esClient,paramsClass, serviceType);
+    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ElasticsearchClient esClient, ServiceType serviceType) {
+        return getMyService(sid, symkey, config, br, null,esClient, serviceType);
     }
-    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ApipClient apipClient, ElasticsearchClient esClient, Class<?> paramsClass, Service.ServiceType serviceType) {
+    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ApipClient apipClient, ElasticsearchClient esClient, ServiceType serviceType) {
         System.out.println("Get my service...");
         Service service = null;
         if(sid ==null) {
@@ -810,16 +796,6 @@ public class Settings {
             if(service==null)return null;
         }
 
-        Params params;
-        switch (serviceType) {
-            case APIP -> params = (ApipParams) Params.getParamsFromService(service, paramsClass);
-            case DISK -> params = (DiskParams) Params.getParamsFromService(service, paramsClass);
-            case TALK -> params = (TalkParams) Params.getParamsFromService(service, paramsClass);
-            case SWAP_HALL -> params = (SwapHallParams) Params.getParamsFromService(service, paramsClass);
-            default -> params = (Params) Params.getParamsFromService(service, paramsClass);
-        }
-        if (params == null) return service;
-        service.setParams(params);
         this.sid = service.getId();
 
         if(config.getMainCidInfoMap().get(mainFid)==null) {
@@ -832,15 +808,14 @@ public class Settings {
         return service;
     }
 
-    private static Service askIfPublishNewService(String sid, byte[] symkey, BufferedReader br, Service.ServiceType serviceType, ApipClient apipClient, ElasticsearchClient esClient, Settings settings) {
+    private static Service askIfPublishNewService(String sid, byte[] symkey, BufferedReader br, ServiceType serviceType, ApipClient apipClient, ElasticsearchClient esClient, Settings settings) {
         Service service = null;
         if(askIfYes(br,"Publish a new service?")) {
             switch (serviceType) {
-                case APIP -> new ApipManager(null, null, br, symkey, ApipParams.class).publishService();
-                case FAPI -> new FapiServer(null, null, br, symkey, Params.class, settings).publishService();
-                case DISK -> new server.serviceManagers.DiskManager(null, null, br, symkey, DiskParams.class).publishService();
-                case TALK -> new TalkManager(null, null, br, symkey, TalkParams.class).publishService();
-                case SWAP_HALL -> new SwapHallManager(null, null, br, symkey, SwapHallParams.class).publishService();
+                case APIP -> new ApipManager(null, null, br, symkey).publishService();
+                case FAPI, FAPI_No1_NrC7 -> new FapiServer(null, br, symkey, settings).publishService();
+                case DISK -> new server.serviceManagers.DiskManager(null, null, br, symkey).publishService();
+                case TALK -> new TalkManager(null, null, br, symkey).publishService();
                 default -> {
                     System.out.println("Unexpected service type: "+serviceType);
                     return null;
@@ -871,54 +846,18 @@ public class Settings {
         return service;
     }
 
-    // private  void setInitForServer(String sid, Configure config, BufferedReader br) {
-    //     this.config= config;
-    //     this.br = br;
-    //     if(sid==null) {
-    //         System.out.println("No service yet. We will set it later.");
-    //         Menu.anyKeyToContinue(br);
-    //     }
-    //     else this.sid = sid;
-    //     freeApiListMap = config.getFreeApiListMap();
-    // }
-
-    private  void writeServiceToRedis(Service service, Class<? extends Params> paramsClass) {
+    private void writeServiceToRedis(Service service) {
         try(Jedis jedis = jedisPool.getResource()) {
             String key = Settings.addSidBriefToName(service.getId(),SERVICE);
             RedisUtils.writeToRedis(service, key,jedis,service.getClass());
-            String paramsKey = Settings.addSidBriefToName(sid,PARAMS);
-            RedisUtils.writeToRedis(service.getParams(), paramsKey,jedis,paramsClass);
+            if(service.getParams() != null) {
+                String paramsKey = Settings.addSidBriefToName(sid,PARAMS);
+                RedisUtils.writeToRedis(service.getParams(), paramsKey,jedis,service.getParams().getClass());
+            }
         }
     }
 
-    public static boolean isWrongServiceType(Service service, String type) {
-        if(!StringUtils.isContainCaseInsensitive(service.getTypes(), type)) {
-            System.out.println("\nWrong service type:"+ Arrays.toString(service.getTypes()));
-            return true;
-        }
-        return false;
-    }
 
-    public String chooseFid(Configure config, BufferedReader br, byte[] symkey) {
-        String fid = core.fch.Inputer.chooseOne(config.getMainCidInfoMap().keySet().toArray(new String[0]), null, "Choose fid:",br);
-        if(fid==null)fid =config.addUser(symkey);
-        return fid;
-    }
-
-
-    // private  void initService(String accountAlias, Service.ServiceType type, String apipAccountId, byte[] symkey, Configure config) {
-    //     ApiAccount apiAccount = config.checkAPI(apipAccountId, mainFid, type,symkey);
-    //     switch (type){
-    //         case APIP,TALK,SWAP_HALL,MAP -> apiAccount = checkIfMainFidIsApiAccountUser(symkey,config,br,apiAccount, mainFid);
-    //     }
-    //     if(apiAccount.getClient()!=null){
-    //         apipAccountId=apiAccount.getId();
-    //         ClientGroup clientGroup = clientGroups.get(accountAlias);
-    //         clientGroup.addClient(apipAccountId,apiAccount.getClient());
-    //         if(type.equals(APIP))config.setApipClient((ApipClient) apiAccount.getClient());
-    //     }
-    //     else System.out.println("Failed to connect service:"+accountAlias);
-    // }
 
     public void writeToFile(String fid, String oid){
         fileName = FileUtils.makeFileName(fid, oid, SETTINGS, DOT_JSON);
@@ -950,25 +889,123 @@ public class Settings {
     public void saveSimpleSettings(String clientName){
         writeToFile(null, clientName);
     }
+    
+    private void saveSettings() {
+        if (this.sid != null) {
+            saveServerSettings(sid);
+        } else if (this.mainFid != null) {
+            saveClientSettings(mainFid, clientName);
+        } else {
+            saveSimpleSettings(clientName);
+        }
+    }
 
-    public void setting(BufferedReader br, @Nullable Service.ServiceType serviceTypeOnlyForServer) {
+    public void setting(BufferedReader br, @Nullable ServiceType serviceTypeOnlyForServer) {
         System.out.println("Setting...");
         Menu menu = new Menu("Setting",this::closeMenu);
         menu.setTitle("Settings");
+        
+        boolean isServer = serviceTypeOnlyForServer != null;
+        boolean isFapi = isServer && ServiceType.isFapi(serviceTypeOnlyForServer);
+        
         ApipClient apipClient = (ApipClient) getClient(APIP);
+        fapi.client.FapiClient fapiClient0 = (fapi.client.FapiClient)getClient(FAPI);
+        fapi.client.FapiClient fapiClient = fapiClient0 != null ? fapiClient0 : (fapi.client.FapiClient)getClient(FAPI_No1_NrC7);
+        
         menu.add("Reset password", () -> resetPassword(serviceTypeOnlyForServer, jedisPool));
-        menu.add("Add API provider", () -> config.addApiProviderAndConnect(symkey, null, apipClient));
-        menu.add("Add API account", () -> config.addApiAccount(null, symkey, apipClient));
+        menu.add("Add API provider", () -> config.addApiProviderAndConnect(symkey, null, apipClient,fapiClient));
+        menu.add("Add API account", () -> config.addApiAccount(null, symkey, apipClient,fapiClient));
         menu.add("Update API provider", () -> config.updateApiProvider(apipClient));
-        menu.add("Update API account", () -> config.updateApiAccount(config.chooseApiProviderOrAdd(config.getApiProviderMap(), apipClient), symkey, apipClient));
-        menu.add("Delete API provider", () -> config.deleteApiProvider(symkey, apipClient));
-        menu.add("Delete API account", () -> config.deleteApiAccount(symkey, apipClient));
-        menu.add("Reset default APIs", () -> resetApi(symkey, apipClient));
+        menu.add("Update API account", () -> config.updateApiAccount(config.chooseApiProviderOrAdd(config.getApiProviderMap(), apipClient), symkey, apipClient,fapiClient));
+        menu.add("Delete API provider", () -> config.deleteApiProvider(symkey, apipClient,fapiClient));
+        menu.add("Delete API account", () -> config.deleteApiAccount(symkey, apipClient,fapiClient));
+        menu.add("Reset default APIs", () -> resetApi(symkey, apipClient,fapiClient));
         menu.add("Check settings", () -> checkSetting(br));
+        
+        // FAPI 配置修改
+        if (isFapi) {
+            menu.add("Modify FAPI server settings", () -> modifyFapiServerSettings(br));
+        } else if (fapiClient != null) {
+            menu.add("Modify FAPI client settings", () -> modifyFapiClientSettings(br));
+        }
+        
         menu.add("Show my prikey", () -> dumpPrikey(br));
         menu.add("Remove me", () -> removeMe(br));
 
         menu.showAndSelect(br);
+    }
+    
+    private void modifyFapiServerSettings(BufferedReader br) {
+        if (settingMap == null) {
+            settingMap = new HashMap<>();
+        }
+        
+        modifySetting(br, fapi.FapiBalanceManager.CREDIT_LIMIT, fapi.FapiBalanceManager.DEFAULT_CREDIT_LIMIT);
+        modifySetting(br, fapi.FapiBalanceManager.KEY_CREDIT_RETENTION_DAYS, fapi.FapiBalanceManager.DEFAULT_CREDIT_RETENTION_DAYS);
+        modifySetting(br, "fapiDiskDataPath", System.getProperty("user.home") + "/diskData");
+        
+        saveSettings();
+    }
+    
+    private void modifyFapiClientSettings(BufferedReader br) {
+        if (settingMap == null) {
+            settingMap = new HashMap<>();
+        }
+        
+        modifySetting(br, "fapiClientPort", 8501);
+        modifySetting(br, "fapiClientDataDir", "~/.fudp_client");
+        
+        // 余额验证配置
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_TOLERANCE_PCT, fapi.client.BalanceVerifier.DEFAULT_TOLERANCE_PCT);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_TOLERANCE_SAT_MIN, fapi.client.BalanceVerifier.DEFAULT_TOLERANCE_SAT_MIN);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_DRIFT_ACCUM_PCT, fapi.client.BalanceVerifier.DEFAULT_DRIFT_ACCUM_PCT);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_DRIFT_ACCUM_SAT, fapi.client.BalanceVerifier.DEFAULT_DRIFT_ACCUM_SAT);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_DRIFT_STOP_PCT, fapi.client.BalanceVerifier.DEFAULT_DRIFT_STOP_PCT);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_DRIFT_STOP_SAT, fapi.client.BalanceVerifier.DEFAULT_DRIFT_STOP_SAT);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_MAX_CONSECUTIVE_DRIFT, fapi.client.BalanceVerifier.DEFAULT_MAX_CONSECUTIVE_DRIFT);
+        modifySetting(br, fapi.client.BalanceVerifier.KEY_DRIFT_ACTION, fapi.client.BalanceVerifier.DEFAULT_DRIFT_ACTION);
+        
+        // 自动充值配置
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_ENABLED, fapi.client.AutoRechargeManager.DEFAULT_ENABLED);
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_THRESHOLD, fapi.client.AutoRechargeManager.DEFAULT_THRESHOLD);
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_PURCHASE_KB, fapi.client.AutoRechargeManager.DEFAULT_PURCHASE_KB);
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_COOLDOWN_MS, fapi.client.AutoRechargeManager.DEFAULT_COOLDOWN_MS);
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_MAX_RETRIES, fapi.client.AutoRechargeManager.DEFAULT_MAX_RETRIES);
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_RETRY_DELAY_MS, fapi.client.AutoRechargeManager.DEFAULT_RETRY_DELAY_MS);
+        modifySetting(br, fapi.client.AutoRechargeManager.KEY_MAX_PAYMENT, fapi.client.AutoRechargeManager.DEFAULT_MAX_PAYMENT);
+        
+        saveSettings();
+    }
+    
+    private void modifySetting(BufferedReader br, String key, Object defaultValue) {
+        if (settingMap == null) {
+            settingMap = new HashMap<>();
+        }
+        
+        Object currentValue = settingMap.getOrDefault(key, defaultValue);
+        String prompt = key + " (current: " + currentValue + ", default: " + defaultValue + "):";
+        
+        if (defaultValue instanceof Long || currentValue instanceof Long) {
+            Long defVal = defaultValue instanceof Long ? (Long) defaultValue : ((Number) defaultValue).longValue();
+            Long currVal = currentValue instanceof Long ? (Long) currentValue : (currentValue instanceof Number ? ((Number) currentValue).longValue() : defVal);
+            Long newValue = Inputer.inputLong(br, prompt, currVal);
+            settingMap.put(key, newValue);
+        } else if (defaultValue instanceof Double || currentValue instanceof Double) {
+            Double defVal = defaultValue instanceof Double ? (Double) defaultValue : ((Number) defaultValue).doubleValue();
+            Double currVal = currentValue instanceof Double ? (Double) currentValue : (currentValue instanceof Number ? ((Number) currentValue).doubleValue() : defVal);
+            Double newValue = Inputer.inputDouble(br, prompt, currVal);
+            settingMap.put(key, newValue);
+        } else if (defaultValue instanceof Boolean || currentValue instanceof Boolean) {
+            Boolean defVal = defaultValue instanceof Boolean ? (Boolean) defaultValue : Boolean.valueOf(defaultValue.toString());
+            Boolean currVal = currentValue instanceof Boolean ? (Boolean) currentValue : (currentValue != null ? Boolean.valueOf(currentValue.toString()) : defVal);
+            Boolean newValue = Inputer.inputBoolean(br, prompt, currVal);
+            settingMap.put(key, newValue);
+        } else if (defaultValue instanceof String || currentValue instanceof String) {
+            String defVal = defaultValue != null ? defaultValue.toString() : "";
+            String currVal = currentValue != null ? currentValue.toString() : defVal;
+            String newValue = Inputer.inputString(br, prompt, currVal);
+            settingMap.put(key, newValue);
+        }
     }
 
     private void dumpPrikey(BufferedReader br) {
@@ -1012,7 +1049,7 @@ public class Settings {
     }
 
 
-    public void resetPassword(@Nullable Service.ServiceType serviceType,BufferedReader br) {
+    public void resetPassword(@Nullable ServiceType serviceType, BufferedReader br) {
         byte[] newSymkey = resetPassword(serviceType, jedisPool);
         if (newSymkey != null) {
             this.symkey = newSymkey;
@@ -1137,7 +1174,7 @@ public class Settings {
         }));
     }
 
-    public byte[] resetPassword(@Nullable Service.ServiceType serviceType, JedisPool jedisPoolOnlyForServer){
+    public byte[] resetPassword(@Nullable ServiceType serviceType, JedisPool jedisPoolOnlyForServer){
         System.out.println("Reset password...");
         byte[] oldSymkey;
         byte[] oldNonceBytes;
@@ -1164,6 +1201,17 @@ public class Settings {
         config.setNonce(Hex.toHex(newNonce));
         byte[] newSymkey =  getSymkeyFromPasswordAndNonce(newPasswordBytes, newNonce);
 
+
+        // Re-encrypt prikeyCipher in mainCidInfoMap
+        if(config.getMainCidInfoMap()!=null && !config.getMainCidInfoMap().isEmpty()){
+            for(CidInfo cidInfo : config.getMainCidInfoMap().values()){
+                if(cidInfo != null && cidInfo.getPrikeyCipher() != null && !cidInfo.getPrikeyCipher().isEmpty()){
+                    String cipher = cidInfo.getPrikeyCipher();
+                    String newCipher = replaceCipher(cipher, oldSymkey, newSymkey);
+                    cidInfo.setPrikeyCipher(newCipher);
+                }
+            }
+        }
 
         if(config.getApiAccountMap()==null||config.getApiAccountMap().isEmpty())return newSymkey;
         for(ApiAccount apiAccount : config.getApiAccountMap().values()){
@@ -1215,18 +1263,18 @@ public class Settings {
         return new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7).encryptBySymkey(data,newSymkey).toJson();
     }
 
-    public void resetApi(byte[] symkey, ApipClient apipClient) {
+    public void resetApi(byte[] symkey, ApipClient apipClient, FapiClient fapiClient) {
         System.out.println("Reset default API service...");
-        List<Service.ServiceType> requiredBasicServices = new ArrayList<>();
+        List<ServiceType> requiredBasicServices = new ArrayList<>();
         for(Module module: modules){
             if(module.getType().equals(Module.ModuleType.SERVICE))
-                requiredBasicServices.add(Service.ServiceType.fromString(module.getName()));
+                requiredBasicServices.add(ServiceType.fromString(module.getName()));
         }
-        Service.ServiceType type = Inputer.chooseOne(requiredBasicServices.toArray(new Service.ServiceType[0]),null,"Choose the Service:",br);
+        ServiceType type = Inputer.chooseOne(requiredBasicServices.toArray(new ServiceType[0]),null,"Choose the Service:",br);
 
         ApiProvider apiProvider = config.chooseApiProviderOrAdd(config.getApiProviderMap(), type, apipClient);
         if(apiProvider==null)return;
-        ApiAccount apiAccount = config.findAccountForTheProvider(apiProvider, mainFid, symkey, apipClient);
+        ApiAccount apiAccount = config.findAccountForTheProvider(apiProvider, mainFid, symkey, apipClient,fapiClient);
         if (apiAccount != null) {
             Object client = apiAccount.getClient();//connectApi(config.getApiProviderMap().get(apiAccount.getProviderId()), symkey, br, null, config.getMainCidInfoMap());
             if (client != null) {
@@ -1236,17 +1284,13 @@ public class Settings {
             System.out.println("Failed to get the apiAccount.");
             return;
         }
-        addAccountToGroup(apiProvider.getType(),apiAccount);
+        addAccountToGroup(apiProvider.fetchServiceType(),apiAccount);
 
         saveConfig();
         saveSettings();
     }
 
-    private void saveSettings() {
-        if(this.sid!=null)saveServerSettings(sid);
-        else if(this.mainFid!=null)saveClientSettings(mainFid,clientName);
-        else saveSimpleSettings(clientName);
-    }
+    // saveSettings() 方法已在 resetApi 方法中使用，保留原有的实现
 
 //    private void freshAliasMaps(String alias, ApiAccount apiAccount) {
 //        aliasAccountMap.put(alias, apiAccount);
@@ -1254,7 +1298,7 @@ public class Settings {
 //        aliasClientMap.put(alias, apiAccount.getClient());
 //    }
 
-    private void addAccountToGroup(Service.ServiceType type, ApiAccount apiAccount){
+    private void addAccountToGroup(ServiceType type, ApiAccount apiAccount){
         ClientGroup clientGroup = clientGroups.get(type);
         if(clientGroup==null)clientGroup= new ClientGroup(type);
         ClientGroup.GroupStrategy strategy = clientGroup.getStrategy();
@@ -1390,19 +1434,19 @@ public class Settings {
 //    }
 
 
-    public Service.ServiceType getServerType() {
+    public ServiceType getServerType() {
         return serverType;
     }
 
-    public void setServerType(Service.ServiceType serverType) {
+    public void setServerType(ServiceType serverType) {
         this.serverType = serverType;
     }
 
-    public static Map<Service.ServiceType, List<FreeApi>> getFreeApiListMap() {
+    public static Map<ServiceType, List<FreeApi>> getFreeApiListMap() {
         return freeApiListMap;
     }
 
-    public static void setFreeApiListMap(Map<Service.ServiceType, List<FreeApi>> freeApiListMap) {
+    public static void setFreeApiListMap(Map<ServiceType, List<FreeApi>> freeApiListMap) {
         Settings.freeApiListMap = freeApiListMap;
     }
 
@@ -1450,11 +1494,11 @@ public class Settings {
         this.myPrikeyCipher = myPrikeyCipher;
     }
 
-    public ClientGroup getClientGroup(Service.ServiceType type) {
+    public ClientGroup getClientGroup(ServiceType type) {
         return clientGroups.get(type);
     }
 
-    public void addClientToGroup(Service.ServiceType type, String apiAccountId, Object client) {
+    public void addClientToGroup(ServiceType type, String apiAccountId, Object client) {
         ClientGroup group = clientGroups.get(type);
         if (group != null) {
             group.addClient(apiAccountId, client);
@@ -1473,7 +1517,7 @@ public class Settings {
             System.out.println("Load module "+(count++) + "/"+ total +"...");
 
             switch (module.getType()) {
-                case SERVICE -> initClientGroupMute(Service.ServiceType.valueOf(module.getName()));
+                case SERVICE -> initClientGroupMute(ServiceType.valueOf(module.getName()));
                 case MANAGER -> initManager(Manager.ManagerType.valueOf(module.getName()));
                 default -> log.warn("Unknown module type: " + module.getName());
             }
@@ -1493,7 +1537,7 @@ public class Settings {
             System.out.println("Load module "+(count++) + "/"+ total +"...");
 
             switch (module.getType()) {
-                case SERVICE -> initClientGroup(Service.ServiceType.valueOf(module.getName()));
+                case SERVICE -> initClientGroup(ServiceType.valueOf(module.getName()));
                 case MANAGER -> initManager(Manager.ManagerType.valueOf(module.getName()));
                 case NODE -> initNode(module.getName());
                 default -> log.warn("Unknown module type: " + module.getName());
@@ -1516,17 +1560,15 @@ public class Settings {
             case NONCE -> managers.put(type, new NonceManager(this));
             case MAIL -> managers.put(type, new MailManager(this));
             case CONTACT -> managers.put(type, new ContactManager(this));
-            case GROUP -> managers.put(type, new GroupManager(this));
+            case SQUARE -> managers.put(type, new SquareManager(this));
             case TEAM -> managers.put(type, new TeamManager(this));
             case HAT -> managers.put(type, new HatManager(this));
             case DISK -> managers.put(type, new DiskManager(this));
-            case TALK_ID -> managers.put(type, new TalkIdManager(this));
-            case TALK_UNIT -> managers.put(type, new TalkUnitManager(this));
             case ACCOUNT -> managers.put(type, new AccountManager(this));
             case SECRET -> managers.put(type,new SecretManager(this));
             case MEMPOOL -> managers.put(type,new MempoolManager(this));
             case WEBHOOK -> managers.put(type,new WebhookManager(this));
-            case BALANCE -> managers.put(type, new BalanceManager(this));
+//            case BALANCE -> managers.put(type, new BalanceManager(this));
             default -> throw new IllegalArgumentException("Unexpected handler type: " + type);
         }
         System.out.println(type + " handler initiated.\n");
@@ -1578,64 +1620,6 @@ public class Settings {
         settingMap.putIfAbsent(NodeConfig.BALANCE_VERIFICATION,true);
     }
 
-    private boolean connectFapiWithEndpoints(List<FapiClient.Endpoint> endpoints, ClientGroup group, String source) {
-        if (endpoints == null || endpoints.isEmpty()) return false;
-        for (FapiClient.Endpoint ep : endpoints) {
-            if (connectFapiViaEndpoint(ep.host(), ep.port(), group, source)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean connectFapiViaEndpoint(String host, int port, ClientGroup group, String source) {
-        if (fudpNode == null) {
-            initNode("FUDP");
-        }
-        if (fudpNode == null) {
-            System.out.println("FUDP node not ready, skip FAPI connect.");
-            return false;
-        }
-        log.debug("connectFapiViaEndpoint: starting discovery for {}:{} (source: {})", host, port, source);
-        try {
-            FapiClient.DiscoveryResult discovery = FapiClient.discoverViaHelloAndPing(
-                    fudpNode,
-                    host,
-                    port,
-                    FapiClient.DEFAULT_HELLO_TIMEOUT_MS,
-                    FapiClient.DEFAULT_PING_TIMEOUT_MS
-            );
-            if (discovery == null) {
-                System.out.println("Failed to discover peer at " + host + ":" + port);
-                log.warn("connectFapiViaEndpoint: discovery returned null for {}:{}", host, port);
-                return false;
-            }
-            log.debug("connectFapiViaEndpoint: discovered peer {} at {}:{}", discovery.getPeerId(), host, port);
-            List<Service> services = discovery.getServices();
-            if (services == null || services.isEmpty()) {
-                System.out.println("No FAPI services advertised by peer " + discovery.getPeerId());
-                log.warn("connectFapiViaEndpoint: no services from peer {} at {}:{}", discovery.getPeerId(), host, port);
-                return false;
-            }
-            log.debug("connectFapiViaEndpoint: found {} services from peer {}", services.size(), discovery.getPeerId());
-            Service selected = services.get(0);
-            log.debug("connectFapiViaEndpoint: selected service SID={}, name={}", selected.getId(), selected.getStdName());
-            FapiClient client = new FapiClient(fudpNode, discovery.getPeerId(), selected.getId(), 30, this);
-            Service serviceDetails = resolveFapiService(selected, client);
-            persistFapiConfiguration(host, port, serviceDetails, group, client);
-            log.info("connectFapiViaEndpoint: successfully connected to {}:{}, peerId={}, SID={}", 
-                host, port, discovery.getPeerId(), selected.getId());
-            return true;
-        } catch (Exception e) {
-            log.error("connectFapiViaEndpoint: failed to connect to {}:{}", host, port, e);
-            System.out.println("Failed to connect FAPI endpoint " + host + ":" + port + ": " + 
-                (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
-            return false;
-        } catch (Throwable t) {
-            log.error("connectFapiViaEndpoint: unexpected error connecting to {}:{}", host, port, t);
-            throw new RuntimeException(t);
-        }
-    }
 
     private Service resolveFapiService(Service selected, FapiClient client) {
         Service service = null;
@@ -1647,8 +1631,8 @@ public class Settings {
                 }
                 if (service == null) {
                     Fcdsl fcdsl = new Fcdsl();
-                    fcdsl.setIndex(IndicesNames.SERVICE);
-                    fcdsl.addNewQuery().addNewMatch().addNewFields(FieldNames.TYPES).addNewValue(FAPI.name());
+                    fcdsl.setEntity(IndicesNames.SERVICE);
+                    fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(FAPI_No1_NrC7.name(), FAPI.name());
                     List<Service> list = client.entitySearch(IndicesNames.SERVICE, fcdsl, Service.class);
                     if (list != null && !list.isEmpty()) {
                         service = list.stream().filter(s -> Objects.equals(s.getId(), selected.getId())).findFirst().orElse(list.get(0));
@@ -1688,7 +1672,7 @@ public class Settings {
 
         group.addApiAccount(account);
         group.addClient(account.getId(), client);
-        clientGroups.put(Service.ServiceType.FAPI, group);
+        clientGroups.put(ServiceType.FAPI_No1_NrC7, group);
 
         Configure.saveConfig();
         if (mainFid != null) {
@@ -1698,16 +1682,9 @@ public class Settings {
 
     private ApiProvider buildFapiProvider(String host, int port, Service selected) {
         ApiProvider provider = new ApiProvider();
-        provider.setId(selected.getId());
-        provider.setName(selected.getStdName());
-        provider.setType(Service.ServiceType.FAPI);
+        provider.fromFcService(selected);
+        provider.makeServiceType(ServiceType.FAPI_No1_NrC7);
         provider.setApiUrl(host + ":" + port);
-        provider.setService(selected);
-        provider.setApiParams(Params.getParamsFromService(selected, Params.class));
-        provider.setDealer(selected.getDealer());
-        provider.setDealerPubkey(selected.getDealerPubkey());
-        provider.setOwner(selected.getOwner());
-        provider.setProtocols(selected.getProtocols());
         return provider;
     }
 
@@ -1719,7 +1696,6 @@ public class Settings {
         account.setProviderId(provider.getId());
         account.setApiUrl(provider.getApiUrl());
         account.setService(selected);
-        account.setServiceParams(Params.getParamsFromService(selected, Params.class));
         account.setUserId(mainFid);
         account.setUserPubkey(myPubkey);
         account.setUserPrikeyCipher(myPrikeyCipher);
@@ -1743,11 +1719,11 @@ public class Settings {
     }
 
 
-    public Map<Service.ServiceType, ClientGroup> getClientGroups() {
+    public Map<ServiceType, ClientGroup> getClientGroups() {
         return clientGroups;
     }
 
-    public void setClientGroups(Map<Service.ServiceType, ClientGroup> clientGroups) {
+    public void setClientGroups(Map<ServiceType, ClientGroup> clientGroups) {
         this.clientGroups = clientGroups;
     }
 
@@ -1808,19 +1784,19 @@ public class Settings {
     /**
      * Initialize client group for web server without user interaction
      */
-    public Object initClientGroupMute(Service.ServiceType type) {
+    public void initClientGroupMute(ServiceType type) {
         System.out.println("Initiate "+ type +" accounts and clients for server...");
 
         // Preserve existing group if it exists
         ClientGroup group;
         if(clientGroups==null) {
             log.warn("Client groups are not initialized");
-            return null;
+            return;
         };
         group = clientGroups.get(type);
         if(group==null){
             log.warn("Client group for "+ type +" is not initialized");
-            return null;
+            return;
         }
 
         group.connectAllClients(config, this, symkey, br);
@@ -1836,7 +1812,6 @@ public class Settings {
                 loadMyService(null, symkey, config);
             }
         }
-        return getClient(type);
     }
 
     public LocalDB.DbType getLocalDBType() {

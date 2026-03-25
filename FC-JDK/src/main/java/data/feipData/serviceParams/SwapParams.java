@@ -24,7 +24,7 @@ import static constants.Strings.LTC;
 import static constants.Tickers.*;
 
 @SuppressWarnings("unused")
-public class SwapParams extends Params {
+public class SwapParams {
     private String goods;
     private String money;
     private String gTick;
@@ -143,27 +143,6 @@ public class SwapParams extends Params {
             }
         }
     }
-
-//    public String updateParams(BufferedReader br, byte[] initSymkey){
-//        String prikeyCipher = null;
-//        System.out.println("The goods address is " + gAddr);
-//        System.out.println("The money address is " + mAddr);
-//        if(Inputer.askIfYes(br,"Update dealer addresses? y/n:")){
-//            prikeyCipher = setAddrs(br, initSymkey.clone());
-//        }
-//        updateGoods(br);
-//        updateMoney(br);
-//        updateGTick(br);
-//        updateMTick(br);
-//        updateCurve(br);
-//        updateGConfirm(br);
-//        updateMConfirm(br);
-//        updateGWithdrawFee(br);
-//        updateMWithdrawFee(br);
-//        updateSwapFee(br);
-//        updateServiceFee(br);
-//        return prikeyCipher;
-//    }
 
     private void updateGAddr(BufferedReader br) {
         System.out.println("The goods address is " + gAddr);

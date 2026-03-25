@@ -86,6 +86,63 @@ public interface NodeEventListener {
      */
     default void onError(String peerId, int errorCode, String message) {}
 
+    // ============ Bytes Events ============
+
+    /**
+     * Called when a bytes message is received.
+     * @param peerId the sender peer ID
+     * @param messageId the message ID
+     * @param dataType the data type hint (0=raw, 1=json, 2=protobuf, etc.)
+     * @param data the raw byte array
+     */
+    default void onBytesReceived(String peerId, long messageId, int dataType, byte[] data) {}
+
+    /**
+     * Called when a bytes acknowledgment is received.
+     * @param peerId the peer who acknowledged
+     * @param messageId the ID of the acknowledged message
+     * @param rttMs round-trip time in milliseconds
+     */
+    default void onBytesAck(String peerId, long messageId, long rttMs) {}
+
+    // ============ Relay Events ============
+
+    /**
+     * Called when an anonymous relayed message is received.
+     * Note: origin FID is NOT provided (privacy-preserving).
+     * @param relayPeerId the relay node that delivered the message
+     * @param message the inner message that was relayed
+     */
+    default void onRelayedMessageReceived(String relayPeerId, fudp.message.AppMessage message) {}
+
+    /**
+     * Called when an identified relayed message is received (sender revealed identity).
+     * Used for bidirectional protocols like file transfer.
+     * @param relayPeerId the relay node that delivered the message
+     * @param senderFid the sender's FID (revealed for response routing)
+     * @param sessionId the relay session ID (groups related messages)
+     * @param message the inner message that was relayed
+     */
+    default void onRelayedMessageReceived(String relayPeerId, String senderFid, long sessionId, fudp.message.AppMessage message) {
+        // Default: call anonymous version for backward compatibility
+        onRelayedMessageReceived(relayPeerId, message);
+    }
+
+    /**
+     * Called when a relay acknowledgment is received.
+     * @param messageId the ID of the relayed message
+     * @param rttMs round-trip time in milliseconds
+     */
+    default void onRelayAck(long messageId, long rttMs) {}
+
+    /**
+     * Called when a relay operation fails.
+     * @param messageId the ID of the relayed message
+     * @param errorCode the error code (see RelayErrorCode)
+     * @param reason human-readable error description
+     */
+    default void onRelayFailed(long messageId, int errorCode, String reason) {}
+
     /**
      * File offer information.
      */
