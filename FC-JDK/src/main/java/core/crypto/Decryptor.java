@@ -19,8 +19,10 @@ import javax.annotation.Nullable;
 import javax.crypto.Cipher;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.security.spec.AlgorithmParameterSpec;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -405,10 +407,21 @@ public class Decryptor {
         }
 
         SecretKeySpec keySpec = new SecretKeySpec(key, algo);
-        IvParameterSpec ivSpec = new IvParameterSpec(iv);
+
+        // Match Encryptor: GCM mode requires GCMParameterSpec so the 128-bit
+        // auth tag length is explicit, not provider-default. Using
+        // IvParameterSpec for GCM silently relies on provider defaults and
+        // can desync decrypt from encrypt on non-default JCE providers.
+        AlgorithmParameterSpec paramSpec;
+        if (transformation.contains("GCM")) {
+            paramSpec = new GCMParameterSpec(128, iv);
+        } else {
+            paramSpec = new IvParameterSpec(iv);
+        }
+
         try {
             Cipher cipher = Cipher.getInstance(transformation, provider);
-            cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
+            cipher.init(Cipher.DECRYPT_MODE, keySpec, paramSpec);
 
             var hashFunction = Hashing.sha256();
             var hasherIn = hashFunction.newHasher();
