@@ -299,7 +299,9 @@ public class Encryptor {
             return cryptoDataByte;
         }
 
-        Security.addProvider(new BouncyCastleProvider());
+        if (Security.getProvider("BC") == null) {
+            Security.addProvider(new BouncyCastleProvider());
+        }
 
         SecretKeySpec keySpec = new SecretKeySpec(key, algo);
         byte[] iv=cryptoDataByte.getIv();

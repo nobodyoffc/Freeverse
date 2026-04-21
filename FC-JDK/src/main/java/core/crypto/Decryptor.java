@@ -400,7 +400,9 @@ public class Decryptor {
     }
 
     public static void decryptBySymkeyBase(String algo, String transformation, String provider, InputStream inputStream, OutputStream outputStream, @Nullable CryptoDataByte cryptoDataByte) {
-        Security.addProvider(new BouncyCastleProvider());
+        if (Security.getProvider("BC") == null) {
+            Security.addProvider(new BouncyCastleProvider());
+        }
         if(cryptoDataByte==null)return ;
         if(cryptoDataByte.getSymkey()==null){
             cryptoDataByte.setCodeMessage(CodeMessage.Code4006InvalidKey);
