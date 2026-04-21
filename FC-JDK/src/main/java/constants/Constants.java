@@ -14,6 +14,8 @@ public class Constants {
     public static final String FUND_FID = "FTqiqAyXHnK7uDTXzMap3acvqADK4ZGzts";
     public static final byte[] MAGIC_BYTES = new byte[]{(byte)0xf9,(byte)0xbe,(byte)0xb4,(byte)0xd9};
     public static final int MAXIMUM_MULTI_SIGNER = 16;
+    public static final double MIN_AMOUNT = 0.000001;
+    public static final int MAX_AMOUNT = 99999999;
 
     public static long CDD_CHECK_HEIGHT =3000000;
     public static long CD_REQUIRED =0;
