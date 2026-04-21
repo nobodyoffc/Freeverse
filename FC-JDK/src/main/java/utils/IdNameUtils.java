@@ -18,6 +18,14 @@ public class IdNameUtils {
         return Hash.sha256x2(text);
     }
 
+    public static String makeDid(byte[] bytes) {
+        return Hex.toHex(Hash.sha256x2(bytes));
+    }
+
+    public static String makePasswordHashName(byte[] passwordBytes) {
+        return Hex.toHex(Hash.sha256x2(passwordBytes)).substring(0, 6);
+    }
+
     /**
      * Generate key name
      * @param oid object ID(such as sid, codeId, etc.)
