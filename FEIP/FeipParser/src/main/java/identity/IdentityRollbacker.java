@@ -1,5 +1,8 @@
 package identity;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import startFEIP.FeipConstants;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -18,6 +21,8 @@ import java.util.*;
 import static constants.FieldNames.SIGNER;
 
 public class IdentityRollbacker {
+
+	private static final Logger log = LoggerFactory.getLogger(IdentityRollbacker.class);
 
 	public boolean rollback(ElasticsearchClient esClient, long height) throws Exception {
 		boolean error = false;		
@@ -47,20 +52,20 @@ public class IdentityRollbacker {
 		Map<String, ArrayList<String>> resultMap = getEffectedCidAndHistory(esClient,height);
 		ArrayList<String> signerList = resultMap.get("signerList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
-		
+
 		if(signerList==null || signerList.isEmpty())return error;
-		
-		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'cid': ");
+
+		log.warn("If Rollbacking is interrupted, reparse all effected ids of index 'cid': ");
 		JsonUtils.printJson(signerList);
-		
+
+		// Query reparse data BEFORE deleting, so it's available even if crash occurs mid-rollback
+		List<FreerHist> reparseList = EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY, SIGNER, null, signerList, FreerHist.class);
+
 		deleteEffectedCids(esClient, signerList);
-		
-		deleteRolledHists(esClient, IndicesNames.FREER_HISTORY,histIdList);
-		
-		List<FreerHist>reparseList = 	EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY,SIGNER, null, signerList, FreerHist.class);
-		
-		reparse(esClient,reparseList);
-		
+		deleteRolledHists(esClient, IndicesNames.FREER_HISTORY, histIdList);
+
+		reparse(esClient, reparseList);
+
 		return error;
 	}
 
@@ -78,7 +83,7 @@ public class IdentityRollbacker {
 
 		for(Hit<FreerHist> hit: resultSearch.hits().hits()) {
 			if(hit.source()==null){
-				System.out.println("Cid hist is null");
+				log.info("Cid hist is null");
 				continue;
 			}
 			signerSet.add(hit.source().getSigner());
@@ -95,9 +100,27 @@ public class IdentityRollbacker {
 		return resultMap;
 	}
 
+	/**
+	 * Clear FEIP-managed fields from affected Freer documents instead of deleting them,
+	 * so that blockchain fields (balance, cash, income, cd, cdd, weight, etc.) written
+	 * by BlockWriter are preserved.
+	 */
 	private void deleteEffectedCids(ElasticsearchClient esClient, ArrayList<String> signerList) throws Exception {
-		EsUtils.bulkDeleteList(esClient, IndicesNames.FREER, signerList);
-		
+		if (signerList == null || signerList.isEmpty()) return;
+
+		Map<String, Object> clearFields = new HashMap<>();
+		for (String field : FeipConstants.FREER_FEIP_FIELDS) {
+			clearFields.put(field, null);
+		}
+
+		BulkRequest.Builder br = new BulkRequest.Builder();
+		for (String signer : signerList) {
+			br.operations(op -> op.update(u -> u
+					.index(IndicesNames.FREER)
+					.id(signer)
+					.action(a -> a.doc(clearFields))));
+		}
+		esClient.bulk(br.build());
 	}
 
 	private void deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
@@ -106,10 +129,11 @@ public class IdentityRollbacker {
 	}
 
 	private void reparse(ElasticsearchClient esClient, List<FreerHist> reparseList) throws Exception {
-		
+
 		if(reparseList==null)return;
+		IdentityParser parser = new IdentityParser();
 		for(FreerHist freerHist : reparseList) {
-			new IdentityParser().parseCidInfo(esClient, freerHist);
+			parser.parseCidInfo(esClient, freerHist);
 		}
 	}
 
@@ -143,7 +167,7 @@ public class IdentityRollbacker {
 
 		for(Hit<RepuHist> hit: resultSearch.hits().hits()) {
 			if(hit.source()==null){
-				System.out.println("Repu hist is null");
+				log.info("Repu hist is null");
 				continue;
 			}
 			rateeSet.add(hit.source().getRatee());

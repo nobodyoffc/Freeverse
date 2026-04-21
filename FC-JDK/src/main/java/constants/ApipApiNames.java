@@ -3,6 +3,8 @@ package constants;
 public class ApipApiNames {
 
     public static final String SwapHallPath = "/swapHall/v1/";
+    public static final String MycoinsPath = "/mycoins/v1/";
+    public static final String MYCOINS = "_MYCOINS";
     public static final String VER_1 ="v1";
     public static final String VER_2 ="v2";
     public static final String SN_0 = "sn0";
@@ -153,7 +155,6 @@ public class ApipApiNames {
     public static final String DECODE_TX = "decodeTx";
     public static final String BROADCAST_TX = "broadcastTx";
     public static final String FEE_RATE = "feeRate";
-    public static final String BROADCAST = "broadcast";
     public static final String GET_TOTALS = "getTotals";
     public static final String GET_PRICES = "getPrices";
     public static final String NID_SEARCH = "nidSearch";
@@ -232,4 +233,11 @@ public class ApipApiNames {
     public static final String SwapCashByIds = "swapCashByIds";
 
     public static final String SING_IN = "signIn";
+    public static final String SWAP = "_SWAP";
+
+    // Common multi-coin API endpoints
+    public static final String GET_BALANCE = "getBalance";
+    public static final String GET_UTXOS = "getUtxos";
+    public static final String GET_TX_HISTORY = "getTxHistory";
+    public static final String BROADCAST = "broadcast";
 }

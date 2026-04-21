@@ -40,6 +40,7 @@ public class StartFCH {
 
     static {
         settingMap.put(Settings.LISTEN_PATH,System.getProperty(UserHome)+"/fc_data/blocks");
+        settingMap.put(Preparer.REORG_PROTECT_KEY, Preparer.DEFAULT_REORG_PROTECT);
     }
     public static void main(String[] args)  {
         String name = "Freecash Chain Parser";
@@ -92,9 +93,10 @@ public class StartFCH {
                     TimeUnit.SECONDS.sleep(3);
                     IndicesFCH.createAllIndices(esClient);
                     try {
-                        new Preparer().prepare(esClient, blockDir, -1);
+                        new Preparer().prepare(esClient, blockDir, -1, settings.getSettingMap());
                     } catch (Exception e) {
-                        restart(esClient, blockDir);
+                        log.error("Initial parse failed, attempting restart.", e);
+                        restart(esClient, blockDir, settings.getSettingMap());
                     }
                 }
             }
@@ -109,7 +111,7 @@ public class StartFCH {
             String restart = br.readLine();
             if (restart.equals("y")) {
                 String blockDir = (String)settings.getSettingMap().get(Settings.LISTEN_PATH);
-                restart(esClient, blockDir);
+                restart(esClient, blockDir, settings.getSettingMap());
             }
         } catch (IOException e) {
             log.error("Error during restart", e);
@@ -131,40 +133,55 @@ public class StartFCH {
             }
             String blockDir = (String)settings.getSettingMap().get(Settings.LISTEN_PATH);
             try {
-                new Preparer().prepare(esClient, blockDir, bestHeight);
+                new Preparer().prepare(esClient, blockDir, bestHeight, settings.getSettingMap());
             } catch (Exception e) {
-                restart(esClient, blockDir);
+                log.error("Manual start failed, attempting restart.", e);
+                restart(esClient, blockDir, settings.getSettingMap());
             }
         } catch (Exception e) {
             log.error("Error during manual start", e);
         }
     }
 
-    private static void restart(ElasticsearchClient esClient,String blockDir) {
-        long bestHeight;
-        Block bestBlock;
-        try {
-            bestBlock = EsUtils.getBestBlock(esClient);
-            if (bestBlock==null){
-                log.error("Failed to get bestHeight wrong.");
+    private static final int MAX_RESTART_RETRIES = 5;
+
+    private static void restart(ElasticsearchClient esClient, String blockDir, Map<String, Object> settingMap) {
+        for (int attempt = 1; attempt <= MAX_RESTART_RETRIES; attempt++) {
+            long bestHeight;
+            Block bestBlock;
+            try {
+                bestBlock = EsUtils.getBestBlock(esClient);
+                if (bestBlock == null) {
+                    log.error("Failed to get bestBlock from ES.");
+                    return;
+                }
+            } catch (IOException e) {
+                log.error("Get bestHeight wrong.", e);
                 return;
             }
-        } catch (IOException e) {
-            log.error("Get bestHeight wrong.",e);
-            return;
+            bestHeight = bestBlock.getHeight() - 1;
+
+            log.debug("Restarting from BestHeight: {} (attempt {}/{}) ...", bestHeight, attempt, MAX_RESTART_RETRIES);
+
+            try {
+                new Preparer().prepare(esClient, blockDir, bestHeight, settingMap);
+                return; // Success, exit the retry loop
+            } catch (Exception e) {
+                log.error("Restart attempt {}/{} failed.", attempt, MAX_RESTART_RETRIES, e);
+                if (attempt < MAX_RESTART_RETRIES) {
+                    try {
+                        long backoffMs = 5000L * attempt;
+                        log.info("Retrying in {} ms...", backoffMs);
+                        TimeUnit.MILLISECONDS.sleep(backoffMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.error("Restart interrupted.");
+                        return;
+                    }
+                }
+            }
         }
-        bestHeight = bestBlock.getHeight();
-
-        log.debug("Restarting from BestHeight: " + (bestHeight - 1) + " ...");
-
-        bestHeight = bestHeight - 1;
-
-        try {
-            new Preparer().prepare(esClient, blockDir, bestHeight);
-        } catch (Exception e) {
-            e.printStackTrace();
-            restart(esClient,blockDir);
-        }
+        log.error("All {} restart attempts failed. Manual intervention required.", MAX_RESTART_RETRIES);
     }
 
     private static void checkOpReturnFile() {

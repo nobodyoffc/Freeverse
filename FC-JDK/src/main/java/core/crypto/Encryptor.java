@@ -42,6 +42,7 @@ import static data.fcData.AlgorithmId.*;
 
 public class Encryptor {
     AlgorithmId algorithmId;
+    Kdf kdf = Kdf.Argon2id_No1_NrC7;
     protected static final Logger log = LoggerFactory.getLogger(Encryptor.class);
 
     public Encryptor() {
@@ -50,6 +51,14 @@ public class Encryptor {
 
     public Encryptor(AlgorithmId algorithmId) {
         this.algorithmId = algorithmId;
+    }
+
+    public Kdf getKdf() {
+        return kdf;
+    }
+
+    public void setKdf(Kdf kdf) {
+        this.kdf = kdf;
     }
 
     public static String encryptFile(String fileName, String pubkeyHex) {
@@ -78,17 +87,20 @@ public class Encryptor {
 
     public CryptoDataByte encryptByPassword(@NotNull byte[] msg, @NotNull char[] password){
         byte[] iv = generateRandomIv();
-        byte[] symkey = passwordToSymkey(password, iv);
+        byte[] symkey = kdf.deriveSymkey(password, iv);
         CryptoDataByte cryptoDataByte = encryptBySymkey(msg,symkey,iv);
         cryptoDataByte.setType(EncryptType.Password);
+        cryptoDataByte.setKdf(kdf);
         return cryptoDataByte;
     }
 
     @NotNull
     private byte[] generateRandomIv() {
         int ivLength = switch (this.algorithmId){
-            case FC_AesGcm256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7 -> 12;
-            default -> 16;
+            case FC_AesGcm256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7,
+                 FC_ChaCha20_No1_NrC7, FC_EccK1ChaCha20_No1_NrC7,
+                 FC_ChaCha20Poly1305_No1_NrC7, FC_EccK1ChaCha20Poly1305_No1_NrC7 -> CryptoConstants.IV_LENGTH_GCM;
+            default -> CryptoConstants.IV_LENGTH_CBC;
         };
         return BytesUtils.getRandomBytes(ivLength);
     }
@@ -118,12 +130,13 @@ public class Encryptor {
     public CryptoDataByte encryptFileByPassword(@NotNull String dataFileName, @NotNull String cipherFileName, @NotNull char[]password){
         FileUtils.createFileWithDirectories(cipherFileName);
         byte[] iv = generateRandomIv();
-        byte[] key = passwordToSymkey(password, iv);
+        byte[] key = kdf.deriveSymkey(password, iv);
 
 
         CryptoDataByte cryptoDataByte = encryptFileBySymkey(dataFileName,cipherFileName,key,iv);
 //        cryptoDataByte.setSymkey(key);
         cryptoDataByte.setType(EncryptType.Password);
+        cryptoDataByte.setKdf(kdf);
 
         return cryptoDataByte;
     }
@@ -197,9 +210,10 @@ public class Encryptor {
     }
     public byte[] encryptToBundleByPassword(@NotNull byte[] msg, @NotNull char[] password){
         byte[] iv = generateRandomIv();
-        byte[] symkey = Encryptor.passwordToSymkey(password,iv);
+        byte[] symkey = kdf.deriveSymkey(password, iv);
         CryptoDataByte cryptoDataByte = encryptBySymkey(msg,symkey, iv);
         if(cryptoDataByte.getCode()!=0)return null;
+        cryptoDataByte.setKdf(kdf);
         return cryptoDataByte.toBundle();
     }
 
@@ -221,8 +235,8 @@ public class Encryptor {
                 case FC_AesCbc256_No1_NrC7 ->  cryptoDataByte = AesCbc256.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
                 case FC_AesGcm256_No1_NrC7 ->  cryptoDataByte = AesGcm256.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
                 case FC_ChaCha20_No1_NrC7 ->  cryptoDataByte = ChaCha20.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
+                case FC_ChaCha20Poly1305_No1_NrC7 ->  cryptoDataByte = ChaCha20Poly1305.encrypt(bisMsg, bosCipher, key, adjustedIv, cryptoDataByte);
                 default -> {
-                    System.out.println("The algorithm is not supported:"+algorithmId);
                     if(cryptoDataByte==null)cryptoDataByte = new CryptoDataByte();
                     cryptoDataByte.setCodeMessage(CodeMessage.Code4002NoSuchAlgorithm);
                     return cryptoDataByte;
@@ -262,8 +276,10 @@ public class Encryptor {
             case FC_ChaCha20_No1_NrC7,FC_EccK1ChaCha20_No1_NrC7-> {
                 return ChaCha20.encrypt(inputStream,outputStream,key,adjustedIv,cryptoDataByte);
             }
+            case FC_ChaCha20Poly1305_No1_NrC7,FC_EccK1ChaCha20Poly1305_No1_NrC7-> {
+                return ChaCha20Poly1305.encrypt(inputStream,outputStream,key,adjustedIv,cryptoDataByte);
+            }
             default -> {
-                System.out.println("The algorithm is not supported:"+algorithmId);
                 if(cryptoDataByte==null)cryptoDataByte = new CryptoDataByte();
                 cryptoDataByte.setCodeMessage(CodeMessage.Code4002NoSuchAlgorithm);
                 return cryptoDataByte;
@@ -652,21 +668,23 @@ public class Encryptor {
                                 algorithmId == FC_EccK1AesGcm256_No1_NrC7 ||
                                 algorithmId == FC_X25519AesGcm256_No1_NrC7 ||
                                 algorithmId == FC_ChaCha20_No1_NrC7 ||
-                                algorithmId == FC_EccK1ChaCha20_No1_NrC7);
+                                algorithmId == FC_EccK1ChaCha20_No1_NrC7 ||
+                                algorithmId == FC_ChaCha20Poly1305_No1_NrC7 ||
+                                algorithmId == FC_EccK1ChaCha20Poly1305_No1_NrC7);
 
         if (uses12ByteIv) {
             // AES-GCM and ChaCha20 should use 12-byte IV
-            if (iv.length == 16) {
+            if (iv.length == CryptoConstants.IV_LENGTH_CBC) {
                 // Truncate 16-byte IV to 12 bytes for backward compatibility
-                byte[] adjustedIv = new byte[12];
-                System.arraycopy(iv, 0, adjustedIv, 0, 12);
+                byte[] adjustedIv = new byte[CryptoConstants.IV_LENGTH_GCM];
+                System.arraycopy(iv, 0, adjustedIv, 0, CryptoConstants.IV_LENGTH_GCM);
                 return adjustedIv;
-            } else if (iv.length == 12) {
+            } else if (iv.length == CryptoConstants.IV_LENGTH_GCM) {
                 return iv;
             }
         } else {
             // AES-CBC should use 16-byte IV
-            if (iv.length == 16) {
+            if (iv.length == CryptoConstants.IV_LENGTH_CBC) {
                 return iv;
             }
         }
@@ -675,9 +693,13 @@ public class Encryptor {
         return iv;
     }
 
+    /**
+     * Legacy SHA-256 based password-to-symkey derivation. Retained for decrypting
+     * artifacts written before Argon2id was introduced. New code should go through
+     * the configured {@link Kdf} on {@link Encryptor}.
+     */
     public static byte[] passwordToSymkey(char[] password, byte[] iv) {
-        byte[] passwordBytes = BytesUtils.charArrayToByteArray(password, StandardCharsets.UTF_8);
-        return Decryptor.sha256(BytesUtils.addByteArray(Decryptor.sha256(passwordBytes), iv));
+        return Kdf.Sha256Iv_No1_NrC7.deriveSymkey(password, iv);
     }
     public static byte[] sha512(byte[] b) {
         return Hashing.sha512().hashBytes(b).asBytes();

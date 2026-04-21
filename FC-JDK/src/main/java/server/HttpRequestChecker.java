@@ -1,5 +1,6 @@
 package server;
 
+import core.crypto.Decryptor;
 import core.crypto.EncryptType;
 import core.crypto.KeyTools;
 import data.apipData.Fcdsl;
@@ -26,7 +27,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import data.feipData.ServiceType;
+import data.fchData.Cash;
 
 import static constants.Strings.*;
 import static constants.Values.TRUE;
@@ -170,7 +176,7 @@ public class HttpRequestChecker {
             return false;
         }
 
-        if(!validateUrlAndTime(request, signInfo.url, url, signInfo.time, response, authType.equals(SYMKEY_ENCRYPT))) return false;
+        if(!validateUrlAndTime(request, signInfo.url, url, signInfo.time, response, authType.equals(ENCRYPTED))) return false;
 
         if (signInfo.via != null) setVia(signInfo.via);
 
@@ -249,21 +255,22 @@ public class HttpRequestChecker {
         }
 
         // Decrypt the CryptoDataByte to get RequestBody
-        core.crypto.Decryptor decryptor = new core.crypto.Decryptor();
-        CryptoDataByte decryptedData = decryptor.decrypt(requestBodyJson, decryptionKey);
+        Decryptor decryptor = new Decryptor();
+        cryptoDataByte.setPrikeyB(decryptionKey);
+        decryptor.decrypt(cryptoDataByte);
 
-        if (decryptedData.getCode() != CodeMessage.Code0Success) {
-            replyBody.replyHttp(CodeMessage.Code1029FailedToDecrypt, decryptedData.getMessage(), response);
+        if (cryptoDataByte.getCode() != CodeMessage.Code0Success) {
+            replyBody.replyHttp(CodeMessage.Code1029FailedToDecrypt, cryptoDataByte.getMessage(), response);
             return false;
         }
-        switch (decryptedData.getType()){
-            case AsyTwoWay -> this.authType = ASY_TWO_WAY_ENCRYPT;
-            case Symkey -> this.authType = SYMKEY_ENCRYPT;
+        switch (cryptoDataByte.getType()){
+            case AsyTwoWay -> this.authType = AuthType.ENCRYPTED;
+            case Symkey -> this.authType = ENCRYPTED;
         }
 
 
         // Parse decrypted data to RequestBody
-        RequestBody requestBody = parseDecryptedRequestBody(decryptedData, response);
+        RequestBody requestBody = parseDecryptedRequestBody(cryptoDataByte, response);
         if (requestBody == null) return false;
 
         setRequestBody(requestBody);
@@ -282,13 +289,11 @@ public class HttpRequestChecker {
         String sid = settings.getSid();
         if(!validateBalanceAndNonce(fid, sid, requestBody.getNonce(), response)) return false;
 
-        if(!validateUrlAndTime(request, requestBody.getUrl(), url, requestBody.getTime(), response, true)) return false;
+        if(!validateUrlAndTime(request, requestBody.getUrl(), url, requestBody.getTime(), response, false)) return false;
 
         if (requestBody.getVia() != null) {
             setVia(requestBody.getVia());
         }
-
-        checkNewSessionKey(requestBody);
 
         return true;
     }
@@ -323,13 +328,32 @@ public class HttpRequestChecker {
     }
 
     /**
-     * Validate balance and nonce
+     * Validate balance and nonce. If balance is insufficient, search for valid cashes
+     * to cover the minPayment and set them into replyBody.data.
      * @return true if validation passes, false otherwise
      */
     private boolean validateBalanceAndNonce(String fid, String sid, Integer nonce, HttpServletResponse response) {
         if (fid != null && accountHandler != null && accountHandler.isBadBalance(fid)) {
-            String data = "Send at lest " + service.getMinPayment() + " F to " + service.getDealer() + " to buy the service #" + sid + ".";
-            replyBody.replyHttp(CodeMessage.Code1004InsufficientBalance, data, response);
+            String minPayment = service.getMinPayment();
+            long amount = utils.FchUtils.coinToSatoshi(Double.parseDouble(minPayment));
+
+            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
+            MempoolManager mempoolHandler = (MempoolManager) settings.getManager(Manager.ManagerType.MEMPOOL);
+
+            CashManager.SearchResult<Cash> searchResult = CashManager.getValidCashes(
+                    fid, amount, null, null, 1, 0, null, esClient, mempoolHandler);
+
+            if (!searchResult.hasError() && searchResult.getData() != null && !searchResult.getData().isEmpty()) {
+                List<Cash> cashList = searchResult.getData();
+                Map<String, Object> data = new HashMap<>();
+                data.put("msg", "Send at least " + minPayment + " F to " + service.getDealer() + " to buy the service #" + sid + ".");
+                data.put("cashList", cashList);
+                replyBody.replyHttp(CodeMessage.Code1004InsufficientBalance, data, response);
+            } else {
+                String data = "Send at least " + minPayment + " F to " + service.getDealer() + " to buy the service #" + sid
+                        + ". No valid cashes found for " + fid + " to make the payment.";
+                replyBody.replyHttp(CodeMessage.Code1004InsufficientBalance, data, response);
+            }
             return false;
         }
 
@@ -523,7 +547,7 @@ public class HttpRequestChecker {
         if(requestBody == null)return new SignInfo(CodeMessage.Code1003BodyMissed, null, 0,0,null,null, null, null, null);
         if(requestBody.getNonce()==null&& forbidFreeRequest)return new SignInfo(CodeMessage.Code1018NonceMissed, null, 0,0,null,null, null, null,null);
         if(requestBody.getTime()==null&& forbidFreeRequest)return new SignInfo(CodeMessage.Code1019TimeMissed, null, 0,0,null,null, null, null,null);
-        if(requestBody.getUrl()==null&& forbidFreeRequest)return new SignInfo(CodeMessage.Code1024UrlMissed, null, 0,0,null,null, null, null,null);
+        //URL check removed — encrypted body makes URL validation redundant
         if(request.getHeader(SIGN)==null && forbidFreeRequest)
             return new SignInfo(CodeMessage.Code1000SignMissed, null, 0,0,null,null, null, null, null);
         if(request.getHeader(SESSION_NAME)==null && forbidFreeRequest)

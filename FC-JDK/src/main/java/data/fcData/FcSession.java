@@ -84,20 +84,19 @@ public class FcSession extends FcObject {
         return sign(keyBytes,dataBytes);
     }
     public static String sign(byte[] sessionKeyBytes, byte[] dataBytes) {
-        byte[] signBytes = Hash.sha256x2(BytesUtils.bytesMerger(dataBytes, sessionKeyBytes));
-        return Hex.toHex(signBytes);
+        return Hex.toHex(Hash.hmacSha256(dataBytes, sessionKeyBytes));
     }
 
     public String verifySign(String sign, byte[] requestBodyBytes) {
         if(sign==null)return "The sign is null.";
         if(requestBodyBytes==null)return "The byte array is null.";
-        byte[] signBytes = BytesUtils.bytesMerger(requestBodyBytes, keyBytes);
-        String doubleSha256Hash = HexFormat.of().formatHex(Hash.sha256x2(signBytes));
-
-        if(!sign.equals(doubleSha256Hash)){
-            return "The sign of the request body should be: "+doubleSha256Hash;
-        }
-        return TRUE;
+        // Try HMAC-SHA256 first (new algorithm)
+        String hmacHash = Hex.toHex(Hash.hmacSha256(requestBodyBytes, keyBytes));
+        if(sign.equals(hmacHash)) return TRUE;
+        // Fall back to legacy SHA256x2(msg || key) for backward compatibility
+        String legacyHash = HexFormat.of().formatHex(Hash.sha256x2(BytesUtils.bytesMerger(requestBodyBytes, keyBytes)));
+        if(sign.equals(legacyHash)) return TRUE;
+        return "The sign of the request body should be: "+hmacHash;
     }
 
 

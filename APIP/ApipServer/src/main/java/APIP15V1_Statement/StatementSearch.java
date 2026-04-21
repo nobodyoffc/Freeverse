@@ -33,7 +33,7 @@ public class StatementSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_HEIGHT,false,ID,true, null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.STATEMENT, Statement.class, defaultSort, request,response,authType);
     }

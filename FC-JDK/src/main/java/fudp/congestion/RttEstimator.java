@@ -52,8 +52,8 @@ public class RttEstimator {
         long adjustedRtt = latestRtt;
         long rttDiff = Math.abs(smoothedRtt - adjustedRtt);
 
-        rttVariance = (3 * rttVariance + rttDiff) / 4;
-        smoothedRtt = (7 * smoothedRtt + adjustedRtt) / 8;
+        rttVariance = (3 * rttVariance + rttDiff + 2) / 4;
+        smoothedRtt = (7 * smoothedRtt + adjustedRtt + 4) / 8;
     }
 
     /**

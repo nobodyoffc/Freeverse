@@ -25,7 +25,7 @@ public class TotalSupply extends HttpServlet {
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         doRequest(request, response, authType,settings);
     }
 

@@ -7,68 +7,76 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import config.Settings;
 import constants.ApipApiNames;
+import constants.CodeMessage;
 import constants.IndicesNames;
+import data.apipData.RequestBody;
+import data.fcData.ReplyBody;
 import data.fchData.Cash;
 import data.feipData.ServiceType;
 import initial.Initiator;
+import server.HttpRequestChecker;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.lang.reflect.Type;
 import java.util.*;
 
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapCashByIds)
 public class SwapCashByIds extends HttpServlet {
     private final Settings settings = Initiator.settings;
-    private static final Gson gson = new Gson();
-    private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>(){}.getType();
 
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        PrintWriter writer = response.getWriter();
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.FREE, settings);
+    }
 
-        byte[] bodyBytes = request.getInputStream().readAllBytes();
-        if (bodyBytes == null || bodyBytes.length == 0) {
-            writeError(writer, response, "Request body is empty.");
-            return;
-        }
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.ENCRYPTED, settings);
+    }
 
-        Map<String, Object> dataMap;
-        try {
-            dataMap = gson.fromJson(new String(bodyBytes), MAP_TYPE);
-        } catch (Exception e) {
-            writeError(writer, response, "Invalid JSON: " + e.getMessage());
-            return;
-        }
+    @SuppressWarnings("unchecked")
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
 
-        if (dataMap == null || dataMap.get("ids") == null) {
-            writeError(writer, response, "The 'ids' field is required.");
-            return;
-        }
-
-        List<String> idList;
-        try {
-            idList = gson.fromJson(gson.toJson(dataMap.get("ids")), new TypeToken<List<String>>(){}.getType());
-        } catch (Exception e) {
-            writeError(writer, response, "Invalid 'ids' format: " + e.getMessage());
-            return;
+        List<String> idList = null;
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
+        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getIds() != null) {
+            replier.setNonce(requestBody.getNonce());
+            idList = requestBody.getFcdsl().getIds();
+        } else if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+            replier.setNonce(requestBody.getNonce());
+            try {
+                Map<String, Object> otherMap = ObjectUtils.objectToMap(requestBody.getFcdsl().getOther(), String.class, Object.class);
+                if (otherMap != null && otherMap.get("ids") != null) {
+                    Gson gson = new Gson();
+                    idList = gson.fromJson(gson.toJson(otherMap.get("ids")), new TypeToken<List<String>>(){}.getType());
+                }
+            } catch (Exception ignored) {}
+        } else {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            String idsParam = request.getParameter("ids");
+            if (idsParam != null) {
+                idList = Arrays.asList(idsParam.split(","));
+            }
         }
 
         if (idList == null || idList.isEmpty()) {
-            writeError(writer, response, "The 'ids' list must not be empty.");
+            replier.replyOtherErrorHttp("The 'ids' field is required.", response);
             return;
         }
 
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
         try {
-            MgetResponse<Cash> mgetResponse = esClient.mget(m -> m.index(IndicesNames.CASH).ids(idList), Cash.class);
+            List<String> finalIdList = idList;
+            MgetResponse<Cash> mgetResponse = esClient.mget(m -> m.index(IndicesNames.CASH).ids(finalIdList), Cash.class);
 
             Map<String, Cash> resultMap = new LinkedHashMap<>();
             for (MultiGetResponseItem<Cash> item : mgetResponse.docs()) {
@@ -78,27 +86,11 @@ public class SwapCashByIds extends HttpServlet {
                 }
             }
 
-            writeSuccess(writer, resultMap, resultMap.size());
+            replier.setTotal((long) resultMap.size());
+            replier.setGot((long) resultMap.size());
+            replier.reply0SuccessHttp(resultMap, response);
         } catch (Exception e) {
-            writeError(writer, response, "ES query failed: " + e.getMessage());
+            replier.replyOtherErrorHttp("ES query failed: " + e.getMessage(), response);
         }
-    }
-
-    private void writeSuccess(PrintWriter writer, Object data, int count) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 0);
-        result.put("message", "Success.");
-        result.put("data", data);
-        result.put("got", count);
-        result.put("total", count);
-        writer.write(gson.toJson(result));
-    }
-
-    private void writeError(PrintWriter writer, HttpServletResponse response, String message) {
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        Map<String, Object> err = new HashMap<>();
-        err.put("code", 1020);
-        err.put("message", message);
-        writer.write(gson.toJson(err));
     }
 }

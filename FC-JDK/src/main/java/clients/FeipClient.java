@@ -94,7 +94,7 @@ public class FeipClient {
 
         String txId;
         if(apipClient != null)
-            txId = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            txId = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.ENCRYPTED);
         else if(nasaClient != null)
             txId = nasaClient.sendRawTransaction(txSigned);
         else {

@@ -192,15 +192,7 @@ public class Bitcore {
     }
 
     private static boolean constantTimeEquals(byte[] a, byte[] b) {
-        if (a.length != b.length) {
-            return false;
-        }
-
-        int result = 0;
-        for (int i = 0; i < a.length; i++) {
-            result |= a[i] ^ b[i];
-        }
-        return result == 0;
+        return java.security.MessageDigest.isEqual(a, b);
     }
     // ... (keep other methods like generateSharedSecret, sha512, hmacSha256, etc.)
 
@@ -299,17 +291,7 @@ public class Bitcore {
             publicKey = createPublicKey(pubKey);
             return Bitcore.encrypt(msg, publicKey );
 
-        } catch (NoSuchAlgorithmException e) {
-            System.out.println(e.getLocalizedMessage());
-            return null;
-        } catch (NoSuchProviderException e) {
-            System.out.println(e.getLocalizedMessage());
-            return null;
-        } catch (InvalidKeySpecException e) {
-            System.out.println(e.getLocalizedMessage());
-            return null;
         } catch (Exception e) {
-            System.out.println(e.getLocalizedMessage());
             return null;
         }
 
@@ -397,8 +379,7 @@ public class Bitcore {
             byteArrayOutputStream.write(cryptoDataByte.getPubkeyA());
             byteArrayOutputStream.write(cryptoDataByte.getIv());
             byteArrayOutputStream.write(cryptoDataByte.getCipher());
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (IOException ignored) {
         }
         return byteArrayOutputStream.toByteArray();
     }
@@ -468,7 +449,6 @@ public class Bitcore {
 
             return outputStream.toByteArray();
         } catch (IOException e) {
-            e.printStackTrace();
             return null;
         }
     }
@@ -558,7 +538,6 @@ public class Bitcore {
             return cryptoDataByte;
 
         } catch (Exception e) {
-            e.printStackTrace();
             return null;
         }
     }

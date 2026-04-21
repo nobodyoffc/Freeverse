@@ -273,10 +273,29 @@ public class BlockParser {
 				}
 
 				default -> {
+					// Check for SegWit outputs (witness version 0 and 1)
+					// P2WPKH: OP_0 <20 bytes> → 0x00 0x14 <20-byte-hash> (22 bytes)
+					// P2WSH:  OP_0 <32 bytes> → 0x00 0x20 <32-byte-hash> (34 bytes)
+					// P2TR:   OP_1 <32 bytes> → 0x51 0x20 <32-byte-hash> (34 bytes)
+					if (b1Script == 0x00 && scriptSize == 22 && bScript[1] == 0x14) {
+						out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+						byte[] witnessHash = Arrays.copyOfRange(bScript, 2, 22);
+						out.setOwner(BytesUtils.bytesToHexStringBE(witnessHash));
+						out.setType(Cash.CashType.P2WPKH.name());
+					} else if (b1Script == 0x00 && scriptSize == 34 && bScript[1] == 0x20) {
+						out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+						byte[] witnessHash = Arrays.copyOfRange(bScript, 2, 34);
+						out.setOwner(BytesUtils.bytesToHexStringBE(witnessHash));
+						out.setType(Cash.CashType.P2WSH.name());
+					} else if (b1Script == 0x51 && scriptSize == 34 && bScript[1] == 0x20) {
+						out.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+						byte[] witnessHash = Arrays.copyOfRange(bScript, 2, 34);
+						out.setOwner(BytesUtils.bytesToHexStringBE(witnessHash));
+						out.setType(Cash.CashType.P2TR.name());
+					} else if (scriptSize >= 35 && bScript[(int) scriptSize - 1] == OP_CHECKSIG) {
 					// Check for P2PK (Pay-to-Public-Key) script
 					// P2PK format: <pubkey_length> <pubkey> OP_CHECKSIG
 					// Pubkey can be 65 bytes (uncompressed) or 33 bytes (compressed)
-					if (scriptSize >= 35 && bScript[(int) scriptSize - 1] == OP_CHECKSIG) {
 						int pubkeyLen = Byte.toUnsignedInt(b1Script);
 						// Check for valid pubkey lengths: 33 (compressed) or 65 (uncompressed)
 						if ((pubkeyLen == 33 || pubkeyLen == 65) && scriptSize == pubkeyLen + 2) {
@@ -465,12 +484,13 @@ public class BlockParser {
 
 			// Parse sigHash.
 			// 解析sigHash。
-			int sigLen = Byte.toUnsignedInt(bvScript[0]);// Length of signature;
-			// Skip signature/跳过签名。
-			byte sigHash;
-			if(sigLen!=0){                                // No multiSig
-				sigHash = bvScript[sigLen];                // 签名类型标志
-				setInputSigHash(input,sigHash);
+			if(bvScript.length > 0) {
+				int sigLen = Byte.toUnsignedInt(bvScript[0]);// Length of signature;
+				// Skip signature/跳过签名。
+				if(sigLen > 0 && sigLen < bvScript.length) {
+					byte sigHash = bvScript[sigLen];       // 签名类型标志
+					setInputSigHash(input, sigHash);
+				}
 			}
 
 			// Get sequence./获取sequence。

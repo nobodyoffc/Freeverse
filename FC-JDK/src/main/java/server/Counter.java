@@ -520,7 +520,7 @@ protected void waitNewOrder() {
         fcdsl.addNewFilter().addNewTerms().addNewFields(OWNER).addNewValues(account);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ACTIVE).addNewValues(FALSE);
         fcdsl.setSize(String.valueOf(3000));
-        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        return apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
     }
 
     protected List<Cash> getNewCashListFromEs(long lastHeight, String account, ElasticsearchClient esClient) {

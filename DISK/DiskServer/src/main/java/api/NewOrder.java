@@ -29,10 +29,9 @@ public class NewOrder extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        SessionManager sessionHandler = (SessionManager)settings.getManager(Manager.ManagerType.SESSION);
         byte[] requestBodyBytes = request.getInputStream().readAllBytes();
 
-        WebhookPushBody webhookPushBody = WebhookPushBody.checkWebhookPushBody(sessionHandler, requestBodyBytes);
+        WebhookPushBody webhookPushBody = WebhookPushBody.checkWebhookPushBody(requestBodyBytes,null,null);
         if (webhookPushBody == null) return;
 
         String method = webhookPushBody.getMethod();

@@ -1,5 +1,7 @@
 package personal;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import constants.OpNames;
 import data.feipData.*;
@@ -23,6 +25,8 @@ import static constants.Values.UPDATED;
 
 public class PersonalParser {
 
+	private static final Logger log = LoggerFactory.getLogger(PersonalParser.class);
+
 	public boolean parseContact(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
 
 
@@ -31,13 +35,13 @@ public class PersonalParser {
 		ContactOpData contactRaw = new ContactOpData();
 
 		try {
-			contactRaw = gson.fromJson(gson.toJson(feip.getData()), ContactOpData.class);
+			contactRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ContactOpData.class);
 			if(contactRaw==null){
-				System.out.println("Bad contact data");
+				log.info("Bad contact data");
 				return false;
 			}
 		}catch(Exception e) {
-			System.out.println("Bad contact data");
+			log.info("Bad contact data");
 			return false;
 		}
 
@@ -45,7 +49,7 @@ public class PersonalParser {
 
 		long height;
 		if(contactRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return false;
 		}
 
@@ -56,7 +60,7 @@ public class PersonalParser {
 
 				if (contactRaw.getAlg() != null)contact.setAlg(contactRaw.getAlg());
 				if (contactRaw.getCipher()==null){
-					System.out.println("Cipher is null");
+					log.info("Cipher is null");
 					return false;
 				}
 				contact.setCipher(contactRaw.getCipher());
@@ -69,11 +73,11 @@ public class PersonalParser {
 
 				Contact contact1 = contact;
 				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.CONTACT).id(contact1.getId()).document(contact1));
-				System.out.println(result1.result());
+				log.info("{}", result1.result());
 				return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
 			case "delete","recover":
 				if(contactRaw.getContactIds() ==null){
-					System.out.println("Contact IDs are null");
+					log.info("Contact IDs are null");
 					return false;
 				}
 
@@ -82,14 +86,14 @@ public class PersonalParser {
 				MgetResult<Contact> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CONTACT, contactRaw.getContactIds(), Contact.class);
 
 				if(result.getResultList() == null || result.getResultList().isEmpty()){
-					System.out.println("Contact list is empty");
+					log.info("Contact list is empty");
 					return false;
 				}
 				List<Contact> contactList = result.getResultList();
 
 				for (Contact contact4 : contactList) {
 					if (result.getResultList() == null || result.getResultList().isEmpty()){
-						System.out.println("Contact list is empty");
+						log.info("Contact list is empty");
 						return false;
 					}
 
@@ -99,7 +103,7 @@ public class PersonalParser {
 					contact4.setLastHeight(height);
 				}
 				if(contactList.isEmpty()){
-					System.out.println("Contact list is empty");
+					log.info("Contact list is empty");
 					return false;
 				}
 
@@ -114,14 +118,16 @@ public class PersonalParser {
 					);
 				}
 				BulkResponse result2 = esClient.bulk(br.build());
-				if(result2.errors())System.out.println("Failed");
-				else System.out.println("Done");
-
+				if(result2.errors()){
+					log.info("Failed to bulk update contact");
+					return false;
+				}
+				log.info("Done");
 				return true;
 
 			case "update":
 				if(contactRaw.getContactId() ==null){
-					System.out.println("Contact ID is null");
+					log.info("Contact ID is null");
 					return false;
 				}
 				height = opre.getHeight();
@@ -129,21 +135,21 @@ public class PersonalParser {
 				contact = EsUtils.getById(esClient, IndicesNames.CONTACT, contactRaw.getContactId(), Contact.class);
 
 				if(contact == null){
-					System.out.println("Contact is null");
+					log.info("Contact is null");
 					return false;
 				}
 
 				if(!contact.getOwner().equals(opre.getSigner())){
-					System.out.println("Contact owner is not the signer");
+					log.info("Contact owner is not the signer");
 					return false;
 				}
 				if(!contact.getActive()){
-					System.out.println("Contact is not active");
+					log.info("Contact is not active");
 					return false;
 				}
 
 				if (contactRaw.getCipher()==null){
-					System.out.println("Cipher is null");
+					log.info("Cipher is null");
 					return false;
 				}
 				if (contactRaw.getAlg() != null)contact.setAlg(contactRaw.getAlg());
@@ -153,7 +159,7 @@ public class PersonalParser {
 
 				Contact contact5 = contact;
 				IndexResponse result3 = esClient.index(i->i.index(IndicesNames.CONTACT).id(contact5.getId()).document(contact5));
-				System.out.println(result3.result());
+				log.info("{}", result3.result());
 				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			default:
 				return false;
@@ -168,13 +174,13 @@ public class PersonalParser {
 		MailOpData mailRaw = new MailOpData();
 
 		try {
-			mailRaw = gson.fromJson(gson.toJson(feip.getData()), MailOpData.class);
+			mailRaw = gson.fromJson(gson.toJsonTree(feip.getData()), MailOpData.class);
 			if(mailRaw==null){
-				System.out.println("Bad mail data");
+				log.info("Bad mail data");
 				return false;
 			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			System.out.println("Bad mail data");
+			log.info("Bad mail data");
 			return false;
 		}
 
@@ -182,7 +188,7 @@ public class PersonalParser {
 
 		long height;
 		if(mailRaw.getOp()==null ){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return false;
 		}
 		//Version 4
@@ -191,7 +197,7 @@ public class PersonalParser {
 				case "send" -> {
 					mail.setId(opre.getId());
 					if (mailRaw.getCipher() == null)
-						System.out.println("Cipher is null");
+						log.info("Cipher is null");
 					if (mailRaw.getAlg() != null) {
 						mail.setAlg(mailRaw.getAlg());
 					}
@@ -206,20 +212,20 @@ public class PersonalParser {
 					mail.setNoticeFee(opre.getPaid());
 					mail.setActive(true);
 					IndexResponse result4 = esClient.index(i -> i.index(IndicesNames.MAIL).id(mail.getId()).document(mail));
-					System.out.println(result4.result());
+					log.info("{}", result4.result());
 					return CREATED.equals(result4.result().jsonValue()) || UPDATED.equals(result4.result().jsonValue());
 
 
 				}
 				case "delete", "recover" -> {
 					if (mailRaw.getMailIds() == null){
-						System.out.println("Mail IDs are null");
+						log.info("Mail IDs are null");
 						return false;
 					}
 					height = opre.getHeight();
 					MgetResult<Mail> result = EsUtils.getMultiByIdList(esClient, IndicesNames.MAIL, mailRaw.getMailIds(), Mail.class);
 					if (result.getResultList() == null || result.getResultList().isEmpty()){
-						System.out.println("Mail list is empty");
+						log.info("Mail list is empty");
 						return false;
 					}
 					List<Mail> mailList = result.getResultList();
@@ -239,7 +245,7 @@ public class PersonalParser {
 						mail1.setLastHeight(height);
 					}
 					if (mailList.isEmpty()){
-						System.out.println("Mail list is empty");
+						log.info("Mail list is empty");
 						return false;
 					}
 					BulkRequest.Builder br = new BulkRequest.Builder();
@@ -254,15 +260,15 @@ public class PersonalParser {
 					}
 					BulkResponse result5 = esClient.bulk(br.build());
 					if(result5.errors()){
-						System.out.println("Failed");
+						log.info("Failed");
 						return false;
 					}else{
-						System.out.println("Done");
+						log.info("Done");
 						return true;
 					}
 				}
 				default -> {
-					System.out.println("Invalid operation");
+					log.info("Invalid operation");
 					return false;
 				}
 			}
@@ -277,13 +283,13 @@ public class PersonalParser {
 		SecretOpData secretRaw = new SecretOpData();
 
 		try {
-			secretRaw = gson.fromJson(gson.toJson(feip.getData()), SecretOpData.class);
+			secretRaw = gson.fromJson(gson.toJsonTree(feip.getData()), SecretOpData.class);
 			if(secretRaw==null || secretRaw.getOp()==null){
-				System.out.println("Bad secret data");
+				log.info("Bad secret data");
 				return false;
 			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			System.out.println("Bad secret data");
+			log.info("Bad secret data");
 			return false;
 		}
 
@@ -314,12 +320,12 @@ public class PersonalParser {
 				Secret safe0 = secret;
 
 				IndexResponse result6 = esClient.index(i->i.index(IndicesNames.SECRET).id(safe0.getId()).document(safe0));
-				System.out.println(result6.result());
+				log.info("{}", result6.result());
 				return CREATED.equals(result6.result().jsonValue()) || UPDATED.equals(result6.result().jsonValue());
 
 			case "update":
 				if(secretRaw.getSecretId() ==null){
-					System.out.println("Secret ID is null");
+					log.info("Secret ID is null");
 					return false;
 				}
 				height = opre.getHeight();
@@ -327,21 +333,21 @@ public class PersonalParser {
 				secret = EsUtils.getById(esClient, IndicesNames.SECRET, secretRaw.getSecretId(), Secret.class);
 
 				if(secret == null){
-					System.out.println("Secret is null");
+					log.info("Secret is null");
 					return false;
 				}
 
 				if(!secret.getOwner().equals(opre.getSigner())){
-					System.out.println("Secret owner is not the signer");
+					log.info("Secret owner is not the signer");
 					return false;
 				}
 				if(!secret.getActive()){
-					System.out.println("Secret is not active");
+					log.info("Secret is not active");
 					return false;
 				}
 
 				if (secretRaw.getCipher()==null){
-					System.out.println("Cipher is null");
+					log.info("Cipher is null");
 					return false;
 				}
 				if (secretRaw.getAlg() != null)secret.setAlg(secretRaw.getAlg());
@@ -351,12 +357,12 @@ public class PersonalParser {
 				Secret safe1 = secret;
 
 				IndexResponse result7 = esClient.index(i->i.index(IndicesNames.SECRET).id(safe1.getId()).document(safe1));
-				System.out.println(result7.result());
+				log.info("{}", result7.result());
 				return CREATED.equals(result7.result().jsonValue()) || UPDATED.equals(result7.result().jsonValue());
 
 			case "delete":
 				if(secretRaw.getSecretIds() ==null){
-					System.out.println("Secret IDs are null");
+					log.info("Secret IDs are null");
 					return false;
 				}
 				height = opre.getHeight();
@@ -364,7 +370,7 @@ public class PersonalParser {
 
 				MgetResult<Secret> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw1.getSecretIds(), Secret.class);
 				if(result==null || result.getResultList()==null || result.getResultList().isEmpty()){
-					System.out.println("Secret list is empty");
+					log.info("Secret list is empty");
 					return false;
 				}
 				List<Secret> secretList = result.getResultList();
@@ -380,7 +386,7 @@ public class PersonalParser {
 					secret1.setLastHeight(height);
 				}
 				if(secretList.isEmpty()){
-					System.out.println("Secret list is empty");
+					log.info("Secret list is empty");
 					return false;
 				}
 
@@ -395,12 +401,15 @@ public class PersonalParser {
 					);
 				}
 				BulkResponse result8 = esClient.bulk(br.build());
-				if(result8.errors())System.out.println("Failed");
-				else System.out.println("Done");
+				if(result8.errors()){
+					log.info("Failed to bulk update secret");
+					return false;
+				}
+				log.info("Done");
 				return true;
 			case "recover":
 				if(secretRaw.getSecretIds() ==null){
-					System.out.println("Secret IDs are null");
+					log.info("Secret IDs are null");
 					return false;
 				}
 				height = opre.getHeight();
@@ -408,7 +417,7 @@ public class PersonalParser {
 
 				MgetResult<Secret> result1 = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw2.getSecretIds(), Secret.class);
 				if(result1.getResultList() == null || result1.getResultList().isEmpty()){
-					System.out.println("Secret list is empty");
+					log.info("Secret list is empty");
 					return false;
 				}
 				List<Secret> secretList1 = result1.getResultList();
@@ -424,7 +433,7 @@ public class PersonalParser {
 					secret1.setLastHeight(height);
 				}
 				if(secretList1.isEmpty()){
-					System.out.println("Secret list is empty");
+					log.info("Secret list is empty");
 					return false;
 				}
 
@@ -439,11 +448,14 @@ public class PersonalParser {
 					);
 				}
 				BulkResponse result9 = esClient.bulk(br1.build());
-				if(result9.errors())System.out.println("Failed");
-				else System.out.println("Done");
+				if(result9.errors()){
+					log.info("Failed to bulk recover secret");
+					return false;
+				}
+				log.info("Done");
 				return true;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return false;
 		}
 	}
@@ -454,20 +466,20 @@ public class PersonalParser {
 		BoxOpData boxRaw = new BoxOpData();
 
 		try {
-			boxRaw = gson.fromJson(gson.toJson(feip.getData()), BoxOpData.class);
+			boxRaw = gson.fromJson(gson.toJsonTree(feip.getData()), BoxOpData.class);
 			if(boxRaw==null){
-				System.out.println("Bad box data");
+				log.info("Bad box data");
 				return null;
 			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			System.out.println("Bad box data");
+			log.info("Bad box data");
 			return null;
 		}
 
 		BoxHistory boxHist = new BoxHistory();
 
 		if(boxRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -476,15 +488,15 @@ public class PersonalParser {
 		switch(boxRaw.getOp()) {
 			case "create":
 				if(boxRaw.getName()==null){
-					System.out.println("Name is null");
+					log.info("Name is null");
 					return null;
 				}
 				if(boxRaw.getBid()!=null){
-					System.out.println("Bid is not null");
+					log.info("Bid is not null");
 					return null;
 				}
                 if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("CDD is less than required");
+					log.info("CDD is less than required");
 					return null;
 				}
 				boxHist.setId(opre.getId());
@@ -502,11 +514,11 @@ public class PersonalParser {
 				return boxHist;
 			case "update":
 				if(boxRaw.getBid()==null){
-					System.out.println("Bid is null");
+					log.info("Bid is null");
 					return null;
 				}
 				if(boxRaw.getName()==null){
-					System.out.println("Name is null");
+					log.info("Name is null");
 					return null;
 				}
 
@@ -527,7 +539,7 @@ public class PersonalParser {
 
 			case "recover":
 				if(boxRaw.getBids()==null){
-					System.out.println("Bids are null");
+					log.info("Bids are null");
 					return null;
 				}
 				boxHist.setBids(boxRaw.getBids());
@@ -538,7 +550,7 @@ public class PersonalParser {
 				boxHist.setSigner(opre.getSigner());
 				return boxHist;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 	}
@@ -570,11 +582,11 @@ public class PersonalParser {
 
 					Box box1=box;
 					IndexResponse result10 = esClient.index(i->i.index(IndicesNames.BOX).id(boxHist.getBid()).document(box1));
-					System.out.println(result10.result());
+					log.info("{}", result10.result());
 					return CREATED.equals(result10.result().jsonValue()) || UPDATED.equals(result10.result().jsonValue());
 
 				}else {
-					System.out.println("Box already exists");
+					log.info("Box already exists");
 					return false;
 				}
 
@@ -584,11 +596,11 @@ public class PersonalParser {
 				try {
 					result = EsUtils.getMultiByIdList(esClient, IndicesNames.BOX, boxHist.getBids(), Box.class);
 				} catch (Exception e) {
-					System.out.println("ElasticSearch wrong.");
+					log.info("ElasticSearch wrong.");
 					return false;
 				}
 				if(result.getResultList() == null || result.getResultList().isEmpty()) {
-					System.out.println("Box list is empty");
+					log.info("Box list is empty");
 					return false;
 				}
 				List<Box> boxList = result.getResultList();
@@ -612,10 +624,10 @@ public class PersonalParser {
 				}
 				BulkResponse result11 = esClient.bulk(br.build());
 				if(result11.errors()){
-					System.out.println("Failed");
+					log.info("Failed");
 					return false;
 				}else {
-					System.out.println("Done");
+					log.info("Done");
 					return true;
 				}
 
@@ -623,17 +635,17 @@ public class PersonalParser {
 				box = EsUtils.getById(esClient, IndicesNames.BOX, boxHist.getBid(), Box.class);
 
 				if(box==null) {
-					System.out.println("Box not found");
+					log.info("Box not found");
 					return false;
 				}
 
 				if(! box.getOwner().equals(boxHist.getSigner())) {
-					System.out.println("Box owner is not the signer");
+					log.info("Box owner is not the signer");
 					return false;
 				}
 
 				if(Boolean.FALSE.equals(box.isActive())) {
-					System.out.println("Box is not active");
+					log.info("Box is not active");
 					return false;
 				}
 
@@ -651,11 +663,11 @@ public class PersonalParser {
 				Box box2 = box;
 
 				IndexResponse result13 = esClient.index(i->i.index(IndicesNames.BOX).id(boxHist.getBid()).document(box2));
-				System.out.println(result13.result());
+				log.info("{}", result13.result());
 				return CREATED.equals(result13.result().jsonValue()) || UPDATED.equals(result13.result().jsonValue());
 
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return false;
 		}
 	}

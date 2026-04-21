@@ -58,7 +58,7 @@ public class Get extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
         HttpRequestChecker httpRequestChecker;
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         String did;
         //Check authorization
         httpRequestChecker = new HttpRequestChecker(settings, replier);

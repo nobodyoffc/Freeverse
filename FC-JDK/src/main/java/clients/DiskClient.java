@@ -144,7 +144,7 @@ public class DiskClient extends FcClient {
         // 2. Try getting data from diskClient
         try {
             String tempPath = System.getProperty("java.io.tmpdir");
-            String gotFileId = diskClient.get(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, did, tempPath);
+            String gotFileId = diskClient.get(RequestMethod.POST, AuthType.ENCRYPTED, did, tempPath);
             if (gotFileId != null) {
                 byte[] data = Files.readAllBytes(Path.of(tempPath, gotFileId));
                 log.debug("Got data from diskClient with DID: {}", did);
@@ -172,7 +172,7 @@ public class DiskClient extends FcClient {
                 // Try diskClient with rawDid
                 try {
                     String tempPath = System.getProperty("java.io.tmpdir");
-                    String gotFileId = diskClient.get(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, rawDid, tempPath);
+                    String gotFileId = diskClient.get(RequestMethod.POST, AuthType.ENCRYPTED, rawDid, tempPath);
                     if (gotFileId != null) {
                         byte[] data = Files.readAllBytes(Path.of(tempPath, gotFileId));
                         log.debug("Got data from diskClient using rawDid: {}", rawDid);

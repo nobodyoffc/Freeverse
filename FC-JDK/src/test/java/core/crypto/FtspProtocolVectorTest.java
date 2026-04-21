@@ -342,10 +342,13 @@ public class FtspProtocolVectorTest {
         String expect = Signature.symSign(msg, Hex.toHex(sym));
         Signature s = new Signature();
         s = s.sign(msg, sym, FC_Sha256SymSignMsg_No1_NrC7);
+        // symSign now uses HMAC-SHA256 instead of legacy SHA256x2(msg||key)
+        assertEquals(expect, s.getSign());
+        // Verify legacy algorithm still works via fallback
+        String legacySign = Signature.symSignLegacy(msg, Hex.toHex(sym));
         assertEquals(
                 "c0d6ca9c6fbef7da6fee37cc69eae562b56f4e86a63b5b194b3100fce2120dca",
-                expect);
-        assertEquals(expect, s.getSign());
+                legacySign);
     }
 
     @Test

@@ -26,7 +26,7 @@ public class TxSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         fcHttpRequestHandler.doTxInfoRequest(false,ID,request, response, authType);
     }
 

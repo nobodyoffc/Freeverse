@@ -34,7 +34,7 @@ public class TeamRateHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.TEAM_HISTORY, TeamHistory.class, OP,RATE, null,null,defaultSort,request,response,authType);
     }

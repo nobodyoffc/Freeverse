@@ -345,7 +345,7 @@ public class HomeApp extends FcApp {
         System.out.println("Requesting txSearch...");
         List<String> last = null;
         while (true) {
-            List<FidTxMask> result = apipClient.txByFid(myFid, 20, last == null ? null : last.toArray(new String[0]), RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            List<FidTxMask> result = apipClient.txByFid(myFid, 20, last == null ? null : last.toArray(new String[0]), RequestMethod.POST, AuthType.ENCRYPTED);
             if (result == null) return;
             if (result.size() < 20) break;
             last = apipClient.getFcClientEvent().getResponseBody().getLast();
@@ -1257,7 +1257,7 @@ public class HomeApp extends FcApp {
 
         String fid = inputGoodFid(br, "Input the multisig fid:");
         Multisig multisig;
-        Map<String, Multisig> p2shMap = apipClient.multisigByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, fid);
+        Map<String, Multisig> p2shMap = apipClient.multisigByIds(RequestMethod.POST, AuthType.ENCRYPTED, fid);
         if (p2shMap == null || p2shMap.get(fid)==null) {
             System.out.println(fid + " is not found.");
             if(Inputer.askIfYes(br,"Input the P2SH or the redeem script?")){
@@ -1291,7 +1291,7 @@ public class HomeApp extends FcApp {
             sum += sendTo.getAmount();
         }
 
-        List<Cash> cashList = apipClient.cashValid(fid, sum, null, sendToList.size(), msgLen, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Cash> cashList = apipClient.cashValid(fid, sum, null, sendToList.size(), msgLen, RequestMethod.POST, AuthType.ENCRYPTED);
         if(cashList==null || cashList.isEmpty()){
             System.out.println("Failed to get valid cashes of "+fid);
             Menu.anyKeyToContinue(br);
@@ -1324,7 +1324,7 @@ public class HomeApp extends FcApp {
         String[] fids = fidList.toArray(new String[0]);
         int m = Inputer.inputInt(br, "How many signatures is required? ", Constants.MAXIMUM_MULTI_SIGNER);
 
-        Map<String, Freer> fidMap = apipClient.freerByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, fids);
+        Map<String, Freer> fidMap = apipClient.freerByIds(RequestMethod.POST, AuthType.ENCRYPTED, fids);
         if (fidMap == null) return;
 
         List<byte[]> pubkeyList = new ArrayList<>();
@@ -1354,7 +1354,7 @@ public class HomeApp extends FcApp {
             return;
         }
         System.out.println("Requesting APIP from " + apipClient.getUrlHead());
-        Map<String, Multisig> p2shMap = apipClient.multisigByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, fid);
+        Map<String, Multisig> p2shMap = apipClient.multisigByIds(RequestMethod.POST, AuthType.ENCRYPTED, fid);
         if(p2shMap==null || p2shMap.isEmpty()){
             System.out.println("The redeem script of this multisig FID hasn't been shown on chain.");
             return;
@@ -1371,7 +1371,7 @@ public class HomeApp extends FcApp {
         Shower.printUnderline(10);
         System.out.println("The members:");
 
-        Map<String, Freer> cidInfoMap = apipClient.freerByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, multisig.getFids().toArray(new String[0]));
+        Map<String, Freer> cidInfoMap = apipClient.freerByIds(RequestMethod.POST, AuthType.ENCRYPTED, multisig.getFids().toArray(new String[0]));
         if (cidInfoMap == null) {
             return;
         }

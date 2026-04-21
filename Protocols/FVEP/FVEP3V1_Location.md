@@ -59,7 +59,7 @@ Without a standard location notation, each service and application would invent 
 |`@`|**At** (Within Operator)|Child is within parent|Left to right: `A@B@C` means C > B > A|
 |`#`|**Sharp** (Part Indicator)|A data fragment (not an entity) within an entity|`entity#part` refers to a non-entity data part|
 |`\`|**Escape**|The next character is literal, not an operator|`big\@dog` is the entity name "big@dog"|
-|`()`|**Typed ID** (defined in FVEP2)|Disambiguates txid-based OIDs|`(codeId)abc...` is a Code entity|
+|`()`|**Typed ID** (defined in FVEP2)|Disambiguates 64-char hex OIDs (txid-based and DID)|`(codeId)abc...` is a Code entity|
 
 ### Slash — Path Operator `/`
 
@@ -122,11 +122,12 @@ Escape has the highest precedence — it is always resolved first.
 
 ### Typed ID `()`
 
-The Typed ID notation `(type)value` from FVEP2 disambiguates txid-based OIDs within location expressions:
+The Typed ID notation `(type)value` from FVEP2 disambiguates 64-char hex OIDs — both txid-based OIDs (SID, AID, PID, codeId, …) and Hash-based DIDs — within location expressions:
 
 ```
 (SID)abc123/users
 (PID)def456/implementations/(codeId)ghi789
+(DID)b3a2e7c9.../meta
 ```
 
 Typed IDs are resolved after Escape and Sharp but before At and Slash.

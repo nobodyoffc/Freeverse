@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static constants.IndicesNames.FREER;
 import static data.apipData.FcQuery.PART;
 import static constants.FieldNames.*;
 
@@ -34,7 +35,7 @@ public class FidCidSeek extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         doRequest(request, response, authType, settings);
     }
 
@@ -62,42 +63,40 @@ public class FidCidSeek extends HttpServlet {
             value = request.getParameter(PART);
         }
 
-        String finalValue = value;
-        SearchResponse<Freer> result = esClient.search(s -> s.index(CID).query(q -> q.wildcard(w -> w.field(ID)
-                .caseInsensitive(true)
-                .value("*" + finalValue + "*"))), Freer.class);
-
-        if (result.hits().hits().size() > 0) {
-            for (Hit<Freer> hit : result.hits().hits()) {
-                Freer addr = hit.source();
-                if(addr==null) continue;
-                addrCidsMap.put(addr.getId(),new ArrayList<>());
-            }
+        if(value == null || value.isEmpty()){
+            replier.setGot(0L);
+            replier.setTotal(0L);
+            replier.reply0SuccessHttp(addrCidsMap, response);
+            return;
         }
 
-        SearchResponse<Freer> result1 = esClient.search(s -> s
-            .index(CID)
+        String finalValue = value;
+
+        SearchResponse<Freer> result = esClient.search(s -> s
+            .index(FREER)
+            .size(20)
             .query(q -> q
                 .bool(b -> b
-                    .should(sh -> sh
-                        .wildcard(w -> w
-                            .field(USED_CIDS)
-                            .caseInsensitive(true)
-                            .value("*" + finalValue + "*")))
                     .should(sh -> sh
                         .wildcard(w -> w
                             .field(ID)
                             .caseInsensitive(true)
                             .value("*" + finalValue + "*")))
+                    .should(sh -> sh
+                        .wildcard(w -> w
+                            .field(USED_CIDS)
+                            .caseInsensitive(true)
+                            .value("*" + finalValue + "*")))
                 )
             ), Freer.class);
-        if (result1.hits().hits().size() > 0) {
-            for (Hit<Freer> hit : result1.hits().hits()) {
-                Freer cid = hit.source();
-                if(cid==null) continue;
-                addrCidsMap.put(cid.getId(), cid.getUsedCids());
-            }
+
+        for (Hit<Freer> hit : result.hits().hits()) {
+            Freer freer = hit.source();
+            if (freer == null || freer.getId() == null) continue;
+            List<String> usedCids = freer.getUsedCids();
+            addrCidsMap.put(freer.getId(), usedCids != null ? usedCids : new ArrayList<>());
         }
+
         replier.setGot((long) addrCidsMap.size());
         replier.setTotal((long) addrCidsMap.size());
         replier.reply0SuccessHttp(addrCidsMap, response);

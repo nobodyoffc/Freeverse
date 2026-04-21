@@ -15,18 +15,19 @@ import com.google.gson.reflect.TypeToken;
 import config.Settings;
 import constants.ApipApiNames;
 import constants.IndicesNames;
+import data.apipData.RequestBody;
+import data.fcData.ReplyBody;
 import data.feipData.Service;
 import data.feipData.ServiceType;
 import initial.Initiator;
+import server.HttpRequestChecker;
 import utils.EsUtils;
+import utils.http.AuthType;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.lang.reflect.Type;
 import java.util.*;
 
@@ -38,28 +39,34 @@ public class SwapServiceSearch extends HttpServlet {
     private static final int DEFAULT_SIZE = 20;
     private static final int MAX_SIZE = 100;
 
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        PrintWriter writer = response.getWriter();
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.ENCRYPTED, settings);
+    }
 
-        byte[] bodyBytes = request.getInputStream().readAllBytes();
-        if (bodyBytes == null || bodyBytes.length == 0) {
-            writeError(writer, response, "Request body is empty.");
-            return;
-        }
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.FREE, settings);
+    }
 
-        Map<String, Object> fcdslMap;
-        try {
-            fcdslMap = gson.fromJson(new String(bodyBytes), MAP_TYPE);
-        } catch (Exception e) {
-            writeError(writer, response, "Invalid JSON: " + e.getMessage());
-            return;
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
+
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
+        if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+
+        Map<String, Object> fcdslMap = null;
+        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+            fcdslMap = gson.fromJson(gson.toJson(requestBody.getFcdsl().getOther()), MAP_TYPE);
+        } else if (requestBody != null && requestBody.getFcdsl() != null) {
+            fcdslMap = gson.fromJson(gson.toJson(requestBody.getFcdsl()), MAP_TYPE);
         }
 
         if (fcdslMap == null) {
-            writeError(writer, response, "Request body is null.");
-            return;
+            fcdslMap = new HashMap<>();
         }
 
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
@@ -131,7 +138,6 @@ public class SwapServiceSearch extends HttpServlet {
             SearchResponse<Service> result = esClient.search(searchBuilder.build(), Service.class);
 
             List<Hit<Service>> hitList = result.hits().hits();
-
             List<Service> serviceList = new ArrayList<>();
             for (Hit<Service> hit : hitList) {
                 serviceList.add(hit.source());
@@ -142,22 +148,18 @@ public class SwapServiceSearch extends HttpServlet {
                 total = result.hits().total().value();
             }
 
-            Map<String, Object> resultMap = new HashMap<>();
-            resultMap.put("code", 0);
-            resultMap.put("message", "Success.");
-            resultMap.put("data", serviceList);
-            resultMap.put("got", serviceList.size());
-            resultMap.put("total", total);
+            replier.setTotal(total);
+            replier.setGot((long) serviceList.size());
             if (!hitList.isEmpty()) {
                 List<String> lastSort = EsUtils.toStringList(hitList.get(hitList.size() - 1).sort());
                 if (lastSort != null && !lastSort.isEmpty()) {
-                    resultMap.put("last", lastSort);
+                    replier.setLast(lastSort);
                 }
             }
-            writer.write(gson.toJson(resultMap));
+            replier.reply0SuccessHttp(serviceList, response);
 
         } catch (Exception e) {
-            writeError(writer, response, "ES query failed: " + e.getMessage());
+            replier.replyOtherErrorHttp("ES query failed: " + e.getMessage(), response);
         }
     }
 
@@ -224,13 +226,5 @@ public class SwapServiceSearch extends HttpServlet {
             sortOptions.add(SortOptions.of(s -> s.field(fs)));
         }
         return sortOptions;
-    }
-
-    private void writeError(PrintWriter writer, HttpServletResponse response, String message) {
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        Map<String, Object> err = new HashMap<>();
-        err.put("code", 1020);
-        err.put("message", message);
-        writer.write(gson.toJson(err));
     }
 }

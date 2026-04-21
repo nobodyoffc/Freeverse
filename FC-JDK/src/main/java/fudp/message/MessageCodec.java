@@ -96,25 +96,13 @@ public class MessageCodec {
      */
     private static AppMessage createMessage(MessageType type) {
         return switch (type) {
-            case CHAT -> new ChatMessage();
-            case CHAT_ACK -> new ChatAckMessage();
             case REQUEST -> new RequestMessage();
             case RESPONSE -> new ResponseMessage();
             case ERROR -> new ErrorMessage();
+            case NOTIFY -> new NotifyMessage();
+            case NOTIFY_ACK -> new NotifyAckMessage();
             case PING -> new PingMessage();
             case PONG -> new PongMessage();
-            case FILE_OFFER -> new FileOfferMessage();
-            case FILE_ACCEPT -> new FileAcceptMessage();
-            case FILE_REJECT -> new FileRejectMessage();
-            case FILE_CHUNK -> new FileChunkMessage();
-            case FILE_COMPLETE -> new FileCompleteMessage();
-            case FILE_CANCEL -> new FileCancelMessage();
-            case BYTES -> new BytesMessage();
-            case BYTES_ACK -> new BytesAckMessage();
-            case RELAY -> new RelayMessage();
-            case RELAY_ACK -> new RelayAckMessage();
-            case RELAY_FAIL -> new RelayFailMessage();
-            default -> throw new UnsupportedOperationException("Message type not implemented: " + type);
         };
     }
 

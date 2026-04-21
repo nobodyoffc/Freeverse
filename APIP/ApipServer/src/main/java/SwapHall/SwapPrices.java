@@ -13,25 +13,25 @@ import config.Settings;
 import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.FieldNames;
-import constants.Strings;
+import data.apipData.RequestBody;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
 import data.feipData.ServiceType;
 import feature.swap.SwapPriceData;
 import initial.Initiator;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import server.HttpRequestChecker;
 import utils.EsUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static constants.FieldNames.*;
 import static constants.IndicesNames.SWAP_PRICE;
@@ -41,53 +41,76 @@ import static constants.Values.ASC;
 public class SwapPrices extends HttpServlet {
     private final Settings settings = Initiator.settings;
 
-    /*
-        - https://cid.cash/APIP/swapHall/v1/swapPrice
-        - https://cid.cash/APIP/swapHall/v1/swapPrice?sid=c12aef3c9341a8ab135bd412e1ad798f480519004649871d0a59e7ba799a6f06
-        - https://cid.cash/APIP/swapHall/v1/swapPrice?sid=c12aef3c9341a8ab135bd412e1ad798f480519004649871d0a59e7ba799a6f06&startTime=1708157907767&endTime=1713237231924&last=1712476822738,c12aef3c9341a8ab135bd412e1ad798f480519004649871d0a59e7ba799a6f06
-        - https://cid.cash/APIP/swapHall/v1/swapPrice?gTick=fch&mTick=doge&startTime=1708157907767&endTime=1713237231924&last=1712476822738,c12aef3c9341a8ab135bd412e1ad798f480519004649871d0a59e7ba799a6f06&last=1712476822738,c12aef3c9341a8ab135bd412e1ad798f480519004649871d0a59e7ba799a6f06
-     */
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        ReplyBody replier = new ReplyBody();
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.FREE, settings);
+    }
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
-        try(Jedis jedis = jedisPool.getResource()) {
-            replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-        }
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.ENCRYPTED, settings);
+    }
+
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
 
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
-        String sid = request.getParameter(SID);
+        String sid = null;
+        String gTick = null;
+        String mTick = null;
+        String lastStr = null;
+        String startTime = null;
+        String endTime = null;
+        String size = null;
 
-        String gTick = request.getParameter(G_TICK);
-        String mTick = request.getParameter(M_TICK);
-
-        String lastStr = request.getParameter(FieldNames.LAST);
-        String startTime = request.getParameter(START_TIME);
-        String endTime = request.getParameter(END_TIME);
-        String size = request.getParameter(SIZE);
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
+        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            try {
+                Map<String, String> otherMap = ObjectUtils.objectToMap(requestBody.getFcdsl().getOther(), String.class, String.class);
+                if (otherMap != null) {
+                    sid = otherMap.get(SID);
+                    gTick = otherMap.get(G_TICK);
+                    mTick = otherMap.get(M_TICK);
+                    lastStr = otherMap.get(FieldNames.LAST);
+                    startTime = otherMap.get(START_TIME);
+                    endTime = otherMap.get(END_TIME);
+                    size = otherMap.get(SIZE);
+                }
+            } catch (Exception ignored) {}
+        } else {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            sid = request.getParameter(SID);
+            gTick = request.getParameter(G_TICK);
+            mTick = request.getParameter(M_TICK);
+            lastStr = request.getParameter(FieldNames.LAST);
+            startTime = request.getParameter(START_TIME);
+            endTime = request.getParameter(END_TIME);
+            size = request.getParameter(SIZE);
+        }
 
         SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-
-        List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.TIME,DESC,FieldNames.SID,ASC);
+        List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.TIME, DESC, FieldNames.SID, ASC);
 
         searchBuilder.index(SWAP_PRICE);
         searchBuilder.sort(sortOptionsList);
-        if(size!=null)searchBuilder.size(Integer.valueOf(size));
+        if (size != null) searchBuilder.size(Integer.valueOf(size));
         else searchBuilder.size(50);
-        if(lastStr!=null) {
+        if (lastStr != null) {
             String[] last = lastStr.split(",");
             searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));
         }
 
         BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
-        List<Query> queryList=new ArrayList<>();
-        if(sid!=null) {
-            Query query = EsUtils.getTermsQuery(SID,sid.toLowerCase());
+        List<Query> queryList = new ArrayList<>();
+        if (sid != null) {
+            Query query = EsUtils.getTermsQuery(SID, sid.toLowerCase());
             queryList.add(query);
-        }else {
+        } else {
             if (gTick != null) {
                 Query query = EsUtils.getTermsQuery(G_TICK, gTick.toLowerCase());
                 queryList.add(query);
@@ -98,53 +121,54 @@ public class SwapPrices extends HttpServlet {
             }
         }
 
-        if(startTime!=null||endTime!=null){
+        if (startTime != null || endTime != null) {
             RangeQuery.Builder rqb = new RangeQuery.Builder();
             rqb.field(TIME);
-            if(startTime!=null)
+            if (startTime != null)
                 rqb.gte(JsonData.of(Long.parseLong(startTime)));
-            if(endTime!=null)
+            if (endTime != null)
                 rqb.lt(JsonData.of(Long.parseLong(endTime)));
             Query query = new Query.Builder().range(rqb.build()).build();
             queryList.add(query);
         }
 
         BoolQuery boolQuery = boolBuilder.must(queryList).build();
-
         Query query = new Query(boolQuery);
         searchBuilder.query(query);
-        SearchRequest searchRequest = searchBuilder.build();
-        SearchResponse<SwapPriceData> result = esClient.search(searchRequest, SwapPriceData.class);
 
-        long total=0;
-        if(result!=null && result.hits().total()!=null)
-            total=result.hits().total().value();
-        if(total==0){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-            return;
+        try {
+            SearchResponse<SwapPriceData> result = esClient.search(searchBuilder.build(), SwapPriceData.class);
+
+            long total = 0;
+            if (result != null && result.hits().total() != null)
+                total = result.hits().total().value();
+            if (total == 0) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+                return;
+            }
+
+            String[] last = null;
+            if (!result.hits().hits().isEmpty()) {
+                last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
+            }
+
+            List<Hit<SwapPriceData>> hitList = result.hits().hits();
+            List<SwapPriceData> swapPriceList = new ArrayList<>();
+            for (Hit<SwapPriceData> hit : hitList) {
+                swapPriceList.add(hit.source());
+            }
+
+            if (swapPriceList.isEmpty()) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+                return;
+            }
+
+            replier.setTotal(total);
+            replier.setLast(last != null ? List.of(last) : null);
+            replier.setGot((long) swapPriceList.size());
+            replier.reply0SuccessHttp(swapPriceList, response);
+        } catch (Exception e) {
+            replier.replyOtherErrorHttp(e.getMessage(), response);
         }
-
-        String[] last = null;
-        if(result.hits().hits().size() >0){
-            last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
-        }
-
-        List<Hit<SwapPriceData>> hitList = result.hits().hits();
-        List<SwapPriceData> swapPriceList = new ArrayList<>();
-        for(Hit<SwapPriceData> hit : hitList){
-            swapPriceList.add(hit.source());
-        }
-
-        if(swapPriceList.isEmpty()){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-            return;
-        }
-
-        replier.setData(swapPriceList);
-        replier.setTotal(total);
-        replier.setLast(last != null ? List.of(last) : null);
-        replier.setGot((long) swapPriceList.size());
-        replier.reply0SuccessHttp(swapPriceList,response);
     }
-
 }

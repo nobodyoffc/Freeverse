@@ -12,11 +12,10 @@ import static org.junit.jupiter.api.Assertions.*;
 public class MessageCodecTest {
 
     @Test
-    public void testEncodDecodeChatMessage() {
+    public void testEncodeDecodeNotifyMessage() {
         // Create message
-        ChatMessage original = new ChatMessage("Hello, World!");
+        NotifyMessage original = new NotifyMessage("Hello, World!".getBytes(StandardCharsets.UTF_8), NotifyMessage.DATA_TYPE_JSON);
         original.setMessageId(12345L);
-        original.setContentType(ChatMessage.CONTENT_TYPE_TEXT);
 
         // Encode
         byte[] encoded = MessageCodec.encode(original);
@@ -26,25 +25,22 @@ public class MessageCodecTest {
         // Decode
         AppMessage decoded = MessageCodec.decode(encoded);
         assertNotNull(decoded);
-        assertInstanceOf(ChatMessage.class, decoded);
+        assertInstanceOf(NotifyMessage.class, decoded);
 
-        ChatMessage chat = (ChatMessage) decoded;
-        assertEquals(original.getMessageId(), chat.getMessageId());
-        assertEquals(original.getContentType(), chat.getContentType());
-        assertEquals(original.getContent(), chat.getContent());
+        NotifyMessage notify = (NotifyMessage) decoded;
+        assertEquals(original.getMessageId(), notify.getMessageId());
+        assertEquals(original.getDataType(), notify.getDataType());
+        assertArrayEquals(original.getData(), notify.getData());
     }
 
     @Test
     public void testEncodeDecodeRequestMessage() {
-        // Create message
         byte[] data = "{\"action\": \"get\"}".getBytes(StandardCharsets.UTF_8);
         RequestMessage original = new RequestMessage(54321L, "user.profile", data);
 
-        // Encode
         byte[] encoded = MessageCodec.encode(original);
         assertNotNull(encoded);
 
-        // Decode
         AppMessage decoded = MessageCodec.decode(encoded);
         assertNotNull(decoded);
         assertInstanceOf(RequestMessage.class, decoded);
@@ -57,15 +53,12 @@ public class MessageCodecTest {
 
     @Test
     public void testEncodeDecodeResponseMessage() {
-        // Create message
         byte[] data = "{\"name\": \"John\"}".getBytes(StandardCharsets.UTF_8);
         ResponseMessage original = new ResponseMessage(99999L, ResponseMessage.STATUS_SUCCESS, data);
 
-        // Encode
         byte[] encoded = MessageCodec.encode(original);
         assertNotNull(encoded);
 
-        // Decode
         AppMessage decoded = MessageCodec.decode(encoded);
         assertNotNull(decoded);
         assertInstanceOf(ResponseMessage.class, decoded);
@@ -79,15 +72,12 @@ public class MessageCodecTest {
 
     @Test
     public void testEncodeDecodeErrorMessage() {
-        // Create message
         ErrorMessage original = new ErrorMessage(404, "Not found");
         original.setMessageId(11111L);
 
-        // Encode
         byte[] encoded = MessageCodec.encode(original);
         assertNotNull(encoded);
 
-        // Decode
         AppMessage decoded = MessageCodec.decode(encoded);
         assertNotNull(decoded);
         assertInstanceOf(ErrorMessage.class, decoded);
@@ -100,7 +90,6 @@ public class MessageCodecTest {
 
     @Test
     public void testEncodeDecodePingPong() {
-        // Ping
         PingMessage ping = new PingMessage();
         ping.setMessageId(1L);
 
@@ -109,7 +98,6 @@ public class MessageCodecTest {
         assertInstanceOf(PingMessage.class, decodedPing);
         assertEquals(ping.getTimestamp(), ((PingMessage) decodedPing).getTimestamp());
 
-        // Pong
         PongMessage pong = new PongMessage(ping.getTimestamp());
         pong.setMessageId(2L);
 
@@ -120,39 +108,36 @@ public class MessageCodecTest {
     }
 
     @Test
-    public void testEncodDecodeChatAck() {
-        // Create message
-        ChatAckMessage original = new ChatAckMessage(77777L);
+    public void testEncodeDecodeNotifyAck() {
+        NotifyAckMessage original = new NotifyAckMessage(77777L);
         original.setMessageId(88888L);
 
-        // Encode
         byte[] encoded = MessageCodec.encode(original);
         assertNotNull(encoded);
 
-        // Decode
         AppMessage decoded = MessageCodec.decode(encoded);
         assertNotNull(decoded);
-        assertInstanceOf(ChatAckMessage.class, decoded);
+        assertInstanceOf(NotifyAckMessage.class, decoded);
 
-        ChatAckMessage ack = (ChatAckMessage) decoded;
+        NotifyAckMessage ack = (NotifyAckMessage) decoded;
         assertEquals(original.getMessageId(), ack.getMessageId());
         assertEquals(original.getAckedMessageId(), ack.getAckedMessageId());
     }
 
     @Test
     public void testPeekType() {
-        ChatMessage chat = new ChatMessage("Test");
-        byte[] encoded = MessageCodec.encode(chat);
+        NotifyMessage notify = new NotifyMessage("Test".getBytes(StandardCharsets.UTF_8));
+        byte[] encoded = MessageCodec.encode(notify);
 
         MessageType type = MessageCodec.peekType(encoded);
-        assertEquals(MessageType.CHAT, type);
+        assertEquals(MessageType.NOTIFY, type);
     }
 
     @Test
     public void testPeekMessageId() {
-        ChatMessage chat = new ChatMessage("Test");
-        chat.setMessageId(123456789L);
-        byte[] encoded = MessageCodec.encode(chat);
+        NotifyMessage notify = new NotifyMessage("Test".getBytes(StandardCharsets.UTF_8));
+        notify.setMessageId(123456789L);
+        byte[] encoded = MessageCodec.encode(notify);
 
         long messageId = MessageCodec.peekMessageId(encoded);
         assertEquals(123456789L, messageId);
@@ -160,13 +145,13 @@ public class MessageCodecTest {
 
     @Test
     public void testFlags() {
-        ChatMessage chat = new ChatMessage("Test with flags");
-        chat.setMessageId(1L);
-        chat.setFlag(AppMessage.FLAG_NEED_ACK);
-        chat.setFlag(AppMessage.FLAG_COMPRESSED);
+        NotifyMessage notify = new NotifyMessage("Test with flags".getBytes(StandardCharsets.UTF_8));
+        notify.setMessageId(1L);
+        notify.setFlag(AppMessage.FLAG_NEED_ACK);
+        notify.setFlag(AppMessage.FLAG_COMPRESSED);
 
-        byte[] encoded = MessageCodec.encode(chat);
-        ChatMessage decoded = (ChatMessage) MessageCodec.decode(encoded);
+        byte[] encoded = MessageCodec.encode(notify);
+        NotifyMessage decoded = (NotifyMessage) MessageCodec.decode(encoded);
 
         assertTrue(decoded.hasFlag(AppMessage.FLAG_NEED_ACK));
         assertTrue(decoded.hasFlag(AppMessage.FLAG_COMPRESSED));
@@ -174,84 +159,43 @@ public class MessageCodecTest {
     }
 
     @Test
-    public void testEmptyContent() {
-        ChatMessage chat = new ChatMessage("");
-        chat.setMessageId(1L);
+    public void testEmptyData() {
+        NotifyMessage notify = new NotifyMessage(new byte[0]);
+        notify.setMessageId(1L);
 
-        byte[] encoded = MessageCodec.encode(chat);
-        ChatMessage decoded = (ChatMessage) MessageCodec.decode(encoded);
+        byte[] encoded = MessageCodec.encode(notify);
+        NotifyMessage decoded = (NotifyMessage) MessageCodec.decode(encoded);
 
-        assertEquals("", decoded.getContent());
+        assertEquals(0, decoded.getData().length);
     }
 
     @Test
-    public void testUnicodeContent() {
-        String unicode = "Hello 世界 🌍 مرحبا";
-        ChatMessage chat = new ChatMessage(unicode);
-        chat.setMessageId(1L);
-
-        byte[] encoded = MessageCodec.encode(chat);
-        ChatMessage decoded = (ChatMessage) MessageCodec.decode(encoded);
-
-        assertEquals(unicode, decoded.getContent());
-    }
-
-    @Test
-    public void testLargeContent() {
-        // Create large message (100KB)
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 10000; i++) {
-            sb.append("0123456789");
+    public void testLargeData() {
+        // 100KB payload
+        byte[] largeData = new byte[100_000];
+        for (int i = 0; i < largeData.length; i++) {
+            largeData[i] = (byte) (i % 256);
         }
-        String largeContent = sb.toString();
 
-        ChatMessage chat = new ChatMessage(largeContent);
-        chat.setMessageId(1L);
+        NotifyMessage notify = new NotifyMessage(largeData);
+        notify.setMessageId(1L);
 
-        byte[] encoded = MessageCodec.encode(chat);
-        ChatMessage decoded = (ChatMessage) MessageCodec.decode(encoded);
+        byte[] encoded = MessageCodec.encode(notify);
+        NotifyMessage decoded = (NotifyMessage) MessageCodec.decode(encoded);
 
-        assertEquals(largeContent, decoded.getContent());
+        assertArrayEquals(largeData, decoded.getData());
     }
 
     @Test
     public void testInvalidData() {
-        // Too short
-        assertThrows(IllegalArgumentException.class, () -> {
-            MessageCodec.decode(new byte[5]);
-        });
-
-        // Null
-        assertThrows(IllegalArgumentException.class, () -> {
-            MessageCodec.decode(null);
-        });
+        assertThrows(IllegalArgumentException.class, () -> MessageCodec.decode(new byte[5]));
+        assertThrows(IllegalArgumentException.class, () -> MessageCodec.decode(null));
     }
 
     @Test
     public void testUnknownMessageType() {
-        // Create data with unknown type
         byte[] data = new byte[20];
-        data[0] = (byte) 0xFF; // Unknown type
-
-        assertThrows(IllegalArgumentException.class, () -> {
-            MessageCodec.decode(data);
-        });
-    }
-
-    @Test
-    public void testContentTypes() {
-        // Markdown
-        ChatMessage md = new ChatMessage("# Header", ChatMessage.CONTENT_TYPE_MARKDOWN);
-        md.setMessageId(1L);
-        byte[] encoded = MessageCodec.encode(md);
-        ChatMessage decoded = (ChatMessage) MessageCodec.decode(encoded);
-        assertEquals(ChatMessage.CONTENT_TYPE_MARKDOWN, decoded.getContentType());
-
-        // JSON
-        ChatMessage json = new ChatMessage("{}", ChatMessage.CONTENT_TYPE_JSON);
-        json.setMessageId(2L);
-        encoded = MessageCodec.encode(json);
-        decoded = (ChatMessage) MessageCodec.decode(encoded);
-        assertEquals(ChatMessage.CONTENT_TYPE_JSON, decoded.getContentType());
+        data[0] = (byte) 0xFF;
+        assertThrows(IllegalArgumentException.class, () -> MessageCodec.decode(data));
     }
 }

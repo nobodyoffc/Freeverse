@@ -245,10 +245,19 @@ public class BlockMaker {
 				String txId = opReturn.getId();
 				Tx tx = txMap.get(txId);
 
+				if (tx == null) {
+					keysToRemove.add(opReturn.getId());
+					continue;
+				}
+
 				opReturn.setCdd(tx.getCdd());
 				opReturn.setTime(tx.getBlockTime());
 
-				String signer = tx.getSpentCashes().get(0).getOwner();
+				String signer = null;
+				if (tx.getSpentCashes() != null && !tx.getSpentCashes().isEmpty()) {
+					signer = tx.getSpentCashes().get(0).getOwner();
+				}
+				if (signer == null) signer = "coinbase";
 				opReturn.setSigner(signer);
 
 				Long paid = null;
@@ -498,10 +507,17 @@ public class BlockMaker {
 			if (tx.getSpentCashes() != null && !tx.getSpentCashes().isEmpty()) {
 				for (CashMask inb : tx.getSpentCashes()) {
 					String inAddr = inb.getOwner();
+					if (inAddr == null || inAddr.isEmpty() || "Unknown".equalsIgnoreCase(inAddr) || "OpReturn".equalsIgnoreCase(inAddr))
+						continue;
 					long inValue = inb.getValue();
 					long cdd = inb.getCdd();
 
 					Freer addr = cidMap.get(inAddr);
+					if (addr == null) {
+						addr = new Freer();
+						addr.setId(inAddr);
+						cidMap.put(inAddr, addr);
+					}
 					if(addr.getExpend()==null)addr.setExpend(inValue);
 					else addr.setExpend(addr.getExpend() + inValue);
 					if(addr.getBalance()==null)addr.setBalance(inValue);
@@ -558,8 +574,15 @@ public class BlockMaker {
 
 			for (CashMask outB : tx.getIssuedCashes()) {
 				String outAddr = outB.getOwner();
+				if (outAddr == null || outAddr.isEmpty() || "Unknown".equalsIgnoreCase(outAddr) || "OpReturn".equalsIgnoreCase(outAddr))
+					continue;
 				long outValue = outB.getValue();
 				Freer cid = cidMap.get(outAddr);
+				if (cid == null) {
+					cid = new Freer();
+					cid.setId(outAddr);
+					cidMap.put(outAddr, cid);
+				}
 				if(cid.getIncome()==null)cid.setIncome(outValue);
 				else cid.setIncome(cid.getIncome() + outValue);
 
@@ -610,10 +633,16 @@ public class BlockMaker {
 		LinkedHashMap<String, Cash> outMap = readyBlock.getOutMap();
 		Set<String> addrStrSet = new HashSet<>();
 
-		for (Cash in : inMap.values())
-			addrStrSet.add(in.getOwner());
-		for (Cash out : outMap.values())
-			addrStrSet.add(out.getOwner());
+		for (Cash in : inMap.values()) {
+			String owner = in.getOwner();
+			if (owner != null && !owner.isEmpty() && !"Unknown".equalsIgnoreCase(owner) && !"OpReturn".equalsIgnoreCase(owner))
+				addrStrSet.add(owner);
+		}
+		for (Cash out : outMap.values()) {
+			String owner = out.getOwner();
+			if (owner != null && !owner.isEmpty() && !"Unknown".equalsIgnoreCase(owner) && !"OpReturn".equalsIgnoreCase(owner))
+				addrStrSet.add(owner);
+		}
 
 		return new ArrayList<>(addrStrSet);
 	}

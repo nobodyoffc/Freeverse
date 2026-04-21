@@ -26,6 +26,7 @@ import static utils.JsonUtils.readOneJsonFromFile;
 public class CryptoDataStr {
     private EncryptType type;
     private AlgorithmId alg;
+    private Kdf kdf;
     private String data;
     private transient String did;
     private String cipher;
@@ -246,6 +247,8 @@ public class CryptoDataStr {
             cryptoDataStr.setType(cryptoDataByte.getType());
         if (cryptoDataByte.getAlg() != null)
             cryptoDataStr.setAlg(cryptoDataByte.getAlg());
+        if (cryptoDataByte.getKdf() != null)
+            cryptoDataStr.setKdf(cryptoDataByte.getKdf());
         if (cryptoDataByte.getCipher() != null)
             cryptoDataStr.setCipher(Base64.getEncoder().encodeToString(cryptoDataByte.getCipher()));
         if (cryptoDataByte.getIv() != null)
@@ -316,6 +319,7 @@ public class CryptoDataStr {
     public String toJson() {
         Gson gson = new GsonBuilder()
                 .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeSerializer())
+                .registerTypeAdapter(Kdf.class, new Kdf.KdfSerializer())
                 .create();
         return gson.toJson(this);
     }
@@ -329,6 +333,7 @@ public class CryptoDataStr {
     public String toNiceJson() {
         Gson gson = new GsonBuilder()
                 .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeSerializer())
+                .registerTypeAdapter(Kdf.class, new Kdf.KdfSerializer())
                 .setPrettyPrinting()
                 .disableHtmlEscaping()
                 .create();
@@ -338,6 +343,7 @@ public class CryptoDataStr {
     public static CryptoDataStr fromJson(String json) {
         Gson gson = new GsonBuilder()
                 .registerTypeAdapter(AlgorithmId.class, new AlgorithmId.AlgorithmTypeDeserializer())
+                .registerTypeAdapter(Kdf.class, new Kdf.KdfDeserializer())
                 .create();
         return gson.fromJson(json, CryptoDataStr.class);
     }
@@ -382,6 +388,14 @@ public class CryptoDataStr {
 
     public void setAlg(AlgorithmId alg) {
         this.alg = alg;
+    }
+
+    public Kdf getKdf() {
+        return kdf;
+    }
+
+    public void setKdf(Kdf kdf) {
+        this.kdf = kdf;
     }
 
     public String getData() {

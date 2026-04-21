@@ -17,9 +17,11 @@ import java.util.List;
  * - CryptoDataByte Bundle (encrypted payload)
  * 
  * Encrypted Payload Structure:
- * - Timestamp (8 bytes): Current time for replay protection
- * - Session Epoch (8 bytes): Random value generated at node startup for restart detection
- * - Frames (variable): Protocol frames
+ * - Timestamp (8 bytes, optional): Current time for replay protection. Present when FLAG_HAS_TIMESTAMP is set.
+ *   Omitted for ACK-only packets to save 8 bytes.
+ * - Session Epoch (8 bytes, optional): Random value for restart detection. Present when FLAG_HAS_EPOCH is set.
+ *   Omitted once the peer has confirmed receipt of the epoch.
+ * - Frames (variable): Protocol frames. The last StreamFrame may use implicit length (no length varint).
  */
 public class Packet {
 
@@ -52,23 +54,54 @@ public class Packet {
 
     /**
      * Serialize all frames to plaintext bytes (before encryption).
-     * 
+     *
      * @param sessionEpoch The sender's session epoch for restart detection
      * @return Serialized bytes including timestamp, session epoch, and frames
      */
     public byte[] serializeFrames(long sessionEpoch) {
+        return serializeFrames(sessionEpoch, true, true);
+    }
+
+    /**
+     * Serialize all frames to plaintext bytes (before encryption).
+     * Conditionally includes timestamp and session epoch to save bytes.
+     *
+     * @param sessionEpoch The sender's session epoch for restart detection
+     * @param includeTimestamp Whether to include the 8-byte timestamp (skip for ACK-only packets)
+     * @param includeEpoch Whether to include the 8-byte session epoch (skip once peer confirmed)
+     * @return Serialized bytes including optional timestamp, optional session epoch, and frames
+     */
+    public byte[] serializeFrames(long sessionEpoch, boolean includeTimestamp, boolean includeEpoch) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-            // Write timestamp (8 bytes) for replay protection
-            out.write(ByteUtils.longToBytes(System.currentTimeMillis()));
-            
-            // Write session epoch (8 bytes) for restart detection
-            out.write(ByteUtils.longToBytes(sessionEpoch));
+            // Conditionally write timestamp (8 bytes) for replay protection
+            if (includeTimestamp) {
+                out.write(ByteUtils.longToBytes(System.currentTimeMillis()));
+                header.setHasTimestamp(true);
+            } else {
+                header.setHasTimestamp(false);
+            }
 
-            // Write all frames
-            for (Frame frame : frames) {
+            // Conditionally write session epoch (8 bytes) for restart detection
+            if (includeEpoch) {
+                out.write(ByteUtils.longToBytes(sessionEpoch));
+                header.setHasEpoch(true);
+            } else {
+                header.setHasEpoch(false);
+            }
+
+            // E3: If the last frame is a StreamFrame, use implicit length to save bytes
+            for (int i = 0; i < frames.size(); i++) {
+                Frame frame = frames.get(i);
+                if (i == frames.size() - 1 && frame instanceof StreamFrame) {
+                    ((StreamFrame) frame).setImplicitLength(true);
+                }
                 out.write(frame.toBytes());
+                // Reset implicit length flag after serialization
+                if (frame instanceof StreamFrame) {
+                    ((StreamFrame) frame).setImplicitLength(false);
+                }
             }
 
             return out.toByteArray();
@@ -79,16 +112,24 @@ public class Packet {
 
     /**
      * Parse frames from decrypted payload.
-     * Extracts timestamp and session epoch for replay protection and restart detection.
+     * Extracts timestamp and session epoch based on header flags.
      */
     public void parseFrames(byte[] payload) {
         ByteBuffer buffer = ByteBuffer.wrap(payload);
 
-        // Read timestamp (8 bytes)
-        this.timestamp = buffer.getLong();
-        
-        // Read session epoch (8 bytes)
-        this.sessionEpoch = buffer.getLong();
+        // Read timestamp (8 bytes) only if present (indicated by header flag)
+        if (header.hasTimestamp()) {
+            this.timestamp = buffer.getLong();
+        } else {
+            this.timestamp = System.currentTimeMillis();
+        }
+
+        // Read session epoch (8 bytes) only if present (indicated by header flag)
+        if (header.hasEpoch()) {
+            this.sessionEpoch = buffer.getLong();
+        } else {
+            this.sessionEpoch = 0;
+        }
 
         // Parse frames
         frames.clear();
@@ -157,7 +198,9 @@ public class Packet {
      * Get the total size of all frames
      */
     public int getFramesSize() {
-        int size = 16; // timestamp (8) + sessionEpoch (8)
+        int size = 0;
+        if (header.hasTimestamp()) size += 8;  // timestamp
+        if (header.hasEpoch()) size += 8;      // sessionEpoch
         for (Frame frame : frames) {
             size += frame.getSize();
         }

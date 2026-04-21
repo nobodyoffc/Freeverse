@@ -26,7 +26,7 @@ public class BlockByIds extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         fcHttpRequestHandler.doBlockInfoRequest(true,ID, request, response, authType);
     }
 

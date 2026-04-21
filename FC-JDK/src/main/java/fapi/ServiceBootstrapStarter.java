@@ -1,6 +1,7 @@
 package fapi;
 
 import data.fcData.Module;
+import data.feipData.ApiGroupType;
 import data.feipData.Service;
 import data.feipData.ServiceType;
 import fapi.client.AutoRechargeManager;
@@ -62,7 +63,7 @@ public class ServiceBootstrapStarter {
         ServiceBootstrapStarter config = new ServiceBootstrapStarter();
         config.serviceType = ServiceType.FAPI_No1_NrC7;
         config.serviceName = "FAPI Server";
-        config.componentTypes = new String[] { "BASE" }; // 默认启用BASE组件
+        config.componentTypes = new String[] {ApiGroupType.BASE_NO1_NRC7}; // 默认启用BASE组件
         
         // 服务端默认需要的模块
         config.modules.add(new Module(Service.class.getSimpleName(), ServiceType.NASA_RPC.name()));

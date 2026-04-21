@@ -1,8 +1,11 @@
 package webhook;
 
+import constants.CodeMessage;
 import data.apipData.WebhookPushBody;
 import data.fchData.Cash;
 import data.fchData.OpReturn;
+import managers.AccountManager;
+import managers.Manager;
 import managers.WebhookManager;
 import server.ApipApi;
 import utils.EsUtils;
@@ -11,8 +14,11 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import com.google.gson.Gson;
 import constants.*;
 
+import core.crypto.CryptoDataByte;
+import core.crypto.Encryptor;
+import data.fcData.AlgorithmId;
 import utils.FchUtils;
-import utils.JsonUtils;
+import utils.Hex;
 import utils.ObjectUtils;
 import utils.http.HttpUtils;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -27,7 +33,6 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static data.fcData.FcSession.sign;
 import static constants.FieldNames.IDS;
 import static constants.Strings.*;
 
@@ -35,15 +40,19 @@ public class Pusher implements Runnable{
 
     private static final Logger log = LoggerFactory.getLogger(Pusher.class);
     private volatile AtomicBoolean running = new AtomicBoolean(true);
+    private final Settings settings;
     private final String listenDir;
     private final ElasticsearchClient esClient;
-    private Map<String,Map<String, WebhookManager.WebhookRequestBody>> methodFidEndpointInfoMapMap = new HashMap<>();
     private final String sid;
+    private final AccountManager accountManager;
+    private Map<String,Map<String, WebhookManager.WebhookRequestBody>> methodFidEndpointInfoMapMap = new HashMap<>();
 
-    public Pusher(String sid,String listenDir, ElasticsearchClient esClient) {
+    public Pusher(Settings settings, String listenDir, ElasticsearchClient esClient) {
+        this.settings = settings;
         this.esClient = esClient;
         this.listenDir = listenDir;
-        this.sid = sid;
+        this.sid = settings.getSid();
+        this.accountManager = (AccountManager) settings.getManager(Manager.ManagerType.ACCOUNT);
     }
 
     @Override
@@ -87,10 +96,6 @@ public class Pusher implements Runnable{
             makeMethodFidEndpointMapMap(webhookInfoList);
             setWebhookSubscriptionIntoRedis(methodFidEndpointInfoMapMap, jedis);
         }
-        //methodFidEndpointInfoMapMap structure is <method:<userId:webhookInfo>>
-//        jedis.select(Constants.RedisDb4Webhook);
-//        jedis.flushDB();
-//        setWebhookSubscriptionIntoRedis(methodFidEndpointInfoMapMap,jedis);
     }
 
     private void readMethodFidWebhookInfoMapMapFromRedis(Jedis jedis) {
@@ -146,7 +151,6 @@ public class Pusher implements Runnable{
         for(String method: methodFidWatchedFidsMapMap.keySet()){
             switch (method){
                 case ApipApiNames.HOOK_NEW_CASH_BY_FIDS -> putNewCashByFids(methodFidWatchedFidsMapMap.get(method),sinceHeight);
-                //TODO untested
                 case ApipApiNames.HOOK_NEW_OP_RETURN_BY_FIDS -> putNewOpReturnByFids(methodFidWatchedFidsMapMap.get(method),sinceHeight);
             }
         }
@@ -172,76 +176,121 @@ public class Pusher implements Runnable{
 
     private <T> void pushDataList(WebhookManager.WebhookRequestBody webhookRequestBody, String method, ArrayList<T> dataList) {
         Gson gson = new Gson();
-        String sessionName ;
-        String sessionKey;
-        String balance;
         String bestHeight;
-        try(Jedis jedis = new Jedis()){
-            jedis.select(0);
-            balance = jedis.hget(Settings.addSidBriefToName(sid, FieldNames.BALANCE),webhookRequestBody.getUserId());
-            if(balance==null)return;
+        String endpoint = webhookRequestBody.getEndpoint();
+        String subscriberPubkey = webhookRequestBody.getPubkey();
 
-            String nPrice = jedis.hget(Settings.addSidBriefToName(sid,Strings.N_PRICE), method);
-            double nPriceF = Double.parseDouble(nPrice);
-
-            String pricePerKB = jedis.hget(Settings.addSidBriefToName(sid,PARAMS), FieldNames.PRICE_PER_K_B);
-            Long price = FchUtils.coinStrToSatoshi(pricePerKB);
-            if(price==null)price=0L;
-
-            long balanceL = Long.parseLong(balance);
-            bestHeight = jedis.get(BEST_HEIGHT);
-
-            long newBalanceL = (long) (balanceL-(price*nPriceF));
-            balance = String.valueOf(newBalanceL);
-            jedis.hset(Settings.addSidBriefToName(sid, FieldNames.BALANCE),webhookRequestBody.getUserId(),balance);
-
-            sessionName = jedis.hget(Settings.addSidBriefToName(sid,Strings.ID_SESSION_NAME),webhookRequestBody.getUserId());
-            if(sessionName==null)return;
-            jedis.select(1);
-            sessionKey = jedis.hget(sessionName, FieldNames.SESSION_KEY);
-        }catch (Exception e){
-            log.error("Operate redis wrong when push {}.",method,e);
+        if (subscriberPubkey == null) {
+            log.error("No pubkey found for webhook subscriber {}. Skipping push.", webhookRequestBody.getUserId());
             return;
         }
-        byte[] sessionKeyBytes = HexFormat.of().parseHex(sessionKey);
 
-        Map<String,Object> dataMap = new HashMap<>();
-        dataMap.put(FieldNames.BALANCE,balance);
-        dataMap.put(BEST_HEIGHT,bestHeight);
-        dataMap.put(Strings.DATA,dataList);
+        try (Jedis jedis = new Jedis()) {
+            jedis.select(0);
+            bestHeight = jedis.get(BEST_HEIGHT);
+        } catch (Exception e) {
+            log.error("Failed to get bestHeight from redis for push {}.", method, e);
+            return;
+        }
 
+        // Check balance and deduct cost
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put(FieldNames.BALANCE, null);
+        dataMap.put(BEST_HEIGHT, bestHeight);
+        dataMap.put(Strings.DATA, dataList);
         String dataStr = gson.toJson(dataMap);
-        byte[] dataBytes = dataStr.getBytes(StandardCharsets.UTF_8);
+        long length = dataStr.length();
 
-        String sign = sign(sessionKeyBytes, dataBytes);
+        Long newBalance = accountManager.userSpend(webhookRequestBody.getUserId(), method, length, null);
 
-        String endpoint = webhookRequestBody.getEndpoint();
+        if (newBalance != null && newBalance < -accountManager.getMinCredit()) {
+            // Insufficient balance: send 1004 error and unsubscribe
+            log.warn("Insufficient balance for webhook subscriber {}. Sending 1004 and unsubscribing.", webhookRequestBody.getUserId());
+            pushInsufficientBalanceError(webhookRequestBody, method, bestHeight);
+            unsubscribeWebhook(webhookRequestBody);
+            return;
+        }
 
-        WebhookPushBody postBody = new WebhookPushBody();
+        // Update balance in data
+        dataMap.put(FieldNames.BALANCE, newBalance);
+        dataStr = gson.toJson(dataMap);
 
-        postBody.setData(dataStr);
+        // Encrypt data with AsyTwoWay
+        byte[] serverPrikey = settings.decryptPrikey();
+        byte[] subscriberPubkeyBytes = Hex.fromHex(subscriberPubkey);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesGcm256_No1_NrC7);
+        CryptoDataByte encrypted = encryptor.encryptByAsyTwoWay(dataStr.getBytes(StandardCharsets.UTF_8), serverPrikey, subscriberPubkeyBytes);
+        if (encrypted == null) {
+            log.error("Failed to encrypt webhook push data for {}.", webhookRequestBody.getUserId());
+            return;
+        }
 
-        postBody.setHookUserId(webhookRequestBody.getHookUserId());
-        postBody.setMethod(method);
-        postBody.setSessionName(sessionName);
-        postBody.setSign(sign);
-        postBody.setBestHeight(Long.valueOf(bestHeight));
+        WebhookPushBody pushBody = new WebhookPushBody();
+        pushBody.setHookUserId(webhookRequestBody.getHookUserId());
+        pushBody.setMethod(method);
+        pushBody.setBestHeight(Long.valueOf(bestHeight));
+        pushBody.setCode(CodeMessage.Code0Success);
+        pushBody.setEncryptedData(encrypted.toJson());
 
-        System.out.println("Endpoint:"+endpoint);
-        CloseableHttpResponse result = HttpUtils.post(endpoint, new HashMap<>(), HttpUtils.BodyType.STRING, gson.toJson(postBody).getBytes());
+        log.info("Pushing webhook to endpoint: {}", endpoint);
+        CloseableHttpResponse result = HttpUtils.post(endpoint, new HashMap<>(), HttpUtils.BodyType.STRING, gson.toJson(pushBody).getBytes());
 
-        if(result==null){
-            log.debug("Failed to push webhook data.");
+        if (result == null) {
+            log.debug("Failed to push webhook data to {}.", endpoint);
             return;
         }
         try {
-            JsonUtils.printJson(new String(result.getEntity().getContent().readAllBytes()));
+            if (result.getStatusLine().getStatusCode() == 200) {
+                log.info("Pushed webhook data for {}: {}", pushBody.getHookUserId(), result.getStatusLine().getReasonPhrase());
+            } else {
+                log.warn("Failed to push webhook data. Status: {}", result.getStatusLine().getStatusCode());
+            }
+            result.close();
         } catch (IOException e) {
-            System.out.println("Failed to get http response entity.");
-            return;
+            log.warn("Failed to read http response for webhook push.", e);
         }
-        if(result.getStatusLine().getStatusCode()==200)System.out.println("Pushed webhook data:"+postBody.getHookUserId()+":\n"+result.getStatusLine().getReasonPhrase());
-        else System.out.println("Failed to push new cashes.");
+    }
+
+    private void pushInsufficientBalanceError(WebhookManager.WebhookRequestBody webhookRequestBody, String method, String bestHeight) {
+        Gson gson = new Gson();
+        String subscriberPubkey = webhookRequestBody.getPubkey();
+        String endpoint = webhookRequestBody.getEndpoint();
+
+        // Build error data and encrypt it
+        Map<String, Object> errorData = new HashMap<>();
+        errorData.put(FieldNames.BALANCE, accountManager.getUserBalance(webhookRequestBody.getUserId()));
+        errorData.put(BEST_HEIGHT, bestHeight);
+        String errorDataStr = gson.toJson(errorData);
+
+        byte[] serverPrikey = settings.decryptPrikey();
+        byte[] subscriberPubkeyBytes = Hex.fromHex(subscriberPubkey);
+        Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesGcm256_No1_NrC7);
+        CryptoDataByte encrypted = encryptor.encryptByAsyTwoWay(errorDataStr.getBytes(StandardCharsets.UTF_8), serverPrikey, subscriberPubkeyBytes);
+
+        WebhookPushBody pushBody = new WebhookPushBody();
+        pushBody.setHookUserId(webhookRequestBody.getHookUserId());
+        pushBody.setMethod(method);
+        pushBody.setBestHeight(Long.valueOf(bestHeight));
+        pushBody.setCode(CodeMessage.Code1004InsufficientBalance);
+        pushBody.setMessage(CodeMessage.Msg1004InsufficientBalance);
+        if (encrypted != null) {
+            pushBody.setEncryptedData(encrypted.toJson());
+        }
+
+        CloseableHttpResponse result = HttpUtils.post(endpoint, new HashMap<>(), HttpUtils.BodyType.STRING, gson.toJson(pushBody).getBytes());
+        if (result != null) {
+            try {
+                result.close();
+            } catch (IOException ignore) {}
+        }
+    }
+
+    private void unsubscribeWebhook(WebhookManager.WebhookRequestBody webhookRequestBody) {
+        WebhookManager webhookManager = (WebhookManager) settings.getManager(Manager.ManagerType.WEBHOOK);
+        if (webhookManager != null) {
+            webhookManager.remove(webhookRequestBody.getHookUserId());
+            log.info("Unsubscribed webhook for user {} due to insufficient balance.", webhookRequestBody.getUserId());
+        }
     }
 
     private ArrayList<Cash> getNewCashList(WebhookManager.WebhookRequestBody webhookInfo, long sinceHeight) {

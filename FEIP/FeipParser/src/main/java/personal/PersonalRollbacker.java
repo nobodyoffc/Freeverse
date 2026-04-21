@@ -1,6 +1,8 @@
 package personal;
 
 import constants.OpNames;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -16,6 +18,8 @@ import static constants.FieldNames.BID;
 import static constants.FieldNames.BIDS;
 
 public class PersonalRollbacker {
+
+	private static final Logger log = LoggerFactory.getLogger(PersonalRollbacker.class);
 
 	public void rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		rollbackBox(esClient,lastHeight);
@@ -36,15 +40,16 @@ public class PersonalRollbacker {
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 
 		if(itemIdList==null||itemIdList.isEmpty())return false;
-		System.out.println("If rolling back is interrupted, reparse all effected ids of index 'box': ");
+		log.warn("If rolling back is interrupted, reparse all effected ids of index 'box': ");
 		JsonUtils.printJson(itemIdList);
-		deleteEffectedItems(esClient, IndicesNames.BOX,itemIdList);
-		if(histIdList==null||histIdList.isEmpty())return false;
-		deleteRolledHists(esClient, IndicesNames.BOX_HISTORY,histIdList);
 
-		List<BoxHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY,BID, BIDS, itemIdList, BoxHistory.class);
+		List<BoxHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY, BID, BIDS, itemIdList, BoxHistory.class);
 
-		reparseBox(esClient,reparseHistList);
+		deleteEffectedItems(esClient, IndicesNames.BOX, itemIdList);
+		if(histIdList!=null&&!histIdList.isEmpty())
+			deleteRolledHists(esClient, IndicesNames.BOX_HISTORY, histIdList);
+
+		reparseBox(esClient, reparseHistList);
 
 		return false;
 	}
@@ -64,7 +69,7 @@ public class PersonalRollbacker {
 
 			BoxHistory item = hit.source();
 			if(item==null){
-				System.out.println("Box hist is null");
+				log.info("Box hist is null");
 				continue;
 			}
 			String op = item.getOp();
@@ -106,8 +111,9 @@ public class PersonalRollbacker {
 
 	private void reparseBox(ElasticsearchClient esClient, List<BoxHistory> reparseHistList) throws Exception {
 		if(reparseHistList==null)return;
+		PersonalParser parser = new PersonalParser();
 		for(BoxHistory boxHist: reparseHistList) {
-			new PersonalParser().parseBox(esClient, boxHist);
+			parser.parseBox(esClient, boxHist);
 		}
 	}
 

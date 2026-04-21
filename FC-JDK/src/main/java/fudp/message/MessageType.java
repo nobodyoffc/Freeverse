@@ -3,46 +3,29 @@ package fudp.message;
 /**
  * Application-level message types for FUDP Node.
  * These are transmitted as STREAM frame data using the underlying FUDP protocol.
+ *
+ * FUDP is a pure transport protocol. Only 7 message types are needed:
+ * - REQUEST/RESPONSE for bidirectional exchanges
+ * - NOTIFY/NOTIFY_ACK for one-way data with optional delivery confirmation
+ * - PING/PONG for keepalive and latency measurement
+ * - ERROR for error reporting
+ *
+ * Application-level features (chat, file transfer, relay) are built on top
+ * of these primitives, not embedded in the transport.
  */
 public enum MessageType {
-    // Chat/Messaging
-    CHAT(0x01),                    // Simple text message
-    CHAT_ACK(0x02),                // Message delivered acknowledgment
-
     // Request/Response
-    REQUEST(0x10),                 // Application request
-    RESPONSE(0x11),                // Application response
+    REQUEST(0x10),                 // Application request (expects RESPONSE)
+    RESPONSE(0x11),                // Application response (matches REQUEST by messageId)
     ERROR(0x12),                   // Error response
 
-    // File Transfer
-    FILE_OFFER(0x20),              // Offer to send a file
-    FILE_ACCEPT(0x21),             // Accept file offer
-    FILE_REJECT(0x22),             // Reject file offer
-    FILE_CHUNK(0x23),              // File data chunk
-    FILE_COMPLETE(0x24),           // File transfer complete
-    FILE_CANCEL(0x25),             // Cancel transfer
+    // One-way data
+    NOTIFY(0x20),                  // One-way data with optional ACK
+    NOTIFY_ACK(0x21),              // Delivery acknowledgment for NOTIFY
 
-    // Control
-    PING(0x30),                    // Keep-alive ping
-    PONG(0x31),                    // Ping response
-    PEER_INFO(0x32),               // Exchange peer information
-
-    // Relay
-    RELAY(0x40),                   // Relay message to target FID
-    RELAY_ACK(0x41),               // Relay delivery confirmed
-    RELAY_FAIL(0x42),              // Relay delivery failed
-    RELAY_QUERY(0x43),             // Query relay path/cost
-    RELAY_QUOTE(0x44),             // Relay cost quote response
-
-    // NAT Traversal
-    NAT_REGISTER(0x50),            // Register with relay for NAT traversal
-    NAT_KEEPALIVE(0x51),           // Keep NAT mapping alive
-    NAT_PROBE(0x52),               // Probe for direct connectivity
-    NAT_PROBE_RESPONSE(0x53),      // Response to connectivity probe
-
-    // General Data
-    BYTES(0x60),                   // General-purpose byte array
-    BYTES_ACK(0x61);               // Bytes delivery confirmed
+    // Keepalive
+    PING(0x30),                    // Keep-alive ping / latency measurement
+    PONG(0x31);                    // Ping response
 
     private final int code;
 
@@ -60,6 +43,6 @@ public enum MessageType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Unknown message type code: " + code);
+        throw new IllegalArgumentException("Unknown message type code: 0x" + Integer.toHexString(code));
     }
 }

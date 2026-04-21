@@ -27,7 +27,7 @@ public class SoundOpHistory extends HttpServlet {
     private final Settings settings = Initiator.settings;
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(settings);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.SOUND_HISTORY, SoundHistory.class, null,null,OP,RATE, defaultSort,request,response,authType);

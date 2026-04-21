@@ -785,11 +785,11 @@ public class FapiServer implements NodeEventListener {
      * 同时向后兼容纯 JSON 格式和旧版 DISK 二进制协议
      */
     @Override
-    public void onRequestReceived(String peerId, long requestId, String serviceName, byte[] data) {
-        requestExecutor.submit(() -> handleRequest(peerId, requestId, serviceName, data));
+    public void onRequestReceived(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {
+        requestExecutor.submit(() -> handleRequest(peerId, connectionId, requestId, serviceName, data));
     }
-    
-    private void handleRequest(String peerId, long requestId, String serviceName, byte[] data) {
+
+    private void handleRequest(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {
         try {
             FapiRequest fapiRequest;
             byte[] binaryData = null;
@@ -803,7 +803,7 @@ public class FapiServer implements NodeEventListener {
             } 
             // 向后兼容：旧版 DISK 二进制协议
             else if ("DISK".equals(serviceName) && fapi.components.disk.DiskProtocol.isDiskProtocol(data)) {
-                handleLegacyBinaryDiskRequest(peerId, requestId, data);
+                handleLegacyBinaryDiskRequest(peerId, connectionId, requestId, data);
                 return;
             }
             // 向后兼容：纯 JSON 格式
@@ -813,7 +813,7 @@ public class FapiServer implements NodeEventListener {
             }
             
             if (fapiRequest == null) {
-                sendErrorResponse(peerId, requestId, FapiCode.BAD_REQUEST, "Invalid request format");
+                sendErrorResponse(peerId, connectionId, requestId, FapiCode.BAD_REQUEST, "Invalid request format");
                 return;
             }
             
@@ -824,7 +824,7 @@ public class FapiServer implements NodeEventListener {
             
             // 验证 api 格式
             if (fapiRequest.getApi() == null || !fapiRequest.getApi().contains(".")) {
-                sendErrorResponse(peerId, requestId, FapiCode.BAD_REQUEST, 
+                sendErrorResponse(peerId, connectionId, requestId, FapiCode.BAD_REQUEST, 
                     "Invalid api format, expected: component.method (e.g., base.search)");
                 return;
             }
@@ -832,7 +832,7 @@ public class FapiServer implements NodeEventListener {
             // 验证 dataSize 与实际二进制数据大小是否匹配
             if (fapiRequest.hasBinaryData() && binaryData != null) {
                 if (fapiRequest.getDataSize() != binaryData.length) {
-                    sendErrorResponse(peerId, requestId, FapiCode.BAD_REQUEST, 
+                    sendErrorResponse(peerId, connectionId, requestId, FapiCode.BAD_REQUEST, 
                         "dataSize mismatch: declared=" + fapiRequest.getDataSize() + 
                         ", actual=" + binaryData.length);
                     return;
@@ -845,7 +845,7 @@ public class FapiServer implements NodeEventListener {
             FapiComponent component = components.get(componentName != null ? componentName.toUpperCase() : "");
             
             if (component == null) {
-                sendErrorResponse(peerId, requestId, FapiCode.NOT_FOUND, 
+                sendErrorResponse(peerId, connectionId, requestId, FapiCode.NOT_FOUND, 
                     "Component not found: " + componentName);
                 return;
             }
@@ -858,7 +858,7 @@ public class FapiServer implements NodeEventListener {
                 
                 // 检查 maxCost 限制
                 if (fapiRequest.hasMaxCost() && estimatedFee > fapiRequest.getMaxCost()) {
-                    sendErrorResponse(peerId, requestId, FapiCode.PAYMENT_REQUIRED, 
+                    sendErrorResponse(peerId, connectionId, requestId, FapiCode.PAYMENT_REQUIRED, 
                         "Estimated cost (" + estimatedFee + " sat) exceeds maxCost (" + fapiRequest.getMaxCost() + " sat)");
                     return;
                 }
@@ -872,12 +872,12 @@ public class FapiServer implements NodeEventListener {
                             log.info("Allowing whitelisted free broadcastTx for peer {}", peerId);
                             // Fall through to route the request without charging
                         } else {
-                            sendErrorResponse(peerId, requestId, FapiCode.PAYMENT_REQUIRED,
+                            sendErrorResponse(peerId, connectionId, requestId, FapiCode.PAYMENT_REQUIRED,
                                 "Insufficient balance for request");
                             return;
                         }
                     } else {
-                        sendPaymentRequiredWithCashes(peerId, requestId);
+                        sendPaymentRequiredWithCashes(peerId, connectionId, requestId);
                         return;
                     }
                 }
@@ -913,7 +913,7 @@ public class FapiServer implements NodeEventListener {
                         
                         long actualFee = balanceManager.estimateFee(requestSize, totalResponseSize);
                         if (fapiRequest.hasMaxCost() && actualFee > fapiRequest.getMaxCost()) {
-                            sendErrorResponse(peerId, requestId, FapiCode.PAYMENT_REQUIRED, 
+                            sendErrorResponse(peerId, connectionId, requestId, FapiCode.PAYMENT_REQUIRED, 
                                 "Actual cost (" + actualFee + " sat) exceeds maxCost (" + fapiRequest.getMaxCost() + " sat)");
                             return;
                         }
@@ -936,7 +936,7 @@ public class FapiServer implements NodeEventListener {
                     log.debug("Streaming response to {}: requestId={}, statusCode={}, fileSize={}", 
                         peerId, requestId, statusCode, streamSize);
                     try (java.io.InputStream fileStream = java.nio.file.Files.newInputStream(streamPath)) {
-                        fudpNode.respondWithStream(peerId, requestId, statusCode, 
+                        fudpNode.respondWithStream(peerId, connectionId, requestId, statusCode,
                             headerBytes, fileStream, streamSize);
                     }
                     log.debug("Streaming response sent to {}: requestId={}", peerId, requestId);
@@ -955,7 +955,7 @@ public class FapiServer implements NodeEventListener {
                         long actualFee = balanceManager.estimateFee(requestSize, responseData.length);
                         if (fapiRequest.hasMaxCost() && actualFee > fapiRequest.getMaxCost()) {
                             // 实际费用超过限制，不收费，返回错误
-                            sendErrorResponse(peerId, requestId, FapiCode.PAYMENT_REQUIRED, 
+                            sendErrorResponse(peerId, connectionId, requestId, FapiCode.PAYMENT_REQUIRED, 
                                 "Actual cost (" + actualFee + " sat) exceeds maxCost (" + fapiRequest.getMaxCost() + " sat)");
                             return;
                         }
@@ -978,14 +978,14 @@ public class FapiServer implements NodeEventListener {
                     
                     log.debug("Sending response to {}: requestId={}, statusCode={}, size={}", 
                         peerId, requestId, statusCode, responseData.length);
-                    fudpNode.respond(peerId, requestId, statusCode, responseData);
+                    fudpNode.respond(peerId, connectionId, requestId, statusCode, responseData);
                     log.debug("Response sent to {}: requestId={}", peerId, requestId);
                 }
             }
             
         } catch (Exception e) {
             log.error("Error handling request from {}: {}", peerId, e.getMessage(), e);
-            sendErrorResponse(peerId, requestId, FapiCode.INTERNAL_ERROR, "Internal server error");
+            sendErrorResponse(peerId, connectionId, requestId, FapiCode.INTERNAL_ERROR, "Internal server error");
         }
     }
     
@@ -1041,19 +1041,19 @@ public class FapiServer implements NodeEventListener {
      * @deprecated 使用统一协议 UnifiedCodec 替代
      */
     @Deprecated
-    private void handleLegacyBinaryDiskRequest(String peerId, long requestId, byte[] data) {
+    private void handleLegacyBinaryDiskRequest(String peerId, long connectionId, long requestId, byte[] data) {
         try {
             // 获取 DISK 组件
             FapiComponent diskComponent = components.get("DISK");
             if (diskComponent == null) {
                 log.error("DISK component not found");
-                sendErrorResponse(peerId, requestId, FapiCode.NOT_FOUND, "DISK component not available");
+                sendErrorResponse(peerId, connectionId, requestId, FapiCode.NOT_FOUND, "DISK component not available");
                 return;
             }
             
             if (!(diskComponent instanceof fapi.components.DiskComponent)) {
                 log.error("DISK component is not of expected type");
-                sendErrorResponse(peerId, requestId, FapiCode.INTERNAL_ERROR, "DISK component misconfigured");
+                sendErrorResponse(peerId, connectionId, requestId, FapiCode.INTERNAL_ERROR, "DISK component misconfigured");
                 return;
             }
             
@@ -1063,7 +1063,7 @@ public class FapiServer implements NodeEventListener {
             
             // 发送二进制响应
             if (fudpNode != null) {
-                fudpNode.respond(peerId, requestId, FapiCode.SUCCESS, responseData);
+                fudpNode.respond(peerId, connectionId, requestId, FapiCode.SUCCESS, responseData);
             }
             
             log.debug("Handled binary DISK request from {}, response size: {} bytes", 
@@ -1071,21 +1071,20 @@ public class FapiServer implements NodeEventListener {
             
         } catch (Exception e) {
             log.error("Error handling binary DISK request from {}: {}", peerId, e.getMessage(), e);
-            sendErrorResponse(peerId, requestId, FapiCode.INTERNAL_ERROR, "DISK operation failed: " + e.getMessage());
+            sendErrorResponse(peerId, connectionId, requestId, FapiCode.INTERNAL_ERROR, "DISK operation failed: " + e.getMessage());
         }
     }
     
     /**
      * 发送错误响应（使用统一协议编码）
      */
-    private void sendErrorResponse(String peerId, long requestId, int code, String message) {
+    private void sendErrorResponse(String peerId, long connectionId, long requestId, int code, String message) {
         if (fudpNode != null) {
             try {
                 FapiResponse errorResponse = FapiResponse.error(null, code, message);
-                // 错误响应也填充余额信息
                 fillBalanceInfo(errorResponse, peerId);
                 byte[] responseData = UnifiedCodec.encodeResponse(errorResponse, null);
-                fudpNode.respond(peerId, requestId, code, responseData);
+                fudpNode.respond(peerId, connectionId, requestId, code, responseData);
             } catch (Exception e) {
                 log.error("Failed to send error response to {}: {}", peerId, e.getMessage());
             }
@@ -1096,7 +1095,7 @@ public class FapiServer implements NodeEventListener {
      * Send PAYMENT_REQUIRED error with the client's valid cash list in response.data,
      * and grant a one-time free broadcastTx pass.
      */
-    private void sendPaymentRequiredWithCashes(String peerId, long requestId) {
+    private void sendPaymentRequiredWithCashes(String peerId, long connectionId, long requestId) {
         if (fudpNode == null) return;
         try {
             FapiResponse errorResponse = FapiResponse.error(null, FapiCode.PAYMENT_REQUIRED,
@@ -1123,7 +1122,7 @@ public class FapiServer implements NodeEventListener {
             }
 
             byte[] responseData = UnifiedCodec.encodeResponse(errorResponse, null);
-            fudpNode.respond(peerId, requestId, FapiCode.PAYMENT_REQUIRED, responseData);
+            fudpNode.respond(peerId, connectionId, requestId, FapiCode.PAYMENT_REQUIRED, responseData);
         } catch (Exception e) {
             log.error("Failed to send PAYMENT_REQUIRED with cashes to {}: {}", peerId, e.getMessage());
         }

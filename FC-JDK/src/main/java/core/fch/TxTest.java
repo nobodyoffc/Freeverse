@@ -88,7 +88,7 @@ public class TxTest {
         apipClient.setUrlHead(urlHead);
         apipClient.setSessionKey(sessionKey);
         String id = mFid;
-        Map<String, Multisig> p2SHMap = apipClient.multisigByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,mFid);
+        Map<String, Multisig> p2SHMap = apipClient.multisigByIds(RequestMethod.POST,AuthType.ENCRYPTED,mFid);
         if(p2SHMap==null)return;
         multisig = p2SHMap.get(mFid);
         JsonUtils.printJson(multisig);
@@ -107,7 +107,7 @@ public class TxTest {
 
         String msg = "hi";
 
-        List<Cash> cashList = apipClient.cashValid(mFid, 0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Cash> cashList = apipClient.cashValid(mFid, 0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.ENCRYPTED);
 
         if(cashList==null)return;
 
@@ -197,7 +197,7 @@ public class TxTest {
 
         String msg = "hi";
 
-        List<Cash> cashList  = apipClient.cashValid(fid,0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Cash> cashList  = apipClient.cashValid(fid,0.1,null,sendToList.size(),msg.getBytes().length, RequestMethod.POST, AuthType.ENCRYPTED);
 
         String txSigned = createTimeLockedTransaction(cashList, priKeyBytes, sendToList, 1999900, msg, FchMainNetwork.MAINNETWORK);
         System.out.println(txSigned);

@@ -68,7 +68,7 @@ public class Wallet {
                 System.out.println("Failed to make tx.");
                 return null;
             }
-            sendResult = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            sendResult = apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.ENCRYPTED);
         }
         return sendResult;
     }
@@ -80,7 +80,7 @@ public class Wallet {
         List<Cash> sendToList = new ArrayList<>();
         sendToList.add(sendTo);
         String txSigned = createAndSignFchTx(cashList, priKey, sendToList, msg, FchMainNetwork.MAINNETWORK);
-        return apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        return apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.ENCRYPTED);
     }
 
     public static String signRawTx(String rawTxHex, byte[] priKey) {
@@ -89,7 +89,7 @@ public class Wallet {
 
     public static String sendTxByApip(BufferedReader br, byte[] priKey, List<Cash> sendToList, String opReturnStr, long cd, int maxCashes, ApipClient apipClient) {
         String txSigned = makeTx(br, priKey, null, sendToList, opReturnStr, cd, maxCashes, apipClient, null);
-        apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.ENCRYPTED);
         Object data = apipClient.checkResult();
         return (String) data;
     }
@@ -136,7 +136,7 @@ public class Wallet {
         }
 
         if (apipClient != null) {
-            cashList = apipClient.cashValid(fid,sum,cd,sendToList.size(),opReturnSize,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
+            cashList = apipClient.cashValid(fid,sum,cd,sendToList.size(),opReturnSize,RequestMethod.POST,AuthType.ENCRYPTED);
             bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
         } else if (esClient != null) {
             ReplyBody replier = getCashListFromEs(new ArrayList<>(Arrays.asList(fid)), true, null, maxCashes, null, null, esClient);
@@ -243,7 +243,7 @@ public class Wallet {
                 replyBody.setBestHeight(bestHeight);
             }
         } else if (apipClient != null) {
-            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.ENCRYPTED);
             return apipClient.getFcClientEvent().getResponseBody();
         } else replyBody.setOtherError("No client to send tx.");
         return replyBody;
@@ -335,7 +335,7 @@ public class Wallet {
         String txSigned = createAndSignFchTx(cashList, priKey, sendToList, null, FchMainNetwork.MAINNETWORK);
 
         if (apipClient != null) {
-            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            apipClient.broadcastTx(txSigned, RequestMethod.POST, AuthType.ENCRYPTED);
             data = apipClient.checkResult();
         } else if (nasaClient != null) {
             data = nasaClient.sendRawTransaction(txSigned);
@@ -491,7 +491,7 @@ public class Wallet {
             if (nasaClient != null) return nasaClient.getBestHeight();
             if (esClient != null) return getBestHeight(esClient);
             if (apipClient != null) {
-                apipClient.ping(VER_1, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, null);
+                apipClient.ping(VER_1, RequestMethod.POST, AuthType.ENCRYPTED, null);
                 return apipClient.getFcClientEvent().getResponseBody().getBestHeight();
             }
         } catch (Exception ignore) {

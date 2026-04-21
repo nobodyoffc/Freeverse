@@ -87,9 +87,26 @@ public class Hash {
         return Hashing.sha512().hashBytes(Hashing.sha512().hashBytes(s.getBytes()).asBytes()).toString();
     }
 
+    /**
+     * Compute HMAC-SHA256 message authentication code.
+     * This is the recommended method for signing — use instead of getSignLegacy().
+     */
+    public static byte[] hmacSha256(byte[] message, byte[] key) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA256"));
+            return mac.doFinal(message);
+        } catch (Exception e) {
+            throw new RuntimeException("HmacSHA256 not available", e);
+        }
+    }
+
+    public static String hmacSha256Hex(byte[] message, byte[] key) {
+        return BytesUtils.bytesToHexStringBE(hmacSha256(message, key));
+    }
+
     public static byte[] getSign(byte[] text, byte[] symKey) {
-        byte[] bytes = BytesUtils.bytesMerger(text, symKey);
-        return Hash.sha256x2(bytes);
+        return hmacSha256(text, symKey);
     }
 
     public static String getSign(String text, byte[] symKey) {
@@ -101,13 +118,23 @@ public class Hash {
     public static String getSign(String symKey, String text) {
         byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
         byte[] keyBytes = BytesUtils.hexToByteArray(symKey);
-        byte[] bytes = BytesUtils.bytesMerger(textBytes, keyBytes);
-        System.out.println("----");
-        System.out.println("Content in hex to be signed: ");
-        System.out.println("----");
-        System.out.println(HexFormat.of().formatHex(bytes));
-//        System.out.println("------");
-        byte[] signBytes = Hash.sha256x2(bytes);
+        return BytesUtils.bytesToHexStringBE(hmacSha256(textBytes, keyBytes));
+    }
+
+    /**
+     * Legacy signing using SHA256x2(text || key). Kept for verifying old signatures.
+     * @deprecated Use {@link #getSign(byte[], byte[])} (HMAC-SHA256) for new signatures.
+     */
+    @Deprecated
+    public static byte[] getSignLegacy(byte[] text, byte[] symKey) {
+        byte[] bytes = BytesUtils.bytesMerger(text, symKey);
+        return Hash.sha256x2(bytes);
+    }
+
+    @Deprecated
+    public static String getSignLegacy(String text, byte[] symKey) {
+        byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
+        byte[] signBytes = getSignLegacy(textBytes, symKey);
         return BytesUtils.bytesToHexStringBE(signBytes);
     }
 

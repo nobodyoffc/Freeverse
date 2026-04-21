@@ -64,7 +64,7 @@ public class ApipClient extends FcClient {
     public List<Multisig> myMultisigs(String fid) {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(FIDS).addNewValues(fid);
-        return multisigSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        return multisigSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
     }
 
     public void checkMaster(String prikeyCipher,byte[] symKey,BufferedReader br) {
@@ -97,7 +97,7 @@ public class ApipClient extends FcClient {
     }
     public Long bestHeight() {
         //Request
-        Block block = bestBlock(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
+        Block block = bestBlock(RequestMethod.POST,AuthType.ENCRYPTED);
         if(block==null)return null;
         return block.getHeight();
     }
@@ -389,7 +389,7 @@ public class ApipClient extends FcClient {
     }
 
     public Freer freerById(String id) {
-        Map<String, Freer> map = freerByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, Freer> map = freerByIds(RequestMethod.POST, AuthType.ENCRYPTED, id);
         try {
             return map.get(id);
         }catch (Exception e){
@@ -406,7 +406,7 @@ public class ApipClient extends FcClient {
 
     public Map<String, String> getFidCidMap(List<String> fidList) {
         fidList.remove(null);
-        Map<String, Freer> cidInfoMap = this.freerByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, fidList.toArray(new String[0]));
+        Map<String, Freer> cidInfoMap = this.freerByIds(RequestMethod.POST, AuthType.ENCRYPTED, fidList.toArray(new String[0]));
         if (cidInfoMap == null) return null;
         Map<String, String> fidCidMap = new HashMap<>();
         for (String fid:cidInfoMap.keySet()) {
@@ -421,7 +421,7 @@ public class ApipClient extends FcClient {
         String part = Inputer.inputString(br,"Input the FID, CID, used CIDs or a part of any one of them:");
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewPart().addNewFields(ID,FieldNames.USED_CIDS).addNewValue(part);
-        List<Freer> result = freerSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        List<Freer> result = freerSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         if(result==null || result.isEmpty())return null;
         return Freer.showCidList("Chose CIDs",result,20,choose,br);
     }
@@ -515,7 +515,7 @@ public class ApipClient extends FcClient {
     }
 
     public Protocol protocolById(String id){
-        Map<String, Protocol> map = protocolByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, Protocol> map = protocolByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);
@@ -554,7 +554,7 @@ public class ApipClient extends FcClient {
     }
 
     public Code codeById(String id){
-        Map<String, Code> map = codeByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, Code> map = codeByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);
@@ -617,7 +617,7 @@ public class ApipClient extends FcClient {
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.addNewQuery().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(type);
         fcdsl.addNewExcept().addNewTerms().addNewFields(ACTIVE).addNewValues(FALSE);
-        serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         return serviceList;
     }
 
@@ -627,7 +627,7 @@ public class ApipClient extends FcClient {
         fcdsl.addNewQuery().addNewTerms().addNewFields(OWNER).addNewValues(owner);
         fcdsl.addNewExcept().addNewTerms().addNewFields(CLOSED).addNewValues(TRUE);
         if(type!=null)fcdsl.addNewFilter().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(type.name());
-        serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         return serviceList;
     }
 
@@ -637,12 +637,12 @@ public class ApipClient extends FcClient {
         fcdsl.addNewQuery().addNewTerms().addNewFields(DEALER).addNewValues(dealer);
         fcdsl.addNewExcept().addNewTerms().addNewFields(CLOSED).addNewValues(TRUE);
         if(type!=null)fcdsl.addNewFilter().addNewTerms().addNewFields(FieldNames.TYPE).addNewValues(type.toString());
-        serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        serviceList = serviceSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         return serviceList;
     }
 
     public Service serviceById(String id){
-        Map<String, Service> map = serviceByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, Service> map = serviceByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);
@@ -657,7 +657,7 @@ public class ApipClient extends FcClient {
     }
 
     public App appById(String id){
-        Map<String, App> map = appByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, App> map = appByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);
@@ -667,7 +667,7 @@ public class ApipClient extends FcClient {
     }
 
     public List<App> appSearch(Fcdsl fcdsl, RequestMethod requestMethod, AuthType authType){
-        Object data = requestJsonByFcdsl(APP_SEARCH, VER_1, fcdsl, AuthType.SYMKEY_ENCRYPT, sessionKey, RequestMethod.POST);
+        Object data = requestJsonByFcdsl(APP_SEARCH, VER_1, fcdsl, AuthType.ENCRYPTED, sessionKey, RequestMethod.POST);
         if(data==null)return null;
         return objectToList(data,App.class);
     }
@@ -823,7 +823,7 @@ public class ApipClient extends FcClient {
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 
-        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.ENCRYPTED);
 
         Object data = result.getData();
         return objectToList(data, Contact.class);
@@ -884,7 +884,7 @@ public class ApipClient extends FcClient {
 
         if(last!=null && !last.isEmpty())fcdsl.addAfter(last);
 
-        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.ENCRYPTED);
 
         Object data = result.getData();
         return objectToList(data, tClass);
@@ -938,7 +938,7 @@ public class ApipClient extends FcClient {
 //        return this.mailSearch(fcdsl, RequestMethod.POST, AuthType.FC_SIGN_BODY);
 
 
-        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        ReplyBody result = this.general(fcdsl,RequestMethod.POST, AuthType.ENCRYPTED);
 
         Object data = result.getData();
         return objectToList(data, Mail.class);
@@ -1290,7 +1290,7 @@ public class ApipClient extends FcClient {
     public Map<String, String> newCashListByIds(WebhookManager.WebhookRequestBody webhookRequestBody){
         Fcdsl fcdsl = new Fcdsl();
         Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonUtils.toJson(webhookRequestBody));
-        Object data = requestJsonByFcdsl(ApipApi.HOOK_NEW_CASH_BY_FIDS, VER_1, fcdsl, AuthType.SYMKEY_ENCRYPT, sessionKey, RequestMethod.POST);
+        Object data = requestJsonByFcdsl(ApipApi.HOOK_NEW_CASH_BY_FIDS, VER_1, fcdsl, AuthType.ENCRYPTED, sessionKey, RequestMethod.POST);
         if(data==null)return null;
         return objectToMap(data,String.class,String.class);
     }
@@ -1298,7 +1298,7 @@ public class ApipClient extends FcClient {
     public Map<String, String> newOpReturnListByIds(WebhookManager.WebhookRequestBody webhookRequestBody){
         Fcdsl fcdsl = new Fcdsl();
         Fcdsl.setSingleOtherMap(fcdsl, constants.FieldNames.WEBHOOK_REQUEST_BODY, JsonUtils.toJson(webhookRequestBody));
-        Object data = requestJsonByFcdsl(NEW_OP_RETURN_HOOK_BY_FIDS, VER_1, fcdsl, AuthType.SYMKEY_ENCRYPT, sessionKey, RequestMethod.POST);
+        Object data = requestJsonByFcdsl(NEW_OP_RETURN_HOOK_BY_FIDS, VER_1, fcdsl, AuthType.ENCRYPTED, sessionKey, RequestMethod.POST);
         if(data==null)return null;
         return objectToMap(data,String.class,String.class);
     }
@@ -1311,7 +1311,7 @@ public class ApipClient extends FcClient {
     public String chooseFid(BufferedReader br) {
         while (true) {
             String input = Inputer.inputString(br, "Input CID, FID or a part of them:");
-            Map<String, String[]> result = fidCidSeek(input, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            Map<String, String[]> result = fidCidSeek(input, RequestMethod.POST, AuthType.ENCRYPTED);
             if (result == null || result.isEmpty()) return null;
             Object chosen = Inputer.chooseOneFromMapArray(result, false, false, "Choose one:", br);
             if (chosen == null) {
@@ -1331,7 +1331,7 @@ public class ApipClient extends FcClient {
         for(Sort sort: sortList)fcdsl.addSort(sort.getField(),sort.getOrder());
         if(last !=null)fcdsl.addAfter(last).addSize(size);
     
-        ReplyBody result = apipClient.general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        ReplyBody result = apipClient.general(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         if(result==null || result.getData()==null) return null;
         if(last!=null){
             last.clear();
@@ -1343,7 +1343,7 @@ public class ApipClient extends FcClient {
         if(meetList==null || meetList.isEmpty())return;
         List<Cash> addingList = new ArrayList<>();
         List<String> removingIdList = new ArrayList<>();
-        Map<String, List<Cash>> result = unconfirmedCaches(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT,fid);
+        Map<String, List<Cash>> result = unconfirmedCaches(RequestMethod.POST, AuthType.ENCRYPTED,fid);
         if(result!=null){
             List<Cash> unconfirmedCashList = result.get(fid);
             if(unconfirmedCashList!=null){
@@ -1376,7 +1376,7 @@ public class ApipClient extends FcClient {
         fcdsl.addIds(ids);
 
         // Make request
-        ReplyBody result = general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        ReplyBody result = general(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         if(result==null || result.getData()==null) return null;
         // Convert and return result
         List<T> dataList = objectToList(result.getData(),tClass);
@@ -1400,7 +1400,7 @@ public class ApipClient extends FcClient {
     }
 
     public Text textById(String id){
-        Map<String, Text> map = textByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, Text> map = textByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);
@@ -1437,7 +1437,7 @@ public class ApipClient extends FcClient {
     }
 
     public Remark remarkById(String id){
-        Map<String, Remark> map = remarkByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, Remark> map = remarkByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);
@@ -1475,7 +1475,7 @@ public class ApipClient extends FcClient {
     }
 
     public News newsById(String id){
-        Map<String, News> map = newsByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, id);
+        Map<String, News> map = newsByIds(RequestMethod.POST,AuthType.ENCRYPTED, id);
         if(map==null)return null;
         try {
             return map.get(id);

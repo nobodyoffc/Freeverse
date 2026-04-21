@@ -29,7 +29,7 @@ public class OpReturnSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,TX_INDEX,true,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.OPRETURN, OpReturn.class, defaultSort, request,response,authType);
     }

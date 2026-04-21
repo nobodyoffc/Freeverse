@@ -124,7 +124,7 @@ public class Mail extends FcObject {
         if(myFid.equals(mail.getTo()))cryptoDataByte.setPrikeyB(priKey);
         if(myFid.equals(mail.getFrom())){
             cryptoDataByte.setPrikeyA(priKey);
-            String pubKeyB = apipClient.getPubkey(mail.getTo(), RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            String pubKeyB = apipClient.getPubkey(mail.getTo(), RequestMethod.POST, AuthType.ENCRYPTED);
             cryptoDataByte.setPubkeyB(Hex.fromHex(pubKeyB));
         }
 

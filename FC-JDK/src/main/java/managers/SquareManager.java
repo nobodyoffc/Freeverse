@@ -87,12 +87,12 @@ public class SquareManager extends Manager<Square> {
         System.out.println("Found " + squareList.size() + " updated squares.");
     }
     public Square getSquareInfo(String gid, ApipClient apipClient){
-        Map<String, Square> result = apipClient.squareByIds(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,gid);
+        Map<String, Square> result = apipClient.squareByIds(RequestMethod.POST,AuthType.ENCRYPTED,gid);
         if(result==null || result.isEmpty())return null;
         return result.get(gid);
     }
     public List<String> getSquareMembers(String gid,ApipClient apipClient){
-        Map<String, String[]> result = apipClient.squareMembers(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT,gid);
+        Map<String, String[]> result = apipClient.squareMembers(RequestMethod.POST,AuthType.ENCRYPTED,gid);
         if(result==null || result.isEmpty())return null;
         return Arrays.asList(result.get(gid));
     }
@@ -122,7 +122,7 @@ public class SquareManager extends Manager<Square> {
         List<Square> resultList;
         List<String> last = new ArrayList<>();
         while(true){
-            resultList = apipClient.mySquares(myFid,sinceHeight,size,last,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
+            resultList = apipClient.mySquares(myFid,sinceHeight,size,last,RequestMethod.POST,AuthType.ENCRYPTED);
             if(resultList==null)return null;
             if(resultList.size()<size)break;
             if(br!=null && !Inputer.askIfYes(br,"Get more squares?"))break;
@@ -329,7 +329,7 @@ public class SquareManager extends Manager<Square> {
                  .addNewPart()
                  .addNewFields(FieldNames.SQUARE_ID, FieldNames.NAME, Values.DESC,FieldNames.MEMBERS)
                  .addNewValue(searchTerm);
-        return apipClient.squareSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        return apipClient.squareSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
     }
     public List<Square> chooseSquareList(List<Square> squareList, BufferedReader br) {
         if(squareList==null || squareList.isEmpty())return null;

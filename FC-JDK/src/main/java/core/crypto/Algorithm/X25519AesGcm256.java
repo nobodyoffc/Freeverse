@@ -174,16 +174,20 @@ public class X25519AesGcm256 implements AsymmetricCipher {
 
         // Derive symmetric key
         byte[] symkey = X25519.asyKeyToSymkey(priKey, pubKey, nonce);
-        cryptoDataByte.setSymkey(symkey);
-        cryptoDataByte.setIv(nonce);
-        cryptoDataByte.setAlg(AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
+        try {
+            cryptoDataByte.setSymkey(symkey);
+            cryptoDataByte.setIv(nonce);
+            cryptoDataByte.setAlg(AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
 
-        // Encrypt using AES-GCM-256
-        AesGcm256.encrypt(inputStream, outputStream, symkey, nonce, cryptoDataByte);
+            // Encrypt using AES-GCM-256
+            AesGcm256.encrypt(inputStream, outputStream, symkey, nonce, cryptoDataByte);
 
-        cryptoDataByte.setAlg(AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
+            cryptoDataByte.setAlg(AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
 
-        return cryptoDataByte;
+            return cryptoDataByte;
+        } finally {
+            java.util.Arrays.fill(symkey, (byte) 0);
+        }
     }
 
     /**
@@ -205,11 +209,15 @@ public class X25519AesGcm256 implements AsymmetricCipher {
 
         // Derive symmetric key
         byte[] symkey = X25519.asyKeyToSymkey(priKey, pubKey, nonce);
-        cryptoDataByte.setSymkey(symkey);
-        cryptoDataByte.setIv(nonce);
+        try {
+            cryptoDataByte.setSymkey(symkey);
+            cryptoDataByte.setIv(nonce);
 
-        // Decrypt using AES-GCM-256
-        AesGcm256.decryptStream(inputStream, outputStream, cryptoDataByte);
+            // Decrypt using AES-GCM-256
+            AesGcm256.decryptStream(inputStream, outputStream, cryptoDataByte);
+        } finally {
+            java.util.Arrays.fill(symkey, (byte) 0);
+        }
     }
 
     /**

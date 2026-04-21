@@ -28,7 +28,7 @@ public class P2shByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.P2SH, P2SH.class, ID, request,response,authType);
     }
     @Override

@@ -25,7 +25,7 @@ public class Ping extends HttpServlet {
     }
 
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         FcHttpRequestHandler.doPingPost(request, response, authType,replier,httpRequestChecker);
 
     }

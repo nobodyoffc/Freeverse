@@ -1,6 +1,8 @@
 package finance;
 
 import constants.OpNames;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
@@ -19,6 +21,8 @@ import static constants.OpNames.DESTROY;
 
 public class FinanceRollbacker {
 
+	private static final Logger log = LoggerFactory.getLogger(FinanceRollbacker.class);
+
 	public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = false;
 		error = rollbackProof(esClient,lastHeight);
@@ -33,17 +37,17 @@ public class FinanceRollbacker {
 		ArrayList<String> itemIdList = resultMap.get("itemIdList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 
-
 		if(itemIdList==null||itemIdList.isEmpty())return error;
-		System.out.println("If Rollbacking is interrupted, reparse all effected ids of index 'proof': ");
+		log.warn("If Rollbacking is interrupted, reparse all effected ids of index 'proof': ");
 		JsonUtils.printJson(itemIdList);
+
+		List<ProofHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY, PROOF_ID, PROOF_IDS, itemIdList, ProofHistory.class);
+
 		deleteEffectedItems(esClient, IndicesNames.PROOF, itemIdList);
-		if(histIdList==null||histIdList.isEmpty())return error;
-		deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY,histIdList);
+		if(histIdList!=null&&!histIdList.isEmpty())
+			deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY, histIdList);
 
-		List<ProofHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY,PROOF_ID,PROOF_IDS , itemIdList, ProofHistory.class);
-
-		reparseProof(esClient,reparseHistList);
+		reparseProof(esClient, reparseHistList);
 
 		return error;
 	}
@@ -106,8 +110,9 @@ public class FinanceRollbacker {
 
 	private void reparseProof(ElasticsearchClient esClient, List<ProofHistory> reparseHistList) throws Exception {
 		if(reparseHistList==null)return;
+		FinanceParser parser = new FinanceParser();
 		for(ProofHistory proofHist: reparseHistList) {
-			new FinanceParser().parseProof(esClient, proofHist);
+			parser.parseProof(esClient, proofHist);
 		}
 	}
 
@@ -117,21 +122,18 @@ public class FinanceRollbacker {
 		ArrayList<String> tokenIdList = resultMap.get("itemIdList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 
-
 		if(tokenIdList==null||tokenIdList.isEmpty())return error;
-		System.out.println("If Rollback is interrupted, reparse all effected ids of index 'token': ");
+		log.warn("If Rollback is interrupted, reparse all effected ids of index 'token': ");
 		JsonUtils.printJson(tokenIdList);
+
+		List<TokenHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY, TOKEN_ID, TOKEN_IDS, tokenIdList, TokenHistory.class);
+
 		deleteEffectedItems(esClient, IndicesNames.TOKEN, tokenIdList);
+		if(histIdList!=null&&!histIdList.isEmpty())
+			deleteRolledHists(esClient, IndicesNames.TOKEN_HISTORY, histIdList);
+		deleteEffectedTokenHolders(esClient, tokenIdList);
 
-		if(histIdList==null||histIdList.isEmpty())return error;
-
-		deleteRolledHists(esClient, IndicesNames.TOKEN_HISTORY,histIdList);
-
-		List<TokenHistory>reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY, TOKEN_ID, TOKEN_IDS, tokenIdList, TokenHistory.class);
-
-		deleteEffectedTokenHolders(esClient,tokenIdList);
-
-		reparseToken(esClient,reparseHistList);
+		reparseToken(esClient, reparseHistList);
 
 		return error;
 	}
@@ -207,9 +209,10 @@ public class FinanceRollbacker {
 
 	private void reparseToken(ElasticsearchClient esClient, List<TokenHistory> reparseHistList) throws Exception {
 		if(reparseHistList==null)return;
+		FinanceParser parser = new FinanceParser();
 		for(TokenHistory tokenHist: reparseHistList) {
 			try {
-				new FinanceParser().parseToken(esClient, tokenHist);
+				parser.parseToken(esClient, tokenHist);
 			}catch (NumberFormatException ignore){}
 		}
 	}

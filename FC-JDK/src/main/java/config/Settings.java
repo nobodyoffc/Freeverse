@@ -97,6 +97,7 @@ public class Settings {
     private Service service;
     private String clientName;
 
+    private boolean bootstrapping; // true while ServiceBootstrap is driving init (suppresses early loadMyService)
     private String sid; //For server
     private String mainFid; //For Client
 //    private String master;
@@ -261,7 +262,7 @@ public class Settings {
         }
 
         if(apipClient!=null){
-            return apipClient.bestBlock(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            return apipClient.bestBlock(RequestMethod.POST, AuthType.ENCRYPTED);
         }
 
         if(esClient!=null){
@@ -768,7 +769,7 @@ public class Settings {
         }
         clientGroups.put(groupType, group);
         if(groupType == REDIS)jedisPool = (JedisPool) group.getClient();
-        if(sid==null && serverType!=null) {
+        if(sid==null && serverType!=null && !bootstrapping) {
             if(groupType == APIP || groupType == ES && (this.serverType == APIP || ServiceType.isFapi(this.serverType)))
                 loadMyService(null, symkey, config);
         }
@@ -1440,6 +1441,10 @@ public class Settings {
 
     public void setServerType(ServiceType serverType) {
         this.serverType = serverType;
+    }
+
+    public void setBootstrapping(boolean bootstrapping) {
+        this.bootstrapping = bootstrapping;
     }
 
     public static Map<ServiceType, List<FreeApi>> getFreeApiListMap() {

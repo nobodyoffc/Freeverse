@@ -7,9 +7,11 @@ import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import co.elastic.clients.elasticsearch.cat.IndicesResponse;
 import co.elastic.clients.elasticsearch.cat.indices.IndicesRecord;
+import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.elasticsearch._types.aggregations.StringTermsBucket;
 import co.elastic.clients.json.JsonData;
 import core.crypto.KeyTools;
 import core.fch.RawTxParser;
@@ -21,6 +23,7 @@ import data.apipData.Utxo;
 import data.fcData.EntityProperty;
 import data.fchData.Cash;
 import data.fchData.FchChainInfo;
+import data.fchData.Freer;
 import data.fchData.TxHasInfo;
 import data.feipData.ServiceType;
 import fapi.AbstractFapiComponent;
@@ -31,6 +34,7 @@ import fapi.query.FcdslQueryExecutor;
 import fapi.query.QueryResult;
 import fapi.rpc.RpcOperationService;
 import fapi.rpc.RpcOperationService.RpcResult;
+import utils.EsUtils;
 import utils.FchUtils;
 
 import java.util.*;
@@ -66,6 +70,7 @@ public class BaseComponent extends AbstractFapiComponent {
             // 通用查询
             "base.getByIds",           // 根据ID获取实体
             "base.search",             // 搜索实体
+            "base.freerByIds",         // 根据FID获取Freer（实时计算余额/CD）
             "base.totals",             // 获取所有索引文档数量
             "base.health",             // 健康检查
             // 余额查询
@@ -112,6 +117,7 @@ public class BaseComponent extends AbstractFapiComponent {
             // 通用查询
             case "getByIds" -> handleGetByIds(request);
             case "search" -> handleSearch(request);
+            case "freerByIds" -> handleFreerByIds(request);
             case "totals" -> handleTotals(requestId);
             case "health" -> handleHealth(requestId);
             // 余额查询
@@ -208,7 +214,112 @@ public class BaseComponent extends AbstractFapiComponent {
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Search failed: " + e.getMessage());
         }
     }
-    
+
+    /**
+     * 处理freerByIds请求 - 根据FID获取Freer并实时计算余额、UTXO数量和CD
+     */
+    private FapiResponse handleFreerByIds(FapiRequest request) {
+        String requestId = request.getId();
+        Fcdsl fcdsl = request.getFcdsl();
+
+        List<String> fids = fcdsl != null ? fcdsl.getIds() : null;
+        if (fids == null || fids.isEmpty()) {
+            return errorResponse(requestId, FapiCode.BAD_REQUEST, "fcdsl.ids (FID list) is required");
+        }
+
+        try {
+            // 1. 从freer索引获取Freer记录
+            Map<String, Freer> freerMap = queryExecutor.executeIdsQuery("freer", Freer.class, fids);
+            if (freerMap == null || freerMap.isEmpty()) {
+                return errorResponse(requestId, FapiCode.NOT_FOUND, "No freers found");
+            }
+
+            // 2. 从cash索引实时计算余额、数量和CD
+            Map<String, long[]> liveStats = computeLiveCashStats(new ArrayList<>(freerMap.keySet()));
+
+            // 3. 更新Freer对象并批量更新ES
+            BulkRequest.Builder br = new BulkRequest.Builder();
+            for (Map.Entry<String, Freer> entry : freerMap.entrySet()) {
+                String fid = entry.getKey();
+                Freer freer = entry.getValue();
+                long[] stats = liveStats.getOrDefault(fid, new long[]{0, 0, 0});
+
+                freer.setCash(stats[0]);
+                freer.setBalance(stats[1]);
+                freer.setCd(stats[2]);
+
+                Map<String, Long> updateMap = new HashMap<>();
+                updateMap.put("cash", stats[0]);
+                updateMap.put("balance", stats[1]);
+                updateMap.put("cd", stats[2]);
+
+                br.operations(o -> o.update(u -> u
+                    .index("freer").id(fid)
+                    .action(a -> a.doc(updateMap))));
+            }
+            EsUtils.bulkWithBuilder(esClient, br);
+
+            // 4. 返回更新后的Freer
+            FapiResponse response = successResponse(requestId, freerMap);
+            response.setGot((long) freerMap.size());
+            response.setTotal((long) freerMap.size());
+            return response;
+        } catch (Exception e) {
+            log.error("Failed to handle freerByIds", e);
+            return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Failed to get freers: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 从cash索引实时计算每个FID的UTXO数量、余额和CD
+     * 使用ES聚合查询，一次请求完成所有计算
+     *
+     * @return Map<FID, long[]{count, balance, cd}>
+     */
+    private Map<String, long[]> computeLiveCashStats(List<String> fids) throws Exception {
+        Map<String, long[]> statsMap = new HashMap<>();
+
+        List<FieldValue> fidValues = new ArrayList<>();
+        for (String fid : fids) {
+            fidValues.add(FieldValue.of(fid));
+        }
+
+        long nowSeconds = System.currentTimeMillis() / 1000;
+
+        // CD公式与Cash.makeCd()和CdMaker一致: ((now - birthTime) / 86400) * value / 100000000
+        String cdScript = "long bt = doc['birthTime'].size() > 0 ? doc['birthTime'].value : 0L; " +
+                          "long v = doc['value'].size() > 0 ? doc['value'].value : 0L; " +
+                          "return ((long)((params.now - bt) / 86400)) * v / 100000000;";
+
+        SearchResponse<Void> searchResponse = esClient.search(s -> s
+            .index("cash")
+            .size(0)
+            .query(q -> q.bool(b -> b
+                .must(m -> m.terms(t -> t.field("owner").terms(t1 -> t1.value(fidValues))))
+                .must(m -> m.term(t -> t.field("valid").value(true)))))
+            .aggregations("byOwner", a -> a
+                .terms(t -> t.field("owner").size(fids.size()))
+                .aggregations("balanceSum", a2 -> a2.sum(su -> su.field("value")))
+                .aggregations("cdSum", a2 -> a2.sum(su -> su
+                    .script(sc -> sc.inline(i -> i
+                        .source(cdScript)
+                        .params("now", JsonData.of(nowSeconds))))))),
+            Void.class);
+
+        List<StringTermsBucket> buckets = searchResponse.aggregations()
+            .get("byOwner").sterms().buckets().array();
+
+        for (StringTermsBucket bucket : buckets) {
+            String owner = bucket.key().stringValue();
+            long count = bucket.docCount();
+            long balance = (long) bucket.aggregations().get("balanceSum").sum().value();
+            long cd = (long) bucket.aggregations().get("cdSum").sum().value();
+            statsMap.put(owner, new long[]{count, balance, cd});
+        }
+
+        return statsMap;
+    }
+
     /**
      * 处理totals请求
      */

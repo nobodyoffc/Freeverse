@@ -20,6 +20,8 @@ public class ConnectionCloseFrame extends Frame {
     public static final int FLOW_CONTROL_ERROR = 0x03;
     public static final int STREAM_LIMIT_ERROR = 0x04;
     public static final int PROTOCOL_VIOLATION = 0x05;
+    public static final int IDLE_TIMEOUT = 0x06;
+    public static final int CONNECTION_LIMIT = 0x07;
 
     private long errorCode;
     private String reasonPhrase;
@@ -72,6 +74,9 @@ public class ConnectionCloseFrame extends Frame {
 
         frame.errorCode = Varint.decode(buffer);
         int reasonLength = (int) Varint.decode(buffer);
+        if (reasonLength < 0 || reasonLength > buffer.remaining()) {
+            throw new IllegalArgumentException("Invalid reason length: " + reasonLength + ", remaining: " + buffer.remaining());
+        }
         byte[] reasonBytes = new byte[reasonLength];
         buffer.get(reasonBytes);
         frame.reasonPhrase = new String(reasonBytes, StandardCharsets.UTF_8);

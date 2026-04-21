@@ -8,11 +8,30 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 
 public class OpReFileUtils {
+
+    /**
+     * Reads exactly {@code len} bytes from the input stream.
+     * Unlike InputStream.read(byte[]), this guarantees all bytes are read
+     * unless EOF is reached.
+     * @return actual bytes read, or -1 if EOF before any byte
+     */
+    private static int readFully(InputStream is, byte[] buf, int len) throws IOException {
+        int totalRead = 0;
+        while (totalRead < len) {
+            int bytesRead = is.read(buf, totalRead, len - totalRead);
+            if (bytesRead == -1) {
+                return totalRead == 0 ? -1 : totalRead;
+            }
+            totalRead += bytesRead;
+        }
+        return totalRead;
+    }
 
     public static opReReadResult readOpReFromFile(FileInputStream opis) throws IOException {
 
@@ -23,19 +42,33 @@ public class OpReFileUtils {
         OpReturn op = new OpReturn();
 
         byte[] length = new byte[4];
-        int end = opis.read(length);
-        if (end == -1) {
+        int bytesRead = readFully(opis, length, 4);
+        if (bytesRead == -1) {
             System.out.println("OpReturn File was parsed completely.");
             fileEnd = true;
             result.setFileEnd(fileEnd);
             opis.close();
             return result;
         }
+        if (bytesRead < 4) {
+            // Partial length header — treat as file end (data not yet fully written)
+            System.out.println("OpReturn File: short read on length header, treating as file end.");
+            fileEnd = true;
+            result.setFileEnd(fileEnd);
+            return result;
+        }
 
         int opLength = BytesUtils.bytesToIntBE(length);
 
         byte[] opbytes = new byte[opLength];
-        opis.read(opbytes);
+        bytesRead = readFully(opis, opbytes, opLength);
+        if (bytesRead < opLength) {
+            // Partial record — treat as file end (data not yet fully written)
+            System.out.println("OpReturn File: short read on record data (" + bytesRead + "/" + opLength + "), treating as file end.");
+            fileEnd = true;
+            result.setFileEnd(fileEnd);
+            return result;
+        }
 
         int offset = 0;
 

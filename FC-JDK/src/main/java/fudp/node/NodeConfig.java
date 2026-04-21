@@ -84,6 +84,21 @@ public class NodeConfig {
     private boolean auditLogEnablePersistence = false; // Enable persistence (default: disabled)
     private long auditLogRetentionDays = 30;           // Persisted log retention days (if enabled)
 
+    // Multi-Connection per FID
+    private int maxConnectionsPerFid = 5;            // Max simultaneous connections per FID
+    private long idleConnectionTimeoutMs = 300000;   // 5 minutes idle timeout per connection
+    private long idleConnectionCleanupIntervalMs = 60000; // Cleanup check interval (60 seconds)
+
+    // Loss Detection
+    private long lossDetectionMinThresholdMs = 2000;
+
+    // Pacing
+    private int pacingBurstOverride = -1;      // -1 = auto-calculate; >0 = override burst size
+    private long pacingIntervalNanos = 1_000_000; // 1ms default; use 200_000 (200us) for LAN
+
+    // Socket Buffers
+    private int socketBufferSize = 2 * 1024 * 1024; // 2MB default; increase for large MTU
+
     // DDoS Defense
     private fudp.security.DDoSConfig ddosConfig = new fudp.security.DDoSConfig();
 
@@ -539,6 +554,99 @@ public class NodeConfig {
 
     public NodeConfig setAuditLogRetentionDays(long auditLogRetentionDays) {
         this.auditLogRetentionDays = auditLogRetentionDays;
+        return this;
+    }
+
+    // Multi-Connection per FID getters/setters
+
+    public int getMaxConnectionsPerFid() {
+        return maxConnectionsPerFid;
+    }
+
+    public NodeConfig setMaxConnectionsPerFid(int maxConnectionsPerFid) {
+        this.maxConnectionsPerFid = maxConnectionsPerFid;
+        return this;
+    }
+
+    public long getIdleConnectionTimeoutMs() {
+        return idleConnectionTimeoutMs;
+    }
+
+    public NodeConfig setIdleConnectionTimeoutMs(long idleConnectionTimeoutMs) {
+        this.idleConnectionTimeoutMs = idleConnectionTimeoutMs;
+        return this;
+    }
+
+    public long getIdleConnectionCleanupIntervalMs() {
+        return idleConnectionCleanupIntervalMs;
+    }
+
+    public NodeConfig setIdleConnectionCleanupIntervalMs(long idleConnectionCleanupIntervalMs) {
+        this.idleConnectionCleanupIntervalMs = idleConnectionCleanupIntervalMs;
+        return this;
+    }
+
+    // Loss Detection getters/setters
+
+    public long getLossDetectionMinThresholdMs() {
+        return lossDetectionMinThresholdMs;
+    }
+
+    public NodeConfig setLossDetectionMinThresholdMs(long lossDetectionMinThresholdMs) {
+        this.lossDetectionMinThresholdMs = lossDetectionMinThresholdMs;
+        return this;
+    }
+
+    // Pacing getters/setters
+
+    /**
+     * Get the pacing burst override. -1 means auto-calculate.
+     */
+    public int getPacingBurstOverride() {
+        return pacingBurstOverride;
+    }
+
+    /**
+     * Override the pacing burst size (frames sent before each pause).
+     * Default -1 = auto-calculate based on MTU.
+     * For LAN/localhost, set to 10-20 for small MTU to improve throughput.
+     * For internet, leave at -1 (auto).
+     */
+    public NodeConfig setPacingBurstOverride(int pacingBurstOverride) {
+        this.pacingBurstOverride = pacingBurstOverride;
+        return this;
+    }
+
+    /**
+     * Get the pacing interval in nanoseconds.
+     */
+    public long getPacingIntervalNanos() {
+        return pacingIntervalNanos;
+    }
+
+    /**
+     * Set the pacing interval (pause duration between bursts).
+     * Default: 1,000,000 ns (1ms). For LAN, use 200,000 ns (200us) for 5x faster pacing.
+     * Thread.sleep(1) actually sleeps ~1-2ms on most OS; LockSupport.parkNanos is more precise.
+     */
+    public NodeConfig setPacingIntervalNanos(long pacingIntervalNanos) {
+        this.pacingIntervalNanos = pacingIntervalNanos;
+        return this;
+    }
+
+    /**
+     * Get the socket buffer size.
+     */
+    public int getSocketBufferSize() {
+        return socketBufferSize;
+    }
+
+    /**
+     * Set the UDP socket send/receive buffer size.
+     * Default: 2MB. For large MTU (>8000), increase to 8-16MB to prevent packet loss.
+     */
+    public NodeConfig setSocketBufferSize(int socketBufferSize) {
+        this.socketBufferSize = socketBufferSize;
         return this;
     }
 

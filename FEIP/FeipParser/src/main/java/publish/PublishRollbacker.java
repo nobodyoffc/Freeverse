@@ -1,5 +1,7 @@
 package publish;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -18,6 +20,8 @@ import static constants.OpNames.*;
 
 public class PublishRollbacker {
 
+    private static final Logger log = LoggerFactory.getLogger(PublishRollbacker.class);
+
     public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
         return rollbackStatement(esClient, lastHeight)
                 || rollbackText(esClient, lastHeight)
@@ -34,13 +38,14 @@ public class PublishRollbacker {
         ArrayList<String> histIdList = resultMap.get("histIdList");
 
         if (itemIdList == null || itemIdList.isEmpty()) return error;
-        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'text': ");
+        log.warn("If rolling back is interrupted, reparse all effected ids of index 'text': ");
         JsonUtils.printJson(itemIdList);
-        deleteEffectedItems(esClient, IndicesNames.TEXT, itemIdList);
-        if (histIdList == null || histIdList.isEmpty()) return error;
-        deleteRolledHists(esClient, IndicesNames.TEXT_HISTORY, histIdList);
 
-        List<TextHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEXT_HISTORY, TEXT_ID,TEXT_IDS , itemIdList, TextHistory.class);
+        List<TextHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEXT_HISTORY, TEXT_ID, TEXT_IDS, itemIdList, TextHistory.class);
+
+        deleteEffectedItems(esClient, IndicesNames.TEXT, itemIdList);
+        if (histIdList != null && !histIdList.isEmpty())
+            deleteRolledHists(esClient, IndicesNames.TEXT_HISTORY, histIdList);
 
         reparseText(esClient, reparseHistList);
 
@@ -61,7 +66,7 @@ public class PublishRollbacker {
         for (Hit<TextHistory> hit : resultSearch.hits().hits()) {
             TextHistory item = hit.source();
             if(item==null){
-                System.out.println("Text hist is null");
+                log.info("Text hist is null");
                 continue;
             }
 
@@ -105,8 +110,9 @@ public class PublishRollbacker {
 
     private void reparseText(ElasticsearchClient esClient, List<TextHistory> reparseHistList) throws Exception {
         if (reparseHistList == null) return;
+        PublishParser parser = new PublishParser();
         for (TextHistory textHist : reparseHistList) {
-            new PublishParser().parseText(esClient, textHist);
+            parser.parseText(esClient, textHist);
         }
     }
 
@@ -136,13 +142,14 @@ public class PublishRollbacker {
         ArrayList<String> histIdList = resultMap.get("histIdList");
 
         if (itemIdList == null || itemIdList.isEmpty()) return error;
-        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'remark': ");
+        log.warn("If rolling back is interrupted, reparse all effected ids of index 'remark': ");
         JsonUtils.printJson(itemIdList);
-        deleteEffectedItems(esClient, IndicesNames.REMARK, itemIdList);
-        if (histIdList == null || histIdList.isEmpty()) return error;
-        deleteRolledHists(esClient, IndicesNames.REMARK_HISTORY, histIdList);
 
-        List<RemarkHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.REMARK_HISTORY, REMARK_ID,REMARK_IDS , itemIdList, RemarkHistory.class);
+        List<RemarkHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.REMARK_HISTORY, REMARK_ID, REMARK_IDS, itemIdList, RemarkHistory.class);
+
+        deleteEffectedItems(esClient, IndicesNames.REMARK, itemIdList);
+        if (histIdList != null && !histIdList.isEmpty())
+            deleteRolledHists(esClient, IndicesNames.REMARK_HISTORY, histIdList);
 
         reparseRemark(esClient, reparseHistList);
 
@@ -164,7 +171,7 @@ public class PublishRollbacker {
         for (Hit<RemarkHistory> hit : resultSearch.hits().hits()) {
             RemarkHistory item = hit.source();
             if(item==null){
-                System.out.println("Remark hist is null");
+                log.info("Remark hist is null");
                 continue;
             }
             String op = item.getOp();
@@ -206,8 +213,9 @@ public class PublishRollbacker {
 
     private void reparseRemark(ElasticsearchClient esClient, List<RemarkHistory> reparseHistList) throws Exception {
         if (reparseHistList == null) return;
+        PublishParser parser = new PublishParser();
         for (RemarkHistory remarkHist : reparseHistList) {
-            new PublishParser().parseRemark(esClient, remarkHist);
+            parser.parseRemark(esClient, remarkHist);
         }
     }
 
@@ -218,13 +226,14 @@ public class PublishRollbacker {
         ArrayList<String> histIdList = resultMap.get("histIdList");
 
         if (itemIdList == null || itemIdList.isEmpty()) return error;
-        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'sound': ");
+        log.warn("If rolling back is interrupted, reparse all effected ids of index 'sound': ");
         JsonUtils.printJson(itemIdList);
-        deleteEffectedItems(esClient, IndicesNames.SOUND, itemIdList);
-        if (histIdList == null || histIdList.isEmpty()) return error;
-        deleteRolledHists(esClient, IndicesNames.SOUND_HISTORY, histIdList);
 
         List<SoundHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SOUND_HISTORY, SOUND_ID, SOUND_IDS, itemIdList, SoundHistory.class);
+
+        deleteEffectedItems(esClient, IndicesNames.SOUND, itemIdList);
+        if (histIdList != null && !histIdList.isEmpty())
+            deleteRolledHists(esClient, IndicesNames.SOUND_HISTORY, histIdList);
 
         reparseSound(esClient, reparseHistList);
 
@@ -245,7 +254,7 @@ public class PublishRollbacker {
         for (Hit<SoundHistory> hit : resultSearch.hits().hits()) {
             SoundHistory item = hit.source();
             if(item==null){
-                System.out.println("Sound hist is null");
+                log.info("Sound hist is null");
                 continue;
             }
             String op = item.getOp();
@@ -287,8 +296,9 @@ public class PublishRollbacker {
 
     private void reparseSound(ElasticsearchClient esClient, List<SoundHistory> reparseHistList) throws Exception {
         if (reparseHistList == null) return;
+        PublishParser parser = new PublishParser();
         for (SoundHistory soundHist : reparseHistList) {
-            new PublishParser().parseSound(esClient, soundHist);
+            parser.parseSound(esClient, soundHist);
         }
     }
 
@@ -299,13 +309,14 @@ public class PublishRollbacker {
         ArrayList<String> histIdList = resultMap.get("histIdList");
 
         if (itemIdList == null || itemIdList.isEmpty()) return error;
-        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'image': ");
+        log.warn("If rolling back is interrupted, reparse all effected ids of index 'image': ");
         JsonUtils.printJson(itemIdList);
-        deleteEffectedItems(esClient, IndicesNames.IMAGE, itemIdList);
-        if (histIdList == null || histIdList.isEmpty()) return error;
-        deleteRolledHists(esClient, IndicesNames.IMAGE_HISTORY, histIdList);
 
-        List<ImageHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.IMAGE_HISTORY, IMAGE_ID,IMAGE_IDS , itemIdList, ImageHistory.class);
+        List<ImageHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.IMAGE_HISTORY, IMAGE_ID, IMAGE_IDS, itemIdList, ImageHistory.class);
+
+        deleteEffectedItems(esClient, IndicesNames.IMAGE, itemIdList);
+        if (histIdList != null && !histIdList.isEmpty())
+            deleteRolledHists(esClient, IndicesNames.IMAGE_HISTORY, histIdList);
 
         reparseImage(esClient, reparseHistList);
 
@@ -326,7 +337,7 @@ public class PublishRollbacker {
         for (Hit<ImageHistory> hit : resultSearch.hits().hits()) {
             ImageHistory item = hit.source();
             if(item==null){
-                System.out.println("Image hist is null");
+                log.info("Image hist is null");
                 continue;
             }
             String op = item.getOp();
@@ -368,8 +379,9 @@ public class PublishRollbacker {
 
     private void reparseImage(ElasticsearchClient esClient, List<ImageHistory> reparseHistList) throws Exception {
         if (reparseHistList == null) return;
+        PublishParser parser = new PublishParser();
         for (ImageHistory imageHist : reparseHistList) {
-            new PublishParser().parseImage(esClient, imageHist);
+            parser.parseImage(esClient, imageHist);
         }
     }
 
@@ -380,13 +392,14 @@ public class PublishRollbacker {
         ArrayList<String> histIdList = resultMap.get("histIdList");
 
         if (itemIdList == null || itemIdList.isEmpty()) return error;
-        System.out.println("If rolling back is interrupted, reparse all effected ids of index 'video': ");
+        log.warn("If rolling back is interrupted, reparse all effected ids of index 'video': ");
         JsonUtils.printJson(itemIdList);
-        deleteEffectedItems(esClient, IndicesNames.VIDEO, itemIdList);
-        if (histIdList == null || histIdList.isEmpty()) return error;
-        deleteRolledHists(esClient, IndicesNames.VIDEO_HISTORY, histIdList);
 
-        List<VideoHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.VIDEO_HISTORY, VIDEO_ID,VIDEO_IDS , itemIdList, VideoHistory.class);
+        List<VideoHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.VIDEO_HISTORY, VIDEO_ID, VIDEO_IDS, itemIdList, VideoHistory.class);
+
+        deleteEffectedItems(esClient, IndicesNames.VIDEO, itemIdList);
+        if (histIdList != null && !histIdList.isEmpty())
+            deleteRolledHists(esClient, IndicesNames.VIDEO_HISTORY, histIdList);
 
         reparseVideo(esClient, reparseHistList);
 
@@ -407,7 +420,7 @@ public class PublishRollbacker {
         for (Hit<VideoHistory> hit : resultSearch.hits().hits()) {
             VideoHistory item = hit.source();
             if(item==null){
-                System.out.println("Video hist is null");
+                log.info("Video hist is null");
                 continue;
             }
 
@@ -451,8 +464,9 @@ public class PublishRollbacker {
 
     private void reparseVideo(ElasticsearchClient esClient, List<VideoHistory> reparseHistList) throws Exception {
         if (reparseHistList == null) return;
+        PublishParser parser = new PublishParser();
         for (VideoHistory videoHist : reparseHistList) {
-            new PublishParser().parseVideo(esClient, videoHist);
+            parser.parseVideo(esClient, videoHist);
         }
     }
 }

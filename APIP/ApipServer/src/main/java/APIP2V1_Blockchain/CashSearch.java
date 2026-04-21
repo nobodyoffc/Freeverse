@@ -30,7 +30,7 @@ public class CashSearch extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LAST_TIME,false,ID,true,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.CASH, Cash.class, defaultSort, request,response,authType);
     }

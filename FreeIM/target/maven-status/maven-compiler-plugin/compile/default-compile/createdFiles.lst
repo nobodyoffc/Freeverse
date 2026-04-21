@@ -1,0 +1,14 @@
+freeim/PeerManager.class
+freeim/FileTransfer.class
+freeim/AccountManager$Account.class
+freeim/FileTransfer$PendingOffer.class
+freeim/FileTransfer$ProgressInputStream.class
+freeim/MessageStore$1.class
+freeim/Message.class
+freeim/ChatManager$MessageListener.class
+freeim/AccountManager$SelectedAccount.class
+freeim/ChatManager.class
+freeim/FreeIM.class
+freeim/MessageStore.class
+freeim/AccountManager$1.class
+freeim/AccountManager.class

@@ -177,7 +177,7 @@ public class MapComponent extends AbstractFapiComponent {
         }
         
         // 获取连接信息
-        PeerConnection conn = node.getProtocol().getConnectionManager().getByPeerId(peerId);
+        PeerConnection conn = node.getProtocol().getConnectionManager().getAnyConnection(peerId);
         if (conn == null) {
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Connection not found for peer");
         }

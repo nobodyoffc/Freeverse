@@ -102,7 +102,7 @@ public class ApipClientEvent {
                 ApipClientEvent.RequestBodyType.FCDSL,
                 fcdsl, null,null,null,null,
                 ApipClientEvent.ResponseBodyType.STRING, null,null,
-                AuthType.ASY_TWO_WAY_ENCRYPT, null,
+                AuthType.ENCRYPTED, null,
                 via);
     }
 
@@ -295,12 +295,12 @@ public class ApipClientEvent {
         return false;
     }
 
-    private boolean decryptResponseIfNeeded() throws IOException {
+    private boolean decryptResponseIfNeeded() {
         // Check if decryption is needed
         if (authType == null ||
-            !(authType.equals(AuthType.SYMKEY_ENCRYPT) ||
-              authType.equals(AuthType.ASY_ONE_WAY_ENCRYPT) ||
-              authType.equals(AuthType.ASY_TWO_WAY_ENCRYPT))) {
+            !(authType.equals(AuthType.ENCRYPTED) ||
+              authType.equals(AuthType.ENCRYPTED) ||
+              authType.equals(AuthType.ENCRYPTED))) {
             return true; // No decryption needed
         }
 
@@ -326,15 +326,8 @@ public class ApipClientEvent {
         // Decrypt the response
         CryptoDataByte decryptedData = null;
         switch (authType) {
-            case SYMKEY_ENCRYPT:
-                if (this.sessionKey == null) {
-                    code = CodeMessage.Code1023MissSessionKey;
-                    message = CodeMessage.Msg1023MissSessionKey;
-                    return false;
-                }
-                decryptedData = decryptor.decryptJsonBySymkey(responseJson,sessionKey);
-                break;
-            case ASY_TWO_WAY_ENCRYPT:
+
+            case ENCRYPTED:
                 if (this.myPrikey == null) {
                     code = CodeMessage.Code1033MissPrikey;
                     message = CodeMessage.Msg1033MissPrikey;
@@ -349,14 +342,7 @@ public class ApipClientEvent {
                 decryptedData = decryptor.decryptJsonByAsyTwoWay(responseJson,myPrikey,Hex.fromHex(itsPubkey));
 
                 break;
-            case ASY_ONE_WAY_ENCRYPT:
-                if (this.myPrikey == null) {
-                    code = CodeMessage.Code1033MissPrikey;
-                    message = CodeMessage.Msg1033MissPrikey;
-                    return false;
-                }
-                decryptedData = decryptor.decryptJsonByAsyOneWay(responseJson,Hex.fromHex(itsPubkey));
-                break;
+
             default:
                 return true; // Should not reach here
         }
@@ -597,19 +583,8 @@ public class ApipClientEvent {
         CryptoDataByte result;
 
         switch (authType){
-            case SYMKEY_ENCRYPT -> {
-                if(sessionKey==null){
-                    code = CodeMessage.Code1023MissSessionKey;
-                    message = CodeMessage.Msg1023MissSessionKey;
-                    System.out.println(message);
-                    return false;
-                }
 
-                Encryptor encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
-                result = encryptor.encryptBySymkey(this.requestBodyBytes, sessionKey);
-            }
-
-            case ASY_TWO_WAY_ENCRYPT -> {
+            case ENCRYPTED -> {
                 Encryptor encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
 
                 if(myPrikey == null){

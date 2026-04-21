@@ -181,23 +181,6 @@ public class Configure {
         }
     }
 
-//    public String initiateClient(byte[] symkey) {
-//        System.out.println("Initiating config...");
-//        String fid;
-//        if (apiProviderMap == null) apiProviderMap = new HashMap<>();
-//        if (apiAccountMap == null) apiAccountMap = new HashMap<>();
-//        if (fidCipherMap == null) {
-//            fidCipherMap = new HashMap<>();
-//            addUser(symkey);
-//        }
-//
-//        if(fidCipherMap ==null || fidCipherMap.isEmpty())
-//            return null;
-//        fid = (String) Inputer.chooseOne(fidCipherMap.keySet().toArray(), null, "Choose a user:", br);
-//        if(fid==null)fid = addUser(symkey);
-//        saveConfig();
-//        return fid;
-//    }
 
     public String addUser(byte[] symkey) {
         return addUser(null,symkey);

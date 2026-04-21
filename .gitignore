@@ -34,3 +34,4 @@ Thumbs.db
 # vscode
 .vscode/
 *.class
+.aider*

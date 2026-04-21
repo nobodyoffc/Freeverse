@@ -244,3 +244,4 @@ More categories can be added as needed.
 |22|[BTC_EcdsaSignMsg](FTSP22V1_BTC_EcdsaSignMsg.md)|Signing|Bitcoin message ECDSA (`ECKey.signMessage`); `BTC_EcdsaSignMsg@No1_NrC7`; see FVEP7.|
 |23|[Sha256SymSignMsg](FTSP23V1_Sha256SymSignMsg.md)|Signing|Double-SHA256 over `msg ‖ symkey`; `FC_Sha256SymSignMsg@No1_NrC7`; see FVEP7.|
 |24|[SchnorrSignMsg](FTSP24V1_SchnorrSignMsg.md)|Signing|BIP340-style Schnorr over `sha256x2(msg)`; `FC_SchnorrSignMsg@No1_NrC7`; see FVEP7.|
+|25|[PasswordToSymkey](FTSP25V1_PasswordToSymkey.md)|Hashing / KeyDerivation|SHA256-based password-to-symkey KDF: `symkey = SHA256(SHA256(password) ‖ iv)`; used by `EncryptType.Password` before dispatching to FTSP12/14/20.|

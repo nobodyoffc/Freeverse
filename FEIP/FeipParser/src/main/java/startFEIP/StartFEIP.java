@@ -36,9 +36,10 @@ public class StartFEIP {
 
 	private static final Logger log = LoggerFactory.getLogger(StartFEIP.class);
 
+	// Active parser reference for graceful shutdown
+	private static volatile FileParser activeParser;
 
 	private final static String serverName = "FEIP";
-
 
 
 	public static void main(String[] args) {
@@ -59,6 +60,16 @@ public class StartFEIP {
 		//Prepare API clients
 		ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
+		// Register shutdown hook for graceful termination
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			log.info("Shutdown signal received.");
+			FileParser parser = activeParser;
+			if (parser != null) {
+				parser.requestStop();
+			}
+			log.info("FEIP Parser shutdown complete.");
+		}, "feip-shutdown-hook"));
+
 		Menu menu = new Menu("FEIP Parser");
 		menu.add("Start New Parse from file", () -> startNewParse(opReturnJsonPath, br, esClient));
 		menu.add("Restart from interruption", () -> restartFromFile(esClient, opReturnJsonPath));
@@ -70,32 +81,32 @@ public class StartFEIP {
 	}
 
 	private static void reparseIdList(BufferedReader br, ElasticsearchClient esClient)  {
-		System.out.println("Input the name of ES index:");
+		log.info("Input the name of ES index:");
 		try{
 			String index = br.readLine();
-			System.out.println("Input the ID list in compressed Json string:");
+			log.info("Input the ID list in compressed Json string:");
 			String idListJsonStr = br.readLine();
 			List<String> idList = JsonUtils.listFromJson(idListJsonStr,String.class);
 			FileParser fileParser = new FileParser();
 			fileParser.reparseIdList(esClient, index, idList);
 		} catch (Exception e) {
-			e.printStackTrace();
+			log.error("Error occurred", e);
 		}
 	}
 
 	private static void restartSinceHeight(String opReturnJsonPath, BufferedReader br, ElasticsearchClient esClient)  {
-		System.out.println("Input the height that parsing begin with: ");
+		log.info("Input the height that parsing begin with: ");
 		long bestHeight;
 		try{
 
 			while (true) {
 				String input = br.readLine();
-					bestHeight = Long.parseLong(input);
-					break;
+				bestHeight = Long.parseLong(input);
+				break;
 			}
 			manualRestartFromFile(esClient, opReturnJsonPath, bestHeight);
 		}catch (Exception e){
-			System.out.println("\nInput the number of the height:");
+			log.info("Input the number of the height:");
 		}
 	}
 
@@ -121,74 +132,85 @@ public class StartFEIP {
 				}
 			}
 		}catch (Exception e){
-			e.printStackTrace();
+			log.error("Error occurred", e);
 		}
 	}
 
 	private static void startNewFromFile(ElasticsearchClient esClient, String path) throws Exception {
-		
-		System.out.println("startNewFromFile.");
-		
+
+		log.info("startNewFromFile.");
+
 		FileParser fileParser = new FileParser();
-		
+		activeParser = fileParser;
+
 		fileParser.setPath(path);
 		fileParser.setFileName("opreturn0.byte");
 		fileParser.setPointer(0);
 		fileParser.setLastHeight(0);
 		fileParser.setLastIndex(0);
-		
+
 		boolean isRollback = false;
-		fileParser.parseFile(esClient, isRollback);
+		try {
+			fileParser.parseFile(esClient, isRollback);
+		} finally {
+			activeParser = null;
+		}
 	}
 
 	private static void restartFromFile(ElasticsearchClient esClient, String path)  {
 		try {
-		SearchResponse<ParseMark> result = esClient.search(s->s
-				.index(IndicesNames.FEIP_MARK)
-				.size(1)
-				.sort(s1->s1
-						.field(f->f
-								.field(LAST_INDEX).order(SortOrder.Desc)
-								.field(LAST_HEIGHT).order(SortOrder.Desc)
-								)
-						)
-				, ParseMark.class);
-			
-		ParseMark parseMark = result.hits().hits().get(0).source();
+			SearchResponse<ParseMark> result = esClient.search(s->s
+							.index(IndicesNames.FEIP_MARK)
+							.size(1)
+							.sort(s1->s1
+									.field(f->f
+											.field(LAST_INDEX).order(SortOrder.Desc)
+											.field(LAST_HEIGHT).order(SortOrder.Desc)
+									)
+							)
+					, ParseMark.class);
 
-		if (parseMark == null) throw new AssertionError();
-		JsonUtils.printJson(parseMark);
-		
-		FileParser fileParser = new FileParser();
-		
-		fileParser.setPath(path);
-		fileParser.setFileName(parseMark.getFileName());
-		fileParser.setPointer(parseMark.getPointer());
-		fileParser.setLength(parseMark.getLength());
-		fileParser.setLastHeight(parseMark.getLastHeight());
-		fileParser.setLastIndex(parseMark.getLastIndex());
-		fileParser.setLastId(parseMark.getLastId());
-		
-		boolean isRollback = false;
-		boolean error = fileParser.parseFile(esClient,isRollback);
-		if(error)log.error("Error during restartFromFile");
+			if (result.hits() == null || result.hits().hits() == null || result.hits().hits().isEmpty()) {
+				log.error("No parse mark found in FEIP_MARK index. Use 'Start New Parse' instead.");
+				return;
+			}
+			ParseMark parseMark = result.hits().hits().get(0).source();
+
+			if (parseMark == null) throw new AssertionError();
+			JsonUtils.printJson(parseMark);
+
+			FileParser fileParser = new FileParser();
+			activeParser = fileParser;
+
+			fileParser.setPath(path);
+			fileParser.setFileName(parseMark.getFileName());
+			fileParser.setPointer(parseMark.getPointer());
+			fileParser.setLength(parseMark.getLength());
+			fileParser.setLastHeight(parseMark.getLastHeight());
+			fileParser.setLastIndex(parseMark.getLastIndex());
+			fileParser.setLastId(parseMark.getLastId());
+
+			boolean isRollback = false;
+			boolean error = fileParser.parseFile(esClient,isRollback);
+			if(error)log.error("Error during restartFromFile");
 		} catch (Exception e) {
-			e.printStackTrace();
 			log.error("Error during restartFromFile",e);
+		} finally {
+			activeParser = null;
 		}
-		System.out.println("restartFromFile.");
+		log.info("restartFromFile.");
 	}
 
 	private static void manualRestartFromFile(ElasticsearchClient esClient, String path, long height) throws Exception {
-		
+
 		SearchResponse<ParseMark> result = esClient.search(s->s
-				.index(IndicesNames.FEIP_MARK)
-				.query(q->q.range(r->r.field(LAST_HEIGHT).lte(JsonData.of(height))))
-				.size(1)
-				.sort(s1->s1
-						.field(f->f
-								.field(LAST_INDEX).order(SortOrder.Desc)
-								.field(LAST_HEIGHT).order(SortOrder.Desc)))
+						.index(IndicesNames.FEIP_MARK)
+						.query(q->q.range(r->r.field(LAST_HEIGHT).lte(JsonData.of(height))))
+						.size(1)
+						.sort(s1->s1
+								.field(f->f
+										.field(LAST_INDEX).order(SortOrder.Desc)
+										.field(LAST_HEIGHT).order(SortOrder.Desc)))
 				, ParseMark.class);
 
 		if (result==null||result.hits()==null||result.hits().total()==null) {
@@ -200,11 +222,16 @@ public class StartFEIP {
 			restartFromFile(esClient, path);
 			return;
 		}
-		
+
+		if (result.hits().hits() == null || result.hits().hits().isEmpty()) {
+			log.error("No parse mark found at or below height {}.", height);
+			return;
+		}
 		ParseMark parseMark = result.hits().hits().get(0).source();
-		
+
 		FileParser fileParser = new FileParser();
-		
+		activeParser = fileParser;
+
 		fileParser.setPath(path);
 		if (null == parseMark) throw new AssertionError();
 		fileParser.setFileName(parseMark.getFileName());
@@ -213,13 +240,17 @@ public class StartFEIP {
 		fileParser.setLastHeight(parseMark.getLastHeight());
 		fileParser.setLastIndex(parseMark.getLastIndex());
 		fileParser.setLastId(parseMark.getLastId());
-		
+
 		boolean isRollback = true;
-		
-		boolean error = fileParser.parseFile(esClient,isRollback);
-		if(error)log.error("Error during manualRestartFromFile");
-		
-		System.out.println("manualRestartFromFile");
+
+		try {
+			boolean error = fileParser.parseFile(esClient, isRollback);
+			if (error) log.error("Error during manualRestartFromFile");
+		} finally {
+			activeParser = null;
+		}
+
+		log.info("manualRestartFromFile");
 
 	}
 }

@@ -126,7 +126,7 @@ public class FcHttpRequestHandler {
                 return;
             }
 
-            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.ASY_TWO_WAY_ENCRYPT);
+            boolean isOk = httpRequestChecker.checkRequestHttp(request, response, AuthType.ENCRYPTED);
             if (!isOk)
                 return;
 

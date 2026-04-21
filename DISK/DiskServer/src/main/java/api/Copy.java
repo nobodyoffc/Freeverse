@@ -77,7 +77,7 @@ public class Copy extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier = new ReplyBody(settings);
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
 
         // Check authorization
         HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);

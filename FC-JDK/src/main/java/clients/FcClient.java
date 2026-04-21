@@ -206,13 +206,13 @@ public abstract class FcClient {
         byte[] myPrikey = null;
         String itsPubkey = null;
 
-        if(authType.equals(AuthType.SYMKEY_ENCRYPT) && authKey==null){
-            authType = AuthType.ASY_TWO_WAY_ENCRYPT;
+        if(authType.equals(AuthType.ENCRYPTED) && authKey==null){
+            authType = AuthType.ENCRYPTED;
             apipClientEvent.setAuthType(authType);
             if(tryKey==null) addNewSessionKey();
         }
 
-        if( authType.equals(AuthType.ASY_TWO_WAY_ENCRYPT)){
+        if( authType.equals(AuthType.ENCRYPTED)){
             itsPubkey = getDealersPubkey();
 
             if(itsPubkey==null){
@@ -312,7 +312,7 @@ public abstract class FcClient {
 
                 while(true){
                     waitSeconds(10);
-                    Object result = ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, ServiceType.APIP);
+                    Object result = ping(VER_1, RequestMethod.POST, AuthType.ENCRYPTED, ServiceType.APIP);
                     if(result!=null) {
                         System.out.println("OK! " + result + " KB/requests are available.");
                         break;
@@ -453,7 +453,7 @@ public abstract class FcClient {
         paramMap.put(MODE,mode.name());
         Fcdsl fcdsl = new Fcdsl();
         fcdsl.setOther(paramMap);
-        Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, fcdsl, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, AuthType.ASY_TWO_WAY_ENCRYPT, null, RequestMethod.POST);
+        Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, fcdsl, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, AuthType.ENCRYPTED, null, RequestMethod.POST);
         if(data==null)return null;
         serverSession = gson.fromJson(gson.toJson(data), FcSession.class);
         if(apipClientEvent.getResponseBody()!=null)

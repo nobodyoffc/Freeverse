@@ -380,7 +380,7 @@ public class ApiAccount {
 //            if (sessionKey == null) return null;
 //            revised = true;
 
-            Object result = ((ApipClient)apiAccount.getClient()).ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, ServiceType.APIP);
+            Object result = ((ApipClient)apiAccount.getClient()).ping(VER_1, RequestMethod.POST, AuthType.ENCRYPTED, ServiceType.APIP);
             if(result!=null) {
                 System.out.println("OK! " + result + " KB/requests are available.");
             }else
@@ -425,7 +425,7 @@ public class ApiAccount {
         System.out.println("Set the APIP service buyer(requester)...");
         apiAccount.inputPrikeyCipher(br, symkey);
         FcClient client = (FcClient) apiAccount.client;
-        Object result = client.ping(VER_1, RequestMethod.POST, AuthType.ASY_TWO_WAY_ENCRYPT, client.getServiceType());
+        Object result = client.ping(VER_1, RequestMethod.POST, AuthType.ENCRYPTED, client.getServiceType());
         if(result!=null) {
             System.out.println("OK! " + result + " KB/requests are available.");
             writeApipParamsToFile(apiAccount, APIP_Account_JSON);
@@ -797,7 +797,7 @@ public class ApiAccount {
             client = apipClient;
         }else apipClient=(ApipClient) client;
 
-        apipClient.ping(VER_1, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, ServiceType.APIP);
+        apipClient.ping(VER_1, RequestMethod.POST, AuthType.ENCRYPTED, ServiceType.APIP);
 
         apipClient.setUrlHead(apiUrl);
         apipClient.setVia(via);
@@ -1009,7 +1009,7 @@ public class ApiAccount {
     public ApiProvider checkFcApiProvider(ApiProvider apiProvider, ServiceType type, ApipClient apipClient) {
 
         System.out.println("Update API provider from APIP service...");
-        Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, apiProvider.getId());
+        Map<String, Service> serviceMap = apipClient.serviceByIds(RequestMethod.POST, AuthType.ENCRYPTED, apiProvider.getId());
         if(serviceMap==null || serviceMap.get(apiProvider.getId())==null)return null;
 
         this.service = serviceMap.get(apiProvider.getId());

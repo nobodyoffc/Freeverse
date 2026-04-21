@@ -9,7 +9,7 @@ import com.google.gson.Gson;
 import config.Settings;
 import constants.ApipApiNames;
 import constants.CodeMessage;
-import constants.Strings;
+import data.apipData.RequestBody;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
 import data.feipData.Service;
@@ -19,17 +19,16 @@ import feature.swap.SwapParams;
 import feature.swap.SwapStateData;
 import initial.Initiator;
 import org.jetbrains.annotations.Nullable;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import server.HttpRequestChecker;
 import utils.EsUtils;
 import utils.NumberUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.*;
 
 import static constants.FieldNames.LAST;
@@ -41,46 +40,68 @@ import static constants.Values.ASC;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapInfo)
 public class SwapInfo extends HttpServlet {
     private final Settings settings = Initiator.settings;
-    
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        ReplyBody replier = new ReplyBody();
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
-        try(Jedis jedis = jedisPool.getResource()) {
-            replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-        }
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.FREE, settings);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.ENCRYPTED, settings);
+    }
+
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
 
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
-        String sidStr = request.getParameter(SID);
+        String sidStr = null;
+        String lastStr = null;
 
-        if(sidStr!=null){
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
+        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            try {
+                Map<String, String> otherMap = ObjectUtils.objectToMap(requestBody.getFcdsl().getOther(), String.class, String.class);
+                if (otherMap != null) {
+                    sidStr = otherMap.get(SID);
+                    lastStr = otherMap.get(LAST);
+                }
+            } catch (Exception ignored) {}
+        } else {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            sidStr = request.getParameter(SID);
+            lastStr = request.getParameter(LAST);
+        }
+
+        if (sidStr != null) {
             String[] sids = sidStr.split(",");
-            EsUtils.MgetResult<SwapStateData> mgetResult = null;
+            EsUtils.MgetResult<SwapStateData> mgetResult;
             try {
                 mgetResult = EsUtils.getMultiByIdList(esClient, SWAP_STATE, Arrays.asList(sids), SwapStateData.class);
             } catch (Exception e) {
-                replier.replyOtherErrorHttp("Failed to mGet from ES.",response);
+                replier.replyOtherErrorHttp("Failed to mGet from ES.", response);
                 return;
             }
-            if(mgetResult.getResultList().isEmpty()){
-                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+            if (mgetResult.getResultList().isEmpty()) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
                 return;
             }
             List<SwapStateData> swapStateList = mgetResult.getResultList();
             List<SwapInfoData> swapInfoList = makeSwapInfoList(swapStateList, response, replier, esClient);
             if (swapInfoList == null || swapInfoList.isEmpty()) {
-                replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
                 return;
             }
 
-            replier.setData(swapInfoList);
             replier.setTotal((long) swapInfoList.size());
             replier.setLast(null);
             replier.setGot((long) swapInfoList.size());
-            replier.reply0SuccessHttp(swapInfoList,response);
+            replier.reply0SuccessHttp(swapInfoList, response);
             return;
         }
 
@@ -97,38 +118,40 @@ public class SwapInfo extends HttpServlet {
 
         searchBuilder.size(20);
         searchBuilder.sort(sortOptionsList);
-        String lastStr = request.getParameter(LAST);
-        if(lastStr!=null){
+        if (lastStr != null) {
             String[] last = lastStr.split(",");
             searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));
         }
 
-        SearchResponse<SwapStateData> result = esClient.search(searchBuilder.build(), SwapStateData.class);
-        long total = 0;
-        if(result.hits().total()!=null) total = result.hits().total().value();
-        if(result.hits().total()==null || total==0){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-            return;
-        }
-        String[] last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
+        try {
+            SearchResponse<SwapStateData> result = esClient.search(searchBuilder.build(), SwapStateData.class);
+            long total = 0;
+            if (result.hits().total() != null) total = result.hits().total().value();
+            if (result.hits().total() == null || total == 0) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+                return;
+            }
+            String[] last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
 
-        List<SwapStateData> swapStateList = new ArrayList<>();
-        for(Hit<SwapStateData> hit : result.hits().hits()){
-            if(hit.source()==null)continue;
-            swapStateList.add(hit.source());
-        }
+            List<SwapStateData> swapStateList = new ArrayList<>();
+            for (Hit<SwapStateData> hit : result.hits().hits()) {
+                if (hit.source() == null) continue;
+                swapStateList.add(hit.source());
+            }
 
-        List<SwapInfoData> swapInfoList = makeSwapInfoList(swapStateList, response, replier, esClient);
-        if (swapInfoList == null || swapInfoList.isEmpty()) {
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-            return;
-        }
+            List<SwapInfoData> swapInfoList = makeSwapInfoList(swapStateList, response, replier, esClient);
+            if (swapInfoList == null || swapInfoList.isEmpty()) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+                return;
+            }
 
-        replier.setData(swapInfoList);
-        replier.setTotal(total);
-        replier.setLast(List.of(last));
-        replier.setGot((long) swapInfoList.size());
-        replier.reply0SuccessHttp(swapInfoList,response);
+            replier.setTotal(total);
+            replier.setLast(List.of(last));
+            replier.setGot((long) swapInfoList.size());
+            replier.reply0SuccessHttp(swapInfoList, response);
+        } catch (Exception e) {
+            replier.replyOtherErrorHttp(e.getMessage(), response);
+        }
     }
 
     @Nullable
@@ -137,40 +160,39 @@ public class SwapInfo extends HttpServlet {
         List<String> sidList = new ArrayList<>();
         Map<String, SwapStateData> swapStateMap = new HashMap<>();
 
-        for(SwapStateData swapState : swapStateList){
+        for (SwapStateData swapState : swapStateList) {
             sidList.add(swapState.getSid());
-            swapStateMap.put(swapState.getSid(),swapState);
+            swapStateMap.put(swapState.getSid(), swapState);
         }
 
-        EsUtils.MgetResult<Service> mgetResult1 = null;
+        EsUtils.MgetResult<Service> mgetResult1;
         try {
             mgetResult1 = EsUtils.getMultiByIdList(esClient, SERVICE, sidList, Service.class);
         } catch (Exception e) {
-            replier.replyOtherErrorHttp("Failed to mGet from ES.",response);
+            replier.replyOtherErrorHttp("Failed to mGet from ES.", response);
             return null;
         }
 
-        if(mgetResult1.getResultList().isEmpty()){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+        if (mgetResult1.getResultList().isEmpty()) {
+            replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
             return null;
         }
 
         List<SwapInfoData> swapInfoList = new ArrayList<>();
-
         List<Service> swapServiceList = mgetResult1.getResultList();
 
-        for(Service service:swapServiceList){
-            if(service.getActive()){
-                SwapParams swapParams = gson.fromJson(gson.toJson(service.getParams()),SwapParams.class);
-                if(swapParams!=null){
+        for (Service service : swapServiceList) {
+            if (service.getActive()) {
+                SwapParams swapParams = gson.fromJson(gson.toJson(service.getParams()), SwapParams.class);
+                if (swapParams != null) {
                     service.setParams(swapParams);
-                    SwapInfoData swapInfo = makeSwapInfo(swapStateMap.get(service.getId()),service,swapParams);
+                    SwapInfoData swapInfo = makeSwapInfo(swapStateMap.get(service.getId()), service, swapParams);
                     swapInfoList.add(swapInfo);
                 }
             }
         }
-        if(swapInfoList.isEmpty()){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
+        if (swapInfoList.isEmpty()) {
+            replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
             return null;
         }
         return swapInfoList;
@@ -202,9 +224,9 @@ public class SwapInfo extends HttpServlet {
         swapInfoData.setgPendingSum(swapState.getgPendingSum());
         swapInfoData.setmPendingSum(swapState.getmPendingSum());
 
-        double dM = 1-Double.parseDouble(swapInfoData.getSwapFee())-Double.parseDouble(swapInfoData.getServiceFee());
+        double dM = 1 - Double.parseDouble(swapInfoData.getSwapFee()) - Double.parseDouble(swapInfoData.getServiceFee());
         double dG = ammCalculator(swapState.getmSum() + swapState.getmPendingSum(), swapState.getgSum() + swapState.getgPendingSum(), dM);
-        double price = NumberUtils.roundDouble8(1/ dG);
+        double price = NumberUtils.roundDouble8(1 / dG);
 
         swapInfoData.setPrice(price);
         swapInfoData.setLastTime(swapState.getLastTime());
@@ -212,7 +234,7 @@ public class SwapInfo extends HttpServlet {
         return swapInfoData;
     }
 
-    public static double ammCalculator(double x, double y, double dX){
-        return (y*dX)/(x+dX);
+    public static double ammCalculator(double x, double y, double dX) {
+        return (y * dX) / (x + dX);
     }
 }

@@ -30,7 +30,7 @@ public class TextSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(DELETED,false,T_RATE,false,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.TEXT, Text.class, defaultSort, request,response,authType);
     }

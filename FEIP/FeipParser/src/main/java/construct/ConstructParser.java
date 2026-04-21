@@ -1,5 +1,7 @@
 package construct;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import core.crypto.KeyTools;
 import data.fcData.News;
@@ -8,6 +10,7 @@ import data.feipData.*;
 import utils.EsUtils;
 import utils.StringUtils;
 import constants.IndicesNames;
+import startFEIP.FeipConstants;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
@@ -25,26 +28,28 @@ import static constants.Values.UPDATED;
 
 public class ConstructParser {
 
+	private static final Logger log = LoggerFactory.getLogger(ConstructParser.class);
+
 	public ProtocolHistory makeProtocol(OpReturn opre, Feip feip) {
 
 		Gson gson = new Gson();
 
 		ProtocolOpData protocolRaw = new ProtocolOpData();
 		try {
-			protocolRaw = gson.fromJson(gson.toJson(feip.getData()), ProtocolOpData.class);
+			protocolRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ProtocolOpData.class);
 			if(protocolRaw==null){
-				System.out.println("Protocol raw is null");
+				log.info("Protocol raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse protocol");
+			log.info("Failed to parse protocol");
 			return null;
 		}
 
 		ProtocolHistory protocolHist = new ProtocolHistory();
 
 		if(protocolRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -54,11 +59,11 @@ public class ConstructParser {
 
 			case PUBLISH:
 				if(protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName())){
-					System.out.println("Sn or name is null or empty");
+					log.info("Sn or name is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					log.info("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
 					return null;
 				}
 				protocolHist.setId(opre.getId());
@@ -85,7 +90,7 @@ public class ConstructParser {
 			case UPDATE:
 
 				if(protocolRaw.getPid()==null|| protocolRaw.getSn()==null|| protocolRaw.getName()==null||"".equals(protocolRaw.getName())){
-					System.out.println("Pid or Sn or name is null or empty");
+					log.info("Pid or Sn or name is null or empty");
 					return null;
 				}
 				protocolHist.setId(opre.getId());
@@ -112,7 +117,7 @@ public class ConstructParser {
 			case RECOVER:
 			case CLOSE:
 				if (protocolRaw.getPids() == null || protocolRaw.getPids().isEmpty()) {
-					System.out.println("Pids is null or empty");
+					log.info("Pids is null or empty");
 					return null;
 				}
 				protocolHist.setPids(protocolRaw.getPids());
@@ -129,11 +134,11 @@ public class ConstructParser {
 
 			case RATE:
 				if(protocolRaw.getPid()==null){
-					System.out.println("Pid is null");
+					log.info("Pid is null");
 					return null;
 				}
 				if (opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				protocolHist.setPid(protocolRaw.getPid());
@@ -147,7 +152,7 @@ public class ConstructParser {
 				protocolHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return protocolHist;
@@ -159,37 +164,36 @@ public class ConstructParser {
 		ServiceOpData serviceRaw = new ServiceOpData();
 
 		try {
-			serviceRaw = gson.fromJson(gson.toJson(feip.getData()), ServiceOpData.class);
+			serviceRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ServiceOpData.class);
 			if(serviceRaw==null){
-				System.out.println("Service raw is null");
+				log.info("Service raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse service");
+			log.info("Failed to parse service");
 			return null;
 		}
 
 		ServiceHistory serviceHist = new ServiceHistory();
 
 		if(serviceRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
 		serviceHist.setOp(serviceRaw.getOp());
-
 		switch(serviceRaw.getOp()) {
 			case PUBLISH:
 				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName())){
-					System.out.println("StdName is null or empty");
+					log.info("StdName is null or empty");
 					return null;
 				}
 				if(serviceRaw.getSid()!=null){
-					System.out.println("Sid is not null");
+					log.info("Sid is not null");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					log.info("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
 					return null;
 				}
 				serviceHist.setId(opre.getId());
@@ -214,7 +218,7 @@ public class ConstructParser {
 					serviceHist.setParams(serviceRaw.getParams());
 				}
 				if(serviceRaw.getDealer()!=null && serviceRaw.getDealerPubkey()!=null && !serviceRaw.getDealer().equals(KeyTools.pubkeyToFchAddr(serviceRaw.getDealerPubkey()))) {
-					System.out.println("The dealerPubkey does not match the dealer.");
+					log.info("The dealerPubkey does not match the dealer.");
 					return null;
 				}else{
 					serviceHist.setDealer(serviceRaw.getDealer());
@@ -239,11 +243,11 @@ public class ConstructParser {
 				break;
 			case UPDATE:
 				if(serviceRaw.getSid()==null){
-					System.out.println("Sid is null");
+					log.info("Sid is null");
 					return null;
 				}
 				if(serviceRaw.getStdName()==null||"".equals(serviceRaw.getStdName())){
-					System.out.println("StdName is null or empty");
+					log.info("StdName is null or empty");
 					return null;
 				}
 
@@ -269,7 +273,7 @@ public class ConstructParser {
 					serviceHist.setParams(serviceRaw.getParams());
 				}
 				if(serviceRaw.getDealer()!=null && serviceRaw.getDealerPubkey()!=null && !serviceRaw.getDealer().equals(KeyTools.pubkeyToFchAddr(serviceRaw.getDealerPubkey()))) {
-					System.out.println("The dealerPubkey does not match the dealer.");
+					log.info("The dealerPubkey does not match the dealer.");
 					return null;
 				}else{
 					serviceHist.setDealer(serviceRaw.getDealer());
@@ -294,7 +298,7 @@ public class ConstructParser {
 			case "recover":
 			case "close":
 				if(serviceRaw.getSids()==null||serviceRaw.getSids().isEmpty()){
-					System.out.println("Sids is null or empty");
+					log.info("Sids is null or empty");
 					return null;
 				}
 				serviceHist.setSids(serviceRaw.getSids());
@@ -310,15 +314,15 @@ public class ConstructParser {
 				break;
 			case RATE:
 				if(serviceRaw.getSid()==null){
-					System.out.println("Sid is null");
+					log.info("Sid is null");
 					return null;
 				}
-				if(serviceRaw.getRate()<0 ||serviceRaw.getRate()>5){
-					System.out.println("Rate should be between 0 and 5");
+				if(serviceRaw.getRate()<0 ||serviceRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and 5");
 					return null;
 				}
 				if (opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				serviceHist.setSid(serviceRaw.getSid());
@@ -331,7 +335,7 @@ public class ConstructParser {
 				serviceHist.setCdd(opre.getCdd());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return serviceHist;
@@ -344,20 +348,20 @@ public class ConstructParser {
 		AppOpData appRaw = new AppOpData();
 
 		try {
-			appRaw = gson.fromJson(gson.toJson(feip.getData()), AppOpData.class);
+			appRaw = gson.fromJson(gson.toJsonTree(feip.getData()), AppOpData.class);
 			if(appRaw==null){
-				System.out.println("App raw is null");
+				log.info("App raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse app");
+			log.info("Failed to parse app");
 			return null;
 		}
 
 		AppHistory appHist = new AppHistory();
 
 		if(appRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 		appHist.setOp(appRaw.getOp());
@@ -366,15 +370,15 @@ public class ConstructParser {
 
 			case PUBLISH:
 				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())){
-					System.out.println("StdName is null or empty");
+					log.info("StdName is null or empty");
 					return null;
 				}
 				if(appRaw.getAid()!=null){
-					System.out.println("Aid is not null");
+					log.info("Aid is not null");
 					return null;
 				}
             if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-				System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+				log.info("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
 				return null;
 			}
 				appHist.setId(opre.getId());
@@ -400,11 +404,11 @@ public class ConstructParser {
 
 			case UPDATE:
 				if(appRaw.getAid()==null){
-					System.out.println("Aid is null");
+					log.info("Aid is null");
 					return null;
 				}
 				if(appRaw.getStdName()==null||"".equals(appRaw.getStdName())){
-					System.out.println("StdName is null or empty");
+					log.info("StdName is null or empty");
 					return null;
 				}
 
@@ -433,7 +437,7 @@ public class ConstructParser {
 			case RECOVER:
 			case CLOSE:
 				if(appRaw.getAids()==null||appRaw.getAids().isEmpty()){
-					System.out.println("Aids is null or empty");
+					log.info("Aids is null or empty");
 					return null;
 				}
 				appHist.setAids(appRaw.getAids());
@@ -450,15 +454,15 @@ public class ConstructParser {
 				break;
 			case RATE:
 				if(appRaw.getAid()==null){
-					System.out.println("Aid is null");
+					log.info("Aid is null");
 					return null;
 				}
-				if(appRaw.getRate()<0 ||appRaw.getRate()>5){
-					System.out.println("Rate should be between 0 and 5");
+				if(appRaw.getRate()<0 ||appRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and 5");
 					return null;
 				}
             if (opre.getCdd() < StartFEIP.CddRequired){
-				System.out.println("Cdd is less than CddRequired");
+				log.info("Cdd is less than CddRequired");
 				return null;
 			}
 				appHist.setAid(appRaw.getAid());
@@ -472,7 +476,7 @@ public class ConstructParser {
 				appHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return appHist;
@@ -484,20 +488,20 @@ public class ConstructParser {
 		CodeOpData codeRaw = new CodeOpData();
 
 		try {
-			codeRaw = gson.fromJson(gson.toJson(feip.getData()), CodeOpData.class);
+			codeRaw = gson.fromJson(gson.toJsonTree(feip.getData()), CodeOpData.class);
 			if(codeRaw==null){
-				System.out.println("Code raw is null");
+				log.info("Code raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse code");
+			log.info("Failed to parse code");
 			return null;
 		}
 
 		CodeHistory codeHist = new CodeHistory();
 
 		if(codeRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -506,11 +510,11 @@ public class ConstructParser {
 		switch(codeRaw.getOp()) {
 			case PUBLISH:
 				if(codeRaw.getName()==null||"".equals(codeRaw.getName())){
-					System.out.println("Name is null or empty");
+					log.info("Name is null or empty");
 					return null;
 				}
 				if(codeRaw.getCodeId()!=null){
-					System.out.println("CodeId is not null");
+					log.info("CodeId is not null");
 					return null;
 				}
 
@@ -532,11 +536,11 @@ public class ConstructParser {
 				break;
 			case UPDATE:
 				if(codeRaw.getCodeId()==null){
-					System.out.println("CodeId is null");
+					log.info("CodeId is null");
 					return null;
 				}
 				if(codeRaw.getName()==null||"".equals(codeRaw.getName())){
-					System.out.println("Name is null or empty");
+					log.info("Name is null or empty");
 					return null;
 				}
 
@@ -560,7 +564,7 @@ public class ConstructParser {
 			case RECOVER:
 			case CLOSE:
 				if (codeRaw.getCodeIds() == null || codeRaw.getCodeIds().isEmpty()) {
-					System.out.println("CodeIds is null or empty");
+					log.info("CodeIds is null or empty");
 					return null;
 				}
 				codeHist.setCodeIds(codeRaw.getCodeIds());
@@ -577,15 +581,15 @@ public class ConstructParser {
 				break;
 			case RATE:
 				if(codeRaw.getCodeId()==null){
-					System.out.println("CodeId is null");
+					log.info("CodeId is null");
 					return null;
 				}
-				if(codeRaw.getRate()<0 ||codeRaw.getRate()>5){
-					System.out.println("Rate should be between 0 and 5");
+				if(codeRaw.getRate()<0 ||codeRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and 5");
 					return null;
 				}
 				if (opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				codeHist.setCodeId(codeRaw.getCodeId());
@@ -598,7 +602,7 @@ public class ConstructParser {
 				codeHist.setCdd(opre.getCdd());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return codeHist;
@@ -607,7 +611,7 @@ public class ConstructParser {
 	public boolean parseProtocol(ElasticsearchClient esClient, ProtocolHistory protocolHist) throws Exception {
 
 		if(protocolHist==null){
-			System.out.println("Protocol hist is null");
+			log.info("Protocol hist is null");
 			return false;
 		}
 		Protocol protocol;
@@ -645,16 +649,16 @@ public class ConstructParser {
 
 					IndexResponse result = esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol1));
 					if(result==null||result.result()==null){
-						System.out.println("Failed to create protocol");
+						log.info("Failed to create protocol");
 						return false;
 					}
 					if (!CREATED.equals(result.result().jsonValue()))
 						if (!UPDATED.equals(result.result().jsonValue())) {
-							System.out.println("Failed to create protocol");
+							log.info("Failed to create protocol");
 							return false;
 						}
 
-					System.out.println(result.result());
+					log.info("{}", result.result());
 
 					// Create news
 					News.createNews(esClient, protocolHist.getId(), protocolHist.getSigner(), PUBLISH,
@@ -662,26 +666,26 @@ public class ConstructParser {
 							protocolHist.getHeight(), protocolHist.getTime());
 					return true;
 				} else {
-					System.out.println("Protocol already exists");
+					log.info("Protocol already exists");
 					return false;
 				}
 			}
 			case UPDATE -> {
 				protocol = EsUtils.getById(esClient, IndicesNames.PROTOCOL, protocolHist.getPid(), Protocol.class);
 				if (protocol == null) {
-					System.out.println("Protocol not found");
+					log.info("Protocol not found");
 					return false;
 				}
 				if (Boolean.TRUE.equals(protocol.isClosed())) {
-					System.out.println("Protocol is closed");
+					log.info("Protocol is closed");
 					return false;
 				}
 				if (!protocol.getOwner().equals(protocolHist.getSigner())) {
-					System.out.println("Protocol owner is not the same as the signer");
+					log.info("Protocol owner is not the same as the signer");
 					return false;
 				}
 				if (Boolean.FALSE.equals(protocol.isActive())) {
-					System.out.println("Protocol is not active");
+					log.info("Protocol is not active");
 					return false;
 				}
 				protocol.setType(protocolHist.getType());
@@ -701,10 +705,10 @@ public class ConstructParser {
 				IndexResponse result = esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol2));
 
 				if(result==null || result.result()==null){
-					System.out.println("Failed to update protocol");
+					log.info("Failed to update protocol");
 					return false;
 				}
-				System.out.println(result.result());
+				log.info("{}", result.result());
 				return CREATED.equals(result.result().jsonValue()) || UPDATED.equals(result.result().jsonValue());
 			}
 			case STOP, RECOVER, CLOSE -> {
@@ -712,7 +716,7 @@ public class ConstructParser {
 				if (protocolHist.getPids() != null && !protocolHist.getPids().isEmpty()) {
 					idList.addAll(protocolHist.getPids());
 				} else {
-					System.out.println("Pids is null or empty");
+					log.info("Pids is null or empty");
 					return false;
 				}
 
@@ -765,9 +769,9 @@ public class ConstructParser {
 					}
 					BulkResponse result1 = esClient.bulk(br.build());
 					if(result1.errors()){
-						System.out.println("Failed to bulk update protocol");
+						log.info("Failed to bulk update protocol");
 						return false;
-					}else System.out.println("Done");
+					}else log.info("Done");
 					// Create news
 					News.createNews(esClient, protocolHist.getId(), protocolHist.getSigner(), protocolHist.getOp(),
 							Feip.FeipProtocol.PROTOCOL.getName(), null, null, StringUtils.listToString(protocolHist.getPids()),
@@ -780,16 +784,16 @@ public class ConstructParser {
 			case RATE -> {
 				protocol = EsUtils.getById(esClient, IndicesNames.PROTOCOL, protocolHist.getPid(), Protocol.class);
 				if (protocol == null) {
-					System.out.println("Protocol not found");
+					log.info("Protocol not found");
 					return false;
 				}
 				if (protocol.getOwner().equals(protocolHist.getSigner())) {
-					System.out.println("Protocol owner is the same as the signer");
+					log.info("Protocol owner is the same as the signer");
 					return false;
 				}
 
 				if((protocolHist.getCdd()==null || protocolHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -811,10 +815,10 @@ public class ConstructParser {
 				IndexResponse result = esClient.index(i -> i.index(IndicesNames.PROTOCOL).id(protocolHist.getPid()).document(protocol3));
 
 				if(result==null || result.result()==null){
-					System.out.println("Failed to update protocol");
+					log.info("Failed to update protocol");
 					return false;
 				}
-				System.out.println(result.result());
+				log.info("{}", result.result());
 				return CREATED.equals(result.result().jsonValue()) || UPDATED.equals(result.result().jsonValue());
 			}
 		}
@@ -825,7 +829,7 @@ public class ConstructParser {
 	public boolean parseService(ElasticsearchClient esClient, ServiceHistory serviceHist) throws Exception {
 
 		if(serviceHist==null){
-			System.out.println("Service hist is null");
+			log.info("Service hist is null");
 			return false;
 		}
 		Service service;
@@ -886,15 +890,15 @@ public class ConstructParser {
 					Service service1 = service;
 					IndexResponse result = esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service1));
 					if(result==null||result.result()==null){
-						System.out.println("Failed to create service");
+						log.info("Failed to create service");
 						return false;
 					}
 					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
-						System.out.println("Failed to create service");
+						log.info("Failed to create service");
 						return false;
 					}
 
-					System.out.println(result.result());
+					log.info("{}", result.result());
 
 					// Create news
 					News.createNews(esClient, serviceHist.getId(), serviceHist.getSigner(), PUBLISH,
@@ -903,12 +907,12 @@ public class ConstructParser {
 
 					return true;
 				}else {
-					System.out.println("Service already exists");
+					log.info("Service already exists");
 					return false;
 				}
 			case STOP, RECOVER, CLOSE : {
 				if(serviceHist.getSids()==null||serviceHist.getSids().isEmpty()){
-					System.out.println("Sids is null or empty");
+					log.info("Sids is null or empty");
 					return false;
 				}
 
@@ -924,7 +928,7 @@ public class ConstructParser {
 					if (!serviceItem.getOwner().equals(serviceHist.getSigner())) {
 						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, serviceHist.getSigner(), Freer.class);
 						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(serviceHist.getSigner())) {
-							System.out.println("Service owner is not the same as the signer");
+							log.info("Service owner is not the same as the signer");
 							continue;
 						}
 					}
@@ -962,9 +966,9 @@ public class ConstructParser {
 					}
 					BulkResponse result1 = esClient.bulk(br.build());
 					if(result1.errors()){
-						System.out.println("Failed to bulk update service");
+						log.info("Failed to bulk update service");
 						return false;
-					} else System.out.println("Done");
+					} else log.info("Done");
 
 					// Create news
 					News.createNews(esClient, serviceHist.getId(), serviceHist.getSigner(), serviceHist.getOp(),
@@ -978,17 +982,17 @@ public class ConstructParser {
 				service = EsUtils.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 
 				if(service==null) {
-					System.out.println("Service not found");
+					log.info("Service not found");
 					return false;
 				}
 
 				if(Boolean.TRUE.equals(service.isClosed())) {
-					System.out.println("Service is closed");
+					log.info("Service is closed");
 					return false;
 				}
 
 				if(! (service.getOwner().equals(serviceHist.getSigner()))) {
-					System.out.println("Service owner is not the same as the signer");
+					log.info("Service owner is not the same as the signer");
 					return false;
 				}
 
@@ -1013,20 +1017,19 @@ public class ConstructParser {
 				service.setServices(serviceHist.getServices());
 				service.setParams(serviceHist.getParams());
 
-				// Pricing fields
-				if(serviceHist.getPricePerKB()!=null)service.setPricePerKB(serviceHist.getPricePerKB());
-				if(serviceHist.getPricePerKBIn()!=null)service.setPricePerKBIn(serviceHist.getPricePerKBIn());
-				if(serviceHist.getPricePerKBOut()!=null)service.setPricePerKBOut(serviceHist.getPricePerKBOut());
-				if(serviceHist.getPricePerKBDay()!=null)service.setPricePerKBDay(serviceHist.getPricePerKBDay());
-				if(serviceHist.getMinPayment()!=null)service.setMinPayment(serviceHist.getMinPayment());
-				if(serviceHist.getPricePerRequest()!=null)service.setPricePerRequest(serviceHist.getPricePerRequest());
-				if(serviceHist.getSessionDays()!=null)service.setSessionDays(serviceHist.getSessionDays());
-				if(serviceHist.getConsumeViaShare()!=null)service.setConsumeViaShare(serviceHist.getConsumeViaShare());
-				if(serviceHist.getOrderViaShare()!=null)service.setOrderViaShare(serviceHist.getOrderViaShare());
-				if(serviceHist.getCurrency()!=null)service.setCurrency(serviceHist.getCurrency());
-				if(serviceHist.getMinCredit()!=null)service.setMinCredit(serviceHist.getMinCredit());
-				if(serviceHist.getMaxDataSize()!=null)service.setMaxDataSize(serviceHist.getMaxDataSize());
-				if(serviceHist.getDataExpiresInDays()!=null)service.setDataExpiresInDays(serviceHist.getDataExpiresInDays());
+				service.setPricePerKB(serviceHist.getPricePerKB());
+				service.setPricePerKBIn(serviceHist.getPricePerKBIn());
+				service.setPricePerKBOut(serviceHist.getPricePerKBOut());
+				service.setPricePerKBDay(serviceHist.getPricePerKBDay());
+				service.setMinPayment(serviceHist.getMinPayment());
+				service.setPricePerRequest(serviceHist.getPricePerRequest());
+				service.setSessionDays(serviceHist.getSessionDays());
+				service.setConsumeViaShare(serviceHist.getConsumeViaShare());
+				service.setOrderViaShare(serviceHist.getOrderViaShare());
+				service.setCurrency(serviceHist.getCurrency());
+				service.setMinCredit(serviceHist.getMinCredit());
+				service.setMaxDataSize(serviceHist.getMaxDataSize());
+				service.setDataExpiresInDays(serviceHist.getDataExpiresInDays());
 
 
 				service.setLastTxId(serviceHist.getId());
@@ -1037,27 +1040,27 @@ public class ConstructParser {
 
 				IndexResponse result = esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service4));
 				if(result==null || result.result()==null){
-					System.out.println("Failed to update service");
+					log.info("Failed to update service");
 					return false;
 				}
-				System.out.println(result.result());
+				log.info("{}", result.result());
 				return CREATED.equals(result.result().jsonValue()) || UPDATED.equals(result.result().jsonValue());
 
 			case RATE:
 				service = EsUtils.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 
 				if(service==null) {
-					System.out.println("Service not found");
+					log.info("Service not found");
 					return false;
 				}
 
 				if(service.getOwner().equals(serviceHist.getSigner())) {
-					System.out.println("Service owner is the same as the signer");
+					log.info("Service owner is the same as the signer");
 					return false;
 				}
 
 				if((serviceHist.getCdd()==null || serviceHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -1080,10 +1083,10 @@ public class ConstructParser {
 
 				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.SERVICE).id(serviceHist.getSid()).document(service5));
 				if(result2==null || result2.result()==null){
-					System.out.println("Failed to update service");
+					log.info("Failed to update service");
 					return false;
 				}
-				System.out.println(result2.result());
+				log.info("{}", result2.result());
 				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 
 		}
@@ -1092,7 +1095,7 @@ public class ConstructParser {
 
 	public boolean parseApp(ElasticsearchClient esClient, AppHistory appHist) throws Exception {
 		if(appHist==null){
-			System.out.println("App hist is null");
+			log.info("App hist is null");
 			return false;
 		}
 		App app;
@@ -1127,14 +1130,14 @@ public class ConstructParser {
 					App app1=app;
 					IndexResponse result = esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app1));
 					if(result==null||result.result()==null){
-						System.out.println("Failed to create app");
+						log.info("Failed to create app");
 						return false;
 					}
 					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
-						System.out.println("Failed to create app");
+						log.info("Failed to create app");
 						return false;
 					}
-					System.out.println(result.result());
+					log.info("{}", result.result());
 
 					// Create news
 					News.createNews(esClient, appHist.getId(), appHist.getSigner(), PUBLISH,
@@ -1142,13 +1145,13 @@ public class ConstructParser {
 							appHist.getHeight(), appHist.getTime());
 					return true;
 				}else {
-					System.out.println("App already exists");
+					log.info("App already exists");
 					return false;
 				}
 
 			case STOP, RECOVER, CLOSE:
 				if(appHist.getAids()==null||appHist.getAids().isEmpty()){
-					System.out.println("Aids is null or empty");
+					log.info("Aids is null or empty");
 					return false;
 				}
 
@@ -1164,7 +1167,7 @@ public class ConstructParser {
 					if (!appItem.getOwner().equals(appHist.getSigner())) {
 						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, appHist.getSigner(), Freer.class);
 						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(appHist.getSigner())) {
-							System.out.println("App owner is not the same as the signer");
+							log.info("App owner is not the same as the signer");
 							continue;
 						}
 					}
@@ -1202,9 +1205,9 @@ public class ConstructParser {
 					}
 					BulkResponse result1 = esClient.bulk(br.build());
 					if(result1.errors()){
-						System.out.println("Failed to bulk update app");
+						log.info("Failed to bulk update app");
 						return false;
-					} else System.out.println("Done");
+					} else log.info("Done");
 
 					// Create news
 					News.createNews(esClient, appHist.getId(), appHist.getSigner(), appHist.getOp(),
@@ -1217,22 +1220,22 @@ public class ConstructParser {
 				app = EsUtils.getById(esClient, IndicesNames.APP, appHist.getAid(), App.class);
 
 				if(app==null) {
-					System.out.println("App not found");
+					log.info("App not found");
 					return false;
 				}
 
 				if(Boolean.TRUE.equals(app.isClosed())) {
-					System.out.println("App is closed");
+					log.info("App is closed");
 					return false;
 				}
 
 				if(! app.getOwner().equals(appHist.getSigner())) {
-					System.out.println("App owner is not the same as the signer");
+					log.info("App owner is not the same as the signer");
 					return false;
 				}
 
 				if(Boolean.FALSE.equals(app.isActive())) {
-					System.out.println("App is not active");
+					log.info("App is not active");
 					return false;
 				}
 
@@ -1257,27 +1260,27 @@ public class ConstructParser {
 
 				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app2));
 				if(result1==null || result1.result()==null){
-					System.out.println("Failed to update app");
+					log.info("Failed to update app");
 					return false;
 				}
-				System.out.println(result1.result());
+				log.info("{}", result1.result());
 				return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
 
 			case RATE:
 				app = EsUtils.getById(esClient, IndicesNames.APP, appHist.getAid(), App.class);
 
 				if(app==null) {
-					System.out.println("App not found");
+					log.info("App not found");
 					return false;
 				}
 
 				if(app.getOwner().equals(appHist.getSigner())) {
-					System.out.println("App owner is the same as the signer");
+					log.info("App owner is the same as the signer");
 					return false;
 				}
 
 				if((appHist.getCdd()==null || appHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -1300,10 +1303,10 @@ public class ConstructParser {
 
 				IndexResponse result2 = esClient.index(i->i.index(IndicesNames.APP).id(appHist.getAid()).document(app3));
 				if(result2==null || result2.result()==null){
-					System.out.println("Failed to update app");
+					log.info("Failed to update app");
 					return false;
 				}
-				System.out.println(result2.result());
+				log.info("{}", result2.result());
 				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 		}
 		return false;
@@ -1311,7 +1314,7 @@ public class ConstructParser {
 
 	public boolean parseCode(ElasticsearchClient esClient, CodeHistory codeHist) throws Exception {
 		if(codeHist==null){
-			System.out.println("Code hist is null");
+			log.info("Code hist is null");
 			return false;
 		}
 		Code code;
@@ -1344,14 +1347,14 @@ public class ConstructParser {
 					Code code1=code;
 					IndexResponse result = esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(code1));
 					if(result==null||result.result()==null){
-						System.out.println("Failed to create code");
+						log.info("Failed to create code");
 						return false;
 					}
 					if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
-						System.out.println("Failed to create code");
+						log.info("Failed to create code");
 						return false;
 					}
-					System.out.println(result.result());
+					log.info("{}", result.result());
 
 					// Create news
 					News.createNews(esClient, codeHist.getId(), codeHist.getSigner(), PUBLISH,
@@ -1359,13 +1362,13 @@ public class ConstructParser {
 							codeHist.getHeight(), codeHist.getTime());
 					return true;
 				}else {
-					System.out.println("Code already exists");
+					log.info("Code already exists");
 					return false;
 				}
 
 			case STOP, RECOVER, CLOSE:
 				if (codeHist.getCodeIds() == null || codeHist.getCodeIds().isEmpty()) {
-					System.out.println("CodeIds is null or empty");
+					log.info("CodeIds is null or empty");
 					return false;
 				}
 
@@ -1381,7 +1384,7 @@ public class ConstructParser {
 					if (!codeItem.getOwner().equals(codeHist.getSigner())) {
 						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, codeHist.getSigner(), Freer.class);
 						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(codeHist.getSigner())) {
-							System.out.println("Code owner is not the same as the signer");
+							log.info("Code owner is not the same as the signer");
 							continue;
 						}
 					}
@@ -1403,7 +1406,7 @@ public class ConstructParser {
 				}
 
 				if(updatedCodes.isEmpty()){
-					System.out.println("No valid codes to be updated");
+					log.info("No valid codes to be updated");
 					return true;
 				}
 
@@ -1419,9 +1422,9 @@ public class ConstructParser {
 				}
 				BulkResponse result1 = esClient.bulk(br.build());
 				if(result1.errors()){
-					System.out.println("Failed to bulk update code");
+					log.info("Failed to bulk update code");
 					return false;
-				} else System.out.println("Done");
+				} else log.info("Done");
 				// Create news
 				News.createNews(esClient, codeHist.getId(), codeHist.getSigner(), codeHist.getOp(),
 						Feip.FeipProtocol.CODE.getName(), null, null,StringUtils.listToString(codeHist.getCodeIds()),
@@ -1432,22 +1435,22 @@ public class ConstructParser {
 				code = EsUtils.getById(esClient, IndicesNames.CODE, codeHist.getCodeId(), Code.class);
 
 				if(code==null) {
-					System.out.println("Code not found");
+					log.info("Code not found");
 					return false;
 				}
 
 				if(Boolean.TRUE.equals(code.isClosed())) {
-					System.out.println("Code is closed");
+					log.info("Code is closed");
 					return false;
 				}
 
 				if(! code.getOwner().equals(codeHist.getSigner())) {
-					System.out.println("Code owner is not the same as the signer");
+					log.info("Code owner is not the same as the signer");
 					return false;
 				}
 
 				if(Boolean.FALSE.equals(code.isActive())) {
-					System.out.println("Code is not active");
+					log.info("Code is not active");
 					return false;
 				}
 
@@ -1468,23 +1471,23 @@ public class ConstructParser {
 				Code app2 = code;
 
 				IndexResponse result3 = esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(app2));
-				System.out.println(result3.result());
+				log.info("{}", result3.result());
 				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			case RATE:
 				code = EsUtils.getById(esClient, IndicesNames.CODE, codeHist.getCodeId(), Code.class);
 
 				if(code==null) {
-					System.out.println("Code not found");
+					log.info("Code not found");
 					return false;
 				}
 
 				if(code.getOwner().equals(codeHist.getSigner())) {
-					System.out.println("Code owner is the same as the signer");
+					log.info("Code owner is the same as the signer");
 					return false;
 				}
 
 				if((codeHist.getCdd()==null || codeHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -1507,7 +1510,7 @@ public class ConstructParser {
 				Code code3 = code;
 
 				IndexResponse result4 = esClient.index(i->i.index(IndicesNames.CODE).id(codeHist.getCodeId()).document(code3));
-				System.out.println(result4.result());
+				log.info("{}", result4.result());
 				return CREATED.equals(result4.result().jsonValue()) || UPDATED.equals(result4.result().jsonValue());
 		}
 		return false;

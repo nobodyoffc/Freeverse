@@ -105,6 +105,7 @@ public class AccountManager extends Manager<FcEntity> {
     private Double orderViaShare;
     private Double consumeViaShare;
     private Double minPay;
+    private final long minCredit;
     
     // Add these constants at the class level
     private final String redisKeyUserBalance;
@@ -143,6 +144,8 @@ public class AccountManager extends Manager<FcEntity> {
         consumeViaShare = consumeViaShareStr != null ? Double.parseDouble(consumeViaShareStr) : 0;
         String minPayStr = service.getMinPayment();
         minPay = minPayStr != null ? Double.parseDouble(minPayStr) : 0;
+        String minCreditStr = service.getMinCredit();
+        this.minCredit = minCreditStr != null ? utils.FchUtils.coinToSatoshi(Double.parseDouble(minCreditStr)) : 100L;
 
         this.useRedis = (jedisPool != null);
         
@@ -826,7 +829,7 @@ public class AccountManager extends Manager<FcEntity> {
     public boolean updateMyBalance() {
         // Try APIP client first
         if (apipClient != null) {
-            Map<String, Long> balanceMap = apipClient.balanceByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, mainFid);
+            Map<String, Long> balanceMap = apipClient.balanceByIds(RequestMethod.POST, AuthType.ENCRYPTED, mainFid);
             if (balanceMap != null && !balanceMap.isEmpty()) {
                 myBalance = balanceMap.get(mainFid);
                 return true;
@@ -915,11 +918,13 @@ public class AccountManager extends Manager<FcEntity> {
     }
 
     public boolean isBadBalance(String senderFid) {
-        Long balance = checkUserBalance(senderFid);//getBalanceByFid(Settings.addSidBriefToName(talkServer.getService().getSid(),BALANCE), jedis, senderFid);
-        if (balance==null || balance < 0) {
+        Long balance = checkUserBalance(senderFid);
+        if (balance == null) balance = 0L;
+        if (balance < -minCredit) {
             updateIncome();
             balance = checkUserBalance(senderFid);
-            return balance == null || balance < 0;
+            if (balance == null) balance = 0L;
+            return balance < -minCredit;
         }
         return false;
     }
@@ -945,29 +950,21 @@ public class AccountManager extends Manager<FcEntity> {
         String valueStr = jedis.hget(redisKeyUserBalance, userFid);
         long currentBalance = valueStr != null ? Long.parseLong(valueStr) : 0L;
         long newBalance = currentBalance + value;
-        if (newBalance <= 0) {
+        if (newBalance < -minCredit) {
             updateIncome();
             valueStr = jedis.hget(redisKeyUserBalance, userFid);
             currentBalance = valueStr != null ? Long.parseLong(valueStr) : 0L;
             newBalance = currentBalance + value;
-            if (newBalance <= 0)jedis.hdel(redisKeyUserBalance, userFid);
-            else jedis.hset(redisKeyUserBalance, userFid, String.valueOf(newBalance));
-        } else {
-            jedis.hset(redisKeyUserBalance, userFid, String.valueOf(newBalance));
         }
+        jedis.hset(redisKeyUserBalance, userFid, String.valueOf(newBalance));
         return newBalance;
     }
     private long updateUserBalanceInLocal(String userFid, Long value) {
         Long balanceFromLocal = getBalanceFromLocal(userFid);
-        long newBalance  = balanceFromLocal +value;
-        if (newBalance <= 0) {
+        long newBalance  = balanceFromLocal + value;
+        if (newBalance < -minCredit) {
             updateIncome();
-            newBalance = getBalanceFromLocal(userFid) +value;
-            if (newBalance <= 0) {
-                userBalance.remove(userFid);
-                removeUserBalanceInLocalDB(userFid);
-                return 0;
-            }
+            newBalance = getBalanceFromLocal(userFid) + value;
         }
         Map.Entry<String, Long> oldest = userBalance.put(userFid, newBalance);
         if(oldest!=null)localDB.putInMap(USER_BALANCE_MAP,oldest.getKey(),oldest.getValue());
@@ -1016,26 +1013,19 @@ public class AccountManager extends Manager<FcEntity> {
     private void updateUserBalanceInLocal(Map<String, Long> balanceMap) {
         // For each balance to add
         Map<String,Long> moveToLocalDB = new HashMap<>();
-        List<String> removedKeyList = new ArrayList<>();
         for (Map.Entry<String, Long> entry : balanceMap.entrySet()) {
             String userFid = entry.getKey();
             Long balanceFromLocal = getBalanceFromLocal(userFid);
             Long value = entry.getValue();
             long newBalance  = balanceFromLocal + value;
-            if (newBalance <= 0) {
+            if (newBalance < -minCredit) {
                 updateIncome();
-                newBalance = getBalanceFromLocal(userFid) +value;
-                if (newBalance <= 0) {
-                    userBalance.remove(userFid);
-                    removedKeyList.add(userFid);
-                    continue;
-                }
+                newBalance = getBalanceFromLocal(userFid) + value;
             }
             Map.Entry<String, Long> oldest = userBalance.put(userFid, newBalance);
             if(oldest!=null)moveToLocalDB.put(oldest.getKey(),oldest.getValue());
         }
         localDB.putAllInMap(USER_BALANCE_MAP,moveToLocalDB.keySet().stream().toList(),moveToLocalDB.values().stream().toList());
-        localDB.removeFromMap(USER_BALANCE_MAP,removedKeyList);
         localDB.commit();
     }
 
@@ -1228,7 +1218,7 @@ public class AccountManager extends Manager<FcEntity> {
                 if (lastIncome!=null && !lastIncome.isEmpty()) {
                     fcdsl.addAfter(lastIncome);
                 }
-                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
                 ReplyBody responseBody = apipClient.getFcClientEvent().getResponseBody();
                 if(responseBody!=null){
                     lastIncome = responseBody.getLast();
@@ -1382,7 +1372,7 @@ public class AccountManager extends Manager<FcEntity> {
         }
         Map<String, OpReturn> opReturnMap;
         if (apipClient != null) {
-            opReturnMap = apipClient.opReturnByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, txIdCashIdMap.keySet().toArray(new String[0]));
+            opReturnMap = apipClient.opReturnByIds(RequestMethod.POST, AuthType.ENCRYPTED, txIdCashIdMap.keySet().toArray(new String[0]));
         } else if (esClient != null) {
             try {
                 opReturnMap = EsUtils.getOpReturnsByIds(esClient, txIdCashIdMap.keySet());
@@ -1440,7 +1430,7 @@ public class AccountManager extends Manager<FcEntity> {
                 if (lastExpense!=null && !lastExpense.isEmpty()) {
                     fcdsl.addAfter(lastExpense);
                 }
-                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+                newCashes = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
                 if(apipClient.getFcClientEvent().getResponseBody().getLast()!=null)
                     lastExpense = apipClient.getFcClientEvent().getResponseBody().getLast();
                 if (newCashes == null || newCashes.isEmpty()) {
@@ -2573,5 +2563,8 @@ public void removeExpenseSinceHeight(long height) {
     }
     public void setMinPay(Double minPay) {
         this.minPay = minPay;
+    }
+    public long getMinCredit() {
+        return minCredit;
     }
 }

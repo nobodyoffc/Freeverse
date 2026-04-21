@@ -22,8 +22,9 @@ import java.util.List;
  * or externally synchronized.
  */
 public class MessageFrameAssembler {
-    
+
     private static final int FIXED_HEADER_SIZE = 10; // type(1) + messageId(8) + flags(1)
+    private static final int MAX_BUFFER_SIZE = 64 * 1024 * 1024; // 64 MB
     
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     
@@ -34,6 +35,10 @@ public class MessageFrameAssembler {
      */
     public void addData(byte[] data) {
         if (data != null && data.length > 0) {
+            if (buffer.size() + data.length > MAX_BUFFER_SIZE) {
+                buffer.reset();
+                throw new IllegalStateException("Assembler buffer exceeded max size: " + MAX_BUFFER_SIZE);
+            }
             buffer.write(data, 0, data.length);
         }
     }

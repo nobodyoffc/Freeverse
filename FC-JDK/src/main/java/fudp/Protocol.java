@@ -51,6 +51,11 @@ public class Protocol {
     private final int maxPacketSize;
     private final int maxPayloadSize;
 
+    // Pacing configuration
+    private final int pacingBurstOverride;     // -1 = auto-calculate
+    private final long pacingIntervalNanos;    // pause duration between bursts
+    private static final int MAX_BURST_BYTES = 512 * 1024; // 512KB max per burst to prevent receiver overflow
+
     // Plaintext control message types
     private static final byte CONTROL_HELLO = 0x01;
     private static final byte CONTROL_PUBLIC_KEY = 0x02;
@@ -62,6 +67,10 @@ public class Protocol {
     private static final long PUBKEY_WINDOW_MS = 2000;
     private static final int PUBKEY_MAX_PER_WINDOW = 3;
     private final ConcurrentHashMap<String, PublicKeyResponseBucket> publicKeyResponseBuckets = new ConcurrentHashMap<>();
+
+    /** Idle threshold for session-epoch eviction: connections idle longer than this
+     *  with a different epoch than the incoming packet are considered stale (30 seconds). */
+    private static final long STALE_IDLE_THRESHOLD_MS = 30_000;
 
     // Event listeners
     private final List<PacketListener> packetListeners;
@@ -77,8 +86,15 @@ public class Protocol {
     }
 
     public Protocol(byte[] privateKey, int port, String dataDir, int maxPacketSize) throws IOException {
+        this(privateKey, port, dataDir, maxPacketSize, -1, 1_000_000, 2 * 1024 * 1024);
+    }
+
+    public Protocol(byte[] privateKey, int port, String dataDir, int maxPacketSize,
+                    int pacingBurstOverride, long pacingIntervalNanos, int socketBufferSize) throws IOException {
         this.maxPacketSize = maxPacketSize;
         this.maxPayloadSize = maxPacketSize - HEADER_OVERHEAD;
+        this.pacingBurstOverride = pacingBurstOverride;
+        this.pacingIntervalNanos = pacingIntervalNanos;
         this.cryptoManager = new CryptoManager(privateKey);
         this.connectionManager = new ConnectionManager();
         this.packetCrypto = new PacketCrypto(cryptoManager);
@@ -88,12 +104,10 @@ public class Protocol {
         this.channel.bind(new InetSocketAddress(port));
         this.channel.configureBlocking(false);
 
-        // Increase UDP socket buffers for high-throughput transfers.
-        // macOS defaults are ~9KB send / ~42KB receive, which causes silent packet
-        // loss when sending many frames in a burst.
+        // Set UDP socket buffers. Larger buffers prevent packet loss at high throughput.
         try {
-            this.channel.setOption(java.net.StandardSocketOptions.SO_SNDBUF, 2 * 1024 * 1024); // 2 MB send buffer
-            this.channel.setOption(java.net.StandardSocketOptions.SO_RCVBUF, 2 * 1024 * 1024); // 2 MB receive buffer
+            this.channel.setOption(java.net.StandardSocketOptions.SO_SNDBUF, socketBufferSize);
+            this.channel.setOption(java.net.StandardSocketOptions.SO_RCVBUF, socketBufferSize);
         } catch (Exception e) {
             // Best effort; some OSes cap the max value
             log.warn("[Protocol] Could not increase socket buffer sizes: {}", e.getMessage());
@@ -276,6 +290,9 @@ public class Protocol {
         if (challengeHandler != null) {
             challengeHandler.cleanup();
         }
+        // Clean stale public key response buckets
+        long bucketCutoff = System.currentTimeMillis() - 60_000;
+        publicKeyResponseBuckets.entrySet().removeIf(e -> e.getValue().windowStart < bucketCutoff);
     }
 
     /**
@@ -371,74 +388,50 @@ public class Protocol {
      * datagram. Sending too many in a tight loop overwhelms the receiver's ability to
      * decrypt, process, and ACK them, causing UDP buffer overflow and packet loss.
      *
-     * The burst size scales with packet size:
-     * - 1350-byte packets → burst of 2 (pause every ~2.5KB, ~500 pps steady state)
-     * - 60000-byte packets → burst of 40+ (pause every ~2.4MB, effectively no bottleneck)
+     * The burst is also capped by MAX_BURST_BYTES to prevent receiver buffer overflow
+     * with large packets.
      */
+    private static final int MIN_BURST_BYTES = 16384; // 16KB target per burst
+
     private int calculatePacingBurst() {
-        // Scale with payload capacity. Small packets need very conservative pacing.
-        // With 1350 packets: maxPayloadSize ≈ 1277 → burst = 1 (sleep every frame)
-        // With 10000 packets: maxPayloadSize ≈ 9927 → burst = max(1, 9927/3000) = 3
-        // With 60000 packets: maxPayloadSize ≈ 59927 → burst = max(1, 59927/3000) = 19
-        return Math.max(1, maxPayloadSize / 3000);
+        // If user explicitly set a burst override, use it
+        if (pacingBurstOverride > 0) {
+            return pacingBurstOverride;
+        }
+
+        // Auto-calculate: target MIN_BURST_BYTES (16KB) per burst.
+        // This compensates for OS timer imprecision (parkNanos(1ms) often sleeps
+        // 5-15ms on macOS), ensuring reasonable throughput regardless of MTU.
+        //
+        // With 1350-byte MTU: max(2, 16384/1277) = 12 → 12*1277=15KB/burst → ~1-3 MB/s
+        // With 8000-byte MTU: max(2, 16384/7927) =  2 →  2*7927=16KB/burst → ~1-3 MB/s
+        // With 60000-byte MTU: max(2, 16384/59927) = 2 → 2*60KB=120KB/burst (capped below)
+        int burst = Math.max(2, MIN_BURST_BYTES / Math.max(1, maxPayloadSize));
+
+        // Cap burst so total bytes per burst doesn't exceed MAX_BURST_BYTES.
+        // This prevents receiver buffer overflow with large MTU.
+        int maxBurstByBytes = Math.max(1, MAX_BURST_BYTES / maxPacketSize);
+        return Math.min(burst, maxBurstByBytes);
     }
 
     /**
-     * Simple time-based pacing: sleeps 1ms after every `pacingBurst` frames.
-     * This provides reliable rate limiting without depending on the congestion
-     * control state, which can collapse and deadlock on fast networks.
+     * Time-based pacing: pauses after every `pacingBurst` frames.
+     * Uses LockSupport.parkNanos for sub-millisecond precision when configured.
      *
-     * Effective rates:
-     * - 1350-byte packets (burst=1): 1000 fps ≈ 1.27 MB/s
-     * - 60000-byte packets (burst=19): 19000 fps ≈ very high throughput
+     * Default (1ms nominal interval, actual ~5-15ms on macOS):
+     * - 1350-byte packets (burst=12): ~16KB/burst → ~1-3 MB/s
+     * - 8000-byte packets (burst=2):  ~16KB/burst → ~1-3 MB/s
+     * - 60000-byte packets (burst=2): ~120KB/burst → ~8-24 MB/s
+     *
+     * With 200us interval (LAN mode):
+     * - 1350-byte packets (burst=12): ~60 frames/ms → ~75 MB/s
      */
     private void paceSending(PeerConnection conn, int framesSent, int pacingBurst) {
         if (framesSent > 0 && framesSent % pacingBurst == 0) {
-            try {
-                // Pure time-based pacing: sleep 1ms after every pacingBurst frames.
-                //
-                // We intentionally do NOT block on the congestion window here.
-                // The congestion window is enforced only in the retransmission task
-                // (to prevent retransmit floods).  For original data, time-based
-                // pacing provides sufficient rate-limiting:
-                //  - 1350-byte MTU → pacingBurst=1 → 1 frame/ms → ~1.35 MB/s
-                //  - 60000-byte MTU → pacingBurst=19 → ~1.14 MB/ms → very fast
-                //
-                // With the conservative 2000ms loss detection threshold, no false
-                // retransmissions occur on localhost or typical WANs, so the cwnd
-                // stays at INITIAL_WINDOW (120KB+) and doesn't need enforcement.
-                Thread.sleep(1);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
-    /**
-     * Wait until the congestion window allows sending more data.
-     * This prevents the sender from overwhelming the receiver with a burst of
-     * unacknowledged packets. The sender blocks until ACKs arrive (processed
-     * by the receive thread) and free up window space.
-     *
-     * @param conn The peer connection to check
-     * @param size The size of data to send
-     */
-    private void waitForCongestionWindow(PeerConnection conn, int size) {
-        int waited = 0;
-        while (!conn.getCongestionControl().canSend(size) && running && waited < 5000) {
-            try {
-                Thread.sleep(1);
-                waited++;
-                if (waited == 200 || waited == 1000 || waited == 3000) {
-                    System.err.println("[CWND-WAIT] Blocked for " + waited + "ms: " + conn.getCongestionControl());
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-        }
-        if (waited >= 5000) {
-            System.err.println("[CWND-WAIT] GAVE UP after 5s: " + conn.getCongestionControl());
+            // Use LockSupport.parkNanos for sub-millisecond precision.
+            // Thread.sleep(1) actually sleeps 1-2ms on most OS;
+            // parkNanos(200_000) gives ~200us precision on modern hardware.
+            java.util.concurrent.locks.LockSupport.parkNanos(pacingIntervalNanos);
         }
     }
 
@@ -490,6 +483,16 @@ public class Protocol {
      * with the FIN flag set only on the last frame.
      */
     public void sendAndClose(Stream stream, byte[] data) throws IOException {
+        sendAndClose(stream, data, null);
+    }
+
+    /**
+     * Send data and close the stream, with optional progress callback.
+     * @param stream   the stream to send on
+     * @param data     the data to send
+     * @param progress callback receiving (bytesSent, totalBytes) — may be null
+     */
+    public void sendAndClose(Stream stream, byte[] data, java.util.function.BiConsumer<Long, Long> progress) throws IOException {
         PeerConnection conn = getConnectionForStream(stream);
         if (conn == null) {
             throw new IOException("No connection for stream");
@@ -503,6 +506,7 @@ public class Protocol {
             long offset = stream.consumeSendOffset(data.length);
             StreamFrame frame = new StreamFrame(stream.getStreamId(), offset, data, true);
             sendFrame(conn, frame);
+            if (progress != null) progress.accept((long) data.length, (long) data.length);
         } else {
             // Large data: split into multiple frames with pacing, FIN on last.
             // Flow control is done via pacing only (not congestion window),
@@ -520,6 +524,7 @@ public class Protocol {
                 sendFrame(conn, frame);
                 pos += chunkSize;
                 framesSent++;
+                if (progress != null) progress.accept((long) pos, (long) data.length);
                 if (!isLast) {
                     paceSending(conn, framesSent, pacingBurst);
                 }
@@ -628,15 +633,26 @@ public class Protocol {
     }
 
     /**
-     * Close a connection.
+     * Close a specific connection by connectionId.
      */
-    public void close(String peerId, int errorCode, String reason) throws IOException {
-        PeerConnection conn = connectionManager.getByPeerId(peerId);
+    public void close(long connectionId, int errorCode, String reason) throws IOException {
+        PeerConnection conn = connectionManager.getByConnectionId(connectionId);
         if (conn == null) return;
 
         ConnectionCloseFrame frame = new ConnectionCloseFrame(errorCode, reason);
         sendFrame(conn, frame);
         conn.setState(ConnectionState.CLOSING);
+    }
+
+    /**
+     * Close all connections for a peer.
+     */
+    public void closeAll(String peerId, int errorCode, String reason) throws IOException {
+        for (PeerConnection conn : connectionManager.getConnectionsByPeerId(peerId)) {
+            ConnectionCloseFrame frame = new ConnectionCloseFrame(errorCode, reason);
+            sendFrame(conn, frame);
+            conn.setState(ConnectionState.CLOSING);
+        }
     }
 
     /**
@@ -682,8 +698,14 @@ public class Protocol {
             packet.addFrame(frame);
         }
 
+        // E1: Skip timestamp for ACK-only packets (saves 8 bytes)
+        boolean includeTimestamp = packet.isAckEliciting();
+        // E2: Skip epoch once peer has confirmed receipt (saves 8 bytes)
+        boolean includeEpoch = !conn.isEpochConfirmed();
+
         // Encrypt using AsyTwoWay
-        packetCrypto.encryptPacket(packet, conn.getPeerId(), conn.getPeerPublicKey());
+        packetCrypto.encryptPacket(packet, conn.getPeerId(), conn.getPeerPublicKey(),
+                includeTimestamp, includeEpoch);
 
         // IMPORTANT: Record in sentPackets BEFORE sending the UDP datagram.
         // On localhost (near-zero latency), the ACK can arrive before recordSentPacket
@@ -733,7 +755,7 @@ public class Protocol {
     private final AtomicLong sendDropCount = new AtomicLong();
     private final AtomicLong sendFailCount = new AtomicLong();
     private final AtomicLong sendTotalCount = new AtomicLong();
-    private volatile long lastLossSignalTime = 0;
+
     private final AtomicLong replayDuplicateCount = new AtomicLong();
     private final AtomicLong packetsFullyProcessed = new AtomicLong();
 
@@ -805,19 +827,73 @@ public class Protocol {
                 return;
             }
 
+            // Skip creating a new connection for close-only packets.
+            // When a client sends CONNECTION_CLOSE and the server has already removed
+            // the old connection, getOrCreate would create a brand-new connection just
+            // to immediately tear it down — causing rapid create/remove churn.
+            if (isCloseOnlyPacket(packet)) {
+                PeerConnection existingConn = connectionManager.getByAddress(from);
+                if (existingConn != null && existingConn.getPeerId().equals(senderId)) {
+                    // Process close on the existing connection
+                    existingConn.setState(ConnectionState.CLOSED);
+                    connectionManager.removeConnection(existingConn.getConnectionId());
+                    replayProtection.removeConnection(existingConn.getConnectionId());
+                    log.debug("Processed CONNECTION_CLOSE on existing connection {} for peer {} from {}",
+                            existingConn.getConnectionId(), senderId, from);
+                } else {
+                    log.debug("Ignoring CONNECTION_CLOSE from {} for peer {} — no active connection to close",
+                            from, senderId);
+                }
+                return;
+            }
+
             // Get or create connection
             PeerConnection conn = connectionManager.getOrCreate(senderId, from);
             if (packet.getPeerPublicKey() != null) {
                 conn.setPeerPublicKey(packet.getPeerPublicKey());
             }
 
+            // E2: If epoch was not included in packet, use the connection's known epoch
+            long incomingEpoch = packet.getSessionEpoch();
+            if (incomingEpoch == 0 && !packet.getHeader().hasEpoch()) {
+                incomingEpoch = conn.getSessionEpoch();
+            }
+            // Store session epoch on the connection (first packet sets it).
+            if (incomingEpoch != 0 && conn.getSessionEpoch() == 0) {
+                conn.setSessionEpoch(incomingEpoch);
+            }
+
+            // Session epoch based stale connection eviction.
+            // Only evict connections from the SAME address with a different epoch (peer restart).
+            // Connections from different addresses are different physical devices and must be kept.
+            if (incomingEpoch != 0) {
+                long now = System.currentTimeMillis();
+                for (PeerConnection other : connectionManager.getConnectionsByPeerId(senderId)) {
+                    if (other.getConnectionId() == conn.getConnectionId()) continue;
+                    long otherEpoch = other.getSessionEpoch();
+                    if (otherEpoch != 0 && otherEpoch != incomingEpoch
+                            && other.getPeerAddress().equals(conn.getPeerAddress())) {
+                        long idle = now - other.getLastActivity().toEpochMilli();
+                        if (idle > STALE_IDLE_THRESHOLD_MS) {
+                            log.info("[Protocol] Evicting stale connection {} for peer {} " +
+                                            "(idle={}ms, epoch={}, new epoch={} from {})",
+                                    other.getConnectionId(), senderId, idle, otherEpoch, incomingEpoch, from);
+                            other.setState(ConnectionState.CLOSED);
+                            replayProtection.removeConnection(other.getConnectionId());
+                            connectionManager.removeConnection(other.getConnectionId());
+                        }
+                    }
+                }
+            }
+
             // Replay protection with session epoch for peer restart detection
+            // Keyed by connectionId (not peerId) to support multiple connections per FID
             ReplayProtection.CheckResult result = replayProtection.checkAndRecord(
-                    senderId, packet.getPacketNumber(), packet.getTimestamp(), packet.getSessionEpoch());
+                    conn.getConnectionId(), packet.getPacketNumber(), packet.getTimestamp(), incomingEpoch);
 
             if (result == ReplayProtection.CheckResult.INVALID_TIMESTAMP) {
                 System.err.println("[Protocol] Invalid timestamp from " + senderId);
-                close(senderId, ConnectionCloseFrame.INTERNAL_ERROR, "Invalid timestamp");
+                close(conn.getConnectionId(), ConnectionCloseFrame.INTERNAL_ERROR, "Invalid timestamp");
                 return;
             }
 
@@ -866,6 +942,26 @@ public class Protocol {
                 System.err.println("[HANDLE-EX] " + e.getClass().getSimpleName() + ": " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * Check if a packet contains only CONNECTION_CLOSE frame(s) and no data frames.
+     */
+    private boolean isCloseOnlyPacket(Packet packet) {
+        List<Frame> frames = packet.getFrames();
+        if (frames == null || frames.isEmpty()) return false;
+        for (Frame frame : frames) {
+            if (frame.getType() != FrameType.CONNECTION_CLOSE && frame.getType() != FrameType.ACK) {
+                return false;
+            }
+        }
+        // Must have at least one CONNECTION_CLOSE frame
+        for (Frame frame : frames) {
+            if (frame.getType() == FrameType.CONNECTION_CLOSE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private int localPort() {
@@ -993,11 +1089,9 @@ public class Protocol {
             case STREAM -> {
                 StreamFrame streamFrame = (StreamFrame) frame;
                 Stream stream = conn.getStreamManager().getOrCreateStream(streamFrame.getStreamId());
-                long sfCount = totalStreamFramesDelivered.incrementAndGet();
-                if (sfCount <= 20 || sfCount % 100 == 0) {
-                    log.debug("[Protocol] StreamFrame: peer={} stream={} offset={} len={} fin={}",
-                            conn.getPeerId(), streamFrame.getStreamId(), streamFrame.getOffset(),
-                            streamFrame.getData().length, streamFrame.isFin());
+                if (stream == null) {
+                    log.warn("Stream limit exceeded, dropping frame for stream {}", streamFrame.getStreamId());
+                    return;
                 }
                 stream.onDataReceived(streamFrame.getOffset(), streamFrame.getData(), streamFrame.isFin());
             }
@@ -1013,8 +1107,11 @@ public class Protocol {
 
             case CONNECTION_CLOSE -> {
                 ConnectionCloseFrame closeFrame = (ConnectionCloseFrame) frame;
+                log.info("Received CONNECTION_CLOSE from peer {} on connection {} (error={}, reason={})",
+                        conn.getPeerId(), conn.getConnectionId(), closeFrame.getErrorCode(), closeFrame.getReasonPhrase());
                 conn.setState(ConnectionState.CLOSED);
-                connectionManager.removeConnection(conn.getPeerId());
+                connectionManager.removeConnection(conn.getConnectionId());
+                replayProtection.removeConnection(conn.getConnectionId());
             }
 
             case MAX_DATA -> {
@@ -1075,35 +1172,20 @@ public class Protocol {
             if (lost.isEmpty()) continue;
 
             // Rate-limit retransmission to avoid overwhelming the receiver.
-            // Cap at 50 packets per 50ms cycle = 1000 pps. This matches
-            // the pacing rate for small packets (1 frame per ms) and prevents
-            // the retransmit snowball effect where unlimited retransmissions
-            // flood the network and create more losses.
             int maxRetransmitPerCycle = 50;
-
             int retransmitted = 0;
 
             for (SentPacket packet : lost) {
-                if (packet.retransmitCount >= 30) {
-                    // Too many retransmits, remove from tracking and close connection
+                if (packet.getRetransmitCount() >= 30) {
+                    // Abandon the undeliverable packet but keep the connection alive.
+                    // Closing the connection for a single lost stream frame is too aggressive
+                    // — other streams on this connection may be working fine.
                     conn.removeSentPacket(packet.packetNumber);
-                    try {
-                        close(conn.getPeerId(), ConnectionCloseFrame.INTERNAL_ERROR, "Too many retransmits");
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
                     continue;
                 }
 
                 // Rate limit: leave remaining packets for the next cycle
                 if (retransmitted >= maxRetransmitPerCycle) {
-                    break;
-                }
-
-                // Respect congestion window: don't retransmit if we're already
-                // over the window.  Leave the packet for the next cycle when
-                // ACKs have freed up space.
-                if (!conn.getCongestionControl().canSend(0)) {
                     break;
                 }
 
@@ -1116,16 +1198,19 @@ public class Protocol {
                 }
 
                 if (!framesToRetransmit.isEmpty()) {
-                    // Remove old entry before retransmit (sendPacket creates new entry).
-                    // If removeSentPacket returns null, the packet was already ACK'd
-                    // between detectLostPackets() and now — skip the retransmission
-                    // to avoid creating phantom entries in sentPackets.
+                    // Remove old entry to free bytesInFlight (prevents deadlock where
+                    // unACK'd packets inflate bytesInFlight permanently).
                     SentPacket removed = conn.removeSentPacket(packet.packetNumber);
                     if (removed == null) {
                         // Already ACK'd — no need to retransmit
                         continue;
                     }
-                    int inheritedRetransmitCount = removed.retransmitCount + 1;
+
+                    // Retransmits ALWAYS proceed regardless of congestion window.
+                    // Per QUIC RFC 9002: retransmissions are loss recovery, not new data,
+                    // and must not be blocked by congestion control. The rate limiter
+                    // (maxRetransmitPerCycle) already prevents flooding.
+                    int inheritedRetransmitCount = removed.getRetransmitCount() + 1;
                     try {
                         sendPacket(conn, framesToRetransmit, inheritedRetransmitCount);
                         conn.recordRetransmit();
@@ -1136,17 +1221,8 @@ public class Protocol {
                 }
             }
 
-            // Signal loss to congestion control at most once per second
-            // to prevent the congestion window from collapsing to MIN_WINDOW.
-            // The retransmit task runs every 50ms, and calling onLoss() each cycle
-            // would reduce cwnd by 30% twenty times per second, reaching MIN_WINDOW
-            // almost instantly.  A 1-second cooldown allows CUBIC time to recover.
             if (retransmitted > 0) {
-                long now = System.currentTimeMillis();
-                if (now - lastLossSignalTime > 1000) {
-                    conn.getCongestionControl().onLoss();
-                    lastLossSignalTime = now;
-                }
+                conn.trySignalLoss();
             }
         }
     }
@@ -1155,12 +1231,7 @@ public class Protocol {
      * Get connection for a stream.
      */
     private PeerConnection getConnectionForStream(Stream stream) {
-        for (PeerConnection conn : connectionManager.getAllConnections()) {
-            if (conn.getStream(stream.getStreamId()) == stream) {
-                return conn;
-            }
-        }
-        return null;
+        return stream.getConnection();
     }
 
     /**
@@ -1188,6 +1259,10 @@ public class Protocol {
 
     public ConnectionManager getConnectionManager() {
         return connectionManager;
+    }
+
+    public ReplayProtection getReplayProtection() {
+        return replayProtection;
     }
 
     /**

@@ -1,9 +1,12 @@
 package identity;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.*;
+import co.elastic.clients.json.JsonData;
 import com.google.gson.Gson;
 import constants.IndicesNames;
 import constants.OpNames;
@@ -15,6 +18,7 @@ import data.feipData.*;
 import data.fchData.Freer;
 import data.fchData.Nobody;
 import data.fchData.OpReturn;
+import startFEIP.FeipConstants;
 import startFEIP.StartFEIP;
 import utils.EsUtils;
 
@@ -30,8 +34,23 @@ import static constants.Values.UPDATED;
 
 public class IdentityParser {
 
+	private static final Logger log = LoggerFactory.getLogger(IdentityParser.class);
+
 	private static boolean isValidEsResult(String jsonValue) {
 		return CREATED.equals(jsonValue) || UPDATED.equals(jsonValue) || NOOP.equals(jsonValue);
+	}
+
+	@SuppressWarnings("unchecked")
+	private boolean partialUpdateFreer(ElasticsearchClient esClient, String id, Map<String, Object> fields) throws IOException {
+		if (id != null) fields.put("id", id);
+		UpdateResponse<Map> result = esClient.update(u -> u
+				.index(FREER)
+				.id(id)
+				.doc(fields)
+				.docAsUpsert(true),
+				Map.class);
+		log.info(FREER + ": " + result.result());
+		return isValidEsResult(result.result().jsonValue());
 	}
 
 	public FreerHist makeCid(OpReturn opre, Feip feip) throws ElasticsearchException {
@@ -39,18 +58,18 @@ public class IdentityParser {
 		Gson gson = new Gson();
 		CidOpData cidRaw;
 		try {
-			cidRaw = gson.fromJson(gson.toJson(feip.getData()), CidOpData.class);
+			cidRaw = gson.fromJson(gson.toJsonTree(feip.getData()), CidOpData.class);
 		}catch(Exception e) {
-			System.out.println("Bad cid data");
+			log.info("Bad cid data");
 			return null;
 		}
 		if(cidRaw==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return null;
 		}
 
 		if(cidRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -72,14 +91,15 @@ public class IdentityParser {
 						||cidRaw.getName().contains("@")
 						||cidRaw.getName().contains("#")
 						||cidRaw.getName().contains("/")
+						||!FeipConstants.isWithinLimit(cidRaw.getName(), FeipConstants.MAX_NAME_LENGTH)
 				){
-					System.out.println("Name is invalid");
+					log.info("Name is invalid");
 					return null;
 				}
 				freerHist.setName(cidRaw.getName());
 			}
 		}else {
-			System.out.println("Op is invalid");
+			log.info("Op is invalid");
 			return null;
 		}
 
@@ -91,21 +111,21 @@ public class IdentityParser {
 		Gson gson = new Gson();
 		NobodyOpData nobodyRaw;
 		try {
-			nobodyRaw = gson.fromJson(gson.toJson(feip.getData()), NobodyOpData.class);
+			nobodyRaw = gson.fromJson(gson.toJsonTree(feip.getData()), NobodyOpData.class);
 		}catch(Exception e) {
-			System.out.println("Bad nobody data");
+			log.info("Bad nobody data");
 			return null;
 		}
 		if(nobodyRaw==null){
-			System.out.println("Nobody is null");
+			log.info("Nobody is null");
 			return null;
 		}
 		if(nobodyRaw.getPrikey()==null){
-			System.out.println("Prikey is null");
+			log.info("Prikey is null");
 			return null;
 		}
 		if(! addrFromPrikey(nobodyRaw.getPrikey()).equals(opre.getSigner())){
-			System.out.println("Prikey is not the signer");
+			log.info("Prikey is not the signer");
 			return null;
 		}
 		FreerHist freerHist = new FreerHist();
@@ -132,36 +152,36 @@ public class IdentityParser {
 		Gson gson = new Gson();
 		MasterOpData masterRaw;
 		try {
-			masterRaw = gson.fromJson(gson.toJson(feip.getData()), MasterOpData.class);
+			masterRaw = gson.fromJson(gson.toJsonTree(feip.getData()), MasterOpData.class);
 		}catch(Exception e) {
-			System.out.println("Bad master data");
+			log.info("Bad master data");
 			return null;
 		}
 		if(masterRaw==null){
-			System.out.println("Master is null");
+			log.info("Master is null");
 			return null;
 		}
 		if(masterRaw.getPromise()==null){
-			System.out.println("Promise is null");
+			log.info("Promise is null");
 			return null;
 		}
-		if(!masterRaw.getPromise().equals("The master owns all my rights.")){
-			System.out.println("Promise is not the master owns all my rights.");
+		if(!masterRaw.getPromise().equals(FeipConstants.PROMISE_MASTER)){
+			log.info("Promise is not the master owns all my rights.");
 			return null;
 		}
 
 		if(masterRaw.getCipherPriKey()==null){
-			System.out.println("Prikey cipher is null");
+			log.info("Prikey cipher is null");
 			return null;
 		}
 
 		if(masterRaw.getMaster()==null){
-			System.out.println("Master FID is null");
+			log.info("Master FID is null");
 			return null;
 		}
 
 		if(!KeyTools.isGoodFid(masterRaw.getMaster())){
-			System.out.println("Master is not a good fid");
+			log.info("Master is not a good fid");
 			return null;
 		}
 
@@ -186,28 +206,28 @@ public class IdentityParser {
 		Gson gson = new Gson();
 		HomeOpData homeRaw;
 		try {
-			homeRaw = gson.fromJson(gson.toJson(feip.getData()), HomeOpData.class);
+			homeRaw = gson.fromJson(gson.toJsonTree(feip.getData()), HomeOpData.class);
 		}catch(Exception e) {
-			System.out.println("Bad home data");
+			log.info("Bad home data");
 			return null;
 		}
 		if(homeRaw ==null){
-			System.out.println("home is null");
+			log.info("home is null");
 			return null;
 		}
 
 		if(homeRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
 		if(!(homeRaw.getOp().equals("register") || homeRaw.getOp().equals("unregister"))){
-			System.out.println("Op is invalid");
+			log.info("Op is invalid");
 			return null;
 		}
 
 		if(homeRaw.getOp().equals("register") && homeRaw.getHome()==null){
-			System.out.println("Home is absent in register.");
+			log.info("Home is absent in register.");
 			return null;
 		}
 
@@ -232,13 +252,13 @@ public class IdentityParser {
 		Gson gson = new Gson();
 		NoticeFeeOpData noticeFeeRaw;
 		try {
-			noticeFeeRaw = gson.fromJson(gson.toJson(feip.getData()), NoticeFeeOpData.class);
+			noticeFeeRaw = gson.fromJson(gson.toJsonTree(feip.getData()), NoticeFeeOpData.class);
 		}catch(Exception e) {
-			System.out.println("Bad notice fee data");
+			log.info("Bad notice fee data");
 			return null;
 		}
 		if(noticeFeeRaw ==null){
-			System.out.println("Notice fee is null");
+			log.info("Notice fee is null");
 			return null;
 		}
 
@@ -262,17 +282,17 @@ public class IdentityParser {
 		Gson gson = new Gson();
 		ReputationOpData reputationRaw;
 		try {
-			reputationRaw = gson.fromJson(gson.toJson(feip.getData()), ReputationOpData.class);
+			reputationRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ReputationOpData.class);
 		}catch(Exception e) {
-			System.out.println("Bad reputation data");
+			log.info("Bad reputation data");
 			return null;
 		}
 		if(reputationRaw ==null){
-			System.out.println("Reputation is null");
+			log.info("Reputation is null");
 			return null;
 		}
 		if(reputationRaw.getRate()==null){
-			System.out.println("Rate is null");
+			log.info("Rate is null");
 			return null;
 		}
 
@@ -310,43 +330,42 @@ public class IdentityParser {
 
 	private boolean parseNobody(ElasticsearchClient esClient, FreerHist freerHist) throws ElasticsearchException, IOException {
 		if(freerHist ==null){
-			System.out.println("The freer history is null");
+			log.info("The freer history is null");
 			return false;
 		}
 		GetResponse<Freer> resultGetCid;
 		try {
 			GetResponse<Nobody> result = esClient.get(g -> g.index(NOBODY).id(freerHist.getSigner()), Nobody.class);
 			if(result.found()){
-				System.out.println("Nobody is found");
+				log.info("Nobody is found");
 				return false;
 			}
 
 			resultGetCid = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
 			if(resultGetCid==null){
-				System.out.println("Cid is null");
+				log.info("Cid is null");
 				return false;
 			}
 		}catch(Exception e) {
-			System.out.println("Error getting cid");
+			log.info("Error getting cid");
 			return false;
 		}
 
 		if(!resultGetCid.found()) {
-			System.out.println("Cid is not found");
+			log.info("Cid is not found");
 			return false;
 		}
 
 		Freer cid  = resultGetCid.source();
 		if(cid==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return false;
 		}
-		cid.setPrikey(freerHist.getPrikey());
-		cid.setLastHeight(freerHist.getHeight());
-		IndexResponse result = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-		System.out.println(IndicesNames.FREER + ": " + result.result());
-		if(!isValidEsResult(result.result().jsonValue())){
-			System.out.println("Failed to update cid");
+		Map<String, Object> doc = new HashMap<>();
+		doc.put("prikey", freerHist.getPrikey());
+		doc.put("lastHeight", freerHist.getHeight());
+		if(!partialUpdateFreer(esClient, freerHist.getSigner(), doc)){
+			log.info("Failed to update cid");
 			return false;
 		}
 
@@ -358,9 +377,9 @@ public class IdentityParser {
 		nobody.setLeakTxId(freerHist.getId());
 		nobody.setLeakTxIndex(freerHist.getIndex());
 		IndexResponse result1 = esClient.index(i->i.index(NOBODY).id(freerHist.getSigner()).document(nobody));
-		System.out.println(IndicesNames.NOBODY + ": " + result1.result());
+		log.info(IndicesNames.NOBODY + ": " + result1.result());
 		if(!isValidEsResult(result1.result().jsonValue())){
-			System.out.println("Failed to index nobody");
+			log.info("Failed to index nobody");
 			return false;
 		}
 		// Create News for Nobody operation
@@ -370,19 +389,26 @@ public class IdentityParser {
 		return true;
 	}
 
+	private static final int MAX_CID_SUFFIX_ITERATIONS = 50;
+
 	private boolean parseCid(ElasticsearchClient esClient, FreerHist freerHist) throws ElasticsearchException, IOException, InterruptedException {
 
 		if(freerHist ==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return false;
 		}
 		if(freerHist.getOp().equals("register")) {
 
 			//Rule 1
-			int suffixLength = 4;
-			String cidStr = freerHist.getName()+"_"+ freerHist.getSigner().substring(34-suffixLength);
+			int suffixLength = FeipConstants.INITIAL_CID_SUFFIX_LENGTH;
+			String signer = freerHist.getSigner();
+			if (signer == null || signer.length() < suffixLength) {
+				log.info("Signer address too short");
+				return false;
+			}
+			String cidStr = freerHist.getName()+"_"+ signer.substring(signer.length()-suffixLength);
 
-			while(true) {
+			for (int iteration = 0; iteration < MAX_CID_SUFFIX_ITERATIONS; iteration++) {
 				String cidStr1 = cidStr;
 				SearchResponse<Freer> resultCidSearch = esClient.search(s->s
 								.query(q->q.term(t->t.field("usedCids").value(cidStr1)))
@@ -390,13 +416,13 @@ public class IdentityParser {
 						, Freer.class);
 
 				if(resultCidSearch==null||resultCidSearch.hits()==null||resultCidSearch.hits().total()==null){
-					System.out.println("Result cid search is null");
+					log.info("Result cid search is null");
 					return false;
 				}
 
 				if(resultCidSearch.hits().total().value()==0) {
 					Freer cid = null;
-					GetResponse<Freer> resultGetCid = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
+					GetResponse<Freer> resultGetCid = esClient.get(g->g.index(FREER).id(signer), Freer.class);
 
 					if(resultGetCid.found()) cid = resultGetCid.source();
 
@@ -405,8 +431,8 @@ public class IdentityParser {
 					if(existingCids != null) {
 						nameCount = existingCids.size();
 					}
-					if(nameCount>=4){
-						System.out.println("Name count is greater than 4");
+					if(nameCount>=FeipConstants.MAX_CID_COUNT){
+						log.info("Name count is greater than " + FeipConstants.MAX_CID_COUNT);
 						return false;
 					}
 
@@ -419,46 +445,46 @@ public class IdentityParser {
 					}
 					usedCidSet.add(cidStr1);
 
-					if(usedCidSet.size()>4){
-						System.out.println("Used cid set size is greater than 4");
+					if(usedCidSet.size()>FeipConstants.MAX_CID_COUNT){
+						log.info("Used cid set size is greater than " + FeipConstants.MAX_CID_COUNT);
 						return false;
 					}
 
-					Freer freerToIndex = (cid != null) ? cid : new Freer();
-					freerToIndex.setId(freerHist.getSigner());
-					freerToIndex.setCid(cidStr1);
-					freerToIndex.setUsedCids(usedCidSet.stream().toList());
-					if(isFirstCid) freerToIndex.setNameTime(freerHist.getTime());
-					freerToIndex.setLastHeight(freerHist.getHeight());
-
 					//rule 3
-					IndexResponse result2 = esClient.index(i -> i.index(FREER).id(freerToIndex.getId()).document(freerToIndex));
-					System.out.println(result2.result());
-					return isValidEsResult(result2.result().jsonValue());
+					Map<String, Object> doc = new HashMap<>();
+					doc.put("cid", cidStr1);
+					doc.put("usedCids", usedCidSet.stream().toList());
+					if(isFirstCid) doc.put("nameTime", freerHist.getTime());
+					doc.put("lastHeight", freerHist.getHeight());
+					return partialUpdateFreer(esClient, signer, doc);
 
 				}else if(resultCidSearch.hits().hits().size()==1 &&
-						resultCidSearch.hits().hits().get(0).source().getId().equals(freerHist.getSigner())) {
+						resultCidSearch.hits().hits().get(0).id().equals(signer)) {
 
 					//rule 4,5
 					Freer cidToUpdate = resultCidSearch.hits().hits().get(0).source();
 					if(cidToUpdate==null){
-						System.out.println("Cid is null");
+						log.info("Cid is null");
 						return false;
 					}
-					cidToUpdate.setCid(cidStr1);
-					cidToUpdate.setLastHeight(freerHist.getHeight());
 
 					//rule 3
-					IndexResponse result3 = esClient.index(i -> i.index(FREER).id(cidToUpdate.getId()).document(cidToUpdate));
-					System.out.println(result3.result());
-					return isValidEsResult(result3.result().jsonValue());
+					Map<String, Object> doc2 = new HashMap<>();
+					doc2.put("cid", cidStr1);
+					doc2.put("lastHeight", freerHist.getHeight());
+					return partialUpdateFreer(esClient, resultCidSearch.hits().hits().get(0).id(), doc2);
 				}
 
 				//rule 2
 				suffixLength ++;
-				cidStr = freerHist.getName()+"_"+ freerHist.getSigner().substring(34-suffixLength);
-                //esClient.esClient.get(g->g.index(Indices.CidIndex).id(opre.getSigner()), Cid.class);
+				if (suffixLength > signer.length()) {
+					log.info("CID suffix exhausted entire signer address, no unique CID found");
+					return false;
+				}
+				cidStr = freerHist.getName()+"_"+ signer.substring(signer.length()-suffixLength);
 			}
+			log.info("CID registration exceeded max iterations (" + MAX_CID_SUFFIX_ITERATIONS + ")");
+			return false;
 
 		}else if(freerHist.getOp().equals("unregister")) {
 
@@ -467,22 +493,20 @@ public class IdentityParser {
 			if(result.found()){
 				Freer cid = result.source();
 				if(cid==null){
-					System.out.println("Cid is null");
+					log.info("Cid is null");
 					return false;
 				}
 				if(!"".equals(cid.getCid())){
-					cid.setCid("");
-					cid.setLastHeight(freerHist.getHeight());
-
 					//rule 6
-					IndexResponse result4 = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-					System.out.println(result4.result());
-					return isValidEsResult(result4.result().jsonValue());
+					Map<String, Object> doc3 = new HashMap<>();
+					doc3.put("cid", "");
+					doc3.put("lastHeight", freerHist.getHeight());
+					return partialUpdateFreer(esClient, freerHist.getSigner(), doc3);
 				}
 			}
 		}
 
-		System.out.println("Bad cid operation");
+		log.info("Bad cid operation");
 		return false;
 	}
 
@@ -490,7 +514,7 @@ public class IdentityParser {
 	private boolean parseMaster(ElasticsearchClient esClient, FreerHist freerHist) throws ElasticsearchException, IOException {
 
 		if(freerHist ==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return false;
 		}
 		GetResponse<Freer> resultGetCid = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
@@ -498,129 +522,117 @@ public class IdentityParser {
 		if(resultGetCid.found()) {
 			Freer cid  = resultGetCid.source();
 			if(cid==null){
-				System.out.println("Cid is null");
+				log.info("Cid is null");
 				return false;
 			}
 			if(cid.getMaster()==null || cid.getMaster().isBlank()) {
-				cid.setMaster(freerHist.getMaster());
-				cid.setLastHeight(freerHist.getHeight());
-				IndexResponse result5 = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-				System.out.println(result5.result());
-				return isValidEsResult(result5.result().jsonValue());
+				Map<String, Object> doc = new HashMap<>();
+				doc.put("master", freerHist.getMaster());
+				doc.put("lastHeight", freerHist.getHeight());
+				return partialUpdateFreer(esClient, freerHist.getSigner(), doc);
 			}
-			System.out.println("Master had been set.");
+			log.info("Master had been set.");
 			return false;
 		}else {
-			Freer newFreer = new Freer();
-			newFreer.setId(freerHist.getSigner());
-			newFreer.setMaster(freerHist.getMaster());
-			newFreer.setLastHeight(freerHist.getHeight());
-			IndexResponse result6 = esClient.index(i -> i.index(FREER).id(newFreer.getId()).document(newFreer));
-			System.out.println(result6.result());
-			return isValidEsResult(result6.result().jsonValue());
+			Map<String, Object> doc = new HashMap<>();
+			doc.put("master", freerHist.getMaster());
+			doc.put("lastHeight", freerHist.getHeight());
+			return partialUpdateFreer(esClient, freerHist.getSigner(), doc);
 		}
 	}
 
 	private boolean parseHome(ElasticsearchClient esClient, FreerHist freerHist) throws ElasticsearchException, IOException {
 
 		if(freerHist ==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return false;
 		}
 
-		GetResponse<Freer> resultGetCid = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
-
 		if(freerHist.getOp().equals("register")) {
-			if(resultGetCid.found()) {
-				Freer cid = resultGetCid.source();
-				if(cid == null){
-					System.out.println("Cid is null");
-					return false;
-				}
-				cid.setHome(freerHist.getHome());
-				cid.setLastHeight(freerHist.getHeight());
-				IndexResponse result7 = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-				System.out.println(result7.result());
-				return isValidEsResult(result7.result().jsonValue());
-			}else {
-				Freer newFreer = new Freer();
-				newFreer.setId(freerHist.getSigner());
-				newFreer.setHome(freerHist.getHome());
-				newFreer.setLastHeight(freerHist.getHeight());
-				IndexResponse result8 = esClient.index(i -> i.index(FREER).id(newFreer.getId()).document(newFreer));
-				System.out.println(result8.result());
-				return isValidEsResult(result8.result().jsonValue());
-			}
+			// Use scripted update to REPLACE the home map entirely (doc merge would merge map keys)
+			Map<String, Object> upsertDoc = new HashMap<>();
+			upsertDoc.put("home", freerHist.getHome());
+			upsertDoc.put("lastHeight", freerHist.getHeight());
+
+			Map<String, JsonData> params = new HashMap<>();
+			params.put("home", JsonData.of(freerHist.getHome()));
+			params.put("lastHeight", JsonData.of(freerHist.getHeight()));
+
+			@SuppressWarnings("unchecked")
+			UpdateResponse<Map> result = esClient.update(u -> u
+					.index(FREER)
+					.id(freerHist.getSigner())
+					.script(s -> s
+							.inline(i -> i
+									.source("ctx._source.home = params.home; ctx._source.lastHeight = params.lastHeight")
+									.params(params)))
+					.upsert(upsertDoc),
+					Map.class);
+			log.info(FREER + ": " + result.result());
+			return isValidEsResult(result.result().jsonValue());
 		}else if(freerHist.getOp().equals("unregister")) {
-			if(resultGetCid.found()) {
-				Freer cid  = resultGetCid.source();
-				if(cid==null){
-					System.out.println("Cid is null");
+			// Keep GET for business rule: home must exist to unregister
+			GetResponse<Freer> resultGetFreer = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
+			if(resultGetFreer.found()) {
+				Freer freer  = resultGetFreer.source();
+				if(freer==null){
+					log.info("Freer is null");
 					return false;
 				}
-				if(cid.getHome() ==null || cid.getHome().isEmpty()) {
-					System.out.println("Links is null");
+				if(freer.getHome() ==null || freer.getHome().isEmpty()) {
+					log.info("Home is null");
 					return false;
 				}else {
-					cid.setHome(null);
-					cid.setLastHeight(freerHist.getHeight());
-					IndexResponse result9 = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-					System.out.println(result9.result());
-					return isValidEsResult(result9.result().jsonValue());
+					// Use scripted update to set home to null (full replacement)
+					Map<String, JsonData> params = new HashMap<>();
+					params.put("lastHeight", JsonData.of(freerHist.getHeight()));
+
+					@SuppressWarnings("unchecked")
+					UpdateResponse<Map> result = esClient.update(u -> u
+							.index(FREER)
+							.id(freerHist.getSigner())
+							.script(s -> s
+									.inline(i -> i
+											.source("ctx._source.home = null; ctx._source.lastHeight = params.lastHeight")
+											.params(params))),
+							Map.class);
+					log.info(FREER + ": " + result.result());
+					return isValidEsResult(result.result().jsonValue());
 				}
 			}
 		}
 
-
-		System.out.println("Bad links operation");
+		log.info("Bad home operation");
 		return false;
 	}
 
 	private boolean parseNoticeFee(ElasticsearchClient esClient, FreerHist freerHist) throws ElasticsearchException, IOException {
 		if(freerHist ==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return false;
 		}
 
-		GetResponse<Freer> resultGetCid = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
-
-		if(resultGetCid.found()) {
-			Freer cid = resultGetCid.source();
-			if(cid == null){
-				System.out.println("Cid is null");
-				return false;
-			}
-			cid.setNoticeFee(freerHist.getNoticeFee());
-			cid.setLastHeight(freerHist.getHeight());
-			IndexResponse result10 = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-			System.out.println(result10.result());
-			return isValidEsResult(result10.result().jsonValue());
-		}else {
-			Freer newFreer = new Freer();
-			newFreer.setId(freerHist.getSigner());
-			newFreer.setNoticeFee(freerHist.getNoticeFee());
-			newFreer.setLastHeight(freerHist.getHeight());
-			IndexResponse result11 = esClient.index(i -> i.index(FREER).id(newFreer.getId()).document(newFreer));
-			System.out.println(result11.result());
-			return isValidEsResult(result11.result().jsonValue());
-		}
-
+		// Use partial update - no need to read first, only modifies noticeFee and lastHeight
+		Map<String, Object> doc = new HashMap<>();
+		doc.put("noticeFee", freerHist.getNoticeFee());
+		doc.put("lastHeight", freerHist.getHeight());
+		return partialUpdateFreer(esClient, freerHist.getSigner(), doc);
 	}
 
 	public boolean parseReputation(ElasticsearchClient esClient, RepuHist repuHist) throws ElasticsearchException, IOException {
 		if(repuHist==null){
-			System.out.println("Reputation is null");
+			log.info("Reputation is null");
 			return false;
 		}
 		GetResponse<Freer> resultGetCid = esClient.get(g->g.index(FREER).id(repuHist.getRatee()), Freer.class);
 		Freer cid;
 		if(!resultGetCid.found() || resultGetCid.source()==null) {
-			System.out.println("Cid is not found");
+			log.info("Cid is not found");
 			return false;
 		}
 		cid = resultGetCid.source();
 		if(cid==null){
-			System.out.println("Cid is null");
+			log.info("Cid is null");
 			return false;
 		}
 		long newReputation;
@@ -635,14 +647,17 @@ public class IdentityParser {
 		else
 			newHot = cid.getHot()+ repuHist.getHot();
 
-		cid.setReputation(newReputation);
-		cid.setHot(newHot);
-		cid.setLastHeight(repuHist.getHeight());
-		cid.reCalcWeight();
+		long weight = core.fch.Weight.calcWeight(
+				cid.getCd() != null ? cid.getCd() : 0,
+				cid.getCdd() != null ? cid.getCdd() : 0,
+				newReputation);
 
-		IndexResponse result12 = esClient.index(i -> i.index(FREER).id(cid.getId()).document(cid));
-		System.out.println(result12.result());
-		return isValidEsResult(result12.result().jsonValue());
+		Map<String, Object> doc = new HashMap<>();
+		doc.put("reputation", newReputation);
+		doc.put("hot", newHot);
+		doc.put("weight", weight);
+		doc.put("lastHeight", repuHist.getHeight());
+		return partialUpdateFreer(esClient, repuHist.getRatee(), doc);
 	}
 
 	public boolean parseNid(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
@@ -652,13 +667,13 @@ public class IdentityParser {
 		NidOpData nidRaw = new NidOpData();
 
 		try {
-			nidRaw = gson.fromJson(gson.toJson(feip.getData()), NidOpData.class);
+			nidRaw = gson.fromJson(gson.toJsonTree(feip.getData()), NidOpData.class);
 			if(nidRaw==null){
-				System.out.println("Nid raw is null");
+				log.info("Nid raw is null");
 				return false;
 			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			System.out.println("Error parsing nid raw");
+			log.info("Error parsing nid raw");
 			return false;
 		}
 
@@ -666,24 +681,29 @@ public class IdentityParser {
 
 		long height;
 		if(nidRaw.getOp()==null){
-			System.out.println("Op is null");
+			log.info("Op is null");
 			return false;
 		}
 		switch(nidRaw.getOp()) {
 
 			case "add":
 				if(nidRaw.getName()==null){
-					System.out.println("Name is null");
+					log.info("Name is null");
+					return false;
+				}
+				if(!FeipConstants.isWithinLimit(nidRaw.getName(), FeipConstants.MAX_NAME_LENGTH)){
+					log.info("Name exceeds max length");
 					return false;
 				}
 				if(nidRaw.getOid()==null){
-					System.out.println("Oid is null");
+					log.info("Oid is null");
 					return false;
 				}
 
 				nid.setId(Hash.sha256x2(nidRaw.getName()+opre.getSigner()));
 				nid.setName(nidRaw.getName());
-				nid.setDesc(nidRaw.getDesc());
+				nid.setDesc(nidRaw.getDesc() != null && nidRaw.getDesc().length() > FeipConstants.MAX_DESC_LENGTH
+						? nidRaw.getDesc().substring(0, FeipConstants.MAX_DESC_LENGTH) : nidRaw.getDesc());
 				nid.setOid(nidRaw.getOid());
 
 				nid.setNamer(opre.getSigner());
@@ -697,12 +717,12 @@ public class IdentityParser {
 				Nid nid0 = nid;
 
 				IndexResponse result13 = esClient.index(i->i.index(IndicesNames.NID).id(nid0.getId()).document(nid0));
-				System.out.println(result13.result());
+				log.info("{}", result13.result());
 				return isValidEsResult(result13.result().jsonValue());
 
 			case "stop","recover":
 				if(nidRaw.getNames()==null || nidRaw.getNames().isEmpty()){
-					System.out.println("Names is null");
+					log.info("Names is null");
 					return false;
 				}
 				List<String> nameIds = new ArrayList<>();
@@ -714,7 +734,7 @@ public class IdentityParser {
 
 				EsUtils.MgetResult<Nid> result = EsUtils.getMultiByIdList(esClient, IndicesNames.NID, nameIds, Nid.class);
 				if(result==null||result.getResultList()==null||result.getResultList().isEmpty()){
-					System.out.println("Result is null");
+					log.info("Result is null");
 					return false;
 				}
 				BulkRequest.Builder br = new BulkRequest.Builder();
@@ -735,14 +755,14 @@ public class IdentityParser {
 				}
 				BulkResponse result14 = esClient.bulk(br.build());
 				if(result14.errors()){
-					System.out.println("Failed");
+					log.info("Failed");
 					return false;
 				}
-				System.out.println("Done");
+				log.info("Done");
 				return true;
 
 			default:		
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return false;
 		}
 	}

@@ -2,6 +2,7 @@ package fapi;
 
 import config.Configure;
 import config.Settings;
+import data.feipData.ApiGroupType;
 import data.feipData.Service;
 import fapi.service.FapiServer;
 import fudp.node.FudpNode;
@@ -64,8 +65,10 @@ public class ServiceBootstrap {
             Settings settings = loadOrCreateSettings(sid, config, configure);
 
             // 4. 初始化必需的外部服务（ES, NASA_RPC 等）
+            settings.setBootstrapping(true);
             initializeExternalServices(settings, symkey, configure);
-            
+            settings.setBootstrapping(false);
+
             // 5. 加载链上服务信息
             Service service = settings.loadMyService(sid, symkey, configure);
             if (service == null) {
@@ -95,13 +98,13 @@ public class ServiceBootstrap {
             
             // 10. 配置余额管理监听（使用 FapiServer 内置的 FapiBalanceManager）
             setupBalanceListener(fudpNode, server);
-            
-            log.info("FAPI Server started successfully");
-            log.info("  Service SID: {}", service.getId());
-            log.info("  Local FID: {}", fudpNode.getLocalFid());
-            log.info("  Port: {}", fudpNode.getConfig().getPort());
-            log.info("  Components: {}", String.join(", ", componentTypes));
-            log.info("  BalanceManager: {}", server.getBalanceManager() != null ? "initialized" : "not available");
+
+            System.out.println("\nFAPI Server started successfully");
+            System.out.println("  Service SID: "+ service.getId());
+            System.out.println("  Local FID: "+fudpNode.getLocalFid());
+            System.out.println("  Port: "+fudpNode.getConfig().getPort());
+            System.out.println("  Components:"+ String.join(", ", componentTypes));
+            System.out.println("  BalanceManager:"+(server.getBalanceManager() != null ? "initialized" : "not available"));
             
             return server;
             
@@ -159,6 +162,8 @@ public class ServiceBootstrap {
             
             // 5. 创建 NodeConfig
             NodeConfig nodeConfig = new NodeConfig();
+            nodeConfig.setMaxPacketSize(8000);
+            nodeConfig.setSocketBufferSize(4 * 1024 * 1024);
             Map<String, Object> settingMap = config.getSettingMap();
             Object clientPortObj = settingMap.get("fapiClientPort");
             int clientPort = clientPortObj instanceof Number 
@@ -300,6 +305,8 @@ public class ServiceBootstrap {
         NodeConfig nodeConfig = new NodeConfig();
         nodeConfig.setPort(port);
         nodeConfig.setDataDir("fudp_data/" + settings.getMainFid());
+        nodeConfig.setMaxPacketSize(8000);
+        nodeConfig.setSocketBufferSize(4 * 1024 * 1024);
         nodeConfig.setPongDataProvider(server::buildAdvertiseData);
         
         // 创建并启动 FudpNode
@@ -371,7 +378,7 @@ public class ServiceBootstrap {
         }
         // 确保至少包含 BASE
         if (types.isEmpty()) {
-            types.add("BASE");
+            types.add(ApiGroupType.BASE_NO1_NRC7);
         }
         return types.toArray(new String[0]);
     }

@@ -23,6 +23,10 @@ import static app.HomeApp.findNiceFid;
 import static constants.Values.SHA256;
 
 
+/**
+ * @deprecated Legacy tools. Kept for backward compatibility with on-chain data.
+ */
+@Deprecated
 public class StartTools {
 
     public static void main(String[] args) throws Exception {

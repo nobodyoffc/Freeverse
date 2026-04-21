@@ -41,7 +41,10 @@ import java.util.Base64;
  * The resulting encrypted file begins with the ASCII string "Salted__" (which is 8 bytes), followed by the 8 bytes of salt that were used in the key derivation function. The rest of the file is the actual encrypted data.<p>
  * This "Salted__" string is a magic string used by OpenSSL to identify that the encrypted data was salted.<p>
  * * By No1_NrC7 with the help of chatGPT
+ * @deprecated Use {@code AesCbc256} in {@code core.crypto.Algorithm} package instead.
+ *             Kept for decrypting existing on-chain ciphertexts.
  */
+@Deprecated
 public class Aes256CbcP7 {
     public static void main(String[] args) throws Exception {
 //

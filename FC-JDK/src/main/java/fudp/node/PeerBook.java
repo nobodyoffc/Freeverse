@@ -7,6 +7,7 @@ import fudp.connection.ConnectionState;
 
 import java.io.*;
 import java.lang.reflect.Type;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.file.Files;
@@ -49,10 +50,40 @@ public class PeerBook {
 
     /**
      * Add peer with address.
+     * If the peer already exists, adds the address as an additional endpoint
+     * instead of overwriting the existing one.
+     * Resolves hostname to IP address to avoid DNS dependency on reconnect.
      */
     public void addWithAddress(String peerId, byte[] publicKey, String host, int port) {
-        Peer peer = new Peer(peerId, publicKey, host, port);
-        add(peer);
+        String resolvedHost = resolveToIp(host);
+        Peer existing = peers.get(peerId);
+        if (existing != null) {
+            // Peer exists: add as additional endpoint
+            boolean added = existing.addEndpoint(resolvedHost, port);
+            if (publicKey != null && existing.getPublicKey() == null) {
+                existing.setPublicKey(publicKey);
+            }
+            if (added) {
+                save();
+            }
+        } else {
+            // New peer
+            Peer peer = new Peer(peerId, publicKey, resolvedHost, port);
+            add(peer);
+        }
+    }
+
+    /**
+     * Resolve a hostname to its IP address. If already an IP or resolution fails, returns the original.
+     */
+    private static String resolveToIp(String host) {
+        if (host == null || host.isEmpty()) return host;
+        try {
+            InetAddress addr = InetAddress.getByName(host);
+            return addr.getHostAddress();
+        } catch (Exception e) {
+            return host;
+        }
     }
 
     /**
@@ -108,35 +139,34 @@ public class PeerBook {
     /**
      * Update address from incoming connection.
      * Automatically adds peer if not exists.
+     * Always stores the resolved IP address (not hostname) to avoid DNS dependency on reconnect.
      */
     public void updateFromConnection(String peerId, byte[] publicKey, SocketAddress address) {
         Peer peer = peers.get(peerId);
         if (address instanceof InetSocketAddress inet) {
+            // Always use resolved IP address, not hostname, to avoid DNS issues on reconnect
+            String hostAddr = (inet.getAddress() != null)
+                    ? inet.getAddress().getHostAddress()
+                    : inet.getHostString();
+            int port = inet.getPort();
+
             if (peer == null) {
                 // Auto-add new peer with alias (last 4 chars of ID)
-                Peer newPeer = new Peer(peerId, publicKey, inet.getHostString(), inet.getPort());
+                Peer newPeer = new Peer(peerId, publicKey, hostAddr, port);
                 String alias = peerId.length() > 4 ? peerId.substring(peerId.length() - 4) : peerId;
                 newPeer.setAlias(alias);
                 add(newPeer);
             } else {
-                // Update existing
-                boolean changed = false;
-                if (!inet.getHostString().equals(peer.getHost())) {
-                    peer.setHost(inet.getHostString());
-                    changed = true;
-                }
-                if (inet.getPort() != peer.getPort()) {
-                    peer.setPort(inet.getPort());
-                    changed = true;
-                }
+                // Update existing: add as endpoint (doesn't overwrite existing endpoints)
+                boolean changed = peer.addEndpoint(hostAddr, port);
                 if (publicKey != null && peer.getPublicKey() == null) {
                     peer.setPublicKey(publicKey);
                     changed = true;
                 }
-                
+
                 peer.setLastSeen(System.currentTimeMillis());
                 peer.setState(ConnectionState.ESTABLISHED);
-                
+
                 if (changed) {
                     save();
                 }
@@ -233,11 +263,23 @@ public class PeerBook {
             List<Peer> peerList = gson.fromJson(reader, listType);
 
             if (peerList != null) {
+                boolean needsSave = false;
                 for (Peer peer : peerList) {
+                    // Resolve any stored domain names to IPs
+                    if (peer.getHost() != null && !peer.getHost().isEmpty()) {
+                        String resolved = resolveToIp(peer.getHost());
+                        if (!resolved.equals(peer.getHost())) {
+                            peer.setHost(resolved);
+                            needsSave = true;
+                        }
+                    }
                     peers.put(peer.getId(), peer);
                     if (peer.getAlias() != null && !peer.getAlias().isEmpty()) {
                         peersByAlias.put(peer.getAlias().toLowerCase(), peer);
                     }
+                }
+                if (needsSave) {
+                    save();
                 }
             }
         } catch (IOException e) {

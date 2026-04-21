@@ -13,7 +13,7 @@ public class SentPacket {
     public final int size;
     public final boolean ackEliciting;
     public final long sentTime;
-    public int retransmitCount;
+    private int retransmitCount;
 
     public SentPacket(long packetNumber, List<Frame> frames, int size, boolean ackEliciting) {
         this.packetNumber = packetNumber;
@@ -23,4 +23,8 @@ public class SentPacket {
         this.sentTime = System.currentTimeMillis();
         this.retransmitCount = 0;
     }
+
+    public int getRetransmitCount() { return retransmitCount; }
+    public void setRetransmitCount(int retransmitCount) { this.retransmitCount = retransmitCount; }
+    public void incrementRetransmitCount() { retransmitCount++; }
 }

@@ -24,7 +24,7 @@ public class BlockByHeights extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         fcHttpRequestHandler.doBlockInfoRequest(true,HEIGHT, request, response, authType);
     }
 

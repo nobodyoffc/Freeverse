@@ -21,15 +21,27 @@ public class PacketCrypto {
 
     /**
      * Encrypt a packet using AsyTwoWay (ECDH) mode.
-     * 
+     * Includes both timestamp and session epoch in the payload.
+     */
+    public Packet encryptPacket(Packet packet, String peerId, byte[] peerPubkey) {
+        return encryptPacket(packet, peerId, peerPubkey, true, true);
+    }
+
+    /**
+     * Encrypt a packet using AsyTwoWay (ECDH) mode.
+     *
      * @param packet The packet with frames to encrypt
      * @param peerId The peer's FID (for logging)
      * @param peerPubkey The peer's public key
+     * @param includeTimestamp Whether to include the 8-byte timestamp
+     * @param includeEpoch Whether to include the 8-byte session epoch
      * @return The encrypted packet
      */
-    public Packet encryptPacket(Packet packet, String peerId, byte[] peerPubkey) {
+    public Packet encryptPacket(Packet packet, String peerId, byte[] peerPubkey,
+                                boolean includeTimestamp, boolean includeEpoch) {
         // Include our session epoch for peer restart detection
-        byte[] plaintext = packet.serializeFrames(cryptoManager.getSessionEpoch());
+        byte[] plaintext = packet.serializeFrames(cryptoManager.getSessionEpoch(),
+                includeTimestamp, includeEpoch);
 
         // Always use AsyTwoWay encryption
         CryptoDataByte cryptoData = cryptoManager.encryptAsyTwoWay(plaintext, peerPubkey);

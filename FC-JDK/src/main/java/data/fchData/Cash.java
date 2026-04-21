@@ -216,6 +216,9 @@ public class Cash extends FcObject {
 		P2SH_MULTISIG("P2SH_Multisig"),           // P2SH Multisig without time lock
 		P2SH_CLTV("P2SH_CLTV"),                   // P2SH with CheckLockTimeVerify (time-locked single-sig)
 		P2SH_MULTISIG_CLTV("P2SH_Multisig_CLTV"), // P2SH Multisig with CheckLockTimeVerify
+		P2WPKH("P2WPKH"),            // Pay-to-Witness-Public-Key-Hash (SegWit v0)
+		P2WSH("P2WSH"),              // Pay-to-Witness-Script-Hash (SegWit v0)
+		P2TR("P2TR"),                // Pay-to-Taproot (SegWit v1)
 		OP_RETURN("OP_RETURN"),      // Data storage output (unspeakable)
 		UNKNOWN("Unknown");           // Unrecognized script type
 

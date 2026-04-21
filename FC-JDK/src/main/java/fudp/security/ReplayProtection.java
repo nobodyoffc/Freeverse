@@ -4,21 +4,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Replay attack protection using sliding window.
- * 
+ * <p>
+ * Windows are keyed by connectionId (not peerId) to support multiple
+ * simultaneous connections from the same FID. Each connection has its own
+ * independent packet number sequence starting from 0, so replay detection
+ * must be scoped per connection.
+ * <p>
  * This implementation includes peer restart detection via Session Epoch:
  * Each node generates a random Session Epoch at startup.
- * When we detect that a peer's Session Epoch has changed, we know they
- * have restarted and we reset their sliding window.
- * 
- * This is more robust than packet number heuristics because:
- * - It works regardless of how many packets were exchanged before restart
- * - It works even with infrequent communication
- * - It has no false positives or false negatives
+ * When we detect that a connection's Session Epoch has changed, we know
+ * the peer has restarted and we reset that connection's sliding window.
  */
 public class ReplayProtection {
     private static final Logger log = LoggerFactory.getLogger(ReplayProtection.class);
@@ -29,10 +30,10 @@ public class ReplayProtection {
     // falsely marked as "too old" and dropped.
     // 65536 covers even very large transfers with ample margin (~85MB at 1350-byte MTU).
     private static final long WINDOW_SIZE = 65536;
-    private static final long TIMESTAMP_TOLERANCE_MS = 500000; // ±5 seconds
+    private static final long TIMESTAMP_TOLERANCE_MS = 500000; // ±500 seconds
 
-    // Per-peer packet windows
-    private final Map<String, PacketWindow> windows;
+    // Per-connection packet windows (keyed by connectionId)
+    private final Map<Long, PacketWindow> windows;
 
     public ReplayProtection() {
         this.windows = new ConcurrentHashMap<>();
@@ -48,54 +49,52 @@ public class ReplayProtection {
     /**
      * Check if a packet is valid (not a replay) and record it.
      * Detects peer restart when session epoch changes.
-     * 
-     * @param peerId The sender's FID
+     *
+     * @param connectionId The connection ID (unique per connection, not per peer)
      * @param packetNumber The packet number
-     * @param timestamp The timestamp from the packet
+     * @param timestamp    The timestamp from the packet
      * @param sessionEpoch The sender's session epoch (changes on restart)
      * @return Result of the check
      */
-    public CheckResult checkAndRecord(String peerId, long packetNumber, long timestamp, long sessionEpoch) {
+    public CheckResult checkAndRecord(long connectionId, long packetNumber, long timestamp, long sessionEpoch) {
         // Check timestamp
         long now = System.currentTimeMillis();
         if (Math.abs(timestamp - now) > TIMESTAMP_TOLERANCE_MS) {
             return CheckResult.INVALID_TIMESTAMP;
         }
 
-        // Get or create window for peer
-        PacketWindow window = windows.computeIfAbsent(peerId, k -> new PacketWindow());
+        // Get or create window for this connection
+        PacketWindow window = windows.computeIfAbsent(connectionId, k -> new PacketWindow());
 
         // Check for peer restart via session epoch change
-        // detectAndHandleSessionEpochChange atomically detects and updates the epoch
         if (window.detectAndHandleSessionEpochChange(sessionEpoch)) {
-            log.info("[ReplayProtection] Detected peer restart for {} via session epoch change. " +
-                    "Old epoch={}, new epoch={}", 
-                    peerId, window.getPreviousSessionEpoch(), sessionEpoch);
-            // Reset window and record this packet (epoch already updated atomically)
-            window.reset();
+            log.info("[ReplayProtection] Detected peer restart for connection {} via session epoch change. " +
+                            "Old epoch={}, new epoch={}",
+                    connectionId, window.getPreviousSessionEpoch(), sessionEpoch);
+            // Window already reset atomically inside detectAndHandleSessionEpochChange()
             window.checkAndRecord(packetNumber);
             return CheckResult.PEER_RESTART;
         }
 
         return window.checkAndRecord(packetNumber) ? CheckResult.OK : CheckResult.DUPLICATE;
     }
-    
+
     /**
-     * Legacy method for backward compatibility.
-     * @deprecated Use {@link #checkAndRecord(String, long, long, long)} with sessionEpoch
+     * Remove window for a single connection.
      */
-    @Deprecated
-    public CheckResult checkAndRecord(String peerId, long packetNumber, long timestamp) {
-        // Without session epoch, we cannot detect peer restart reliably
-        // This is kept for backward compatibility but should not be used
-        return checkAndRecord(peerId, packetNumber, timestamp, 0);
+    public void removeConnection(long connectionId) {
+        windows.remove(connectionId);
     }
 
     /**
-     * Remove window for a peer
+     * Remove windows for all connections of a peer.
+     *
+     * @param connectionIds the connection IDs belonging to the peer
      */
-    public void removePeer(String peerId) {
-        windows.remove(peerId);
+    public void removeAllForPeer(Collection<Long> connectionIds) {
+        for (Long connId : connectionIds) {
+            windows.remove(connId);
+        }
     }
 
     /**
@@ -110,7 +109,7 @@ public class ReplayProtection {
      */
     private static class PacketWindow {
         private long highestPacketNumber = -1;
-        private long sessionEpoch = 0;           // Current known session epoch for this peer
+        private long sessionEpoch = 0;           // Current known session epoch
         private long previousSessionEpoch = 0;   // For logging
         private final BitSet receivedBitmap;
 
@@ -122,39 +121,33 @@ public class ReplayProtection {
          * Detect if the peer has restarted based on session epoch change.
          * If restart is detected, atomically updates the session epoch to prevent
          * duplicate detections in multi-threaded scenarios.
-         * 
+         *
          * @param newSessionEpoch The session epoch from the received packet
          * @return true if peer restart was detected (session epoch changed)
          */
         public synchronized boolean detectAndHandleSessionEpochChange(long newSessionEpoch) {
-            // First packet from this peer
+            // First packet on this connection
             if (sessionEpoch == 0) {
                 sessionEpoch = newSessionEpoch;
                 return false;
             }
 
             // Session epoch changed - peer has restarted
+            // Reset bitmap atomically with epoch update to prevent race
             if (newSessionEpoch != sessionEpoch) {
                 previousSessionEpoch = sessionEpoch;
-                // Atomically update session epoch here to prevent duplicate detections
                 sessionEpoch = newSessionEpoch;
+                reset();
                 return true;
             }
 
             return false;
         }
-        
-        /**
-         * Get the previous session epoch (before change).
-         * Used for logging.
-         */
+
         public long getPreviousSessionEpoch() {
             return previousSessionEpoch;
         }
 
-        /**
-         * Reset the window state.
-         */
         public synchronized void reset() {
             highestPacketNumber = -1;
             receivedBitmap.clear();
@@ -191,10 +184,8 @@ public class ReplayProtection {
             long shift = packetNumber - highestPacketNumber;
 
             if (shift >= WINDOW_SIZE) {
-                // Large jump, reset window
                 receivedBitmap.clear();
             } else {
-                // Shift the bitmap
                 for (int i = (int) (WINDOW_SIZE - 1); i >= shift; i--) {
                     receivedBitmap.set(i, receivedBitmap.get((int) (i - shift)));
                 }

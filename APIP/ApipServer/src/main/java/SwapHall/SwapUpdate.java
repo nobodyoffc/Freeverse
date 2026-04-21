@@ -2,37 +2,37 @@ package SwapHall;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import config.Settings;
 import constants.ApipApiNames;
+import data.apipData.RequestBody;
+import data.fcData.ReplyBody;
 import data.feipData.ServiceType;
 import feature.swap.*;
 import initial.Initiator;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import server.HttpRequestChecker;
 import utils.EsUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static SwapHall.SwapRegister.REGISTERED_SWAP;
+import static constants.FieldNames.SID;
 import static constants.IndicesNames.*;
 
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapUpdate)
 public class SwapUpdate extends HttpServlet {
     private final Settings settings = Initiator.settings;
     private static final Gson gson = new Gson();
-    private static final Type MAP_TYPE = new TypeToken<Map<String, Object>>(){}.getType();
 
     public static String APIP_SWAP_SID_ADDR_KEY;
 
@@ -40,39 +40,51 @@ public class SwapUpdate extends HttpServlet {
         APIP_SWAP_SID_ADDR_KEY = settings.getService().getStdName() + "_" + REGISTERED_SWAP;
     }
 
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        PrintWriter writer = response.getWriter();
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.ENCRYPTED, settings);
+    }
 
-        byte[] bodyBytes = request.getInputStream().readAllBytes();
-        if (bodyBytes == null || bodyBytes.length == 0) {
-            writeError(writer, response, "Request body is empty.");
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.FREE, settings);
+    }
+
+    @SuppressWarnings("unchecked")
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
+
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
+        if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+
+        String sid = null;
+        Map<String, Object> dataMap = null;
+
+        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+            try {
+                dataMap = ObjectUtils.objectToMap(requestBody.getFcdsl().getOther(), String.class, Object.class);
+                if (dataMap != null) {
+                    sid = dataMap.get(SID) != null ? String.valueOf(dataMap.get(SID)) : null;
+                }
+            } catch (Exception ignored) {}
+        } else {
+            sid = request.getParameter(SID);
+        }
+
+        if (sid == null) {
+            replier.replyOtherErrorHttp("The 'sid' field is required.", response);
             return;
         }
 
-        Map<String, Object> dataMap;
-        try {
-            dataMap = gson.fromJson(new String(bodyBytes), MAP_TYPE);
-        } catch (Exception e) {
-            writeError(writer, response, "Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        if (dataMap == null || dataMap.get("sid") == null) {
-            writeError(writer, response, "The 'sid' field is required.");
-            return;
-        }
-
-        String sid = String.valueOf(dataMap.get("sid"));
-
-        Object stateObj = dataMap.get("state");
         SwapStateData swapState = null;
-        if (stateObj != null) {
-            swapState = gson.fromJson(gson.toJson(stateObj), SwapStateData.class);
+        if (dataMap != null && dataMap.get("state") != null) {
+            swapState = gson.fromJson(gson.toJson(dataMap.get("state")), SwapStateData.class);
         }
         if (swapState == null) {
-            writeError(writer, response, "The 'state' field is required and must be a valid SwapStateData object.");
+            replier.replyOtherErrorHttp("The 'state' field is required and must be a valid SwapStateData object.", response);
             return;
         }
         if (swapState.getSid() == null) {
@@ -87,52 +99,40 @@ public class SwapUpdate extends HttpServlet {
             swapRegisterInfoJson = jedis.hget(APIP_SWAP_SID_ADDR_KEY, sid);
         }
         if (swapRegisterInfoJson == null) {
-            writeError(writer, response, "The swap '" + sid + "' is not registered in " + settings.getSid());
+            replier.replyOtherErrorHttp("The swap '" + sid + "' is not registered in " + settings.getSid(), response);
             return;
         }
 
         SwapRegisterInfo swapRegisterInfo = gson.fromJson(swapRegisterInfoJson, SwapRegisterInfo.class);
         if (swapRegisterInfo == null) {
-            writeError(writer, response, "Failed to parse register info for swap " + sid);
+            replier.replyOtherErrorHttp("Failed to parse register info for swap " + sid, response);
             return;
         }
 
         List<String> resultList = new ArrayList<>();
         resultList.add(writeStateToEs(esClient, swapState));
 
-        if (dataMap.get("lp") != null) {
+        if (dataMap != null && dataMap.get("lp") != null) {
             SwapLpData lpData = gson.fromJson(gson.toJson(dataMap.get("lp")), SwapLpData.class);
             resultList.add(writeLpToEs(esClient, lpData));
         }
 
-        if (dataMap.get("pending") != null) {
+        if (dataMap != null && dataMap.get("pending") != null) {
             List<SwapAffair> pendingList = SwapDataGetter.getSwapAffairList(dataMap.get("pending"));
             resultList.add(writePendingToEs(esClient, pendingList, sid));
         }
 
-        if (dataMap.get("finished") != null) {
+        if (dataMap != null && dataMap.get("finished") != null) {
             List<SwapAffair> finishedList = SwapDataGetter.getSwapAffairList(dataMap.get("finished"));
             resultList.add(writeFinishedToEs(esClient, finishedList, sid));
         }
 
-        if (dataMap.get("price") != null) {
+        if (dataMap != null && dataMap.get("price") != null) {
             List<SwapPriceData> priceList = SwapDataGetter.getSwapPriceList(dataMap.get("price"));
             resultList.add(writePriceToEs(esClient, priceList));
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("code", 0);
-        result.put("message", "Success.");
-        result.put("data", resultList);
-        writer.write(gson.toJson(result));
-    }
-
-    private void writeError(PrintWriter writer, HttpServletResponse response, String message) {
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        Map<String, Object> err = new HashMap<>();
-        err.put("code", 1020);
-        err.put("message", message);
-        writer.write(gson.toJson(err));
+        replier.reply0SuccessHttp(resultList, response);
     }
 
     private String writePriceToEs(ElasticsearchClient esClient, List<SwapPriceData> swapPriceList) {
@@ -194,4 +194,3 @@ public class SwapUpdate extends HttpServlet {
         return "Saved swap state to ES.";
     }
 }
-

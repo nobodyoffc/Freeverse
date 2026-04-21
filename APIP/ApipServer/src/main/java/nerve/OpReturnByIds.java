@@ -28,7 +28,7 @@ public class OpReturnByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.OPRETURN, OpReturn.class, ID, request,response,authType);
     }
     @Override

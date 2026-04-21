@@ -6,7 +6,6 @@ import data.fcData.ReplyBody;
 import config.Settings;
 import data.feipData.ServiceType;
 import initial.Initiator;
-import server.HttpRequestChecker;
 import utils.Hex;
 import utils.http.AuthType;
 import clients.NaSaClient.NaSaRpcClient;
@@ -33,7 +32,7 @@ public class BroadcastTx extends HttpServlet {
         doRequest(rawTx,request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         String rawTx = getRawTx(request);
         doRequest(rawTx, request, response, authType, settings);
     }

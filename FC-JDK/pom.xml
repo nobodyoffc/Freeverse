@@ -73,6 +73,13 @@
             <version>${gson.version}</version>
         </dependency>
 
+        <!-- BouncyCastle (for Argon2id KDF and BC crypto provider) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.76</version>
+        </dependency>
+
         <!-- Logging API -->
         <dependency>
             <groupId>org.slf4j</groupId>

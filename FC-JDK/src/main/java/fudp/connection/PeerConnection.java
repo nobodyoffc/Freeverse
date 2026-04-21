@@ -8,6 +8,9 @@ import fudp.transport.*;
 import fudp.congestion.CongestionControl;
 import fudp.congestion.RttEstimator;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.SocketAddress;
 import java.time.Instant;
 import java.util.*;
@@ -15,11 +18,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a connection to a peer.
- * 
+ *
  * Simplified version without symmetric key session management.
  * All encryption uses AsyTwoWay (ECDH) mode.
  */
 public class PeerConnection {
+    private static final Logger log = LoggerFactory.getLogger(PeerConnection.class);
 
     private final String peerId;           // Peer FID
     private byte[] peerPublicKey;          // Peer public key
@@ -44,7 +48,7 @@ public class PeerConnection {
 
     // Timestamps
     private final Instant createdAt;
-    private Instant lastActivity;
+    private volatile Instant lastActivity;
 
     // Statistics
     private long packetsSent = 0;
@@ -59,11 +63,26 @@ public class PeerConnection {
     // Peer restart handling flag (to avoid duplicate processing in multi-threaded scenarios)
     private volatile boolean peerRestartHandled = false;
 
+    // Session epoch: identifies the remote node's session (changes on restart).
+    // Used to detect stale connections when the same FID reconnects with a new epoch.
+    private volatile long sessionEpoch = 0;
+
+    // E2: Once the peer has acknowledged our epoch, no need to keep sending it
+    private volatile boolean epochConfirmed = false;
+
+    // Per-connection loss signal throttle (moved from Protocol to avoid global throttle)
+    private volatile long lastLossSignalTime = 0;
+
     public PeerConnection(String peerId, SocketAddress address, long connectionId) {
+        this(peerId, address, connectionId, 2000);
+    }
+
+    public PeerConnection(String peerId, SocketAddress address, long connectionId, long lossDetectionMinThresholdMs) {
         this.peerId = peerId;
         this.peerAddress = address;
         this.connectionId = connectionId;
         this.state = ConnectionState.IDLE;
+        this.minTimeThresholdMs = lossDetectionMinThresholdMs;
 
         this.sentPackets = new ConcurrentHashMap<>();
         this.streamManager = new StreamManager(this);
@@ -96,7 +115,7 @@ public class PeerConnection {
      */
     public void recordSentPacket(long packetNumber, List<Frame> frames, int size, boolean ackEliciting, int retransmitCount) {
         SentPacket sent = new SentPacket(packetNumber, frames, size, ackEliciting);
-        sent.retransmitCount = retransmitCount;
+        sent.setRetransmitCount(retransmitCount);
         // Only track ACK-eliciting packets for loss detection
         // ACK-only packets don't need acknowledgment and shouldn't be counted as lost
         if (ackEliciting) {
@@ -104,12 +123,16 @@ public class PeerConnection {
         }
         packetsSent++;
         bytesOut += size;
+        lastActivity = Instant.now();
     }
 
     /**
      * Process received ACK.
      */
     public void onAckReceived(long largestAcked, long ackDelay, List<Long> ackedPackets) {
+        // E2: Peer has responded, so it has seen our epoch — no need to keep sending it
+        epochConfirmed = true;
+
         int found = 0;
         int notFound = 0;
         for (long pn : ackedPackets) {
@@ -119,7 +142,7 @@ public class PeerConnection {
                 // Update RTT estimation
                 if (pn == largestAcked) {
                     long rttSample = System.currentTimeMillis() - sent.sentTime;
-                    rttEstimator.updateRtt(rttSample - ackDelay / 1000);
+                    rttEstimator.updateRtt(Math.max(1, rttSample - ackDelay / 1000));
                 }
 
                 // Update congestion control
@@ -127,7 +150,7 @@ public class PeerConnection {
             } else {
                 notFound++;
             }
-            
+
             // Check if this packet was previously marked as suspected lost
             // If so, it was a false positive (late ACK, not real loss)
             if (suspectedLostPacketNumbers.remove(pn)) {
@@ -138,24 +161,8 @@ public class PeerConnection {
         if (largestAcked > largestAckedPacketNumber) {
             largestAckedPacketNumber = largestAcked;
         }
-        
-        // Debug: log ACK processing stats periodically 
-//        totalAcksProcessed += ackedPackets.size();
-//        totalAcksFound += found;
-//        totalAcksNotFound += notFound;
-//        if (totalAcksProcessed % 50 == 0 || notFound > 0) {
-//            System.err.println("[ACK-DBG] peer=" + peerId.substring(0, 8) +
-//                    " thisAck: found=" + found + " notFound=" + notFound +
-//                    " total: processed=" + totalAcksProcessed +
-//                    " found=" + totalAcksFound + " notFound=" + totalAcksNotFound +
-//                    " sentPkts=" + sentPackets.size() + " " + congestionControl);
-//        }
+
     }
-    
-    // Debug counters
-    private long totalAcksProcessed = 0;
-    private long totalAcksFound = 0;
-    private long totalAcksNotFound = 0;
 
     // Track packets that were marked as suspected lost (for accurate loss tracking)
     private final Set<Long> suspectedLostPacketNumbers = ConcurrentHashMap.newKeySet();
@@ -173,7 +180,7 @@ public class PeerConnection {
     //    phantom onLoss() calls reduce cwnd below inFlight, blocking the sender.
     //  - On WAN (RTT ~ 100-200ms): threshold = max(2000, 2*RTT + RTTvar).
     //    Real losses are detected within 2 seconds, which is acceptable.
-    private static final long MIN_TIME_THRESHOLD_MS = 2000;
+    private final long minTimeThresholdMs;
     // Packet reordering threshold (number of packets that can arrive out of order)
     private static final long PACKET_THRESHOLD = 3;
 
@@ -187,7 +194,7 @@ public class PeerConnection {
         // Adding RTT variance makes it more adaptive to network jitter
         long smoothedRtt = rttEstimator.getSmoothedRtt();
         long rttVar = rttEstimator.getRttVariance();
-        long timeThreshold = Math.max(MIN_TIME_THRESHOLD_MS, 
+        long timeThreshold = Math.max(minTimeThresholdMs, 
                 (long) (smoothedRtt * TIME_THRESHOLD_MULTIPLIER) + rttVar);
 
         for (Map.Entry<Long, SentPacket> entry : sentPackets.entrySet()) {
@@ -249,7 +256,7 @@ public class PeerConnection {
             
             suspectedLostCount++;
             suspectedLostPacketNumbers.add(packetNumber);
-            if (removed.retransmitCount >= 3) {
+            if (removed.getRetransmitCount() >= 3) {
                 confirmedLostCount++;
             }
         }
@@ -416,6 +423,7 @@ public class PeerConnection {
         ackManager.resetForRestart();
         largestAckedPacketNumber = -1;
         peerRestartHandled = false; // Reset flag for next restart detection
+        epochConfirmed = false;     // E2: Must re-send epoch after peer restart
     }
     
     /**
@@ -437,6 +445,35 @@ public class PeerConnection {
      */
     public boolean isPeerRestartHandled() {
         return peerRestartHandled;
+    }
+
+    /**
+     * Throttled loss signal. Returns true if loss was signaled (at most once per second).
+     */
+    public boolean trySignalLoss() {
+        long now = System.currentTimeMillis();
+        if (now - lastLossSignalTime > 1000) {
+            lastLossSignalTime = now;
+            congestionControl.onLoss();
+            return true;
+        }
+        return false;
+    }
+
+    public long getSessionEpoch() {
+        return sessionEpoch;
+    }
+
+    public void setSessionEpoch(long sessionEpoch) {
+        this.sessionEpoch = sessionEpoch;
+    }
+
+    public boolean isEpochConfirmed() {
+        return epochConfirmed;
+    }
+
+    public void setEpochConfirmed(boolean epochConfirmed) {
+        this.epochConfirmed = epochConfirmed;
     }
 
     // Getters and setters

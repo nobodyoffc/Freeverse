@@ -80,21 +80,21 @@ In the current version, the only subjectId implementation is **FID** (Freecash I
                              │     EID (Entity ID)  │
                              └──────┬───────────┬───┘
                                     │           │
-                    ┌───────────────▼──┐   ┌────▼──────────────┐
-                    │    subjectId     │   │       OID         │
-                    │   (Subject ID)   │   │   (Object ID)     │
-                    └──┬───────────┬───┘   └──┬───────┬───────┬┘
-                       │           │          │       │       │
-               ┌───────▼────┐ ┌────▼────┐ ┌───▼──┐ ┌──▼──┐ ┌──▼──────┐
-               │    FID     │ │   CID   │ │ DID  │ │txid │ │ NID     │
-               │(Freecash   │ │(Crypto  │ │(Data │ │based│ │(Name ID)│
-               │   ID)      │ │  ID)    │ │  ID) │ │ ID  │ │         │
-               │            │ │         │ │      │ │     │ │         │
-               │(secp256k1) │ │  FID    │ │  of  │ │     │ │human    │
-               │  hash of   │ │ human-  │ │double│ │reuse│ │readable │
-               │  pubkey    │ │readable │ │sha256│ │txid │ │OID      │
-               │            │ │(FEIP3)  │ │bytes │ │     │ │(FEIP11) │
-               └────────────┘ └─────────┘ └──────┘ └─────┘ └─────────┘
+                    ┌───────────────▼──┐   ┌────▼───────────────┐
+                    │    subjectId     │   │       OID          │
+                    │   (Subject ID)   │   │   (Object ID)      │
+                    └──┬───────────┬───┘   └──┬───────┬────────┬┘
+                       │           │          │       │        │
+               ┌───────▼────┐ ┌────▼────┐ ┌───▼──┐ ┌──▼───┐ ┌──▼──────┐
+               │    FID     │ │   CID   │ │ DID  │ │transf│ │ NID     │
+               │(Freecash   │ │(Crypto  │ │(Data │ │ormed │ │(Name ID)│
+               │   ID)      │ │  ID)    │ │  ID) │ │ ID   │ │         │
+               │            │ │         │ │      │ │      │ │         │
+               │(secp256k1) │ │  FID    │ │  of  │ │      │ │human    │
+               │  hash of   │ │ human-  │ │double│ │reuse │ │readable │
+               │  pubkey    │ │readable │ │sha256│ │txid  │ │OID      │
+               │            │ │(FEIP3)  │ │bytes │ │      │ │(FEIP11) │
+               └────────────┘ └─────────┘ └──────┘ └──────┘ └─────────┘
                                                              
                                                            
 ```
@@ -192,6 +192,8 @@ The `entityTypeName` is generally the value of the `meta.n` field (the name fiel
 
 ### Typed ID Notation
 
+> **Note**: "Typed ID" (a *notation*) is distinct from "Transformed ID" (a *derivation kind*). A Transformed ID is one **kind** of OID — produced by reusing a txid. A Typed ID is a **way of writing** any 64-char hex OID with a `(type)` prefix so its type is unambiguous. A DID (Hash ID) written as `(DID)b3a2…` is a Hash-derived OID rendered in Typed ID notation.
+
 DID, txid, and all txid-based OIDs share the same 64-character hex string format. To disambiguate, a **Typed ID** notation is defined:
 
 ```
@@ -202,10 +204,13 @@ For example:
 - `(codeId)eed190e4f003fc61bcd71d19da2a940d49bbf6bdcca05409c062576a92e7e361` — an ID of a Code entity
 - `(SID)a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90` — an ID of a Service entity
 - `(PID)f6e5d4c3b2a1908172635445362718091a2b3c4d5e6f7081920a1b2c3d4e5f60` — an ID of a Protocol entity
+- `(DID)b3a2e7c9f1d4a6b8e0c2d4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6` — a content-hash ID of a Data Object
 
 #### Scope
 
-The Typed ID notation applies to **txid-based OIDs** only, because they share the same raw format and are ambiguous without context.
+The Typed ID notation applies to any **OID that is rendered as a 64-character hex string** — this includes both **txid-based OIDs** (SID, AID, PID, codeId, …) and **Hash-based OIDs** (DID). Because they share the same raw format, they are ambiguous without context and benefit from the `(type)value` prefix.
+
+The notation is NOT used for human-readable IDs (CID, NID) or for non-OID identifiers, since their formats are already self-distinguishing.
 
 #### When to Use
 
@@ -251,7 +256,7 @@ If no `(` prefix is present, the value is an untyped ID whose type must be infer
 
 8. For entity types without a reserved short name, the ID type name SHOULD follow the `<entityTypeName>Id` convention, where `entityTypeName` corresponds to `meta.n`.
 
-9. Txid-based OIDs SHOULD use the Typed ID notation `(type)value` when the ID appears outside its own entity context and the type cannot be determined from surrounding information. When the type can be determined from context, the `(type)` prefix SHOULD be omitted.
+9. OIDs rendered as a 64-character hex string (both txid-based OIDs and Hash-based DIDs) SHOULD use the Typed ID notation `(type)value` when the ID appears outside its own entity context and the type cannot be determined from surrounding information. When the type can be determined from context, the `(type)` prefix SHOULD be omitted.
 
 ## Examples
 
@@ -273,7 +278,7 @@ FID:                     FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUZ
 ```
 Object byte content:     {"name":"Freecash Community","desc":"..."}
   ↓ SHA-256 × 2 (double SHA-256)
-DID:                     b3a2e7c9f1d4a6b8e0c2d4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4
+DID:                     b3a2e7c9f1d4a6b8e0c2d4f6a8b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6
 ```
 
 ### Human-readable ID: CID

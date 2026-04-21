@@ -61,11 +61,14 @@ public class DockComponent extends AbstractFapiComponent {
     private static final int MAX_RECIPIENTS = 100;
     private static final long DEFAULT_MAX_DATA_SIZE = 64 * 1024; // 64 KB default; large data should use DISK
     private static final int BLOCKS_PER_DAY = 1440; // ~1 block per minute for FCH
-    
+
+    public static final String KEY_DOCK_FORWARD_ENABLED = "dockForwardEnabled";
+
     private ElasticsearchClient esClient;
     private FapiBalanceManager balanceManager;
     private String indexName;
     private long maxDataSize = DEFAULT_MAX_DATA_SIZE;
+    private boolean forwardEnabled = true; // allow forwarding by default
     
     // Pricing (from Service)
     private long pricePerKBIn;      // Ingress fee (satoshi per KB)
@@ -106,8 +109,8 @@ public class DockComponent extends AbstractFapiComponent {
         loadServiceConfig();
         ensureIndexExists();
         
-        log.info("DOCK component initialized: index={}, maxDataSize={}, pricePerKBIn={}, pricePerKBOut={}, pricePerKBDay={}, defaultMaxDays={}",
-                indexName, maxDataSize, pricePerKBIn, pricePerKBOut, pricePerKBDay, defaultMaxDays);
+        log.info("DOCK component initialized: index={}, maxDataSize={}, pricePerKBIn={}, pricePerKBOut={}, pricePerKBDay={}, defaultMaxDays={}, forwardEnabled={}",
+                indexName, maxDataSize, pricePerKBIn, pricePerKBOut, pricePerKBDay, defaultMaxDays, forwardEnabled);
     }
     
     /**
@@ -183,6 +186,25 @@ public class DockComponent extends AbstractFapiComponent {
         }
         
         // 3. Hardcoded default (DEFAULT_MAX_DAYS = 7) is already the field initializer
+
+        // Load forwardEnabled from settingMap (default: true)
+        Map<String, Object> settingMap = settings.getSettingMap();
+        if (settingMap != null && settingMap.containsKey(KEY_DOCK_FORWARD_ENABLED)) {
+            Object val = settingMap.get(KEY_DOCK_FORWARD_ENABLED);
+            if (val instanceof Boolean) {
+                this.forwardEnabled = (Boolean) val;
+            } else {
+                this.forwardEnabled = !"false".equalsIgnoreCase(String.valueOf(val));
+            }
+        }
+    }
+
+    public boolean isForwardEnabled() {
+        return forwardEnabled;
+    }
+
+    public void setForwardEnabled(boolean forwardEnabled) {
+        this.forwardEnabled = forwardEnabled;
     }
     
     /**
@@ -320,6 +342,11 @@ public class DockComponent extends AbstractFapiComponent {
             String targetDockUrl = (String) params.get(FieldNames.TARGET_DOCK_URL);
             if (targetDockUrl != null && !targetDockUrl.isEmpty()
                     && !server.isSelfUrl(targetDockUrl)) {
+                if (!forwardEnabled) {
+                    return new UnifiedResponse(
+                        errorResponse(requestId, FapiCode.METHOD_NOT_ALLOWED, "Forwarding is disabled on this server"),
+                        null);
+                }
                 return handlePutForward(request, binaryData, peerId, recipients, maxDays, targetDockUrl);
             }
             

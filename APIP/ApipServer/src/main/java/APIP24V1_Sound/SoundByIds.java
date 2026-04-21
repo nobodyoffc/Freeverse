@@ -27,7 +27,7 @@ public class SoundByIds extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         fcHttpRequestHandler.doIdsRequest(IndicesNames.SOUND, Sound.class, ID, request,response,authType);
     }
     @Override

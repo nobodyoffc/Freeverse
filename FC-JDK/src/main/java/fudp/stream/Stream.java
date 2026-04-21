@@ -1,5 +1,7 @@
 package fudp.stream;
 
+import fudp.connection.PeerConnection;
+
 import java.io.ByteArrayOutputStream;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -10,6 +12,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Stream {
 
     private final long streamId;
+    private PeerConnection connection;
     private StreamState sendState;
     private StreamState recvState;
 
@@ -55,6 +58,7 @@ public class Stream {
      * Check if we can send data
      */
     public boolean canSend(int length) {
+        if (sendState != StreamState.OPEN) return false;
         return sentData + length <= maxSendData;
     }
 
@@ -62,36 +66,26 @@ public class Stream {
      * Process received stream data
      * @return assembled data if continuous, null otherwise
      */
-    // Debug counters
-    private long dataReceivedCalls = 0;
-    private long duplicateCount = 0;
-    private long assembledCount = 0;
-    private long bufferedCount = 0;
-
     public synchronized byte[] onDataReceived(long offset, byte[] data, boolean fin) {
-        dataReceivedCalls++;
-        
         // Duplicate detection: ignore data that has already been processed
         // (offset is before current recvOffset)
         if (offset < recvOffset) {
-            duplicateCount++;
             // This is duplicate/retransmitted data we've already processed
             if (fin) {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
             }
             return null;
         }
-        
+
         // Check if this exact offset is already in buffer (retransmission of pending data)
         if (recvBuffer.containsKey(offset)) {
-            duplicateCount++;
             // Already have this data, ignore duplicate
             if (fin) {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
             }
             return null;
         }
-        
+
         // Store in receive buffer
         recvBuffer.put(offset, data);
         recvData += data.length;
@@ -105,6 +99,7 @@ public class Stream {
             if (entry.getKey() == recvOffset) {
                 output.write(entry.getValue(), 0, entry.getValue().length);
                 recvOffset += entry.getValue().length;
+                recvData -= entry.getValue().length;
                 recvBuffer.pollFirstEntry();
             } else {
                 break; // Gap in data
@@ -117,18 +112,8 @@ public class Stream {
 
         byte[] assembled = output.toByteArray();
         if (assembled.length > 0) {
-            assembledCount++;
             receivedData.offer(assembled);
             return assembled;
-        } else {
-            bufferedCount++;
-            if (bufferedCount <= 5 || bufferedCount % 100 == 0) {
-                System.err.println("[STREAM-DBG] stream=" + streamId + 
-                        " buffered: offset=" + offset + " recvOffset=" + recvOffset + 
-                        " bufSize=" + recvBuffer.size() + 
-                        " calls=" + dataReceivedCalls + " dup=" + duplicateCount +
-                        " assembled=" + assembledCount + " buffered=" + bufferedCount);
-            }
         }
         return null;
     }
@@ -229,6 +214,14 @@ public class Stream {
 
     public long getMaxRecvData() {
         return maxRecvData;
+    }
+
+    public PeerConnection getConnection() {
+        return connection;
+    }
+
+    public void setConnection(PeerConnection connection) {
+        this.connection = connection;
     }
 
     @Override

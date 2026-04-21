@@ -10,7 +10,6 @@ import data.fchData.*;
 import core.fch.OpReFileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import parser.Preparer;
 import parser.ReadyBlock;
 import utils.EsUtils;
 
@@ -19,7 +18,7 @@ import java.util.*;
 public class BlockWriter {
 
 	private static final Logger log = LoggerFactory.getLogger(BlockWriter.class);
-	public void writeIntoEs(ElasticsearchClient esClient, ReadyBlock readyBlock, OpReFileUtils opReFile) throws Exception {
+	public void writeIntoEs(ElasticsearchClient esClient, ReadyBlock readyBlock, OpReFileUtils opReFile, parser.ChainState state) throws Exception {
 
 		Block block = readyBlock.getBlock();
 		LinkedHashMap<String, Tx> txMap = readyBlock.getTxLinkedMap();
@@ -30,8 +29,6 @@ public class BlockWriter {
 		LinkedHashMap<String, Freer> addrMap = readyBlock.getAddrMap();
 		Map<String, P2SH> p2SHMap = readyBlock.getP2SHMap();
 		Map<String, Multisig> multisigMap = readyBlock.getMultisigMap();
-
-		opReFile.writeOpReturnListIntoFile(new ArrayList<>(opReturnMap.values()));
 
 		Builder br = new Builder();
 		putBlock(block, br);
@@ -46,11 +43,11 @@ public class BlockWriter {
 		BulkResponse response = EsUtils.bulkWithBuilder(esClient, br);
 
 		System.out.println("Main chain linked. "
-				+"Orphan: "+Preparer.orphanList.size()
-				+" Fork: "+Preparer.forkList.size()
+				+"Orphan: "+state.orphanSize()
+				+" Fork: "+state.forkSize()
 				+" id: "+ blockMask.getId()
-				+" file: "+Preparer.CurrentFile
-				+" pointer: "+Preparer.Pointer
+				+" file: "+state.getCurrentFile()
+				+" pointer: "+state.getPointer()
 				+" Height:"+ blockMask.getHeight());
 
 		
@@ -62,18 +59,20 @@ public class BlockWriter {
 				if(item.error()!=null) {
 					System.out.println("index: "+item.index()+", Type: "+item.error().type()+"\nReason: "+item.error().reason());
 				}
-			}	
+			}
 			throw new Exception("bulkWriteToEs error");
 		}
 
-		Preparer.mainList.add(blockMask);
-		if (Preparer.mainList.size() > EsUtils.READ_MAX) {
-			Preparer.mainList.remove(0);
-		}
-		Preparer.BestHash = blockMask.getId();
-		Preparer.BestHeight = blockMask.getHeight();
-		Preparer.beforeBestBlockMask = Preparer.bestBlockMask;
-		Preparer.bestBlockMask = blockMask;
+		// Write OpReturn file AFTER ES bulk succeeds, so FeipParser only sees
+		// OpReturns whose corresponding Freer data is already in ES.
+		opReFile.writeOpReturnListIntoFile(new ArrayList<>(opReturnMap.values()));
+
+		state.addToMain(blockMask);
+		state.trimMainToSize(EsUtils.READ_MAX);
+		state.setBestHash(blockMask.getId());
+		state.setBestHeight(blockMask.getHeight());
+		state.setBeforeBestBlockMask(state.getBestBlockMask());
+		state.setBestBlockMask(blockMask);
 	}
 
 	private void putBlockMark(BlockMask blockMask, Builder br) {
@@ -81,20 +80,54 @@ public class BlockWriter {
 	}
 
 	private void putAddress(ElasticsearchClient esClient, ArrayList<Freer> addrList, Builder br) throws Exception {
+		// Filter out entries with null/invalid IDs — update operations require a non-null ID
+		addrList.removeIf(am -> am.getId() == null || am.getId().isEmpty());
 
+		// Use partial update (not full replace) to avoid overwriting FEIP fields (home, cid, master, etc.)
 		if (addrList.size() > EsUtils.WRITE_MAX / 5) {
-			Iterator<Freer> iter = addrList.iterator();
-			ArrayList<String> idList = new ArrayList<>();
-			while (iter.hasNext())
-				idList.add(iter.next().getId());
-			BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.FREER, addrList, idList, Freer.class);
+			// Large list: build a separate bulk request with update operations
+			Builder updateBr = new Builder();
+			for (Freer am : addrList) {
+				Map<String, Object> doc = buildBlockchainFieldMap(am);
+				updateBr.operations(op -> op.update(u -> u
+						.index(IndicesNames.FREER)
+						.id(am.getId())
+						.action(a -> a.doc(doc).docAsUpsert(true))));
+			}
+			BulkResponse response = EsUtils.bulkWithBuilder(esClient, updateBr);
 			checkBulkWriteErrors(response, "CID", addrList.size());
-			// TimeUnit.SECONDS.sleep(3); // Testing if this sleep is necessary - commented out to observe ES behavior
 		} else {
 			for (Freer am : addrList) {
-				br.operations(op -> op.index(i -> i.index(IndicesNames.FREER).id(am.getId()).document(am)));
+				Map<String, Object> doc = buildBlockchainFieldMap(am);
+				br.operations(op -> op.update(u -> u
+						.index(IndicesNames.FREER)
+						.id(am.getId())
+						.action(a -> a.doc(doc).docAsUpsert(true))));
 			}
 		}
+	}
+
+	private static Map<String, Object> buildBlockchainFieldMap(Freer am) {
+		Map<String, Object> doc = new HashMap<>();
+		if (am.getId() != null) doc.put("id", am.getId());
+		if (am.getBalance() != null) doc.put("balance", am.getBalance());
+		if (am.getCash() != null) doc.put("cash", am.getCash());
+		if (am.getIncome() != null) doc.put("income", am.getIncome());
+		if (am.getExpend() != null) doc.put("expend", am.getExpend());
+		if (am.getCd() != null) doc.put("cd", am.getCd());
+		if (am.getCdd() != null) doc.put("cdd", am.getCdd());
+		if (am.getWeight() != null) doc.put("weight", am.getWeight());
+		if (am.getLastHeight() != null) doc.put("lastHeight", am.getLastHeight());
+		if (am.getBirthHeight() != null) doc.put("birthHeight", am.getBirthHeight());
+		if (am.getGuide() != null) doc.put("guide", am.getGuide());
+		if (am.getPubkey() != null) doc.put("pubkey", am.getPubkey());
+		if (am.getBtcAddr() != null) doc.put("btcAddr", am.getBtcAddr());
+		if (am.getEthAddr() != null) doc.put("ethAddr", am.getEthAddr());
+		if (am.getLtcAddr() != null) doc.put("ltcAddr", am.getLtcAddr());
+		if (am.getDogeAddr() != null) doc.put("dogeAddr", am.getDogeAddr());
+		if (am.getTrxAddr() != null) doc.put("trxAddr", am.getTrxAddr());
+		if (am.getBchAddr() != null) doc.put("bchAddr", am.getBchAddr());
+		return doc;
 	}
 
 	private void putOpReturn(ElasticsearchClient esClient, ArrayList<OpReturn> opReturnList, Builder br)

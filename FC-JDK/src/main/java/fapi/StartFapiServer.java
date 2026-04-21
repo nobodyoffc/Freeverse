@@ -3,6 +3,7 @@ package fapi;
 import data.feipData.Service;
 import data.feipData.ServiceType;
 import fapi.components.DiskComponent;
+import fapi.components.DockComponent;
 import fapi.components.disk.DiskSyncManager;
 import fapi.components.disk.DiskSyncSource;
 import fapi.components.disk.DiskSyncState;
@@ -73,7 +74,6 @@ public class StartFapiServer {
                 }
             }
             
-            printConnectionInfo();
             showMainMenu();
             
         } catch (Exception e) {
@@ -136,6 +136,7 @@ public class StartFapiServer {
                 fapiServer.getSettings().setting(br, ServiceType.FAPI_No1_NrC7);
             });
             menu.add("DDoS Defence", StartFapiServer::ddosDefenceMenu);
+            menu.add("DOCK Forward", StartFapiServer::dockForwardMenu);
             menu.add("DISK Sync", StartFapiServer::diskSyncMenu);
 
             menu.showAndSelect(br);
@@ -205,6 +206,43 @@ public class StartFapiServer {
             }
         } catch (Exception e) {
             log.error("Error in DDoS defence menu", e);
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    /**
+     * DOCK forward toggle menu
+     */
+    private static void dockForwardMenu() {
+        DockComponent dock = fapiServer.getComponent(DockComponent.class);
+        if (dock == null) {
+            System.out.println("DOCK component not loaded.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        System.out.println("\n=== DOCK Forward ===");
+        System.out.println("Current status: " + (dock.isForwardEnabled() ? "ALLOWED" : "FORBIDDEN"));
+        System.out.println();
+
+        try {
+            System.out.print("Toggle DOCK forward? (y/N): ");
+            String input = br.readLine().trim().toLowerCase();
+            if ("y".equals(input) || "yes".equals(input)) {
+                boolean newState = !dock.isForwardEnabled();
+                dock.setForwardEnabled(newState);
+
+                // Persist to settingMap
+                Map<String, Object> settingMap = getOrCreateSettingMap();
+                settingMap.put(DockComponent.KEY_DOCK_FORWARD_ENABLED, newState);
+                saveSettings();
+
+                System.out.println("DOCK forward is now " + (newState ? "ALLOWED" : "FORBIDDEN") + " (effective immediately)");
+            } else {
+                System.out.println("No change.");
+            }
+        } catch (Exception e) {
+            log.error("Error in DOCK forward menu", e);
         }
         Menu.anyKeyToContinue(br);
     }

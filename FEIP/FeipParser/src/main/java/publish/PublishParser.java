@@ -1,5 +1,7 @@
 package publish;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
@@ -7,6 +9,7 @@ import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import com.google.gson.Gson;
 import constants.IndicesNames;
+import startFEIP.FeipConstants;
 import data.fcData.News;
 import data.fchData.Freer;
 import data.fchData.OpReturn;
@@ -26,6 +29,8 @@ import static constants.Values.UPDATED;
 
 public class PublishParser {
 
+	private static final Logger log = LoggerFactory.getLogger(PublishParser.class);
+
 	public boolean parseStatement(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws ElasticsearchException, IOException {
 
 		Gson gson = new Gson();
@@ -33,13 +38,13 @@ public class PublishParser {
 		StatementOpData statementRaw = new StatementOpData();
 
 		try {
-			statementRaw = gson.fromJson(gson.toJson(feip.getData()), StatementOpData.class);
+			statementRaw = gson.fromJson(gson.toJsonTree(feip.getData()), StatementOpData.class);
 			if(statementRaw==null){
-				System.out.println("Statement raw is null");
+				log.info("Statement raw is null");
 				return false;
 			}
 		}catch(com.google.gson.JsonSyntaxException e) {
-			System.out.println("Statement raw is null");
+			log.info("Statement raw is null");
 			return false;
 		}
 
@@ -48,17 +53,17 @@ public class PublishParser {
 		statement.setId(opre.getId());
 
 		if(statementRaw.getConfirm()==null){
-			System.out.println("Confirm is null");
+			log.info("Confirm is null");
 			return false;
 		}
 
-		if(!statementRaw.getConfirm().equals("This is a formal and irrevocable statement.")){
-			System.out.println("Confirm is not a formal and irrevocable statement");
+		if(!statementRaw.getConfirm().equals(FeipConstants.CONFIRM_STATEMENT)){
+			log.info("Confirm is not a formal and irrevocable statement");
 			return false;
 		}
 
 		if(statementRaw.getTitle()==null && statementRaw.getContent()==null){
-			System.out.println("Title and content are null");
+			log.info("Title and content are null");
 			return false;
 		}
 
@@ -76,14 +81,14 @@ public class PublishParser {
 
 		IndexResponse result = esClient.index(i -> i.index(IndicesNames.STATEMENT).id(statement.getId()).document(statement));
 		if(result==null||result.result()==null){
-			System.out.println("Failed to create statement");
+			log.info("Failed to create statement");
 			return false;
 		}
 		if(!CREATED.equals(result.result().jsonValue()) && !UPDATED.equals(result.result().jsonValue())){
-			System.out.println("Failed to create statement");
+			log.info("Failed to create statement");
 			return false;
 		}
-		System.out.println(result.result());
+		log.info("{}", result.result());
 		// Create news record for statement
 		News.createNews(esClient, opre.getId(), opre.getSigner(), Feip.FeipProtocol.STATEMENT.getName(),
 				Feip.FeipProtocol.STATEMENT.getName(), opre.getId(), statement.getTitle(), statement.getContent(),
@@ -100,20 +105,20 @@ public class PublishParser {
 
 		TextOpData textRaw = new TextOpData();
 		try {
-			textRaw = gson.fromJson(gson.toJson(feip.getData()), TextOpData.class);
+			textRaw = gson.fromJson(gson.toJsonTree(feip.getData()), TextOpData.class);
 			if(textRaw==null){
-				System.out.println("Text raw is null");
+				log.info("Text raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse text");
+			log.info("Failed to parse text");
 			return null;
 		}
 
 		TextHistory textHist = new TextHistory();
 
 		if(textRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -123,11 +128,11 @@ public class PublishParser {
 
 			case PUBLISH:
 				if(textRaw.getTitle()==null||"".equals(textRaw.getTitle())){
-					System.out.println("Title is null or empty");
+					log.info("Title is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired){
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					log.info("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
 					return null;
 				}
 				textHist.setId(opre.getId());
@@ -149,7 +154,7 @@ public class PublishParser {
 
 			case UPDATE:
 				if(textRaw.getTextId()==null|| textRaw.getTitle()==null||"".equals(textRaw.getTitle())){
-					System.out.println("TextId is null or title is null or empty");
+					log.info("TextId is null or title is null or empty");
 					return null;
 				}
 				textHist.setId(opre.getId());
@@ -171,7 +176,7 @@ public class PublishParser {
 			case RECOVER:
 			case DELETE:
 				if (textRaw.getTextIds() == null || textRaw.getTextIds().size() == 0) {
-					System.out.println("TextIds is null or empty");
+					log.info("TextIds is null or empty");
 					return null;
 				}
 				textHist.setTextIds(textRaw.getTextIds());
@@ -185,21 +190,21 @@ public class PublishParser {
 
 			case RATE:
 				if(textRaw.getTextId()==null){
-					System.out.println("TextId is null");
+					log.info("TextId is null");
 					return null;
 				}
 				if (opre.getCdd() == null) {
-					System.out.println("Cdd is null");
+					log.info("Cdd is null");
 					return null;
 				}
 
 				if (opre.getCdd() < StartFEIP.CddRequired) {
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 
 				if (textRaw.getRate() == null) {
-					System.out.println("Rate is null");
+					log.info("Rate is null");
 					return null;
 				}
 				textHist.setTextId(textRaw.getTextId());
@@ -213,7 +218,7 @@ public class PublishParser {
 				textHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return textHist;
@@ -223,7 +228,7 @@ public class PublishParser {
 	public boolean parseText(ElasticsearchClient esClient, TextHistory textHist) throws Exception {
 
 		if(textHist==null){
-			System.out.println("Text hist is null");
+			log.info("Text hist is null");
 			return false;
 		}
 		Text text;
@@ -257,11 +262,11 @@ public class PublishParser {
 
 					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.TEXT).id(textHist.getTextId()).document(text1));
 					if(result1==null||result1.result()==null){
-						System.out.println("Failed to create text");
+						log.info("Failed to create text");
 						return false;
 					}
 					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
-						System.out.println("Failed to create text");
+						log.info("Failed to create text");
 						return false;
 					}
 					// Create news record for text publication
@@ -271,22 +276,22 @@ public class PublishParser {
 
 					return true;
 				} else {
-					System.out.println("Text already exists");
+					log.info("Text already exists");
 					return false;
 				}
 			}
 			case UPDATE -> {
 				text = EsUtils.getById(esClient, IndicesNames.TEXT, textHist.getTextId(), Text.class);
 				if (text == null) {
-					System.out.println("Text not found");
+					log.info("Text not found");
 					return false;
 				}
 				if (Boolean.TRUE.equals(text.isDeleted())) {
-					System.out.println("Text is deleted");
+					log.info("Text is deleted");
 					return false;
 				}
 				if (!text.getPublisher().equals(textHist.getSigner())) {
-					System.out.println("Text publisher is not the same as the signer");
+					log.info("Text publisher is not the same as the signer");
 					return false;
 				}
 				text.setVer(String.valueOf(Integer.parseInt(text.getVer())+1));
@@ -303,11 +308,11 @@ public class PublishParser {
 				Text text2 = text;
 				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.TEXT).id(textHist.getTextId()).document(text2));
 				if(result2==null||result2.result()==null){
-					System.out.println("Failed to update text");
+					log.info("Failed to update text");
 					return false;
 				}
 				if(!CREATED.equals(result2.result().jsonValue()) && !UPDATED.equals(result2.result().jsonValue())){
-					System.out.println("Failed to update text");
+					log.info("Failed to update text");
 					return false;
 				}
 				return true;
@@ -318,7 +323,7 @@ public class PublishParser {
 				if (textHist.getTextIds() != null && textHist.getTextIds().size() > 0) {
 					idList.addAll(textHist.getTextIds());
 				} else {
-					System.out.println("TextIds is null or empty");
+					log.info("TextIds is null or empty");
 					return false;
 				}
 
@@ -365,28 +370,28 @@ public class PublishParser {
 					}
 					BulkResponse result3 = esClient.bulk(br.build());
 					if(result3.errors()){
-						System.out.println("Failed to bulk update text");
+						log.info("Failed to bulk update text");
 						return false;
 					}
 					return true;
 				}
-				System.out.println("No text matched publisher/master filter");
+				log.info("No text matched publisher/master filter");
 				return false;
 			}
 
 			case RATE -> {
 				text = EsUtils.getById(esClient, IndicesNames.TEXT, textHist.getTextId(), Text.class);
 				if (text == null) {
-					System.out.println("Text not found");
+					log.info("Text not found");
 					return false;
 				}
 				if (text.getPublisher().equals(textHist.getSigner())) {
-					System.out.println("Text publisher is the same as the signer");
+					log.info("Text publisher is the same as the signer");
 					return false;
 				}
 
 				if((textHist.getCdd()==null || textHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -418,20 +423,20 @@ public class PublishParser {
 
 		RemarkOpData remarkRaw = new RemarkOpData();
 		try {
-			remarkRaw = gson.fromJson(gson.toJson(feip.getData()), RemarkOpData.class);
+			remarkRaw = gson.fromJson(gson.toJsonTree(feip.getData()), RemarkOpData.class);
 			if(remarkRaw==null){
-				System.out.println("Remark raw is null");
+				log.info("Remark raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse remark");
+			log.info("Failed to parse remark");
 			return null;
 		}
 
 		RemarkHistory remarkHist = new RemarkHistory();
 
 		if(remarkRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -441,13 +446,13 @@ public class PublishParser {
 
 			case PUBLISH:
 				if(remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle())){
-					System.out.println("Title is null or empty");
+					log.info("Title is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
 					Long cdd = opre.getCdd();
 					if (cdd == null || cdd < StartFEIP.CddRequired) {
-						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
 						return null;
 					}
 				}
@@ -471,7 +476,7 @@ public class PublishParser {
 
 			case UPDATE:
 				if(remarkRaw.getRemarkId()==null|| remarkRaw.getTitle()==null||"".equals(remarkRaw.getTitle())){
-					System.out.println("RemarkId is null or title is null or empty");
+					log.info("RemarkId is null or title is null or empty");
 					return null;
 				}
 				remarkHist.setId(opre.getId());
@@ -494,7 +499,7 @@ public class PublishParser {
 			case RECOVER:
 			case DELETE:
 				if (remarkRaw.getRemarkIds() == null || remarkRaw.getRemarkIds().length == 0) {
-					System.out.println("RemarkIds is null or empty");
+					log.info("RemarkIds is null or empty");
 					return null;
 				}
 				remarkHist.setRemarkIds(remarkRaw.getRemarkIds());
@@ -508,20 +513,20 @@ public class PublishParser {
 
 			case RATE:
 				if(remarkRaw.getRemarkId()==null){
-					System.out.println("RemarkId is null");
+					log.info("RemarkId is null");
 					return null;
 				}
 				if (remarkRaw.getRate() == null) {
-					System.out.println("Rate is null");
+					log.info("Rate is null");
 					return null;
 				}
 				Long remarkRateCdd = opre.getCdd();
 				if (remarkRateCdd == null) {
-					System.out.println("Cdd is null");
+					log.info("Cdd is null");
 					return null;
 				}
 				if (remarkRateCdd < StartFEIP.CddRequired) {
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				remarkHist.setRemarkId(remarkRaw.getRemarkId());
@@ -535,7 +540,7 @@ public class PublishParser {
 				remarkHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return remarkHist;
@@ -544,7 +549,7 @@ public class PublishParser {
 	public boolean parseRemark(ElasticsearchClient esClient, RemarkHistory remarkHist) throws Exception {
 
 		if(remarkHist==null){
-			System.out.println("Remark hist is null");
+			log.info("Remark hist is null");
 			return false;
 		}
 		Remark remark;
@@ -579,31 +584,31 @@ public class PublishParser {
 
 					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark1));
 					if(result1==null||result1.result()==null){
-						System.out.println("Failed to create remark");
+						log.info("Failed to create remark");
 						return false;
 					}
 					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
-						System.out.println("Failed to create remark");
+						log.info("Failed to create remark");
 						return false;
 					}
 					return true;
 				} else {
-					System.out.println("Remark already exists");
+					log.info("Remark already exists");
 					return false;
 				}
 			}
 			case UPDATE -> {
 				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
 				if (remark == null) {
-					System.out.println("Remark not found");
+					log.info("Remark not found");
 					return false;
 				}
 				if (Boolean.TRUE.equals(remark.isDeleted())) {
-					System.out.println("Remark is deleted");
+					log.info("Remark is deleted");
 					return false;
 				}
 				if (!remark.getPublisher().equals(remarkHist.getSigner())) {
-					System.out.println("Remark publisher is not the same as the signer");
+					log.info("Remark publisher is not the same as the signer");
 					return false;
 				}
 				remark.setVer(String.valueOf(Integer.parseInt(remark.getVer())+1));
@@ -628,18 +633,18 @@ public class PublishParser {
 				if (remarkHist.getRemarkIds() != null && remarkHist.getRemarkIds().length > 0) {
 					idList.addAll(Arrays.asList(remarkHist.getRemarkIds()));
 				} else {
-					System.out.println("RemarkIds is null or empty");
+					log.info("RemarkIds is null or empty");
 					return false;
 				}
 
 				EsUtils.MgetResult<Remark> result = EsUtils.getMultiByIdList(esClient, IndicesNames.REMARK, idList, Remark.class);
 				if (result == null) {
-					System.out.println("Remark mget result is null");
+					log.info("Remark mget result is null");
 					return false;
 				}
 				List<Remark> remarks = result.getResultList();
 				if (remarks == null || remarks.isEmpty()) {
-					System.out.println("Remarks is null or empty");
+					log.info("Remarks is null or empty");
 					return false;
 				}
 
@@ -682,28 +687,28 @@ public class PublishParser {
 					}
 					BulkResponse result3 = esClient.bulk(br.build());
 					if(result3.errors()){
-						System.out.println("Failed to bulk update remark");
+						log.info("Failed to bulk update remark");
 						return false;
 					}
 					return true;
 				}
-				System.out.println("No remark matched publisher/master filter; delete/recover skipped");
+				log.info("No remark matched publisher/master filter; delete/recover skipped");
 				return false;
 			}
 
 			case RATE -> {
 				remark = EsUtils.getById(esClient, IndicesNames.REMARK, remarkHist.getRemarkId(), Remark.class);
 				if (remark == null) {
-					System.out.println("Remark not found");
+					log.info("Remark not found");
 					return false;
 				}
 				if (remark.getPublisher().equals(remarkHist.getSigner())) {
-					System.out.println("Remark publisher is the same as the signer");
+					log.info("Remark publisher is the same as the signer");
 					return false;
 				}
 
 				if((remarkHist.getCdd()==null || remarkHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -723,7 +728,7 @@ public class PublishParser {
 				remark.setLastHeight(remarkHist.getHeight());
 				Remark remark3 = remark;
 				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.REMARK).id(remarkHist.getRemarkId()).document(remark3));
-				System.out.println(result3.result());
+				log.info("{}", result3.result());
 				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}
@@ -737,20 +742,20 @@ public class PublishParser {
 
 		ArtworkOpData artworkRaw = new ArtworkOpData();
 		try {
-			artworkRaw = gson.fromJson(gson.toJson(feip.getData()), ArtworkOpData.class);
+			artworkRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ArtworkOpData.class);
 			if(artworkRaw==null){
-				System.out.println("Artwork raw is null");
+				log.info("Artwork raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse artwork");
+			log.info("Failed to parse artwork");
 			return null;
 		}
 
 		ArtworkHistory artworkHist = new ArtworkHistory();
 
 		if(artworkRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -760,11 +765,11 @@ public class PublishParser {
 
 			case PUBLISH:
 				if(artworkRaw.getTitle()==null||"".equals(artworkRaw.getTitle())){
-					System.out.println("Title is null or empty");
+					log.info("Title is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired) {
-					System.out.println("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
+					log.info("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
 					return null;
 				}
 				artworkHist.setId(opre.getId());
@@ -785,7 +790,7 @@ public class PublishParser {
 				break;
 			case UPDATE:
 				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())){
-					System.out.println("ArtworkId is null or empty");
+					log.info("ArtworkId is null or empty");
 					return null;
 				}
 				artworkHist.setId(opre.getId());
@@ -807,7 +812,7 @@ public class PublishParser {
 			case DELETE:
 			case RECOVER:
 				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())){
-					System.out.println("ArtworkId is null or empty");
+					log.info("ArtworkId is null or empty");
 					return null;
 				}
 				artworkHist.setId(opre.getId());
@@ -821,11 +826,11 @@ public class PublishParser {
 				break;
 			case RATE:
 				if(artworkRaw.getArtworkId()==null||"".equals(artworkRaw.getArtworkId())){
-					System.out.println("ArtworkId is null or empty");
+					log.info("ArtworkId is null or empty");
 					return null;
 				}
 				if(artworkRaw.getRate()==null) {
-					System.out.println("Rate is null");
+					log.info("Rate is null");
 					return null;
 				}
 				artworkHist.setId(opre.getId());
@@ -840,7 +845,7 @@ public class PublishParser {
 
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 
@@ -854,20 +859,20 @@ public class PublishParser {
 
 		SoundOpData soundRaw = new SoundOpData();
 		try {
-			soundRaw = gson.fromJson(gson.toJson(feip.getData()), SoundOpData.class);
+			soundRaw = gson.fromJson(gson.toJsonTree(feip.getData()), SoundOpData.class);
 			if(soundRaw==null){
-				System.out.println("Sound raw is null");
+				log.info("Sound raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse sound");
+			log.info("Failed to parse sound");
 			return null;
 		}
 
 		SoundHistory soundHist = new SoundHistory();
 
 		if(soundRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -877,13 +882,13 @@ public class PublishParser {
 
 			case PUBLISH:
 				if(soundRaw.getTitle()==null||"".equals(soundRaw.getTitle())){
-					System.out.println("Title is null or empty");
+					log.info("Title is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
 					Long cdd = opre.getCdd();
 					if (cdd == null || cdd < StartFEIP.CddRequired) {
-						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
 						return null;
 					}
 				}
@@ -906,7 +911,7 @@ public class PublishParser {
 
 			case UPDATE:
 				if(soundRaw.getSoundId()==null|| soundRaw.getTitle()==null||"".equals(soundRaw.getTitle())){
-					System.out.println("SoundId is null or title is null or empty");
+					log.info("SoundId is null or title is null or empty");
 					return null;
 				}
 				soundHist.setId(opre.getId());
@@ -928,7 +933,7 @@ public class PublishParser {
 			case RECOVER:
 			case DELETE:
 				if (soundRaw.getSoundIds() == null || soundRaw.getSoundIds().length == 0) {
-					System.out.println("SoundIds is null or empty");
+					log.info("SoundIds is null or empty");
 					return null;
 				}
 				soundHist.setSoundIds(soundRaw.getSoundIds());
@@ -942,20 +947,20 @@ public class PublishParser {
 
 			case RATE:
 				if(soundRaw.getSoundId()==null){
-					System.out.println("SoundId is null");
+					log.info("SoundId is null");
 					return null;
 				}
 				if (soundRaw.getRate() == null) {
-					System.out.println("Rate is null");
+					log.info("Rate is null");
 					return null;
 				}
 				Long rateCdd = opre.getCdd();
 				if (rateCdd == null) {
-					System.out.println("Cdd is null");
+					log.info("Cdd is null");
 					return null;
 				}
 				if (rateCdd < StartFEIP.CddRequired) {
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				soundHist.setSoundId(soundRaw.getSoundId());
@@ -969,7 +974,7 @@ public class PublishParser {
 				soundHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return soundHist;
@@ -978,7 +983,7 @@ public class PublishParser {
 	public boolean parseSound(ElasticsearchClient esClient, SoundHistory soundHist) throws Exception {
 
 		if(soundHist==null){
-			System.out.println("Sound hist is null");
+			log.info("Sound hist is null");
 			return false;
 		}
 		Sound sound;
@@ -1012,11 +1017,11 @@ public class PublishParser {
 
 					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.SOUND).id(soundHist.getSoundId()).document(sound1));
 					if(result1==null||result1.result()==null){
-						System.out.println("Failed to create sound");
+						log.info("Failed to create sound");
 						return false;
 					}
 					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
-						System.out.println("Failed to create sound");
+						log.info("Failed to create sound");
 						return false;
 					}
 
@@ -1027,22 +1032,22 @@ public class PublishParser {
 
 					return true;
 				} else {
-					System.out.println("Sound already exists");
+					log.info("Sound already exists");
 					return false;
 				}
 			}
 			case UPDATE -> {
 				sound = EsUtils.getById(esClient, IndicesNames.SOUND, soundHist.getSoundId(), Sound.class);
 				if (sound == null) {
-					System.out.println("Sound not found");
+					log.info("Sound not found");
 					return false;
 				}
 				if (Boolean.TRUE.equals(sound.isDeleted())) {
-					System.out.println("Sound is deleted");
+					log.info("Sound is deleted");
 					return false;
 				}
 				if (!sound.getPublisher().equals(soundHist.getSigner())) {
-					System.out.println("Sound publisher is not the same as the signer");
+					log.info("Sound publisher is not the same as the signer");
 					return false;
 				}
 				sound.setVer(String.valueOf(Integer.parseInt(sound.getVer())+1));
@@ -1057,7 +1062,7 @@ public class PublishParser {
 				sound.setLastHeight(soundHist.getHeight());
 				Sound sound2 = sound;
 				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.SOUND).id(soundHist.getSoundId()).document(sound2));
-				System.out.println(result2.result());
+				log.info("{}", result2.result());
 				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 			}
 
@@ -1066,18 +1071,18 @@ public class PublishParser {
 				if (soundHist.getSoundIds() != null && soundHist.getSoundIds().length > 0) {
 					idList.addAll(Arrays.asList(soundHist.getSoundIds()));
 				} else {
-					System.out.println("SoundIds is null or empty");
+					log.info("SoundIds is null or empty");
 					return false;
 				}
 
 				EsUtils.MgetResult<Sound> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SOUND, idList, Sound.class);
 				if (result == null) {
-					System.out.println("Sound mget result is null");
+					log.info("Sound mget result is null");
 					return false;
 				}
 				List<Sound> sounds = result.getResultList();
 				if(sounds==null||sounds.isEmpty()){
-					System.out.println("Sounds is null or empty");
+					log.info("Sounds is null or empty");
 					return false;
 				}
 
@@ -1121,28 +1126,28 @@ public class PublishParser {
 					}
 					BulkResponse result3 = esClient.bulk(br.build());
 					if(result3.errors()){
-						System.out.println("Failed to bulk update sound");
+						log.info("Failed to bulk update sound");
 						return false;
 					}
 					return true;
 				}
-				System.out.println("No sound matched publisher/master filter");
+				log.info("No sound matched publisher/master filter");
 				return false;
 			}
 
 			case RATE -> {
 				sound = EsUtils.getById(esClient, IndicesNames.SOUND, soundHist.getSoundId(), Sound.class);
 				if (sound == null) {
-					System.out.println("Sound not found");
+					log.info("Sound not found");
 					return false;
 				}
 				if (sound.getPublisher().equals(soundHist.getSigner())) {
-					System.out.println("Sound publisher is the same as the signer");
+					log.info("Sound publisher is the same as the signer");
 					return false;
 				}
 
 				if((soundHist.getCdd()==null || soundHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -1162,7 +1167,7 @@ public class PublishParser {
 				sound.setLastHeight(soundHist.getHeight());
 				Sound sound3 = sound;
 				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.SOUND).id(soundHist.getSoundId()).document(sound3));
-				System.out.println(result3.result());
+				log.info("{}", result3.result());
 				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}
@@ -1175,20 +1180,20 @@ public class PublishParser {
 
 		ImageOpData imageRaw = new ImageOpData();
 		try {
-			imageRaw = gson.fromJson(gson.toJson(feip.getData()), ImageOpData.class);
+			imageRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ImageOpData.class);
 			if(imageRaw==null){
-				System.out.println("Image raw is null");
+				log.info("Image raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse image");
+			log.info("Failed to parse image");
 			return null;
 		}
 
 		ImageHistory imageHist = new ImageHistory();
 
 		if(imageRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -1198,13 +1203,13 @@ public class PublishParser {
 
 			case PUBLISH:
 				if(imageRaw.getTitle()==null||"".equals(imageRaw.getTitle())){
-					System.out.println("Title is null or empty");
+					log.info("Title is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
 					Long cdd = opre.getCdd();
 					if (cdd == null || cdd < StartFEIP.CddRequired) {
-						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
 						return null;
 					}
 				}
@@ -1227,7 +1232,7 @@ public class PublishParser {
 
 			case UPDATE:
 				if(imageRaw.getImageId()==null|| imageRaw.getTitle()==null||"".equals(imageRaw.getTitle())){
-					System.out.println("ImageId is null or title is null or empty");
+					log.info("ImageId is null or title is null or empty");
 					return null;
 				}
 				imageHist.setId(opre.getId());
@@ -1249,7 +1254,7 @@ public class PublishParser {
 			case RECOVER:
 			case DELETE:
 				if (imageRaw.getImageIds() == null || imageRaw.getImageIds().length == 0) {
-					System.out.println("ImageIds is null or empty");
+					log.info("ImageIds is null or empty");
 					return null;
 				}
 				imageHist.setImageIds(imageRaw.getImageIds());
@@ -1263,20 +1268,20 @@ public class PublishParser {
 
 			case RATE:
 				if(imageRaw.getImageId()==null){
-					System.out.println("ImageId is null");
+					log.info("ImageId is null");
 					return null;
 				}
 				if (imageRaw.getRate() == null) {
-					System.out.println("Rate is null");
+					log.info("Rate is null");
 					return null;
 				}
 				Long imageRateCdd = opre.getCdd();
 				if (imageRateCdd == null) {
-					System.out.println("Cdd is null");
+					log.info("Cdd is null");
 					return null;
 				}
 				if (imageRateCdd < StartFEIP.CddRequired){
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				imageHist.setImageId(imageRaw.getImageId());
@@ -1290,7 +1295,7 @@ public class PublishParser {
 				imageHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return imageHist;
@@ -1299,7 +1304,7 @@ public class PublishParser {
 	public boolean parseImage(ElasticsearchClient esClient, ImageHistory imageHist) throws Exception {
 
 		if(imageHist==null){
-			System.out.println("Image hist is null");
+			log.info("Image hist is null");
 			return false;
 		}
 		Image image;
@@ -1333,11 +1338,11 @@ public class PublishParser {
 
 					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.IMAGE).id(imageHist.getImageId()).document(image1));
 					if(result1==null||result1.result()==null){
-						System.out.println("Failed to create image");
+						log.info("Failed to create image");
 						return false;
 					}
 					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
-						System.out.println("Failed to create image");
+						log.info("Failed to create image");
 						return false;
 					}
 
@@ -1348,22 +1353,22 @@ public class PublishParser {
 
 					return true;
 				} else {
-					System.out.println("Image already exists");
+					log.info("Image already exists");
 					return false;
 				}
 			}
 			case UPDATE -> {
 				image = EsUtils.getById(esClient, IndicesNames.IMAGE, imageHist.getImageId(), Image.class);
 				if (image == null) {
-					System.out.println("Image not found");
+					log.info("Image not found");
 					return false;
 				}
 				if (Boolean.TRUE.equals(image.isDeleted())) {
-					System.out.println("Image is deleted");
+					log.info("Image is deleted");
 					return false;
 				}
 				if (!image.getPublisher().equals(imageHist.getSigner())) {
-					System.out.println("Image publisher is not the same as the signer");
+					log.info("Image publisher is not the same as the signer");
 					return false;
 				}
 				image.setVer(String.valueOf(Integer.parseInt(image.getVer())+1));
@@ -1378,7 +1383,7 @@ public class PublishParser {
 				image.setLastHeight(imageHist.getHeight());
 				Image image2 = image;
 				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.IMAGE).id(imageHist.getImageId()).document(image2));
-				System.out.println(result2.result());
+				log.info("{}", result2.result());
 				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 			}
 
@@ -1387,18 +1392,18 @@ public class PublishParser {
 				if (imageHist.getImageIds() != null && imageHist.getImageIds().length > 0) {
 					idList.addAll(Arrays.asList(imageHist.getImageIds()));
 				} else {
-					System.out.println("ImageIds is null or empty");
+					log.info("ImageIds is null or empty");
 					return false;
 				}
 
 				EsUtils.MgetResult<Image> result = EsUtils.getMultiByIdList(esClient, IndicesNames.IMAGE, idList, Image.class);
 				if (result == null) {
-					System.out.println("Image mget result is null");
+					log.info("Image mget result is null");
 					return false;
 				}
 				List<Image> images = result.getResultList();
 				if (images == null || images.isEmpty()) {
-					System.out.println("Images is null or empty");
+					log.info("Images is null or empty");
 					return false;
 				}
 
@@ -1441,28 +1446,28 @@ public class PublishParser {
 					}
 					BulkResponse result3 = esClient.bulk(br.build());
 					if(result3.errors()){
-						System.out.println("Failed to bulk update image");
+						log.info("Failed to bulk update image");
 						return false;
 					}
 					return true;
 				}
-				System.out.println("No image matched publisher/master filter; delete/recover skipped");
+				log.info("No image matched publisher/master filter; delete/recover skipped");
 				return false;
 			}
 
 			case RATE -> {
 				image = EsUtils.getById(esClient, IndicesNames.IMAGE, imageHist.getImageId(), Image.class);
 				if (image == null) {
-					System.out.println("Image not found");
+					log.info("Image not found");
 					return false;
 				}
 				if (image.getPublisher().equals(imageHist.getSigner())) {
-					System.out.println("Image publisher is the same as the signer");
+					log.info("Image publisher is the same as the signer");
 					return false;
 				}
 
 				if((imageHist.getCdd()==null || imageHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -1482,7 +1487,7 @@ public class PublishParser {
 				image.setLastHeight(imageHist.getHeight());
 				Image image3 = image;
 				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.IMAGE).id(imageHist.getImageId()).document(image3));
-				System.out.println(result3.result());
+				log.info("{}", result3.result());
 				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}
@@ -1495,19 +1500,19 @@ public class PublishParser {
 
 		VideoOpData videoRaw = new VideoOpData();
 		try {
-			videoRaw = gson.fromJson(gson.toJson(feip.getData()), VideoOpData.class);
+			videoRaw = gson.fromJson(gson.toJsonTree(feip.getData()), VideoOpData.class);
 			if(videoRaw==null){
-				System.out.println("Video raw is null");
+				log.info("Video raw is null");
 				return null;
 			}
 		}catch(Exception e) {
-			System.out.println("Failed to parse video");
+			log.info("Failed to parse video");
 			return null;
 		}
 		VideoHistory videoHist = new VideoHistory();
 
 		if(videoRaw.getOp()==null){
-			System.out.println("OP is null");
+			log.info("OP is null");
 			return null;
 		}
 
@@ -1517,13 +1522,13 @@ public class PublishParser {
 
 			case PUBLISH:
 				if(videoRaw.getTitle()==null||"".equals(videoRaw.getTitle())){
-					System.out.println("Title is null or empty");
+					log.info("Title is null or empty");
 					return null;
 				}
 				if (opre.getHeight() > StartFEIP.CddCheckHeight) {
 					Long cdd = opre.getCdd();
 					if (cdd == null || cdd < StartFEIP.CddRequired) {
-						System.out.println("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+						log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
 						return null;
 					}
 				}
@@ -1546,7 +1551,7 @@ public class PublishParser {
 
 			case UPDATE:
 				if(videoRaw.getVideoId()==null|| videoRaw.getTitle()==null||"".equals(videoRaw.getTitle())){
-					System.out.println("VideoId is null or title is null or empty");
+					log.info("VideoId is null or title is null or empty");
 					return null;
 				}
 				videoHist.setId(opre.getId());
@@ -1568,7 +1573,7 @@ public class PublishParser {
 			case RECOVER:
 			case DELETE:
 				if (videoRaw.getVideoIds() == null || videoRaw.getVideoIds().length == 0) {
-					System.out.println("VideoIds is null or empty");
+					log.info("VideoIds is null or empty");
 					return null;
 				}
 				videoHist.setVideoIds(videoRaw.getVideoIds());
@@ -1582,20 +1587,20 @@ public class PublishParser {
 
 			case RATE:
 				if(videoRaw.getVideoId()==null){
-					System.out.println("VideoId is null");
+					log.info("VideoId is null");
 					return null;
 				}
 				if (videoRaw.getRate() == null) {
-					System.out.println("Rate is null");
+					log.info("Rate is null");
 					return null;
 				}
 				Long videoRateCdd = opre.getCdd();
 				if (videoRateCdd == null) {
-					System.out.println("Cdd is null");
+					log.info("Cdd is null");
 					return null;
 				}
 				if (videoRateCdd < StartFEIP.CddRequired){
-					System.out.println("Cdd is less than CddRequired");
+					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				videoHist.setVideoId(videoRaw.getVideoId());
@@ -1609,7 +1614,7 @@ public class PublishParser {
 				videoHist.setSigner(opre.getSigner());
 				break;
 			default:
-				System.out.println("Invalid operation");
+				log.info("Invalid operation");
 				return null;
 		}
 		return videoHist;
@@ -1618,7 +1623,7 @@ public class PublishParser {
 	public boolean parseVideo(ElasticsearchClient esClient, VideoHistory videoHist) throws Exception {
 
 		if(videoHist==null){
-			System.out.println("Video hist is null");
+			log.info("Video hist is null");
 			return false;
 		}
 		Video video;
@@ -1652,11 +1657,11 @@ public class PublishParser {
 
 					IndexResponse result1 = esClient.index(i -> i.index(IndicesNames.VIDEO).id(videoHist.getVideoId()).document(video1));
 					if(result1==null||result1.result()==null){
-						System.out.println("Failed to create video");
+						log.info("Failed to create video");
 						return false;
 					}
 					if(!CREATED.equals(result1.result().jsonValue()) && !UPDATED.equals(result1.result().jsonValue())){
-						System.out.println("Failed to create video");
+						log.info("Failed to create video");
 						return false;
 					}
 
@@ -1667,22 +1672,22 @@ public class PublishParser {
 
 					return true;
 				} else {
-					System.out.println("Video already exists");
+					log.info("Video already exists");
 					return false;
 				}
 			}
 			case UPDATE -> {
 				video = EsUtils.getById(esClient, IndicesNames.VIDEO, videoHist.getVideoId(), Video.class);
 				if (video == null) {
-					System.out.println("Video not found");
+					log.info("Video not found");
 					return false;
 				}
 				if (Boolean.TRUE.equals(video.isDeleted())) {
-					System.out.println("Video is deleted");
+					log.info("Video is deleted");
 					return false;
 				}
 				if (!video.getPublisher().equals(videoHist.getSigner())) {
-					System.out.println("Video publisher is not the same as the signer");
+					log.info("Video publisher is not the same as the signer");
 					return false;
 				}
 				video.setVer(String.valueOf(Integer.parseInt(video.getVer())+1));
@@ -1697,7 +1702,7 @@ public class PublishParser {
 				video.setLastHeight(videoHist.getHeight());
 				Video video2 = video;
 				IndexResponse result2 = esClient.index(i -> i.index(IndicesNames.VIDEO).id(videoHist.getVideoId()).document(video2));
-				System.out.println(result2.result());
+				log.info("{}", result2.result());
 				return CREATED.equals(result2.result().jsonValue()) || UPDATED.equals(result2.result().jsonValue());
 			}
 
@@ -1706,18 +1711,18 @@ public class PublishParser {
 				if (videoHist.getVideoIds() != null && videoHist.getVideoIds().length > 0) {
 					idList.addAll(Arrays.asList(videoHist.getVideoIds()));
 				} else {
-					System.out.println("VideoIds is null or empty");
+					log.info("VideoIds is null or empty");
 					return false;
 				}
 
 				EsUtils.MgetResult<Video> result = EsUtils.getMultiByIdList(esClient, IndicesNames.VIDEO, idList, Video.class);
 				if (result == null) {
-					System.out.println("Video mget result is null");
+					log.info("Video mget result is null");
 					return false;
 				}
 				List<Video> videos = result.getResultList();
 				if (videos == null || videos.isEmpty()) {
-					System.out.println("Videos is null or empty");
+					log.info("Videos is null or empty");
 					return false;
 				}
 
@@ -1760,28 +1765,28 @@ public class PublishParser {
 					}
 					BulkResponse result3 = esClient.bulk(br.build());
 					if(result3.errors()){
-						System.out.println("Failed to bulk update video");
+						log.info("Failed to bulk update video");
 						return false;
 					}
 					return true;
 				}
-				System.out.println("No video matched publisher/master filter; delete/recover skipped");
+				log.info("No video matched publisher/master filter; delete/recover skipped");
 				return false;
 			}
 
 			case RATE -> {
 				video = EsUtils.getById(esClient, IndicesNames.VIDEO, videoHist.getVideoId(), Video.class);
 				if (video == null) {
-					System.out.println("Video not found");
+					log.info("Video not found");
 					return false;
 				}
 				if (video.getPublisher().equals(videoHist.getSigner())) {
-					System.out.println("Video publisher is the same as the signer");
+					log.info("Video publisher is the same as the signer");
 					return false;
 				}
 
 				if((videoHist.getCdd()==null || videoHist.getRate()==null)){
-					System.out.println("Cdd or rate is null");
+					log.info("Cdd or rate is null");
 					return false;
 				}
 
@@ -1801,7 +1806,7 @@ public class PublishParser {
 				video.setLastHeight(videoHist.getHeight());
 				Video video3 = video;
 				IndexResponse result3 = esClient.index(i -> i.index(IndicesNames.VIDEO).id(videoHist.getVideoId()).document(video3));
-				System.out.println(result3.result());
+				log.info("{}", result3.result());
 				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
 			}
 		}

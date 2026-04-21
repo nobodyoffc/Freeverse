@@ -37,7 +37,7 @@ public class GetUtxo extends HttpServlet {
         doRequest(request, response, authType, settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         doRequest(request, response, authType, settings);
     }
 

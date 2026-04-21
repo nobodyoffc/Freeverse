@@ -46,6 +46,7 @@ import java.util.function.LongConsumer;
 public class FapiClient {
     private static final Logger log = LoggerFactory.getLogger(FapiClient.class);
     
+    public static final int DEFAULT_PORT = 8500;
     public static final long DEFAULT_HELLO_TIMEOUT_MS = 5000;
     public static final long DEFAULT_PING_TIMEOUT_MS = 5000;
 
@@ -217,6 +218,26 @@ public class FapiClient {
      * @return UnifiedResponse，包含响应和可选的二进制数据
      */
     public UnifiedResponse requestWithBinaryData(FapiRequest fapiRequest, byte[] binaryData) {
+        return requestWithBinaryData(fapiRequest, binaryData, requestTimeoutSeconds, null);
+    }
+
+    /**
+     * Send a request with binary data using a custom timeout.
+     */
+    public UnifiedResponse requestWithBinaryData(FapiRequest fapiRequest, byte[] binaryData, long timeoutSeconds) {
+        return requestWithBinaryData(fapiRequest, binaryData, timeoutSeconds, null);
+    }
+
+    /**
+     * Send a request with binary data, custom timeout, and optional send-progress callback.
+     * @param fapiRequest    FAPI request
+     * @param binaryData     binary data
+     * @param timeoutSeconds custom timeout in seconds
+     * @param sendProgress   callback receiving (bytesSent, totalBytes) — may be null
+     * @return UnifiedResponse containing response and optional binary data
+     */
+    public UnifiedResponse requestWithBinaryData(FapiRequest fapiRequest, byte[] binaryData,
+            long timeoutSeconds, java.util.function.BiConsumer<Long, Long> sendProgress) {
         try {
             if (balanceVerifier != null && balanceVerifier.isStopped()) {
                 lastError = new IllegalStateException("Balance verification stopped due to drift");
@@ -224,18 +245,19 @@ public class FapiClient {
                 this.lastResponse = errorResp;
                 return new UnifiedResponse(errorResp, null);
             }
-            
+
             // 自动填充 via（消费渠道）
             if (fapiRequest.getVia() == null && via != null) {
                 fapiRequest.setVia(via);
             }
-            
+
             // 使用统一编码格式编码请求（包含二进制数据）
             byte[] requestData = UnifiedCodec.encodeRequest(fapiRequest, binaryData);
-            CompletableFuture<ResponseMessage> future = fudpNode.request(servicePeerId, serviceSid, requestData);
-            
-            ResponseMessage response = future.get(requestTimeoutSeconds, TimeUnit.SECONDS);
-            
+            CompletableFuture<ResponseMessage> future = fudpNode.request(
+                    servicePeerId, serviceSid, requestData, sendProgress);
+
+            ResponseMessage response = future.get(timeoutSeconds, TimeUnit.SECONDS);
+
             if (response.getStatusCode() != ResponseMessage.STATUS_SUCCESS) {
                 this.lastError = new IOException("Request failed with status: " + response.getStatusCode());
                 FapiResponse errorResp = buildErrorResponse(response.getStatusCode(),
@@ -243,27 +265,27 @@ public class FapiClient {
                 this.lastResponse = errorResp;
                 return new UnifiedResponse(errorResp, null);
             }
-            
+
             // 使用统一编码格式解析响应（包含可能的二进制数据）
             UnifiedResponse unifiedResponse = UnifiedCodec.decodeResponse(response.getData());
             updateBalanceFromResponse(unifiedResponse.response());
             this.lastResponse = unifiedResponse.response();
             this.lastError = null;
-            
+
             return unifiedResponse;
-            
+
         } catch (TimeoutException e) {
             this.lastError = e;
-            FapiResponse errorResp = buildErrorResponse(408, "Request timeout after " + requestTimeoutSeconds + "s");
+            FapiResponse errorResp = buildErrorResponse(408, "Request timeout after " + timeoutSeconds + "s");
             this.lastResponse = errorResp;
-            log.warn("FAPI binary request timeout ({}s): api={}", requestTimeoutSeconds, 
+            log.warn("FAPI binary request timeout ({}s): api={}", timeoutSeconds,
                     fapiRequest != null ? fapiRequest.getApi() : "null");
             return new UnifiedResponse(errorResp, null);
         } catch (Exception e) {
             this.lastError = e;
             FapiResponse errorResp = buildErrorResponse(500, e.getMessage());
             this.lastResponse = errorResp;
-            log.error("Error sending FAPI request with binary data: api={}", 
+            log.error("Error sending FAPI request with binary data: api={}",
                     fapiRequest != null ? fapiRequest.getApi() : "null", e);
             return new UnifiedResponse(errorResp, null);
         }
@@ -314,14 +336,33 @@ public class FapiClient {
     }
 
     /**
-     * Look up Freer records by FIDs via BASE component.
-     * Use this to discover a target's home.ROAD or home.MAP before calling roadRelay().
+     * Look up Freer records by FIDs with live-computed balance, cash count, and CD.
      *
      * @param fids One or more FIDs to look up
-     * @return Map of FID -> Freer, or null on error
+     * @return Map of FID -> Freer with live values, or null on error
      */
     public Map<String, Freer> freerByIds(String... fids) {
-        return entityByIds(constants.IndicesNames.FREER, Freer.class, fids);
+        if (fids == null || fids.length == 0) return null;
+        Fcdsl fcdsl = new Fcdsl();
+        fcdsl.addIds(fids);
+        FapiResponse response = query("base.freerByIds", fcdsl);
+        if (response == null || response.getCode() != 0 || response.getData() == null) {
+            return null;
+        }
+        return ObjectUtils.objectToMap(response.getData(), String.class, Freer.class);
+    }
+
+    /**
+     * Get a single Freer by FID with live balance, cash count, and CD.
+     *
+     * @param fid the FID to look up
+     * @return Freer with live values, or null if not found
+     */
+    public Freer getFreer(String fid) {
+        if (fid == null || fid.isEmpty()) return null;
+        Map<String, Freer> result = freerByIds(fid);
+        if (result == null) return null;
+        return result.get(fid);
     }
 
     /**
@@ -786,6 +827,21 @@ public class FapiClient {
      * @return RoadRelayResult with success status and results for each target, or null on error
      */
     public RoadRelayResult roadRelay(List<String> targetFids, byte[] data, long maxCost, String targetRoad) {
+        return roadRelay(targetFids, data, maxCost, targetRoad, null);
+    }
+
+    /**
+     * Relay data to multiple target FIDs with progress callback.
+     *
+     * @param targetFids   List of destination FIDs
+     * @param data         The data to relay
+     * @param maxCost      Maximum satoshi willing to pay (0 = no limit)
+     * @param targetRoad   URL of the remote ROAD for non-local targets (null = local only)
+     * @param sendProgress callback receiving (bytesSent, totalBytes) — may be null
+     * @return RoadRelayResult or null on error
+     */
+    public RoadRelayResult roadRelay(List<String> targetFids, byte[] data, long maxCost,
+            String targetRoad, java.util.function.BiConsumer<Long, Long> sendProgress) {
         if (targetFids == null || targetFids.isEmpty()) {
             lastError = new IllegalArgumentException("targetFids is required");
             return null;
@@ -807,9 +863,14 @@ public class FapiClient {
             }
             
             FapiRequest fapiRequest = FapiRequest.binaryOperation("road.relay", params, data.length, null);
-            
+
+            // Calculate dynamic timeout based on data size:
+            // Base 30s + 1s per 100KB, minimum 30s
+            long dynamicTimeout = Math.max(requestTimeoutSeconds,
+                    requestTimeoutSeconds + (data.length / (100 * 1024)));
+
             // Send request
-            UnifiedResponse unified = requestWithBinaryData(fapiRequest, data);
+            UnifiedResponse unified = requestWithBinaryData(fapiRequest, data, dynamicTimeout, sendProgress);
             
             if (unified == null || unified.response() == null) {
                 lastError = new RuntimeException("No response from server");
@@ -2030,6 +2091,12 @@ public class FapiClient {
             log.error("bootstrapFromUrl: invalid parameters");
             return null;
         }
+        // Normalize URL: add fudp:// scheme and default port if absent
+        url = normalizeUrl(url);
+        if (url == null) {
+            log.error("bootstrapFromUrl: failed to normalize URL");
+            return null;
+        }
         Endpoint ep = parseFudpUrl(url);
         if (ep == null) {
             log.error("bootstrapFromUrl: failed to parse URL: {}", url);
@@ -2057,7 +2124,10 @@ public class FapiClient {
      */
     public static Endpoint parseFudpUrl(String fudpUrl) {
         if (fudpUrl == null || fudpUrl.isEmpty()) return null;
-        if (!fudpUrl.toLowerCase().startsWith("fudp://")) return null;
+        // FAPI always uses fudp — add scheme if absent
+        if (!fudpUrl.toLowerCase().startsWith("fudp://")) {
+            fudpUrl = "fudp://" + fudpUrl;
+        }
         try {
             String hostPort = fudpUrl.substring(7);
             int pathIdx = hostPort.indexOf('/');
@@ -2065,7 +2135,7 @@ public class FapiClient {
             int queryIdx = hostPort.indexOf('?');
             if (queryIdx > 0) hostPort = hostPort.substring(0, queryIdx);
             String host;
-            int port = 8500;
+            int port = DEFAULT_PORT;
             if (hostPort.contains(":")) {
                 String[] parts = hostPort.split(":");
                 host = parts[0];
@@ -2078,6 +2148,59 @@ public class FapiClient {
             log.warn("parseFudpUrl failed for {}: {}", fudpUrl, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Normalize a FAPI server URL to ensure it has the fudp:// scheme and a port.
+     * If the port is absent, the default port 8500 is used.
+     * <p>
+     * Accepted formats:
+     * <ul>
+     *   <li>fudp://host:port → returned as-is</li>
+     *   <li>fudp://host → fudp://host:8500</li>
+     *   <li>host:port → fudp://host:port</li>
+     *   <li>host → fudp://host:8500</li>
+     * </ul>
+     *
+     * @param url the raw URL string
+     * @return normalized fudp://host:port URL, or null if the input is invalid
+     */
+    public static String normalizeUrl(String url) {
+        if (url == null || url.trim().isEmpty()) return null;
+        url = url.trim();
+
+        String hostPort;
+        if (url.toLowerCase().startsWith("fudp://")) {
+            hostPort = url.substring(7); // strip "fudp://"
+        } else {
+            hostPort = url;
+        }
+
+        // Strip trailing path / query
+        int pathIdx = hostPort.indexOf('/');
+        if (pathIdx > 0) hostPort = hostPort.substring(0, pathIdx);
+        int queryIdx = hostPort.indexOf('?');
+        if (queryIdx > 0) hostPort = hostPort.substring(0, queryIdx);
+
+        String host;
+        int port = DEFAULT_PORT;
+        if (hostPort.contains(":")) {
+            String[] parts = hostPort.split(":", 2);
+            host = parts[0];
+            if (!parts[1].isEmpty()) {
+                try {
+                    port = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException e) {
+                    log.warn("normalizeUrl: invalid port in URL: {}", url);
+                    return null;
+                }
+            }
+        } else {
+            host = hostPort;
+        }
+
+        if (host.isEmpty()) return null;
+        return "fudp://" + host + ":" + port;
     }
 
     /**
@@ -2105,35 +2228,9 @@ public class FapiClient {
 
     public static Endpoint parseEndpoint(String seed) {
         if (seed == null || seed.isBlank()) return null;
-        try {
-            if (seed.startsWith("fudp")) {
-                Endpoint ep = parseFudpUrl(seed);
-                if (ep != null) return ep;
-                URL url = new URL(seed);
-                try (var in = url.openStream()) {
-                    String json = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-                    Map<String, Object> map = JsonUtils.jsonToMap(json,String.class,Object.class);
-                    if(map==null)return null;
-                    String host = stringVal(map.getOrDefault("host", url.getHost()));
-                    int port = parsePort(map.get("port"), url.getPort() > 0 ? url.getPort() : 8500);
-                    return new Endpoint(host, port, seed);
-                }
-            }
-            // host:port
-            String host = seed;
-            int port = 8500;
-            if (seed.contains(":")) {
-                String[] parts = seed.split(":");
-                host = parts[0];
-                if (parts.length > 1) {
-                    port = Integer.parseInt(parts[1]);
-                }
-            }
-            return new Endpoint(host, port, seed);
-        } catch (Exception e) {
-            log.warn("Ignore bad bootstrap seed {}: {}", seed, e.getMessage());
-            return null;
-        }
+        // parseFudpUrl now accepts URLs with or without fudp:// scheme
+        // and defaults port to DEFAULT_PORT when absent
+        return parseFudpUrl(seed);
     }
 
     private static int parsePort(Object value, int defaultPort) {

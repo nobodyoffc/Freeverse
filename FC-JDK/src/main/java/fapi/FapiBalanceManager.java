@@ -20,6 +20,7 @@ import utils.FchUtils;
 import utils.Hex;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -161,9 +162,7 @@ public class FapiBalanceManager implements Closeable {
 
         try {
             Files.createDirectories(this.dbDir);
-            Options options = new Options();
-            options.createIfMissing(true);
-            this.db = Iq80DBFactory.factory.open(this.dbDir.toFile(), options);
+            this.db = openLevelDb(this.dbDir);
             
             // 初始化 WAL 和快照管理器
             initializeWalAndSnapshot();
@@ -205,6 +204,50 @@ public class FapiBalanceManager implements Closeable {
         }
     }
     
+    /**
+     * Open LevelDB with stale lock handling and corrupted log recovery.
+     */
+    private DB openLevelDb(Path dbPath) throws IOException {
+        File dbFolder = dbPath.toFile();
+        handleStaleLock(dbFolder);
+
+        Options options = new Options();
+        options.createIfMissing(true);
+
+        try {
+            return Iq80DBFactory.factory.open(dbFolder, options);
+        } catch (IOException e) {
+            log.warn("First LevelDB open failed ({}). Attempting recovery by removing log files...", e.getMessage());
+            // The iq80 LevelDB recovery reads *.log files; if they are corrupted/timed-out, remove them.
+            File[] logFiles = dbFolder.listFiles((dir, name) -> name.endsWith(".log"));
+            if (logFiles != null) {
+                for (File lf : logFiles) {
+                    log.warn("Removing potentially corrupted log file: {}", lf.getName());
+                    if (!lf.delete()) {
+                        log.error("Failed to delete log file: {}", lf.getAbsolutePath());
+                    }
+                }
+            }
+            handleStaleLock(dbFolder);
+            return Iq80DBFactory.factory.open(dbFolder, options);
+        }
+    }
+
+    private void handleStaleLock(File dbFolder) {
+        File lockFile = new File(dbFolder, "LOCK");
+        if (!lockFile.exists()) return;
+
+        long lockAge = System.currentTimeMillis() - lockFile.lastModified();
+        long staleThreshold = 5 * 60 * 1000; // 5 minutes
+
+        if (lockAge > staleThreshold) {
+            log.warn("Found stale LOCK file ({} ms old) in {}. Removing.", lockAge, dbFolder);
+            if (!lockFile.delete()) {
+                log.error("Failed to remove stale LOCK file: {}", lockFile.getAbsolutePath());
+            }
+        }
+    }
+
     /**
      * 初始化 WAL 和快照管理器
      */

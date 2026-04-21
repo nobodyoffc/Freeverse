@@ -114,8 +114,8 @@ public class Decryptor {
 
     public static byte[] decryptPrikey(String userPrikeyCipher, byte[] symkey) {
         CryptoDataByte cryptoResult = new Decryptor().decryptJsonBySymkey(userPrikeyCipher, symkey);
-        if (cryptoResult.getCode() != 0) {
-            cryptoResult.printCodeMessage();
+        if (cryptoResult == null || cryptoResult.getCode() == null || cryptoResult.getCode() != 0) {
+            if (cryptoResult != null) cryptoResult.printCodeMessage();
             return null;
         }
         return cryptoResult.getData();
@@ -161,8 +161,8 @@ public class Decryptor {
 
     public CryptoDataByte decrypt(CryptoDataByte cryptoDataByte){
         switch (cryptoDataByte.getAlg()){
-            case FC_AesCbc256_No1_NrC7, FC_AesGcm256_No1_NrC7, FC_ChaCha20_No1_NrC7 -> decryptBySymkey(cryptoDataByte);
-            case FC_EccK1AesCbc256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7, FC_EccK1ChaCha20_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
+            case FC_AesCbc256_No1_NrC7, FC_AesGcm256_No1_NrC7, FC_ChaCha20_No1_NrC7, FC_ChaCha20Poly1305_No1_NrC7 -> decryptBySymkey(cryptoDataByte);
+            case FC_EccK1AesCbc256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7, FC_EccK1ChaCha20_No1_NrC7, FC_EccK1ChaCha20Poly1305_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
             case BitCore_EccAes256 -> decryptBitcore(cryptoDataByte);
             default -> cryptoDataByte.setCodeMessage(CodeMessage.Code4002NoSuchAlgorithm);
         }
@@ -242,11 +242,17 @@ public class Decryptor {
 
     @NotNull
     private static CryptoDataByte decryptByPassword(@NotNull CryptoDataByte cryptoDataByte, @NotNull char[] password) {
-        byte[] symkey = Encryptor.passwordToSymkey(password, cryptoDataByte.getIv());
+        Kdf kdf = cryptoDataByte.getKdf() != null ? cryptoDataByte.getKdf() : Kdf.Sha256Iv_No1_NrC7;
+        byte[] symkey = kdf.deriveSymkey(password, cryptoDataByte.getIv());
         cryptoDataByte.setType(EncryptType.Symkey);
         cryptoDataByte.setSymkey(symkey);
         decryptBySymkey(cryptoDataByte);
         cryptoDataByte.setType(EncryptType.Password);
+        cryptoDataByte.setKdf(kdf);
+        // Delay on failure to mitigate brute-force attacks
+        if (cryptoDataByte.getCode() != null && cryptoDataByte.getCode() != 0) {
+            try { Thread.sleep(200); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        }
         return cryptoDataByte;
     }
 
@@ -269,6 +275,7 @@ public class Decryptor {
             case FC_AesCbc256_No1_NrC7 -> AesCbc256.decrypt(cryptoDataByte);
             case FC_AesGcm256_No1_NrC7 -> AesGcm256.decrypt(cryptoDataByte);
             case FC_ChaCha20_No1_NrC7 -> ChaCha20.decrypt(cryptoDataByte);
+            case FC_ChaCha20Poly1305_No1_NrC7 -> ChaCha20Poly1305.decrypt(cryptoDataByte);
             default -> new EccAes256K1P7().decrypt(cryptoDataByte);
         }
         return cryptoDataByte;
@@ -316,7 +323,8 @@ public class Decryptor {
             }
             if(key==null){
                 if(password!=null){
-                    key = Encryptor.passwordToSymkey(password,cryptoDataByte.getIv());
+                    Kdf kdf = cryptoDataByte.getKdf() != null ? cryptoDataByte.getKdf() : Kdf.Sha256Iv_No1_NrC7;
+                    key = kdf.deriveSymkey(password, cryptoDataByte.getIv());
                 }else {
                     cryptoDataByte.setCodeMessage(CodeMessage.Code4006InvalidKey);
                     return cryptoDataByte;
@@ -328,6 +336,7 @@ public class Decryptor {
                 case FC_AesCbc256_No1_NrC7 -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
                 case FC_AesGcm256_No1_NrC7 -> AesGcm256.decryptStream(fis,fos,cryptoDataByte);
                 case FC_ChaCha20_No1_NrC7 -> ChaCha20.decryptStream(fis,fos,cryptoDataByte);
+                case FC_ChaCha20Poly1305_No1_NrC7 -> ChaCha20Poly1305.decryptStream(fis,fos,cryptoDataByte);
                 default -> AesCbc256.decryptStream(fis,fos,cryptoDataByte);
             }
         } catch (FileNotFoundException e) {
@@ -379,6 +388,9 @@ public class Decryptor {
             }
             case FC_ChaCha20_No1_NrC7 -> {
                 ChaCha20.decryptStream(inputStream,outputStream,cryptoDataByte);
+            }
+            case FC_ChaCha20Poly1305_No1_NrC7 -> {
+                ChaCha20Poly1305.decryptStream(inputStream,outputStream,cryptoDataByte);
             }
             default -> AesCbc256.decryptStream(inputStream,outputStream,cryptoDataByte);
         }
@@ -481,10 +493,36 @@ public class Decryptor {
 //        return decryptBySymkey(cipher,iv,key,sum,algBytes);
     }
     public CryptoDataByte decryptBundleByPassword(@NotNull byte[]bundle, @NotNull char[] password) {
-        byte[] iv = new byte[16];
-        System.arraycopy(bundle,6,iv,0,16);
-        byte[]  symkey = Encryptor.passwordToSymkey(password,iv);
-        return decryptBundleBySymkey(bundle,symkey);
+        // Bundles carry no KDF marker, so try the new default (Argon2id) first and
+        // fall back to the legacy Sha256Iv KDF for data encrypted before the change.
+        CryptoDataByte parsed = CryptoDataByte.fromBundle(bundle);
+        if (parsed == null) {
+            CryptoDataByte err = new CryptoDataByte();
+            err.setCodeMessage(CodeMessage.Code4013BadCipher);
+            return err;
+        }
+        byte[] iv = parsed.getIv();
+
+        byte[] argonKey = Kdf.Argon2id_No1_NrC7.deriveSymkey(password, iv);
+        CryptoDataByte attempt = decryptBundleBySymkey(bundle, argonKey);
+        if (attempt != null && attempt.getCode() != null && attempt.getCode() == 0) {
+            attempt.setType(EncryptType.Password);
+            attempt.setKdf(Kdf.Argon2id_No1_NrC7);
+            return attempt;
+        }
+
+        byte[] legacyKey = Kdf.Sha256Iv_No1_NrC7.deriveSymkey(password, iv);
+        CryptoDataByte legacy = decryptBundleBySymkey(bundle, legacyKey);
+        if (legacy != null) {
+            legacy.setType(EncryptType.Password);
+            if (legacy.getCode() != null && legacy.getCode() == 0) {
+                legacy.setKdf(Kdf.Sha256Iv_No1_NrC7);
+                return legacy;
+            }
+        }
+        // Both KDFs failed; apply brute-force mitigation delay before returning.
+        try { Thread.sleep(200); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        return legacy;
     }
 
     public CryptoDataByte decryptBundleByAsyOneWay(@NotNull byte[] bundle, @NotNull byte[]prikey){

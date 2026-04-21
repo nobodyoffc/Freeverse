@@ -32,7 +32,7 @@ public class SquareSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(T_CDD,false,ID,true,null,null);
         doSquareSearchRequest(null,null,null,null, defaultSort, request,response,authType);
     }

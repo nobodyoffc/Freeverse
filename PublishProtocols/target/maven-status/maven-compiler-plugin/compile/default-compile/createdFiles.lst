@@ -1,0 +1,6 @@
+publishprotocols/AbstractExtractor.class
+publishprotocols/PublishProtocols.class
+publishprotocols/PublishProtocols$CliException.class
+publishprotocols/SummaryTableParser.class
+publishprotocols/PublishProtocols$Args.class
+publishprotocols/PublishProtocols$ParsedDoc.class

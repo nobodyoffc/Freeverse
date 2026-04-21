@@ -83,11 +83,11 @@ public class StartDiskClient {
                 case 3 -> ping(br);
                 case 4 -> put(br);
                 case 5 -> get(RequestMethod.GET, AuthType.FREE, br,symkey);
-                case 6 -> get(RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, br,symkey);
+                case 6 -> get(RequestMethod.POST,AuthType.ENCRYPTED, br,symkey);
                 case 7 -> checkFree(br);
                 case 8 -> check(br);
                 case 9 -> list(RequestMethod.GET, AuthType.FREE, br);
-                case 10 -> list(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, br);
+                case 10 -> list(RequestMethod.POST, AuthType.ENCRYPTED, br);
                 case 11 -> carve(br);
 //                case 12 -> signInEcc();
                 case 13 -> settings.setting(br, null);
@@ -121,7 +121,7 @@ public class StartDiskClient {
     }
 
     public static void ping(BufferedReader br){
-        Object rest = diskClient.ping(VER_1, RequestMethod.POST,AuthType.SYMKEY_ENCRYPT, null);
+        Object rest = diskClient.ping(VER_1, RequestMethod.POST,AuthType.ENCRYPTED, null);
         if(rest!=null) System.out.println("OK! "+rest+" KB/requests are available.");
         else System.out.println("Failed!");
 

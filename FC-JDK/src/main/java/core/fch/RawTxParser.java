@@ -418,7 +418,7 @@ public class RawTxParser {
         if(apipClient==null && esClient==null)return null;
         Map<String, Cash> inCashMap;
         if(apipClient!=null){
-            inCashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, String.valueOf(inIdList));
+            inCashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.ENCRYPTED, String.valueOf(inIdList));
         }else
             inCashMap = getInCashListFromEs(esClient, inIdList);
         return mergeInCash(inCashMap, rawInCashMap, outCashMap);

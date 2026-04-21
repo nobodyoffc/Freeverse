@@ -53,8 +53,10 @@ import static data.fcData.AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
  * * secp256k1<p>
  * * AES-256-CBC-PKCS7Padding<p>
  * * By No1_NrC7 with the help of chatGPT
+ * @deprecated Use algorithms in {@code core.crypto.Algorithm} package instead.
+ *             Kept for decrypting existing on-chain ciphertexts.
  */
-
+@Deprecated
 public class EccAes256K1P7 {
     private static final Logger log = LoggerFactory.getLogger(EccAes256K1P7.class);
     static {

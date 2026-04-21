@@ -115,6 +115,19 @@ public class CongestionControl {
     }
 
     /**
+     * Atomically check if we can send and reserve the bytes.
+     * Combines canSend() + onSend() into a single synchronized operation.
+     * @return true if the bytes were reserved, false if congestion window is full
+     */
+    public synchronized boolean trySend(int bytes) {
+        if (bytesInFlight.get() + bytes <= congestionWindow) {
+            bytesInFlight.addAndGet(bytes);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Check if we can send more data.
      */
     public synchronized boolean canSend(int bytes) {

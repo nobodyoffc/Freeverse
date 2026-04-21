@@ -17,7 +17,6 @@ import java.util.function.Consumer;
 
 /**
  * Routes incoming messages to appropriate handlers.
- * Integrates balance management for REQUEST/RESPONSE messages.
  */
 public class MessageHandler {
     private static final Logger log = LoggerFactory.getLogger(MessageHandler.class);
@@ -29,48 +28,62 @@ public class MessageHandler {
         void sendMessage(String peerId, AppMessage message) throws IOException;
     }
 
-    private final NodeEventListener eventListener;
+    private volatile NodeEventListener eventListener;
     private final Map<Long, CompletableFuture<ResponseMessage>> pendingRequests;
     private final Map<Long, CompletableFuture<PongMessage>> pendingPongs;
-    private final ChatHandler chatHandler;
     private final Consumer<MeterRecord> meterSink;
     private MessageSender messageSender;
-    
+
     public MessageHandler(NodeEventListener eventListener, MessageSender messageSender, Consumer<MeterRecord> meterSink) {
         this.eventListener = eventListener;
         this.pendingRequests = new ConcurrentHashMap<>();
         this.pendingPongs = new ConcurrentHashMap<>();
-        this.chatHandler = new ChatHandler(eventListener);
         this.messageSender = messageSender;
         this.meterSink = meterSink;
     }
-    
+
     /**
      * Set message sender (called by FudpNode after initialization)
      */
     public void setMessageSender(MessageSender messageSender) {
         this.messageSender = messageSender;
     }
-    
+
+    /**
+     * Update the event listener without losing pending requests or pongs.
+     */
+    public void setEventListener(NodeEventListener listener) {
+        this.eventListener = listener;
+    }
+
     /**
      * Handle incoming data from a peer.
+     *
+     * @param peerId       the sender's FID
+     * @param connectionId the connection ID the data arrived on
+     * @param data         the raw message bytes
      */
-    public void handleIncomingData(String peerId, byte[] data) {
+    public void handleIncomingData(String peerId, long connectionId, byte[] data) {
         try {
             AppMessage message = MessageCodec.decode(data);
             emitMeter(peerId, message.getType(), data.length, MeterDirection.INBOUND);
-            routeMessage(peerId, message);
+            routeMessage(peerId, connectionId, message);
         } catch (IllegalArgumentException e) {
-            // Invalid message
             if (eventListener != null) {
                 eventListener.onError(peerId, 2002, "Invalid message: " + e.getMessage());
             }
         } catch (Exception e) {
-            // Unexpected error
             if (eventListener != null) {
                 eventListener.onError(peerId, 1, "Error handling message: " + e.getMessage());
             }
         }
+    }
+
+    /**
+     * Handle incoming data (convenience overload without connectionId, uses 0 as default).
+     */
+    public void handleIncomingData(String peerId, byte[] data) {
+        handleIncomingData(peerId, 0L, data);
     }
 
     private void emitMeter(String peerId, MessageType type, int payloadBytes, MeterDirection direction) {
@@ -93,24 +106,15 @@ public class MessageHandler {
     /**
      * Route message to appropriate handler.
      */
-    private void routeMessage(String peerId, AppMessage message) {
+    private void routeMessage(String peerId, long connectionId, AppMessage message) {
         switch (message.getType()) {
-            case CHAT -> chatHandler.handleChat(peerId, (ChatMessage) message);
-
-            case CHAT_ACK -> chatHandler.handleChatAck(peerId, (ChatAckMessage) message);
-
-            case REQUEST -> handleRequest(peerId, (RequestMessage) message);
-
+            case REQUEST -> handleRequest(peerId, connectionId, (RequestMessage) message);
             case RESPONSE -> handleResponse(peerId, (ResponseMessage) message);
-
             case ERROR -> handleError(peerId, (ErrorMessage) message);
-
             case PING -> handlePing(peerId, (PingMessage) message);
-
             case PONG -> handlePong(peerId, (PongMessage) message);
-
+            // NOTIFY and NOTIFY_ACK are handled directly by FudpNode
             default -> {
-                // Unhandled message type
                 if (eventListener != null) {
                     eventListener.onError(peerId, 2001, "Unhandled message type: " + message.getType());
                 }
@@ -121,10 +125,11 @@ public class MessageHandler {
     /**
      * Handle incoming request (as provider).
      */
-    private void handleRequest(String peerId, RequestMessage request) {
+    private void handleRequest(String peerId, long connectionId, RequestMessage request) {
         if (eventListener != null) {
             eventListener.onRequestReceived(
                     peerId,
+                    connectionId,
                     request.getMessageId(),
                     request.getSid(),
                     request.getData()
@@ -144,7 +149,7 @@ public class MessageHandler {
                     response.getData() != null ? response.getData().length : 0);
             future.complete(response);
         } else {
-            log.warn("[MessageHandler] Response has NO matching pending request (peer={}, messageId={}, pending={})",
+            log.warn("[FudpNode] RESP_NO_MATCH peer={} msgId={} pendingKeys={}",
                     peerId, responseId, pendingRequests.keySet());
         }
     }
@@ -155,12 +160,10 @@ public class MessageHandler {
     private void handleError(String peerId, ErrorMessage error) {
         int errorCode = error.getErrorCode();
         String errorMessage = error.getErrorMessage();
-        
-        // Log error with context
-        log.error("Error received from peer {}: code={}, message={}", 
+
+        log.error("Error received from peer {}: code={}, message={}",
             peerId, errorCode, errorMessage);
-        
-        // Complete any pending request with error
+
         CompletableFuture<ResponseMessage> future = pendingRequests.remove(error.getMessageId());
         if (future != null) {
             RuntimeException exception = new RuntimeException(
@@ -220,13 +223,6 @@ public class MessageHandler {
     }
 
     /**
-     * Get the chat handler.
-     */
-    public ChatHandler getChatHandler() {
-        return chatHandler;
-    }
-
-    /**
      * Get pending request count.
      */
     public int getPendingRequestCount() {
@@ -241,7 +237,7 @@ public class MessageHandler {
         pendingPongs.put(messageId, future);
         return future;
     }
-    
+
     /**
      * Cancel waiting for a pong.
      */
@@ -251,7 +247,7 @@ public class MessageHandler {
             f.cancel(true);
         }
     }
-    
+
     /**
      * Send response (as provider).
      */
@@ -259,7 +255,7 @@ public class MessageHandler {
         if (messageSender == null) {
             throw new IllegalStateException("MessageSender not set");
         }
-        
+
         ResponseMessage response = new ResponseMessage(requestId, statusCode, data);
         messageSender.sendMessage(peerId, response);
     }

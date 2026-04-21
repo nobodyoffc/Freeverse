@@ -29,7 +29,7 @@ public class NobodySearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(LEAK_HEIGHT,false, LEAK_TX_INDEX,true,ID,true);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.NOBODY, Nobody.class, defaultSort, request,response,authType);
     }

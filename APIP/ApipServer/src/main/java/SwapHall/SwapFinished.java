@@ -10,25 +10,25 @@ import config.Settings;
 import constants.ApipApiNames;
 import constants.CodeMessage;
 import constants.FieldNames;
-import constants.Strings;
+import data.apipData.RequestBody;
 import data.apipData.Sort;
 import data.fcData.ReplyBody;
 import data.feipData.ServiceType;
 import feature.swap.SwapAffair;
 import initial.Initiator;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
+import server.HttpRequestChecker;
 import utils.EsUtils;
+import utils.ObjectUtils;
+import utils.http.AuthType;
 
-import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static constants.FieldNames.DESC;
 import static constants.FieldNames.SID;
@@ -38,68 +38,92 @@ import static constants.Values.ASC;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapFinished)
 public class SwapFinished extends HttpServlet {
     private final Settings settings = Initiator.settings;
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        ReplyBody replier = new ReplyBody();
 
-        JedisPool jedisPool = (JedisPool) settings.getClient(ServiceType.REDIS);
-        try(Jedis jedis = jedisPool.getResource()) {
-            replier.setBestHeight(Long.parseLong(jedis.get(Strings.BEST_HEIGHT)));
-        }
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.FREE, settings);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) {
+        doRequest(request, response, AuthType.ENCRYPTED, settings);
+    }
+
+    protected void doRequest(HttpServletRequest request, HttpServletResponse response, AuthType authType, Settings settings) {
+        ReplyBody replier = new ReplyBody(settings);
+        HttpRequestChecker httpRequestChecker = new HttpRequestChecker(settings, replier);
+        boolean isOk = httpRequestChecker.checkRequestHttp(request, response, authType);
+        if (!isOk) return;
 
         ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
 
-        String sid = request.getParameter(SID);
-        if(sid==null){
-            replier.replyOtherErrorHttp("SID is required.",response);
+        String sid = null;
+        String lastStr = null;
+
+        RequestBody requestBody = replier.getRequestChecker().getRequestBody();
+        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            try {
+                Map<String, String> otherMap = ObjectUtils.objectToMap(requestBody.getFcdsl().getOther(), String.class, String.class);
+                if (otherMap != null) {
+                    sid = otherMap.get(SID);
+                    lastStr = otherMap.get(FieldNames.LAST);
+                }
+            } catch (Exception ignored) {}
+        } else {
+            if(requestBody!=null)replier.setNonce(requestBody.getNonce());
+            sid = request.getParameter(SID);
+            lastStr = request.getParameter(FieldNames.LAST);
+        }
+
+        if (sid == null) {
+            replier.replyOtherErrorHttp("SID is required.", response);
             return;
         }
-        String lastStr = request.getParameter(FieldNames.LAST);
 
         SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-
-        List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.GET_TIME,DESC,FieldNames.ID,ASC);
+        List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.GET_TIME, DESC, FieldNames.ID, ASC);
 
         searchBuilder.index(SWAP_FINISHED);
         searchBuilder.sort(sortOptionsList);
         searchBuilder.size(20);
-        if(lastStr!=null) {
+        if (lastStr != null) {
             String[] last = lastStr.split(",");
             searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));
         }
 
-        Query query = EsUtils.getTermsQuery(SID,sid.toLowerCase());
-
+        Query query = EsUtils.getTermsQuery(SID, sid.toLowerCase());
         searchBuilder.query(query);
-        SearchRequest searchRequest = searchBuilder.build();
-        SearchResponse<SwapAffair> result = esClient.search(searchRequest, SwapAffair.class);
+        try {
+            SearchResponse<SwapAffair> result = esClient.search(searchBuilder.build(), SwapAffair.class);
 
-        if(result==null||result.hits().total()==null){
-            replier.replyOtherErrorHttp("Searching ES wrong.",response);
-            return;
-        }
-        if(result.hits().total().value()==0){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-            return;
-        }
-        String[] last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
-        long total = result.hits().total().value();
-        List<Hit<SwapAffair>> hitList = result.hits().hits();
-        List<SwapAffair> swapAffairList = new ArrayList<>();
-        for(Hit<SwapAffair> hit : hitList){
-            swapAffairList.add(hit.source());
-        }
+            if (result == null || result.hits().total() == null) {
+                replier.replyOtherErrorHttp("Searching ES wrong.", response);
+                return;
+            }
+            if (result.hits().total().value() == 0) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+                return;
+            }
+            String[] last = EsUtils.toStringList(result.hits().hits().get(result.hits().hits().size() - 1).sort()).toArray(new String[0]);
+            long total = result.hits().total().value();
+            List<Hit<SwapAffair>> hitList = result.hits().hits();
+            List<SwapAffair> swapAffairList = new ArrayList<>();
+            for (Hit<SwapAffair> hit : hitList) {
+                swapAffairList.add(hit.source());
+            }
 
-        if(swapAffairList.isEmpty()){
-            replier.replyHttp(CodeMessage.Code1011DataNotFound,response);
-            return;
-        }
+            if (swapAffairList.isEmpty()) {
+                replier.replyHttp(CodeMessage.Code1011DataNotFound, response);
+                return;
+            }
 
-        replier.setData(swapAffairList);
-        replier.setTotal(total);
-        replier.setLast(List.of(last));
-        replier.setGot((long) swapAffairList.size());
-        replier.reply0SuccessHttp(swapAffairList,response);
+            replier.setTotal(total);
+            replier.setLast(List.of(last));
+            replier.setGot((long) swapAffairList.size());
+            replier.reply0SuccessHttp(swapAffairList, response);
+        } catch (Exception e) {
+            replier.replyOtherErrorHttp(e.getMessage(), response);
+        }
     }
 }

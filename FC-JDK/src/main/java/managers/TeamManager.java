@@ -358,7 +358,7 @@ public class TeamManager extends Manager<Team> {
                  .addNewPart()
                  .addNewFields(FieldNames.TID, FieldNames.STD_NAME, FieldNames.LOCAL_NAMES, FieldNames.ACCOUNTS, Values.DESC, FieldNames.MEMBERS)
                  .addNewValue(searchTerm);
-        return apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        return apipClient.teamSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
     }
 
     public List<Team> chooseTeamList(List<Team> teamList, BufferedReader br) {
@@ -412,7 +412,7 @@ public class TeamManager extends Manager<Team> {
     }
 
     public List<String> getTeamMembers(String tid, ApipClient apipClient) {
-        Map<String, String[]> result = apipClient.teamMembers(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, tid);
+        Map<String, String[]> result = apipClient.teamMembers(RequestMethod.POST, AuthType.ENCRYPTED, tid);
         if(result == null || result.isEmpty()) return null;
         return Arrays.asList(result.get(tid));
     }
@@ -433,7 +433,7 @@ public class TeamManager extends Manager<Team> {
         List<Team> resultList;
         List<String> last = new ArrayList<>();
         while(true) {
-            resultList = apipClient.myTeams(myFid, sinceHeight, size, last, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            resultList = apipClient.myTeams(myFid, sinceHeight, size, last, RequestMethod.POST, AuthType.ENCRYPTED);
             if(resultList == null) return null;
             if(resultList.size() < size) break;
             if(br != null && !Inputer.askIfYes(br, "Get more teams?")) break;
@@ -581,7 +581,7 @@ public class TeamManager extends Manager<Team> {
         }
 
         // If not found locally, fetch from API
-        Map<String, Team> result = apipClient.teamByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, tid);
+        Map<String, Team> result = apipClient.teamByIds(RequestMethod.POST, AuthType.ENCRYPTED, tid);
         if (result == null || result.isEmpty()) return null;
         
         // Cache the result before returning

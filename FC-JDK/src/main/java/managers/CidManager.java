@@ -68,7 +68,7 @@ public class CidManager extends Manager<Freer> {
 
         // Query API
         Map<String, Freer> cidInfoMap = apipClient.freerByIds(utils.http.RequestMethod.POST,
-                                                                 utils.http.AuthType.SYMKEY_ENCRYPT, fid);
+                                                                 utils.http.AuthType.ENCRYPTED, fid);
         if (cidInfoMap != null && !cidInfoMap.isEmpty()) {
             Freer cidInfo = cidInfoMap.get(fid);
             if (cidInfo != null) {
@@ -219,7 +219,7 @@ public class CidManager extends Manager<Freer> {
             
             Map<String, String[]> results = apipClient.fidCidSeek(searchTerm, 
                 utils.http.RequestMethod.POST,
-                utils.http.AuthType.SYMKEY_ENCRYPT);
+                utils.http.AuthType.ENCRYPTED);
                 
             if (results != null && !results.isEmpty()) {
                 System.out.println("\nSearch Results:");

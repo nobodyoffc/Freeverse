@@ -23,7 +23,7 @@ public class FeipUtils {
             String json = JsonUtils.strToJson(opre.getOpReturn());
             feip = new Gson().fromJson(json, Feip.class);
         }catch(JsonSyntaxException e) {
-            log.debug("Bad json on {}. ",opre.getId());
+            log.debug("Failed parsing FEIP JSON on {}. ",opre.getId());
         }
         return  feip;
     }

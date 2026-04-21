@@ -31,7 +31,7 @@ public class P2shSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(ID,true,null,null,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.P2SH, P2SH.class, defaultSort, request,response,authType);
     }

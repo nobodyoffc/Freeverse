@@ -25,6 +25,7 @@ public class StreamFrame extends Frame {
     private long offset;
     private byte[] data;
     private boolean fin;
+    private boolean implicitLength = false; // E3: when true, omit length varint (last frame in packet)
 
     public StreamFrame() {
         super(FrameType.STREAM);
@@ -46,7 +47,7 @@ public class StreamFrame extends Frame {
             // Build type byte with flags
             int typeByte = FrameType.STREAM.getValue();
             if (fin) typeByte |= FLAG_FIN;
-            typeByte |= FLAG_LEN; // Always include length
+            if (!implicitLength) typeByte |= FLAG_LEN; // Include length unless implicit (last frame)
             if (offset > 0) typeByte |= FLAG_OFF;
 
             out.write(Varint.encode(typeByte));
@@ -56,7 +57,9 @@ public class StreamFrame extends Frame {
                 out.write(Varint.encode(offset));
             }
 
-            out.write(Varint.encode(data.length));
+            if (!implicitLength) {
+                out.write(Varint.encode(data.length));
+            }
             out.write(data);
 
             return out.toByteArray();
@@ -144,6 +147,14 @@ public class StreamFrame extends Frame {
 
     public void setFin(boolean fin) {
         this.fin = fin;
+    }
+
+    public boolean isImplicitLength() {
+        return implicitLength;
+    }
+
+    public void setImplicitLength(boolean implicitLength) {
+        this.implicitLength = implicitLength;
     }
 
     @Override

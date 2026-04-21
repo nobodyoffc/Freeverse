@@ -17,6 +17,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.SecureRandom;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -209,7 +210,12 @@ public class CryptoManager {
             byte[] secret = Ecc256K1AesGcm256.getInstance().getSharedSecret(localPrivateKey, peerPublicKey);
             return secret;
         });
-        
+        if (ecdhCache.size() > 1000) {
+            // Evict one entry to keep cache bounded
+            Iterator<String> it = ecdhCache.keySet().iterator();
+            if (it.hasNext()) { it.next(); it.remove(); }
+        }
+
         // Fast path: reuse ThreadLocal instances
         try {
             // Generate random IV (12 bytes for AES-GCM per NIST)
@@ -253,14 +259,19 @@ public class CryptoManager {
         if (peerPubKey == null) {
             throw new RuntimeException("Decryption failed: missing sender public key");
         }
-        
+
         // Get or compute shared secret (ECDH is the expensive part)
         String peerPubKeyHex = Hex.toHex(peerPubKey);
         byte[] sharedSecret = ecdhCache.computeIfAbsent(peerPubKeyHex, k -> {
             byte[] secret = Ecc256K1AesGcm256.getInstance().getSharedSecret(localPrivateKey, peerPubKey);
             return secret;
         });
-        
+        if (ecdhCache.size() > 1000) {
+            // Evict one entry to keep cache bounded
+            Iterator<String> it = ecdhCache.keySet().iterator();
+            if (it.hasNext()) { it.next(); it.remove(); }
+        }
+
         // Fast path: reuse ThreadLocal instances
         try {
             byte[] iv = cryptoData.getIv();

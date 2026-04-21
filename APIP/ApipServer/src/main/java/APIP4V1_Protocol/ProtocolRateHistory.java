@@ -33,7 +33,7 @@ public class ProtocolRateHistory extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> defaultSort = Sort.makeSortList(HEIGHT,false,INDEX,false,null,null);
         fcHttpRequestHandler.doSearchRequest(IndicesNames.PROTOCOL_HISTORY, ProtocolHistory.class, OP,RATE,null,null, defaultSort,request,response,authType);
     }

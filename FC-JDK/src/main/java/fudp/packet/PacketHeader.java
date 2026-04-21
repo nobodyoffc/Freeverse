@@ -21,6 +21,8 @@ public class PacketHeader {
     // Bit 2 reserved (previously FLAG_HAS_SYMKEY_PROPOSAL, removed in v2.0)
     // Bit 3 reserved (previously FLAG_REKEY, removed in v2.0)
     public static final int FLAG_FIN = 0x10;                   // Bit 4
+    public static final int FLAG_HAS_TIMESTAMP = 0x20;         // Bit 5: timestamp present in payload
+    public static final int FLAG_HAS_EPOCH = 0x40;             // Bit 6: session epoch present in payload
 
     // Packet types
     public static final int PACKET_TYPE_DATA = 0x00;
@@ -115,6 +117,30 @@ public class PacketHeader {
             flags |= FLAG_FIN;
         } else {
             flags &= ~FLAG_FIN;
+        }
+    }
+
+    public boolean hasTimestamp() {
+        return (flags & FLAG_HAS_TIMESTAMP) != 0;
+    }
+
+    public void setHasTimestamp(boolean value) {
+        if (value) {
+            flags |= FLAG_HAS_TIMESTAMP;
+        } else {
+            flags &= ~FLAG_HAS_TIMESTAMP;
+        }
+    }
+
+    public boolean hasEpoch() {
+        return (flags & FLAG_HAS_EPOCH) != 0;
+    }
+
+    public void setHasEpoch(boolean value) {
+        if (value) {
+            flags |= FLAG_HAS_EPOCH;
+        } else {
+            flags &= ~FLAG_HAS_EPOCH;
         }
     }
 

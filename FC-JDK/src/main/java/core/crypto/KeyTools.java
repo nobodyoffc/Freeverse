@@ -69,7 +69,7 @@ public class KeyTools {
             if(pubkey!=null)return pubkey;
         }
         if(apipClient!=null){
-            pubkey = apipClient.getPubkey(fid, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            pubkey = apipClient.getPubkey(fid, RequestMethod.POST, AuthType.ENCRYPTED);
         }
         return pubkey;
     }
@@ -82,7 +82,6 @@ public class KeyTools {
         try{
             return getPubkey33(pubkeyB);
         }catch (Exception e){
-            System.out.println("Failed to get pubkey: "+e.getMessage());
             return null;
         }
     }
@@ -123,7 +122,6 @@ public class KeyTools {
             case 64 -> prikey32Bytes = HexFormat.of().parseHex(prikey);
             case 52 -> {
                 if (!(prikey.charAt(0) == 'L' || prikey.charAt(0) == 'K')) {
-                    System.out.println("It's not a private key.");
                     return null;
                 }
                 prikeyBytes = Base58.decode(prikey);
@@ -145,7 +143,6 @@ public class KeyTools {
             }
             case 51 -> {
                 if (prikey.charAt(0) != '5') {
-                    System.out.println("It's not a private key.");
                     return null;
                 }
                 prikeyBytes = Base58.decode(prikey);
@@ -166,7 +163,6 @@ public class KeyTools {
                 System.arraycopy(prikeyForHash, 1, prikey32Bytes, 0, 32);
             }
             default -> {
-                System.out.println("It's not a private key.");
                 return null;
             }
         }
@@ -1024,7 +1020,6 @@ public class KeyTools {
                 System.arraycopy(prikeyForHash, 1, prikey32Bytes, 0, 32);
             }
             default -> {
-                System.out.println("It's not a private key.");
                 return null;
             }
         }
@@ -1075,7 +1070,6 @@ public class KeyTools {
         if(prikey32.startsWith("0x")||prikey32.startsWith("0X"))prikey32 = prikey32.substring(2);
         String prikey26;
         if (prikey32.length() != 64) {
-            System.out.println("Private keys must be 32 bytes");
             return null;
         }
         // Keys that have compressed public components have an extra 1 byte on the end in dumped form.
@@ -1115,7 +1109,6 @@ public class KeyTools {
 
         String prikey37;
         if (prikey32.length() != 64) {
-            System.out.println("Private keys must be 32 bytes");
             return null;
         }
         // Keys that have compressed public components have an extra 1 byte on the end in dumped form.
@@ -1182,7 +1175,6 @@ public class KeyTools {
                 break;
             case 52:
                 if (!(prikey.substring(0, 1).equals("L") || prikey.substring(0, 1).equals("K"))) {
-                    System.out.println("It's not a private key.");
                     return null;
                 }
                 prikeyBytes = Base58.decode(prikey);
@@ -1209,7 +1201,6 @@ public class KeyTools {
                 break;
             case 51:
                 if (!prikey.substring(0, 1).equals("5")) {
-                    System.out.println("It's not a private key.");
                     return null;
                 }
 
@@ -1236,7 +1227,6 @@ public class KeyTools {
                 System.arraycopy(prikeyForHash, 1, prikey32Bytes, 0, 32);
                 break;
             default:
-                System.out.println("It's not a private key.");
                 return null;
         }
 
@@ -1563,14 +1553,16 @@ public class KeyTools {
             int destPos = (i - 1) * hLen;
             int len = Math.min(hLen, dkLen - destPos);
             System.arraycopy(t, 0, dk, destPos, len);
+            Arrays.fill(u, (byte) 0);
+            Arrays.fill(t, (byte) 0);
         }
 
         return dk;
     }
 
     /**
-     * Derive private keys from BIP39 mnemonic using BIP44 path: m/44'/0'/0'/0/i
-     * This uses the standard Bitcoin derivation path
+     * Derive private keys from BIP39 mnemonic using BIP44 path: m/44'/coinType'/account'/0/i
+     * Defaults to Bitcoin mainnet: m/44'/0'/0'/0/i
      *
      * @param mnemonic Array of BIP39 mnemonic words (12 or 24 words)
      * @param count Number of private keys to generate (generates keys from index 0 to count-1)
@@ -1578,12 +1570,12 @@ public class KeyTools {
      * @throws Exception if mnemonic is invalid or derivation fails
      */
     public static byte[][] priKeysFromMnemonic(String[] mnemonic, int count) throws Exception {
-        return priKeysFromMnemonic(mnemonic, "", count);
+        return priKeysFromMnemonic(mnemonic, "", 0, 0, count);
     }
 
     /**
      * Derive private keys from BIP39 mnemonic using BIP44 path: m/44'/0'/0'/0/i
-     * This uses the standard Bitcoin derivation path
+     * Defaults to Bitcoin mainnet.
      *
      * @param mnemonic Array of BIP39 mnemonic words (12 or 24 words)
      * @param passphrase BIP39 passphrase (can be empty string "")
@@ -1592,6 +1584,21 @@ public class KeyTools {
      * @throws Exception if mnemonic is invalid or derivation fails
      */
     public static byte[][] priKeysFromMnemonic(String[] mnemonic, String passphrase, int count) throws Exception {
+        return priKeysFromMnemonic(mnemonic, passphrase, 0, 0, count);
+    }
+
+    /**
+     * Derive private keys from BIP39 mnemonic using BIP44 path: m/44'/coinType'/account'/0/i
+     *
+     * @param mnemonic Array of BIP39 mnemonic words (12 or 24 words)
+     * @param passphrase BIP39 passphrase (can be empty string "")
+     * @param coinType BIP44 coin type (0=Bitcoin, 60=Ethereum, 145=BCH, etc.)
+     * @param account BIP44 account index (usually 0)
+     * @param count Number of private keys to generate (generates keys from index 0 to count-1)
+     * @return Array of private key byte arrays (32 bytes each)
+     * @throws Exception if mnemonic is invalid or derivation fails
+     */
+    public static byte[][] priKeysFromMnemonic(String[] mnemonic, String passphrase, int coinType, int account, int count) throws Exception {
         if (count <= 0) {
             throw new IllegalArgumentException("Count must be positive");
         }
@@ -1602,20 +1609,25 @@ public class KeyTools {
         // Derive master key from seed
         byte[] masterKey = deriveMasterKey(seed);
 
-        // Derive keys using BIP44 path: m/44'/0'/0'/0/i
-        byte[][] privateKeys = new byte[count][];
+        try {
+            // Derive keys using BIP44 path: m/44'/coinType'/account'/0/i
+            byte[][] privateKeys = new byte[count][];
 
-        for (int i = 0; i < count; i++) {
-            privateKeys[i] = deriveChildKey(masterKey, new int[]{
-                    0x8000002C, // 44' (hardened)
-                    0x80000000, // 0' (hardened) - Bitcoin coin type
-                    0x80000000, // 0' (hardened) - account
-                    0,          // 0 - external chain
-                    i           // i - address index
-            });
+            for (int i = 0; i < count; i++) {
+                privateKeys[i] = deriveChildKey(masterKey, new int[]{
+                        0x80000000 | 44,        // 44' (hardened) - BIP44 purpose
+                        0x80000000 | coinType,   // coinType' (hardened)
+                        0x80000000 | account,    // account' (hardened)
+                        0,                       // 0 - external chain
+                        i                        // i - address index
+                });
+            }
+
+            return privateKeys;
+        } finally {
+            Arrays.fill(seed, (byte) 0);
+            Arrays.fill(masterKey, (byte) 0);
         }
-
-        return privateKeys;
     }
 
     /**
@@ -1678,12 +1690,18 @@ public class KeyTools {
             // Right 32 bytes is the new chain code
             System.arraycopy(i, 32, chainCode, 0, 32);
 
+            // Zero intermediate HMAC result
+            Arrays.fill(i, (byte) 0);
+
             // Parse iL as 256 bit number and add to parent key modulo curve order
             BigInteger keyInt = new BigInteger(1, key);
             BigInteger iLInt = new BigInteger(1, iL);
             BigInteger n = new BigInteger("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16);
 
             BigInteger childKeyInt = iLInt.add(keyInt).mod(n);
+
+            // Zero iL after use
+            Arrays.fill(iL, (byte) 0);
 
             // Convert back to bytes
             byte[] childKeyBytes = childKeyInt.toByteArray();
@@ -1697,6 +1715,7 @@ public class KeyTools {
             } else {
                 System.arraycopy(childKeyBytes, childKeyBytes.length - 32, key, 0, 32);
             }
+            Arrays.fill(childKeyBytes, (byte) 0);
         }
 
         return key;

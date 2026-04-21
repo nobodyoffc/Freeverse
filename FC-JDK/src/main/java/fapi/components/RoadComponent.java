@@ -445,8 +445,8 @@ public class RoadComponent extends AbstractFapiComponent {
         
         try {
             ensurePeerInBook(fudpNode, targetFid);
-            log.info("ROAD tryDirectFudpSend: calling sendBytesWaitAck to {} ({} bytes)", targetFid, data.length);
-            boolean acked = fudpNode.sendBytesWaitAck(targetFid, data, RELAY_ACK_TIMEOUT_MS);
+            log.info("ROAD tryDirectFudpSend: calling sendNotifyWaitAck to {} ({} bytes)", targetFid, data.length);
+            boolean acked = fudpNode.sendNotifyWaitAck(targetFid, data, RELAY_ACK_TIMEOUT_MS);
             if (!acked) {
                 log.warn("ROAD tryDirectFudpSend: NO ACK from {} within {}ms", targetFid, RELAY_ACK_TIMEOUT_MS);
                 errorCounts.get("DELIVERY_FAILED").incrementAndGet();
@@ -482,7 +482,7 @@ public class RoadComponent extends AbstractFapiComponent {
         log.info("ROAD ensurePeerInBook: {} NOT in PeerBook, checking ConnectionManager...", targetFid);
         
         var connMgr = fudpNode.getProtocol().getConnectionManager();
-        PeerConnection conn = connMgr.getByPeerId(targetFid);
+        PeerConnection conn = connMgr.getAnyConnection(targetFid);
         if (conn == null) {
             StringBuilder peerIds = new StringBuilder();
             for (PeerConnection c : connMgr.getAllConnections()) {
@@ -613,7 +613,7 @@ public class RoadComponent extends AbstractFapiComponent {
             byte[] pubkey = utils.Hex.fromHex(entry.getPubkey());
             fudpNode.addPeer(targetFid, pubkey, entry.getObservedIp(), entry.getObservedPort());
             
-            fudpNode.sendBytes(targetFid, data);
+            fudpNode.sendNotify(targetFid, data);
             
             log.debug("Delivered {} bytes to {} at {}:{}", 
                 data.length, targetFid, entry.getObservedIp(), entry.getObservedPort());

@@ -2,6 +2,7 @@ package core.crypto.Algorithm;
 
 import com.google.common.hash.Hashing;
 import constants.CodeMessage;
+import core.crypto.CryptoConstants;
 import core.crypto.CryptoDataByte;
 import core.crypto.Decryptor;
 import core.crypto.EncryptType;
@@ -57,14 +58,14 @@ public class ChaCha20 {
         }
 
         // Validate key length (must be 32 bytes for ChaCha20-256)
-        if (key == null || key.length != 32) {
+        if (key == null || key.length != CryptoConstants.KEY_LENGTH_256) {
             cryptoDataByte.setCodeMessage(CodeMessage.Code4008WrongKeyLength,
                 "ChaCha20 requires a 32-byte key");
             return cryptoDataByte;
         }
 
         // Validate IV length (must be 12 bytes for ChaCha20)
-        if (iv == null || iv.length != 12) {
+        if (iv == null || iv.length != CryptoConstants.IV_LENGTH_CHACHA20) {
             cryptoDataByte.setCodeMessage(CodeMessage.Code4009MissingIv,
                 "ChaCha20 requires a 12-byte nonce");
             return cryptoDataByte;
@@ -179,14 +180,14 @@ public class ChaCha20 {
         byte[] iv = cryptoDataByte.getIv();
 
         // Validate key
-        if (key == null || key.length != 32) {
+        if (key == null || key.length != CryptoConstants.KEY_LENGTH_256) {
             cryptoDataByte.setCodeMessage(CodeMessage.Code4008WrongKeyLength,
                 "ChaCha20 requires a 32-byte key");
             return;
         }
 
         // Validate IV
-        if (iv == null || iv.length != 12) {
+        if (iv == null || iv.length != CryptoConstants.IV_LENGTH_CHACHA20) {
             cryptoDataByte.setCodeMessage(CodeMessage.Code4009MissingIv,
                 "ChaCha20 requires a 12-byte nonce");
             return;

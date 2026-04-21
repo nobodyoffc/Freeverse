@@ -8,123 +8,104 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 public class IndicesFEIP {
 
 	static final Logger log = LoggerFactory.getLogger(IndicesFEIP.class);
 
+	/**
+	 * Loads an ES mapping JSON string from a resource file under mappings/.
+	 */
+	private static String loadMapping(String fileName) {
+		try (InputStream is = IndicesFEIP.class.getClassLoader().getResourceAsStream("mappings/" + fileName)) {
+			if (is == null) {
+				log.error("Mapping resource not found: mappings/{}", fileName);
+				return null;
+			}
+			return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			log.error("Failed to load mapping: mappings/{}", fileName, e);
+			return null;
+		}
+	}
+
+	private static void createIndex(ElasticsearchClient esClient, String indexName, String mappingFile) {
+		String mapping = loadMapping(mappingFile);
+		if (mapping != null) {
+			EsUtils.createIndex(esClient, indexName, mapping);
+		}
+	}
 
 	public static void createAllIndices(ElasticsearchClient esClient) throws ElasticsearchException {
 
 		if (esClient == null) {
-			System.out.println("Create a Java client for ES first.");
+			log.info("Create a Java client for ES first.");
 			return;
 		}
 
-		String freerHistJsonStr = "{\"mappings\":{\"properties\":{\"urls\":{\"type\":\"text\"},\"master\":{\"type\":\"wildcard\"},\"cipherPrikey\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"height\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"name\":{\"type\":\"wildcard\"},\"home\":{\"type\":\"object\"},\"noticeFee\":{\"type\":\"text\"},\"op\":{\"type\":\"wildcard\"},\"prikey\":{\"type\":\"keyword\"},\"signer\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"ver\":{\"type\":\"short\"}}}}";
-		String repuHistJsonStr = "{\"mappings\":{\"properties\":{\"cause\":{\"type\":\"text\"},\"rate\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"hot\":{\"type\":\"long\"},\"id\":{\"type\":\"keyword\"},\"index\":{\"type\":\"short\"},\"ratee\":{\"type\":\"wildcard\"},\"rater\":{\"type\":\"wildcard\"},\"reputation\":{\"type\":\"long\"},\"time\":{\"type\":\"long\"}}}}";
-		String parseMarkJsonStr = "{\"mappings\":{\"properties\":{\"fileName\":{\"type\":\"wildcard\"},\"lastHeight\":{\"type\":\"long\"},\"lastId\":{\"type\":\"keyword\"},\"lastIndex\":{\"type\":\"long\"},\"length\":{\"type\":\"short\"},\"pointer\":{\"type\":\"long\"}}}}";
-		String nidJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"nid\":{\"type\":\"wildcard\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"oid\":{\"type\":\"wildcard\"},\"active\":{\"type\":\"boolean\"},\"namer\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.NID, nidJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.FREER_HISTORY, freerHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.REPUTATION_HISTORY, repuHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.FEIP_MARK, parseMarkJsonStr);
+		// Identity
+		createIndex(esClient, IndicesNames.NID, "nid.json");
+		createIndex(esClient, IndicesNames.FREER_HISTORY, "freer_history.json");
+		createIndex(esClient, IndicesNames.REPUTATION_HISTORY, "reputation_history.json");
+		createIndex(esClient, IndicesNames.FEIP_MARK, "feip_mark.json");
 
-		String protocolJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"type\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"wildcard\"},\"name\":{\"type\":\"wildcard\"},\"did\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"waiters\":{\"type\":\"keyword\"},\"preDid\":{\"type\":\"keyword\"},\"home\":{\"type\":\"text\"},\"title\":{\"type\":\"wildcard\"},\"owner\":{\"type\":\"wildcard\"},\"birthTxId\":{\"type\":\"keyword\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"},\"closed\":{\"type\":\"boolean\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String protocolHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"type\":{\"type\":\"wildcard\"},\"sn\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"wildcard\"},\"name\":{\"type\":\"wildcard\"},\"did\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"lang\":{\"type\":\"wildcard\"},\"preDid\":{\"type\":\"keyword\"},\"home\":{\"type\":\"text\"},\"signer\":{\"type\":\"wildcard\"},\"pid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"waiters\":{\"type\":\"keyword\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String codeJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"wildcard\"},\"did\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"langs\":{\"type\":\"wildcard\"},\"home\":{\"type\":\"text\"},\"protocols\":{\"type\":\"keyword\"},\"codes\":{\"type\":\"keyword\"},\"waiters\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"},\"closed\":{\"type\":\"boolean\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String codeHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"codeId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"ver\":{\"type\":\"wildcard\"},\"did\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"langs\":{\"type\":\"wildcard\"},\"home\":{\"type\":\"text\"},\"protocols\":{\"type\":\"keyword\"},\"codes\":{\"type\":\"keyword\"},\"waiters\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String serviceJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"stdName\":{\"type\":\"text\"},\"localNames\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"type\":{\"type\":\"keyword\"},\"components\":{\"type\":\"keyword\"},\"home\":{\"type\":\"object\"},\"dealer\":{\"type\":\"wildcard\"},\"dealerPubkey\":{\"type\":\"keyword\"},\"waiters\":{\"type\":\"wildcard\"},\"protocols\":{\"type\":\"keyword\"},\"codes\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"params\":{\"type\":\"object\"},\"owner\":{\"type\":\"wildcard\"},\"pricePerKB\":{\"type\":\"keyword\"},\"pricePerKBIn\":{\"type\":\"keyword\"},\"pricePerKBOut\":{\"type\":\"keyword\"},\"pricePerDayKB\":{\"type\":\"keyword\"},\"minPayment\":{\"type\":\"keyword\"},\"pricePerRequest\":{\"type\":\"keyword\"},\"sessionDays\":{\"type\":\"keyword\"},\"consumeViaShare\":{\"type\":\"keyword\"},\"orderViaShare\":{\"type\":\"keyword\"},\"currency\":{\"type\":\"keyword\"},\"minCredit\":{\"type\":\"keyword\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"},\"closed\":{\"type\":\"boolean\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String serviceHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"wildcard\"},\"localNames\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"type\":{\"type\":\"keyword\"},\"components\":{\"type\":\"keyword\"},\"ver\":{\"type\":\"keyword\"},\"home\":{\"type\":\"object\"},\"waiters\":{\"type\":\"keyword\"},\"protocols\":{\"type\":\"keyword\"},\"codes\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"params\":{\"type\":\"object\"},\"pricePerKB\":{\"type\":\"keyword\"},\"pricePerKBIn\":{\"type\":\"keyword\"},\"pricePerKBOut\":{\"type\":\"keyword\"},\"pricePerDayKB\":{\"type\":\"keyword\"},\"minPayment\":{\"type\":\"keyword\"},\"pricePerRequest\":{\"type\":\"keyword\"},\"consumeViaShare\":{\"type\":\"keyword\"},\"orderViaShare\":{\"type\":\"keyword\"},\"currency\":{\"type\":\"keyword\"},\"minCredit\":{\"type\":\"keyword\"},\"sid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String appJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"stdName\":{\"type\":\"wildcard\"},\"localNames\":{\"type\":\"wildcard\"},\"types\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"home\":{\"type\":\"object\"},\"downloads\":{\"properties\":{\"os\":{\"type\":\"text\"},\"link\":{\"type\":\"text\"},\"did\":{\"type\":\"keyword\"}}},\"waiters\":{\"type\":\"keyword\"},\"protocols\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"},\"closed\":{\"type\":\"boolean\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		String appHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"wildcard\"},\"localNames\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"types\":{\"type\":\"wildcard\"},\"home\":{\"type\":\"text\"},\"downloads\":{\"properties\":{\"os\":{\"type\":\"text\"},\"link\":{\"type\":\"text\"},\"did\":{\"type\":\"keyword\"}}},\"waiters\":{\"type\":\"keyword\"},\"protocols\":{\"type\":\"keyword\"},\"services\":{\"type\":\"keyword\"},\"aid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"},\"closeStatement\":{\"type\":\"text\"}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.PROTOCOL, protocolJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.PROTOCOL_HISTORY, protocolHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.CODE, codeJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.CODE_HISTORY, codeHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.SERVICE, serviceJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.SERVICE_HISTORY, serviceHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.APP, appJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.APP_HISTORY, appHistJsonStr);
+		// Construct
+		createIndex(esClient, IndicesNames.PROTOCOL, "protocol.json");
+		createIndex(esClient, IndicesNames.PROTOCOL_HISTORY, "protocol_history.json");
+		createIndex(esClient, IndicesNames.CODE, "code.json");
+		createIndex(esClient, IndicesNames.CODE_HISTORY, "code_history.json");
+		createIndex(esClient, IndicesNames.SERVICE, "service.json");
+		createIndex(esClient, IndicesNames.SERVICE_HISTORY, "service_history.json");
+		createIndex(esClient, IndicesNames.APP, "app.json");
+		createIndex(esClient, IndicesNames.APP_HISTORY, "app_history.json");
 
-		String squareJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"home\":{\"type\":\"object\"},\"namers\":{\"type\":\"wildcard\"},\"members\":{\"type\":\"wildcard\"},\"memberNum\":{\"type\":\"long\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"cddToUpdate\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"}}}}";
-		String squareHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"squareId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"home\":{\"type\":\"object\"},\"cdd\":{\"type\":\"long\"}}}}";
-		String teamJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"text\"},\"localNames\":{\"type\":\"text\"},\"waiters\":{\"type\":\"text\"},\"accounts\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"home\":{\"type\":\"object\"},\"members\":{\"type\":\"wildcard\"},\"exMembers\":{\"type\":\"wildcard\"},\"managers\":{\"type\":\"wildcard\"},\"transferee\":{\"type\":\"wildcard\"},\"invitees\":{\"type\":\"wildcard\"},\"leavers\":{\"type\":\"wildcard\"},\"notAgreeMembers\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"active\":{\"type\":\"boolean\"}}}}";
-		String teamHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"},\"tid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"list\":{\"type\":\"wildcard\"},\"stdName\":{\"type\":\"text\"},\"localNames\":{\"type\":\"text\"},\"waiters\":{\"type\":\"text\"},\"accounts\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"desc\":{\"type\":\"text\"},\"home\":{\"type\":\"object\"},\"rate\":{\"type\":\"short\"},\"transferee\":{\"type\":\"wildcard\"}}}}";
+		// Organize
+		createIndex(esClient, IndicesNames.SQUARE, "square.json");
+		createIndex(esClient, IndicesNames.SQUARE_HISTORY, "square_history.json");
+		createIndex(esClient, IndicesNames.TEAM, "team.json");
+		createIndex(esClient, IndicesNames.TEAM_HISTORY, "team_history.json");
 
-		EsUtils.createIndex(esClient, IndicesNames.SQUARE, squareJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.SQUARE_HISTORY, squareHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.TEAM, teamJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.TEAM_HISTORY, teamHistJsonStr);
+		// Personal
+		createIndex(esClient, IndicesNames.CONTACT, "contact.json");
+		createIndex(esClient, IndicesNames.MAIL, "mail.json");
+		createIndex(esClient, IndicesNames.SECRET, "secret.json");
+		createIndex(esClient, IndicesNames.BOX, "box.json");
+		createIndex(esClient, IndicesNames.BOX_HISTORY, "box_history.json");
 
-		String contactJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"cipher\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
-		String mailJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"from\":{\"type\":\"wildcard\"},\"to\":{\"type\":\"wildcard\"},\"alg\":{\"type\":\"wildcard\"},\"cipher\":{\"type\":\"keyword\"},\"cipherSend\":{\"type\":\"keyword\"},\"cipherReci\":{\"type\":\"keyword\"},\"textId\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
-		String secretJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"alg\":{\"type\":\"wildcard\"},\"cipher\":{\"type\":\"keyword\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
-		String boxJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"contain\":{\"type\":\"text\"},\"active\":{\"type\":\"boolean\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		String boxHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"bid\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"wildcard\"},\"desc\":{\"type\":\"text\"},\"contain\":{\"type\":\"text\"}}}}";
+		// Publish
+		createIndex(esClient, IndicesNames.STATEMENT, "statement.json");
+		createIndex(esClient, IndicesNames.TEXT, "text.json");
+		createIndex(esClient, IndicesNames.TEXT_HISTORY, "text_history.json");
+		createIndex(esClient, IndicesNames.REMARK, "remark.json");
+		createIndex(esClient, IndicesNames.REMARK_HISTORY, "remark_history.json");
+		createIndex(esClient, IndicesNames.SOUND, "sound.json");
+		createIndex(esClient, IndicesNames.SOUND_HISTORY, "sound_history.json");
+		createIndex(esClient, IndicesNames.IMAGE, "image.json");
+		createIndex(esClient, IndicesNames.IMAGE_HISTORY, "image_history.json");
+		createIndex(esClient, IndicesNames.VIDEO, "video.json");
+		createIndex(esClient, IndicesNames.VIDEO_HISTORY, "video_history.json");
 
-		EsUtils.createIndex(esClient, IndicesNames.CONTACT, contactJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.MAIL, mailJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.SECRET, secretJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.BOX, boxJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.BOX_HISTORY, boxHistJsonStr);
+		// Finance
+		createIndex(esClient, IndicesNames.PROOF, "proof.json");
+		createIndex(esClient, IndicesNames.PROOF_HISTORY, "proof_history.json");
+		createIndex(esClient, IndicesNames.TOKEN, "token.json");
+		createIndex(esClient, IndicesNames.TOKEN_HOLDER, "token_holder.json");
+		createIndex(esClient, IndicesNames.TOKEN_HISTORY, "token_history.json");
 
-		String statementJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"active\":{\"type\":\"boolean\"}}}}";
-		
-		EsUtils.createIndex(esClient, IndicesNames.STATEMENT, statementJsonStr);
-
-		String textJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"type\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
-		String remarkJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"onDid\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
-
-		EsUtils.createIndex(esClient, IndicesNames.TEXT, textJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.REMARK, remarkJsonStr);
-
-		String textHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"textId\":{\"type\":\"keyword\"},\"textIds\":{\"type\":\"keyword\"},\"type\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"}}}}";
-		String remarkHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"remarkId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"onDid\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"}}}}";
-
-		EsUtils.createIndex(esClient, IndicesNames.TEXT_HISTORY, textHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.REMARK_HISTORY, remarkHistJsonStr);
-
-	String soundJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
-	String soundHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"soundId\":{\"type\":\"keyword\"},\"soundIds\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"}}}}";
-	String imageJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
-	String imageHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"imageId\":{\"type\":\"keyword\"},\"imageIds\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"}}}}";
-	String videoJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"publisher\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"},\"tCdd\":{\"type\":\"long\"},\"tRate\":{\"type\":\"float\"},\"deleted\":{\"type\":\"boolean\"}}}}";
-	String videoHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"videoId\":{\"type\":\"keyword\"},\"videoIds\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"ver\":{\"type\":\"keyword\"},\"did\":{\"type\":\"keyword\"},\"authors\":{\"type\":\"keyword\"},\"lang\":{\"type\":\"keyword\"},\"format\":{\"type\":\"keyword\"},\"summary\":{\"type\":\"text\"},\"rate\":{\"type\":\"short\"},\"cdd\":{\"type\":\"long\"}}}}";
-	EsUtils.createIndex(esClient, IndicesNames.SOUND, soundJsonStr);
-	EsUtils.createIndex(esClient, IndicesNames.SOUND_HISTORY, soundHistJsonStr);
-	EsUtils.createIndex(esClient, IndicesNames.IMAGE, imageJsonStr);
-	EsUtils.createIndex(esClient, IndicesNames.IMAGE_HISTORY, imageHistJsonStr);
-	EsUtils.createIndex(esClient, IndicesNames.VIDEO, videoJsonStr);
-	EsUtils.createIndex(esClient, IndicesNames.VIDEO_HISTORY, videoHistJsonStr);
-		String proofJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"cosignersInvited\":{\"type\":\"wildcard\"},\"cosignersSigned\":{\"type\":\"wildcard\"},\"isTransferable\":{\"type\":\"boolean\"},\"active\":{\"type\":\"boolean\"},\"issuer\":{\"type\":\"wildcard\"},\"owner\":{\"type\":\"wildcard\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		String proofHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"short\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"wildcard\"},\"cdd\":{\"type\":\"long\"},\"proofId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"title\":{\"type\":\"text\"},\"content\":{\"type\":\"text\"},\"cosignersInvited\":{\"type\":\"wildcard\"},\"isTransferable\":{\"type\":\"boolean\"},\"allSignsRequired\":{\"type\":\"boolean\"}}}}";
-		String tokenJsonStr ="{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"name\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"capacity\":{\"type\":\"keyword\"},\"decimal\":{\"type\":\"keyword\"},\"transferable\":{\"type\":\"keyword\"},\"closable\":{\"type\":\"keyword\"},\"openIssue\":{\"type\":\"keyword\"},\"maxAmtPerIssue\":{\"type\":\"keyword\"},\"minCddPerIssue\":{\"type\":\"keyword\"},\"maxIssuesPerAddr\":{\"type\":\"keyword\"},\"closed\":{\"type\":\"keyword\"},\"deployer\":{\"type\":\"keyword\"},\"circulating\":{\"type\":\"double\"},\"birthTime\":{\"type\":\"long\"},\"birthHeight\":{\"type\":\"long\"},\"lastTxId\":{\"type\":\"keyword\"},\"lastTime\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		String tokenHolderJsonStr ="{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"fid\":{\"type\":\"keyword\"},\"tokenId\":{\"type\":\"keyword\"},\"balance\":{\"type\":\"double\"},\"firstHeight\":{\"type\":\"long\"},\"lastHeight\":{\"type\":\"long\"}}}}";
-		String tokenHistJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"height\":{\"type\":\"long\"},\"index\":{\"type\":\"integer\"},\"time\":{\"type\":\"long\"},\"signer\":{\"type\":\"keyword\"},\"recipient\":{\"type\":\"keyword\"},\"cdd\":{\"type\":\"long\"},\"tokenId\":{\"type\":\"keyword\"},\"op\":{\"type\":\"keyword\"},\"name\":{\"type\":\"text\"},\"desc\":{\"type\":\"text\"},\"consensusId\":{\"type\":\"keyword\"},\"capacity\":{\"type\":\"keyword\"},\"decimal\":{\"type\":\"keyword\"},\"transferable\":{\"type\":\"keyword\"},\"closable\":{\"type\":\"keyword\"},\"openIssue\":{\"type\":\"keyword\"},\"maxAmtPerIssue\":{\"type\":\"keyword\"},\"minCddPerIssue\":{\"type\":\"keyword\"},\"maxIssuesPerAddr\":{\"type\":\"keyword\"},\"issueTo\":{\"type\":\"nested\",\"properties\":{\"fid\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"double\"}}},\"transferTo\":{\"type\":\"nested\",\"properties\":{\"fid\":{\"type\":\"keyword\"},\"amount\":{\"type\":\"double\"}}}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.PROOF, proofJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.PROOF_HISTORY, proofHistJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.TOKEN, tokenJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderJsonStr);
-		EsUtils.createIndex(esClient, IndicesNames.TOKEN_HISTORY, tokenHistJsonStr);
-	
-
-
-		String nobodyJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"prikey\":{\"type\":\"keyword\"},\"leakTime\":{\"type\":\"long\"},\"leakTxIndex\":{\"type\":\"integer\"},\"leakTxId\":{\"type\":\"keyword\"}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.NOBODY, nobodyJsonStr);
-
-		String newsJsonStr = "{\"mappings\":{\"properties\":{\"id\":{\"type\":\"keyword\"},\"doer\":{\"type\":\"wildcard\"},\"act\":{\"type\":\"keyword\"},\"objectType\":{\"type\":\"keyword\"},\"objectId\":{\"type\":\"keyword\"},\"objectName\":{\"type\":\"text\"},\"objectBrief\":{\"type\":\"text\"},\"height\":{\"type\":\"long\"},\"time\":{\"type\":\"long\"}}}}";
-		EsUtils.createIndex(esClient, IndicesNames.NEWS, newsJsonStr);
+		// Other
+		createIndex(esClient, IndicesNames.NOBODY, "nobody.json");
+		createIndex(esClient, IndicesNames.NEWS, "news.json");
 	}
 
 	public static void deleteAllIndices(ElasticsearchClient esClient) throws IOException {
 
 		if (esClient == null) {
-			System.out.println("Create a Java client for ES first.");
+			log.info("Create a Java client for ES first.");
 			return;
 		}
 
-		// EsTools.deleteIndex(esClient, IndicesNames.CID);
 		EsUtils.deleteIndex(esClient, IndicesNames.FREER_HISTORY);
 		EsUtils.deleteIndex(esClient, IndicesNames.REPUTATION_HISTORY);
 		EsUtils.deleteIndex(esClient, IndicesNames.FEIP_MARK);

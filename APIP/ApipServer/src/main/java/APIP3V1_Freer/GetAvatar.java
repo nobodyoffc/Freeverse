@@ -28,7 +28,7 @@ public class GetAvatar extends HttpServlet {
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         ReplyBody replier =new ReplyBody(settings);
-        doRequest(request, response, AuthType.SYMKEY_ENCRYPT, replier);
+        doRequest(request, response, AuthType.ENCRYPTED, replier);
     }
 
     @Override

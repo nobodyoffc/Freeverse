@@ -23,8 +23,8 @@ public class StreamManager {
 
     // Flow control
     private long maxData = 10485760; // 10 MB connection level
-    private long dataReceived = 0;
-    private long dataSent = 0;
+    private final AtomicLong dataReceived = new AtomicLong(0);
+    private final AtomicLong dataSent = new AtomicLong(0);
 
     public StreamManager(PeerConnection connection) {
         this.connection = connection;
@@ -40,6 +40,9 @@ public class StreamManager {
      * to avoid overwriting their receive state.
      */
     public Stream openStream() {
+        if (streams.size() >= maxLocalStreams) {
+            throw new IllegalStateException("Local stream limit exceeded: " + maxLocalStreams);
+        }
         long streamId;
         int skipped = 0;
         do {
@@ -52,6 +55,7 @@ public class StreamManager {
         } while (skipped < 1000); // safety bound
 
         Stream stream = new Stream(streamId);
+        stream.setConnection(this.connection);
         streams.put(streamId, stream);
         return stream;
     }
@@ -70,7 +74,15 @@ public class StreamManager {
      * Get or create a stream (for receiving)
      */
     public Stream getOrCreateStream(long streamId) {
-        return streams.computeIfAbsent(streamId, Stream::new);
+        if (!streams.containsKey(streamId) && streams.size() >= maxRemoteStreams) {
+            log.warn("Remote stream limit exceeded (max={}), rejecting stream {}", maxRemoteStreams, streamId);
+            return null;
+        }
+        return streams.computeIfAbsent(streamId, id -> {
+            Stream s = new Stream(id);
+            s.setConnection(this.connection);
+            return s;
+        });
     }
 
     /**
@@ -94,6 +106,14 @@ public class StreamManager {
     }
 
     /**
+     * Remove a stream unconditionally.
+     * Used to clean up streams after their message has been fully delivered.
+     */
+    public void removeStream(long streamId) {
+        streams.remove(streamId);
+    }
+
+    /**
      * Get all streams
      */
     public Collection<Stream> getAllStreams() {
@@ -111,21 +131,21 @@ public class StreamManager {
      * Connection-level flow control: record sent data
      */
     public boolean canSendData(int bytes) {
-        return dataSent + bytes <= maxData;
+        return dataSent.get() + bytes <= maxData;
     }
 
     /**
      * Record sent data
      */
     public void onDataSent(int bytes) {
-        dataSent += bytes;
+        dataSent.addAndGet(bytes);
     }
 
     /**
      * Record received data
      */
     public void onDataReceived(int bytes) {
-        dataReceived += bytes;
+        dataReceived.addAndGet(bytes);
     }
 
     /**
@@ -134,15 +154,15 @@ public class StreamManager {
     public void resetForRestart() {
         streams.clear();
         nextLocalStreamId.set(0);
-        dataReceived = 0;
-        dataSent = 0;
+        dataReceived.set(0);
+        dataSent.set(0);
     }
 
     /**
      * Check if connection flow control update needed
      */
     public boolean needsFlowControlUpdate() {
-        return dataReceived > maxData / 2;
+        return dataReceived.get() > maxData / 2;
     }
 
     /**
@@ -168,11 +188,11 @@ public class StreamManager {
     }
 
     public long getDataReceived() {
-        return dataReceived;
+        return dataReceived.get();
     }
 
     public long getDataSent() {
-        return dataSent;
+        return dataSent.get();
     }
 
     public long getMaxLocalStreams() {

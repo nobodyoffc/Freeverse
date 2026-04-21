@@ -310,7 +310,7 @@ public class MailManager extends Manager<Mail> {
                     mailIds.add(mailId);
                 }
             } else {
-                recoverMailMap = apipClient.mailByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, mailIds.toArray(new String[0]));
+                recoverMailMap = apipClient.mailByIds(RequestMethod.POST, AuthType.ENCRYPTED, mailIds.toArray(new String[0]));
                 if (recoverMailMap == null || recoverMailMap.isEmpty()) {
                     System.out.println("The mails do not exist or are deleted.");
                     return null;

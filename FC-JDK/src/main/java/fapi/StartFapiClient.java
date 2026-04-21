@@ -10,8 +10,7 @@ import fapi.client.FapiClient.DiscoveryResult;
 import fapi.message.FapiResponse;
 import core.crypto.Hash;
 import data.fcData.DockItem;
-import fudp.message.AppMessage;
-import fudp.message.BytesMessage;
+import fudp.message.NotifyMessage;
 import fudp.node.FudpNode;
 import fudp.node.NodeEventListener;
 import org.slf4j.Logger;
@@ -1186,9 +1185,18 @@ public class StartFapiClient {
         String targetRoad = Inputer.inputString(br, "Target ROAD URL (from freer.home.ROAD, empty for local only):");
         if (targetRoad != null && targetRoad.isEmpty()) targetRoad = null;
         
-        System.out.println("Relaying " + data.length + " bytes to " + targetFids.size() + " target(s)...");
-        
-        FapiClient.RoadRelayResult result = fapiClient.roadRelay(targetFids, data, maxCost, targetRoad);
+        System.out.println("Relaying " + ProgressBar.formatBytes(data.length) + " to " + targetFids.size() + " target(s)...");
+
+        // Progress bar with real send-progress tracking
+        ProgressBar progressBar = new ProgressBar("Sending", data.length);
+        java.util.function.BiConsumer<Long, Long> sendProgress = (bytesSent, totalBytes) -> {
+            progressBar.update(bytesSent);
+        };
+
+        FapiClient.RoadRelayResult result = fapiClient.roadRelay(
+                targetFids, data, maxCost, targetRoad, sendProgress);
+
+        progressBar.finish();
         if (result != null) {
             System.out.println("\n=== Relay Result ===");
             System.out.println("Overall success: " + result.success());
@@ -1390,10 +1398,7 @@ public class StartFapiClient {
             System.out.println("Local FID: " + fudpNode.getLocalFid());
             System.out.println("Local Port: " + fudpNode.getConfig().getPort());
         }
-        System.out.println("\nDefault endpoints:");
-        for (String ep : FapiDefaults.DEFAULT_ENDPOINTS) {
-            System.out.println("  - " + ep);
-        }
+
         Menu.anyKeyToContinue(br);
     }
     
@@ -1469,13 +1474,13 @@ public class StartFapiClient {
     private static class ClientEventListener implements NodeEventListener {
 
         @Override
-        public void onBytesReceived(String peerId, long messageId, int dataType, byte[] data) {
+        public void onNotifyReceived(String peerId, long messageId, int dataType, byte[] data) {
             String did = saveReceivedData(data);
             String typeStr = switch (dataType) {
-                case BytesMessage.DATA_TYPE_RAW -> "raw";
-                case BytesMessage.DATA_TYPE_JSON -> "json";
-                case BytesMessage.DATA_TYPE_PROTOBUF -> "protobuf";
-                case BytesMessage.DATA_TYPE_MSGPACK -> "msgpack";
+                case NotifyMessage.DATA_TYPE_RAW -> "raw";
+                case NotifyMessage.DATA_TYPE_JSON -> "json";
+                case NotifyMessage.DATA_TYPE_PROTOBUF -> "protobuf";
+                case NotifyMessage.DATA_TYPE_MSGPACK -> "msgpack";
                 default -> "type-" + dataType;
             };
             System.out.println("\n╔══════════════════════════════════════╗");
@@ -1491,58 +1496,18 @@ public class StartFapiClient {
         }
 
         @Override
-        public void onRelayedMessageReceived(String relayPeerId, AppMessage message) {
-            System.out.println("\n╔══════════════════════════════════════╗");
-            System.out.println("║  Incoming Relayed Message            ║");
-            System.out.println("╠══════════════════════════════════════╣");
-            System.out.println("║ Relay peer: " + relayPeerId);
-            System.out.println("║ Message type: " + message.getType());
-            if (message instanceof BytesMessage bytesMsg) {
-                byte[] data = bytesMsg.getData();
-                String did = saveReceivedData(data);
-                System.out.println("║ Size: " + data.length + " bytes");
-                System.out.println("║ DID: " + did);
-                System.out.println("║ Saved to: " + RECEIVED_FILES_DIR + "/" + did);
-            } else {
-                System.out.println("║ Message: " + message);
-            }
-            System.out.println("╚══════════════════════════════════════╝");
+        public void onNotifyAck(String peerId, long messageId, long rttMs) {
+            log.debug("Notify ACK from {}, messageId={}, RTT={}ms", peerId, messageId, rttMs);
         }
 
         @Override
-        public void onRelayedMessageReceived(String relayPeerId, String senderFid, long sessionId, AppMessage message) {
-            System.out.println("\n╔══════════════════════════════════════╗");
-            System.out.println("║  Incoming Relayed Message            ║");
-            System.out.println("╠══════════════════════════════════════╣");
-            System.out.println("║ Relay peer: " + relayPeerId);
-            System.out.println("║ Sender FID: " + senderFid);
-            System.out.println("║ Session ID: " + sessionId);
-            System.out.println("║ Message type: " + message.getType());
-            if (message instanceof BytesMessage bytesMsg) {
-                byte[] data = bytesMsg.getData();
-                String did = saveReceivedData(data);
-                System.out.println("║ Size: " + data.length + " bytes");
-                System.out.println("║ DID: " + did);
-                System.out.println("║ Saved to: " + RECEIVED_FILES_DIR + "/" + did);
-            } else {
-                System.out.println("║ Message: " + message);
-            }
-            System.out.println("╚══════════════════════════════════════╝");
+        public void onPeerConnected(String peerId, long connectionId) {
+            log.debug("Peer connected: {} (conn={})", peerId, connectionId);
         }
 
         @Override
-        public void onBytesAck(String peerId, long messageId, long rttMs) {
-            log.debug("Bytes ACK from {}, messageId={}, RTT={}ms", peerId, messageId, rttMs);
-        }
-
-        @Override
-        public void onPeerConnected(String peerId) {
-            log.debug("Peer connected: {}", peerId);
-        }
-
-        @Override
-        public void onPeerDisconnected(String peerId) {
-            log.debug("Peer disconnected: {}", peerId);
+        public void onPeerDisconnected(String peerId, long connectionId) {
+            log.debug("Peer disconnected: {} (conn={})", peerId, connectionId);
         }
 
         @Override

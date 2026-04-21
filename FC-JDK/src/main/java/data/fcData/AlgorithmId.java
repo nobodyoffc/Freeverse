@@ -14,6 +14,8 @@ public enum AlgorithmId {
     FC_X25519AesGcm256_No1_NrC7(Constants.FC_X25519_AES_GCM_256_NO1_NRC7),
     FC_ChaCha20_No1_NrC7(Constants.FC_CHACHA20_NO1_NRC7),
     FC_EccK1ChaCha20_No1_NrC7(Constants.FC_ECC_K1_CHACHA20_NO1_NRC7),
+    FC_ChaCha20Poly1305_No1_NrC7(Constants.FC_CHACHA20_POLY1305_NO1_NRC7),
+    FC_EccK1ChaCha20Poly1305_No1_NrC7(Constants.FC_ECC_K1_CHACHA20_POLY1305_NO1_NRC7),
     BTC_EcdsaSignMsg_No1_NrC7(Constants.BTC_ECDSA_SIGN_MSG_NO1_NRC7),
     FC_Sha256SymSignMsg_No1_NrC7(Constants.FC_SHA256SYM_SIGN_MSG_NO1_NRC7),
     FC_SchnorrSignTx_No1_NrC7(Constants.FC_SCHNORR_SIGN_TX_NO1_NRC7),
@@ -72,6 +74,8 @@ public enum AlgorithmId {
         public static final String FC_X25519_AES_GCM_256_NO1_NRC7 = "X25519AesGcm256@No1_NrC7";
         public static final String FC_CHACHA20_NO1_NRC7 = "ChaCha20@No1_NrC7";
         public static final String FC_ECC_K1_CHACHA20_NO1_NRC7 = "EccK1ChaCha20@No1_NrC7";
+        public static final String FC_CHACHA20_POLY1305_NO1_NRC7 = "ChaCha20Poly1305@No1_NrC7";
+        public static final String FC_ECC_K1_CHACHA20_POLY1305_NO1_NRC7 = "EccK1ChaCha20Poly1305@No1_NrC7";
         public static final String BTC_ECDSA_SIGN_MSG_NO1_NRC7 = "BTC-EcdsaSignMsg@No1_NrC7";
         public static final String FC_SHA256SYM_SIGN_MSG_NO1_NRC7 = "Sha256SymSignMsg@No1_NrC7";
         public static final String FC_SCHNORR_SIGN_TX_NO1_NRC7 = "SchnorrSignTx@No1_NrC7";

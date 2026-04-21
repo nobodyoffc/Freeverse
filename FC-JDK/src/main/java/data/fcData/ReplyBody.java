@@ -127,8 +127,8 @@ public class ReplyBody extends FcObject {
 
         long newBalance = accountHandler.userSpend(fid, apiName, length,via);
 
-        // If balance is depleted, remove session
-        if (newBalance <= 0 && sessionName != null) {
+        // If balance exceeds credit limit, remove session
+        if (newBalance < -accountHandler.getMinCredit() && sessionName != null) {
             sessionHandler.removeSession(sessionName);
         }
 
@@ -340,18 +340,11 @@ public class ReplyBody extends FcObject {
         Encryptor encryptor;
         CryptoDataByte result = null;
         switch (authType) {
-            case SYMKEY_ENCRYPT-> {
-                String sessionKey = httpRequestChecker.getSessionKey();
-                if(sessionKey!=null){
-                    encryptor = new Encryptor(AlgorithmId.FC_AesCbc256_No1_NrC7);
-                    result = encryptor.encryptBySymkey(replyStr.getBytes(), Hex.fromHex(sessionKey));
-                }
-            }
-            case ASY_TWO_WAY_ENCRYPT -> {
+            case ENCRYPTED -> {
                 String pubkey = httpRequestChecker.getPubkey();
                 if (pubkey!=null){
                     byte[] prikey = settings.decryptPrikey();
-                    encryptor = new Encryptor(AlgorithmId.FC_EccK1AesCbc256_No1_NrC7);
+                    encryptor = new Encryptor(AlgorithmId.FC_EccK1AesGcm256_No1_NrC7);
                     result = encryptor.encryptByAsyTwoWay(replyStr.getBytes(),prikey,Hex.fromHex(pubkey));
                 }
             }

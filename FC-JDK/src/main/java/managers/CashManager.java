@@ -205,7 +205,7 @@ public class CashManager extends Manager<Cash> {
     public static List<Nobody> checkNobodys(List<String> recipientList, ApipClient apipClient, ElasticsearchClient esClient) {
         List<Nobody> nobodyList = new ArrayList<>();
         if (apipClient != null) {
-            Map<String, Nobody> nobodyMap = apipClient.nobodyByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, recipientList.toArray(new String[0]));
+            Map<String, Nobody> nobodyMap = apipClient.nobodyByIds(RequestMethod.POST, AuthType.ENCRYPTED, recipientList.toArray(new String[0]));
             if (nobodyMap != null && !nobodyMap.isEmpty()) nobodyList.addAll(nobodyMap.values());
         } else if (esClient != null) {
             List<FieldValue> valueList = recipientList.stream().map(FieldValue::of).collect(Collectors.toList());
@@ -319,7 +319,7 @@ public class CashManager extends Manager<Cash> {
         System.out.println(decodedTx);
         if(askIfYes(br, "Do you want to broadcast the tx?")){
             if(apipClient!=null){
-                String result = apipClient.broadcastTx(rawTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+                String result = apipClient.broadcastTx(rawTx, RequestMethod.POST, AuthType.ENCRYPTED);
                 System.out.println("Broadcasted tx: "+result);
             }else if(nasaClient!=null){
                 String result = nasaClient.broadcast(decodedTx);
@@ -421,7 +421,7 @@ public class CashManager extends Manager<Cash> {
         }
         Cash cash = localDB.get(cashId);
         if(cash==null){
-            Map<String, Cash> cashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT,cashId);
+            Map<String, Cash> cashMap = apipClient.cashByIds(RequestMethod.POST, AuthType.ENCRYPTED,cashId);
             if(cashMap==null || cashMap.isEmpty())return;
             cash = cashMap.get(cashId);
         }
@@ -455,7 +455,7 @@ public class CashManager extends Manager<Cash> {
         int currentPage = 1;
         while(true){
             if(!last.isEmpty()) fcdsl.addAfter(last);
-            List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
+            List<Cash> cashList = apipClient.cashSearch(fcdsl,RequestMethod.POST,AuthType.ENCRYPTED);
 
             if(totalPages==0) {
                 Long total = apipClient.getFcClientEvent().getResponseBody().getTotal();
@@ -821,7 +821,7 @@ public class CashManager extends Manager<Cash> {
                 else resultType = TxResultType.ERROR_STRING;
             }
             else if (apipClient != null) {
-                result = apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+                result = apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.ENCRYPTED);
                 if(Hex.isHexString(result))resultType = TxResultType.TX_ID;
                 else resultType = TxResultType.ERROR_STRING;
             }
@@ -1223,7 +1223,7 @@ public class CashManager extends Manager<Cash> {
         ReplyBody result;
         while(true){
             if(last!=null)fcdsl.setAfter(last);
-            result = apipClient.general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            result = apipClient.general(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
             if(result==null || result.getCode()!=0){
                 if(result==null)log.error("Failed to fresh cashes.");
                 else {
@@ -1274,7 +1274,7 @@ public class CashManager extends Manager<Cash> {
             if (last != null) {
                 fcdsl.setAfter(last);
             }   
-            List<Cash> cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            List<Cash> cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
             if (cashList != null && !cashList.isEmpty()) {
                 return cashList;
             }
@@ -1450,7 +1450,7 @@ public class CashManager extends Manager<Cash> {
                 }
             }
         }else if(apipClient!=null){
-            Map<String,List<Cash>> result = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, mainFid);
+            Map<String,List<Cash>> result = apipClient.unconfirmedCaches(RequestMethod.POST, AuthType.ENCRYPTED, mainFid);
             if(result==null)return;
             List<Cash> unconfirmedCashes = result.get(mainFid);
             if(unconfirmedCashes!=null){
@@ -1584,13 +1584,13 @@ public class CashManager extends Manager<Cash> {
 
         List<Cash> result;
         if(valid!=null ){
-            if(valid)result = apipClient.cashValid(fcdsl,RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
+            if(valid)result = apipClient.cashValid(fcdsl,RequestMethod.POST,AuthType.ENCRYPTED);
             else {
                 fcdsl.addNewFilter().addNewTerms().addNewFields(FieldNames.VALID).addNewValues(Values.FALSE);
-                result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+                result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
             }
         }else {
-            result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            result = apipClient.cashSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         }
         if(result!=null && !result.isEmpty()){
             if(last!=null){
@@ -1751,7 +1751,7 @@ public class CashManager extends Manager<Cash> {
              if(last!=null){
                  fcdsl.setAfter(last);
              }
-             ReplyBody replyBody = apipClient.general(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+             ReplyBody replyBody = apipClient.general(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
              if(replyBody ==null)break;
              last = replyBody.getLast();
              subCashList = ObjectUtils.objectToList(replyBody.getData(), Cash.class);
@@ -1838,7 +1838,7 @@ public class CashManager extends Manager<Cash> {
         }
         if(apipClient!=null){
             Fcdsl fcdsl = createFcdslForValidCashes(sinceHeight, myFid);
-            cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST,AuthType.SYMKEY_ENCRYPT);
+            cashList = apipClient.cashSearch(fcdsl, RequestMethod.POST,AuthType.ENCRYPTED);
             if(cashList==null || cashList.isEmpty()){
                 searchResult.setCode(apipClient.getFcClientEvent().getCode());
                 searchResult.setMessage(apipClient.getFcClientEvent().getMessage());
@@ -2096,7 +2096,7 @@ public class CashManager extends Manager<Cash> {
         String signedTx = new TxCreator().signTx(priKey, unSignedTxBytes,cashList);
 
         // Broadcast the transaction
-        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+        return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.ENCRYPTED);
     }
 
     /**
@@ -2154,7 +2154,7 @@ public class CashManager extends Manager<Cash> {
 
         // Broadcast the transaction
         if(apipClient!=null)
-            return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            return apipClient.broadcastTx(signedTx, RequestMethod.POST, AuthType.ENCRYPTED);
         else if(naSaRpcClient!=null) {
             return naSaRpcClient.sendRawTransaction(signedTx);
         } else{

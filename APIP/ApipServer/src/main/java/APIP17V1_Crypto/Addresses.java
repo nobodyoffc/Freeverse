@@ -19,11 +19,11 @@ import config.Settings;
 public class Addresses extends HttpServlet {
     private final Settings settings = Initiator.settings;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.FC_SIGN_URL;
+        AuthType authType = AuthType.FREE;
         doRequest(request, response, authType,settings);
     }
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         doRequest(request, response, authType,settings);
     }
 

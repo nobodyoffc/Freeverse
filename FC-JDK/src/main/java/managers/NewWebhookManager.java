@@ -174,34 +174,105 @@ public class NewWebhookManager extends Manager<WebhookManager.WebhookRequestBody
             return;
         }
 
-        try {
-            WebhookPushBody pushBody = new WebhookPushBody();
-            pushBody.setHookUserId(webhookInfo.getHookUserId());
-            pushBody.setMethod(method);
-            pushBody.setData(new Gson().toJson(dataList));
-            
-            // Get current best height
-            try (Jedis jedis = jedisPool.getResource()) {
-                jedis.select(0);
-                String bestHeightStr = jedis.get(Strings.BEST_HEIGHT);
-                if (bestHeightStr != null) {
-                    pushBody.setBestHeight(Long.parseLong(bestHeightStr));
-                }
-            }
+        String subscriberPubkey = webhookInfo.getPubkey();
+        if (subscriberPubkey == null) {
+            log.error("No pubkey found for webhook subscriber {}. Skipping push.", webhookInfo.getUserId());
+            return;
+        }
 
-            // Send the push notification
-            String jsonBody = new Gson().toJson(pushBody);
+        Gson gson = new Gson();
+        String bestHeightStr = String.valueOf(bestHeight);
+
+        // Build data payload and calculate cost
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put(FieldNames.BALANCE, null);
+        dataMap.put(Strings.BEST_HEIGHT, bestHeightStr);
+        dataMap.put(Strings.DATA, dataList);
+        String dataStr = gson.toJson(dataMap);
+        long length = dataStr.length();
+
+        // Deduct balance via AccountManager
+        AccountManager accountManager = (AccountManager) settings.getManager(ManagerType.ACCOUNT);
+        Long newBalance = accountManager.userSpend(webhookInfo.getUserId(), method, length, null);
+
+        if (newBalance != null && newBalance < -accountManager.getMinCredit()) {
+            log.warn("Insufficient balance for webhook subscriber {}. Sending 1004 and unsubscribing.", webhookInfo.getUserId());
+            pushInsufficientBalanceError(webhookInfo, method, bestHeightStr, accountManager);
+            remove(webhookInfo.getHookUserId());
+            return;
+        }
+
+        // Update balance in data
+        dataMap.put(FieldNames.BALANCE, newBalance);
+        dataStr = gson.toJson(dataMap);
+
+        // Encrypt data with AsyTwoWay
+        byte[] serverPrikey = settings.decryptPrikey();
+        byte[] subscriberPubkeyBytes = utils.Hex.fromHex(subscriberPubkey);
+        core.crypto.Encryptor encryptor = new core.crypto.Encryptor(data.fcData.AlgorithmId.FC_EccK1AesGcm256_No1_NrC7);
+        core.crypto.CryptoDataByte encrypted = encryptor.encryptByAsyTwoWay(dataStr.getBytes(java.nio.charset.StandardCharsets.UTF_8), serverPrikey, subscriberPubkeyBytes);
+        if (encrypted == null) {
+            log.error("Failed to encrypt webhook push data for {}.", webhookInfo.getUserId());
+            return;
+        }
+
+        WebhookPushBody pushBody = new WebhookPushBody();
+        pushBody.setHookUserId(webhookInfo.getHookUserId());
+        pushBody.setMethod(method);
+        pushBody.setBestHeight(bestHeight);
+        pushBody.setCode(constants.CodeMessage.Code0Success);
+        pushBody.setEncryptedData(encrypted.toJson());
+
+        try {
+            String jsonBody = gson.toJson(pushBody);
             Map<String, String> headers = new HashMap<>();
             headers.put("Content-Type", "application/json");
             try (CloseableHttpResponse response = HttpUtils.post(webhookInfo.getEndpoint(), headers, HttpUtils.BodyType.STRING, jsonBody.getBytes())) {
                 if (response == null || response.getStatusLine().getStatusCode() != 200) {
-                    log.error("Failed to push webhook data to {}: {}", 
-                        webhookInfo.getEndpoint(),
-                        response == null ? "" : response.getStatusLine().getStatusCode());
+                    log.error("Failed to push webhook data to {}: {}",
+                            webhookInfo.getEndpoint(),
+                            response == null ? "" : response.getStatusLine().getStatusCode());
+                } else {
+                    log.info("Pushed webhook data for {}", webhookInfo.getHookUserId());
                 }
             }
         } catch (Exception e) {
             log.error("Error pushing webhook data: {}", e.getMessage());
+        }
+    }
+
+    private void pushInsufficientBalanceError(WebhookManager.WebhookRequestBody webhookInfo, String method, String bestHeightStr, AccountManager accountManager) {
+        Gson gson = new Gson();
+        String subscriberPubkey = webhookInfo.getPubkey();
+
+        Map<String, Object> errorData = new HashMap<>();
+        errorData.put(FieldNames.BALANCE, accountManager.getUserBalance(webhookInfo.getUserId()));
+        errorData.put(Strings.BEST_HEIGHT, bestHeightStr);
+        String errorDataStr = gson.toJson(errorData);
+
+        byte[] serverPrikey = settings.decryptPrikey();
+        byte[] subscriberPubkeyBytes = utils.Hex.fromHex(subscriberPubkey);
+        core.crypto.Encryptor encryptor = new core.crypto.Encryptor(data.fcData.AlgorithmId.FC_EccK1AesGcm256_No1_NrC7);
+        core.crypto.CryptoDataByte encrypted = encryptor.encryptByAsyTwoWay(errorDataStr.getBytes(java.nio.charset.StandardCharsets.UTF_8), serverPrikey, subscriberPubkeyBytes);
+
+        WebhookPushBody pushBody = new WebhookPushBody();
+        pushBody.setHookUserId(webhookInfo.getHookUserId());
+        pushBody.setMethod(method);
+        pushBody.setBestHeight(bestHeight);
+        pushBody.setCode(constants.CodeMessage.Code1004InsufficientBalance);
+        pushBody.setMessage(constants.CodeMessage.Msg1004InsufficientBalance);
+        if (encrypted != null) {
+            pushBody.setEncryptedData(encrypted.toJson());
+        }
+
+        try {
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Content-Type", "application/json");
+            try (CloseableHttpResponse response = HttpUtils.post(webhookInfo.getEndpoint(), headers, HttpUtils.BodyType.STRING, gson.toJson(pushBody).getBytes())) {
+                // Just log, don't fail
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send 1004 error to webhook endpoint: {}", e.getMessage());
         }
     }
 
@@ -231,7 +302,7 @@ public class NewWebhookManager extends Manager<WebhookManager.WebhookRequestBody
             if (last != null) {
                 fcdsl.setAfter(last);
             }
-            opReturnList = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.SYMKEY_ENCRYPT);
+            opReturnList = apipClient.opReturnSearch(fcdsl, RequestMethod.POST, AuthType.ENCRYPTED);
         } else if (esClient != null) {
             try {
                 // Convert List<String> to List<FieldValue> for ES 8.8+ API

@@ -27,7 +27,7 @@ public class FreerSearch extends HttpServlet {
     }
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        AuthType authType = AuthType.SYMKEY_ENCRYPT;
+        AuthType authType = AuthType.ENCRYPTED;
         ArrayList<Sort> sort = Sort.makeSortList(FieldNames.LAST_HEIGHT,false,ID,true,null,null);
         fcHttpRequestHandler.doCidInfoSearchRequest(sort, request, response, authType);
     }

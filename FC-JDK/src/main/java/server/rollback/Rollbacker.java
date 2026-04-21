@@ -33,8 +33,8 @@ public class Rollbacker {
 
         if (lastHeight==0 || lastBlockId ==null)return false;
 
-        Map<String, Block> heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, String.valueOf(lastHeight));
-        if(heightBlockInfoMap==null)heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.SYMKEY_ENCRYPT, String.valueOf(lastHeight));
+        Map<String, Block> heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.ENCRYPTED, String.valueOf(lastHeight));
+        if(heightBlockInfoMap==null)heightBlockInfoMap = apipClient.blockByHeights(RequestMethod.POST, AuthType.ENCRYPTED, String.valueOf(lastHeight));
         if(heightBlockInfoMap==null)throw new RuntimeException("Failed to get last block info. Check APIP service.");
 
         Block blockInfo = heightBlockInfoMap.get(String.valueOf(lastHeight));

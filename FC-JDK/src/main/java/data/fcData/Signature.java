@@ -91,11 +91,13 @@ public class Signature extends FcObject{
 
     public static boolean isGoodSha256Sign(byte[] bytes, String sign, byte[] symKey) {
         if (sign == null || bytes == null) return false;
-        byte[] signBytes = BytesUtils.bytesMerger(bytes, symKey);
-        byte[] hash = Hash.sha256x2(signBytes);
-        String doubleSha256Hash = Hex.toHex(hash);
-
-        return (sign.equals(doubleSha256Hash));
+        // Try HMAC-SHA256 first (new algorithm)
+        String hmacHash = Hex.toHex(Hash.hmacSha256(bytes, symKey));
+        if (sign.equals(hmacHash)) return true;
+        // Fall back to legacy SHA256x2(msg || key) for backward compatibility
+        byte[] legacyBytes = BytesUtils.bytesMerger(bytes, symKey);
+        String legacyHash = Hex.toHex(Hash.sha256x2(legacyBytes));
+        return sign.equals(legacyHash);
     }
 
     public void strToBytes() {
@@ -264,6 +266,22 @@ public class Signature extends FcObject{
 
     public static String symSign(String msg, String symKey) {
         if(msg==null || symKey==null)return null;
+        byte[] msgBytes = msg.getBytes();
+        byte[] keyBytes = Hex.fromHex(symKey);
+        return Hex.toHex(Hash.hmacSha256(msgBytes, keyBytes));
+    }
+
+    public static byte[] symSign(byte[] msg, byte[] symKey) {
+        if(msg==null || symKey==null)return null;
+        return Hash.hmacSha256(msg, symKey);
+    }
+
+    /**
+     * Legacy signing using SHA256x2(text || key). Kept for verifying old signatures.
+     */
+    @Deprecated
+    public static String symSignLegacy(String msg, String symKey) {
+        if(msg==null || symKey==null)return null;
         byte[] replyJsonBytes = msg.getBytes();
         byte[] keyBytes = Hex.fromHex(symKey);
         byte[] bytes = BytesUtils.bytesMerger(replyJsonBytes,keyBytes);
@@ -271,7 +289,8 @@ public class Signature extends FcObject{
         return Hex.toHex(signBytes);
     }
 
-    public static byte[] symSign(byte[] msg, byte[] symKey) {
+    @Deprecated
+    public static byte[] symSignLegacy(byte[] msg, byte[] symKey) {
         if(msg==null || symKey==null)return null;
         byte[] bytes = BytesUtils.bytesMerger(msg, symKey);
         return Hash.sha256x2(bytes);
