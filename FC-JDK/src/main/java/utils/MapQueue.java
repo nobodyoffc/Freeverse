@@ -57,6 +57,7 @@ public class MapQueue<K, V> {
     public Map<K, V> putAll(Map<K, V> map) {
         Map<K, V> pulledMap = new HashMap<>();
         for (Map.Entry<K, V> entry : map.entrySet()) {
+            if(entry.getKey()==null)continue;
             if(map.size()>maxSize){
             Map.Entry<K, V> peekedEntry = peek();
                 if(peekedEntry!=null)
