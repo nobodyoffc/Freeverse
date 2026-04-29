@@ -90,9 +90,11 @@ Every FUDP packet begins with a 21-byte plaintext header. This header is never e
 | Bits | Name | Description |
 |---|---|---|
 | 0-1 | Packet Type | Determines the packet category (see table below) |
-| 2-3 | Reserved | MUST be set to 0 on transmission; MUST be ignored on reception |
+| 2-3 | Reserved | Reserved for future use; MUST be set to 0 on transmission |
 | 4 | FIN | Connection close marker; indicates this packet is part of connection termination |
-| 5-7 | Reserved | MUST be set to 0 on transmission; MUST be ignored on reception |
+| 5 | HAS_TIMESTAMP | `1` if the encrypted plaintext starts with an 8-byte timestamp |
+| 6 | HAS_EPOCH | `1` if the encrypted plaintext includes an 8-byte session epoch |
+| 7 | Reserved | MUST be set to 0 on transmission |
 
 **Packet Type values (bits 0-1):**
 
@@ -107,13 +109,13 @@ Every FUDP packet begins with a 21-byte plaintext header. This header is never e
 
 A 32-bit unsigned integer identifying the protocol version. The current version is **1** (`0x00000001`).
 
-A receiver MUST reject packets with an unrecognized version by responding with an ERROR packet containing error code `0x05` (PROTOCOL_VIOLATION).
+Receivers MUST reject encrypted DATA/ACK packets with an unrecognized version. Plaintext CONTROL packets are version-agnostic in v1.
 
 #### Connection ID (bytes 5-12)
 
-A 64-bit random value that uniquely identifies the connection. The initiator generates this value during connection establishment. All packets belonging to the same connection MUST carry the same Connection ID.
+A 64-bit random value that identifies the sender's local connection record. Each endpoint allocates the value it writes into outbound DATA and ACK packets. The Java reference implementation maps inbound packets to a connection primarily after decryption by peer identity and source address, then stores an endpoint-local connection ID for routing, replay windows, and application callbacks.
 
-Implementations MUST use a cryptographically secure random number generator to produce Connection IDs.
+Implementations MUST use a cryptographically secure random number generator or equivalent secure randomness for locally allocated Connection IDs.
 
 #### Packet Number (bytes 13-20)
 
@@ -144,11 +146,13 @@ The plaintext that is encrypted into the payload has the following structure:
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-| Offset | Length | Field | Description |
-|---|---|---|---|
-| 0 | 8 bytes | Timestamp | 64-bit unsigned integer; milliseconds since Unix epoch at time of packet creation |
-| 8 | 8 bytes | Session Epoch | 64-bit random value generated once at node startup; used for replay detection |
-| 16 | variable | Frames | One or more concatenated frames as defined in [Frame Types](#frame-types) |
+| Offset | Length | Field | Presence | Description |
+|---|---|---|---|---|
+| 0 | 8 bytes | Timestamp | If `HAS_TIMESTAMP=1` | 64-bit unsigned integer; milliseconds since Unix epoch at packet creation |
+| 8 or 0 | 8 bytes | Session Epoch | If `HAS_EPOCH=1` | 64-bit random value generated once at node startup; used for replay/restart detection |
+| variable | variable | Frames | Always | One or more concatenated frames as defined in [Frame Types](#frame-types) |
+
+In the current implementation, `HAS_TIMESTAMP` MAY be 0 for ACK-only packets and `HAS_EPOCH` MAY be 0 after epoch confirmation to reduce overhead.
 
 ### Encrypted Encoding
 
@@ -214,7 +218,7 @@ No additional payload. Total control payload: 1 byte.
 
 Total control payload: 1 byte (type) + 33 bytes (key) = **34 bytes**.
 
-The public key MUST be a valid compressed secp256k1 point. The first byte of the key is `0x02` or `0x03` indicating the parity of the Y coordinate.
+The public key is expected to be a valid compressed secp256k1 point. The first byte of the key is `0x02` or `0x03` indicating the parity of the Y coordinate.
 
 ---
 
@@ -299,7 +303,7 @@ PROCEDURE decode_varint(bytes):
 
 ## Frame Types
 
-Frames are the fundamental unit of data within an encrypted payload. After the 16-byte prefix (Timestamp + Session Epoch), one or more frames are concatenated without delimiters. Each frame begins with a varint-encoded frame type.
+Frames are the fundamental unit of data within an encrypted payload. After any optional timestamp and session-epoch fields indicated by the header flags, one or more frames are concatenated without delimiters. Each frame begins with a varint-encoded frame type.
 
 ### Frame Type Summary
 
@@ -311,7 +315,7 @@ Frames are the fundamental unit of data within an encrypted payload. After the 1
 | 0x03 | MAX_DATA | Update connection-level flow control limit |
 | 0x04 | MAX_STREAM_DATA | Update stream-level flow control limit |
 | 0x05 | MAX_STREAMS | Update maximum number of concurrent streams |
-| 0x08-0x0F | STREAM | Application data with flags encoded in type |
+| 0x08-0x0F | STREAM | Application data with flags encoded in type (LEN is mandatory in v1 wire behavior) |
 
 ### PADDING Frame (0x00)
 
@@ -341,10 +345,10 @@ ACK Frame {
 | Type | varint | `0x01` |
 | Largest Acknowledged | varint | The largest packet number being acknowledged |
 | ACK Delay | varint | Time elapsed since the largest acknowledged packet was received, in **microseconds** |
-| ACK Range Count | varint | Number of additional ACK Range entries following the First ACK Range |
+| ACK Range Count | varint | Total number of ACK range entries encoded in this frame, including the first range |
 | First ACK Range | varint | Number of contiguous packets acknowledged before Largest Acknowledged (inclusive with Largest Acknowledged, the range covers First ACK Range + 1 packets total) |
 
-Each additional ACK Range has the following structure:
+If `ACK Range Count` is greater than 1, each range after the first has the following structure:
 
 ```
 ACK Range {
@@ -361,7 +365,7 @@ ACK Range {
 #### Reconstructing Acknowledged Packet Numbers
 
 ```
-PROCEDURE reconstruct_ack_ranges(largest_ack, first_range, ranges[]):
+PROCEDURE reconstruct_ack_ranges(largest_ack, first_range, additional_ranges[]):
     -- Step 1: First range
     range_start = largest_ack
     range_end   = largest_ack - first_range
@@ -370,7 +374,7 @@ PROCEDURE reconstruct_ack_ranges(largest_ack, first_range, ranges[]):
     current = range_end
 
     -- Step 2: Process each additional ACK Range
-    FOR EACH (gap, ack_range_length) IN ranges:
+    FOR EACH (gap, ack_range_length) IN additional_ranges:
         current = current - gap - 2
         range_start = current
         range_end   = current - ack_range_length
@@ -466,7 +470,7 @@ The STREAM frame carries application data. Three flag bits are encoded in the lo
 | Bit | Mask | Name | Description |
 |---|---|---|---|
 | 0 | 0x01 | FIN | This frame marks the end of the stream |
-| 1 | 0x02 | LEN | The Length field is present |
+| 1 | 0x02 | LEN | Length field; MUST be set in released v1 packets |
 | 2 | 0x04 | OFF | The Offset field is present (omitted when offset is 0) |
 
 The effective type byte ranges from `0x08` (no flags) to `0x0F` (all flags set).
@@ -486,7 +490,7 @@ STREAM Frame {
 | Type | varint | always | `0x08` + flag bits |
 | Stream ID | varint | always | Identifies the stream |
 | Offset | varint | if OFF bit set | Byte offset within the stream for the first byte of Stream Data; implicit 0 when absent |
-| Length | varint | if LEN bit set | Length of Stream Data in bytes; if absent, the data extends to the end of the packet payload |
+| Length | varint | always in v1 | Length of Stream Data in bytes |
 | Stream Data | bytes | always | The application data bytes |
 
 #### Stream ID Allocation
@@ -556,37 +560,37 @@ Initiator                                            Responder
 
 **Step-by-step procedure:**
 
-1. **Initiator** creates a new Connection ID (64-bit CSPRNG) and sends a CONTROL packet (type `0x02`) with a HELLO payload to the responder's address.
+1. **Initiator** sends a CONTROL packet (type `0x02`) with a HELLO payload to the responder's address. Control packets use connection ID `0` in the Java reference implementation.
 
 2. **Responder** replies with a CONTROL packet containing a PUBLIC_KEY payload: the responder's 33-byte compressed secp256k1 public key.
 
 3. **Initiator** derives a shared secret using ECDH per [FTSP11V1_Ecc256K1AesGcm256](../FTSP/FTSP11V1_Ecc256K1AesGcm256.md): perform elliptic-curve Diffie-Hellman with the initiator's private key and the responder's public key, then derive the symmetric key via HKDF per [FTSP13V1_HKDF](../FTSP/FTSP13V1_HKDF.md).
 
-4. **Initiator** sends the first encrypted DATA packet. The `CryptoDataByte` bundle in the payload includes the initiator's compressed public key, allowing the responder to identify the initiator.
+4. **Initiator** creates a local connection record, allocates a local Connection ID, and sends the first encrypted DATA packet. The `CryptoDataByte` bundle in the payload includes the initiator's compressed public key, allowing the responder to identify the initiator.
 
-5. **Responder** extracts the initiator's public key from the `CryptoDataByte` bundle, performs ECDH to derive the same shared secret, and decrypts the payload.
+5. **Responder** extracts the initiator's public key from the `CryptoDataByte` bundle, performs ECDH to derive the same shared secret, decrypts the payload, and creates or reuses its own connection record for that peer/source address.
 
 6. **Responder** sends an encrypted ACK packet. Upon receipt by the initiator, the connection transitions to ESTABLISHED.
 
 ### Multi-Connection Support
 
-A peer (identified by its FID / public key) MAY maintain multiple simultaneous connections from different network addresses. Each connection has a unique Connection ID.
+A peer (identified by its FID / public key) MAY maintain multiple simultaneous connections from different network addresses. Each endpoint's connection record has a unique local Connection ID.
 
-Implementations SHOULD enforce a maximum number of concurrent connections per peer. The recommended limit is **5** connections per peer. If a new connection request would exceed this limit, the implementation SHOULD respond with a CONNECTION_CLOSE frame containing error code `0x07` (CONNECTION_LIMIT).
+Implementations SHOULD enforce a maximum number of concurrent connections per peer. The recommended limit is **5** connections per peer. The Java reference implementation evicts the idlest or least-recently-used connection when this limit is exceeded.
 
 ### Connection Termination
 
 Either endpoint MAY terminate the connection at any time:
 
 1. Send a packet containing a CONNECTION_CLOSE frame with the appropriate error code.
-2. Set the FIN flag (bit 4) in the packet header.
+2. The FIN flag (bit 4) MAY be set in the packet header, but the Java reference implementation relies on the CONNECTION_CLOSE frame itself.
 3. The connection transitions to CLOSING state.
 4. After a drain period (recommended: 3 times the estimated RTT, minimum 3,000 ms), transition to CLOSED state and release all connection resources.
 
 ```
 PROCEDURE close_connection(connection, error_code, reason):
     frame = build_connection_close_frame(error_code, reason)
-    packet = build_packet(connection, DATA, FIN=1, frames=[frame])
+    packet = build_packet(connection, DATA, frames=[frame])
     SEND packet
     connection.state = CLOSING
     START drain_timer(max(3 * connection.rtt, 3000 ms))
@@ -626,15 +630,17 @@ Implementations that require long-lived connections SHOULD use application-level
 
 2. **Authenticity.** AES-256-GCM provides authenticated encryption. Any modification to the ciphertext will cause decryption to fail. Receivers MUST discard packets that fail authentication.
 
-3. **Replay Protection.** The Session Epoch (per-startup random value) and monotonically increasing Packet Numbers together prevent replay attacks. Receivers SHOULD maintain a sliding window of accepted packet numbers and reject duplicates.
+3. **Header integrity.** The 21-byte serialized header is bound as AEAD AAD in the reference implementation. Tampering with header fields (version, flags, connection ID, packet number) causes tag verification failure.
 
-4. **Connection ID Confidentiality.** Connection IDs are transmitted in plaintext. On-path observers can correlate packets belonging to the same connection. This is an accepted trade-off for enabling stateless routing and multiplexing.
+4. **Replay Protection.** Session Epoch and monotonically increasing Packet Numbers together prevent replay attacks. Receivers SHOULD maintain a sliding window of accepted packet numbers and reject duplicates.
 
-5. **Handshake Vulnerability.** The HELLO/PUBLIC_KEY exchange is unauthenticated plaintext. This makes the initial handshake susceptible to active man-in-the-middle attacks. Implementations SHOULD verify the responder's public key against a known FID or trusted peer book before transmitting sensitive data. DDoS mitigation via proof-of-work challenges (FUDP5) provides an additional layer of protection during handshake.
+5. **Connection ID Confidentiality.** Connection IDs are transmitted in plaintext. On-path observers can correlate packets belonging to the same connection. This is an accepted trade-off for enabling stateless routing and multiplexing.
 
-6. **Denial of Service.** Implementations MUST enforce connection limits per peer (recommended: 5) and SHOULD implement rate limiting on CONTROL packets to mitigate resource exhaustion attacks.
+6. **Handshake Vulnerability.** The HELLO/PUBLIC_KEY exchange is unauthenticated plaintext. This makes the initial handshake susceptible to active man-in-the-middle attacks. Implementations SHOULD verify the responder's public key against a known FID or trusted peer book before transmitting sensitive data. DDoS mitigation via proof-of-work challenges (FUDP5) provides an additional layer of protection during handshake.
 
-7. **Key Derivation.** The ECDH shared secret MUST be processed through HKDF per [FTSP13V1_HKDF](../FTSP/FTSP13V1_HKDF.md) before use as an AES-256-GCM key. Direct use of the raw ECDH output as a key is prohibited.
+7. **Denial of Service.** Implementations MUST enforce connection limits per peer (recommended: 5) and SHOULD implement rate limiting on CONTROL packets to mitigate resource exhaustion attacks.
+
+8. **Key Derivation.** The ECDH shared secret MUST be processed through HKDF per [FTSP13V1_HKDF](../FTSP/FTSP13V1_HKDF.md) before use as an AES-256-GCM key. Direct use of the raw ECDH output as a key is prohibited.
 
 ---
 
@@ -642,9 +648,9 @@ Implementations that require long-lived connections SHOULD use application-level
 
 This document defines FUDP Core Transport version 1. Future versions MAY introduce new frame types, modify the header format, or change default parameters.
 
-The Version field in the packet header allows endpoints to negotiate protocol versions. An endpoint receiving a packet with an unsupported version MUST respond with an ERROR packet and close the connection.
+The Version field in the packet header identifies the wire format. The Java reference implementation accepts version `1` on encrypted DATA and ACK packets and silently drops encrypted packets with unsupported versions. CONTROL packets are plaintext and version-agnostic in v1.
 
-Backward-compatible extensions (e.g., new frame types with type values not defined in this specification) MAY be introduced without incrementing the version number. Receivers MUST ignore frame types they do not recognize.
+Backward-compatible extensions (e.g., new frame types with type values not defined in this specification) MAY be introduced without incrementing the version number. The Java reference implementation currently treats an unknown frame type as a packet parse error and drops the packet.
 
 ---
 

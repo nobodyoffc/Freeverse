@@ -29,6 +29,7 @@ import static constants.FieldNames.SID;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapPending)
 public class SwapPending extends HttpServlet {
     private final Settings settings = Initiator.settings;
+    private final String swapPendingIndex = Settings.addSidBriefToName(settings.getSid(), IndicesNames.SWAP_PENDING);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -78,7 +79,7 @@ public class SwapPending extends HttpServlet {
 
         try {
             GetResponse<SwapPendingData> response1 = esClient.get(b -> b
-                    .index(IndicesNames.SWAP_PENDING)
+                    .index(swapPendingIndex)
                     .id(finalSid)
             , SwapPendingData.class);
 

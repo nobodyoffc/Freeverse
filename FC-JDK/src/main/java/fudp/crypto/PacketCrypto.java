@@ -39,12 +39,19 @@ public class PacketCrypto {
      */
     public Packet encryptPacket(Packet packet, String peerId, byte[] peerPubkey,
                                 boolean includeTimestamp, boolean includeEpoch) {
-        // Include our session epoch for peer restart detection
+        // Include our session epoch for peer restart detection.
+        // serializeFrames also sets the HAS_TIMESTAMP / HAS_EPOCH flag bits
+        // on the header — we must take the header bytes AFTER this call so
+        // the AAD reflects what the receiver will see on the wire.
         byte[] plaintext = packet.serializeFrames(cryptoManager.getSessionEpoch(),
                 includeTimestamp, includeEpoch);
 
-        // Always use AsyTwoWay encryption
-        CryptoDataByte cryptoData = cryptoManager.encryptAsyTwoWay(plaintext, peerPubkey);
+        // F1: bind the 21-byte serialised header to the AEAD tag. Any
+        // tampering with header bits between sender and receiver fails
+        // the tag check and the packet is dropped.
+        byte[] aad = packet.getHeader().toBytes();
+
+        CryptoDataByte cryptoData = cryptoManager.encryptAsyTwoWay(plaintext, peerPubkey, aad);
 
         // Convert CryptoDataByte to bundle format
         byte[] bundle = cryptoData.toBundle();
@@ -71,14 +78,21 @@ public class PacketCrypto {
 
         // Only AsyTwoWay is supported
         if (cryptoData.getType() != EncryptType.AsyTwoWay) {
-            throw new RuntimeException("Unsupported encrypt type: " + cryptoData.getType() + 
+            throw new RuntimeException("Unsupported encrypt type: " + cryptoData.getType() +
                     ". Only AsyTwoWay is supported.");
         }
+
+        // F1: re-derive the AAD from the parsed header. The parser is the
+        // inverse of header.toBytes() (round-trip is byte-for-byte
+        // deterministic for valid packets), so this matches what the sender
+        // bound. Any tampering on the wire will diverge here and fail the
+        // AEAD tag below.
+        byte[] aad = packet.getHeader().toBytes();
 
         // Extract sender's public key and decrypt
         byte[] senderPubkey = cryptoData.getPubkeyA();
         String senderId = KeyTools.pubkeyToFchAddr(senderPubkey);
-        byte[] plaintext = cryptoManager.decryptAsyTwoWay(cryptoData);
+        byte[] plaintext = cryptoManager.decryptAsyTwoWay(cryptoData, aad);
 
         // Store sender's public key in packet for connection management
         packet.setPeerPublicKey(senderPubkey);

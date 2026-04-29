@@ -66,42 +66,39 @@ public class Packet {
      * Serialize all frames to plaintext bytes (before encryption).
      * Conditionally includes timestamp and session epoch to save bytes.
      *
+     * <p>Sets the header's HAS_TIMESTAMP / HAS_EPOCH flag bits to match what was
+     * actually written into the payload. Callers must invoke this before reading
+     * the header bytes (e.g. before passing the header as AEAD AAD).
+     *
      * @param sessionEpoch The sender's session epoch for restart detection
      * @param includeTimestamp Whether to include the 8-byte timestamp (skip for ACK-only packets)
      * @param includeEpoch Whether to include the 8-byte session epoch (skip once peer confirmed)
      * @return Serialized bytes including optional timestamp, optional session epoch, and frames
      */
     public byte[] serializeFrames(long sessionEpoch, boolean includeTimestamp, boolean includeEpoch) {
+        // Set header flags first so the header reflects what we are about to write.
+        // (Previously these were toggled mid-serialization as a side effect.)
+        header.setHasTimestamp(includeTimestamp);
+        header.setHasEpoch(includeEpoch);
+
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-            // Conditionally write timestamp (8 bytes) for replay protection
             if (includeTimestamp) {
                 out.write(ByteUtils.longToBytes(System.currentTimeMillis()));
-                header.setHasTimestamp(true);
-            } else {
-                header.setHasTimestamp(false);
             }
-
-            // Conditionally write session epoch (8 bytes) for restart detection
             if (includeEpoch) {
                 out.write(ByteUtils.longToBytes(sessionEpoch));
-                header.setHasEpoch(true);
-            } else {
-                header.setHasEpoch(false);
             }
 
-            // E3: If the last frame is a StreamFrame, use implicit length to save bytes
-            for (int i = 0; i < frames.size(); i++) {
-                Frame frame = frames.get(i);
-                if (i == frames.size() - 1 && frame instanceof StreamFrame) {
-                    ((StreamFrame) frame).setImplicitLength(true);
-                }
+            // F5: every frame carries an explicit length. The previous
+            // last-frame-implicit-length optimisation saved 1-2 bytes per
+            // packet but, combined with an unauthenticated header, turned
+            // a packet truncation into a parser oracle. Header AAD (F1)
+            // already prevents truncation, but mandating an explicit
+            // length keeps the parser straightforward.
+            for (Frame frame : frames) {
                 out.write(frame.toBytes());
-                // Reset implicit length flag after serialization
-                if (frame instanceof StreamFrame) {
-                    ((StreamFrame) frame).setImplicitLength(false);
-                }
             }
 
             return out.toByteArray();

@@ -34,7 +34,6 @@ import finance.FinanceRollbacker;
 import utils.FchUtils;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.text.SimpleDateFormat;
@@ -139,9 +138,7 @@ public class FileParser {
 				raf = new RandomAccessFile(new File(path, currentFileName), "r");
 			}
 			raf.seek(pointer);
-			FileInputStream fis = new FileInputStream(raf.getFD());
-			opReReadResult readOpResult = OpReFileUtils.readOpReFromFile(fis);
-			// Do NOT close fis here — it shares the file descriptor with raf
+			opReReadResult readOpResult = OpReFileUtils.readOpReFromFile(raf);
 			length = readOpResult.getLength();
 			pointer += length;
 

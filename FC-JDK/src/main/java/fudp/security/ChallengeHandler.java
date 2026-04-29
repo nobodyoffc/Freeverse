@@ -26,30 +26,51 @@ import java.util.function.BiConsumer;
 public class ChallengeHandler {
     private static final Logger log = LoggerFactory.getLogger(ChallengeHandler.class);
     
+    /**
+     * Maximum concurrent PoW-solver threads. PoW solving is purely CPU-bound,
+     * so a small pool is sufficient — we only solve challenges for peers we
+     * are actively trying to reach. A bounded pool prevents a misbehaving or
+     * malicious peer from spawning unbounded solver threads on us.
+     */
+    private static final int SOLVER_POOL_SIZE = 2;
+
+    /**
+     * Maximum queued solve tasks beyond the live workers. Keeps the worst-case
+     * memory footprint small under flood. Submissions beyond this are rejected
+     * by the executor; handleChallenge then drops the request.
+     */
+    private static final int SOLVER_QUEUE_CAPACITY = 16;
+
     private final DDoSConfig config;
     private final BiConsumer<SocketAddress, byte[]> responseSender;
     private final ExecutorService solverExecutor;
-    
+
     // Track high-difficulty challenges per peer for reputation
     private final ConcurrentHashMap<String, AtomicInteger> highDifficultyCounts = new ConcurrentHashMap<>();
-    
+
     // Pending solve operations
     private final ConcurrentHashMap<String, CompletableFuture<byte[]>> pendingSolves = new ConcurrentHashMap<>();
-    
+
     /**
      * Create a challenge handler.
-     * 
+     *
      * @param config the DDoS configuration
      * @param responseSender callback to send challenge response packets (address, payload)
      */
     public ChallengeHandler(DDoSConfig config, BiConsumer<SocketAddress, byte[]> responseSender) {
         this.config = config;
         this.responseSender = responseSender;
-        this.solverExecutor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "PoW-Solver");
-            t.setDaemon(true);
-            return t;
-        });
+        this.solverExecutor = new ThreadPoolExecutor(
+                SOLVER_POOL_SIZE, SOLVER_POOL_SIZE,
+                0L, TimeUnit.MILLISECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>(SOLVER_QUEUE_CAPACITY),
+                r -> {
+                    Thread t = new Thread(r, "PoW-Solver");
+                    t.setDaemon(true);
+                    return t;
+                },
+                new ThreadPoolExecutor.AbortPolicy()
+        );
     }
     
     /**
@@ -81,19 +102,28 @@ public class ChallengeHandler {
             return false;
         }
         
-        // Check if we're already solving for this peer
-        if (pendingSolves.containsKey(peerKey)) {
+        // Reserve the slot atomically so concurrent challenges from the same peer
+        // don't both spawn a solver. The placeholder is replaced with the real
+        // future once we start solving; if putIfAbsent returns non-null, another
+        // thread is already solving for this peer and we drop this challenge.
+        CompletableFuture<byte[]> placeholder = new CompletableFuture<>();
+        if (pendingSolves.putIfAbsent(peerKey, placeholder) != null) {
             log.debug("[ChallengeHandler] Already solving challenge for {}", peerKey);
             return true;
         }
-        
+
         // Reset high difficulty count on normal challenge
         highDifficultyCounts.remove(peerKey);
-        
-        // Solve asynchronously
+
+        // Solve asynchronously and replace the placeholder with the real future
         CompletableFuture<byte[]> future = solveAsync(peerKey, challenge.nonce, difficulty);
         pendingSolves.put(peerKey, future);
-        
+        // Forward placeholder completion in case anything was waiting on it
+        future.whenComplete((sol, err) -> {
+            if (err != null) placeholder.completeExceptionally(err);
+            else placeholder.complete(sol);
+        });
+
         future.whenComplete((solution, error) -> {
             pendingSolves.remove(peerKey);
             
@@ -126,25 +156,31 @@ public class ChallengeHandler {
      */
     private CompletableFuture<byte[]> solveAsync(String peerKey, byte[] nonce, int difficulty) {
         CompletableFuture<byte[]> future = new CompletableFuture<>();
-        
-        solverExecutor.submit(() -> {
-            try {
-                byte[] solution = ProofOfWork.solveInterruptible(
-                        nonce, 
-                        difficulty, 
-                        config.getMaxPowTimeMs(),
-                        10000 // Check for interruption every 10k attempts
-                );
-                future.complete(solution);
-            } catch (TimeoutException e) {
-                future.completeExceptionally(e);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                future.completeExceptionally(e);
-            } catch (Exception e) {
-                future.completeExceptionally(e);
-            }
-        });
+
+        try {
+            solverExecutor.submit(() -> {
+                try {
+                    byte[] solution = ProofOfWork.solveInterruptible(
+                            nonce,
+                            difficulty,
+                            config.getMaxPowTimeMs(),
+                            10000 // Check for interruption every 10k attempts
+                    );
+                    future.complete(solution);
+                } catch (TimeoutException e) {
+                    future.completeExceptionally(e);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    future.completeExceptionally(e);
+                } catch (Exception e) {
+                    future.completeExceptionally(e);
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            // Solver pool saturated — drop this challenge rather than spawning more threads
+            log.warn("[ChallengeHandler] Solver queue full, dropping challenge for {}", peerKey);
+            future.completeExceptionally(e);
+        }
         
         // Schedule timeout
         CompletableFuture.delayedExecutor(config.getMaxPowTimeMs() + 100, TimeUnit.MILLISECONDS)

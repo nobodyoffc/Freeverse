@@ -36,6 +36,12 @@ public class SwapUpdate extends HttpServlet {
 
     public static String APIP_SWAP_SID_ADDR_KEY;
 
+    private final String swapStateIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_STATE);
+    private final String swapLpIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_LP);
+    private final String swapPendingIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_PENDING);
+    private final String swapFinishedIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_FINISHED);
+    private final String swapPriceIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_PRICE);
+
     public SwapUpdate() {
         APIP_SWAP_SID_ADDR_KEY = settings.getService().getStdName() + "_" + REGISTERED_SWAP;
     }
@@ -63,9 +69,9 @@ public class SwapUpdate extends HttpServlet {
         String sid = null;
         Map<String, Object> dataMap = null;
 
-        if (requestBody != null && requestBody.getFcdsl() != null && requestBody.getFcdsl().getOther() != null) {
+        if (requestBody != null && requestBody.getData() != null) {
             try {
-                dataMap = ObjectUtils.objectToMap(requestBody.getFcdsl().getOther(), String.class, Object.class);
+                dataMap = ObjectUtils.objectToMap(requestBody.getData(), String.class, Object.class);
                 if (dataMap != null) {
                     sid = dataMap.get(SID) != null ? String.valueOf(dataMap.get(SID)) : null;
                 }
@@ -140,7 +146,7 @@ public class SwapUpdate extends HttpServlet {
         ArrayList<String> idList = new ArrayList<>();
         for (SwapPriceData p : swapPriceList) idList.add(p.getId());
         try {
-            EsUtils.bulkWriteList(esClient, SWAP_PRICE, (ArrayList<SwapPriceData>) swapPriceList, idList, SwapPriceData.class);
+            EsUtils.bulkWriteList(esClient, swapPriceIndex, (ArrayList<SwapPriceData>) swapPriceList, idList, SwapPriceData.class);
         } catch (Exception e) {
             return "Failed to write swap price to ES: " + e.getMessage();
         }
@@ -152,7 +158,7 @@ public class SwapUpdate extends HttpServlet {
         swapPending.setSid(sid);
         swapPending.setPendingList(pendingList);
         try {
-            esClient.index(i -> i.index(SWAP_PENDING).id(sid).document(swapPending));
+            esClient.index(i -> i.index(swapPendingIndex).id(sid).document(swapPending));
         } catch (IOException e) {
             return "Failed to write swap pending to ES.";
         }
@@ -167,7 +173,7 @@ public class SwapUpdate extends HttpServlet {
             idList.add(a.getId());
         }
         try {
-            EsUtils.bulkWriteList(esClient, SWAP_FINISHED, (ArrayList<SwapAffair>) finishedList, idList, SwapAffair.class);
+            EsUtils.bulkWriteList(esClient, swapFinishedIndex, (ArrayList<SwapAffair>) finishedList, idList, SwapAffair.class);
         } catch (Exception e) {
             return "Failed to write swap finished to ES: " + e.getMessage();
         }
@@ -177,7 +183,7 @@ public class SwapUpdate extends HttpServlet {
     private String writeLpToEs(ElasticsearchClient esClient, SwapLpData lpData) {
         if (lpData == null || lpData.getSid() == null) return "No LP data.";
         try {
-            esClient.index(i -> i.index(SWAP_LP).id(lpData.getSid()).document(lpData));
+            esClient.index(i -> i.index(swapLpIndex).id(lpData.getSid()).document(lpData));
         } catch (IOException e) {
             return "Failed to write swap LP to ES.";
         }
@@ -187,7 +193,7 @@ public class SwapUpdate extends HttpServlet {
     private String writeStateToEs(ElasticsearchClient esClient, SwapStateData swapState) {
         if (swapState == null || swapState.getSid() == null) return "No state data.";
         try {
-            esClient.index(i -> i.index(SWAP_STATE).id(swapState.getSid()).document(swapState));
+            esClient.index(i -> i.index(swapStateIndex).id(swapState.getSid()).document(swapState));
         } catch (IOException e) {
             return "Failed to write swap state to ES.";
         }

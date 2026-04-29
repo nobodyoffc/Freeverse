@@ -40,6 +40,7 @@ import static constants.Values.ASC;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapInfo)
 public class SwapInfo extends HttpServlet {
     private final Settings settings = Initiator.settings;
+    private final String swapStateIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_STATE);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -82,7 +83,7 @@ public class SwapInfo extends HttpServlet {
             String[] sids = sidStr.split(",");
             EsUtils.MgetResult<SwapStateData> mgetResult;
             try {
-                mgetResult = EsUtils.getMultiByIdList(esClient, SWAP_STATE, Arrays.asList(sids), SwapStateData.class);
+                mgetResult = EsUtils.getMultiByIdList(esClient, swapStateIndex, Arrays.asList(sids), SwapStateData.class);
             } catch (Exception e) {
                 replier.replyOtherErrorHttp("Failed to mGet from ES.", response);
                 return;
@@ -106,7 +107,7 @@ public class SwapInfo extends HttpServlet {
         }
 
         SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-        searchBuilder.index(SWAP_STATE);
+        searchBuilder.index(swapStateIndex);
 
         Sort sort = new Sort();
         sort.setField(SID);
@@ -226,7 +227,8 @@ public class SwapInfo extends HttpServlet {
 
         double dM = 1 - Double.parseDouble(swapInfoData.getSwapFee()) - Double.parseDouble(swapInfoData.getServiceFee());
         double dG = ammCalculator(swapState.getmSum() + swapState.getmPendingSum(), swapState.getgSum() + swapState.getgPendingSum(), dM);
-        double price = NumberUtils.roundDouble8(1 / dG);
+        double rawPrice = (dG == 0.0) ? 0.0 : 1.0 / dG;
+        double price = Double.isFinite(rawPrice) ? NumberUtils.roundDouble8(rawPrice) : 0.0;
 
         swapInfoData.setPrice(price);
         swapInfoData.setLastTime(swapState.getLastTime());

@@ -116,7 +116,7 @@ FUDP protocols define the behavior and wire formats of the UDP-based transport l
 4. **Reliability** -- Acknowledgment processing, loss detection, retransmission, and congestion control.
 5. **Transport Security** -- Handshake crypto integration (referencing FTSP), replay protection, and session epoch management.
 6. **DDoS Defense** -- Proof-of-work challenges, IP verification, and rate limiting at the transport layer.
-7. **Application Messages** -- Standardized message types carried over FUDP streams (chat, file transfer, relay, NAT traversal).
+7. **Application Messages** -- Standardized message envelope and Java reference message types carried over FUDP streams (request/response, notify, ping/pong, error).
 
 ### What Does NOT Belong in FUDP
 
@@ -173,7 +173,7 @@ The reference implementation of FUDP is in FC-JDK (Java), located under the `fud
 
 ### 8. Protocol Versioning
 
-The FUDP protocol version is carried in the Version field of the packet header. The current version is **1**. Implementations MUST reject packets with unrecognized version numbers. Future versions that change wire-incompatible behavior MUST increment the version number.
+The FUDP protocol version is carried in the Version field of the packet header. The current version is **1**. Implementations MUST reject encrypted DATA and ACK packets with unrecognized version numbers. The Java reference implementation rejects them by silently dropping the packet. Plaintext CONTROL packets are version-agnostic in v1. Future versions that change wire-incompatible behavior MUST increment the version number.
 
 ### 9. Identity-Based Addressing
 
@@ -224,4 +224,4 @@ Each FUDP protocol document SHOULD follow this structure:
 |3|Loss & Congestion|ACK processing, loss detection, retransmission, CUBIC congestion control, RTT estimation.|
 |4|Security|Handshake crypto (referencing FTSP11), replay protection, session epoch management.|
 |5|DDoS Defense|Proof-of-work challenges, IP verification, rate limiting.|
-|6|Messages|Application-layer message types (chat, file transfer, relay, NAT traversal).|
+|6|Messages|Application-layer message envelope and reference message types (request/response, notify, ping/pong, error).|

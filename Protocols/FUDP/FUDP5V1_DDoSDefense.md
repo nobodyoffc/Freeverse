@@ -82,7 +82,7 @@ The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" in this docu
 When DDoS defense is enabled on the responder, the following procedure applies to connections from unverified IP addresses:
 
 1. **Unverified IP sends HELLO.** The responder does NOT reply with PUBLIC_KEY. Instead, it sends a CONTROL packet containing a CHALLENGE frame.
-2. **Responder sends CHALLENGE.** The challenge contains a 16-byte random nonce and a difficulty value (number of required leading zero bits in the hash output).
+2. **Responder sends CHALLENGE.** The challenge contains a 16-byte random nonce, difficulty value, and challenge timestamp.
 3. **Initiator solves challenge.** The initiator finds an 8-byte solution such that `SHA-256(nonce || solution)` has at least `difficulty` leading zero bits.
 4. **Initiator sends CHALLENGE_RESPONSE.** The response contains the original nonce and the computed solution.
 5. **Responder verifies solution.** The responder recomputes `SHA-256(nonce || solution)` and checks the leading zero bits. If the solution is valid, the source IP is added to the verified whitelist.
@@ -97,12 +97,13 @@ Challenge and response payloads are carried in CONTROL packets as defined in FUD
 **CHALLENGE control payload (type 0x03):**
 
 ```
-Byte 0:      Control Type (0x03)
-Byte 1:      Difficulty (uint8, number of required leading zero bits)
-Bytes 2-17:  Nonce (16 bytes, random)
+Byte 0:       Control Type (0x03)
+Bytes 1-16:   Nonce (16 bytes, random)
+Byte 17:      Difficulty (uint8, number of required leading zero bits)
+Bytes 18-25:  Challenge Timestamp (uint64, milliseconds since Unix epoch)
 ```
 
-Total payload size: 18 bytes.
+Total payload size: 26 bytes.
 
 **CHALLENGE_RESPONSE control payload (type 0x04):**
 
@@ -162,10 +163,10 @@ Solve times are approximate and assume a single-threaded implementation on commo
 | Parameter | Value |
 |---|---|
 | Minimum difficulty | 4 bits |
-| Maximum difficulty | 24 bits |
+| Maximum difficulty | 20 bits (default implementation cap) |
 | Default difficulty | 12 bits |
 
-Implementations MUST reject difficulty values outside the range [4, 24].
+Implementations MUST reject difficulty values outside the accepted implementation range.
 
 ### Adaptive Difficulty
 
@@ -181,7 +182,7 @@ The responder MAY dynamically adjust the PoW difficulty based on the rate of inc
 
 **Behavior:**
 
-- When the incoming packet rate exceeds the high load threshold, increase difficulty by the increase step (capped at the maximum difficulty of 24 bits).
+- When the incoming packet rate exceeds the high load threshold, increase difficulty by the increase step (capped at the configured maximum difficulty; the Java default is 20 bits and the hard PoW utility cap is 24 bits).
 - When the incoming packet rate falls below the low load threshold, decrease difficulty by the decrease step (floored at the configured base difficulty, which defaults to 12 bits).
 - When the packet rate is between the two thresholds, the difficulty remains unchanged.
 - Adjustments MUST NOT occur more frequently than the adjustment interval.

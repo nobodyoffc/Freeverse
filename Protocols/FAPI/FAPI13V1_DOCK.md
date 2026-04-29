@@ -486,7 +486,7 @@ Servers MUST advertise the supported DOCK version through the component type ID.
 
 - **FAPI0V1** -- FAPI foundational rules and protocol structure.
 - **FAPI1V1** -- Core Protocol: wire format, request/response structures, API routing.
-- **FAPI2V1** -- Query Language: FCDSL syntax for filter, sort, and pagination.
+- **FAPI2V1** -- FCDSL: Freeverse Common Data Service Language syntax for filter, sort, and pagination.
 - **FAPI3V1** -- Components: component model, lifecycle, and built-in component catalog.
 - **FAPI4V1** -- Economics: pricing model, credit system, and micropayment mechanics.
 - **FEIP5** -- Service protocol: on-chain service declaration format.

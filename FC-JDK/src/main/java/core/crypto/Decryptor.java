@@ -19,10 +19,8 @@ import javax.annotation.Nullable;
 import javax.crypto.Cipher;
 import javax.crypto.CipherOutputStream;
 import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.security.spec.AlgorithmParameterSpec;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -404,6 +402,15 @@ public class Decryptor {
             Security.addProvider(new BouncyCastleProvider());
         }
         if(cryptoDataByte==null)return ;
+        // Reject AEAD transformations: CipherOutputStream.close() swallows
+        // AEADBadTagException, so auth failures would silently produce
+        // garbage plaintext. Route GCM/CCM through AesGcm256.decryptStream,
+        // which buffers and uses cipher.doFinal() so tag failures surface.
+        if (transformation != null && (transformation.contains("GCM") || transformation.contains("CCM"))) {
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4002NoSuchAlgorithm,
+                    "decryptBySymkeyBase does not support AEAD transformations; use AesGcm256.decryptStream");
+            return;
+        }
         if(cryptoDataByte.getSymkey()==null){
             cryptoDataByte.setCodeMessage(CodeMessage.Code4006InvalidKey);
             return;
@@ -421,17 +428,7 @@ public class Decryptor {
         }
 
         SecretKeySpec keySpec = new SecretKeySpec(key, algo);
-
-        // Match Encryptor: GCM mode requires GCMParameterSpec so the 128-bit
-        // auth tag length is explicit, not provider-default. Using
-        // IvParameterSpec for GCM silently relies on provider defaults and
-        // can desync decrypt from encrypt on non-default JCE providers.
-        AlgorithmParameterSpec paramSpec;
-        if (transformation.contains("GCM")) {
-            paramSpec = new GCMParameterSpec(128, iv);
-        } else {
-            paramSpec = new IvParameterSpec(iv);
-        }
+        IvParameterSpec paramSpec = new IvParameterSpec(iv);
 
         try {
             Cipher cipher = Cipher.getInstance(transformation, provider);

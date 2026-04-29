@@ -98,9 +98,9 @@ Encrypted Bundle (CryptoDataByte format per FTSP11):
 The plaintext before encryption has the following layout:
 
 ```
-Bytes 0-7:   Timestamp (64-bit big-endian, milliseconds since Unix epoch)
-Bytes 8-15:  Session Epoch (64-bit big-endian, see Session Epoch section)
-Bytes 16+:   Frames (concatenated frame data)
+Bytes 0-7:   Timestamp (64-bit big-endian, optional when HAS_TIMESTAMP flag is set)
+Bytes 8-15:  Session Epoch (64-bit big-endian, optional when HAS_EPOCH flag is set)
+Bytes N+:    Frames (concatenated frame data)
 ```
 
 ### Encryption Procedure
@@ -108,15 +108,15 @@ Bytes 16+:   Frames (concatenated frame data)
 **Sender:**
 
 1. Serialize frames into plaintext bytes.
-2. Prepend 8-byte timestamp (current time in milliseconds since Unix epoch, big-endian) and 8-byte session epoch (big-endian).
-3. Encrypt the plaintext using FTSP11 with the sender's private key and the receiver's public key.
+2. Prepend optional timestamp/session-epoch fields according to header flags, then append frame bytes.
+3. Encrypt the plaintext using FTSP11 with the sender's private key and the receiver's public key, binding the 21-byte packet header as AEAD AAD.
 4. The resulting CryptoDataByte bundle becomes the packet payload.
 
 **Receiver:**
 
 1. Parse the 21-byte header to obtain the packet type and connection ID.
 2. Decrypt the payload using FTSP11 with the receiver's private key and the sender's public key (extracted from the CryptoDataByte bundle).
-3. Extract the timestamp (bytes 0-7), session epoch (bytes 8-15), and frames (bytes 16 onward) from the plaintext.
+3. Extract timestamp/session-epoch only when corresponding header flags are set, then parse frames from the remaining plaintext.
 4. Validate the timestamp and session epoch (see Replay Protection).
 5. Process frames.
 
@@ -155,11 +155,11 @@ An attacker who intercepts the HELLO/PUBLIC_KEY exchange and substitutes their o
 
 Each node generates a random 64-bit Session Epoch value at startup. This value:
 
-- Is included in every encrypted packet's plaintext (bytes 8-15).
+- Is included in encrypted packet plaintext while the peer has not yet confirmed the epoch. The Java reference implementation omits it after an ACK confirms receipt, using the header `HAS_EPOCH` flag to indicate presence.
 - Changes only when the node restarts.
 - Allows peers to detect that a node has restarted and reset stale connection state.
 
-The Session Epoch MUST be generated using a cryptographically secure random number generator. The value 0 is reserved and MUST NOT be used as a session epoch.
+The Session Epoch MUST be generated using a cryptographically secure random number generator. The value `0` is reserved on the wire to mean "unknown or omitted" and SHOULD NOT be generated as a real session epoch.
 
 ### Restart Detection
 
@@ -178,7 +178,7 @@ FUDP implements replay protection using a per-connection sliding window combined
 |Parameter|Value|Description|
 |---|---|---|
 |Window Size|65,536|Number of packet numbers tracked in the sliding window|
-|Timestamp Tolerance|+/- 500 seconds|Maximum clock skew allowed between peers|
+|Timestamp Tolerance|+/- 60 seconds (default)|Maximum clock skew allowed between peers|
 
 ### Replay Check Algorithm
 
@@ -259,7 +259,7 @@ The sliding window SHOULD be implemented as a bitset of size WINDOW_SIZE. The `m
 
 - **OK**: Process the packet normally.
 - **DUPLICATE**: Drop the packet silently. Implementations SHOULD NOT send any response to duplicate packets.
-- **INVALID_TIMESTAMP**: Drop the packet silently. Implementations MAY log the event for diagnostics.
+- **INVALID_TIMESTAMP**: The Java reference implementation sends a CONNECTION_CLOSE with `INTERNAL_ERROR` and removes the connection. Other implementations MAY drop silently if they prefer not to reveal timestamp-validation policy.
 - **PEER_RESTART**: Process the packet normally. The connection state has been reset. Implementations SHOULD log the peer restart event.
 
 ## Sensitive Data Handling
@@ -287,9 +287,9 @@ The peer's public key in the CryptoDataByte bundle provides identity binding on 
 
 ### 3. Replay Protection
 
-The sliding window and timestamp check prevent replay attacks within the tolerance window. The 500-second timestamp tolerance is deliberately generous to accommodate clock drift in decentralized P2P networks where nodes may not have access to precise time synchronization.
+The sliding window and timestamp check prevent replay attacks within the tolerance window. The default 60-second tolerance balances replay resistance and practical clock drift.
 
-Implementations operating in environments with reliable time synchronization MAY use a tighter tolerance.
+Implementations MAY tune tolerance within a bounded safe range (implementation-constrained).
 
 ### 4. Session Epoch
 
@@ -306,6 +306,7 @@ The PUBLIC_KEY response rate limit (3 responses per 2-second window per source a
 ### 7. Denial of Service
 
 An attacker can send a high volume of packets with invalid encryption to force a node to perform ECDH computations. Shared secret caching mitigates this for known peers. For unknown peers, the HELLO/PUBLIC_KEY exchange occurs before any ECDH computation, and the rate limiting on PUBLIC_KEY responses bounds the resource expenditure. Additional DDoS defense mechanisms are specified in FUDP5.
+The reference implementation further applies a per-source decrypt-failure rate limiter, temporarily dropping packets from abusive sources before decryption to cap CPU burn during attack bursts.
 
 ## Related Protocols
 

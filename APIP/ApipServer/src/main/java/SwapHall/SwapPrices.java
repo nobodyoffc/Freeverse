@@ -40,6 +40,7 @@ import static constants.Values.ASC;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapPrice)
 public class SwapPrices extends HttpServlet {
     private final Settings settings = Initiator.settings;
+    private final String swapPriceIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_PRICE);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -96,7 +97,7 @@ public class SwapPrices extends HttpServlet {
         SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
         List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.TIME, DESC, FieldNames.SID, ASC);
 
-        searchBuilder.index(SWAP_PRICE);
+        searchBuilder.index(swapPriceIndex);
         searchBuilder.sort(sortOptionsList);
         if (size != null) searchBuilder.size(Integer.valueOf(size));
         else searchBuilder.size(50);

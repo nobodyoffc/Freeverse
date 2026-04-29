@@ -7,6 +7,7 @@ import data.feipData.ServiceType;
 import feature.swap.SwapAffair;
 import feature.swap.SwapLpData;
 import feature.swap.SwapPendingData;
+import feature.swap.SwapPriceData;
 import feature.swap.SwapStateData;
 import managers.AccountManager;
 import managers.Manager;
@@ -50,7 +51,8 @@ import static constants.IndicesNames.WEBHOOK;
 import static constants.IndicesNames.*;
 import static constants.Strings.*;
 
-public class StartApipManager {
+public class
+StartApipManager {
 
 	private static final Logger log = LoggerFactory.getLogger(StartApipManager.class);
 	public static Service service;
@@ -182,9 +184,8 @@ public class StartApipManager {
 		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_LP), SwapLpData.swapLpMappingJsonStr);
 		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_FINISHED), SwapAffair.swapFinishedMappingJsonStr);
 		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_PENDING), SwapPendingData.swapPendingMappingJsonStr);
-		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_STATE), SwapStateData.swapStateJsonStr);
+		nameMappingList.put(Settings.addSidBriefToName(sid,SWAP_PRICE), SwapPriceData.swapPriceMappingJsonStr);
 		EsUtils.checkEsIndices(esClient,nameMappingList);
-
 	}
 
 	public static String getNameOfService(String name) {

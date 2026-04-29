@@ -1,4 +1,4 @@
-# FAPI2V1_QueryLanguage
+# FAPI2V1_FCDSL
 
 ## Contents
 
@@ -28,7 +28,7 @@
 
 |Field|Content|
 |---|---|
-|Title|Query Language|
+|Title|FCDSL|
 |Type|FAPI|
 |SN|2|
 |Ver|1|

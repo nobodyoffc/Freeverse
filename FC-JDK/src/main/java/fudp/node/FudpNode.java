@@ -167,7 +167,7 @@ public class FudpNode implements Protocol.PacketListener {
         // Schedule idle connection cleanup
         long cleanupIntervalMs = config.getIdleConnectionCleanupIntervalMs();
         if (cleanupIntervalMs > 0) {
-            scheduler.scheduleAtFixedRate(
+            cleanupTask = scheduler.scheduleAtFixedRate(
                     this::cleanupIdleConnections,
                     cleanupIntervalMs, cleanupIntervalMs, TimeUnit.MILLISECONDS
             );

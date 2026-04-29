@@ -33,6 +33,7 @@ public class Protocol {
     private final ConnectionManager connectionManager;
     private final PacketCrypto packetCrypto;
     private final ReplayProtection replayProtection;
+    private final DecryptRateLimiter decryptRateLimiter;
 
     private final DatagramChannel channel;
     private Thread receiveThread;
@@ -99,6 +100,7 @@ public class Protocol {
         this.connectionManager = new ConnectionManager();
         this.packetCrypto = new PacketCrypto(cryptoManager);
         this.replayProtection = new ReplayProtection();
+        this.decryptRateLimiter = new DecryptRateLimiter();
 
         this.channel = DatagramChannel.open();
         this.channel.bind(new InetSocketAddress(port));
@@ -758,6 +760,17 @@ public class Protocol {
 
     private final AtomicLong replayDuplicateCount = new AtomicLong();
     private final AtomicLong packetsFullyProcessed = new AtomicLong();
+    private final AtomicLong decryptDropCount = new AtomicLong();
+    private final AtomicLong unsupportedVersionCount = new AtomicLong();
+
+    /**
+     * Versions we accept on the data path. Currently only the single
+     * released wire format; future protocol upgrades will use the CAPS
+     * frame negotiation path to widen this set during a rollout window.
+     */
+    private static boolean isSupportedDataVersion(int v) {
+        return v == PacketHeader.CURRENT_VERSION;
+    }
 
     private void receiveLoop() {
         ByteBuffer buffer = ByteBuffer.allocate(65536);
@@ -813,6 +826,35 @@ public class Protocol {
                 return;
             }
 
+            // F1c: data-path version gate. Reject any data/ack packet whose
+            // header version is not currently supported BEFORE we burn ECDH
+            // on it. Senders that pre-date header-AAD enforcement omitted
+            // AAD entirely — silently accepting them here would recreate
+            // the F1 vulnerability. Control packets are plaintext and
+            // version-agnostic, so the check is scoped to data/ack.
+            int wireVersion = packet.getHeader().getVersion();
+            if (!isSupportedDataVersion(wireVersion)) {
+                long n = unsupportedVersionCount.incrementAndGet();
+                if (n <= 5 || n % 1000 == 0) {
+                    log.warn("[Protocol] Rejecting data packet from {} with unsupported version {} (count={})",
+                            from, wireVersion, n);
+                }
+                return;
+            }
+
+            // Source-rate guard before the expensive ECDH/decrypt step (N1).
+            // Independent of DDoS defense being enabled — protects against
+            // an attacker flooding fresh per-packet pubkeys to force ECDH
+            // misses, even on nodes that opt out of IpVerifier.
+            if (decryptRateLimiter.shouldDrop(from)) {
+                long n = decryptDropCount.incrementAndGet();
+                if (n <= 5 || n % 1000 == 0) {
+                    log.warn("[Protocol] Dropping packet from {} due to recent decrypt-failure flood (drops={})",
+                            from, n);
+                }
+                return;
+            }
+
             // Decrypt and identify sender
             String senderId;
             try {
@@ -820,12 +862,22 @@ public class Protocol {
             } catch (Exception e) {
                 long dfCount = decryptFailCount.incrementAndGet();
                 if (dfCount <= 5 || dfCount % 100 == 0) {
-                    System.err.println("[DECRYPT-FAIL] count=" + dfCount + 
+                    System.err.println("[DECRYPT-FAIL] count=" + dfCount +
                             " pktNum=" + packet.getPacketNumber() + " from=" + from);
                 }
-                sendPublicKeyResponse(from);
+                // Track failure for per-source rate limiting (N1).
+                decryptRateLimiter.recordFailure(from);
+                // Do NOT reply with PUBLIC_KEY on decrypt failure (N2). It
+                // turns this socket into a reflection amplifier for spoofed
+                // source IPs. Peers that need our pubkey must send an
+                // explicit CONTROL_HELLO; that path is rate-limited via
+                // allowPublicKeyResponse(). Drop silently.
                 return;
             }
+            // Successful decrypt: clear any failure history for this source
+            // so a transient burst of bad packets doesn't penalise a
+            // legitimate peer once they recover.
+            decryptRateLimiter.recordSuccess(from);
 
             // Skip creating a new connection for close-only packets.
             // When a client sends CONNECTION_CLOSE and the server has already removed
@@ -1093,7 +1145,20 @@ public class Protocol {
                     log.warn("Stream limit exceeded, dropping frame for stream {}", streamFrame.getStreamId());
                     return;
                 }
-                stream.onDataReceived(streamFrame.getOffset(), streamFrame.getData(), streamFrame.isFin());
+                try {
+                    stream.onDataReceived(streamFrame.getOffset(), streamFrame.getData(), streamFrame.isFin());
+                } catch (fudp.stream.FlowControlViolationException e) {
+                    log.warn("[Protocol] Flow control violation on connection {} from peer {}: {}",
+                            conn.getConnectionId(), conn.getPeerId(), e.getMessage());
+                    try {
+                        close(conn.getConnectionId(),
+                                ConnectionCloseFrame.FLOW_CONTROL_ERROR, "Stream buffer overflow");
+                    } catch (IOException ignored) {
+                        // Best-effort close
+                    }
+                    connectionManager.removeConnection(conn.getConnectionId());
+                    replayProtection.removeConnection(conn.getConnectionId());
+                }
             }
 
             case ACK -> {
@@ -1263,6 +1328,26 @@ public class Protocol {
 
     public ReplayProtection getReplayProtection() {
         return replayProtection;
+    }
+
+    /** Per-source decrypt-failure rate limiter (for monitoring/tests). */
+    public DecryptRateLimiter getDecryptRateLimiter() {
+        return decryptRateLimiter;
+    }
+
+    /** Number of packets dropped at the rate-limit guard (for monitoring/tests). */
+    public long getDecryptDropCount() {
+        return decryptDropCount.get();
+    }
+
+    /** Number of decrypt failures (for monitoring/tests). */
+    public long getDecryptFailCount() {
+        return decryptFailCount.get();
+    }
+
+    /** Number of packets rejected for unsupported wire version (for monitoring/tests). */
+    public long getUnsupportedVersionCount() {
+        return unsupportedVersionCount.get();
     }
 
     /**

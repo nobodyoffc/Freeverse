@@ -5,26 +5,19 @@ import data.fchData.OpReturn;
 import utils.BytesUtils;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 
 public class OpReFileUtils {
 
-    /**
-     * Reads exactly {@code len} bytes from the input stream.
-     * Unlike InputStream.read(byte[]), this guarantees all bytes are read
-     * unless EOF is reached.
-     * @return actual bytes read, or -1 if EOF before any byte
-     */
-    private static int readFully(InputStream is, byte[] buf, int len) throws IOException {
+    private static int readFully(RandomAccessFile raf, byte[] buf, int len) throws IOException {
         int totalRead = 0;
         while (totalRead < len) {
-            int bytesRead = is.read(buf, totalRead, len - totalRead);
+            int bytesRead = raf.read(buf, totalRead, len - totalRead);
             if (bytesRead == -1) {
                 return totalRead == 0 ? -1 : totalRead;
             }
@@ -33,7 +26,7 @@ public class OpReFileUtils {
         return totalRead;
     }
 
-    public static opReReadResult readOpReFromFile(FileInputStream opis) throws IOException {
+    public static opReReadResult readOpReFromFile(RandomAccessFile raf) throws IOException {
 
         opReReadResult result = new opReReadResult();
 
@@ -41,32 +34,32 @@ public class OpReFileUtils {
 
         OpReturn op = new OpReturn();
 
+        long startPos = raf.getFilePointer();
         byte[] length = new byte[4];
-        int bytesRead = readFully(opis, length, 4);
+        int bytesRead = readFully(raf, length, 4);
         if (bytesRead == -1) {
             System.out.println("OpReturn File was parsed completely.");
             fileEnd = true;
             result.setFileEnd(fileEnd);
-            opis.close();
             return result;
         }
         if (bytesRead < 4) {
-            // Partial length header — treat as file end (data not yet fully written)
             System.out.println("OpReturn File: short read on length header, treating as file end.");
             fileEnd = true;
             result.setFileEnd(fileEnd);
+            raf.seek(startPos);
             return result;
         }
 
         int opLength = BytesUtils.bytesToIntBE(length);
 
         byte[] opbytes = new byte[opLength];
-        bytesRead = readFully(opis, opbytes, opLength);
+        bytesRead = readFully(raf, opbytes, opLength);
         if (bytesRead < opLength) {
-            // Partial record — treat as file end (data not yet fully written)
             System.out.println("OpReturn File: short read on record data (" + bytesRead + "/" + opLength + "), treating as file end.");
             fileEnd = true;
             result.setFileEnd(fileEnd);
+            raf.seek(startPos);
             return result;
         }
 

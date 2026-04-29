@@ -27,6 +27,7 @@ import static constants.IndicesNames.SWAP_LP;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapLp)
 public class SwapLp extends HttpServlet {
     private final Settings settings = Initiator.settings;
+    private final String swapLpIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_LP);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -75,7 +76,7 @@ public class SwapLp extends HttpServlet {
 
         try {
             GetResponse<SwapLpData> response1 = esClient.get(b -> b
-                    .index(SWAP_LP)
+                    .index(swapLpIndex)
                     .id(finalSid)
             , SwapLpData.class);
 

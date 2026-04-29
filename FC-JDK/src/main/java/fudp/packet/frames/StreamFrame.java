@@ -8,12 +8,20 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * STREAM frame for carrying application data
+ * STREAM frame for carrying application data.
  *
- * Flags (encoded in type byte):
- * - Bit 0: FIN - stream end marker
- * - Bit 1: LEN - has length field
- * - Bit 2: OFF - has offset field
+ * <p>Flags (encoded in type byte):
+ * <ul>
+ *   <li>Bit 0: FIN - stream end marker</li>
+ *   <li>Bit 1: LEN - reserved; always set on the wire (length varint is
+ *       always emitted). Older drafts allowed omitting the length on the
+ *       last frame in a packet for a 1-2 byte saving, but in combination
+ *       with an unauthenticated header that turned packet truncation into
+ *       a parser oracle. Header AAD (F1) already closes the truncation
+ *       hole, but mandating an explicit length keeps the parser simple
+ *       and removes the special-case branch.</li>
+ *   <li>Bit 2: OFF - has offset field</li>
+ * </ul>
  */
 public class StreamFrame extends Frame {
 
@@ -25,7 +33,6 @@ public class StreamFrame extends Frame {
     private long offset;
     private byte[] data;
     private boolean fin;
-    private boolean implicitLength = false; // E3: when true, omit length varint (last frame in packet)
 
     public StreamFrame() {
         super(FrameType.STREAM);
@@ -44,10 +51,9 @@ public class StreamFrame extends Frame {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
 
-            // Build type byte with flags
-            int typeByte = FrameType.STREAM.getValue();
+            // Build type byte with flags. LEN is always set — see class javadoc.
+            int typeByte = FrameType.STREAM.getValue() | FLAG_LEN;
             if (fin) typeByte |= FLAG_FIN;
-            if (!implicitLength) typeByte |= FLAG_LEN; // Include length unless implicit (last frame)
             if (offset > 0) typeByte |= FLAG_OFF;
 
             out.write(Varint.encode(typeByte));
@@ -56,10 +62,7 @@ public class StreamFrame extends Frame {
             if (offset > 0) {
                 out.write(Varint.encode(offset));
             }
-
-            if (!implicitLength) {
-                out.write(Varint.encode(data.length));
-            }
+            out.write(Varint.encode(data.length));
             out.write(data);
 
             return out.toByteArray();
@@ -81,7 +84,7 @@ public class StreamFrame extends Frame {
     }
 
     /**
-     * Parse a StreamFrame from a ByteBuffer
+     * Parse a StreamFrame from a ByteBuffer. The length varint is mandatory.
      */
     public static StreamFrame parse(ByteBuffer buffer, int typeByte) {
         StreamFrame frame = new StreamFrame();
@@ -89,6 +92,15 @@ public class StreamFrame extends Frame {
         frame.fin = (typeByte & FLAG_FIN) != 0;
         boolean hasLength = (typeByte & FLAG_LEN) != 0;
         boolean hasOffset = (typeByte & FLAG_OFF) != 0;
+
+        // LEN is always set in the released wire format. A frame missing
+        // it is a protocol violation and we refuse to fall back to
+        // "remaining bytes" — that branch was the truncation oracle.
+        if (!hasLength) {
+            throw new IllegalArgumentException(
+                    "StreamFrame missing mandatory LEN flag (typeByte=0x"
+                    + Integer.toHexString(typeByte) + ")");
+        }
 
         frame.streamId = Varint.decode(buffer);
 
@@ -98,13 +110,7 @@ public class StreamFrame extends Frame {
             frame.offset = 0;
         }
 
-        int length;
-        if (hasLength) {
-            length = (int) Varint.decode(buffer);
-        } else {
-            length = buffer.remaining();
-        }
-
+        int length = (int) Varint.decode(buffer);
         if (length < 0 || length > buffer.remaining()) {
             throw new IllegalArgumentException(
                     "Invalid StreamFrame data length: " + length + " (remaining=" + buffer.remaining() + ")");
@@ -147,14 +153,6 @@ public class StreamFrame extends Frame {
 
     public void setFin(boolean fin) {
         this.fin = fin;
-    }
-
-    public boolean isImplicitLength() {
-        return implicitLength;
-    }
-
-    public void setImplicitLength(boolean implicitLength) {
-        this.implicitLength = implicitLength;
     }
 
     @Override

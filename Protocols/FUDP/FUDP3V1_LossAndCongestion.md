@@ -37,7 +37,7 @@
 
 ## Abstract
 
-This document specifies the loss detection and congestion control mechanisms for the FUDP (Freeverse UDP) protocol. It defines ACK processing rules, round-trip time estimation, time-based loss detection, and CUBIC congestion control. These mechanisms ensure reliable data delivery over unreliable UDP transport while maintaining fair use of network resources. This specification is language-agnostic and intended to be implemented alongside FUDP1 (Packet Formats) and FUDP2 (Connection Management).
+This document specifies the loss detection and congestion control mechanisms for the FUDP (Freeverse UDP) protocol. It defines ACK processing rules, round-trip time estimation, time-based loss detection, and CUBIC congestion control. These mechanisms ensure reliable data delivery over unreliable UDP transport while maintaining fair use of network resources. This specification is language-agnostic and intended to be implemented alongside FUDP1 (Core Transport) and FUDP2 (Streams).
 
 ## Summary
 
@@ -50,11 +50,11 @@ FUDP3 defines four interrelated subsystems:
 
 ## 1. Introduction
 
-FUDP operates over UDP and therefore does not inherit TCP's built-in reliability or congestion control. This specification defines the mechanisms that FUDP implementations MUST use to detect lost packets, estimate network conditions, and regulate the rate of data transmission.
+FUDP operates over UDP and therefore does not inherit TCP's built-in reliability or congestion control. This specification defines the mechanisms used by the Java reference implementation to acknowledge packets, detect lost packets, estimate network conditions, retransmit lost frames, and pace outgoing data.
 
 The key words "MUST", "MUST NOT", "SHOULD", "SHOULD NOT", and "MAY" in this document are to be interpreted as described in RFC 2119.
 
-All packet and frame wire formats referenced in this document are defined in FUDP1V1_PacketFormats.
+All packet and frame wire formats referenced in this document are defined in FUDP1V1_CoreTransport.
 
 ## 2. ACK Processing
 
@@ -67,7 +67,7 @@ The following frames are classified by their ack-eliciting property:
 | Classification | Frame Types |
 |---|---|
 | NOT ack-eliciting | ACK, PADDING |
-| Ack-eliciting | STREAM, CONNECTION_CLOSE, MAX_DATA, MAX_STREAM_DATA, PING, and all other frame types |
+| Ack-eliciting | STREAM, CONNECTION_CLOSE, MAX_DATA, MAX_STREAM_DATA, MAX_STREAMS, and all other non-ACK/non-PADDING frame types |
 
 A packet is ack-eliciting if it contains at least one ack-eliciting frame. A packet containing only ACK and/or PADDING frames is NOT ack-eliciting.
 
@@ -82,7 +82,7 @@ If an immediate ACK is not triggered for any reason, a delayed ACK MUST be sent 
 
 ### 2.2. ACK Frame Encoding
 
-The ACK frame wire format is defined in FUDP1. The ACK frame encodes ranges of acknowledged packet numbers compactly using a largest acknowledged packet number, a first range, and zero or more additional (gap, length) pairs.
+The ACK frame wire format is defined in FUDP1. The ACK frame encodes ranges of acknowledged packet numbers compactly using a largest acknowledged packet number, a range-count field, a first range, and zero or more additional (gap, length) pairs. In the Java reference implementation the range-count field is the total number of ranges, including the first range.
 
 The following pseudocode reconstructs the set of acknowledged packet numbers from an ACK frame:
 
@@ -145,7 +145,7 @@ function updateRtt(latestRtt):
 
 The smoothing factor for `smoothedRtt` is 1/8. The smoothing factor for `rttVariance` is 1/4. These values are consistent with established practice in TCP (RFC 6298).
 
-RTT samples MUST NOT be generated from packets that were retransmitted, as the implementation cannot determine whether the ACK corresponds to the original or retransmitted packet (retransmission ambiguity).
+RTT samples SHOULD NOT be generated from packets that were retransmitted, as the implementation cannot determine whether the ACK corresponds to the original or retransmitted packet (retransmission ambiguity). The current Java implementation does not persist an explicit retransmitted flag in `SentPacket`; RTT is sampled when the largest acknowledged packet is removed from the sent-packet table.
 
 ### 3.3. Retransmission Timeout
 
@@ -197,26 +197,26 @@ The minimum time threshold of 2,000 ms is deliberately conservative to avoid spu
 
 ### 4.3. Retransmission
 
-When packets are declared lost, the data they carried MUST be retransmitted subject to the following constraints:
+When packets are declared lost, the data they carried is retransmitted subject to the following constraints:
 
 | Parameter | Value | Description |
 |---|---|---|
 | Max Retransmit Rate | 50 packets per 50 ms | Rate limit to prevent retransmission-induced congestion |
 | Max Retransmit Count | 30 | Maximum retransmissions of the same data before connection closure |
 
-If any data segment has been retransmitted Max Retransmit Count (30) times without successful acknowledgment, the implementation MUST close the connection with an appropriate error.
+If any data segment has been retransmitted Max Retransmit Count (30) times without successful acknowledgment, the implementation MAY abandon that segment. Closing the entire connection for one undeliverable segment is NOT required.
 
 The retransmission procedure is as follows:
 
 1. Remove the old SentPacket record from the tracking data structure. Decrement `bytesInFlight` by the packet size using `onRetransmitRemove`. This removal does NOT grow the congestion window.
-2. Re-package the frames that were in the lost packet into a new packet. The new packet MUST be assigned a new, monotonically increasing packet number.
+2. Re-package the retransmittable frames that were in the lost packet into a new packet. ACK and PADDING frames are not retransmitted. The new packet MUST be assigned a new, monotonically increasing packet number.
 3. Send the new packet. Increment `bytesInFlight` via `onSend`. Record the new SentPacket with the current timestamp.
 
 Retransmitted packets carry new packet numbers. The original packet number is permanently retired and MUST NOT be reused.
 
 ## 5. Congestion Control
 
-FUDP uses the CUBIC congestion control algorithm. CUBIC provides good throughput in high-bandwidth, high-latency environments and converges efficiently to fair bandwidth sharing.
+FUDP includes a CUBIC congestion controller. In the Java reference implementation, CUBIC tracks congestion window state and bytes in flight, and loss events reduce the window. Current packet sending is primarily governed by MTU chunking and pacing; retransmissions are not blocked by the congestion window.
 
 ### 5.1. States
 
@@ -291,7 +291,7 @@ function onSend(sentBytes):
 ```
 
 ```
-// Send permission check
+// Send permission check exposed by the congestion controller
 function canSend(bytes):
     return bytesInFlight + bytes <= cwnd
 ```
@@ -307,9 +307,9 @@ The variable `wMax` records the congestion window size at the time of the most r
 
 ### 5.4. Send Pacing
 
-To prevent bursty transmission patterns that may overwhelm receiver UDP buffers or intermediate network equipment, implementations SHOULD pace outgoing packets.
+To prevent bursty transmission patterns that may overwhelm receiver UDP buffers or intermediate network equipment, implementations SHOULD pace outgoing packets. The Java reference implementation uses send pacing as the active send-rate control for large transfers.
 
-A simple pacing strategy is to insert a short delay (for example, 1 millisecond) after transmitting a burst of N packets. The burst size N SHOULD be tuned based on the current congestion window and observed network behavior.
+A simple pacing strategy is to insert a short delay after transmitting a burst of N packets. The Java reference implementation computes a burst size from target burst bytes and configured packet size, then pauses for the configured pacing interval.
 
 Implementations MAY use more sophisticated pacing algorithms, provided the resulting send rate does not exceed `cwnd / smoothedRtt` bytes per second on average.
 
@@ -330,8 +330,8 @@ The distinction between ACK-driven decrements and retransmit-removal decrements 
 ## 6. References
 
 - FUDP0V1_FUDP -- FUDP protocol overview and design rationale.
-- FUDP1V1_PacketFormats -- Packet structure, frame definitions, and wire format encoding.
-- FUDP2V1_ConnectionManagement -- Connection lifecycle, handshake, and termination.
+- FUDP1V1_CoreTransport -- Packet structure, frame definitions, and wire format encoding.
+- FUDP2V1_Streams -- Stream multiplexing and flow control.
 - RFC 6298 -- Computing TCP's Retransmission Timer.
 - RFC 8312 -- CUBIC for Fast Long-Distance Networks.
 - RFC 2119 -- Key words for use in RFCs to Indicate Requirement Levels.

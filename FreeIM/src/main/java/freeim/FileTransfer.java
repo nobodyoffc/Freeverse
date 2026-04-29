@@ -177,58 +177,15 @@ public class FileTransfer {
 
     private void handleFileData(String peerId, long connectionId, long requestId, byte[] data) {
         try {
-            // Parse metadata to find the linked offerRequestId
-            // The metadata is the non-stream portion of the request data.
-            // For requestWithStream, the data parameter contains the metadata bytes.
+            // Wire layout for a requestWithStream: the receiver gets the
+            // RequestMessage's data field, which is the metadata bytes
+            // (a JSON object) immediately followed by the streamed file
+            // bytes. We split on the first balanced top-level JSON object.
             long offerRequestId = -1;
             String metaFileName = null;
-            try {
-                String metaStr = new String(data, StandardCharsets.UTF_8);
-                // The data could be just file bytes if metadata parsing fails.
-                // Try to detect JSON metadata prefix — it's embedded by requestWithStream
-                // as the header portion before the binary stream data.
-                // Actually, the 'data' parameter in onRequestReceived for requestWithStream
-                // is the FULL reassembled message (header metadata + stream bytes).
-                // We need to check the protocol: requestWithStream sends metadata as the
-                // request data field, and the file bytes as the stream.
-                // But on the receiver side, onRequestReceived gets the complete assembled data.
-                // Let's parse what we can from it.
-            } catch (Exception ignored) {}
-
-            // Match the offer: first try by offerRequestId from metadata, then by peerId
-            String fileName = null;
-            PendingOffer matchedOffer = null;
-
-            // Try to extract offerRequestId from the beginning of data (JSON metadata)
-            // The requestWithStream format: envelope + headerData + streamData
-            // headerData is the JSON metadata we sent
-            // But by the time we get 'data' in onRequestReceived, it's already decoded
-            // as the full request payload (just the request data field, not the stream).
-            // Actually, looking at FudpNode.handleIncomingData -> MessageHandler -> onRequestReceived:
-            // the 'data' is RequestMessage.getData() which is the metadata bytes only.
-            // The stream data is assembled separately... wait, no.
-            // Let me re-check: requestWithStream builds envelope + metadata + stream bytes,
-            // all sent on one stream. The receiver reassembles the full byte sequence,
-            // decodes it as a RequestMessage. The RequestMessage.getData() is everything
-            // after the SID field in the payload.
-            // So 'data' here = metadata + file bytes concatenated.
-            // The metadata is a small JSON, followed by raw file bytes.
-
-            // The metadata was encoded as: statusCode(2) + headerData + streamData
-            // for respondWithStream. But for requestWithStream, the format is:
-            // type(1) + messageId(8) + flags(1) + payloadLen(varint) + sid + data
-            // where data = metaData + fileBytes (concatenated by SequenceInputStream).
-            // So 'data' parameter = metaData bytes + file bytes.
-            // The metaData is JSON, so we can try to find the JSON boundary.
-
-            // Simpler approach: look up offers by peerId, but prefer the one whose
-            // offerRequestId matches if we have multiple pending offers.
-            // Since the offerRequestId is included in metaData JSON (at the start of data),
-            // try to extract it.
-            try {
-                // Find the end of JSON metadata (first '}' followed by non-JSON bytes)
-                int jsonEnd = findJsonEnd(data);
-                if (jsonEnd > 0) {
+            int jsonEnd = findJsonEnd(data);
+            if (jsonEnd > 0) {
+                try {
                     String metaJson = new String(data, 0, jsonEnd, StandardCharsets.UTF_8);
                     JsonObject meta = JsonParser.parseString(metaJson).getAsJsonObject();
                     if (meta.has("offerRequestId")) {
@@ -237,17 +194,26 @@ public class FileTransfer {
                     if (meta.has("name")) {
                         metaFileName = meta.get("name").getAsString();
                     }
+                } catch (Exception ignored) {
+                    // Metadata parsing failed; treat the whole data as file bytes.
+                    jsonEnd = 0;
                 }
-            } catch (Exception ignored) {
-                // Metadata parsing failed; fall back to peerId match
             }
+            // Strip the metadata prefix so the file content is just the
+            // bytes the sender actually streamed. (Previously the entire
+            // data buffer including the JSON header was written to disk,
+            // producing files ~100 bytes larger than the source and
+            // corrupted at offset 0.)
+            byte[] fileBytes = (jsonEnd > 0)
+                    ? java.util.Arrays.copyOfRange(data, jsonEnd, data.length)
+                    : data;
 
-            // Match by offerRequestId first (precise), then by peerId (legacy fallback)
+            // Match the offer: first try by offerRequestId from metadata, then by peerId.
+            PendingOffer matchedOffer = null;
             if (offerRequestId > 0) {
                 matchedOffer = pendingOffers.remove(offerRequestId);
             }
             if (matchedOffer == null) {
-                // Fallback: match by peerId (for backward compatibility with old senders)
                 for (PendingOffer offer : pendingOffers.values()) {
                     if (offer.peerId.equals(peerId)) {
                         matchedOffer = offer;
@@ -257,6 +223,7 @@ public class FileTransfer {
                 }
             }
 
+            String fileName;
             if (matchedOffer != null) {
                 fileName = matchedOffer.fileName;
             } else if (metaFileName != null) {
@@ -271,7 +238,6 @@ public class FileTransfer {
             expectedSizes.remove(offerKey);
             activeReceiveByPeer.remove(peerId);
             long elapsedNanos = (startNanos != null) ? System.nanoTime() - startNanos : 0;
-            // Finish receiver progress bar
             ProgressBar pb = receiveProgressBars.remove(offerKey);
             if (pb != null) {
                 pb.finish();
@@ -287,11 +253,10 @@ public class FileTransfer {
                 count++;
             }
 
-            Files.write(savePath, data);
-            System.out.printf("  [FILE SAVED] %s (%s) -> %s%n", fileName, formatSize(data.length), savePath);
-            printTransferStats(peerId, data.length, elapsedNanos, false);
+            Files.write(savePath, fileBytes);
+            System.out.printf("  [FILE SAVED] %s (%s) -> %s%n", fileName, formatSize(fileBytes.length), savePath);
+            printTransferStats(peerId, fileBytes.length, elapsedNanos, false);
 
-            // Use peerId-based respond for fallback if connection closed
             node.respond(peerId, requestId, 200, "OK".getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             System.out.println("  Failed to receive file: " + e.getMessage());

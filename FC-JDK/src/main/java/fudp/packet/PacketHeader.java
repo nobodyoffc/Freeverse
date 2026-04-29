@@ -14,12 +14,19 @@ import java.nio.ByteBuffer;
 public class PacketHeader {
 
     public static final int HEADER_SIZE = 21;
+    /**
+     * Wire-format version. The current (and only released) format binds the
+     * 21-byte serialised header as AEAD AAD on data packets — see
+     * FUDP_V2_REPAIR_PLAN.md F1. Receivers reject any other version on the
+     * data path; control packets (HELLO / PUBLIC_KEY / CHALLENGE) remain
+     * version-agnostic since they are plaintext and transport-layer-only.
+     */
     public static final int CURRENT_VERSION = 1;
 
     // Flag bit positions
     public static final int FLAG_PACKET_TYPE_MASK = 0x03;     // Bits 0-1
-    // Bit 2 reserved (previously FLAG_HAS_SYMKEY_PROPOSAL, removed in v2.0)
-    // Bit 3 reserved (previously FLAG_REKEY, removed in v2.0)
+    // Bits 2-3 reserved (previously held flags for symkey-negotiation /
+    // rekey paths that were removed before any production rollout).
     public static final int FLAG_FIN = 0x10;                   // Bit 4
     public static final int FLAG_HAS_TIMESTAMP = 0x20;         // Bit 5: timestamp present in payload
     public static final int FLAG_HAS_EPOCH = 0x40;             // Bit 6: session epoch present in payload

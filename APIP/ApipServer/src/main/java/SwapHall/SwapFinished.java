@@ -38,6 +38,7 @@ import static constants.Values.ASC;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapFinished)
 public class SwapFinished extends HttpServlet {
     private final Settings settings = Initiator.settings;
+    private final String swapFinishedIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_FINISHED);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -84,7 +85,7 @@ public class SwapFinished extends HttpServlet {
         SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
         List<SortOptions> sortOptionsList = Sort.makeTwoFieldsSort(FieldNames.GET_TIME, DESC, FieldNames.ID, ASC);
 
-        searchBuilder.index(SWAP_FINISHED);
+        searchBuilder.index(swapFinishedIndex);
         searchBuilder.sort(sortOptionsList);
         searchBuilder.size(20);
         if (lastStr != null) {

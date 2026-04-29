@@ -779,6 +779,7 @@ public class ConstructParser {
 
 					return true;
 				}
+				return false;
 			}
 
 			case RATE -> {
@@ -976,8 +977,8 @@ public class ConstructParser {
 							serviceHist.getHeight(), serviceHist.getTime());
 					return true;
 				}
+				return false;
 			}
-
 			case UPDATE:
 				service = EsUtils.getById(esClient, IndicesNames.SERVICE, serviceHist.getSid(), Service.class);
 

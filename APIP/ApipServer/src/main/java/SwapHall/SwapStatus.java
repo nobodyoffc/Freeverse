@@ -27,6 +27,7 @@ import static constants.IndicesNames.SWAP_STATE;
 @WebServlet(ApipApiNames.SwapHallPath + ApipApiNames.SwapState)
 public class SwapStatus extends HttpServlet {
     private final Settings settings = Initiator.settings;
+    private final String swapStateIndex = Settings.addSidBriefToName(settings.getSid(), SWAP_STATE);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) {
@@ -76,7 +77,7 @@ public class SwapStatus extends HttpServlet {
 
         try {
             GetResponse<SwapStateData> response1 = esClient.get(b -> b
-                    .index(SWAP_STATE)
+                    .index(swapStateIndex)
                     .id(finalSid)
             , SwapStateData.class);
 

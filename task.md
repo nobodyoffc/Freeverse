@@ -1,5 +1,36 @@
 # Freeverse
 
+[]  1. Decryptor.java — likely a real AES-GCM bug in FC-JDK, fixed in Safe.
+Safe uses GCMParameterSpec(128, iv) when the transformation is GCM; FC-JDK uses IvParameterSpec for GCM too.    
+IvParameterSpec doesn't carry the authentication-tag length, which with GCM can silently produce wrong or
+weakly-authenticated behavior depending on the JCE provider.  
+
+[] news 
+[] safe: import prikey to make pubkey
+[] talk: fe
+tch messages of myself
+[] nasa swap, linode
+
+[] default FAPI server
+
+[] No DISK
+
+[] rewrite startFapiServer and startFapiClient
+
+[] FapiServer income and distribute.
+
+[] FAPI: BASE (FEIP_API,FCH_API)，DISK，MAP，TALK，ROAD(relay)，DOCK(save and IO)，BANK(settle)
+[] DISK:put,get,check,list
+[] DOCK:put,get,consume
+[] ROAD:relay
+[] MAP:register fudp peer:fid -> ip,port,pubkey. probe heart beats. last seeing. RTT
+[] BANK:deposit, pay, withdraw, settle
+[] TALK: 
+
+BASE，DISK，MAP，TALK，ROAD，DOCK，BANK
+
+[] relay function in FUDP node.
+
 [x] PROTOCOL("1","7", "Protocol")
 [x] CODE("2","1", "Code")
 [x] CID("3","4", "CID")
@@ -26,29 +57,6 @@
 [x] IMAGE("24","1", "Image")
 [x] VIDEO("25","1", "Video");
 
-[x] fudp://
-[] nasa swap, linode
-
-[] default FAPI server
-
-[] No DISK
-
-[] rewrite startFapiServer and startFapiClient
-
-[] FapiServer income and distribute.
-
-[] FAPI: BASE (FEIP_API,FCH_API)，DISK，MAP，TALK，ROAD(relay)，DOCK(save and IO)，BANK(settle)
-[] DISK:put,get,check,list
-[] DOCK:put,get,consume
-[] ROAD:relay
-[] MAP:register fudp peer:fid -> ip,port,pubkey. probe heart beats. last seeing. RTT
-[] BANK:deposit, pay, withdraw, settle
-[] TALK: 
-
-BASE，DISK，MAP，TALK，ROAD，DOCK，BANK
-
-[] relay function in FUDP node.
-
 [x] Freer.homepage -> locationMap
 [x] apiProvider,service,params 扁平化
 [x] when node2 restarted and node1 send msg to node2, they only communicate with AsyTwoWay.
@@ -63,6 +71,7 @@ BASE，DISK，MAP，TALK，ROAD，DOCK，BANK
 [x] when node2 was breakdown, node1 resend too many times.
 [x] when node2 restarted, it failed to send msg to node2.
 [x] 检查balance付费
+[x] fudp://
 
 [x] make output: if cltv, replace owner
 [x] cash + lockTime, redeemScript

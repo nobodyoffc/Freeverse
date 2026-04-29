@@ -46,8 +46,9 @@ public class RpcRequest {
         ApacheHttp.Request request = new ApacheHttp.Request(url, NetNames.POST, jsonRPC2Request.toJson(), headerMap);
         ApacheHttp.Response response = ApacheHttp.request(request);
 
-        boolean badResponse = false;
-        if (response.isBadResponse()) badResponse = true;
+        if (response == null) return "No response from NasaRPC (transport failure).";
+
+        boolean badResponse = response.isBadResponse();
 
         String bodyStr = response.getBody();
         RpcResponse rpcResponse = null;

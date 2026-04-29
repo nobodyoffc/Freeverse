@@ -162,7 +162,14 @@ public class MempoolManager extends Manager<FcEntity> {
     }
     
     private void clearLists() {
-        String[] mempoolTxIds = nasaClient.getRawMempoolIds();
+        if (!running.get()) return;
+        String[] mempoolTxIds;
+        try {
+            mempoolTxIds = nasaClient.getRawMempoolIds();
+        } catch (Exception e) {
+            if (running.get()) log.warn("clearLists: getRawMempoolIds failed: {}", e.getMessage());
+            return;
+        }
         if(mempoolTxIds == null || mempoolTxIds.length == 0){
             txIdList.clear();
             txList.clear();
@@ -180,6 +187,12 @@ public class MempoolManager extends Manager<FcEntity> {
     
     public void shutdown() {
         running.set(false);
+    }
+
+    @Override
+    public void close() {
+        running.set(false);
+        super.close();
     }
     
     // Getters for the lists

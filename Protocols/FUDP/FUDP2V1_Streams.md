@@ -47,7 +47,7 @@ FUDP2 defines stream multiplexing, flow control, and data reassembly for the FUD
 
 ## Motivation
 
-A single FUDP connection between two peers often carries multiple concurrent logical data flows -- for example, a chat message, a file transfer, and a control signal may all be in progress simultaneously. Without stream multiplexing, these flows would either require separate connections (costly in handshake overhead and state) or share a single byte stream (causing head-of-line blocking).
+A single FUDP connection between two peers often carries multiple concurrent logical data flows -- for example, a request, a response, a notification, and a keepalive may all be in progress simultaneously. Without stream multiplexing, these flows would either require separate connections (costly in handshake overhead and state) or share a single byte stream (causing head-of-line blocking).
 
 FUDP2 addresses this by defining lightweight streams within a connection. Each stream is an independent, ordered byte sequence with its own flow control window. Streams can be created and destroyed cheaply, and head-of-line blocking on one stream does not affect others. Flow control at both the stream level and the connection level prevents a fast sender from overwhelming a slow receiver.
 
@@ -67,6 +67,8 @@ Stream IDs are variable-length integers encoded using the QUIC-style varint enco
 New stream IDs within a given type increment by 4, preserving the lower 2 bits. For example, client-initiated bidirectional streams use IDs 0, 4, 8, 12, and so on. Server-initiated bidirectional streams use IDs 1, 5, 9, 13, and so on.
 
 In FUDP's peer-to-peer model, "client" refers to the connection initiator (the peer that sent the first handshake packet) and "server" refers to the responder.
+
+The Java reference implementation currently allocates locally opened bidirectional streams as `0, 4, 8, ...` and locally opened unidirectional streams by setting bit `0x02` on the same local counter. It does not currently assign different local stream ID parity based on whether the endpoint was the handshake initiator or responder.
 
 ### Stream States
 
@@ -116,7 +118,7 @@ Each stream progresses through a defined set of states. The current state determ
 - HALF_CLOSED_LOCAL -> CLOSED: The local endpoint receives a STREAM frame with the FIN bit set from the remote peer.
 - HALF_CLOSED_REMOTE -> CLOSED: The local endpoint sends a STREAM frame with the FIN bit set.
 
-Any transition to CLOSED also occurs immediately if either side sends a RESET_STREAM frame or if the connection itself is closed.
+Any transition to CLOSED also occurs if the connection itself is closed.
 
 #### State Transitions for Unidirectional Streams
 
@@ -144,8 +146,8 @@ Each stream maintains a monotonically increasing send offset, starting at 0 for 
 The following rules apply:
 
 1. When the offset is 0, the OFF bit MAY be omitted. Receivers MUST treat the absence of the OFF bit as an implicit offset of 0.
-2. The LEN bit SHOULD always be set. An explicit length field enables the sender to pack multiple frames into a single UDP packet. The LEN bit MAY be omitted only when the STREAM frame is the last frame in the packet and its payload extends to the end of the packet.
-3. The FIN bit MUST be set on the final STREAM frame for a given direction. It indicates that no further data will be sent on this stream (or this half of a bidirectional stream).
+2. The LEN bit MUST always be set in released v1 wire behavior. Receivers treat STREAM frames without LEN as protocol violations.
+3. The FIN bit MUST be set on the final STREAM frame for a given message or send direction. The Java high-level node API sends one complete message per stream and removes the stream after FIN and full message delivery.
 4. A STREAM frame with FIN set MAY carry zero bytes of payload. This is valid and simply signals end-of-stream.
 
 ### Data Reassembly
@@ -169,38 +171,38 @@ FUDP implements two levels of flow control to prevent a fast sender from overwhe
 
 #### Stream-Level Flow Control
 
-Each stream has a maximum data limit, expressed as a byte offset. The receiver advertises its willingness to accept data via MAX_STREAM_DATA frames (as defined in FUDP1).
+Each stream has a maximum data limit, expressed as a byte offset. The receiver advertises its willingness to accept data via MAX_STREAM_DATA frames (as defined in FUDP1). The Java reference implementation initializes both send and receive stream limits to 100 MB and applies the receive limit to buffered out-of-order data.
 
 |Parameter|Default Value|Description|
 |---|---|---|
 |Initial Max Stream Data|100,000,000 bytes (100 MB)|The initial per-stream byte limit, representing the maximum offset the sender is permitted to reach.|
 |Expansion Trigger|50% consumed|When the number of bytes consumed (delivered to the application) reaches 50% of the current limit, the receiver doubles the limit.|
 
-The sender MUST NOT send data on a stream that would cause the stream's maximum offset to exceed the limit last advertised by the receiver. If the sender has data to send but is blocked by the stream-level limit, it MUST wait until the receiver sends a new MAX_STREAM_DATA frame with a higher limit.
+The sender SHOULD NOT send data on a stream that would cause the stream's maximum offset to exceed the limit last advertised by the receiver. In the Java reference implementation, `Protocol.send(...)` checks the stream send limit for single-call sends; streaming close helpers focus on MTU chunking and pacing. Receivers close the connection on detected receive-buffer flow-control violations.
 
-When the receiver's consumed byte count reaches 50% of the current limit, the receiver SHOULD send a MAX_STREAM_DATA frame with a new limit equal to twice the current limit. This automatic expansion ensures that a steady data flow is not stalled by flow control under normal conditions.
+When the receiver's consumed byte count reaches 50% of the current limit, the receiver MAY send a MAX_STREAM_DATA frame with a new limit equal to twice the current limit. The Java classes expose this expansion logic, but automatic outbound MAX_STREAM_DATA generation is not part of the current transport loop.
 
 #### Connection-Level Flow Control
 
-All streams within a connection share a connection-level byte limit. The receiver advertises this limit via MAX_DATA frames (as defined in FUDP1).
+All streams within a connection share a connection-level byte limit. The receiver advertises this limit via MAX_DATA frames (as defined in FUDP1). The Java reference implementation stores and parses connection-level limits, but does not currently make connection-level flow control the primary send gate.
 
 |Parameter|Default Value|Description|
 |---|---|---|
 |Initial Max Data|10,485,760 bytes (10 MB)|The initial connection-level byte limit, representing the maximum total bytes across all streams.|
 |Expansion Trigger|50% consumed|When the total consumed bytes across all streams reaches 50% of the current limit, the receiver doubles the limit.|
 
-A sender MUST NOT send data that would cause the total bytes sent across all streams to exceed the connection-level limit, even if individual stream-level limits would permit it. The connection-level limit acts as a global cap.
+A sender SHOULD NOT send data that would cause the total bytes sent across all streams to exceed the connection-level limit, even if individual stream-level limits would permit it. In the Java reference implementation, pacing and stream-level checks are the active controls for large transfers.
 
-When the total consumed bytes across all streams reaches 50% of the connection-level limit, the receiver SHOULD send a MAX_DATA frame with a doubled limit.
+When the total consumed bytes across all streams reaches 50% of the connection-level limit, the receiver MAY send a MAX_DATA frame with a doubled limit. The Java classes expose this calculation, but automatic MAX_DATA generation is not currently wired into packet processing.
 
 #### Interaction Between Stream and Connection Flow Control
 
-A STREAM frame is permitted only if both of the following conditions are satisfied:
+A STREAM frame is fully flow-control-compliant only if both of the following conditions are satisfied:
 
 1. The stream-level offset after sending does not exceed the stream's MAX_STREAM_DATA limit.
 2. The total connection-level byte count after sending does not exceed the connection's MAX_DATA limit.
 
-If either condition is not met, the sender MUST buffer the data until the corresponding limit is raised by the receiver.
+If either condition is not met, the sender SHOULD buffer the data until the corresponding limit is raised by the receiver.
 
 #### Stream Count Limits
 
@@ -222,7 +224,7 @@ The following rules govern stream creation:
 1. Locally initiated streams use even-numbered base IDs: 0, 4, 8, 12, ... (for client-initiated) or 1, 5, 9, 13, ... (for server-initiated), as determined by the two least significant bits of the stream ID.
 2. Stream IDs MUST be used in monotonically increasing order within each type. An implementation MUST NOT skip stream IDs. If stream ID N is opened, all streams with IDs less than N of the same type MUST be considered implicitly opened.
 3. If a received STREAM frame references a stream ID that does not yet exist locally, the implementation MUST create the stream automatically and transition it to the OPEN state.
-4. If creating a new stream would cause the total number of streams of that type to exceed the stream count limit, the implementation SHOULD send a CONNECTION_CLOSE frame with error code STREAM_LIMIT_ERROR and close the connection.
+4. If creating a new stream would cause the total number of streams of that type to exceed the stream count limit, the implementation SHOULD send a CONNECTION_CLOSE frame with error code STREAM_LIMIT_ERROR and close the connection. The Java reference implementation currently returns `null` for over-limit remote stream creation and drops the frame.
 
 ### Stream Closing
 
@@ -232,7 +234,7 @@ For bidirectional streams, each direction is closed independently. The stream tr
 
 For unidirectional streams, a single FIN from the initiator closes the stream entirely.
 
-A stream may also be abruptly terminated by sending a RESET_STREAM frame. A RESET_STREAM immediately transitions the stream to CLOSED, discarding any unsent or buffered data. The receiver of a RESET_STREAM SHOULD discard any buffered data for that stream and signal an error to the application.
+Abrupt stream termination behavior (RESET-style signaling) is implementation-defined in v1 and is not standardized in this document.
 
 ### Error Handling
 
@@ -246,7 +248,7 @@ The following error conditions are defined for stream operations:
 
 Upon detecting a flow control violation or stream limit violation, an implementation MUST close the connection by sending a CONNECTION_CLOSE frame with the appropriate error code.
 
-Upon detecting a stream state error, an implementation SHOULD send a RESET_STREAM frame for the affected stream. If the error is severe or repeated, the implementation MAY close the connection.
+Upon detecting a stream state error, an implementation SHOULD close the connection with an appropriate CONNECTION_CLOSE error code.
 
 ## Security Considerations
 
@@ -269,7 +271,7 @@ Upon detecting a stream state error, an implementation SHOULD send a RESET_STREA
 |Protocol|Relationship|
 |---|---|
 |FUDP0 (FUDP)|Foundational rules, varint encoding, conformance requirements.|
-|FUDP1 (Core Transport)|Defines STREAM frame format (types 0x08-0x0F), MAX_STREAM_DATA, MAX_DATA, MAX_STREAMS, RESET_STREAM, and CONNECTION_CLOSE frame formats referenced by this specification.|
+|FUDP1 (Core Transport)|Defines STREAM frame format (types 0x08-0x0F), MAX_STREAM_DATA, MAX_DATA, MAX_STREAMS, and CONNECTION_CLOSE frame formats referenced by this specification.|
 |FUDP3 (Loss & Congestion)|Handles retransmission of lost STREAM frames and congestion control that affects send rates on streams.|
 |FUDP4 (Security)|All STREAM frame data is encrypted. Security handshake must complete before streams can carry application data.|
 

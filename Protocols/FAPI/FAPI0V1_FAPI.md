@@ -105,7 +105,7 @@ FAPI protocols define the behavior and formats of the decentralized API service 
 1. **Wire Format** -- The binary framing of FAPI messages over FUDP streams, including the header length prefix, JSON encoding, and binary data attachments.
 2. **Request/Response Structure** -- The JSON schema for API requests (method routing, parameters, pagination) and responses (status codes, result data, error messages).
 3. **API Routing** -- The naming convention for API endpoints (`component.method`), method dispatch, and component registration.
-4. **Query Language** -- FCDSL (Freeverse Common Data Service Language) for expressing structured queries against server-side data.
+4. **FCDSL** -- Freeverse Common Data Service Language for expressing structured queries against server-side data.
 5. **Component Model** -- The component-based architecture for extending FAPI with new service capabilities (BASE, DISK, DOCK, MAP, ROAD, and future components).
 6. **Billing and Economics** -- The micropayment model for per-request billing, balance management, pricing negotiation, and settlement.
 7. **Service Discovery** -- How FAPI servers register on-chain and how clients discover and connect to them.
@@ -243,7 +243,7 @@ Each FAPI protocol document SHOULD follow this structure:
 |---|---|---|
 |0|FAPI|This document. Foundational rules for the FAPI series.|
 |1|[Core Protocol](FAPI1V1_CoreProtocol.md)|Wire format (UnifiedCodec), request/response structure, status codes, API routing.|
-|2|[Query Language](FAPI2V1_QueryLanguage.md)|FCDSL (Freeverse Common Data Service Language) specification.|
+|2|[FCDSL](FAPI2V1_FCDSL.md)|Freeverse Common Data Service Language specification.|
 |3|[Components](FAPI3V1_Components.md)|Component model, lifecycle, type IDs, registration. Individual component specs are in FAPI11+.|
 |4|[Economics](FAPI4V1_Economics.md)|Billing model, balance management, pricing, settlement, recharge.|
 |5|[Service Discovery](FAPI5V1_ServiceDiscovery.md)|On-chain service registration, discovery flow, default endpoints.|

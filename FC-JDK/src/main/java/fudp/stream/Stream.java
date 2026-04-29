@@ -65,6 +65,9 @@ public class Stream {
     /**
      * Process received stream data
      * @return assembled data if continuous, null otherwise
+     * @throws FlowControlViolationException if the peer would push more buffered
+     *         out-of-order data than {@code maxRecvData} permits. Caller should
+     *         drop the frame and may close the connection.
      */
     public synchronized byte[] onDataReceived(long offset, byte[] data, boolean fin) {
         // Duplicate detection: ignore data that has already been processed
@@ -84,6 +87,19 @@ public class Stream {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
             }
             return null;
+        }
+
+        // Receiver-side flow control. recvData tracks bytes currently *buffered*
+        // (out-of-order data waiting for gap fill). A misbehaving peer that
+        // ignores MAX_STREAM_DATA could otherwise balloon receiver memory by
+        // sending unending out-of-order chunks; cap the buffered amount and
+        // signal a flow-control violation. Note: in-order data does not stay
+        // in recvBuffer — it is drained into receivedData below — so legitimate
+        // bulk transfers do not hit this limit.
+        if (recvData + data.length > maxRecvData) {
+            throw new FlowControlViolationException(
+                    "Stream " + streamId + " buffered " + recvData
+                    + " bytes, +" + data.length + " would exceed maxRecvData=" + maxRecvData);
         }
 
         // Store in receive buffer

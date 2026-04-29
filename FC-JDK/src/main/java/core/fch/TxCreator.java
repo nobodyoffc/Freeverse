@@ -9,6 +9,7 @@ import com.google.gson.Gson;
 import constants.Constants;
 import constants.IndicesNames;
 import core.crypto.KeyTools;
+import data.fcData.ReplyBody;
 import data.fchData.Cash;
 import data.fchData.Multisig;
 import data.fchData.P2SH;
@@ -164,6 +165,43 @@ public class TxCreator {
         rawTxInfo.setFeeRate(feeRateDouble);
         Transaction tx = createTx(rawTxInfo, mainnetwork);
         return signTx(priKey,tx,rawTxInfo.getInputs());
+    }
+
+    public static String createTxHex(RawTxInfo rawTxInfo, MainNetParams mainNetwork) {
+        byte[] txBytes = createTxBytes(rawTxInfo, mainNetwork);
+        if (txBytes == null) return null;
+        return Hex.toHex(txBytes);
+    }
+
+    public static byte[] createTxBytes(RawTxInfo rawTxInfo, MainNetParams mainNetwork) {
+        Transaction tx = createTx(rawTxInfo, mainNetwork);
+        if (tx == null) return null;
+        return tx.bitcoinSerialize();
+    }
+
+    public static boolean isLockTimeUnlocked(long lockTime, long bestHeight) {
+        long currentTimestamp = System.currentTimeMillis() / 1000;
+        return isLockTimeUnlocked(lockTime, bestHeight, currentTimestamp);
+    }
+
+    /**
+     * Check whether a Bitcoin lockTime is unlocked.
+     *
+     * @param lockTime         The lockTime value to check
+     * @param bestHeight       Current block height
+     * @param currentTimestamp Current block timestamp in seconds
+     * @return true if unlocked and spendable, false if still locked
+     */
+    private static boolean isLockTimeUnlocked(long lockTime, long bestHeight, long currentTimestamp) {
+        final long LOCKTIME_THRESHOLD = 500_000_000L;
+
+        if (lockTime == 0) return true;
+
+        if (lockTime < LOCKTIME_THRESHOLD) {
+            return bestHeight >= lockTime;
+        } else {
+            return currentTimestamp >= lockTime;
+        }
     }
 
     public static Transaction createTx(RawTxInfo rawTxInfo, MainNetParams mainNetwork) {
@@ -506,7 +544,10 @@ public class TxCreator {
                 // scriptSig format: OP_0 <sig1> <sig2> ... <sigM> <redeemScript>
                 // The redeemScript contains both CLTV and multisig, so redeemScriptLen is accurate
                     multisigInputSize(p2sh.getN(), p2sh.getM(), redeemScriptLen);
-            // Fallback to generic calculation
+            default -> {
+                log.warn("Unknown P2SH type: " + inputType + ", using generic calculation");
+                yield calculateSingleSigP2SHInputSize(redeemScriptLen);
+            }
         };
     }
 
@@ -1142,21 +1183,73 @@ public class TxCreator {
         return signSchnorrMultiSigTx(multiSignData, priKey, mainNetParams).toJson();
     }
 
+    /**
+     * Sign a multisig transaction with support for CLTV inputs.
+     * When spending CLTV multisig UTXOs, each input may have its own redeemScript
+     * (stored on the Cash) or may require a CLTV+multisig redeemScript to be built.
+     * Transaction lockTime and input sequence numbers are adjusted to satisfy CLTV rules.
+     */
     public static RawTxInfo signSchnorrMultiSigTx(RawTxInfo multiSignData, byte[] priKey, MainNetParams mainnetwork) {
 
-        byte[] rawTx = multiSignData.getRawTx();
-        byte[] redeemScript = HexFormat.of().parseHex(multiSignData.getSenderMultisig().getRedeemScript());
+        byte[] rawTx = createTxBytes(multiSignData, mainnetwork);
+        if (rawTx == null) rawTx = multiSignData.getRawTx();
         List<Cash> cashList = multiSignData.getInputs();
+        Multisig multisig = multiSignData.getSenderMultisig();
 
         Transaction transaction = new Transaction(mainnetwork, rawTx);
         List<TransactionInput> inputs = transaction.getInputs();
 
+        // Handle CLTV inputs: set sequence and transaction lockTime for time-locked multisig UTXOs.
+        // Spending CLTV outputs requires tx.lockTime >= CLTV value AND input sequence < 0xFFFFFFFF.
+        long maxInputLockTime = 0;
+        for (int i = 0; i < inputs.size(); i++) {
+            Cash cashInput = cashList.get(i);
+            if (cashInput.getLockTime() != null && cashInput.getLockTime() > 0) {
+                inputs.get(i).setSequenceNumber(0xFFFFFFFEL);
+                if (cashInput.getLockTime() > maxInputLockTime) {
+                    maxInputLockTime = cashInput.getLockTime();
+                }
+                log.debug("Set sequence to 0xFFFFFFFE for CLTV multisig input: "
+                        + cashInput.getBirthTxId() + ":" + cashInput.getBirthIndex());
+            }
+        }
+        if (maxInputLockTime > 0) {
+            transaction.setLockTime(maxInputLockTime);
+            log.debug("Set transaction lockTime to " + maxInputLockTime + " for CLTV multisig");
+        }
+
         ECKey ecKey = ECKey.fromPrivate(priKey);
         BigInteger priKeyBigInteger = ecKey.getPrivKey();
         List<String> sigList = new ArrayList<>();
+
+        // Sign each input with the correct redeemScript for that input.
         for (int i = 0; i < inputs.size(); ++i) {
+            byte[] redeemScript;
+            Cash cashInput = cashList.get(i);
+
+            if (cashInput.getRedeemScript() != null && !cashInput.getRedeemScript().isEmpty()) {
+                redeemScript = Hex.fromHex(cashInput.getRedeemScript());
+                log.debug("Signing input " + i + " with stored redeemScript: " + cashInput.getRedeemScript());
+            } else if (cashInput.getLockTime() != null && cashInput.getLockTime() > 0) {
+                Script cltvMultisigScript = P2SH.makeMultisigLockTimeRedeemScript(
+                        cashInput.getLockTime(),
+                        multisig.getPubkeys(),
+                        multisig.getM(),
+                        multisig.getN()
+                );
+                redeemScript = cltvMultisigScript.getProgram();
+                log.debug("Signing input " + i + " with CLTV+multisig redeemScript, lockTime: "
+                        + cashInput.getLockTime());
+            } else {
+                redeemScript = Hex.fromHex(multisig.getRedeemScript());
+                log.debug("Signing input " + i + " with plain multisig redeemScript: " + multisig.getRedeemScript());
+            }
+            if (redeemScript == null) {
+                log.debug("Failed to sign multisig input. RedeemScript is null.");
+                return multiSignData;
+            }
             Script script = new Script(redeemScript);
-            Sha256Hash hash = transaction.hashForSignatureWitness(i, script, Coin.valueOf(cashList.get(i).getValue()), Transaction.SigHash.ALL, false);
+            Sha256Hash hash = transaction.hashForSignatureWitness(i, script, Coin.valueOf(cashInput.getValue()), Transaction.SigHash.ALL, false);
             byte[] sig = SchnorrSignature.schnorr_sign(hash.getBytes(), priKeyBigInteger);
             sigList.add(Hex.toHex(sig));
         }
@@ -1171,6 +1264,7 @@ public class TxCreator {
     }
 
     public static boolean rawTxSigVerify(byte[] rawTx, byte[] pubKey, byte[] sig, int inputIndex, long inputValue, byte[] redeemScript, MainNetParams mainnetwork) {
+        if (mainnetwork == null) mainnetwork = FchMainNetwork.MAINNETWORK;
         Transaction transaction = new Transaction(mainnetwork, rawTx);
         Script script = new Script(redeemScript);
         Sha256Hash hash = transaction.hashForSignatureWitness(inputIndex, script, Coin.valueOf(inputValue), Transaction.SigHash.ALL, false);
@@ -1203,6 +1297,185 @@ public class TxCreator {
 
         byte[] signResult = transaction.bitcoinSerialize();
         return Hex.toHex(signResult);
+    }
+
+    /**
+     * Build a complete multisig transaction from collected signatures, with CLTV support.
+     * For CLTV multisig, transaction lockTime and input sequences are set appropriately,
+     * and each input uses its own redeemScript (stored on Cash) when available.
+     */
+    public static String buildSchnorrMultiSigTx(RawTxInfo rawTxInfo, MainNetParams mainnetwork) {
+        Map<String, List<String>> sigListMap = rawTxInfo.getFidSigMap();
+        Multisig multisig = rawTxInfo.getSenderMultisig();
+        if (sigListMap == null || sigListMap.isEmpty() || multisig == null) return null;
+
+        byte[] rawTx = createTxBytes(rawTxInfo, mainnetwork);
+        if (rawTx == null) rawTx = rawTxInfo.getRawTx();
+        if (rawTx == null) return null;
+
+        if (sigListMap.size() > multisig.getM())
+            sigListMap = dropRedundantStringSigs(sigListMap, multisig.getM());
+
+        Transaction transaction = new Transaction(mainnetwork, rawTx);
+
+        // Ensure lockTime and sequences are set for any CLTV inputs.
+        List<Cash> cashList = rawTxInfo.getInputs();
+        if (cashList != null) {
+            long maxInputLockTime = 0;
+            for (int i = 0; i < transaction.getInputs().size() && i < cashList.size(); i++) {
+                Cash cashInput = cashList.get(i);
+                if (cashInput.getLockTime() != null && cashInput.getLockTime() > 0) {
+                    transaction.getInput(i).setSequenceNumber(0xFFFFFFFEL);
+                    if (cashInput.getLockTime() > maxInputLockTime) {
+                        maxInputLockTime = cashInput.getLockTime();
+                    }
+                }
+            }
+            if (maxInputLockTime > 0) {
+                transaction.setLockTime(maxInputLockTime);
+                log.debug("Set transaction lockTime to " + maxInputLockTime + " for CLTV multisig build");
+            }
+        }
+
+        // Build scriptSig for each input using the correct redeemScript for that input.
+        for (int i = 0; i < transaction.getInputs().size(); i++) {
+            List<byte[]> sigListByTx = new ArrayList<>();
+            for (String fid : multisig.getFids()) {
+                try {
+                    String sig = sigListMap.get(fid).get(i);
+                    sigListByTx.add(Hex.fromHex(sig));
+                } catch (Exception ignore) {
+                }
+            }
+
+            byte[] redeemScriptForBuild;
+            Cash cashInput = (cashList != null && i < cashList.size()) ? cashList.get(i) : null;
+
+            if (cashInput != null && cashInput.getRedeemScript() != null && !cashInput.getRedeemScript().isEmpty()) {
+                redeemScriptForBuild = Hex.fromHex(cashInput.getRedeemScript());
+                log.debug("Building scriptSig with stored redeemScript for input " + i);
+            } else if (cashInput != null && cashInput.getLockTime() != null && cashInput.getLockTime() > 0) {
+                Script cltvMultisigScript = P2SH.makeMultisigLockTimeRedeemScript(
+                        cashInput.getLockTime(),
+                        multisig.getPubkeys(),
+                        multisig.getM(),
+                        multisig.getN()
+                );
+                redeemScriptForBuild = cltvMultisigScript.getProgram();
+                log.debug("Building scriptSig with CLTV+multisig redeemScript for input " + i);
+            } else {
+                redeemScriptForBuild = Hex.fromHex(multisig.getRedeemScript());
+                log.debug("Building scriptSig with plain multisig redeemScript for input " + i);
+            }
+
+            Script inputScript = createSchnorrMultiSigInputScriptBytes(sigListByTx, redeemScriptForBuild);
+            transaction.getInput(i).setScriptSig(inputScript);
+        }
+
+        return Hex.toHex(transaction.bitcoinSerialize());
+    }
+
+    private static Map<String, List<String>> dropRedundantStringSigs(Map<String, List<String>> sigListMap, int m) {
+        Map<String, List<String>> newMap = new HashMap<>();
+        int i = 0;
+        for (String key : sigListMap.keySet()) {
+            newMap.put(key, sigListMap.get(key));
+            i++;
+            if (i == m) return newMap;
+        }
+        return newMap;
+    }
+
+    /**
+     * Merge multiple signed-multisig JSON payloads, verifying each signature before inclusion.
+     * Returns a ReplyBody whose data is the merged RawTxInfo on success.
+     */
+    public static ReplyBody mergeMultisignTxData(String[] signedDatas, MainNetParams mainnetwork) {
+        Map<String, List<String>> fidSigListMap = new HashMap<>();
+        RawTxInfo finalRawTxInfo = null;
+        byte[] rawTx = null;
+        Multisig multisig = null;
+        ReplyBody replyBody;
+        for (String dataJson : signedDatas) {
+            try {
+                RawTxInfo multiSignData = RawTxInfo.fromJson(dataJson, RawTxInfo.class);
+
+                if (multisig == null && multiSignData.getSenderMultisig() != null) {
+                    multisig = multiSignData.getSenderMultisig();
+                }
+
+                if (rawTx == null) {
+                    rawTx = createTxBytes(multiSignData, mainnetwork);
+                }
+
+                for (String fid : multiSignData.getFidSigMap().keySet()) {
+                    List<String> sign = multiSignData.getFidSigMap().get(fid);
+                    if (fidSigListMap.get(fid) == null) {
+                        replyBody = verifySig(fid, multiSignData, mainnetwork);
+                        if (replyBody.getCode() == 0)
+                            fidSigListMap.put(fid, sign);
+                        else return replyBody;
+                    }
+                }
+                finalRawTxInfo = multiSignData;
+            } catch (Exception ignored) {
+                replyBody = new ReplyBody();
+                replyBody.set1020Other("Failed to parse the signed data.");
+                return replyBody;
+            }
+        }
+        if (rawTx == null || rawTx.length == 0 || multisig == null || finalRawTxInfo == null) return null;
+
+        finalRawTxInfo.setSenderMultisig(multisig);
+        finalRawTxInfo.setFidSigMap(fidSigListMap);
+
+        replyBody = new ReplyBody();
+        replyBody.set0Success();
+        replyBody.setData(finalRawTxInfo);
+        return replyBody;
+    }
+
+    private static ReplyBody verifySig(String fid, RawTxInfo multiSignData, MainNetParams mainnetwork) {
+        ReplyBody replyBody = new ReplyBody();
+        try {
+            if (!multiSignData.getSenderMultisig().getFids().contains(fid)) {
+                replyBody.set1020Other("The FID is not a member of " + multiSignData.getSenderMultisig().getId());
+                return replyBody;
+            }
+            int pubKeyIndex = multiSignData.getSenderMultisig().getFids().indexOf(fid);
+            String pubKey = multiSignData.getSenderMultisig().getPubkeys().get(pubKeyIndex);
+            String redeemScript = multiSignData.getSenderMultisig().getRedeemScript();
+            byte[] rawTx = createTxBytes(multiSignData, mainnetwork);
+            for (int i = 0; i < multiSignData.getInputs().size(); i++) {
+                if (!rawTxSigVerify(rawTx, Hex.fromHex(pubKey),
+                        Hex.fromHex(multiSignData.getFidSigMap().get(fid).get(i)),
+                        i, multiSignData.getInputs().get(i).getValue(),
+                        Hex.fromHex(redeemScript), mainnetwork)) {
+                    replyBody.set1020Other("The signature is invalid");
+                    return replyBody;
+                }
+            }
+        } catch (Exception e) {
+            replyBody.set1020Other("Failed to verify the signature.");
+            return replyBody;
+        }
+        replyBody.set0Success();
+        return replyBody;
+    }
+
+    /**
+     * Higher-level helper: merge signed payloads and build the final multisig transaction.
+     */
+    public static String buildSignedMultisigTx(String[] signedData, MainNetParams mainnetwork) {
+        ReplyBody replyBody = mergeMultisignTxData(signedData, mainnetwork);
+        if (replyBody == null) return null;
+        if (replyBody.getCode() != 0) {
+            System.out.println(replyBody.getMessage());
+            return null;
+        }
+        RawTxInfo finalRawTxInfo = (RawTxInfo) replyBody.getData();
+        if (finalRawTxInfo == null) return null;
+        return buildSchnorrMultiSigTx(finalRawTxInfo, mainnetwork);
     }
 
     private static Map<String, List<byte[]>> dropRedundantSigs(Map<String, List<byte[]>> sigListMap, int m) {
@@ -1604,6 +1877,55 @@ public class TxCreator {
                         .sort(so -> so.field(f -> f.field("height").order(SortOrder.Desc)))
                 , data.fchData.Block.class);
         return result.hits().hits().get(0).source();
+    }
+
+    /**
+     * Get a list of Cash outputs from a signed transaction for a specific FID.
+     * Useful for updating the local cash database after broadcasting a transaction.
+     *
+     * @param signedTx The signed transaction in hex format
+     * @param fid      The FID to filter outputs for
+     * @return List of Cash objects belonging to the specified FID
+     */
+    public static List<Cash> getIssuedCashListForFid(String signedTx, String fid) {
+        if (signedTx == null || fid == null) {
+            return new ArrayList<>();
+        }
+
+        List<Cash> cashList = new ArrayList<>();
+
+        try {
+            Transaction transaction = new Transaction(FchMainNetwork.MAINNETWORK, Hex.fromHex(signedTx));
+            String txId = transaction.getTxId().toString();
+            List<TransactionOutput> outputs = transaction.getOutputs();
+
+            for (int i = 0; i < outputs.size(); i++) {
+                TransactionOutput output = outputs.get(i);
+
+                try {
+                    Address address = output.getScriptPubKey().getToAddress(FchMainNetwork.MAINNETWORK);
+
+                    if (fid.equals(address.toString())) {
+                        Cash cash = new Cash();
+                        cash.setBirthTxId(txId);
+                        cash.setBirthIndex(i);
+                        cash.setOwner(fid);
+                        cash.setValue(output.getValue().getValue());
+                        cash.setValid(true);
+                        cash.makeId(txId, i);
+                        cashList.add(cash);
+                    }
+                } catch (Exception e) {
+                    // Skip outputs that can't be converted to addresses (e.g., OP_RETURN)
+                    log.debug("Skipping output " + i + " - cannot convert to address: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse signed transaction: " + e.getMessage());
+            return new ArrayList<>();
+        }
+
+        return cashList;
     }
 
 
