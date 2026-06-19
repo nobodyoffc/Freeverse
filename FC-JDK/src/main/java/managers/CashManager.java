@@ -787,7 +787,7 @@ public class CashManager extends Manager<Cash> {
             if(br!=null && !askIfYes(br,"Continue?"))return resultType+"";
         }
 
-        long destroyingCd = Cash.sumCashCd(meetList);
+        long destroyingCd = Cash.sumCashCd(meetList, bestHeight);
         if(cd!=null && destroyingCd < cd){
             String error = "The required CD is not enough:"+destroyingCd+" < "+cd;
             resultType = TxResultType.ERROR_STRING;
@@ -1109,7 +1109,7 @@ public class CashManager extends Manager<Cash> {
         if(dbEmpty())return;
         long sumCd=0;
         for(Cash cash:localDB.getAll().values()){
-            cash.makeCd();
+            cash.makeCd(bestHeight);
             if(cash.getCd()!=null)sumCd+=cash.getCd();
         }
         if(cid!=null)cid.setCd(sumCd);
@@ -1850,7 +1850,7 @@ public class CashManager extends Manager<Cash> {
             }catch (Exception ignore){}
 
             if (amount == null && cd == null) {
-                if(mempoolHandler!=null && apipClient!=null)
+                if(mempoolHandler != null)
                     checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
                 searchResult.setData(cashList);
                 searchResult.setGot((long) cashList.size());
@@ -1906,6 +1906,8 @@ public class CashManager extends Manager<Cash> {
                 cashList.add(hit.source());
             }
             if (amount == null && cd == null) {
+                if(mempoolHandler != null)
+                    checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
                 searchResult.setData(cashList);
                 searchResult.setGot((long) cashList.size());
                 try{
@@ -1926,7 +1928,7 @@ public class CashManager extends Manager<Cash> {
             searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
         }
 
-        if(mempoolHandler!=null && apipClient!=null)
+        if(mempoolHandler!=null)
             checkUnconfirmed(cashList,myFid, mempoolHandler, apipClient);
 
         amount = amount == null ? 0L : amount;
@@ -1939,8 +1941,8 @@ public class CashManager extends Manager<Cash> {
         for (Cash cash : cashList) {
             if(Boolean.TRUE.equals(isImmature(cash, bestheight)))continue;
             long cdd=0;
-            if(cash.getBirthTime()!=null) {
-                cdd = utils.FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+            if(cash.getBirthHeight()!=null && bestheight!=null) {
+                cdd = utils.FchUtils.cdd(cash.getValue(), cash.getBirthHeight(), bestheight);
             }
             fchSum += cash.getValue();
             cdSum += cdd;

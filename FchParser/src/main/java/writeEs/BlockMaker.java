@@ -310,7 +310,7 @@ public class BlockMaker {
 		in.setBirthTxIndex(out.getBirthTxIndex());
 		in.setBirthTime(out.getBirthTime());
 		in.setBirthHeight(out.getBirthHeight());
-		in.setCdd(FchUtils.cdd(in.getValue(), in.getBirthTime(), in.getSpendTime()));
+		in.setCdd(FchUtils.cdd(in.getValue(), in.getBirthHeight(), in.getSpendHeight()));
 	}
 
 

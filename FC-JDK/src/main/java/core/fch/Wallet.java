@@ -170,7 +170,7 @@ public class Wallet {
             spendCashList.add(cash);
             fee = calcTxSize(spendCashList.size(), sendToList.size(), opReturnSize);
             valueSum += cash.getValue();
-            Long cd1 = utils.FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis()/1000);
+            Long cd1 = utils.FchUtils.cdd(cash.getValue(), cash.getBirthHeight(), bestHeight);
             cdSum += cd1;
             if (valueSum >= (amount + fee) && cdSum >= cd) break;
         }

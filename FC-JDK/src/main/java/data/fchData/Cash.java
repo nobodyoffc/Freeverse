@@ -347,11 +347,11 @@ public class Cash extends FcObject {
 		return FchUtils.satoshiToCoin(sum);
 	}
 
-	public static long sumCashCd(List<Cash> cashList) {
+	public static long sumCashCd(List<Cash> cashList, long bestHeight) {
 		if(cashList==null||cashList.isEmpty())return 0;
 		long sum = 0;
 		for(Cash cash :cashList){
-			if(cash.makeCd()==null)continue;
+			if(cash.makeCd(bestHeight)==null)continue;
 			if(cash.getCd()!=null)sum+=cash.getCd();
 		}
 		return sum;
@@ -504,9 +504,9 @@ public class Cash extends FcObject {
 	public Long getCd() {
 		return cd;
 	}
-	public Long makeCd(){
-		if(value==null || birthTime==null)return null;
-		this.cd = utils.FchUtils.cdd(getValue(),getBirthTime(),System.currentTimeMillis()/1000);
+	public Long makeCd(long bestHeight){
+		if(value==null || birthHeight==null)return null;
+		this.cd = utils.FchUtils.cdd(getValue(),getBirthHeight(),bestHeight);
 		return this.cd;
 	}
 	public void setCd(Long cd) {

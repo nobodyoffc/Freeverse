@@ -294,17 +294,19 @@ public class DiskComponent extends AbstractFapiComponent {
         }
         
         try {
-            // Parse metadata from params
+            // For permanent storage, dataLifeDays is ignored per FAPI12 spec.
             long dataLifeDays = defaultDataLifeDays;
-            @SuppressWarnings("unchecked")
-            Map<String, Object> params = parseParams(request.getParams(), Map.class);
-            if (params != null && params.containsKey("dataLifeDays")) {
-                Object days = params.get("dataLifeDays");
-                if (days instanceof Number) {
-                    dataLifeDays = ((Number) days).longValue();
+            if (!permanent) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> params = parseParams(request.getParams(), Map.class);
+                if (params != null && params.containsKey("dataLifeDays")) {
+                    Object days = params.get("dataLifeDays");
+                    if (days instanceof Number) {
+                        dataLifeDays = ((Number) days).longValue();
+                    }
                 }
             }
-            
+
             // Store using streaming path (wraps byte[] in ByteArrayInputStream,
             // computes hash incrementally and writes to disk in single pass)
             DiskItem diskItem = diskHandler.storeFromBytes(binaryData, permanent, dataLifeDays);
@@ -465,9 +467,9 @@ public class DiskComponent extends AbstractFapiComponent {
                 return createErrorResponse("Content is empty");
             }
             
-            // Determine data life days
+            // For permanent storage, dataLifeDays is ignored per FAPI12 spec.
             long dataLifeDays = defaultDataLifeDays;
-            if (request.metadata() != null && !request.metadata().isEmpty()) {
+            if (!permanent && request.metadata() != null && !request.metadata().isEmpty()) {
                 try {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> metaMap = JsonUtils.fromJson(request.metadata(), Map.class);

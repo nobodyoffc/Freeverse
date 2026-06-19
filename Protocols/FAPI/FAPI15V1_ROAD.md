@@ -74,7 +74,7 @@ Data traverses at most 2 network hops between ROAD servers:
 - **1 hop**: Sender -> ROAD Server A -> Target (local delivery). The target is registered in Server A's MAP.
 - **2 hops**: Sender -> ROAD Server A -> ROAD Server B -> Target (chain relay). Server A forwards the data to Server B via `road.forward`. Server B delivers locally.
 
-The `road.forward` method MUST NOT forward data to another ROAD server. If the target is not registered in the receiving ROAD's local MAP, delivery fails with `TARGET_NOT_FOUND`. This hard limit prevents:
+The `road.forward` method MUST NOT forward data to another ROAD server. If the target is not registered in the receiving ROAD's local MAP, delivery fails with `code: 404` and the `MAX_HOPS_REACHED` counter is incremented. This hard limit prevents:
 
 - Unbounded relay chains that increase latency and cost.
 - Amplification attacks where a single message triggers cascading forwards across many servers.
@@ -109,10 +109,11 @@ feePerTarget = ceil(dataSize / 1024) * (pricePerKBIn + pricePerKBOut)
 totalFee = feePerTarget * numberOfSuccessfulDeliveries
 ```
 
-- **pricePerKBIn**: The ingress fee per kilobyte, set by the server operator.
-- **pricePerKBOut**: The egress fee per kilobyte, set by the server operator.
-- **Failed deliveries are not charged.** Only targets that receive the data incur fees.
-- For multi-target relays, each successfully delivered target is charged independently.
+- **pricePerKBIn**: The ingress fee per kilobyte, sourced from the operator's `Service.pricePerKBIn` (falling back to `Service.pricePerKB`, then to a default of 10 satoshi/KB).
+- **pricePerKBOut**: The egress fee per kilobyte, sourced from `Service.pricePerKBOut` (with the same fallback chain).
+- **Failed deliveries are not charged.** Charging happens only after a successful local FUDP send, a successful ACK-confirmed direct send, or a successful chain-relay response from the remote ROAD.
+- For multi-target relays, each successfully delivered target is charged independently. Chain-relayed targets are recorded with the charge tag suffix `:chain` (`road.relay:in:chain`, `road.relay:out:chain`).
+- **Balance pre-check.** Before processing any target, the server requires the sender's balance to cover at least one target's cost (`pricePerKBIn + pricePerKBOut` per KB). If not, the request is rejected with code 402 and the `INSUFFICIENT_BALANCE` counter is incremented.
 
 ## 3. API List
 
@@ -146,7 +147,7 @@ Relay arbitrary data to one or more target FIDs. This is the primary public API 
   - `chargedIn` (integer): Total ingress fees charged in satoshi.
   - `chargedOut` (integer): Total egress fees charged in satoshi.
   - `totalCharged` (integer): Sum of `chargedIn` and `chargedOut`.
-  - `relayResults` (object): Mapping of each target FID to its individual relay result, containing `success` (boolean), `code` (hex error code if failed), `message` (human-readable description), `chargedIn` (integer), `chargedOut` (integer), and `chainRelay` (boolean, true if delivered via another ROAD).
+  - `relayResults` (object): Mapping of each target FID to its individual relay result, containing `success` (boolean), `code` (integer FapiCode -- 0 on success, otherwise an HTTP-style status such as 404, 502, or 504), `message` (human-readable description), `chargedIn` (integer), `chargedOut` (integer), `chainRelayed` (boolean, present and `true` only when delivered via another ROAD), and `relayedVia` (string, the URL of the remote ROAD; present only when `chainRelayed` is true).
 
 - **Example request**:
   ```json
@@ -175,15 +176,19 @@ Relay arbitrary data to one or more target FIDs. This is the primary public API 
       "relayResults": {
         "FBejsS6cJaBrAwPcMjFJYgfRfBBRRbwi2D": {
           "success": true,
+          "code": 0,
+          "message": "Delivered",
           "chargedIn": 10,
-          "chargedOut": 10,
-          "chainRelay": false
+          "chargedOut": 10
         },
         "F86zoAvNpFV6fuS3GNz7bjR34h1pMhEC2Q": {
           "success": true,
+          "code": 0,
+          "message": "Delivered via chain relay",
           "chargedIn": 10,
           "chargedOut": 10,
-          "chainRelay": true
+          "chainRelayed": true,
+          "relayedVia": "fudp://road.example.com:9000"
         }
       }
     }
@@ -205,17 +210,17 @@ Relay arbitrary data to one or more target FIDs. This is the primary public API 
       "relayResults": {
         "FBejsS6cJaBrAwPcMjFJYgfRfBBRRbwi2D": {
           "success": true,
+          "code": 0,
+          "message": "Delivered",
           "chargedIn": 10,
-          "chargedOut": 10,
-          "chainRelay": false
+          "chargedOut": 10
         },
         "F86zoAvNpFV6fuS3GNz7bjR34h1pMhEC2Q": {
           "success": false,
-          "code": "0x01",
-          "message": "TARGET_NOT_FOUND",
+          "code": 404,
+          "message": "Target home.ROAD is this server but target is not reachable: <reason>",
           "chargedIn": 0,
-          "chargedOut": 0,
-          "chainRelay": false
+          "chargedOut": 0
         }
       }
     }
@@ -240,9 +245,9 @@ Receive forwarded data from another ROAD node for local delivery. This method is
   - `chargedIn` (integer): Ingress fees charged.
   - `chargedOut` (integer): Egress fees charged.
   - `totalCharged` (integer): Sum of `chargedIn` and `chargedOut`.
-  - `relayResults` (object): Single entry for the target FID.
+  - `relayResults` (object): Single entry for the target FID, with the same per-target fields as the `road.relay` response (`success`, `code`, `message`, `chargedIn`, `chargedOut`).
 
-- **Behavior**: The receiving ROAD attempts local delivery only. It looks up the `targetFid` in its local MAP component and delivers via FUDP if found. It MUST NOT forward the data to yet another ROAD server (2-hop rule). If the target is not found in local MAP, the method returns `TARGET_NOT_FOUND`.
+- **Behavior**: The receiving ROAD attempts local delivery only. It looks up the `targetFid` in its local MAP component and delivers via FUDP if found. It MUST NOT forward the data to yet another ROAD server (2-hop rule). If the target is not found in local MAP, the per-target result has `success: false` and `code: 404` ("Target not found (max hops reached)"); the server's `MAX_HOPS_REACHED` error counter is incremented.
 
 - **Example request**:
   ```json
@@ -270,9 +275,10 @@ Receive forwarded data from another ROAD node for local delivery. This method is
       "relayResults": {
         "F86zoAvNpFV6fuS3GNz7bjR34h1pMhEC2Q": {
           "success": true,
+          "code": 0,
+          "message": "Delivered",
           "chargedIn": 10,
-          "chargedOut": 10,
-          "chainRelay": false
+          "chargedOut": 10
         }
       }
     }
@@ -316,11 +322,11 @@ Return relay statistics for the ROAD component.
       "pricePerKBIn": 10,
       "pricePerKBOut": 10,
       "errorCounts": {
-        "TARGET_NOT_FOUND": 312,
+        "NOT_FOUND": 312,
         "DELIVERY_FAILED": 148,
-        "RELAY_REFUSED": 42,
-        "QUOTA_EXCEEDED": 15,
-        "MAX_HOPS_REACHED": 10
+        "MAX_HOPS_REACHED": 10,
+        "INSUFFICIENT_BALANCE": 42,
+        "MAX_COST_EXCEEDED": 15
       },
       "timestamp": 1774934400000
     }
@@ -329,35 +335,52 @@ Return relay statistics for the ROAD component.
 
 ## 5. Relay Algorithm
 
-When `road.relay` is called, the server processes each target FID using the following algorithm. Steps are evaluated in order; the first matching condition determines the delivery path.
+When `road.relay` is called, the server processes each target FID using the following algorithm. Steps are evaluated in order; the first matching condition determines the delivery path. Multi-target requests are dispatched in parallel (bounded thread pool, up to 10 concurrent workers) with a per-target timeout of 15 seconds.
 
-**Step 1 -- Local MAP Lookup.** The server queries the co-hosted MAP component for the target FID. If the target is registered in MAP, the server delivers the payload directly via FUDP to the target's observed address. Delivery is complete.
+**Step 1 -- Local MAP Lookup.** The server queries the co-hosted MAP component for the target FID. If the target is registered in MAP, the server adds the target's pubkey + observed address to the FUDP PeerBook and delivers the payload via `sendNotify` (fire-and-forget). Delivery is reported as successful as soon as the FUDP send returns without exception.
 
-**Step 2 -- Hop Limit Check.** If the current request was received via `road.forward` (i.e., this is already a forwarded relay), no further forwarding is attempted. The server MUST NOT call `road.forward` on another ROAD. If the target was not found in Step 1, delivery fails with `MAX_HOPS_REACHED` (0x05).
+**Step 2 -- Hop Limit Check.** If the current request was received via `road.forward` (i.e., this is already a forwarded relay) and the target was not found in Step 1, delivery fails with `code: 404` ("Target not found (max hops reached)"). The server MUST NOT call `road.forward` on another ROAD. The `MAX_HOPS_REACHED` counter in `errorCounts` is incremented.
 
-**Step 3 -- Self-URL Check.** If `targetRoad` is provided and points to the current server's own URL, the server treats this as a local delivery request. It attempts direct FUDP delivery to the target. If the target is not reachable, delivery fails with `TARGET_NOT_FOUND` (0x01) or `DELIVERY_FAILED` (0x02).
+**Step 3 -- Self-URL Check.** If `targetRoad` is provided and matches the current server's own URL, the server attempts ACK-confirmed direct FUDP delivery via `sendNotifyWaitAck` (3-second timeout). If the target is in the FUDP ConnectionManager (i.e., previously connected as a client), its address is harvested into the PeerBook before sending. On ACK timeout or send failure, the result is `code: 404` and the `DELIVERY_FAILED` counter is incremented.
 
-**Step 4 -- Remote Forwarding.** If `targetRoad` is provided and points to a different server, the server forwards the payload to that remote ROAD by calling `road.forward` on it. If the remote ROAD accepts and delivers successfully, the relay is marked as a chain relay (`chainRelay: true`).
+**Step 4 -- Remote Forwarding.** If `targetRoad` is provided and points to a different server, the server obtains a `FapiClient` to that URL and calls `road.forward` on it (10-second timeout). On a successful response the result is marked `chainRelayed: true` with `relayedVia` set to the remote URL, and the `chainRelays` counter is incremented.
 
-**Step 5 -- Fallback.** If remote forwarding in Step 4 fails (e.g., the remote ROAD is unreachable or returns an error), the server attempts direct FUDP delivery to the target as a fallback. This may succeed if the target's address is reachable despite not being registered in MAP.
+**Step 5 -- Fallback.** If remote forwarding in Step 4 fails (unreachable, error response, or timeout), the server falls back to ACK-confirmed direct FUDP delivery (same path as Step 3). This handles cases where `targetRoad` is an unrecognized alias for this server (e.g., an Android emulator's `10.0.2.2`).
 
-**Step 6 -- No targetRoad.** If `targetRoad` is absent, the server attempts direct FUDP delivery. The client omits `targetRoad` when the target's home ROAD is the same as the server being called, or when the target's home ROAD is unknown.
+**Step 6 -- No targetRoad.** If `targetRoad` is absent, the server attempts ACK-confirmed direct FUDP delivery. Clients omit `targetRoad` when the target's `home.ROAD` equals the client's configured server URL, or when the target's home ROAD is unknown.
+
+**Step 7 -- All Paths Exhausted.** If no path succeeded, the per-target result carries the failure from the last attempted path and the `NOT_FOUND` counter is incremented.
 
 ## 6. Relay Error Codes
 
-When relay delivery fails for a specific target, the per-target relay result includes one of the following error codes:
+The per-target `code` in `relayResults` is a numeric `FapiCode` (HTTP-style status). The values produced by ROAD are:
 
-| Error | Code | Description |
+| Code | Constant | When it appears |
 |---|---|---|
-| TARGET_NOT_FOUND | 0x01 | The target FID is not registered in MAP and cannot be reached. |
-| DELIVERY_FAILED | 0x02 | The target was found but data delivery failed (e.g., FUDP send error). |
-| RELAY_REFUSED | 0x03 | The remote ROAD refused to accept the forwarded data. |
-| QUOTA_EXCEEDED | 0x04 | The sender has exceeded their relay rate limit. |
-| MAX_HOPS_REACHED | 0x05 | The data has already been forwarded once and cannot be forwarded again. |
-| INSUFFICIENT_BALANCE | 0x06 | The sender's account balance is insufficient to cover relay fees. |
-| MAX_COST_EXCEEDED | 0x07 | The estimated relay cost exceeds the sender's `maxCost` parameter. |
+| 0 | SUCCESS | Delivery succeeded (local, direct, or chain). |
+| 404 | NOT_FOUND | Target not in MAP and not reachable; or `road.forward` could not deliver locally (max hops); or ACK timeout from a direct FUDP send. |
+| 502 | BAD_GATEWAY | The local FUDP `sendNotify` raised an exception; or the overall relay returned with zero successful targets. |
+| 504 | GATEWAY_TIMEOUT | A multi-target worker exceeded the 15-second per-target timeout. |
 
-These error codes appear in the per-target `relayResults` object in the `road.relay` and `road.forward` responses, and in the `errorCounts` object returned by `road.stats`.
+Top-level `code` values returned by `road.relay` and `road.forward`:
+
+| Code | Constant | When it appears |
+|---|---|---|
+| 0 | SUCCESS | At least one target was delivered. |
+| 400 | BAD_REQUEST | `data` is empty, `params` missing, no targets supplied, or more than 100 targets. |
+| 402 | PAYMENT_REQUIRED | Estimated cost exceeded `maxCost` (`MAX_COST_EXCEEDED`); or sender balance cannot cover the per-target cost (`INSUFFICIENT_BALANCE`). |
+| 405 | METHOD_NOT_ALLOWED | Unknown method name on the ROAD endpoint. |
+| 502 | BAD_GATEWAY | Every target failed to deliver. |
+
+The `errorCounts` map returned by `road.stats` uses symbolic names (not numeric codes) and is initialized with the following keys:
+
+| Counter | Incremented when |
+|---|---|
+| `NOT_FOUND` | All delivery paths for a target were exhausted. |
+| `DELIVERY_FAILED` | Local MAP delivery raised an exception, or an ACK-confirmed direct send failed/timed out. |
+| `MAX_HOPS_REACHED` | A `road.forward` request had no local MAP entry for the target. |
+| `INSUFFICIENT_BALANCE` | The sender's balance could not cover the per-target cost. |
+| `MAX_COST_EXCEEDED` | The estimated total cost exceeded the sender's `maxCost`. |
 
 ## 7. Security Considerations
 
@@ -371,7 +394,7 @@ These error codes appear in the per-target `relayResults` object in the `road.re
 
 5. **Authentication.** All ROAD requests are transported over FUDP, which authenticates peers using secp256k1 public keys during the handshake. The `peerId` passed to the ROAD handler is the authenticated FID. ROAD does not implement its own authentication layer.
 
-6. **Balance enforcement.** ROAD MUST verify the sender's balance before processing the relay. If the balance is insufficient to cover the estimated fees, ROAD MUST return `INSUFFICIENT_BALANCE` (0x06) without processing any targets.
+6. **Balance enforcement.** ROAD MUST verify the sender's balance before processing the relay. If the balance cannot cover at least one target's per-target cost, ROAD MUST reject the request with code 402 (`PAYMENT_REQUIRED`) and increment the `INSUFFICIENT_BALANCE` counter without processing any targets.
 
 ## 8. Versioning
 

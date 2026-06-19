@@ -39,6 +39,12 @@ public class BlockFileReader {
 
 	private final ChainState state;
 
+	// Cache the "is currentFile the tip file?" determination. getLastBlockFileName()
+	// scans the directory, so we recompute only when currentFile rolls over rather
+	// than on every block (which would add a directory scan per block during sync).
+	private String tipCheckCachedFile = null;
+	private boolean currentFileIsTip = false;
+
 	public BlockFileReader(ChainState state) {
 		this.state = state;
 	}
@@ -200,10 +206,42 @@ public class BlockFileReader {
 			return checkResult;
 		}
 
+		// Tip-file integrity gate: a block freshly appended by the fullnode may have
+		// its size header on disk while the (pre-allocated, zero-padded) body is not
+		// fully flushed. The length/magic checks above can't detect that, so verify
+		// the body against the header's merkle root and treat a mismatch as
+		// "not yet available" rather than letting it through as corrupt data.
+		// Only done on the tip file — historical blocks are already fully written,
+		// so we skip the cost during bulk sync.
+		if (isReadingTipFile()) {
+			try {
+				new BlockParser().parseBlock(blockBytes, blockMask);
+			} catch (IncompleteBlockException e) {
+				log.warn("Block at pointer {} not yet complete: {}. Waiting for fullnode to finish writing.",
+						state.getPointer(), e.getMessage());
+				checkResult.setBlockLength(WAIT_MORE);
+				return checkResult;
+			}
+		}
+
 		checkResult.setBlockLength(blockSize + 8);
 		checkResult.setBlockMark(blockMask);
 		checkResult.setBlockBytes(blockBytes);
 		return checkResult;
+	}
+
+	/**
+	 * Returns true when {@code state.getCurrentFile()} is the highest-numbered
+	 * blk*.dat file (the chain tip), where the fullnode may still be appending.
+	 * The result is cached per file to avoid a directory scan on every block.
+	 */
+	private boolean isReadingTipFile() {
+		String currentFile = state.getCurrentFile();
+		if (!currentFile.equals(tipCheckCachedFile)) {
+			currentFileIsTip = BlockFileUtils.getLastBlockFileName(state.getPath()).equals(currentFile);
+			tipCheckCachedFile = currentFile;
+		}
+		return currentFileIsTip;
 	}
 
 	/** Reads block bytes from cache first, falls back to disk with full read guarantee. */

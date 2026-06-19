@@ -402,7 +402,6 @@ public class DockComponent extends AbstractFapiComponent {
             Map<String, Object> responseData = new LinkedHashMap<>();
             responseData.put(FieldNames.ID, dockId);
             responseData.put(FieldNames.SIZE, dataSize);
-            responseData.put(FieldNames.RECIPIENTS, recipients);
             responseData.put(FieldNames.MAX_DAYS, maxDays);
             responseData.put(FieldNames.CREATE_HEIGHT, currentHeight);
             responseData.put(FieldNames.EXPIRE_HEIGHT, expireHeight);
@@ -488,7 +487,6 @@ public class DockComponent extends AbstractFapiComponent {
             Map<String, Object> responseData = new LinkedHashMap<>();
             responseData.put(FieldNames.ID, remoteResult.getId());
             responseData.put(FieldNames.SIZE, dataSize);
-            responseData.put(FieldNames.RECIPIENTS, recipients);
             responseData.put(FieldNames.MAX_DAYS, maxDays);
             responseData.put(FieldNames.TARGET_DOCK_URL, targetDockUrl);
             responseData.put(FieldNames.CREATE_HEIGHT, remoteResult.getCreateHeight());

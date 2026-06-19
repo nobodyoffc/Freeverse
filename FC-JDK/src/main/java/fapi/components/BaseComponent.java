@@ -284,12 +284,12 @@ public class BaseComponent extends AbstractFapiComponent {
             fidValues.add(FieldValue.of(fid));
         }
 
-        long nowSeconds = System.currentTimeMillis() / 1000;
+        long bestHeight = settings.getBestHeight();
 
-        // CD公式与Cash.makeCd()和CdMaker一致: ((now - birthTime) / 86400) * value / 100000000
-        String cdScript = "long bt = doc['birthTime'].size() > 0 ? doc['birthTime'].value : 0L; " +
+        // CD公式与Cash.makeCd()和CdMaker一致: ((bestHeight - birthHeight) / 1440) * value / 100000000
+        String cdScript = "long bh = doc['birthHeight'].size() > 0 ? doc['birthHeight'].value : 0L; " +
                           "long v = doc['value'].size() > 0 ? doc['value'].value : 0L; " +
-                          "return ((long)((params.now - bt) / 86400)) * v / 100000000;";
+                          "return ((long)((params.bestHeight - bh) / 1440)) * v / 100000000;";
 
         SearchResponse<Void> searchResponse = esClient.search(s -> s
             .index("cash")
@@ -303,7 +303,7 @@ public class BaseComponent extends AbstractFapiComponent {
                 .aggregations("cdSum", a2 -> a2.sum(su -> su
                     .script(sc -> sc.inline(i -> i
                         .source(cdScript)
-                        .params("now", JsonData.of(nowSeconds))))))),
+                        .params("bestHeight", JsonData.of(bestHeight))))))),
             Void.class);
 
         List<StringTermsBucket> buckets = searchResponse.aggregations()
@@ -908,8 +908,8 @@ public class BaseComponent extends AbstractFapiComponent {
             if (isImmature(cash, bestHeight)) continue;
             
             long cdd = 0;
-            if (cash.getBirthTime() != null) {
-                cdd = FchUtils.cdd(cash.getValue(), cash.getBirthTime(), System.currentTimeMillis() / 1000);
+            if (cash.getBirthHeight() != null) {
+                cdd = FchUtils.cdd(cash.getValue(), cash.getBirthHeight(), bestHeight);
             }
             
             fchSum += cash.getValue();

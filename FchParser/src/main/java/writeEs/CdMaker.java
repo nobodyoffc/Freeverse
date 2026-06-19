@@ -51,11 +51,12 @@ public class CdMaker {
 
 	public void makeUtxoCd(ElasticsearchClient esClient, Block bestBlock)
 			throws ElasticsearchException, IOException {
-		long bestBlockTime = bestBlock.getTime();
+		long bestHeight = bestBlock.getHeight();
 
 		System.out.println("Make all cd of UTXOs...");
 		log.debug("Make all cd of UTXOs...");
 
+		// CD公式与FchUtils.cdd()和Cash.makeCd()一致: ((bestHeight - birthHeight) / 1440) * value / 100000000
 		UpdateByQueryResponse response = esClient.updateByQuery(u -> u
 				.conflicts(Conflicts.Proceed)
 				.timeout(Time.of(t->t.time("1800s")))
@@ -63,8 +64,8 @@ public class CdMaker {
 				.query(q -> q.bool(b -> b
 						.filter(f -> f.term(t -> t.field(FieldNames.VALID).value(true)))))
 				.script(s -> s.inline(i1 -> i1.source(
-								"ctx._source.cd = (long)(((long)((params.bestBlockTime - ctx._source.birthTime)/86400)*ctx._source.value)/100000000)")
-						.params("bestBlockTime", JsonData.of(bestBlockTime)))));
+								"ctx._source.cd = (long)(((long)((params.bestHeight - ctx._source.birthHeight)/1440)*ctx._source.value)/100000000)")
+						.params("bestHeight", JsonData.of(bestHeight)))));
 		if(response!=null&& response.took()!=null)
 			log.debug(
 				response.updated()

@@ -55,7 +55,7 @@ Each FAPI protocol is identified by its serial number (`sn`) and version (`ver`)
 FAPI{sn}V{ver}_{Name}
 ```
 
-For example: `FAPI1V1_CoreProtocol` refers to the core wire format and request/response specification, serial number 1, version 1.
+For example: `FAPI1V1_Core` refers to the core wire format and request/response specification, serial number 1, version 1.
 
 ### The Need for FAPI
 
@@ -242,7 +242,7 @@ Each FAPI protocol document SHOULD follow this structure:
 |SN|Name|Scope|
 |---|---|---|
 |0|FAPI|This document. Foundational rules for the FAPI series.|
-|1|[Core Protocol](FAPI1V1_CoreProtocol.md)|Wire format (UnifiedCodec), request/response structure, status codes, API routing.|
+|1|[Core Protocol](FAPI1V1_Core.md)|Wire format (UnifiedCodec), request/response structure, status codes, API routing.|
 |2|[FCDSL](FAPI2V1_FCDSL.md)|Freeverse Common Data Service Language specification.|
 |3|[Components](FAPI3V1_Components.md)|Component model, lifecycle, type IDs, registration. Individual component specs are in FAPI11+.|
 |4|[Economics](FAPI4V1_Economics.md)|Billing model, balance management, pricing, settlement, recharge.|

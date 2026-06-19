@@ -49,6 +49,9 @@ public class ChainParser {
 
 	// ─── Main parse loop ────────────────────────────────────────────────
 
+	/** Max consecutive re-reads of the same incomplete (not-yet-flushed) block before giving up. */
+	private static final int MAX_INCOMPLETE_BLOCK_RETRIES = 30;
+
 	public int startParse(ElasticsearchClient esClient) throws Exception {
 
 		System.out.println("Started parsing file:  " + state.getCurrentFile() + " ...");
@@ -61,6 +64,7 @@ public class ChainParser {
 
 			long blockLength;
 			long cdMakeTime = System.currentTimeMillis();
+			int incompleteRetries = 0;
 
 			while (true) {
 
@@ -115,7 +119,28 @@ public class ChainParser {
 				} else if (blockLength == BlockFileReader.BLANK_8) {
 					state.setPointer(state.getPointer() + blockLength);
 				} else {
-					linkToChain(esClient, blockMask, blockBytes);
+					try {
+						linkToChain(esClient, blockMask, blockBytes);
+					} catch (IncompleteBlockException e) {
+						// The block passed magic/size/length checks but its body is not yet a
+						// complete, valid block — typically the fullnode has not finished flushing
+						// a freshly-appended tip block. Do NOT advance the pointer; wait for the
+						// file to change and re-read the same block.
+						if (++incompleteRetries > MAX_INCOMPLETE_BLOCK_RETRIES) {
+							log.error("Block at pointer {} still incomplete after {} retries: {}",
+									state.getPointer(), MAX_INCOMPLETE_BLOCK_RETRIES, e.getMessage());
+							return WRONG;
+						}
+						log.warn("Incomplete block at pointer {} (retry {}/{}): {}. Waiting for fullnode to finish writing.",
+								state.getPointer(), incompleteRetries, MAX_INCOMPLETE_BLOCK_RETRIES, e.getMessage());
+						AtomicBoolean running = new AtomicBoolean(true);
+						FchUtils.waitForChangeInDirectory(state.getPath(), running);
+						fis.close();
+						fis = new FileInputStream(file);
+						fis.skip(state.getPointer());
+						continue;
+					}
+					incompleteRetries = 0;
 					recheckOrphans(esClient);
 					state.setPointer(state.getPointer() + blockLength);
 				}

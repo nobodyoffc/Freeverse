@@ -61,7 +61,7 @@ public class HealthChecker {
             );
             
         } catch (Exception e) {
-            log.error("Health check failed", e);
+            log.error("Health check failed:{}", e.getMessage());
             status.setOverallHealthy(false);
             status.setErrorMessage(e.getMessage());
         }

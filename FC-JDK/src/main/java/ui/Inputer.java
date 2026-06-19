@@ -42,25 +42,25 @@ public class Inputer {
         }
         return console.readPassword(ask);
     }
-    public static char[] inputPassword(BufferedReader br, String ask) {
-        return inputPassword(ask);
-    }
 //    public static char[] inputPassword(BufferedReader br, String ask) {
-//        System.out.println(ask);
-//        char[] input = new char[64];
-//        int num = 0;
-//        try {
-//            num = br.read(input);
-//        } catch (IOException e) {
-//            System.out.println("BufferReader wrong.");
-//            return null;
-//        }
-//        if (num == 0) return null;
-//        char[] password = new char[num - 1];
-//        System.arraycopy(input, 0, password, 0, num - 1);
-//        if(password.length==0)password=null;
-//        return password;
+//        return inputPassword(ask);
 //    }
+    public static char[] inputPassword(BufferedReader br, String ask) {
+        System.out.println(ask);
+        char[] input = new char[64];
+        int num = 0;
+        try {
+            num = br.read(input);
+        } catch (IOException e) {
+            System.out.println("BufferReader wrong.");
+            return null;
+        }
+        if (num == 0) return null;
+        char[] password = new char[num - 1];
+        System.arraycopy(input, 0, password, 0, num - 1);
+        if(password.length==0)password=null;
+        return password;
+    }
 
     public static String inputString(BufferedReader br) {
         String input = null;

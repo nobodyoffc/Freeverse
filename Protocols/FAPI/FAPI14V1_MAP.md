@@ -75,7 +75,7 @@ The cleanup threshold is **24 hours** (86400000 milliseconds). A periodic cleanu
 
 ### 2.4. Ping Verification
 
-When a `map.find` request targets an entry older than the freshness threshold, the server performs a FUDP ping to the registered address before returning the result. If the ping succeeds, the entry's `lastSeen` is updated and the `stale` flag is cleared. If the ping fails, the entry is still returned but with `stale` set to `true`. The entry is not removed on ping failure; it remains available until the cleanup threshold is exceeded.
+When a `map.find` request targets an entry older than the freshness threshold, the server performs a FUDP ping to the registered address before returning the result. The ping uses a timeout of **5 seconds**. If the ping succeeds, the entry's `lastSeen` is updated and the `stale` flag is cleared. If the ping fails, the entry is still returned but with `stale` set to `true`. The entry is not removed on ping failure; it remains available until the cleanup threshold is exceeded.
 
 ### 2.5. Heartbeat
 
@@ -83,7 +83,7 @@ Clients behind NAT SHOULD periodically call `map.register` at least every **25 s
 
 ### 2.6. Persistence
 
-MAP entries are persisted to a JSON file on disk. The server writes the current state of all entries to disk every **60 seconds** and performs an additional write on graceful shutdown. On startup, the server reloads persisted entries from the file, allowing registrations to survive server restarts. Entries that exceed the cleanup threshold at reload time are discarded.
+MAP entries are persisted to a JSON file named `map_entries.json` on disk. The file is located inside the configured data directory; if no data directory is configured, the server falls back to `~/.fapi/map_entries.json`. The server writes the current state of all entries to disk every **60 seconds** if there have been changes since the last write, and performs an additional unconditional write on graceful shutdown. On startup, the server reloads persisted entries from the file, allowing registrations to survive server restarts.
 
 ## 3. Data Model
 
@@ -174,12 +174,25 @@ Subsequent calls to `map.register` from the same peer update the existing entry,
 Look up a peer's registered network address by FID.
 
 - **Category**: Operation
-- **Request**: `params` with `fid` (string, the target FID to look up).
+- **Request**: The target FID is supplied either through `fcdsl.ids` (preferred; the first element of the array is used) or through `params.fid` (fallback). If both are present, `fcdsl.ids[0]` takes priority.
 - **Response**: `data` contains the MapEntry for the target FID, with an additional `stale` boolean field indicating whether the entry may be outdated.
 - **Freshness verification**: If the entry's `lastSeen` is older than 30 seconds, the server attempts a FUDP ping to the registered address. If the ping succeeds, `lastSeen` is updated and `stale` is set to `false`. If the ping fails, `stale` is set to `true` but the entry is not removed.
-- **Error**: Returns code 404 if the target FID is not registered.
+- **Errors**:
+  - Code `400` if neither `fcdsl.ids` nor `params.fid` provides a target FID.
+  - Code `404` if the target FID is not registered.
 
-**Request example:**
+**Request example (fcdsl.ids):**
+
+```json
+{
+  "api": "map.find",
+  "fcdsl": {
+    "ids": ["FEk41Kqjar45fLDGQ..."]
+  }
+}
+```
+
+**Request example (params.fid):**
 
 ```json
 {
@@ -235,7 +248,19 @@ Look up a peer's registered network address by FID.
 ```json
 {
   "code": 404,
-  "message": "Target FID is not registered.",
+  "message": "FID not registered: FEk41Kqjar45fLDGQ...",
+  "data": null,
+  "got": 0,
+  "total": 0
+}
+```
+
+**Error example (target FID missing):**
+
+```json
+{
+  "code": 400,
+  "message": "Target FID is required (fcdsl.ids or params.fid)",
   "data": null,
   "got": 0,
   "total": 0
@@ -279,7 +304,7 @@ Remove the calling peer's own registration. A peer can only unregister itself; i
 ```json
 {
   "code": 404,
-  "message": "Caller is not registered.",
+  "message": "FID not registered",
   "data": null,
   "got": 0,
   "total": 0

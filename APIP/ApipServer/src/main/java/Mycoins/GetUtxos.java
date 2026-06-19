@@ -37,7 +37,6 @@ public class GetUtxos extends HttpServlet {
     };
 
     private List<Map<String, Object>> getUtxosFch(String address) {
-        System.out.println("[GetUtxos] getUtxosFch called for " + address);
         try {
             ElasticsearchClient esClient = (ElasticsearchClient) apiBase.settings.getClient(ServiceType.ES);
             MempoolManager mempoolHandler = (MempoolManager) apiBase.settings.getManager(ManagerType.MEMPOOL);
@@ -45,7 +44,7 @@ public class GetUtxos extends HttpServlet {
             SearchResult<Cash> searchResult = CashManager.getValidCashes(address, null, null, 0L, 0, 0, null, esClient, mempoolHandler);
 
             List<Map<String, Object>> utxos = new ArrayList<>();
-            if (searchResult != null && searchResult.getData() != null) {
+            if (searchResult.getData() != null) {
                 for (Cash cash : searchResult.getData()) {
                     Map<String, Object> utxo = new HashMap<>();
                     utxo.put("txid", cash.getBirthTxId());
@@ -55,7 +54,6 @@ public class GetUtxos extends HttpServlet {
                     utxos.add(utxo);
                 }
             }
-            System.out.println("[GetUtxos] Found " + utxos.size() + " UTXOs");
             return utxos;
         } catch (Exception e) {
             System.out.println("[GetUtxos] ERROR: " + e.getMessage());
@@ -66,7 +64,6 @@ public class GetUtxos extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) {
-        System.out.println("[GetUtxos] doPost called");
         try {
             apiBase.handleEncryptedPost(request, response, ApipApiNames.GET_UTXOS);
         } catch (Exception e) {

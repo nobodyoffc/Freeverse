@@ -45,7 +45,7 @@ public class GetTxHistory extends HttpServlet {
             SearchResult<Cash> searchResult = CashManager.getValidCashes(address, null, null, 0L, 0, 0, null, esClient, mempoolHandler);
 
             Map<String, Map<String, Object>> txMap = new LinkedHashMap<>();
-            if (searchResult != null && searchResult.getData() != null) {
+            if (searchResult.getData() != null) {
                 for (Cash cash : searchResult.getData()) {
                     String txid = cash.getBirthTxId();
                     Map<String, Object> tx = txMap.get(txid);

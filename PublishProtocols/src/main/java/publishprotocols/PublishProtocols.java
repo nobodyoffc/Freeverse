@@ -52,8 +52,21 @@ public final class PublishProtocols {
             throw new CliException("No .md files found under " + a.folder);
         }
         List<ParsedDoc> parsed = new ArrayList<>();
+        int skipped = 0;
         for (Path path : mdFiles) {
-            parsed.add(parseFile(path, a.lang));
+            try {
+                parsed.add(parseFile(path, a.lang));
+            } catch (CliException e) {
+                skipped++;
+                System.err.println("SKIP: " + e.getMessage());
+            }
+        }
+        if (parsed.isEmpty()) {
+            throw new CliException("No valid protocol .md files found under " + a.folder
+                    + " (" + skipped + " skipped)");
+        }
+        if (skipped > 0) {
+            System.err.println("Skipped " + skipped + " non-protocol file(s); parsed " + parsed.size() + ".");
         }
         parsed.sort(Comparator
                 .comparingInt(ParsedDoc::sortSn)

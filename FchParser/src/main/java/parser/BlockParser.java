@@ -35,9 +35,50 @@ public class BlockParser {
 
 		ReadyBlock readyBlock = parseBlockBody(blockBodyBytes, block);
 
+		// Verify the body against the header's merkle root. A mismatch means the
+		// block bytes are not a complete, valid block — almost always because the
+		// fullnode has not finished flushing a freshly-appended tip block (the
+		// pre-allocated tail is still zero/torn). Reject it as recoverable so the
+		// caller can wait and re-read, instead of writing corrupt data to ES.
+		verifyMerkleRoot(block, readyBlock.getTxLinkedMap());
+
 		readyBlock.setBlockMark(blockMask);
 
 		return readyBlock;
+	}
+
+	/**
+	 * Recomputes the merkle root from the parsed transaction ids (in block order)
+	 * and compares it to the root declared in the block header. Throws an
+	 * {@link IncompleteBlockException} on mismatch.
+	 */
+	private void verifyMerkleRoot(Block block, LinkedHashMap<String, Tx> txMap) throws IncompleteBlockException {
+		String expected = block.getMerkleRoot();
+		if (expected == null || txMap == null || txMap.isEmpty())
+			throw new IncompleteBlockException("Block " + block.getId()
+					+ " has no transactions or merkle root to verify; body is incomplete.");
+
+		// Transaction ids are stored as little-endian display hex; the merkle tree
+		// is built over the internal (raw sha256x2) byte order, so invert back.
+		List<byte[]> layer = new ArrayList<>(txMap.size());
+		for (String txId : txMap.keySet())
+			layer.add(BytesUtils.invertArray(BytesUtils.hexToByteArray(txId)));
+
+		while (layer.size() > 1) {
+			List<byte[]> next = new ArrayList<>((layer.size() + 1) / 2);
+			for (int i = 0; i < layer.size(); i += 2) {
+				byte[] left = layer.get(i);
+				byte[] right = (i + 1 < layer.size()) ? layer.get(i + 1) : left;
+				next.add(Hash.sha256x2(BytesUtils.bytesMerger(left, right)));
+			}
+			layer = next;
+		}
+
+		String computed = BytesUtils.bytesToHexStringLE(layer.get(0));
+		if (!computed.equals(expected))
+			throw new IncompleteBlockException("Merkle root mismatch for block " + block.getId()
+					+ " (expected " + expected + ", computed " + computed
+					+ "); block body is incomplete or corrupt.");
 	}
 
 	private void parseBlockHead(byte[] blockHeadBytes, Block block1) {
@@ -240,6 +281,15 @@ public class BlockParser {
 			blockInputStream.read(bScript);
 			rawBytesList.add(bScript);
 
+			if (scriptSize == 0) {
+				// Empty output script. Don't dereference bScript[0]; record as an
+				// unknown/unspendable output and let merkle verification decide
+				// whether the block as a whole is valid (a torn tip block produces
+				// such zero-length fields and will fail the merkle check).
+				out.setType(Cash.CashType.UNKNOWN.name());
+				out.setOwner("Unknown");
+			} else {
+
 			b1Script = bScript[0];
 
 			switch (b1Script) {
@@ -330,6 +380,7 @@ public class BlockParser {
 						out.setType(Cash.CashType.UNKNOWN.name());
 					}
 				}
+			}
 			}
 
 			// Add block and tx information to output./给输出添加区块和交易信息。

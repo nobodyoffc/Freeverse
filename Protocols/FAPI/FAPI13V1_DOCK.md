@@ -7,9 +7,10 @@
 - [1. Overview](#1-overview)
 - [2. Concepts](#2-concepts)
   - [2.1. Recipients](#21-recipients)
-  - [2.2. Time-to-Live (TTL)](#22-time-to-live-ttl)
+  - [2.2. Lifetime (maxDays / expireHeight)](#22-lifetime-maxdays--expireheight)
   - [2.3. Size Limit](#23-size-limit)
   - [2.4. Charging Model](#24-charging-model)
+  - [2.5. Forwarding](#25-forwarding)
 - [3. API List](#3-api-list)
 - [4. Method Definitions](#4-method-definitions)
   - [4.1. dock.put](#41-dockput)
@@ -22,7 +23,7 @@
 - [5. Security Considerations](#5-security-considerations)
   - [5.1. Storage Abuse Prevention](#51-storage-abuse-prevention)
   - [5.2. Sender-Only Deletion](#52-sender-only-deletion)
-  - [5.3. TTL Limits](#53-ttl-limits)
+  - [5.3. Lifetime Limits](#53-lifetime-limits)
 - [6. Versioning](#6-versioning)
 - [7. References](#7-references)
 
@@ -43,13 +44,13 @@
 
 ## Abstract
 
-FAPI13V1 defines the DOCK component of the FAPI (Freeverse API Protocol) series. DOCK provides a store-and-forward messaging service in which senders deposit data addressed to one or more recipients, and recipients retrieve the data at a later time. The component is designed for small payloads up to 64 KB with time-limited storage. For larger data, clients SHOULD use the DISK component and send only the DID (Data ID) via DOCK. This specification defines the complete API surface of the DOCK component (7 methods), the charging model, recipient addressing, TTL semantics, and security considerations. The component type ID is `DOCK@No1_NrC7`.
+FAPI13V1 defines the DOCK component of the FAPI (Freeverse API Protocol) series. DOCK provides a store-and-forward messaging service in which senders deposit data addressed to one or more recipients, and recipients retrieve the data at a later time. The component is designed for small payloads up to 64 KB with time-limited storage. For larger data, clients SHOULD use the DISK component and send only the DID (Data ID) via DOCK. This specification defines the complete API surface of the DOCK component (7 methods), the charging model, recipient addressing, lifetime semantics, optional cross-server forwarding, and security considerations. The component type ID is `DOCK@No1_NrC7`.
 
 ## 1. Overview
 
-The DOCK component serves as a message drop-off and pickup facility within the FAPI ecosystem. Senders deposit data for one or more recipients by calling `dock.put`. Recipients retrieve their messages at a later time using `dock.get`, `dock.fetch`, or `dock.list`. Messages are stored on the server for a configurable duration (TTL) and are automatically garbage-collected after expiration.
+The DOCK component serves as a message drop-off and pickup facility within the FAPI ecosystem. Senders deposit data for one or more recipients by calling `dock.put`. Recipients retrieve their messages at a later time using `dock.get`, `dock.fetch`, or `dock.list`. Messages are stored on the server for a configurable number of days (`maxDays`) and are automatically garbage-collected after their `expireHeight` is reached.
 
-DOCK is intended for small, transient payloads -- notifications, control messages, encrypted keys, metadata references, and similar lightweight data. The maximum payload size is 64 KB. For larger data transfers, clients SHOULD upload the data to the DISK component and send the resulting DID as the DOCK message payload, allowing the recipient to retrieve the full data from DISK.
+DOCK is intended for small, transient payloads -- notifications, control messages, encrypted keys, metadata references, and similar lightweight data. The maximum payload size defaults to 64 KB. For larger data transfers, clients SHOULD upload the data to the DISK component and send the resulting DID as the DOCK message payload, allowing the recipient to retrieve the full data from DISK.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
 
@@ -64,27 +65,29 @@ A message MAY be addressed to one or more recipients. Each recipient is identifi
 - **Group ID** -- Addresses all members of the specified group.
 - **Room ID** -- Addresses all participants of the specified room.
 
-When a message is addressed to multiple recipients, the server stores a single copy of the data and maintains a delivery record for each recipient. Each recipient independently retrieves and manages their own copy of the message metadata.
+A single `dock.put` request MUST NOT contain more than 100 recipients. When a message is addressed to multiple recipients, the server stores a single copy of the data and indexes the recipients on the document. Each recipient independently retrieves the message and is charged egress fees on retrieval.
 
-### 2.2. Time-to-Live (TTL)
+### 2.2. Lifetime (maxDays / expireHeight)
 
-The TTL defines the number of days a message is stored on the server before automatic deletion.
+The lifetime of a DOCK item is expressed both in days (`maxDays`, supplied by the sender) and in block height (`expireHeight`, computed by the server). One day is treated as 1440 FCH blocks (~1 block per minute).
 
 - **Default**: 7 days.
 - **Maximum**: 365 days.
 - **Minimum**: 1 day.
 
-After TTL expiration, the message becomes eligible for garbage collection. Servers MAY retain expired messages for a brief grace period but MUST NOT guarantee their availability beyond the TTL.
+When a `dock.put` is accepted at chain height `h0`, the server records `createHeight = h0` and `expireHeight = h0 + maxDays * 1440`. Items are eligible for garbage collection once the chain advances past `expireHeight`. Servers MAY retain expired items briefly but MUST NOT guarantee their availability beyond `expireHeight`.
 
-The sender specifies the TTL at deposit time via the `ttl` parameter in `dock.put`. The TTL MAY be extended after deposit using `dock.extend`.
+The sender specifies the lifetime at deposit time via the `maxDays` parameter in `dock.put`. The lifetime MAY be extended after deposit using `dock.extend`, which appends `extraDays * 1440` blocks to `expireHeight`.
+
+A server's default `maxDays` is resolved with priority: on-chain `service.dataExpiresInDays` > `settingMap.dataExpiresInDays` > 7.
 
 ### 2.3. Size Limit
 
-The maximum payload size for a single DOCK message is 64 KB (65,536 bytes), measured after Base64 decoding.
+The maximum payload size for a single DOCK message defaults to 64 KB (65,536 bytes), measured on the raw binary payload. Servers MAY override this limit via `service.maxDataSize`.
 
-Servers MUST reject `dock.put` requests where the decoded payload exceeds this limit with error code 413 (PAYLOAD_TOO_LARGE).
+Servers MUST reject `dock.put` requests where the payload exceeds the configured limit with error code `BAD_REQUEST`.
 
-For payloads exceeding 64 KB, clients SHOULD:
+For payloads exceeding the configured limit, clients SHOULD:
 
 1. Upload the data to the DISK component via `disk.put`.
 2. Obtain the DID (Data ID) from the DISK response.
@@ -93,16 +96,28 @@ For payloads exceeding 64 KB, clients SHOULD:
 
 ### 2.4. Charging Model
 
-DOCK charges are computed based on storage duration, data size, and transfer volume:
+DOCK charges are computed in satoshi based on storage duration, data size, and transfer volume. All sizes are charged per kilobyte, rounded up: `sizeKB = ceil(size / 1024)`.
 
-- **Storage cost**: `pricePerKBDay * ceil(size / 1024) * days`
-  - `pricePerKBDay` is the server's configured rate per kilobyte per day.
-  - `size` is the raw payload size in bytes (after Base64 decoding).
-  - `days` is the requested TTL in days.
-- **Ingress fee**: Charged to the sender on `dock.put`, based on the ingress pricing (`pricePerKBIn`) and the size of the uploaded data.
-- **Egress fee**: Charged to the recipient on `dock.get`, based on the egress pricing (`pricePerKBOut`) and the size of the downloaded data.
+- **Storage fee**: `storageFee = sizeKB * maxDays * pricePerKBDay`. Charged to the sender on `dock.put`.
+- **Ingress fee**: `ingressFee = sizeKB * pricePerKBIn`. Charged to the sender on `dock.put`.
+- **Egress fee**: `egressFee = sizeKB * pricePerKBOut`. Charged to the recipient on `dock.get` and on `dock.fetch` for every item whose payload is returned inline.
+- **Extend fee**: `additionalFee = sizeKB * extraDays * pricePerKBDay`. Charged to the sender on `dock.extend`.
+- **Delete refund**: On `dock.delete`, the sender receives `storageFee * remainingDays / maxDays`, prorated against the unused storage period. The ingress fee is NOT refunded.
 
-The total cost to the sender at deposit time is: storage cost + ingress fee. The recipient pays only the egress fee upon retrieval. Query operations (`dock.fetch`, `dock.list`) are charged standard query fees as defined in FAPI4 (Economics).
+The total charge to the sender at deposit time is `ingressFee + storageFee` (returned as `totalFee`). `dock.list` does not charge egress because content is not transferred. `dock.check` does not transfer payload and does not charge egress.
+
+Pricing fields (`pricePerKBIn`, `pricePerKBOut`, `pricePerKBDay`) are taken from the on-chain `Service` record. If `pricePerKBIn` or `pricePerKBOut` is unset, the server falls back to `pricePerKB`.
+
+### 2.5. Forwarding
+
+A DOCK server MAY relay a `dock.put` to a different DOCK server when the request includes a `targetDockUrl` that does not point to the local server. When forwarding is enabled (controlled by `settingMap.dockForwardEnabled`, default `true`):
+
+1. The local server connects to `targetDockUrl` as a FAPI client and submits the same payload.
+2. The remote server stores the item and returns its own `id`, `storageFee`, and `ingressFee`.
+3. The local server charges the sender `localIngressFee + localEgressFee + remoteStorageFee + remoteIngressFee`.
+4. The response includes `forwarded: true`, the remote `id`, `localFee`, `remoteFee`, and `totalFee`.
+
+If forwarding is disabled, the server returns `METHOD_NOT_ALLOWED`. If the remote DOCK is unreachable or rejects the request, the server returns `BAD_GATEWAY`.
 
 ## 3. API List
 
@@ -110,41 +125,47 @@ The DOCK component exposes 7 methods:
 
 | # | API | Category | Description |
 |---|---|---|---|
-| 1 | `dock.put` | Operation | Store data for one or more recipients |
-| 2 | `dock.get` | Binary operation | Retrieve data by message ID (binary response) |
-| 3 | `dock.fetch` | Query | List items with inline Base64 data for requesting recipient |
-| 4 | `dock.list` | Query | List item metadata for requesting recipient |
+| 1 | `dock.put` | Binary operation | Store data for one or more recipients (binary request) |
+| 2 | `dock.get` | Binary operation | Retrieve data by item ID (binary response) |
+| 3 | `dock.fetch` | Query | List items with inline Base64 data for the requesting recipient(s) |
+| 4 | `dock.list` | Query | List item metadata for the requesting recipient |
 | 5 | `dock.check` | Operation | Check item status without downloading |
 | 6 | `dock.delete` | Operation | Sender removes an item (partial refund) |
-| 7 | `dock.extend` | Operation | Extend an item's TTL (sender pays) |
+| 7 | `dock.extend` | Operation | Extend an item's lifetime (sender pays) |
 
 ## 4. Method Definitions
 
 ### 4.1. dock.put
 
-Store data for one or more recipients. The sender pays storage fees and ingress fees at the time of deposit.
+Store data for one or more recipients. The sender pays storage and ingress fees at deposit time.
 
-- **Category**: Operation
-- **Request**: `params` with:
-  - `recipients` (array of strings, REQUIRED): Recipient identifiers. Each entry MAY be an FID, team ID, group ID, or room ID.
-  - `ttl` (integer, OPTIONAL): Time-to-live in days. Default: 7. Minimum: 1. Maximum: 365.
-  - `data` (string, REQUIRED): Base64-encoded payload data. Decoded size MUST NOT exceed 64 KB.
-- **Response**: `data` contains the message ID (`mid`) and storage metadata.
-- **Charging**: The sender pays `pricePerKBDay * ceil(size / 1024) * days` for storage, plus ingress fees based on `pricePerKBIn`.
+- **Category**: Binary operation. The request MUST use the unified binary protocol; the payload travels as the binary body, not as a Base64 string in `params`.
+- **Request `params`**:
+  - `recipients` (array of strings, REQUIRED): Recipient identifiers. Each entry MAY be an FID, team ID, group ID, or room ID. Maximum: 100.
+  - `maxDays` (integer, OPTIONAL): Lifetime in days. Defaults to the server's configured default (typically 7). Minimum: 1. Maximum: 365.
+  - `dataType` (string, OPTIONAL): Application-level type tag stored on the item.
+  - `targetDockUrl` (string, OPTIONAL): If set and not pointing to the local server, the request is forwarded (see [2.5. Forwarding](#25-forwarding)).
+- **Request body**: Raw binary payload. MUST NOT be empty and MUST NOT exceed the server's configured `maxDataSize` (default 64 KB).
+- **Response `data`**: Item metadata and accounting:
+  - `id`, `size`, `maxDays`, `createHeight`, `expireHeight`, `storageFee`, `ingressFee`, `totalFee`, optional `dataType`.
+  - When forwarded: also `targetDockUrl`, `localFee`, `remoteFee`, `forwarded: true`.
+- **Charging**: Sender pays `ingressFee + storageFee`. For forwarded requests, sender additionally pays the local egress fee and the remote server's `ingressFee + storageFee`.
 - **Errors**:
-  - 413 (PAYLOAD_TOO_LARGE): Decoded payload exceeds 64 KB.
-  - 400 (BAD_REQUEST): Missing required fields or invalid TTL value.
-  - 402 (INSUFFICIENT_CREDIT): Sender's credit balance is insufficient.
+  - `BAD_REQUEST`: Missing/empty body, missing `recipients`, too many recipients, invalid `maxDays`, or oversized payload.
+  - `PAYMENT_REQUIRED`: Sender's balance cannot cover the total fee.
+  - `METHOD_NOT_ALLOWED`: `targetDockUrl` set but forwarding is disabled.
+  - `BAD_GATEWAY`: Remote DOCK is unreachable or rejected the forwarded request.
+  - `INTERNAL_ERROR`: Storage or indexing failure.
 
-**Request example**:
+**Request example** (params portion of the unified request):
 
 ```json
 {
   "api": "dock.put",
   "params": {
     "recipients": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"],
-    "ttl": 14,
-    "data": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
+    "maxDays": 14,
+    "dataType": "note"
   }
 }
 ```
@@ -156,29 +177,57 @@ Store data for one or more recipients. The sender pays storage fees and ingress 
   "code": 0,
   "message": "OK",
   "data": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
-    "sender": "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW",
-    "recipients": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"],
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
     "size": 26,
-    "ttl": 14,
-    "createdAt": 1743120000000,
-    "expiresAt": 1744329600000
+    "maxDays": 14,
+    "createHeight": 850000,
+    "expireHeight": 870160,
+    "storageFee": 14,
+    "ingressFee": 10,
+    "totalFee": 24,
+    "dataType": "note"
+  }
+}
+```
+
+**Forwarded response example**:
+
+```json
+{
+  "code": 0,
+  "message": "OK",
+  "data": {
+    "id": "9b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
+    "size": 26,
+    "maxDays": 14,
+    "targetDockUrl": "https://dock.example.com",
+    "createHeight": 850000,
+    "expireHeight": 870160,
+    "localFee": 20,
+    "remoteFee": 24,
+    "totalFee": 44,
+    "forwarded": true
   }
 }
 ```
 
 ### 4.2. dock.get
 
-Retrieve message data as binary by message ID. Only a designated recipient MAY retrieve the message.
+Retrieve item data as binary by item ID. Only a designated recipient MAY retrieve the item.
 
 - **Category**: Binary operation
-- **Request**: `params` with:
-  - `mid` (string, REQUIRED): The message ID returned by `dock.put`.
-- **Response**: The JSON header contains message metadata (sender, size, timestamps). The binary body contains the raw message content.
-- **Charging**: The recipient pays egress fees based on `pricePerKBOut` and the message size.
+- **Request `params`**:
+  - `id` (string, REQUIRED): The item ID returned by `dock.put`.
+  - `recipientId` (string, OPTIONAL): A recipient identifier (e.g., team or group ID) to assert membership against the item, in addition to the caller's authenticated peer ID.
+- **Response header `data`**: `id`, `sender`, `size`, `createTime`, `expireHeight`, `egressFee`.
+- **Response body**: Raw decoded item content (Base64-decoded from the stored representation).
+- **Charging**: Recipient pays `egressFee = ceil(size/1024) * pricePerKBOut`.
 - **Errors**:
-  - 404 (NOT_FOUND): Message ID does not exist or has expired.
-  - 403 (FORBIDDEN): Requester is not a designated recipient.
+  - `BAD_REQUEST`: Missing `id`.
+  - `NOT_FOUND`: Item ID does not exist, or stored payload is missing.
+  - `FORBIDDEN`: Caller is not a designated recipient.
+  - `GONE`: Item has expired.
+  - `PAYMENT_REQUIRED`: Recipient's balance cannot cover the egress fee.
 
 **Request example**:
 
@@ -186,7 +235,7 @@ Retrieve message data as binary by message ID. Only a designated recipient MAY r
 {
   "api": "dock.get",
   "params": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5"
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5"
   }
 }
 ```
@@ -198,38 +247,44 @@ Retrieve message data as binary by message ID. Only a designated recipient MAY r
   "code": 0,
   "message": "OK",
   "data": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
     "sender": "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW",
     "size": 26,
-    "createdAt": 1743120000000,
-    "expiresAt": 1744329600000
+    "createTime": 1743120000000,
+    "expireHeight": 870160,
+    "egressFee": 10
   }
 }
 ```
 
-The binary response body immediately follows the JSON header and contains the raw decoded message content.
+The binary response body immediately follows the header and contains the raw decoded item content.
 
 ### 4.3. dock.fetch
 
-List items addressed to the requesting peer, with message data included inline as Base64. This method combines the functionality of `dock.list` and `dock.get` into a single call, suitable for small messages.
+List items addressed to the requesting peer (or to a list of recipient IDs), with item data included inline as Base64. This combines list+get for small items in a single round-trip.
 
 - **Category**: Query
-- **Request**: `fcdsl` with optional filter, sort, size, and pagination parameters as defined in FAPI2.
-- **Response**: `data` contains an array of message objects, each including a `data` field with the Base64-encoded content. Standard pagination fields (`got`, `total`, `last`) are included.
-- **Charging**: Standard query fees plus egress fees for all returned message content.
+- **Request `params`** (OPTIONAL):
+  - `recipientIds` (array of strings, OPTIONAL): Recipient identifiers to query. The caller MUST be authorized to receive on behalf of each ID.
+  - `recipientId` (string, OPTIONAL): Alternative to `recipientIds` for a single recipient.
+  - If neither is provided, the requesting peer's own ID is used.
+- **Request `fcdsl`** (OPTIONAL): Standard FCDSL `sort`, `size` (max 50, default 20), and `after` (search-after cursor) fields as defined in FAPI2.
+- **Response**: `data` is an array of item objects with `id`, `sender`, `size`, `createTime`, `expireHeight`, `recipients`, optional `dataType`, and `dataBase64` (the Base64-encoded payload). Standard pagination fields (`got`, `total`, `last`) are included.
+- **Charging**: Recipient pays an egress fee on the aggregate of all returned payloads: `ceil(sum(size)/1024) * pricePerKBOut`. No per-item ingress charge applies.
+- **Errors**:
+  - `PAYMENT_REQUIRED`: Recipient's balance cannot cover the aggregate egress fee.
+  - `INTERNAL_ERROR`: Search failure.
 
 **Request example**:
 
 ```json
 {
   "api": "dock.fetch",
+  "params": {
+    "recipientIds": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"]
+  },
   "fcdsl": {
-    "filter": {
-      "range": {
-        "createdAt": { "gte": 1743120000000 }
-      }
-    },
-    "sort": [{ "createdAt": "desc" }],
+    "sort": [{ "createTime": "desc" }],
     "size": 10
   }
 }
@@ -245,35 +300,41 @@ List items addressed to the requesting peer, with message data included inline a
   "total": 2,
   "data": [
     {
-      "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+      "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
       "sender": "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW",
       "size": 26,
-      "ttl": 14,
-      "createdAt": 1743120000000,
-      "expiresAt": 1744329600000,
-      "data": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
+      "createTime": 1743120000000,
+      "expireHeight": 870160,
+      "recipients": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"],
+      "dataType": "note",
+      "dataBase64": "SGVsbG8sIHRoaXMgaXMgYSB0ZXN0IG1lc3NhZ2Uu"
     },
     {
-      "mid": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
       "sender": "FHnRyV8PHKFQ1hQRNRMmJk6LkRbSx1FKBJ",
       "size": 42,
-      "ttl": 7,
-      "createdAt": 1743033600000,
-      "expiresAt": 1743638400000,
-      "data": "VGhpcyBpcyBhbm90aGVyIHRlc3QgbWVzc2FnZSBmb3IgZG9jayBmZXRjaC4="
+      "createTime": 1743033600000,
+      "expireHeight": 860080,
+      "recipients": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"],
+      "dataBase64": "VGhpcyBpcyBhbm90aGVyIHRlc3QgbWVzc2FnZSBmb3IgZG9jayBmZXRjaC4="
     }
-  ]
+  ],
+  "last": ["1743033600000", "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"]
 }
 ```
 
 ### 4.4. dock.list
 
-List item metadata addressed to the requesting peer, without message content. Use this method to discover available messages before selectively downloading them with `dock.get`.
+List item metadata addressed to the requesting peer, without item content. Use this to discover available items before selectively downloading them with `dock.get`.
 
 - **Category**: Query
-- **Request**: `fcdsl` with optional filter, sort, size, and pagination parameters as defined in FAPI2.
-- **Response**: `data` contains an array of message metadata objects (sender, size, timestamps, TTL). No `data` field is included in each item.
-- **Charging**: Standard query fees only. No egress fees are charged because message content is not transferred.
+- **Request `params`** (OPTIONAL):
+  - `recipientId` (string, OPTIONAL): Recipient identifier to query. Defaults to the requesting peer's ID.
+- **Request `fcdsl`** (OPTIONAL): Standard FCDSL `sort`, `size` (max 100, default 20), and `after` fields. The server transparently excludes `dataBase64` from results.
+- **Response**: `data` is an array of metadata objects: `id`, `sender`, `size`, `createTime`, `expireHeight`, `remainingDays`, `egressFee`, optional `dataType`. Standard pagination fields (`got`, `total`, `last`) are included.
+- **Charging**: No egress fee, since item content is not returned.
+- **Errors**:
+  - `INTERNAL_ERROR`: Search failure.
 
 **Request example**:
 
@@ -281,7 +342,7 @@ List item metadata addressed to the requesting peer, without message content. Us
 {
   "api": "dock.list",
   "fcdsl": {
-    "sort": [{ "createdAt": "desc" }],
+    "sort": [{ "createTime": "desc" }],
     "size": 20
   }
 }
@@ -297,47 +358,50 @@ List item metadata addressed to the requesting peer, without message content. Us
   "total": 3,
   "data": [
     {
-      "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+      "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
       "sender": "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW",
       "size": 26,
-      "ttl": 14,
-      "status": "pending",
-      "createdAt": 1743120000000,
-      "expiresAt": 1744329600000
+      "createTime": 1743120000000,
+      "expireHeight": 870160,
+      "remainingDays": 13,
+      "dataType": "note",
+      "egressFee": 10
     },
     {
-      "mid": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
       "sender": "FHnRyV8PHKFQ1hQRNRMmJk6LkRbSx1FKBJ",
       "size": 42,
-      "ttl": 7,
-      "status": "pending",
-      "createdAt": 1743033600000,
-      "expiresAt": 1743638400000
+      "createTime": 1743033600000,
+      "expireHeight": 860080,
+      "remainingDays": 6,
+      "egressFee": 10
     },
     {
-      "mid": "e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
+      "id": "e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2",
       "sender": "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW",
       "size": 1024,
-      "ttl": 30,
-      "status": "delivered",
-      "createdAt": 1742947200000,
-      "expiresAt": 1745539200000
+      "createTime": 1742947200000,
+      "expireHeight": 893200,
+      "remainingDays": 28,
+      "egressFee": 10
     }
-  ]
+  ],
+  "last": ["1742947200000", "e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"]
 }
 ```
 
 ### 4.5. dock.check
 
-Check the status of a specific message without downloading its content. Both the sender and any designated recipient MAY call this method.
+Check the status of a specific item without downloading its content. Both the sender and any designated recipient MAY call this method.
 
 - **Category**: Operation
-- **Request**: `params` with:
-  - `mid` (string, REQUIRED): The message ID to check.
-- **Response**: `data` contains the message metadata including delivery status.
+- **Request `params`**:
+  - `id` (string, REQUIRED): The item ID to check.
+- **Response `data`**: `id`, `sender`, `size`, `createTime`, `createHeight`, `expireHeight`, `maxDays`, `recipients`, optional `dataType`, `expired` (boolean), `remainingDays`, `egressFee`. When the caller is the sender, the response additionally includes `storageFee` and `ingressFee`.
 - **Errors**:
-  - 404 (NOT_FOUND): Message ID does not exist or has expired.
-  - 403 (FORBIDDEN): Requester is neither the sender nor a designated recipient.
+  - `BAD_REQUEST`: Missing `id`.
+  - `NOT_FOUND`: Item ID does not exist.
+  - `FORBIDDEN`: Caller is neither the sender nor a designated recipient.
 
 **Request example**:
 
@@ -345,43 +409,49 @@ Check the status of a specific message without downloading its content. Both the
 {
   "api": "dock.check",
   "params": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5"
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5"
   }
 }
 ```
 
-**Response example**:
+**Response example** (caller is the sender):
 
 ```json
 {
   "code": 0,
   "message": "OK",
   "data": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
     "sender": "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW",
-    "recipients": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"],
     "size": 26,
-    "ttl": 14,
-    "status": "pending",
-    "createdAt": 1743120000000,
-    "expiresAt": 1744329600000,
-    "deliveredTo": []
+    "createTime": 1743120000000,
+    "createHeight": 850000,
+    "expireHeight": 870160,
+    "maxDays": 14,
+    "recipients": ["FEk41Kqjar45fLDriztUDTUkdki7mmcjWK"],
+    "dataType": "note",
+    "expired": false,
+    "remainingDays": 13,
+    "egressFee": 10,
+    "storageFee": 14,
+    "ingressFee": 10
   }
 }
 ```
 
 ### 4.6. dock.delete
 
-Delete a message from the server. Only the original sender MAY delete a message. A partial refund is issued for the remaining unused storage period.
+Delete an item from the server. Only the original sender MAY delete an item. A partial refund is issued for the unused storage period.
 
 - **Category**: Operation
-- **Request**: `params` with:
-  - `mid` (string, REQUIRED): The message ID to delete.
-- **Response**: `data` contains deletion confirmation and the refund amount.
-- **Refund**: The sender receives a refund proportional to the remaining TTL: `pricePerKBDay * ceil(size / 1024) * remainingDays`. The ingress fee is not refunded.
+- **Request `params`**:
+  - `id` (string, REQUIRED): The item ID to delete.
+- **Response `data`**: `id`, `deleted: true`, `refund` (satoshi).
+- **Refund**: `refund = storageFee * remainingDays / maxDays`. The ingress fee is NOT refunded. If `remainingDays <= 0` or no storage fee was charged, `refund` is 0.
 - **Errors**:
-  - 404 (NOT_FOUND): Message ID does not exist or has expired.
-  - 403 (FORBIDDEN): Requester is not the original sender.
+  - `BAD_REQUEST`: Missing `id`.
+  - `NOT_FOUND`: Item ID does not exist.
+  - `FORBIDDEN`: Caller is not the original sender.
 
 **Request example**:
 
@@ -389,7 +459,7 @@ Delete a message from the server. Only the original sender MAY delete a message.
 {
   "api": "dock.delete",
   "params": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5"
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5"
   }
 }
 ```
@@ -401,29 +471,28 @@ Delete a message from the server. Only the original sender MAY delete a message.
   "code": 0,
   "message": "OK",
   "data": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
     "deleted": true,
-    "remainingDays": 10,
-    "refundAmount": "0.00000260"
+    "refund": 13
   }
 }
 ```
 
 ### 4.7. dock.extend
 
-Extend the time-to-live of an existing message. Only the original sender MAY extend a message's TTL. The sender pays for the additional storage period.
+Extend the lifetime of an existing item. Only the original sender MAY extend an item. The sender pays for the additional storage period.
 
 - **Category**: Operation
-- **Request**: `params` with:
-  - `mid` (string, REQUIRED): The message ID to extend.
-  - `additionalDays` (integer, REQUIRED): Number of days to add to the current TTL. Minimum: 1. The resulting total TTL (original TTL + extension) MUST NOT exceed 365 days.
-- **Response**: `data` contains the updated expiration time and the charge amount.
-- **Charging**: The sender pays `pricePerKBDay * ceil(size / 1024) * additionalDays` for the extended storage period.
+- **Request `params`**:
+  - `id` (string, REQUIRED): The item ID to extend.
+  - `extraDays` (integer, REQUIRED): Number of days to add. Minimum: 1. Maximum: 365.
+- **Response `data`**: `id`, `extraDays`, `newExpireHeight`, `additionalFee`, `totalStorageFee`.
+- **Charging**: Sender pays `additionalFee = ceil(size/1024) * extraDays * pricePerKBDay`. The new `expireHeight` is `previousExpireHeight + extraDays * 1440`, and `maxDays` is incremented by `extraDays`.
 - **Errors**:
-  - 404 (NOT_FOUND): Message ID does not exist or has expired.
-  - 403 (FORBIDDEN): Requester is not the original sender.
-  - 400 (BAD_REQUEST): Extension would exceed the 365-day maximum TTL.
-  - 402 (INSUFFICIENT_CREDIT): Sender's credit balance is insufficient.
+  - `BAD_REQUEST`: Missing `id` or `extraDays` outside `[1, 365]`.
+  - `NOT_FOUND`: Item ID does not exist.
+  - `FORBIDDEN`: Caller is not the original sender.
+  - `PAYMENT_REQUIRED`: Sender's balance cannot cover the additional fee.
 
 **Request example**:
 
@@ -431,8 +500,8 @@ Extend the time-to-live of an existing message. Only the original sender MAY ext
 {
   "api": "dock.extend",
   "params": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
-    "additionalDays": 30
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+    "extraDays": 30
   }
 }
 ```
@@ -444,11 +513,11 @@ Extend the time-to-live of an existing message. Only the original sender MAY ext
   "code": 0,
   "message": "OK",
   "data": {
-    "mid": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
-    "previousExpiresAt": 1744329600000,
-    "expiresAt": 1746921600000,
-    "additionalDays": 30,
-    "chargeAmount": "0.00000780"
+    "id": "d8f3a2b1c4e5f6a7b8c9d0e1f2a3b4c5",
+    "extraDays": 30,
+    "newExpireHeight": 913360,
+    "additionalFee": 30,
+    "totalStorageFee": 44
   }
 }
 ```
@@ -457,25 +526,25 @@ Extend the time-to-live of an existing message. Only the original sender MAY ext
 
 ### 5.1. Storage Abuse Prevention
 
-DOCK servers MUST enforce the 64 KB size limit to prevent storage abuse. Additionally, servers SHOULD implement rate limiting on `dock.put` to prevent a single sender from flooding the system with a large number of small messages. The FCH micropayment model provides an economic deterrent against abuse, as each stored message incurs a cost proportional to its size and TTL. Servers MAY define a minimum charge per message to ensure that even the smallest messages carry a non-trivial cost.
+DOCK servers MUST enforce the configured `maxDataSize` to prevent storage abuse. Servers SHOULD also enforce the 100-recipient limit per `dock.put` to bound fan-out cost. Additionally, servers SHOULD implement rate limiting on `dock.put` to prevent a single sender from flooding the system with a large number of small items. The FCH micropayment model provides an economic deterrent against abuse, as each stored item incurs a cost proportional to its size and lifetime. Servers MAY define a minimum charge per item to ensure that even the smallest items carry a non-trivial cost.
 
-Servers SHOULD monitor total storage utilization and MAY reject new `dock.put` requests with error code 507 (INSUFFICIENT_STORAGE) when storage capacity is exhausted.
+Servers SHOULD monitor total storage utilization and MAY reject new `dock.put` requests when storage capacity is exhausted.
 
 ### 5.2. Sender-Only Deletion
 
-Only the original sender of a message MAY delete it via `dock.delete`. Recipients MUST NOT be permitted to delete messages. This design ensures that the sender retains control over the message lifecycle and can reclaim storage fees for undelivered messages. The server MUST verify the requester's authenticated FID (from the FUDP connection) against the message's sender field before permitting deletion.
+Only the original sender of an item MAY delete it via `dock.delete`. Recipients MUST NOT be permitted to delete items. This design ensures that the sender retains control over the item lifecycle and can reclaim storage fees for undelivered items. The server MUST verify the requester's authenticated peer ID (from the FUDP connection) against the item's `sender` field before permitting deletion or extension.
 
-Recipients who wish to disregard a message simply do not retrieve it; the message expires naturally at the end of its TTL.
+Recipients who wish to disregard an item simply do not retrieve it; the item expires naturally when the chain advances past `expireHeight`.
 
-### 5.3. TTL Limits
+### 5.3. Lifetime Limits
 
-The maximum TTL of 365 days prevents indefinite storage consumption. Servers MUST reject `dock.put` requests with a TTL exceeding 365 days. The `dock.extend` method MUST enforce that the total TTL (original TTL plus all extensions) does not exceed 365 days from the original creation time. This cap ensures predictable storage cost accounting and prevents long-tail storage obligations.
+The maximum lifetime of 365 days prevents indefinite storage consumption. Servers MUST reject `dock.put` requests with `maxDays` outside `[1, 365]`. The `dock.extend` method MUST enforce that each individual `extraDays` value is within `[1, 365]`. This cap ensures predictable storage cost accounting and prevents long-tail storage obligations.
 
-Servers MUST NOT silently truncate TTL values. If a requested TTL exceeds the maximum, the server MUST return an error rather than accepting the request with a reduced TTL, ensuring that clients are always aware of the actual storage duration.
+Servers MUST NOT silently truncate `maxDays` values. If a requested value is out of range, the server MUST return `BAD_REQUEST` rather than accepting the request with a reduced lifetime, ensuring that clients are always aware of the actual storage duration.
 
 ## 6. Versioning
 
-This document defines version 1 of the DOCK component specification (FAPI13V1). Future versions MAY introduce additional methods, modify charging semantics, or adjust size and TTL limits. Version changes follow the FAPI versioning rules defined in FAPI0:
+This document defines version 1 of the DOCK component specification (FAPI13V1). Future versions MAY introduce additional methods, modify charging semantics, or adjust size and lifetime limits. Version changes follow the FAPI versioning rules defined in FAPI0:
 
 - **Minor changes** (new optional fields, relaxed limits) increment the version number.
 - **Breaking changes** (removed methods, incompatible request formats) require a new serial number.

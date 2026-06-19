@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -49,11 +50,11 @@ public class MempoolManager extends Manager<FcEntity> {
         this.listenPath = listenPath;
         this.running = new AtomicBoolean(true);
         
-        // Initialize lists
-        this.txIdList = new ArrayList<>();
-        this.txList = new ArrayList<>();
-        this.inCashList = new ArrayList<>();
-        this.outCashList = new ArrayList<>();
+        // Initialize lists (thread-safe: accessed by request threads and the block-listener daemon)
+        this.txIdList = new CopyOnWriteArrayList<>();
+        this.txList = new CopyOnWriteArrayList<>();
+        this.inCashList = new CopyOnWriteArrayList<>();
+        this.outCashList = new CopyOnWriteArrayList<>();
         
         // Start directory listener
         scanNewBlockToClearLists();
@@ -67,11 +68,11 @@ public class MempoolManager extends Manager<FcEntity> {
         this.listenPath = (String) settings.getSettingMap().get(LISTEN_PATH);
         this.running = new AtomicBoolean(true);
         
-        this.txIdList = new ArrayList<>();
-        this.txList = new ArrayList<>();
-        this.inCashList = new ArrayList<>();
-        this.outCashList = new ArrayList<>();
-        
+        this.txIdList = new CopyOnWriteArrayList<>();
+        this.txList = new CopyOnWriteArrayList<>();
+        this.inCashList = new CopyOnWriteArrayList<>();
+        this.outCashList = new CopyOnWriteArrayList<>();
+
         // Start directory listener
         scanNewBlockToClearLists();
     }
@@ -98,7 +99,7 @@ public class MempoolManager extends Manager<FcEntity> {
 
         if(addingList!=null)cashList.addAll(addingList);
         
-        if(removingIdList!=null){
+        if(!removingIdList.isEmpty()){
             for(String id : removingIdList){
                 cashList.removeIf(cash -> cash.getId().equals(id));
             }
