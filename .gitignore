@@ -3,6 +3,7 @@
 
 # Ignore directories named `target` (commonly used in Maven projects)
 /target/
+target/
 
 
 
@@ -45,6 +46,8 @@ b.jar
 a.tar
 a.dat
 2026-03-28-183110-FchOrphaneBlock.txt
+jsons.txt
+AGENTS.md
 opreturn/opreturn0.byte
 opreturn/opreturn0.byte
 opreturn/opreturn0.byte
