@@ -31,17 +31,18 @@ public class TokenOpData {
         DEPLOY(FeipOp.DEPLOY),
         ISSUE(FeipOp.ISSUE),
         TRANSFER(FeipOp.TRANSFER),
+        DESTROY(FeipOp.DESTROY),
         CLOSE(FeipOp.CLOSE);
 
-		private final FeipOp feipOp;
+        private final FeipOp feipOp;
 
-		Op(FeipOp feipOp) {
-			this.feipOp = feipOp;
-		}
+        Op(FeipOp feipOp) {
+            this.feipOp = feipOp;
+        }
 
-		public FeipOp getFeipOp() {
-			return feipOp;
-		}
+        public FeipOp getFeipOp() {
+            return feipOp;
+        }
 
         public static Op fromValue(String value) {
             for (Op op : Op.values()) {
@@ -52,25 +53,29 @@ public class TokenOpData {
             return null;
         }
         public String toLowerCase() {
-			return feipOp.getValue().toLowerCase();
-		}
+            return feipOp.getValue().toLowerCase();
+        }
     }
 
     public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
     static {
         OP_FIELDS.put(Op.DEPLOY.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.DESC, FieldNames.CONSENSUS_ID, FieldNames.CAPACITY,
-            FieldNames.DECIMAL, FieldNames.TRANSFERABLE, FieldNames.CLOSABLE, FieldNames.OPEN_ISSUE, FieldNames.MAX_AMT_PER_ISSUE, FieldNames.MIN_CDD_PER_ISSUE, FieldNames.MAX_ISSUES_PER_ADDR});
+                FieldNames.DECIMAL, FieldNames.TRANSFERABLE, FieldNames.CLOSABLE, FieldNames.OPEN_ISSUE, FieldNames.MAX_AMT_PER_ISSUE, FieldNames.MIN_CDD_PER_ISSUE, FieldNames.MAX_ISSUES_PER_ADDR});
         OP_FIELDS.put(Op.ISSUE.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.ISSUE_TO});
         OP_FIELDS.put(Op.TRANSFER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.TRANSFER_TO});
+        OP_FIELDS.put(Op.DESTROY.toLowerCase(), new String[]{FieldNames.TOKEN_IDS});
         OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.TOKEN_IDS});
     }
 
-    public static TokenOpData makeRegister(String tokenId, String name, String desc, String consensusId,
-                                           String capacity, String decimal, Boolean transferable, Boolean closable, Boolean openIssue,
-                                           String maxAmtPerIssue, String minCddPerIssue, String maxIssuesPerAddr) {
+    /**
+     * Makes the data of the deploy operation. The tokenId of the new token is
+     * the id of the deploy TX, so it is never included in the deploy data.
+     */
+    public static TokenOpData makeDeploy(String name, String desc, String consensusId,
+                                         String capacity, String decimal, Boolean transferable, Boolean closable, Boolean openIssue,
+                                         String maxAmtPerIssue, String minCddPerIssue, String maxIssuesPerAddr) {
         TokenOpData data = new TokenOpData();
         data.setOp(Op.DEPLOY.toLowerCase());
-        data.setTokenId(tokenId);
         data.setName(name);
         data.setDesc(desc);
         data.setConsensusId(consensusId);
@@ -101,6 +106,17 @@ public class TokenOpData {
         return data;
     }
 
+    /**
+     * Makes the data of the destroy operation which burns the whole balance
+     * of the signer. The tokenIds list has to contain exactly one tokenId.
+     */
+    public static TokenOpData makeDestroy(String tokenId) {
+        TokenOpData data = new TokenOpData();
+        data.setOp(Op.DESTROY.toLowerCase());
+        data.setTokenIds(List.of(tokenId));
+        return data;
+    }
+
     public static TokenOpData makeClose(List<String> tokenIds) {
         TokenOpData data = new TokenOpData();
         data.setOp(Op.CLOSE.toLowerCase());
@@ -116,7 +132,7 @@ public class TokenOpData {
     }
     public void setTokenIds(List<String> tokenIds) {
         this.tokenIds = tokenIds;
-    }   
+    }
 
     public void setTokenId(String tokenId) {
         this.tokenId = tokenId;

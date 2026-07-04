@@ -1065,11 +1065,9 @@ public class OrganizationParser {
 						if(invitee.equals(teamHist.getSigner())) {
 
 							Set<String> activeMemberSet = new HashSet<String>();
-							for(String activeMember:team.getMembers()) {
-								activeMemberSet.add(activeMember);
-							}
+							Collections.addAll(activeMemberSet, team.getMembers());
 							activeMemberSet.add(teamHist.getSigner());
-							String[] activeMembers = activeMemberSet.toArray(new String[activeMemberSet.size()]);
+							String[] activeMembers = activeMemberSet.toArray(new String[0]);
 
 							Set<String>leftMemberSet = new HashSet<String>();
 
@@ -1079,7 +1077,7 @@ public class OrganizationParser {
 										leftMemberSet.add(leftMember);
 									}
 								}
-								String[] leftMembers = leftMemberSet.toArray(new String[leftMemberSet.size()]);
+								String[] leftMembers = leftMemberSet.toArray(new String[0]);
 								team.setExMembers(leftMembers);
 							}
 
@@ -1091,7 +1089,7 @@ public class OrganizationParser {
 							if(inviteeSet.size()==0) {
 								team.setInvitees(null);
 							}else {
-								String[] invitees = inviteeSet.toArray(new String[inviteeSet.size()]);
+								String[] invitees = inviteeSet.toArray(new String[0]);
 								team.setInvitees(invitees);
 							}
 							team.setMembers(activeMembers);
@@ -1115,7 +1113,7 @@ public class OrganizationParser {
 					return false;
 				}
 				MgetResult<Team> result1 = EsUtils.getMultiByIdList(esClient,IndicesNames.TEAM, teamHist.getTids(), Team.class);
-				if(result1==null||result1.getResultList()==null||result1.getResultList().isEmpty()) {
+				if(result1.getResultList() == null || result1.getResultList().isEmpty()) {
 					log.info("Team list is empty");
 					return false;
 				}

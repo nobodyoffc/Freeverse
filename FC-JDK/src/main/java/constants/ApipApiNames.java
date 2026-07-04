@@ -42,6 +42,15 @@ public class ApipApiNames {
 
 
     public static final String Carve = "carve";
+
+    // DISK APIs served by ApipServer under a dedicated "/disk/{api}/v1" path.
+    public static final String DISK_SN = "disk";
+    public static final String DISK_PUT = "put";
+    public static final String DISK_CARVE = "carve";
+    public static final String DISK_GET = "get";
+    public static final String DISK_CHECK = "check";
+    public static final String DISK_LIST = "list";
+
     public static final String SIGN_IN = "signIn";
     public static final String PING = "ping";
     public static final String SIGN_IN_ECC = "signInEcc";

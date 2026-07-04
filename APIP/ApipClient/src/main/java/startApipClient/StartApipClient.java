@@ -15,6 +15,7 @@ import data.feipData.*;
 import data.feipData.ServiceType;
 import config.Configure;
 import core.crypto.EncryptType;
+import core.crypto.Hash;
 import core.crypto.KeyTools;
 
 import utils.BytesUtils;
@@ -24,13 +25,18 @@ import utils.http.AuthType;
 import utils.http.RequestMethod;
 import org.bouncycastle.util.encoders.Base64;
 import config.Settings;
+import constants.ApipApiNames;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +89,7 @@ public class StartApipClient {
         menu.add("Wallet", () -> wallet());
         menu.add("Crypto", () -> crypto());
         menu.add("Endpoint", () -> endpoint());
+        menu.add("Disk", () -> disk());
         menu.add("Settings", () -> settings.setting(br, null));
 
         System.out.println(" << APIP Client>>");
@@ -1770,6 +1777,180 @@ public class StartApipClient {
         menu.add("freecashInfo", () -> System.out.println(apipClient.freecashInfo()));
 
         menu.showAndSelect(br);
+    }
+
+    public static void disk() {
+        Menu menu = new Menu("Disk");
+        menu.add("put", () -> diskPutOrCarve(ApipApiNames.DISK_PUT, "put"));
+        menu.add("carve", () -> diskPutOrCarve(ApipApiNames.DISK_CARVE, "carve"));
+        menu.add("uploadAll", () -> diskUploadAll());
+        menu.add("get", () -> diskGet());
+        menu.add("check", () -> diskCheck());
+        menu.add("list", () -> diskList());
+        menu.showAndSelect(br);
+    }
+
+    // PUT/CARVE: upload a local file as the raw octet-stream body.
+    public static void diskPutOrCarve(String apiName, String label) {
+        String fileName = inputString(br, "Input the local file path to " + label + ":");
+        if (fileName == null || fileName.isEmpty()) return;
+        System.out.println("Requesting disk " + label + "...");
+        apipClient.requestJsonByFile(ApipApiNames.DISK_SN, VER_1, apiName, null, null, fileName);
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    // UPLOAD ALL: recursively upload every file in a directory (including subdirectories).
+    // Each file's did (SHA256x2 of its content) is checked against the server first, so files
+    // already stored are skipped. Afterwards a relativePath -> did map is written to a JSON file,
+    // covering both newly uploaded files and those that were already on the server.
+    public static void diskUploadAll() {
+        String dirPath = inputString(br, "Input the local directory path to upload:");
+        if (dirPath == null || dirPath.isEmpty()) return;
+        File dir = new File(dirPath);
+        if (!dir.exists() || !dir.isDirectory()) {
+            System.out.println("Not a valid directory: " + dirPath);
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        String apiName;
+        String label;
+        if (Inputer.askIfYes(br, "Use 'carve' (permanent storage)? Enter 'n' to use 'put':")) {
+            apiName = ApipApiNames.DISK_CARVE;
+            label = "carve";
+        } else {
+            apiName = ApipApiNames.DISK_PUT;
+            label = "put";
+        }
+
+        List<File> files = new ArrayList<>();
+        collectFiles(dir, files);
+        if (files.isEmpty()) {
+            System.out.println("No files found in " + dirPath);
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        System.out.println("Found " + files.size() + " file(s).");
+        Path dirBase = dir.toPath();
+        // Keep insertion order so the saved map mirrors the traversal order.
+        Map<String, String> didMap = new LinkedHashMap<>();
+        int uploaded = 0;
+        int skipped = 0;
+        int failed = 0;
+        int index = 0;
+        int total = files.size();
+        for (File file : files) {
+            index++;
+            String progress = "[" + index + "/" + total + "] ";
+            String relativePath = dirBase.relativize(file.toPath()).toString();
+            String did;
+            try {
+                did = Hash.sha256x2(file);
+            } catch (IOException e) {
+                System.out.println(progress + "Failed to read " + relativePath + ": " + e.getMessage());
+                failed++;
+                continue;
+            }
+
+            // Check first: if the server already holds this did, skip the upload but still record it.
+            if (diskItemExists(did)) {
+                System.out.println(progress + "Already on server, skip: " + relativePath + " (did=" + did + ")");
+                didMap.put(relativePath, did);
+                skipped++;
+                continue;
+            }
+
+            System.out.println(progress + "Uploading (" + label + "): " + relativePath + " (" + file.length() + " bytes)");
+            apipClient.requestJsonByFile(ApipApiNames.DISK_SN, VER_1, apiName, null, null, file.getAbsolutePath());
+            ReplyBody replyBody = apipClient.getFcClientEvent().getResponseBody();
+            if (replyBody != null && replyBody.getCode() != null && replyBody.getCode() == 0) {
+                didMap.put(relativePath, did);
+                uploaded++;
+            } else {
+                JsonUtils.printJson(replyBody);
+                failed++;
+            }
+        }
+
+        System.out.println("Done. Uploaded: " + uploaded + ", AlreadyOnServer: " + skipped + ", Failed: " + failed + ".");
+
+        // Write the relativePath -> did map to a JSON file (in the working dir to avoid re-upload on rerun).
+        File mapFile = new File(System.getProperty("user.dir"), "disk-upload-map-" + System.currentTimeMillis() + ".json");
+        try {
+            Files.writeString(mapFile.toPath(), JsonUtils.toNiceJson(didMap));
+            System.out.println("did map saved to: " + mapFile.getAbsolutePath());
+        } catch (IOException e) {
+            System.out.println("Failed to write did map file: " + e.getMessage());
+            System.out.println(JsonUtils.toNiceJson(didMap));
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    // CHECK whether a file with this did is already stored on the server.
+    private static boolean diskItemExists(String did) {
+        Map<String, String> paramMap = new HashMap<>();
+        paramMap.put("did", did);
+        apipClient.requestJsonByUrlParams(ApipApiNames.DISK_SN, VER_1, ApipApiNames.DISK_CHECK, paramMap, AuthType.FC_SIGN_URL);
+        ReplyBody replyBody = apipClient.getFcClientEvent().getResponseBody();
+        return replyBody != null && replyBody.getCode() != null && replyBody.getCode() == 0;
+    }
+
+    // Recursively collect all files under dir, including those in subdirectories.
+    private static void collectFiles(File dir, List<File> files) {
+        File[] entries = dir.listFiles();
+        if (entries == null) return;
+        for (File entry : entries) {
+            if (entry.isDirectory()) collectFiles(entry, files);
+            else if (entry.isFile()) files.add(entry);
+        }
+    }
+
+    // GET: download a file by did into a local directory.
+    public static void diskGet() {
+        String did = inputString(br, "Input the did:");
+        if (did == null || did.isEmpty()) return;
+        String localPath = inputString(br, "Input the local dir to save (Enter for current dir):");
+        if (localPath == null || localPath.isEmpty()) localPath = System.getProperty("user.dir");
+
+        Fcdsl fcdsl = new Fcdsl();
+        Map<String, String> other = new HashMap<>();
+        other.put("did", did);
+        fcdsl.setOther(other);
+
+        System.out.println("Requesting disk get...");
+        Object savedFileName = apipClient.requestFile(ApipApiNames.DISK_SN, VER_1, ApipApiNames.DISK_GET,
+                fcdsl, did, localPath, AuthType.ENCRYPTED, null, RequestMethod.POST);
+        if (savedFileName == null) {
+            JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        } else {
+            System.out.println("Saved file: " + localPath + "/" + savedFileName);
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    // CHECK: fetch the DiskItem metadata for a did.
+    public static void diskCheck() {
+        String did = inputString(br, "Input the did:");
+        if (did == null || did.isEmpty()) return;
+        Map<String, String> paramMap = new HashMap<>();
+        paramMap.put("did", did);
+        System.out.println("Requesting disk check...");
+        apipClient.requestJsonByUrlParams(ApipApiNames.DISK_SN, VER_1, ApipApiNames.DISK_CHECK, paramMap, AuthType.FC_SIGN_URL);
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
+    }
+
+    // LIST: query stored DiskItems with an FCDSL.
+    public static void diskList() {
+        Fcdsl fcdsl = inputFcdsl(DEFAULT_SIZE, "since:desc");
+        if (fcdsl == null) return;
+        System.out.println("Requesting disk list...");
+        apipClient.requestJsonByFcdsl(ApipApiNames.DISK_SN, VER_1, ApipApiNames.DISK_LIST,
+                fcdsl, AuthType.ENCRYPTED, null, RequestMethod.POST);
+        JsonUtils.printJson(apipClient.getFcClientEvent().getResponseBody());
+        Menu.anyKeyToContinue(br);
     }
 //
 //    public static void swapTools( ) {

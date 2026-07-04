@@ -1274,7 +1274,7 @@ public class AccountManager extends Manager<FcEntity> {
                     .size(DEFAULT_DISPLAY_LIST_SIZE);
 
                 if (lastIncome!=null && !lastIncome.isEmpty()) {
-                    searchBuilder.searchAfter(EsUtils.toFieldValueList(lastIncome));
+                    searchBuilder.searchAfter(EsUtils.toCashSearchAfterValues(lastIncome));
                 }
 
                 SearchResponse<Cash> response = esClient.search(searchBuilder.build(), Cash.class);
@@ -1477,7 +1477,7 @@ public class AccountManager extends Manager<FcEntity> {
                         );
                     
                     // Add range condition only if lastExpense is empty
-                    if (lastExpense==null || lastExpense.isEmpty() && startHeight!=null) {
+                    if ((lastExpense==null || lastExpense.isEmpty()) && startHeight!=null) {
                         boolQueryBuilder.must(m -> m
                             .range(r -> r
                                 .field(BIRTH_HEIGHT)
@@ -1494,7 +1494,7 @@ public class AccountManager extends Manager<FcEntity> {
                         .size(DEFAULT_DISPLAY_LIST_SIZE);
 
                     if (lastExpense!=null && !lastExpense.isEmpty()) {
-                        searchBuilder.searchAfter(EsUtils.toFieldValueList(lastExpense));
+                        searchBuilder.searchAfter(EsUtils.toCashSearchAfterValues(lastExpense));
                     }
 
                     SearchResponse<Cash> response = esClient.search(searchBuilder.build(), Cash.class);

@@ -2925,63 +2925,45 @@ public class LevelDB<T extends FcEntity> implements LocalDB<T> {
 
     private void handleStaleLock(File dbFolder) {
         File lockFile = new File(dbFolder, "LOCK");
-        if (lockFile.exists()) {
-            // Check if the lock file is stale (older than 30 seconds)
-            long lockAge = System.currentTimeMillis() - lockFile.lastModified();
-            long staleThreshold = 5 * 60 * 1000; // 5 minutes in milliseconds
-            
-            // Try to read and validate lock file content
-            boolean isValidLock = false;
-            String lockContent = "";
-            try {
-                lockContent = new String(java.nio.file.Files.readAllBytes(lockFile.toPath()), StandardCharsets.UTF_8);
-                // Check if lock content indicates a valid Java/LevelDB process
-                isValidLock = lockContent.contains("pid:") || 
-                             lockContent.contains("java") || 
-                             lockContent.contains("leveldb");
-            } catch (IOException e) {
-                log.warn("Could not read lock file content: {}", e.getMessage());
-            }
-            
-            // If lock is old or content is invalid, try to remove it
-            if (lockAge > staleThreshold || !isValidLock) {
-                log.warn("Found potentially stale lock file ({} ms old). Attempting to remove it.", lockAge);
+        if (!lockFile.exists()) {
+            return;
+        }
+
+        long lockAge = System.currentTimeMillis() - lockFile.lastModified();
+        long staleThreshold = 5 * 60 * 1000; // 5 minutes
+
+        // LevelDB LOCK files are always empty — content-based validation is not possible.
+        // Use an exclusive tryLock to detect whether any process is actively holding the lock.
+        try (java.nio.channels.FileChannel channel = java.nio.channels.FileChannel.open(
+                lockFile.toPath(), java.nio.file.StandardOpenOption.WRITE)) {
+            java.nio.channels.FileLock fileLock = channel.tryLock();
+            if (fileLock != null) {
+                // No other process holds the lock — it is stale.
+                fileLock.release();
+                log.warn("Found stale lock file ({} ms old). Attempting to remove it.", lockAge);
                 if (lockFile.delete()) {
                     log.info("Successfully removed stale lock file");
                 } else {
-                    // If we can't delete it, try force unlock
-                    try {
-                        // Try to force release any file system locks
-                        java.nio.channels.FileChannel channel = java.nio.channels.FileChannel.open(
-                            lockFile.toPath(), 
-                            java.nio.file.StandardOpenOption.WRITE
-                        );
-                        java.nio.channels.FileLock fileLock = channel.tryLock();
-                        if (fileLock != null) {
-                            fileLock.release();
-                            channel.close();
-                            // Try delete again after releasing lock
-                            if (lockFile.delete()) {
-                                log.info("Successfully removed lock file after force unlock");
-                            } else {
-                                log.error("Failed to remove lock file even after force unlock");
-                                throw new RuntimeException("Failed to remove lock file after force unlock");
-                            }
-                        } else {
-                            channel.close();
-                            log.error("Failed to acquire lock for removal");
-                            throw new RuntimeException("Failed to acquire lock for removal");
-                        }
-                    } catch (IOException e) {
-                        log.error("Failed to force unlock: {}", e.getMessage());
-                        throw new RuntimeException("Failed to force unlock: " + e.getMessage());
-                    }
+                    log.error("Failed to remove stale lock file: {}", lockFile.getAbsolutePath());
+                    throw new RuntimeException("Failed to remove stale lock file: " + lockFile.getAbsolutePath());
                 }
             } else {
-                // Lock appears to be valid and recent
-                log.warn("Found recent lock file ({} ms old) with content: {}. Database might be in use.", 
-                         lockAge, lockContent.trim());
+                // Another process actively holds the lock.
+                log.warn("Found active lock file ({} ms old). Database is in use by another process.", lockAge);
                 throw new RuntimeException("Database appears to be in use by another process");
+            }
+        } catch (IOException e) {
+            // If we cannot open the lock file at all (e.g. permission denied), fall back to age-based check.
+            log.warn("Could not probe lock file ({}). Falling back to age-based stale check.", e.getMessage());
+            if (lockAge > staleThreshold) {
+                log.warn("Lock file is {} ms old (> threshold {}ms). Treating as stale.", lockAge, staleThreshold);
+                if (!lockFile.delete()) {
+                    log.error("Failed to remove stale lock file: {}", lockFile.getAbsolutePath());
+                    throw new RuntimeException("Failed to remove stale lock file: " + lockFile.getAbsolutePath());
+                }
+                log.info("Successfully removed stale lock file");
+            } else {
+                throw new RuntimeException("Cannot access lock file and it is recent (" + lockAge + " ms old): " + e.getMessage());
             }
         }
     }

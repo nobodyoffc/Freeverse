@@ -1,5 +1,7 @@
 # Freeverse
 
+[x] update the bundle prefix of the algorithm.
+
 []  1. Decryptor.java — likely a real AES-GCM bug in FC-JDK, fixed in Safe.
 Safe uses GCMParameterSpec(128, iv) when the transformation is GCM; FC-JDK uses IvParameterSpec for GCM too.    
 IvParameterSpec doesn't carry the authentication-tag length, which with GCM can silently produce wrong or

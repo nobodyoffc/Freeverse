@@ -70,7 +70,7 @@ public class StartFEIP {
 			log.info("FEIP Parser shutdown complete.");
 		}, "feip-shutdown-hook"));
 
-		Menu menu = new Menu("FEIP Parser");
+		Menu menu = new Menu("FEIP Parser v2.0");
 		menu.add("Start New Parse from file", () -> startNewParse(opReturnJsonPath, br, esClient));
 		menu.add("Restart from interruption", () -> restartFromFile(esClient, opReturnJsonPath));
 		menu.add("Manual start from a height", () -> restartSinceHeight(opReturnJsonPath, br, esClient));

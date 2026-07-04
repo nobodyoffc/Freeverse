@@ -245,16 +245,17 @@ public class ApiUrl{
             urlTailClean = urlTailClean.substring(0, urlTailClean.length() - 1);
         }
 
-        // Parse path segments: [sn/]name[/ver]
-        // Example: sn2/cashSearch/v1
+        // Parse path segments: [service/]name[/ver]
+        // Examples: sn2/cashSearch/v1 (sn-numbered protocol) or disk/put/v1 (named service)
         String[] segments = urlTailClean.split("/");
 
         if(segments.length == 0) return;
 
         int index = 0;
 
-        // Check if first segment is sn number (starts with 'sn')
-        if(segments[index].startsWith("sn")) {
+        // A leading service segment is present when the first segment starts with 'sn'
+        // (sn-numbered protocols), or whenever there are 3+ segments (service/name/ver).
+        if(segments[index].startsWith("sn") || segments.length >= 3) {
             this.sn = segments[index];
             index++;
         }

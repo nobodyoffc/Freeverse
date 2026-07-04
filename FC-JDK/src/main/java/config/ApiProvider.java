@@ -41,6 +41,7 @@ public class ApiProvider extends Service {
     
     public boolean fromFcService(Service service) {
         if(service==null)return false;
+        String existingApiUrl = getApiUrl();
         this.id = service.getId();
         this.stdName = service.getStdName();
         this.localNames = service.getLocalNames();
@@ -81,6 +82,8 @@ public class ApiProvider extends Service {
         String urlHead = service.getApiUrl();
         if(urlHead != null && !urlHead.isBlank()){
             setApiUrl(urlHead);
+        } else if(existingApiUrl != null){
+            setApiUrl(existingApiUrl);
         } else if(getApiUrl() == null){
             setApiUrl("http://127.0.0.1:8081/APIP");
         }

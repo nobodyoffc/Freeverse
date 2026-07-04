@@ -593,13 +593,32 @@ public class EsUtils {
     }
 
     /**
-     * Convert List<String> to List<FieldValue> for ES 8.8+ searchAfter
+     * Convert List<String> to List<FieldValue> for ES 8.8+ searchAfter.
+     * All values are treated as strings; use toCashSearchAfterValues for typed Cash sorts.
      */
     public static List<FieldValue> toFieldValueList(List<String> stringList) {
         if (stringList == null) return null;
         List<FieldValue> result = new ArrayList<>();
         for (String s : stringList) {
             result.add(FieldValue.of(s));
+        }
+        return result;
+    }
+
+    /**
+     * Build typed searchAfter values for Cash queries sorted by (birth_height ASC, id ASC).
+     * birth_height must be a Long FieldValue; id is a String FieldValue.
+     */
+    public static List<FieldValue> toCashSearchAfterValues(List<String> lastValues) {
+        if (lastValues == null || lastValues.isEmpty()) return null;
+        List<FieldValue> result = new ArrayList<>();
+        try {
+            result.add(FieldValue.of(Long.parseLong(lastValues.get(0))));
+        } catch (NumberFormatException e) {
+            result.add(FieldValue.of(lastValues.get(0)));
+        }
+        if (lastValues.size() > 1) {
+            result.add(FieldValue.of(lastValues.get(1)));
         }
         return result;
     }

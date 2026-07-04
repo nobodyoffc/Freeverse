@@ -164,6 +164,11 @@ public class FileParser {
 					log.info("{} Waiting for new item ...", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(System.currentTimeMillis())));
 					FchUtils.waitForChangeInDirectory(path, running);
 					if (!running.get()) { error = true; continue; }
+					// Reopen after a long wait: the JIT may drop raf from its live-variable
+					// set while blocked here, allowing the GC to run its FileCleanable and
+					// close the fd before we return. Reopening guarantees a valid handle.
+					try { raf.close(); } catch (IOException ignored) {}
+					raf = new RandomAccessFile(new File(path, currentFileName), "r");
 					continue;
 				}
 			}

@@ -258,6 +258,7 @@ public class StartFapiClient {
         Menu menu = new Menu("Disk APIs");
         menu.add("put (temporary storage)", StartFapiClient::diskPut);
         menu.add("carve (permanent storage)", StartFapiClient::diskCarve);
+        menu.add("uploadAll (recursive upload)", StartFapiClient::diskUploadAll);
         menu.add("get (download by DID)", StartFapiClient::diskGet);
         menu.add("check (file info)", StartFapiClient::diskCheck);
         menu.add("list (query files)", StartFapiClient::diskList);
@@ -669,6 +670,103 @@ public class StartFapiClient {
         Menu.anyKeyToContinue(br);
     }
     
+    // UPLOAD ALL: recursively upload every file in a directory (including subdirectories).
+    // Each file's did (SHA256x2 of its content) is checked against the server first, so files
+    // already stored are skipped. Afterwards a relativePath -> did map (covering both newly
+    // uploaded files and those already on the server) is written to a JSON file.
+    private static void diskUploadAll() {
+        if (fapiClient == null) {
+            System.out.println("Not connected to FAPI service.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        String dirPath = Inputer.inputString(br, "Enter the local directory path to upload:");
+        if (dirPath == null || dirPath.isEmpty()) {
+            System.out.println("Directory path is required.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        java.io.File dir = new java.io.File(dirPath);
+        if (!dir.exists() || !dir.isDirectory()) {
+            System.out.println("Not a valid directory: " + dirPath);
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        boolean permanent = Inputer.askIfYes(br, "Use 'carve' (permanent storage)? Enter 'n' to use 'put':");
+        String label = permanent ? "carve" : "put";
+
+        java.util.List<java.io.File> files = new java.util.ArrayList<>();
+        collectFiles(dir, files);
+        if (files.isEmpty()) {
+            System.out.println("No files found in " + dirPath);
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+
+        System.out.println("Found " + files.size() + " file(s).");
+        java.nio.file.Path dirBase = dir.toPath();
+        // Keep insertion order so the saved map mirrors the traversal order.
+        Map<String, String> didMap = new java.util.LinkedHashMap<>();
+        int uploaded = 0;
+        int skipped = 0;
+        int failed = 0;
+        for (java.io.File file : files) {
+            String relativePath = dirBase.relativize(file.toPath()).toString();
+            String did;
+            try {
+                did = Hash.sha256x2(file);
+            } catch (java.io.IOException e) {
+                System.out.println("Failed to read " + relativePath + ": " + e.getMessage());
+                failed++;
+                continue;
+            }
+
+            // Check first: if the server already holds this did, skip the upload but still record it.
+            if (fapiClient.diskCheck(did) != null) {
+                System.out.println("Already on server, skip: " + relativePath + " (did=" + did + ")");
+                didMap.put(relativePath, did);
+                skipped++;
+                continue;
+            }
+
+            System.out.println("Uploading (" + label + "): " + relativePath);
+            data.fcData.DiskItem result = permanent ? fapiClient.diskCarve(file) : fapiClient.diskPut(file);
+            if (result != null) {
+                didMap.put(relativePath, result.getId() != null ? result.getId() : did);
+                uploaded++;
+            } else {
+                System.out.println("Upload failed: " + relativePath);
+                printLastError();
+                failed++;
+            }
+        }
+
+        System.out.println("Done. Uploaded: " + uploaded + ", AlreadyOnServer: " + skipped + ", Failed: " + failed + ".");
+
+        // Write the relativePath -> did map to a JSON file (in the working dir to avoid re-upload on rerun).
+        java.io.File mapFile = new java.io.File(System.getProperty("user.dir"), "disk-upload-map-" + System.currentTimeMillis() + ".json");
+        try {
+            java.nio.file.Files.writeString(mapFile.toPath(), JsonUtils.toNiceJson(didMap));
+            System.out.println("did map saved to: " + mapFile.getAbsolutePath());
+        } catch (java.io.IOException e) {
+            System.out.println("Failed to write did map file: " + e.getMessage());
+            System.out.println(JsonUtils.toNiceJson(didMap));
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    // Recursively collect all files under dir, including those in subdirectories.
+    private static void collectFiles(java.io.File dir, java.util.List<java.io.File> files) {
+        java.io.File[] entries = dir.listFiles();
+        if (entries == null) return;
+        for (java.io.File entry : entries) {
+            if (entry.isDirectory()) collectFiles(entry, files);
+            else if (entry.isFile()) files.add(entry);
+        }
+    }
+
     // ==================== DOCK API 实现 ====================
     
     private static void dockPut() {

@@ -130,10 +130,9 @@ The identity of the sender is established by FUDP during the connection handshak
 
 ### 3. Wire Format
 
-FIMP messages cross the wire as one of two equivalent representations of the same `ImMessage` object:
+FIMP messages cross the wire in a single canonical representation of the `ImMessage` object:
 
-1. **Compact binary wire format** -- Used for direct FUDP `NOTIFY` payloads (when not the simple chat path) and for the body of DOCK items. See [The ImMessage Envelope](#the-immessage-envelope) below for the exact binary layout.
-???2. **Plain text** -- Used only for the FUDP "CHAT" fast path (TEXT and RECEIPT only). The receiver MUST be able to distinguish CHAT from binary by the FUDP `dataType` selector (see [Delivery Channels](#delivery-channels)).
+- **Compact binary wire format** -- Used for direct FUDP `NOTIFY` payloads and for the body of DOCK items. See [The ImMessage Envelope](#the-immessage-envelope) below for the exact binary layout. Every mode and every ContentType -- including `TEXT` and `RECEIPT` -- is encoded this way on every delivery channel (FUDP, ROAD, DOCK). There is no separate plain-text fast path.
 
 JSON SHOULD be used for **local storage** of `ImMessage` objects but MUST NOT be used as a wire encoding between FIMP peers. Implementations that re-encode the envelope as JSON for transport are non-conformant.
 
@@ -152,7 +151,7 @@ The wire envelope is identical across all four modes; only the field population,
 
 ### 5. Status Codes
 
-FIMP itself does not define status codes for message delivery. Delivery state is tracked locally by the sender using `MessageStatus` (a local-only enum: `PENDING`, `QUARANTINED`, `SENT`, `DELIVERED`, `READ`, `FAILED`, `IMPORTED`). FAPI13 status codes apply to DOCK API calls. FUDP delivery acknowledgments apply to direct CHAT delivery.
+FIMP itself does not define status codes for message delivery. Delivery state is tracked locally by the sender using `MessageStatus` (a local-only enum: `PENDING`, `QUARANTINED`, `SENT`, `DELIVERED`, `READ`, `FAILED`, `IMPORTED`). FAPI13 status codes apply to DOCK API calls. FUDP `NOTIFY_ACK` acknowledgments apply to direct FUDP delivery.
 
 ### 6. Monetary Values
 
@@ -258,14 +257,11 @@ Enum ordinals are stable. Future versions MAY append new values but MUST NOT reo
 
 A wire-format message is at least 14 bytes (1+1+1+0+1+0+8+2 with empty IDs and no flags). Implementations MUST reject shorter inputs.
 
-### 3. Plain-Text Fast Path
+### 3. No Plain-Text Fast Path
 
-For the FUDP CHAT fast path (used only for `TEXT` and `RECEIPT` ContentTypes between two directly connected peers), the payload is a UTF-8 string instead of the compact binary format:
+Earlier drafts described an optional FUDP "CHAT" fast path that carried `TEXT` and `RECEIPT` payloads as raw UTF-8 strings tagged by a distinct FUDP `dataType`. The reference implementation does not use it: every FIMP message, on every channel (FUDP, ROAD, DOCK) and for every ContentType, is encoded with the compact binary wire format of §2 and carried as a raw FUDP `NOTIFY` payload. There is no dedicated `dataType` selector distinguishing a plain-text path from a binary path.
 
-- For `TEXT`: the payload is the raw text content of the message.
-- For `RECEIPT`: the payload is `"delivered:<messageId>"` or `"read:<messageId>"`.
-
-The FUDP message ID is used as the `ImMessage.id`. The `senderId` is the authenticated FUDP peer. The `type` is `P2P`. All other fields are unset. Receivers MUST be able to consume this fast-path encoding.
+Conformant implementations MUST NOT emit a plain-text fast-path payload; `TEXT` and `RECEIPT` messages MUST use the binary envelope like every other ContentType. The `id`, `senderId`, `type`, and all populated fields are encoded within that envelope (with `id` optionally carried via the `FLAG_MESSAGE_ID` flag, per §2).
 
 ## Enumerations
 
@@ -300,6 +296,11 @@ The FUDP message ID is used as the `ImMessage.id`. The `senderId` is the authent
 |15|`ROOM_INFO`|Room metadata bundle (Room mode only). `content` is a `RoomInfo` JSON, see FIMP2.|
 |16|`ROOM_LEAVE`|Room leave notification (Room mode only). `content` is the `roomId`.|
 |17|`VOICE`|Voice message. `content` holds metadata JSON (`durationMs`, `sampleRate`, `format`); `dataBase64` holds the audio bytes (typically AAC).|
+|18|`ROOM_ACCEPT`|Room invitation acceptance (Room mode only). `content` is the `roomId`; sent by an invitee to the owner to confirm joining. See FIMP2 §4.6.|
+|19|`ROOM_DISBAND`|Room disband notification (Room mode only). `content` is the `roomId` in the P2P form, or `null` with the `roomId` encrypted in `cipher` in the room-channel form. Sent by the room owner. See FIMP2 §4.7.|
+|20|`ROOM_REMOVED`|Room member-removal notification (Room mode only). `content` is the `roomId`; sent by the room owner to a removed member. See FIMP2 §4.8.|
+
+> **Note:** ordinals 18-20 were appended after the initial Draft (see FIMP2 §9). They are Room-mode control signals; other modes MUST NOT emit them. Because they are appended at the end of the enum, they are wire-compatible with implementations that predate them (which simply ignore them).
 
 ### RequestType
 
@@ -352,9 +353,7 @@ Symmetric keys for Room and Team are distributed via P2P `SYMKEY` messages. The 
 
 FIMP supports three delivery channels, in priority order:
 
-1. **FUDP_DIRECT** -- The sender and recipient have an active FUDP connection (or can establish one). The sender invokes a FUDP `NOTIFY` (with or without ACK) carrying either:
-    - the plain-text fast-path payload (CHAT, `dataType=1` -- TEXT/RECEIPT only); or
-    - the compact binary wire format of `ImMessage` (BYTES, any non-CHAT `dataType`).
+1. **FUDP_DIRECT** -- The sender and recipient have an active FUDP connection (or can establish one). The sender invokes a FUDP `NOTIFY` (with or without ACK) carrying the compact binary wire format of `ImMessage` as the raw payload. This applies to all ContentTypes, including `TEXT` and `RECEIPT`; there is no separate fast-path encoding (see [The ImMessage Envelope §3](#the-immessage-envelope)).
 2. **ROAD_RELAY** -- The recipient is reachable through a ROAD server. The sender sends the binary wire format wrapped in a ROAD relay request (see ROAD specification).
 3. **DOCK_STORED** -- The recipient is offline or addressable only by group ID. The sender uploads the binary wire format to a DOCK server with appropriate recipients (see [DOCK Conventions](#dock-conventions)). The recipient retrieves with `dock.fetch` later.
 

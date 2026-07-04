@@ -787,6 +787,7 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
             }
         }else apiAccount = addApiAccount(apiProvider, userFid, symkey,initApipClient, fapiClient);
 
+        if(apiAccount==null)return null;
         apiAccount.setApipClient(initApipClient);
         if(apiAccount.getClient()==null)apiAccount.connectApi(apiProvider,symkey, null, br);
         return apiAccount;

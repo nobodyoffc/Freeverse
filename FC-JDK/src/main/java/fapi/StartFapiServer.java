@@ -35,7 +35,7 @@ import java.util.Map;
 public class StartFapiServer {
     private static final Logger log = LoggerFactory.getLogger(StartFapiServer.class);
 
-    public static final String SERVER_NAME = "FAPI Server";
+    public static final String SERVER_NAME = "FAPI Server v1.0";
     
     private static BufferedReader br;
     private static FapiServer fapiServer;

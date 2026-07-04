@@ -93,6 +93,57 @@ public class ApipClientEvent {
         FC_REPLY,BYTES,FILE,STRING
     }
 
+    // Files at or above this size get a console progress indicator while uploading.
+    private static final long UPLOAD_PROGRESS_THRESHOLD = 5 * 1024 * 1024;
+
+    // Reports console progress as HttpClient drains the wrapped file stream into the request body.
+    // Progress reflects bytes handed to the socket buffer, so it may reach 100% slightly before
+    // the server acknowledges the request.
+    private static class ProgressInputStream extends FilterInputStream {
+        private final long totalBytes;
+        private final String fileName;
+        private long readBytes = 0;
+        private int lastPercent = -1;
+
+        ProgressInputStream(InputStream in, long totalBytes, String fileName) {
+            super(in);
+            this.totalBytes = totalBytes;
+            this.fileName = fileName;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int b = super.read();
+            if (b != -1) count(1);
+            return b;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            int n = super.read(b, off, len);
+            if (n > 0) count(n);
+            return n;
+        }
+
+        @Override
+        public long skip(long n) throws IOException {
+            long skipped = super.skip(n);
+            if (skipped > 0) count(skipped);
+            return skipped;
+        }
+
+        private void count(long n) {
+            readBytes += n;
+            int percent = (int) (readBytes * 100 / totalBytes);
+            if (percent != lastPercent) {
+                lastPercent = percent;
+                System.out.print("\rUploading " + fileName + ": " + percent + "% (" + readBytes + "/" + totalBytes + " bytes)");
+                if (readBytes >= totalBytes) System.out.println();
+                System.out.flush();
+            }
+        }
+    }
+
     public ApipClientEvent() {
     }
 
@@ -163,11 +214,6 @@ public class ApipClientEvent {
             }
             default -> {}
         }
-
-        if(authType.equals(AuthType.FC_SIGN_BODY)){
-            makeHeaderSession(authKey, this.requestBodyBytes);
-        }else if (AuthType.FC_SIGN_URL.equals(authType))
-            makeHeaderSession(authKey,apiUrl.getUrl().getBytes());
     }
 
     public int checkResponse() {
@@ -209,19 +255,11 @@ public class ApipClientEvent {
     }
 
     public boolean get(@Nullable byte[] authKey){
-        // Store sessionKey for potential response decryption
         this.sessionKey = authKey;
 
         if(responseBodyType==null)responseBodyType=ResponseBodyType.FC_REPLY;
 
-        if(authType!=null && !authType.equals(AuthType.FREE)){
-            if(authKey==null){
-                code = CodeMessage.Code1023MissSessionKey;
-                message = CodeMessage.Msg1023MissSessionKey;
-                return false;
-            }
-        }
-
+        // GET requests are always FREE now; no session key is required.
 
         if (apiUrl.getUrl() == null) {
             code = CodeMessage.Code3004RequestUrlIsAbsent;
@@ -410,6 +448,10 @@ public class ApipClientEvent {
     }
 
     private boolean makeFileReply(byte[] sessionKey) throws IOException {
+        // Response headers carry the status ("Code") for file downloads. They are only parsed
+        // eagerly for FC_SIGN_* auth, so ensure they are read here for other auth types (e.g. ENCRYPTED).
+        if (responseHeaderMap == null)
+            parseResponseHeader();
         String code = responseHeaderMap.get(CODE);
         if(!"0".equals(code)) {
             return makeFcReply(sessionKey);
@@ -580,7 +622,7 @@ public class ApipClientEvent {
             else
                 System.out.println("The FCDSL can be converted to GET URL:\n"+apiUrl.getUrl());
         }
-        CryptoDataByte result;
+        CryptoDataByte result = null;
 
         switch (authType){
 
@@ -595,6 +637,8 @@ public class ApipClientEvent {
                 }
                 result = encryptor.encryptByAsyTwoWay(this.requestBodyBytes, myPrikey,Hex.fromHex(itsPubkey));
             }
+            // FREE sends the body as-is (no encryption, no session-key signing).
+            case FREE -> {}
             default -> {
                 code = CodeMessage.Code1020OtherError;
                 message = "Unsupported authType:"+authType;
@@ -637,7 +681,9 @@ public class ApipClientEvent {
                         message = "File "+requestFileName+" doesn't exist.";
                         return false;
                     }
-                    FileInputStream fileInputStream = new FileInputStream(file);
+                    InputStream fileInputStream = new FileInputStream(file);
+                    if (file.length() >= UPLOAD_PROGRESS_THRESHOLD)
+                        fileInputStream = new ProgressInputStream(fileInputStream, file.length(), file.getName());
                     HttpEntity entity = new InputStreamEntity(
                             fileInputStream,
                             file.length(),
