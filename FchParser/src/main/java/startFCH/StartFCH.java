@@ -161,7 +161,7 @@ public class StartFCH {
             }
             bestHeight = bestBlock.getHeight() - 1;
 
-            log.debug("Restarting from BestHeight: {} (attempt {}/{}) ...", bestHeight, attempt, MAX_RESTART_RETRIES);
+            log.info("Restarting from BestHeight: {} (attempt {}/{}) ...", bestHeight, attempt, MAX_RESTART_RETRIES);
 
             try {
                 new Preparer().prepare(esClient, blockDir, bestHeight, settingMap);

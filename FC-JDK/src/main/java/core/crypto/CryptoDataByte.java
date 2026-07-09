@@ -31,6 +31,7 @@ public class CryptoDataByte {
     private static final String ALG_PID_PREFIX_EccK1ChaCha20 = "355319f84bd5";            //PID:355319f84bd534be45548621edf56ebd467e8905d78cfe8c8741bb8555f76d4a
     private static final String ALG_PID_PREFIX_ChaCha20Poly1305 = "b1788c3b7320";         //PID:b1788c3b73208c85f0afdec4bc5c366755c2f9de07dc01973d877fc1b31010a3
     private static final String ALG_PID_PREFIX_EccK1ChaCha20Poly1305 = "d1691132aee1";    //PID:d1691132aee137b59002552b2909f8a33b9cbfcbbf3ca12bad20965e2f968a59
+    private static final String ALG_PID_PREFIX_BitCore = "e308bc027946";                  //PID:e308bc02794604f6819dd86ae89d56a70f48c5d17263287d90c6ae2b5320651d
 
     private EncryptType type;
     private AlgorithmId alg;
@@ -169,10 +170,15 @@ public class CryptoDataByte {
             case FC_EccK1ChaCha20_No1_NrC7 -> Hex.fromHex(ALG_PID_PREFIX_EccK1ChaCha20);
             case FC_ChaCha20Poly1305_No1_NrC7 -> Hex.fromHex(ALG_PID_PREFIX_ChaCha20Poly1305);
             case FC_EccK1ChaCha20Poly1305_No1_NrC7 -> Hex.fromHex(ALG_PID_PREFIX_EccK1ChaCha20Poly1305);
+            case BitCore_EccAes256 -> Hex.fromHex(ALG_PID_PREFIX_BitCore);
             default -> null;
         };
 
         if (algBytes == null) return null;
+
+        // BitCore carries the full 32-byte HMAC-SHA256 tag as its sum
+        if (alg == AlgorithmId.BitCore_EccAes256 && sum.length != CryptoConstants.HMAC_SHA256_LENGTH)
+            return null;
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             // Write algBytes (6 bytes)
@@ -242,6 +248,7 @@ public class CryptoDataByte {
             case ALG_PID_PREFIX_EccK1ChaCha20 -> AlgorithmId.FC_EccK1ChaCha20_No1_NrC7;
             case ALG_PID_PREFIX_ChaCha20Poly1305 -> AlgorithmId.FC_ChaCha20Poly1305_No1_NrC7;
             case ALG_PID_PREFIX_EccK1ChaCha20Poly1305 -> AlgorithmId.FC_EccK1ChaCha20Poly1305_No1_NrC7;
+            case ALG_PID_PREFIX_BitCore -> AlgorithmId.BitCore_EccAes256;
             // Legacy sequential prefixes (kept for backward-compatible decryption)
             case "000000000001" -> AlgorithmId.FC_AesCbc256_No1_NrC7;
             case "000000000002" -> AlgorithmId.FC_EccK1AesCbc256_No1_NrC7;
@@ -308,8 +315,12 @@ public class CryptoDataByte {
                          alg != AlgorithmId.FC_ChaCha20Poly1305_No1_NrC7 &&
                          alg != AlgorithmId.FC_EccK1ChaCha20Poly1305_No1_NrC7);
 
-        // Calculate cipher length dynamically
-        int sumLength = hasSum ? CryptoConstants.SUM_LENGTH : 0;
+        // Calculate cipher length dynamically. BitCore carries the full 32-byte
+        // HMAC-SHA256 tag as its sum; other algorithms use a 4-byte sum.
+        int sumLength;
+        if (!hasSum) sumLength = 0;
+        else if (alg == AlgorithmId.BitCore_EccAes256) sumLength = CryptoConstants.HMAC_SHA256_LENGTH;
+        else sumLength = CryptoConstants.SUM_LENGTH;
         int cipherLength = bundle.length - offset - sumLength;
 
         if (cipherLength <= 0) return null; // Sanity check to ensure we have a valid cipher length
@@ -320,10 +331,10 @@ public class CryptoDataByte {
         cryptoData.setCipher(cipher);
         offset += cipherLength;
 
-        // Extract sum (last 4 bytes) only for non-GCM algorithms
+        // Extract sum (trailing bytes) only for non-GCM algorithms
         if (hasSum) {
-            byte[] sum = new byte[CryptoConstants.SUM_LENGTH];
-            System.arraycopy(bundle, offset, sum, 0, CryptoConstants.SUM_LENGTH);
+            byte[] sum = new byte[sumLength];
+            System.arraycopy(bundle, offset, sum, 0, sumLength);
             cryptoData.setSum(sum);
         }
         cryptoData.setCode(0);

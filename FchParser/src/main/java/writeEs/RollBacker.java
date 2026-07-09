@@ -12,6 +12,7 @@ import constants.Constants;
 import constants.FieldNames;
 import constants.IndicesNames;
 import core.fch.OpReFileUtils;
+import data.fchData.BlockMask;
 import data.fchData.Cash;
 import data.fchData.OpReturn;
 import org.slf4j.Logger;
@@ -41,6 +42,7 @@ public class RollBacker {
 		}
 
 		System.out.println("Rollback to : "+ lastHeight  + " ...");
+		log.info("Rollback to {} from best height {} ...", lastHeight, bestHeight);
 		System.out.println("Recover spent cashes.Wait for 2 seconds...");
 		TimeUnit.SECONDS.sleep(2);
 
@@ -267,7 +269,7 @@ public class RollBacker {
 	}
 
 	private void deleteBlockMarks(ElasticsearchClient esClient, long lastHeight) throws IOException {
-		esClient.deleteByQuery(d->d
+		var response = esClient.deleteByQuery(d->d
 				.index(IndicesNames.BLOCK_MARK)
 				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
 				.query(q->q
@@ -281,6 +283,40 @@ public class RollBacker {
 												.field(ORPHAN_HEIGHT)
 												.gt(JsonData.of(lastHeight))))))
 		);
+		log.info("Deleted {} block marks above height {} (linked or orphaned).", response.deleted(), lastHeight);
+	}
+
+	/**
+	 * Finds the earliest file position among the block marks that a rollback to
+	 * {@code lastHeight} will delete (height &gt; lastHeight OR orphanHeight &gt; lastHeight).
+	 * <p>
+	 * The fullnode stores blocks in receive order, not height order, so a block
+	 * above the rollback height can sit EARLIER in the blk files than the resume
+	 * point computed from the rollback-target block. After its mark is deleted the
+	 * block exists neither in ES nor ahead of the parse pointer — the cause of the
+	 * permanent "lost main chain" stalls. Callers must capture this position BEFORE
+	 * calling {@link #rollback} and rewind the parse position to it.
+	 *
+	 * @return the mark with the minimal (fileOrder, pointer), or null if none match.
+	 */
+	public static BlockMask findMinMarkPositionAbove(ElasticsearchClient esClient, long lastHeight) throws IOException {
+		SearchResponse<BlockMask> response = esClient.search(s->s.index(IndicesNames.BLOCK_MARK)
+						.query(q->q
+								.bool(b->b
+										.should(s1->s1
+												.range(r->r
+														.field(HEIGHT)
+														.gt(JsonData.of(lastHeight))))
+										.should(s2->s2
+												.range(r1->r1
+														.field(ORPHAN_HEIGHT)
+														.gt(JsonData.of(lastHeight))))))
+						.size(1)
+						.sort(so->so.field(f->f.field("_fileOrder").order(SortOrder.Asc)))
+						.sort(so->so.field(f->f.field("_pointer").order(SortOrder.Asc)))
+				, BlockMask.class);
+		List<Hit<BlockMask>> hits = response.hits().hits();
+		return hits.isEmpty() ? null : hits.get(0).source();
 	}
 
 	private void deleteHigherThan(ElasticsearchClient esClient, String index, String rangeField, long lastHeight) throws Exception {

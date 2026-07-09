@@ -168,9 +168,18 @@ public class Decryptor {
     }
 
     private CryptoDataByte decryptBitcore(CryptoDataByte cryptoDataByte) {
-        byte[] cipher = Bitcore.fromCryptoDataByte(cryptoDataByte);
+        // With a separate sum (e.g. parsed from an FC bundle) the HMAC tag must be re-appended;
+        // otherwise the cipher field already carries the tag at its tail.
+        byte[] cipher;
+        if (cryptoDataByte.getSum() != null) cipher = Bitcore.cipherFromCryptoDataByte(cryptoDataByte);
+        else cipher = Bitcore.fromCryptoDataByte(cryptoDataByte);
         try {
             byte[] data = Bitcore.decrypt(cipher,cryptoDataByte.getPrikeyB());
+            if (data == null) {
+                // Bitcore.decrypt returns null on HMAC verification failure (wrong key or corrupted cipher)
+                cryptoDataByte.setCodeMessage(CodeMessage.Code1029FailedToDecrypt);
+                return cryptoDataByte;
+            }
             cryptoDataByte.setData(data);
             cryptoDataByte.setCodeMessage(CodeMessage.Code0Success);
             return cryptoDataByte;
@@ -537,9 +546,24 @@ public class Decryptor {
         boolean isTwoWay = pubkeyY != null;
 
         cryptoDataByte = CryptoDataByte.fromBundle(bundle);
+
+        if (cryptoDataByte == null) {
+            // Not an FC bundle. A raw Bitcore encbuf starts with an EC point prefix.
+            if (!isTwoWay && bundle.length > 0 && (bundle[0] == 0x02 || bundle[0] == 0x03 || bundle[0] == 0x04))
+                cryptoDataByte = Bitcore.cipherToCryptoDataByte(bundle);
+            if (cryptoDataByte == null) {
+                cryptoDataByte = new CryptoDataByte();
+                cryptoDataByte.setCodeMessage(CodeMessage.Code4013BadCipher);
+                return cryptoDataByte;
+            }
+        }
+
         cryptoDataByte.setPrikeyB(prikeyX);
 //        cryptoDataByte.setAlg(algorithm);
         if(isTwoWay)cryptoDataByte.setPubkeyA(pubkeyY);
+
+        if (cryptoDataByte.getAlg() == AlgorithmId.BitCore_EccAes256)
+            return decryptBitcore(cryptoDataByte);
 
         try(ByteArrayInputStream bis = new ByteArrayInputStream(cryptoDataByte.getCipher());
             ByteArrayOutputStream bos = new ByteArrayOutputStream()){

@@ -12,13 +12,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|e308bc02794604f6819dd86ae89d56a70f48c5d17263287d90c6ae2b5320651d|
 
 Parent: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-The **`Bitcore`** helper implements a **compact binary** encrypt/decrypt path on **secp256k1**: ephemeral ECDH, **SHA-512** of a **32-byte** fixed-width shared secret, split into **kE** (AES key) and **kM** (HMAC key), **random 16-byte IV**, **AES/CBC/PKCS5Padding**, **HMAC-SHA256** over **`IV ‖ ciphertext`**, full **32-byte** MAC tag. The output **`encbuf`** layout is **`ephemeralPub ‖ IV ‖ c ‖ d`**. This format is **not** registered as a `CryptoDataByte` / FVEP8 **`AlgorithmId`**; it is a **standalone** API (`Bitcore.encrypt` / `decrypt`).
+The **`Bitcore`** helper implements a **compact binary** encrypt/decrypt path on **secp256k1**: ephemeral ECDH, **SHA-512** of a **32-byte** fixed-width shared secret, split into **kE** (AES key) and **kM** (HMAC key), **random 16-byte IV**, **AES/CBC/PKCS5Padding**, **HMAC-SHA256** over **`IV ‖ ciphertext`**, full **32-byte** MAC tag. The output **`encbuf`** layout is **`ephemeralPub ‖ IV ‖ c ‖ d`**. Besides the **standalone** API (`Bitcore.encrypt` / `decrypt`), the format is registered as `CryptoDataByte` **`AlgorithmId.BitCore_EccAes256`**: `toBundle()` / `fromBundle()` wrap it as **`pidPrefix(6) ‖ type(1) ‖ ephemeralPub(33) ‖ IV(16) ‖ c ‖ d(32)`** with the bundle prefix **`e308bc027946`** (first 6 bytes of the PID).
 
 ## Specification
 

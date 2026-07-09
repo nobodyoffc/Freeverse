@@ -49,6 +49,9 @@ public class BlockWriter {
 				+" file: "+state.getCurrentFile()
 				+" pointer: "+state.getPointer()
 				+" Height:"+ blockMask.getHeight());
+		log.debug("Main chain linked. Orphan: {} Fork: {} id: {} file: {} pointer: {} Height: {}",
+				state.orphanSize(), state.forkSize(), blockMask.getId(),
+				state.getCurrentFile(), state.getPointer(), blockMask.getHeight());
 
 		
 		response.items().iterator();

@@ -216,10 +216,9 @@ public class MessageHandler {
      * Cancel a pending request.
      */
     public void cancelPendingRequest(long messageId) {
-        CompletableFuture<ResponseMessage> future = pendingRequests.remove(messageId);
-        if (future != null) {
-            future.cancel(true);
-        }
+        pendingRequests.remove(messageId);
+        // Don't call future.cancel(true) - let caller complete it exceptionally
+        // Otherwise CancellationException will be thrown instead of TimeoutException
     }
 
     /**

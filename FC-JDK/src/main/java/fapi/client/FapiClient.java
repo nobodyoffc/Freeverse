@@ -238,6 +238,24 @@ public class FapiClient {
      */
     public UnifiedResponse requestWithBinaryData(FapiRequest fapiRequest, byte[] binaryData,
             long timeoutSeconds, java.util.function.BiConsumer<Long, Long> sendProgress) {
+        return requestWithBinaryData(fapiRequest, binaryData, timeoutSeconds, sendProgress, null);
+    }
+
+    /**
+     * Send a request with binary data, custom timeout, send-progress and receive-progress callbacks.
+     * The timeout is idle-based: it expires only after {@code timeoutSeconds} with no response
+     * bytes arriving, so a large download on a slow link is never killed while still progressing.
+     *
+     * @param fapiRequest     FAPI request
+     * @param binaryData      binary data
+     * @param timeoutSeconds  idle timeout in seconds
+     * @param sendProgress    callback receiving (bytesSent, totalBytes) — may be null
+     * @param receiveProgress callback receiving cumulative response bytes assembled — may be null
+     * @return UnifiedResponse containing response and optional binary data
+     */
+    public UnifiedResponse requestWithBinaryData(FapiRequest fapiRequest, byte[] binaryData,
+            long timeoutSeconds, java.util.function.BiConsumer<Long, Long> sendProgress,
+            LongConsumer receiveProgress) {
         try {
             if (balanceVerifier != null && balanceVerifier.isStopped()) {
                 lastError = new IllegalStateException("Balance verification stopped due to drift");
@@ -253,10 +271,18 @@ public class FapiClient {
 
             // 使用统一编码格式编码请求（包含二进制数据）
             byte[] requestData = UnifiedCodec.encodeRequest(fapiRequest, binaryData);
+            java.util.concurrent.atomic.AtomicLong lastActivityMs =
+                    new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis());
+            LongConsumer activityTracker = bytes -> {
+                lastActivityMs.set(System.currentTimeMillis());
+                if (receiveProgress != null) {
+                    receiveProgress.accept(bytes);
+                }
+            };
             CompletableFuture<ResponseMessage> future = fudpNode.request(
-                    servicePeerId, serviceSid, requestData, sendProgress);
+                    servicePeerId, serviceSid, requestData, sendProgress, activityTracker);
 
-            ResponseMessage response = future.get(timeoutSeconds, TimeUnit.SECONDS);
+            ResponseMessage response = awaitWithIdleTimeout(future, timeoutSeconds, lastActivityMs);
 
             if (response.getStatusCode() != ResponseMessage.STATUS_SUCCESS) {
                 this.lastError = new IOException("Request failed with status: " + response.getStatusCode());
@@ -276,18 +302,48 @@ public class FapiClient {
 
         } catch (TimeoutException e) {
             this.lastError = e;
-            FapiResponse errorResp = buildErrorResponse(408, "Request timeout after " + timeoutSeconds + "s");
+            FapiResponse errorResp = buildErrorResponse(408, "Request idle timeout after " + timeoutSeconds + "s without response data");
             this.lastResponse = errorResp;
-            log.warn("FAPI binary request timeout ({}s): api={}", timeoutSeconds,
+            log.warn("FAPI binary request idle timeout ({}s): api={}", timeoutSeconds,
                     fapiRequest != null ? fapiRequest.getApi() : "null");
             return new UnifiedResponse(errorResp, null);
         } catch (Exception e) {
+            // The transport's own idle timer surfaces as ExecutionException(TimeoutException)
+            if (e instanceof ExecutionException && e.getCause() instanceof TimeoutException) {
+                this.lastError = (TimeoutException) e.getCause();
+                FapiResponse errorResp = buildErrorResponse(408, e.getCause().getMessage());
+                this.lastResponse = errorResp;
+                log.warn("FAPI binary request transport idle timeout: api={}",
+                        fapiRequest != null ? fapiRequest.getApi() : "null");
+                return new UnifiedResponse(errorResp, null);
+            }
             this.lastError = e;
             FapiResponse errorResp = buildErrorResponse(500, e.getMessage());
             this.lastResponse = errorResp;
             log.error("Error sending FAPI request with binary data: api={}",
                     fapiRequest != null ? fapiRequest.getApi() : "null", e);
             return new UnifiedResponse(errorResp, null);
+        }
+    }
+
+    /**
+     * Waits for a response with an idle-based deadline: gives up only after
+     * {@code idleTimeoutSeconds} with no response bytes arriving ({@code lastActivityMs}
+     * is refreshed by the transport's receive-progress callback). A small grace period
+     * lets the transport's own idle timer, which applies the same rule, fire first.
+     */
+    private ResponseMessage awaitWithIdleTimeout(CompletableFuture<ResponseMessage> future,
+            long idleTimeoutSeconds, java.util.concurrent.atomic.AtomicLong lastActivityMs)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        long idleMs = idleTimeoutSeconds * 1000L + 2000L;
+        while (true) {
+            try {
+                return future.get(1, TimeUnit.SECONDS);
+            } catch (TimeoutException e) {
+                if (System.currentTimeMillis() - lastActivityMs.get() >= idleMs) {
+                    throw e;
+                }
+            }
         }
     }
     
@@ -1221,14 +1277,15 @@ public class FapiClient {
     /**
      * Download a file from DISK by ID with progress tracking.
      * <p>
-     * The progress callback receives cumulative bytes written to the output file.
-     * Note: Due to FUDP transport reassembling the entire response in memory first,
-     * the progress reflects the file-write phase. For large transfers the network
-     * receive phase dominates; a spinner is recommended while waiting for the response.
-     * 
+     * The progress callback receives cumulative response bytes assembled from the
+     * network as they arrive (may run slightly past the file size due to protocol
+     * framing overhead — consumers displaying a percentage should clamp). The wait
+     * is idle-based: it fails only after {@code requestTimeoutSeconds} of silence,
+     * never while data is still arriving, so large files on slow links complete.
+     *
      * @param did              SHA256x2 hash of content (64 hex chars)
      * @param outputFile       The file to write the downloaded content to
-     * @param progressCallback Optional: callback receiving cumulative bytes written
+     * @param progressCallback Optional: callback receiving cumulative bytes received
      * @return DiskItem metadata if successful, or null on failure
      */
     public data.fcData.DiskItem diskGet(String did, java.io.File outputFile,
@@ -1237,59 +1294,47 @@ public class FapiClient {
             lastError = new IllegalArgumentException("Invalid ID: must be 64 hex characters");
             return null;
         }
-        
+
         try {
             // Build request params
             Map<String, Object> params = new HashMap<>();
             params.put(FieldNames.ID, did);
-            
+
             FapiRequest fapiRequest = FapiRequest.operation("disk.get", params);
-            
-            // Send request and get unified response
-            UnifiedResponse unified = requestWithBinaryData(fapiRequest, null);
-            
+
+            // Send request and get unified response, reporting receive progress
+            UnifiedResponse unified = requestWithBinaryData(
+                    fapiRequest, null, requestTimeoutSeconds, null, progressCallback);
+
             if (unified == null || unified.response() == null) {
                 lastError = new RuntimeException("No response from server");
+                log.warn("diskGet: no response for did={} (lastError={})",
+                        did, lastError.getMessage());
                 return null;
             }
-            
+
             if (unified.response().getCode() != 0) {
                 lastError = new RuntimeException("Server error: " + unified.response().getMessage());
+                log.warn("diskGet: server rejected did={} code={} message={}",
+                        did, unified.response().getCode(), unified.response().getMessage());
                 return null;
             }
-            
+
             // Parse metadata
             data.fcData.DiskItem metadata = utils.ObjectUtils.objectToClass(
                 unified.response().getData(), data.fcData.DiskItem.class);
-            
-            // Write binary data to output file with progress reporting
+
+            // Write binary data to output file (progress was reported during receive)
             byte[] content = unified.binaryData();
             if (content != null && content.length > 0) {
                 if (outputFile.getParentFile() != null) {
                     outputFile.getParentFile().mkdirs();
                 }
-                
-                if (progressCallback != null) {
-                    // Write in chunks and report progress
-                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(outputFile)) {
-                        int chunkSize = 64 * 1024; // 64KB chunks
-                        long written = 0;
-                        int offset = 0;
-                        while (offset < content.length) {
-                            int len = Math.min(chunkSize, content.length - offset);
-                            fos.write(content, offset, len);
-                            written += len;
-                            offset += len;
-                            progressCallback.accept(written);
-                        }
-                    }
-                } else {
-                    java.nio.file.Files.write(outputFile.toPath(), content);
-                }
+                java.nio.file.Files.write(outputFile.toPath(), content);
             }
-            
+
             return metadata;
-            
+
         } catch (Exception e) {
             lastError = e;
             log.error("Failed to get file: {}", e.getMessage());

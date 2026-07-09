@@ -176,6 +176,9 @@ public class ChainParser {
 				+ ". Orphan: " + state.orphanSize()
 				+ ". Fork: " + state.forkSize()
 				+ ". Height: " + state.getBestHeight());
+		log.info("Orphan block {} (pre {}) at file {} pointer {}. Orphans: {} Forks: {} Height: {}",
+				blockMask.getId(), blockMask.getPreBlockId(), state.getCurrentFile(), blockMask.get_pointer(),
+				state.orphanSize(), state.forkSize(), state.getBestHeight());
 	}
 
 	/** O(1) repeat check via HashMap. */
@@ -238,6 +241,25 @@ public class ChainParser {
 
 	private boolean isForkOverMain(BlockMask blockMask) {
 		return blockMask.getHeight() > state.getBestHeight();
+	}
+
+	/**
+	 * Parses and verifies a buffered block. The bytes cache can hold a stale
+	 * snapshot captured while the fullnode was still flushing the block (the
+	 * cause of the 2026-07-05 chain loss), so on verification failure evict
+	 * the cache and re-read from disk once before giving up.
+	 */
+	private ReadyBlock parseBlockRereadingOnFailure(BlockMask blockMask) throws Exception {
+		byte[] blockBytes = fileReader.getBlockBytes(blockMask);
+		try {
+			return new BlockParser().parseBlock(blockBytes, blockMask);
+		} catch (IncompleteBlockException e) {
+			log.warn("Cached bytes of block {} failed verification: {}. Re-reading from disk.",
+					blockMask.getId(), e.getMessage());
+			state.evictBlockBytes(blockMask.getId());
+			blockBytes = fileReader.getBlockBytes(blockMask);
+			return new BlockParser().parseBlock(blockBytes, blockMask);
+		}
 	}
 
 	private void writeBlockMark(ElasticsearchClient esClient, BlockMask blockMask) throws ElasticsearchException, IOException {
@@ -311,11 +333,41 @@ public class ChainParser {
 		System.out.println("Reorganization happen after height: " + heightBeforeFork);
 		log.info("Reorganization happen after height: {}", heightBeforeFork);
 
-		treatLoseList(esClient, loseList);
+		// Rollback FIRST: its deleteBlockMarks removes every mark above
+		// heightBeforeFork (by height or orphanHeight). Writing the lose-list
+		// fork marks before it would delete them right away, leaving ES without
+		// the fork marks a later restart needs to reload this branch.
 		new RollBacker().rollback(esClient, heightBeforeFork);
+		treatLoseList(esClient, loseList);
 		treatWinList(esClient, winList);
+		restoreOrphanMarks(esClient, heightBeforeFork);
 
 		System.out.println("Reorganized. Fork: " + state.forkSize() + " Height: " + heightBeforeFork);
+	}
+
+	/**
+	 * Re-persists in-memory orphan marks whose ES documents were deleted by the
+	 * reorg rollback (orphanHeight &gt; heightBeforeFork). The orphan buffer
+	 * survives a live reorg in memory, but without their marks in ES a later
+	 * restart could neither reload these blocks nor rewind the parse pointer
+	 * to re-read them.
+	 */
+	private void restoreOrphanMarks(ElasticsearchClient esClient, long heightBeforeFork) throws ElasticsearchException, IOException {
+		BulkRequest.Builder br = new BulkRequest.Builder();
+		int count = 0;
+		for (BlockMask bm : state.getOrphanSnapshot()) {
+			if (bm.getOrphanHeight() != null && bm.getOrphanHeight() > heightBeforeFork) {
+				br.operations(op -> op.index(in -> in
+						.index(BLOCK_MARK)
+						.id(bm.getId())
+						.document(bm)));
+				count++;
+			}
+		}
+		if (count > 0) {
+			esClient.bulk(br.build());
+			log.info("Restored {} orphan block marks deleted by the reorg rollback.", count);
+		}
 	}
 
 	private void treatLoseList(ElasticsearchClient esClient, ArrayList<BlockMask> loseList) throws ElasticsearchException, IOException {
@@ -339,8 +391,7 @@ public class ChainParser {
 			BlockMask blockMask = winList.get(i);
 			blockMask.setStatus(Preparer.MAIN);
 
-			byte[] blockBytes = fileReader.getBlockBytes(blockMask);
-			ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes, blockMask);
+			ReadyBlock rawBlock = parseBlockRereadingOnFailure(blockMask);
 			ReadyBlock readyBlock = new BlockMaker().makeReadyBlock(esClient, rawBlock);
 			new BlockWriter().writeIntoEs(esClient, readyBlock, opReFile, state);
 
@@ -348,8 +399,7 @@ public class ChainParser {
 					+ " blockId:" + blockMask.getId()
 					+ " height:" + blockMask.getHeight()
 					+ " blockSize:" + blockMask.getSize()
-					+ " pointer:" + blockMask.get_pointer()
-					+ " blockBytes length:" + blockBytes.length);
+					+ " pointer:" + blockMask.get_pointer());
 		}
 		state.dropOldForks(winList.get(0).getHeight());
 	}
@@ -381,9 +431,21 @@ public class ChainParser {
 				if (blockMask.getPreBlockId().equals(state.getBestHash())) {
 					blockMask.setHeight(state.getBestHeight() + 1);
 					blockMask.setStatus(Preparer.MAIN);
-					byte[] blockBytes = fileReader.getBlockBytes(blockMask);
 
-					ReadyBlock rawBlock = new BlockParser().parseBlock(blockBytes, blockMask);
+					ReadyBlock rawBlock;
+					try {
+						rawBlock = parseBlockRereadingOnFailure(blockMask);
+					} catch (IncompleteBlockException e) {
+						// Even the disk re-read failed verification — the fullnode has
+						// not finished flushing this block. Keep it buffered as an
+						// orphan; this method runs again after every parsed block, so
+						// it will be retried once the bytes are complete on disk.
+						blockMask.setStatus(Preparer.ORPHAN);
+						blockMask.setHeight(0L);
+						log.warn("Orphan {} links to the tip but fails verification even after a disk re-read: {}. Will retry later.",
+								blockMask.getId(), e.getMessage());
+						continue;
+					}
 					ReadyBlock readyBlock = new BlockMaker().makeReadyBlock(esClient, rawBlock);
 					new BlockWriter().writeIntoEs(esClient, readyBlock, opReFile, state);
 
@@ -439,8 +501,14 @@ public class ChainParser {
 					state.removeOrphan(blockMask.getId());
 					if (isForkOverMain(blockMask)) {
 						HashMap<String, ArrayList<BlockMask>> chainMap = findLoseChainAndWinChain(blockMask);
-						if (chainMap == null) return;
-						reorganize(esClient, chainMap);
+						if (chainMap != null) {
+							reorganize(esClient, chainMap);
+						} else {
+							// Don't abandon the whole orphan set over one untraceable
+							// fork — keep processing the remaining orphans.
+							log.warn("Fork over main at {} but the fork chain could not be traced; skipping reorg for now.",
+									blockMask.getId());
+						}
 					}
 					found = true;
 					break; // restart with fresh snapshot after potential reorg

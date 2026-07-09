@@ -87,24 +87,46 @@ public class Preparer {
 
 		} else {
 			chainState.setBestHeight(bestHeight);
+			// Only a MAIN mark may seed the resume point — a fork or orphan mark at
+			// the same height would seed a wrong bestHash and lose the chain.
 			SearchResponse<BlockMask> response = esClient.search(s->s.index(BLOCK_MARK)
-							.query(q->q.term(t->t.field("height").value(bestHeight)))
+							.query(q->q.bool(b->b
+									.must(m->m.term(t->t.field("height").value(bestHeight)))
+									.filter(f->f.term(t->t.field("status").value(MAIN)))))
 					, BlockMask.class);
 
 			List<Hit<BlockMask>> hits = response.hits().hits();
 			if (hits.isEmpty()) {
-				log.error("No block mark found at height {}", bestHeight);
-				throw new Exception("No block mark found at height " + bestHeight);
+				log.error("No main block mark found at height {}", bestHeight);
+				throw new Exception("No main block mark found at height " + bestHeight);
 			}
 			BlockMask backToBlockMask = hits.get(0).source();
 
 			if(backToBlockMask != null) {
+				// Capture, BEFORE the rollback deletes them, the earliest file position
+				// of any mark the rollback will remove. Blocks are stored in receive
+				// order, not height order, so a deleted block can sit EARLIER in the
+				// blk files than the resume point and must be re-read.
+				BlockMask minDeleted = RollBacker.findMinMarkPositionAbove(esClient, backToBlockMask.getHeight());
+
 				new RollBacker().rollback(esClient, backToBlockMask.getHeight());
 
 				chainState.setBestHash(backToBlockMask.getId());
 				chainState.setBestHeight(backToBlockMask.getHeight());
 				chainState.setCurrentFile(BlockFileUtils.getFileNameWithOrder(backToBlockMask.get_fileOrder()));
 				chainState.setPointer(backToBlockMask.get_pointer() + backToBlockMask.getSize() + 8);
+
+				if (minDeleted != null && isBeforeResumePoint(minDeleted, backToBlockMask.get_fileOrder(), chainState.getPointer())) {
+					log.info("Rewinding resume position from file {} pointer {} to file {} pointer {} to re-read block {} whose mark was deleted by the rollback.",
+							chainState.getCurrentFile(), chainState.getPointer(),
+							BlockFileUtils.getFileNameWithOrder(minDeleted.get_fileOrder()), minDeleted.get_pointer(), minDeleted.getId());
+					chainState.setCurrentFile(BlockFileUtils.getFileNameWithOrder(minDeleted.get_fileOrder()));
+					chainState.setPointer(minDeleted.get_pointer());
+				}
+
+				log.info("Resuming parse at file {} pointer {}. Best block {} height {}.",
+						chainState.getCurrentFile(), chainState.getPointer(),
+						chainState.getBestHash(), chainState.getBestHeight());
 			}
 
 			// Refresh ES indices to ensure recently written data is searchable
@@ -115,6 +137,13 @@ public class Preparer {
 			chainState.initOrphanList(readOrphanList(esClient, bestHeight));
 			chainState.initForkList(readForkList(esClient, bestHeight));
 		}
+	}
+
+	/** True when the given mark sits earlier in the blk files than the (fileOrder, pointer) resume point. */
+	private static boolean isBeforeResumePoint(BlockMask mark, int resumeFileOrder, long resumePointer) {
+		if (mark.get_fileOrder() != resumeFileOrder)
+			return mark.get_fileOrder() < resumeFileOrder;
+		return mark.get_pointer() < resumePointer;
 	}
 
 	public static ArrayList<BlockMask> readForkList(ElasticsearchClient esClient, long bestHeight) throws ElasticsearchException, IOException {

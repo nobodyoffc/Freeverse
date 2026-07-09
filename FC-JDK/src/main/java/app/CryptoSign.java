@@ -1197,8 +1197,22 @@ public class CryptoSign extends FcApp {
         CidInfo cidInfo = chooseKeyInfo();
         if (cidInfo == null) return;
         byte[] bundleBytes = Base64.getDecoder().decode(bundle);
-        System.out.println(decryptor.decryptBundleByAsyTwoWay(bundleBytes, cidInfo.getPrikeyBytes(), Hex.fromHex(pubkey)));
+        showDecryptResult(decryptor.decryptBundleByAsyTwoWay(bundleBytes, cidInfo.getPrikeyBytes(), Hex.fromHex(pubkey)));
         Menu.anyKeyToContinue(br);
+    }
+
+    private static void showDecryptResult(CryptoDataByte result) {
+        if (result == null) {
+            System.out.println("Decrypt failed.");
+            return;
+        }
+        if (result.getCode() == null || result.getCode() != 0 || result.getData() == null) {
+            System.out.println("Decrypt failed: " + result.getCode() + " " + result.getMessage());
+            return;
+        }
+        System.out.println("Decrypted:");
+        System.out.println("UTF-8:\n" + new String(result.getData(), StandardCharsets.UTF_8));
+        System.out.println("Hex:\n" + Hex.toHex(result.getData()));
     }
 
     public void decryptAsyOneWayFromBundle(BufferedReader br) {
@@ -1213,7 +1227,7 @@ public class CryptoSign extends FcApp {
             CidInfo cidInfo = chooseKeyInfo();
             if (cidInfo == null) return;
 
-            System.out.println(decryptor.decryptBundleByAsyOneWay(Base64.getDecoder().decode(bundle), cidInfo.getPrikeyBytes()));
+            showDecryptResult(decryptor.decryptBundleByAsyOneWay(Base64.getDecoder().decode(bundle), cidInfo.getPrikeyBytes()));
 
         } catch (IOException e) {
             System.out.println("Something wrong:"+e.getMessage());
@@ -1273,13 +1287,40 @@ public class CryptoSign extends FcApp {
         printRandomInMultipleFormats(bytes);
     }
 
+    public void encryptBitcoreToBundle(BufferedReader br) {
+        System.out.println("Input the message:");
+        String msg = Inputer.inputStringMultiLine(br);
+        if (msg == null || msg.isEmpty()) return;
+        String pubkey = Inputer.inputString(br, "Input the public key in hex:");
+        if (pubkey == null || pubkey.isEmpty()) return;
+        byte[] encrypted = Bitcore.encrypt(msg.getBytes(StandardCharsets.UTF_8), Hex.fromHex(pubkey));
+        if (encrypted == null) {
+            System.out.println("Encrypt failed.");
+            return;
+        }
+        System.out.println("Bitcore cipher: \n" + Base64.getEncoder().encodeToString(encrypted));
+        CryptoDataByte cryptoDataByte = Bitcore.cipherToCryptoDataByte(encrypted);
+        if (cryptoDataByte != null) {
+            byte[] bundle = cryptoDataByte.toBundle();
+            if (bundle != null)
+                System.out.println("FC bundle: \n" + Base64.getEncoder().encodeToString(bundle));
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
     public void decryptBitcoreFromBundle(BufferedReader br) {
         String cipher = Inputer.inputString(br,"Input the cipher:");
+        if (cipher == null || cipher.isEmpty()) return;
         CidInfo cidInfo = chooseKeyInfo();
         if (cidInfo == null) return;
         byte[] decrypted;
         try {
-            decrypted = Bitcore.decrypt(Base64.getDecoder().decode(cipher), cidInfo.getPrikeyBytes());
+            byte[] cipherBytes = Base64.getDecoder().decode(cipher);
+            // Accept either the raw Bitcore encbuf or an FC bundle carrying BitCore_EccAes256
+            CryptoDataByte cryptoDataByte = CryptoDataByte.fromBundle(cipherBytes);
+            if (cryptoDataByte != null && cryptoDataByte.getAlg() == AlgorithmId.BitCore_EccAes256)
+                cipherBytes = Bitcore.cipherFromCryptoDataByte(cryptoDataByte);
+            decrypted = Bitcore.decrypt(cipherBytes, cidInfo.getPrikeyBytes());
             if(decrypted==null){
                 System.out.println("Decrypt failed.");
                 return;

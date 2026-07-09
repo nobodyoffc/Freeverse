@@ -16,12 +16,13 @@ public class BlockFileUtils {
 
     public static String getLastBlockFileName(String blockFilePath) {
         for (int i = 0; ; i++) {
-            String blockFileName = getFileNameWithOrder(i);
-            File file = new File(blockFilePath + blockFileName);
+            // Use the two-arg File constructor so the separator is handled.
+            // String concatenation produced ".../blocksblk00000.dat" when the
+            // path had no trailing slash, which made this method always return
+            // blk00000.dat and silently disabled tip-file detection.
+            File file = new File(blockFilePath, getFileNameWithOrder(i));
             if (!file.exists()) {
-                if (i > 0) {
-                    return getFileNameWithOrder(i - 1);
-                }
+                return getFileNameWithOrder(Math.max(0, i - 1));
             }
         }
     }

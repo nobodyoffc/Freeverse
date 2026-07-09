@@ -61,6 +61,28 @@ public class FudpNode implements Protocol.PacketListener {
      *  Entries are cleaned up when the response is sent or the connection is closed. */
     private final Map<Long, RequestEntry> requestIdToConnectionId = new ConcurrentHashMap<>();
 
+    /**
+     * Outbound requests awaiting responses, keyed by messageId. Inbound stream data
+     * from the target peer refreshes the entry's idle deadline, so a slow but
+     * progressing transfer is never killed mid-flight; only silence times out.
+     */
+    private final Map<Long, PendingRequest> pendingRequestWatch = new ConcurrentHashMap<>();
+
+    private static final class PendingRequest {
+        final String peerId;
+        final CompletableFuture<ResponseMessage> future;
+        final java.util.function.LongConsumer receiveProgress; // may be null
+        volatile long lastActivityMs;
+
+        PendingRequest(String peerId, CompletableFuture<ResponseMessage> future,
+                       java.util.function.LongConsumer receiveProgress) {
+            this.peerId = peerId;
+            this.future = future;
+            this.receiveProgress = receiveProgress;
+            this.lastActivityMs = System.currentTimeMillis();
+        }
+    }
+
     private NodeEventListener eventListener;
     private volatile boolean running = false;
     
@@ -234,6 +256,20 @@ public class FudpNode implements Protocol.PacketListener {
      */
     public CompletableFuture<ResponseMessage> request(String peerId, String serviceName, byte[] data,
             java.util.function.BiConsumer<Long, Long> progress) throws IOException {
+        return request(peerId, serviceName, data, progress, null);
+    }
+
+    /**
+     * Send a request with optional send-progress and receive-progress callbacks.
+     * @param peerId          target peer
+     * @param serviceName     service identifier
+     * @param data            request payload
+     * @param progress        callback receiving (bytesSent, totalBytes) — may be null
+     * @param receiveProgress callback receiving cumulative response bytes assembled so far — may be null
+     */
+    public CompletableFuture<ResponseMessage> request(String peerId, String serviceName, byte[] data,
+            java.util.function.BiConsumer<Long, Long> progress,
+            java.util.function.LongConsumer receiveProgress) throws IOException {
         PeerConnection conn = getOrConnectPeer(peerId);
         Stream stream = conn.openStream();
 
@@ -266,20 +302,76 @@ public class FudpNode implements Protocol.PacketListener {
                 .retransmitCount(0)
                 .build());
 
-        // Dynamic timeout: base config timeout + extra time for large payloads
-        // Add 1 second per 100KB of data to account for transmission time
-        long timeoutMs = config.getRequestTimeoutMs()
+        // Idle deadline: base config timeout + extra time for large payloads
+        // (1 second per 100KB). Extended whenever response data arrives.
+        long idleTimeoutMs = config.getRequestTimeoutMs()
                 + (encoded.length / (100L * 1024)) * 1000L;
-
-        // Timeout
-        scheduler.schedule(() -> {
-            if (!future.isDone()) {
-                messageHandler.cancelPendingRequest(messageId);
-                future.completeExceptionally(new TimeoutException("Request timed out"));
-            }
-        }, timeoutMs, TimeUnit.MILLISECONDS);
+        watchPendingRequest(messageId, peerId, future, idleTimeoutMs, receiveProgress);
 
         return future;
+    }
+
+    /**
+     * Watch a pending request with an idle-based deadline: the timeout fires only after
+     * {@code idleTimeoutMs} of no inbound stream data from the peer (see
+     * {@link #touchPendingRequests}), never while a response is still arriving.
+     */
+    private void watchPendingRequest(long messageId, String peerId,
+            CompletableFuture<ResponseMessage> future, long idleTimeoutMs,
+            java.util.function.LongConsumer receiveProgress) {
+        PendingRequest pending = new PendingRequest(peerId, future, receiveProgress);
+        pendingRequestWatch.put(messageId, pending);
+        future.whenComplete((r, e) -> pendingRequestWatch.remove(messageId));
+        scheduleIdleCheck(messageId, pending, idleTimeoutMs);
+    }
+
+    private void scheduleIdleCheck(long messageId, PendingRequest pending, long idleTimeoutMs) {
+        long delay = Math.max(50, pending.lastActivityMs + idleTimeoutMs - System.currentTimeMillis());
+        try {
+            scheduler.schedule(() -> {
+                if (pending.future.isDone()) {
+                    pendingRequestWatch.remove(messageId);
+                    return;
+                }
+                long idle = System.currentTimeMillis() - pending.lastActivityMs;
+                if (idle >= idleTimeoutMs) {
+                    pendingRequestWatch.remove(messageId);
+                    messageHandler.cancelPendingRequest(messageId);
+                    pending.future.completeExceptionally(new TimeoutException(
+                            "Request timed out after " + idle + "ms without response data"));
+                } else {
+                    scheduleIdleCheck(messageId, pending, idleTimeoutMs);
+                }
+            }, delay, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            // Scheduler stopped (node shutting down) — fail the request rather than leak it
+            pendingRequestWatch.remove(messageId);
+            messageHandler.cancelPendingRequest(messageId);
+            pending.future.completeExceptionally(e);
+        }
+    }
+
+    /**
+     * Inbound stream data from a peer counts as response activity: refresh the idle
+     * deadline of that peer's pending requests and report receive progress.
+     * Attribution is per-peer (a response arrives on a new stream, so it cannot be
+     * matched to a messageId until fully assembled); concurrent requests to the same
+     * peer share activity, which errs on the side of waiting.
+     */
+    private void touchPendingRequests(String peerId, long bytesAssembled) {
+        if (pendingRequestWatch.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        for (PendingRequest pending : pendingRequestWatch.values()) {
+            if (pending.peerId.equals(peerId)) {
+                pending.lastActivityMs = now;
+                if (pending.receiveProgress != null && bytesAssembled > 0) {
+                    try {
+                        pending.receiveProgress.accept(bytesAssembled);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -430,18 +522,12 @@ public class FudpNode implements Protocol.PacketListener {
                 .retransmitCount(0)
                 .build());
 
-        // Dynamic timeout: base config timeout + extra time for large payloads
-        // Add 1 second per 100KB of data to account for transmission time
-        long timeoutMs = config.getRequestTimeoutMs()
+        // Idle deadline: base config timeout + extra time for large payloads
+        // (1 second per 100KB, covering server-side hashing/storing of the upload).
+        // Extended whenever response data arrives.
+        long idleTimeoutMs = config.getRequestTimeoutMs()
                 + (totalOnWire / (100L * 1024)) * 1000L;
-
-        // Timeout
-        scheduler.schedule(() -> {
-            if (!future.isDone()) {
-                messageHandler.cancelPendingRequest(messageId);
-                future.completeExceptionally(new TimeoutException("Request timed out"));
-            }
-        }, timeoutMs, TimeUnit.MILLISECONDS);
+        watchPendingRequest(messageId, peerId, future, idleTimeoutMs, null);
 
         return future;
     }
@@ -870,6 +956,7 @@ public class FudpNode implements Protocol.PacketListener {
                         // for frames belonging to the same stream.
                         List<byte[]> completeMessages;
                         boolean cleanUp = false;
+                        long bufferedBytes;
                         synchronized (assembler) {
                             // Poll all available data chunks and feed into assembler
                             byte[] chunk;
@@ -878,10 +965,11 @@ public class FudpNode implements Protocol.PacketListener {
                                     assembler.addData(chunk);
                                 }
                             }
+                            bufferedBytes = assembler.getBufferSize();
 
                             // Fire assembly progress callback for large transfer tracking
-                            if (eventListener != null && assembler.getBufferSize() > 0) {
-                                eventListener.onStreamAssemblyProgress(peerId, streamId, assembler.getBufferSize());
+                            if (eventListener != null && bufferedBytes > 0) {
+                                eventListener.onStreamAssemblyProgress(peerId, streamId, bufferedBytes);
                             }
 
                             // Extract and handle all complete messages
@@ -892,6 +980,10 @@ public class FudpNode implements Protocol.PacketListener {
                                 cleanUp = true;
                             }
                         }
+
+                        // Response data arriving keeps this peer's pending requests alive
+                        // and drives their receive-progress callbacks.
+                        touchPendingRequests(peerId, bufferedBytes);
 
                         // Handle messages outside the synchronized block to avoid holding
                         // the lock during potentially slow message processing
