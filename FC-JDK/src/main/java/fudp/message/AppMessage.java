@@ -80,8 +80,27 @@ public abstract class AppMessage {
     public abstract byte[] encodePayload();
 
     /**
-     * Decode the message-specific payload.
-     * Subclasses must implement this to deserialize their specific data.
+     * Decode the message-specific payload from a slice of a larger buffer.
+     * <p>
+     * Implementations must read only bytes {@code [offset, offset+length)} and
+     * must NOT retain a reference to {@code buf} (it may be reused by the caller).
+     * Reading directly from the backing array — rather than a pre-sliced copy —
+     * avoids an extra full-size payload copy on the receive path, which matters
+     * for large messages (multi-MB uploads/downloads) under memory pressure.
+     *
+     * @param buf    backing array containing the payload slice
+     * @param offset start of the payload within {@code buf}
+     * @param length payload length in bytes
      */
-    public abstract void decodePayload(byte[] payload);
+    public abstract void decodePayload(byte[] buf, int offset, int length);
+
+    /**
+     * Convenience overload for a payload that occupies an entire array.
+     */
+    public void decodePayload(byte[] payload) {
+        if (payload == null) {
+            throw new IllegalArgumentException("payload is null");
+        }
+        decodePayload(payload, 0, payload.length);
+    }
 }

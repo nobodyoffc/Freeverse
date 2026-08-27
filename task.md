@@ -11,8 +11,7 @@ weakly-authenticated behavior depending on the JCE provider.
 
 [] news 
 [] safe: import prikey to make pubkey
-[] talk: fe
-tch messages of myself
+[] talk: fe tch messages of myself
 [] nasa swap, linode
 
 [] default FAPI server

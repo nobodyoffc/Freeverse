@@ -790,6 +790,7 @@ public class FapiServer implements NodeEventListener {
     }
 
     private void handleRequest(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {
+        long startMs = System.currentTimeMillis();
         try {
             FapiRequest fapiRequest;
             byte[] binaryData = null;
@@ -839,6 +840,17 @@ public class FapiServer implements NodeEventListener {
                 }
             }
             
+            // Binary uploads (disk.put/carve etc.) are logged at INFO so their
+            // arrival — after the FUDP stream fully reassembled — is visible
+            // server-side; ordinary small requests stay at DEBUG.
+            if (binaryData != null && binaryData.length > 0) {
+                log.info("Received {} from {}: {} bytes binary payload (requestId={})",
+                        fapiRequest.getApi(), peerId, binaryData.length, requestId);
+            } else {
+                log.debug("Received {} from {} ({} bytes, requestId={})",
+                        fapiRequest.getApi(), peerId, requestSize, requestId);
+            }
+
             // 获取组件
             String componentName = fapiRequest.getComponentName();
             String method = fapiRequest.getMethodName();
@@ -933,13 +945,14 @@ public class FapiServer implements NodeEventListener {
                     }
                     
                     // Stream the response: header + file content via InputStream
-                    log.debug("Streaming response to {}: requestId={}, statusCode={}, fileSize={}", 
-                        peerId, requestId, statusCode, streamSize);
+                    log.info("Streaming response for {} to {}: requestId={}, statusCode={}, fileSize={}",
+                        fapiRequest.getApi(), peerId, requestId, statusCode, streamSize);
                     try (java.io.InputStream fileStream = java.nio.file.Files.newInputStream(streamPath)) {
                         fudpNode.respondWithStream(peerId, connectionId, requestId, statusCode,
                             headerBytes, fileStream, streamSize);
                     }
-                    log.debug("Streaming response sent to {}: requestId={}", peerId, requestId);
+                    log.info("Streaming response for {} sent to {}: requestId={}, {}ms",
+                        fapiRequest.getApi(), peerId, requestId, System.currentTimeMillis() - startMs);
                     
                 } else {
                     // === Normal (non-streaming) response path ===
@@ -976,10 +989,16 @@ public class FapiServer implements NodeEventListener {
                         responseData = UnifiedCodec.encodeResponse(unifiedResponse);
                     }
                     
-                    log.debug("Sending response to {}: requestId={}, statusCode={}, size={}", 
+                    log.debug("Sending response to {}: requestId={}, statusCode={}, size={}",
                         peerId, requestId, statusCode, responseData.length);
                     fudpNode.respond(peerId, connectionId, requestId, statusCode, responseData);
-                    log.debug("Response sent to {}: requestId={}", peerId, requestId);
+                    if (binaryData != null && binaryData.length > 0) {
+                        log.info("Handled {} from {} in {}ms: code={}, responseSize={} (requestId={})",
+                            fapiRequest.getApi(), peerId, System.currentTimeMillis() - startMs,
+                            fapiResponse.getCode(), responseData.length, requestId);
+                    } else {
+                        log.debug("Response sent to {}: requestId={}", peerId, requestId);
+                    }
                 }
             }
             

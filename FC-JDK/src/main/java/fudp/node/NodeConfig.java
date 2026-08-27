@@ -23,6 +23,16 @@ public class NodeConfig {
     private boolean autoAcceptFiles = false;
     private long maxFileSize = 1073741824;   // 1GB
 
+    // Receive-side memory management.
+    // A received message is reassembled before delivery. Messages up to
+    // maxInMemoryMessageBytes are buffered in RAM (fast path); larger ones spill
+    // to a temp file so a multi-MB upload/download never materialises fully on the
+    // heap. maxAssembledMessageBytes is the hard ceiling on a single assembled
+    // message (RAM + spill combined); it is decoupled from maxFileSize precisely so
+    // a large maxFileSize does not size the heap.
+    private long maxInMemoryMessageBytes = 16L * 1024 * 1024;  // 16MB stays in RAM
+    private long maxAssembledMessageBytes = 1073741824L + 1024 * 1024; // 1GB + slack (spilled to disk)
+
     // Timeouts
     private long requestTimeoutMs = 30000;   // 30 seconds
     private long transferTimeoutMs = 300000; // 5 minutes
@@ -89,8 +99,12 @@ public class NodeConfig {
     private long idleConnectionTimeoutMs = 300000;   // 5 minutes idle timeout per connection
     private long idleConnectionCleanupIntervalMs = 60000; // Cleanup check interval (60 seconds)
 
-    // Loss Detection
-    private long lossDetectionMinThresholdMs = 2000;
+    // Loss Detection: a packet unacknowledged for max(this, 2*RTT + RTTvar) is
+    // declared lost and retransmitted. Was 2000ms as a defence against false
+    // losses caused by fire-once ACK frames (a lost ACK orphaned its packets);
+    // ACK frames now re-advertise received ranges for several seconds, so a
+    // 500ms floor is safe and recovers real loss 4x faster.
+    private long lossDetectionMinThresholdMs = 500;
 
     // Pacing
     private int pacingBurstOverride = -1;      // -1 = auto-calculate; >0 = override burst size
@@ -170,6 +184,32 @@ public class NodeConfig {
 
     public NodeConfig setMaxFileSize(long maxFileSize) {
         this.maxFileSize = maxFileSize;
+        return this;
+    }
+
+    public long getMaxInMemoryMessageBytes() {
+        return maxInMemoryMessageBytes;
+    }
+
+    /**
+     * Cap on how much of a single received message is buffered in RAM. Messages
+     * whose declared length exceeds this spill to a temp file during reassembly.
+     */
+    public NodeConfig setMaxInMemoryMessageBytes(long maxInMemoryMessageBytes) {
+        this.maxInMemoryMessageBytes = maxInMemoryMessageBytes;
+        return this;
+    }
+
+    public long getMaxAssembledMessageBytes() {
+        return maxAssembledMessageBytes;
+    }
+
+    /**
+     * Hard ceiling on a single assembled message (RAM + spilled-to-disk combined).
+     * Independent of {@link #maxFileSize} so a large max file size never sizes the heap.
+     */
+    public NodeConfig setMaxAssembledMessageBytes(long maxAssembledMessageBytes) {
+        this.maxAssembledMessageBytes = maxAssembledMessageBytes;
         return this;
     }
 

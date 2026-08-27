@@ -30,6 +30,10 @@ public class DiskSyncState {
     private long lastSyncTime;
     private long itemsSynced;
     private long bytesSynced;
+    /** IDs that failed to download, mapped to the number of attempts so far. Retried before pagination. */
+    private Map<String, Integer> failedItems;
+    private String lastError;
+    private long lastErrorTime;
 
     public DiskSyncState() {}
 
@@ -54,6 +58,18 @@ public class DiskSyncState {
 
     public long getBytesSynced() { return bytesSynced; }
     public void setBytesSynced(long bytesSynced) { this.bytesSynced = bytesSynced; }
+
+    public Map<String, Integer> getFailedItems() {
+        if (failedItems == null) failedItems = new HashMap<>();
+        return failedItems;
+    }
+    public void setFailedItems(Map<String, Integer> failedItems) { this.failedItems = failedItems; }
+
+    public String getLastError() { return lastError; }
+    public void setLastError(String lastError) { this.lastError = lastError; }
+
+    public long getLastErrorTime() { return lastErrorTime; }
+    public void setLastErrorTime(long lastErrorTime) { this.lastErrorTime = lastErrorTime; }
 
     /**
      * Load all sync states from the JSON file in the given directory.

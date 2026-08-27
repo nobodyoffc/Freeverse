@@ -517,12 +517,36 @@ public class ApiAccount {
                 case APIP, DISK, FAPI, FAPI_No1_NrC7 -> {
                     if(providerId ==null)inputSid(br);
 
-                    userPrikeyCipher = fidInfoMap.get(userFid).getPrikeyCipher();
-                    if(userPrikeyCipher!=null && this.userPubkey==null){
+                    // Resolve the buyer's prikey cipher. userFid may be null (e.g. when the
+                    // account is added right after adding a provider), and even a non-null
+                    // userFid may be missing from fidInfoMap, so guard every lookup.
+                    CidInfo userCidInfo = (fidInfoMap!=null && userFid!=null) ? fidInfoMap.get(userFid) : null;
+                    if(userCidInfo!=null) this.userPrikeyCipher = userCidInfo.getPrikeyCipher();
+
+                    if(this.userPrikeyCipher==null && fidInfoMap!=null && !fidInfoMap.isEmpty()){
+                        String choice = Inputer.chooseOneKeyFromMap(fidInfoMap, false, null,
+                                "Choose the account FID for this service. Enter to input a new one:", br);
+                        if(choice!=null){
+                            userCidInfo = fidInfoMap.get(choice);
+                            if(userCidInfo!=null){
+                                this.userPrikeyCipher = userCidInfo.getPrikeyCipher();
+                                this.userId = choice;
+                            }
+                        }
+                    }
+
+                    if(this.userPrikeyCipher==null){
+                        inputPrikeyCipher(symkey, br, fidInfoMap);
+                    }
+
+                    if(this.userPrikeyCipher!=null && this.userPubkey==null){
                         this.userPubkey = makePubkey(this.userPrikeyCipher,symkey);
                     }
+                    if(this.userId==null && this.userPubkey!=null){
+                        this.userId = KeyTools.pubkeyToFchAddr(Hex.fromHex(this.userPubkey));
+                    }
                     while(userName==null) {
-                        if(userId!=null)userName= userFid;
+                        if(userId!=null)userName= userId;
                         else{
                             userName = Inputer.inputString(br,"Input your userName");
                         }

@@ -7,6 +7,13 @@ public class DiskSyncSource {
     private String sid;
     private String url;
     private boolean enabled = true;
+    /**
+     * Optional recharge amount in FCH for this source. When the balance falls
+     * below minDealerBalance, this amount is paid instead of the client's
+     * default purchase amount (the deficit still sets the lower bound).
+     * Null or <= 0 means use the default.
+     */
+    private Double rechargeFch;
 
     public DiskSyncSource() {}
 
@@ -40,8 +47,17 @@ public class DiskSyncSource {
         this.enabled = enabled;
     }
 
+    public Double getRechargeFch() {
+        return rechargeFch;
+    }
+
+    public void setRechargeFch(Double rechargeFch) {
+        this.rechargeFch = rechargeFch;
+    }
+
     @Override
     public String toString() {
-        return "DiskSyncSource{sid='" + sid + "', url='" + url + "', enabled=" + enabled + '}';
+        return "DiskSyncSource{sid='" + sid + "', url='" + url + "', enabled=" + enabled
+                + (rechargeFch != null ? ", rechargeFch=" + rechargeFch : "") + '}';
     }
 }

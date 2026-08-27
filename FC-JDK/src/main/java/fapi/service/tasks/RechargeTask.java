@@ -81,8 +81,13 @@ public class RechargeTask implements BlockTask {
             }
             
             // 过滤出发送到服务地址的 Cash
+            // Exclude cashes issued by the service address itself: when the dealer
+            // FID pays another service (e.g. DISK sync recharge), the change output
+            // returns to the dealer address and would otherwise be credited as a
+            // customer deposit — including paying out a via share on it.
             List<CashInfo> targetCashes = newCashes.stream()
-                    .filter(cash -> serviceAddress.equals(cash.getOwner()))
+                    .filter(cash -> serviceAddress.equals(cash.getOwner())
+                            && !serviceAddress.equals(cash.getIssuer()))
                     .sorted((a, b) -> {
                         int cmp = Long.compare(a.getBirthHeight(), b.getBirthHeight());
                         return cmp != 0 ? cmp : a.getCashId().compareTo(b.getCashId());

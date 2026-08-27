@@ -73,6 +73,13 @@ public class PeerConnection {
     // Per-connection loss signal throttle (moved from Protocol to avoid global throttle)
     private volatile long lastLossSignalTime = 0;
 
+    // The peer's OWN connectionId for this connection, learned from the header
+    // of its packets (each side stamps its local id). 0 = not yet learned.
+    // Used to recognise the same connection when the peer's source address
+    // changes (NAT rebind → path migration) and to detect the peer rebuilding
+    // its connection state (fresh packet-number space) without restarting.
+    private volatile long remoteConnectionId = 0;
+
     public PeerConnection(String peerId, SocketAddress address, long connectionId) {
         this(peerId, address, connectionId, 2000);
     }
@@ -155,6 +162,21 @@ public class PeerConnection {
             // If so, it was a false positive (late ACK, not real loss)
             if (suspectedLostPacketNumbers.remove(pn)) {
                 ackedAfterSuspectedLost++;
+                // Spurious loss = the path reorders deeper than our current
+                // gap threshold assumed. Widen it to the OBSERVED reordering
+                // extent (RACK-style adaptation) so it converges in one or two
+                // events — heavily load-balanced routes can reorder by dozens
+                // of packets, and every misfire needlessly multiplies the
+                // congestion window down (~50KB window on a 900KB/s path in
+                // the field). The extent includes some retransmit delay, so
+                // it over-estimates slightly; the cap bounds the damage and
+                // the capped 4s timeout remains the real-loss backstop.
+                long extent = largestAckedPacketNumber - pn + 2;
+                long widened = Math.min(MAX_PACKET_THRESHOLD,
+                        Math.max(packetReorderThreshold + 4, extent));
+                if (widened > packetReorderThreshold) {
+                    packetReorderThreshold = widened;
+                }
             }
         }
 
@@ -170,32 +192,61 @@ public class PeerConnection {
     // Loss detection configuration
     // Time-based threshold multiplier (RFC 9002 recommends 9/8 = 1.125, but we use more conservative value)
     private static final double TIME_THRESHOLD_MULTIPLIER = 2.0;  // Conservative multiplier
-    // Minimum time threshold in milliseconds (prevents false positives on fast networks)
-    // Loss detection time threshold.  A packet is considered lost only when it has
-    // been unacknowledged for longer than this threshold.
-    //
-    // 2000ms is conservative but avoids false positives that plagued lower values:
-    //  - On localhost (RTT < 1ms): packets are ACK'd within a few ms, so 2000ms
-    //    means zero false losses.  This prevents the "congestion collapse" where
-    //    phantom onLoss() calls reduce cwnd below inFlight, blocking the sender.
-    //  - On WAN (RTT ~ 100-200ms): threshold = max(2000, 2*RTT + RTTvar).
-    //    Real losses are detected within 2 seconds, which is acceptable.
+    // Minimum floor for the time-based (timeout) loss threshold; the effective
+    // threshold adapts as max(floor, 2*sRTT + 4*RTTvar) so RTT jitter widens it.
     private final long minTimeThresholdMs;
-    // Packet reordering threshold (number of packets that can arrive out of order)
-    private static final long PACKET_THRESHOLD = 3;
+    // Packet reordering threshold for gap-based loss detection: a packet is
+    // lost when one sent >= this many packets AFTER it has been ACKed (QUIC
+    // kPacketThreshold is 3; we start at 6 for reordering margin). Safe to
+    // use now that ACK frames re-advertise all recently received packet
+    // numbers: any ACK frame covers everything received so far, so a "late"
+    // ACK can no longer make an already-delivered packet look lost.
+    // ADAPTIVE: every spurious loss (packet ACKed after being declared lost)
+    // widens the threshold, RACK-style, up to MAX_PACKET_THRESHOLD — paths
+    // that reorder deeply stop triggering false congestion signals.
+    private static final long INITIAL_PACKET_THRESHOLD = 6;
+    private static final long MAX_PACKET_THRESHOLD = 64;
+    private volatile long packetReorderThreshold = INITIAL_PACKET_THRESHOLD;
+    // Ceiling for the timeout-based loss threshold (QUIC caps its PTO
+    // similarly): tolerate multi-second RTT spikes, but never let loss
+    // recovery stall beyond this.
+    private static final long MAX_TIME_THRESHOLD_MS = 4000;
+
+    /**
+     * Loss detection result: the packets to retransmit, and whether any of
+     * them were detected by an ACK GAP (real loss evidence) rather than by
+     * timeout alone. Per QUIC RFC 9002 semantics, only gap-detected loss is a
+     * congestion signal; timeout-detected "loss" is retransmitted but must NOT
+     * shrink the congestion window — on jittery paths (e.g. cross-border
+     * links with multi-second RTT spikes) timeouts are routinely spurious, and
+     * treating them as congestion pinned the window at its floor.
+     */
+    public record LossDetection(List<SentPacket> packets, boolean gapLoss) {}
 
     /**
      * Get packets that need retransmission.
      */
-    public List<SentPacket> detectLostPackets() {
+    public LossDetection detectLostPackets() {
         List<SentPacket> lost = new ArrayList<>();
-        
-        // Calculate time threshold: max(MIN_TIME_THRESHOLD, smoothedRtt * multiplier + rttVariance)
-        // Adding RTT variance makes it more adaptive to network jitter
+        boolean gapLoss = false;
+
+        // Timeout threshold: clamp(2*sRTT + 4*RTTvar, floor, ceiling). The 4x
+        // variance term adapts to jitter so an RTT spike inflates the
+        // threshold instead of mass-expiring the whole flight; the ceiling
+        // keeps chaotic RTT samples under heavy loss from ballooning the
+        // threshold so far that lost packets sit unretransmitted for many
+        // seconds — with the window full of them, the sender stalls silently
+        // and the peer's idle timers fire.
         long smoothedRtt = rttEstimator.getSmoothedRtt();
         long rttVar = rttEstimator.getRttVariance();
-        long timeThreshold = Math.max(minTimeThresholdMs, 
-                (long) (smoothedRtt * TIME_THRESHOLD_MULTIPLIER) + rttVar);
+        long timeThreshold = Math.min(MAX_TIME_THRESHOLD_MS, Math.max(minTimeThresholdMs,
+                (long) (smoothedRtt * TIME_THRESHOLD_MULTIPLIER) + 4 * rttVar));
+        // Gap-detected loss must also be at least ~1 RTT old: reordered
+        // packets arrive within an RTT of their peers, while a truly lost
+        // packet stays unACKed as later ones get ACKed past it (QUIC RACK
+        // time window). Keeps sub-RTT reordering from misfiring as loss.
+        long gapMinAge = Math.max(20, smoothedRtt);
+        long now = System.currentTimeMillis();
 
         for (Map.Entry<Long, SentPacket> entry : sentPackets.entrySet()) {
             long pn = entry.getKey();
@@ -206,22 +257,32 @@ public class PeerConnection {
                 continue;
             }
 
-            // Lost if more than timeThreshold has passed (time-based loss detection).
-            //
-            // NOTE: Packet-number-based loss detection (largestAcked - pn >= PACKET_THRESHOLD)
-            // is DISABLED because ACKs arrive out of order due to multi-threaded processing
-            // on the receiver.  E.g., ACK for packet 50 may arrive before ACK for packet 1,
-            // causing packet 1 to be falsely marked as lost.  This leads to:
-            //   1. Unnecessary retransmissions
-            //   2. Original packets removed from sentPackets; when real ACKs arrive,
-            //      bytesInFlight never decreases → sender deadlocks
-            //   3. Repeated onLoss() calls that collapse the congestion window
-            //
-            // Time-based detection (500ms+ default) gives ample time for all ACKs to arrive.
-            boolean lostByTime = System.currentTimeMillis() - packet.sentTime > timeThreshold;
-            
-            if (lostByTime) {
+            long age = now - packet.sentTime;
+
+            // Gap-based (SACK-style): a packet sent well after this one has
+            // been ACKed — this one was really dropped. Detects loss within
+            // ~1 RTT instead of waiting for the timeout.
+            boolean lostByGap = largestAckedPacketNumber - pn >= packetReorderThreshold
+                    && age > gapMinAge;
+
+            // Time-based (timeout): backstop for tail loss and dead links.
+            // Exponential backoff per retransmission (QUIC PTO backoff): a
+            // packet that keeps timing out waits 1x, 2x, then 4x the
+            // threshold. Under sustained policing, constant-rate blind
+            // retransmissions compete with fresh data for the trickle of
+            // surviving packets and rack up failed attempts toward
+            // abandonment (= permanent stream gap) within seconds. The cap
+            // stays moderate: single-packet messages (small responses) have
+            // no gap evidence and depend on this timer alone, so aggressive
+            // backoff would directly inflate their tail latency.
+            long effectiveTimeThreshold = timeThreshold << Math.min(packet.getRetransmitCount(), 2);
+            boolean lostByTime = age > effectiveTimeThreshold;
+
+            if (lostByGap || lostByTime) {
                 lost.add(packet);
+                if (lostByGap) {
+                    gapLoss = true;
+                }
             }
         }
 
@@ -230,7 +291,7 @@ public class PeerConnection {
         // Previously, removing all detected lost packets here caused permanent data loss
         // when the retransmit task was rate-limited and couldn't retransmit all of them.
 
-        return lost;
+        return new LossDetection(lost, gapLoss);
     }
 
     /**
@@ -425,6 +486,18 @@ public class PeerConnection {
         peerRestartHandled = false; // Reset flag for next restart detection
         epochConfirmed = false;     // E2: Must re-send epoch after peer restart
     }
+
+    public long getPacketReorderThreshold() {
+        return packetReorderThreshold;
+    }
+
+    public long getRemoteConnectionId() {
+        return remoteConnectionId;
+    }
+
+    public void setRemoteConnectionId(long remoteConnectionId) {
+        this.remoteConnectionId = remoteConnectionId;
+    }
     
     /**
      * Atomically check and mark peer restart as handled.
@@ -458,6 +531,52 @@ public class PeerConnection {
             return true;
         }
         return false;
+    }
+
+    // === Rate-based send pacing (QUIC-style leaky bucket) ===
+    //
+    // Bulk senders must not emit line-rate bursts: shallow bottleneck buffers
+    // and ingress policers (common on budget VPSes) clip bursts even when the
+    // AVERAGE rate is far below the path capacity, producing a steady drip of
+    // loss events that keeps multiplying the congestion window down. Packets
+    // are instead spread at PACING_GAIN * cwnd / sRTT — slightly above the
+    // ACK-clocked rate so the window can still grow, but never a burst.
+    private static final double PACING_GAIN = 1.25;
+    private static final double MIN_PACING_RATE_BPS = 10_000; // 10 KB/s floor
+    private static final long PACER_BURST_ALLOWANCE_NANOS = 2_000_000; // 2ms
+
+    private long pacerNextNanos = 0;
+
+    /**
+     * Reserve a pacing slot for {@code bytes} about to be sent.
+     *
+     * @return nanoseconds the caller should sleep before sending (0 = send now)
+     */
+    public synchronized long reservePacingDelayNanos(int bytes) {
+        long srttMs = Math.max(1, rttEstimator.getSmoothedRtt());
+        double rateBps = PACING_GAIN * congestionControl.getCongestionWindow() * 1000.0 / srttMs;
+        if (rateBps < MIN_PACING_RATE_BPS) rateBps = MIN_PACING_RATE_BPS;
+        long nanosForBytes = (long) (bytes * 1_000_000_000.0 / rateBps);
+
+        long now = System.nanoTime();
+        if (pacerNextNanos < now - PACER_BURST_ALLOWANCE_NANOS) {
+            pacerNextNanos = now; // idle: restart the bucket, allow a small burst
+        }
+        long delay = pacerNextNanos - now;
+        pacerNextNanos += nanosForBytes;
+        return Math.max(0, delay);
+    }
+
+    /**
+     * Bytes the pacer allows within the given interval (for non-blocking
+     * senders like the retransmit task that budget per cycle instead of
+     * sleeping per packet).
+     */
+    public long pacingBudgetBytes(long intervalMs) {
+        long srttMs = Math.max(1, rttEstimator.getSmoothedRtt());
+        double rateBps = PACING_GAIN * congestionControl.getCongestionWindow() * 1000.0 / srttMs;
+        if (rateBps < MIN_PACING_RATE_BPS) rateBps = MIN_PACING_RATE_BPS;
+        return (long) (rateBps * intervalMs / 1000.0);
     }
 
     public long getSessionEpoch() {

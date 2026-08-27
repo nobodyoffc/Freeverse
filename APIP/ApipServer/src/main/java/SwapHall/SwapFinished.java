@@ -21,10 +21,10 @@ import utils.EsUtils;
 import utils.ObjectUtils;
 import utils.http.AuthType;
 
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -87,7 +87,7 @@ public class SwapFinished extends HttpServlet {
 
         searchBuilder.index(swapFinishedIndex);
         searchBuilder.sort(sortOptionsList);
-        searchBuilder.size(20);
+        searchBuilder.size(200);
         if (lastStr != null) {
             String[] last = lastStr.split(",");
             searchBuilder.searchAfter(EsUtils.toFieldValueList(Arrays.asList(last)));

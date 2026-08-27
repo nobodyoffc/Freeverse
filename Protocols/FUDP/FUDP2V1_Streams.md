@@ -17,6 +17,7 @@
 - [Flow Control](#flow-control)
 - [Stream Opening](#stream-opening)
 - [Stream Closing](#stream-closing)
+- [Stream Retirement](#stream-retirement)
 
 [Security Considerations](#security-considerations)
 
@@ -68,7 +69,23 @@ New stream IDs within a given type increment by 4, preserving the lower 2 bits. 
 
 In FUDP's peer-to-peer model, "client" refers to the connection initiator (the peer that sent the first handshake packet) and "server" refers to the responder.
 
-The Java reference implementation currently allocates locally opened bidirectional streams as `0, 4, 8, ...` and locally opened unidirectional streams by setting bit `0x02` on the same local counter. It does not currently assign different local stream ID parity based on whether the endpoint was the handshake initiator or responder.
+#### Parity Assignment (bit 0)
+
+Both endpoints on a connection allocate locally opened stream IDs from independent counters that share ONE number space (local IDs and remote-created IDs both live in `streams`, keyed by the same `long`). If both endpoints started their counter at the same base value with the same parity, the two allocators would race to reuse the same IDs. Historically this was avoided only by convention — each side happened to advance its counter in lockstep with the other (one response per request) — which breaks under any desync: a connection object rebuilt without a full restart (see FUDP1, Path Migration), a retried request, or simply two requests in flight at once. When one endpoint allocated an ID the other had already used and *retired* (FUDP2, Stream Retirement), the retirement tombstone silently dropped every frame of the new stream — a request could be fully processed and answered server-side while the requester observed nothing but a timeout, with no error logged on either end.
+
+Implementations MUST assign each endpoint's local allocator a fixed parity for bit 0 that is derived **deterministically from identity comparison, not from connection-establishment role**, so that no negotiation or handshake state is required and the assignment is stable across reconnects and connection rebuilds:
+
+```
+PROCEDURE assign_local_stream_parity(localFid, remoteFid):
+    IF localFid < remoteFid (lexicographic/byte comparison):
+        RETURN 0   -- this endpoint allocates even-numbered local stream IDs
+    ELSE:
+        RETURN 1   -- this endpoint allocates odd-numbered local stream IDs
+```
+
+This guarantees the two endpoints' local allocators are permanently disjoint (one strictly even, one strictly odd) regardless of which side initiated the connection, how many times a connection is rebuilt, or how requests interleave. It MUST be applied before the first locally opened stream on a connection, and is idempotent (a later call with the same peer pair is a no-op) since a connection's peer identities never change mid-connection.
+
+Note this diverges from the initiator/responder framing described above: parity is a property of the *identity pair*, not of who sent the first handshake packet. The Java reference implementation implements this as `StreamManager.initLocalStreamParity(parity)`, invoked from both the outbound `Protocol.connect(...)` path and the inbound `Protocol.handleIncomingPacket(...)` path (so it is set correctly regardless of which side is first to send data), and folds the parity into `nextLocalStreamId`'s starting value (also reapplied on `resetForRestart()`, so a rebuilt connection keeps the same parity instead of colliding with its own prior allocations).
 
 ### Stream States
 
@@ -147,7 +164,7 @@ The following rules apply:
 
 1. When the offset is 0, the OFF bit MAY be omitted. Receivers MUST treat the absence of the OFF bit as an implicit offset of 0.
 2. The LEN bit MUST always be set in released v1 wire behavior. Receivers treat STREAM frames without LEN as protocol violations.
-3. The FIN bit MUST be set on the final STREAM frame for a given message or send direction. The Java high-level node API sends one complete message per stream and removes the stream after FIN and full message delivery.
+3. The FIN bit MUST be set on the final STREAM frame for a given message or send direction. The Java high-level node API sends one complete message per stream and retires the stream after FIN and full message delivery (see [Stream Retirement](#stream-retirement)).
 4. A STREAM frame with FIN set MAY carry zero bytes of payload. This is valid and simply signals end-of-stream.
 
 ### Data Reassembly
@@ -161,9 +178,13 @@ The reassembly procedure is as follows:
 3. **Assemble contiguous data.** Starting from the next expected offset (initially 0), the receiver assembles the longest contiguous run of buffered bytes.
 4. **Deliver to the application.** The assembled contiguous data is delivered to the application layer in order. Data MUST NOT be delivered out of order or with gaps.
 5. **Advance the expected offset.** After delivery, the next expected offset advances by the number of bytes delivered.
-6. **Detect stream completion.** If the FIN bit has been received and all bytes up to and including the final offset have been delivered, the receive side of the stream is complete.
+6. **Detect stream completion.** If the FIN bit has been received and all bytes up to and including the final offset have been delivered, the receive side of the stream is complete. Once the delivered message has been handed to the application, the receiver MUST retire the stream ID (see [Stream Retirement](#stream-retirement)) so that late or retransmitted frames cannot re-create the stream and deliver the same message a second time.
+
+   > **Pitfall — out-of-order FIN.** Receiving a STREAM frame with the FIN bit set is NOT by itself stream completion. Under loss and reordering the FIN frame routinely arrives *before* earlier frames of the same stream. The receiver MUST record the end offset carried by the FIN frame (`offset + length`) and treat the receive side as complete only when the contiguous delivery offset has reached that end offset. An implementation that retires the stream upon merely observing a FIN frame will tombstone the stream while data is still missing; every retransmission of the missing frames is then dropped by the retired-stream check while still being acknowledged at the packet level, so the sender stops retransmitting and the message is permanently lost (the receiver's higher-level request/response layer observes only a timeout). The Java reference implementation encodes this rule as `Stream.isRecvComplete()` — true only when a FIN has been seen AND `recvOffset` has advanced to the FIN's end offset.
 
 Implementations SHOULD bound the size of the reassembly buffer. If a peer sends data that would cause the buffer to exceed a reasonable limit, the receiver MAY close the stream or the connection with an appropriate error.
+
+The reassembly described here reconstructs the ordered *byte stream*. The layer above it (FUDP6 §Message Envelope) reassembles that byte stream into application *messages*, and a single message may be far larger than any individual frame (e.g. a whole-file transfer, since a stream carries exactly one message). To keep a large transfer from exhausting the receiver's heap, that message-assembly layer SHOULD bound its in-memory footprint independently of the maximum message size — buffering a message above an in-memory cap to backing storage rather than the heap — as specified in FUDP6 §Security Considerations "Receive-Side Memory Management". This does not change the ordered, gap-free delivery contract above; it only changes where the assembled bytes are held.
 
 ### Flow Control
 
@@ -172,6 +193,8 @@ FUDP implements two levels of flow control to prevent a fast sender from overwhe
 #### Stream-Level Flow Control
 
 Each stream has a maximum data limit, expressed as a byte offset. The receiver advertises its willingness to accept data via MAX_STREAM_DATA frames (as defined in FUDP1). The Java reference implementation initializes both send and receive stream limits to 100 MB and applies the receive limit to buffered out-of-order data.
+
+> **The receive-buffer limit MUST apply only to out-of-order data.** The limit bounds the memory held in the reassembly buffer, which contains *only* frames that arrived ahead of the next expected offset (in-order data is drained to the application immediately and does not stay buffered). A receiver MUST therefore enforce the limit exclusively against frames whose offset is beyond the current contiguous delivery offset (`offset > recvOffset`). An in-order frame (`offset == recvOffset`) — the gap-filling frame — MUST NOT be rejected on flow-control grounds, because it is drained immediately and typically triggers a large contiguous drain that *reduces* the buffered byte count. Rejecting it deadlocks the transfer: once the buffer is near the limit behind a lost early frame, the retransmitted frame that would fill the gap and free the entire buffer would itself be refused, and (per [Error Handling](#error-handling)) the whole connection torn down as a flow-control violation — killing every other stream on it too. The Java reference implementation encodes this as `if (offset > recvOffset && recvData + len > maxRecvData) throw` in `Stream.onDataReceived`.
 
 |Parameter|Default Value|Description|
 |---|---|---|
@@ -221,9 +244,9 @@ Streams are created lazily. A stream comes into existence when the first STREAM 
 
 The following rules govern stream creation:
 
-1. Locally initiated streams use even-numbered base IDs: 0, 4, 8, 12, ... (for client-initiated) or 1, 5, 9, 13, ... (for server-initiated), as determined by the two least significant bits of the stream ID.
+1. Locally initiated streams use base IDs 0, 4, 8, 12, ... or 1, 5, 9, 13, ..., as determined by the two least significant bits of the stream ID. Which base an endpoint uses is fixed by its parity assignment (see [Parity Assignment (bit 0)](#stream-id-encoding)) — a deterministic function of the two endpoints' identities — not by connection-establishment role.
 2. Stream IDs MUST be used in monotonically increasing order within each type. An implementation MUST NOT skip stream IDs. If stream ID N is opened, all streams with IDs less than N of the same type MUST be considered implicitly opened.
-3. If a received STREAM frame references a stream ID that does not yet exist locally, the implementation MUST create the stream automatically and transition it to the OPEN state.
+3. If a received STREAM frame references a stream ID that does not yet exist locally, the implementation MUST create the stream automatically and transition it to the OPEN state -- unless that stream ID has been retired (see [Stream Retirement](#stream-retirement)), in which case the frame MUST be dropped without creating a stream.
 4. If creating a new stream would cause the total number of streams of that type to exceed the stream count limit, the implementation SHOULD send a CONNECTION_CLOSE frame with error code STREAM_LIMIT_ERROR and close the connection. The Java reference implementation currently returns `null` for over-limit remote stream creation and drops the frame.
 
 ### Stream Closing
@@ -235,6 +258,25 @@ For bidirectional streams, each direction is closed independently. The stream tr
 For unidirectional streams, a single FIN from the initiator closes the stream entirely.
 
 Abrupt stream termination behavior (RESET-style signaling) is implementation-defined in v1 and is not standardized in this document.
+
+### Stream Retirement
+
+Because streams are created lazily (see [Stream Opening](#stream-opening)) and FUDP3 retransmits lost frames in new packets with new packet numbers, a completed stream that is simply removed from tracking is vulnerable to **duplicate message delivery**: a late or retransmitted STREAM frame arriving after removal would automatically re-create the stream, and — since the high-level node API carries exactly one complete message per stream — the reassembled message would be delivered to the application a second time. For request/response traffic this means the same request is executed (and, in metered services, charged) once per retransmitted copy.
+
+To prevent this, receivers MUST retire a remote stream once its message has been fully delivered:
+
+1. **Retire on completion.** When the FIN bit has been received, all bytes have been delivered, and the assembled message has been handed to the application, the receiver removes the stream from active tracking and records its stream ID in a retired-stream set.
+2. **Drop frames for retired streams.** A received STREAM frame referencing a retired stream ID MUST be dropped without re-creating the stream and without delivering any data.
+3. **Still acknowledge the packet.** Packet-level acknowledgment (FUDP3) is unaffected: the packet carrying the dropped frame is acknowledged normally, so the sender's retransmission of that data stops. Dropping the frame at the stream layer while acknowledging at the packet layer is what terminates a retransmission storm without re-executing its payload.
+4. **Not an error.** Frames for retired streams are an expected consequence of retransmission and reordering. They MUST NOT be treated as STREAM_STATE_ERROR and MUST NOT trigger connection closure.
+
+The following rules keep retirement sound:
+
+- **Completion, not FIN observation.** Retirement MUST be gated on actual receive completion: a FIN frame has been seen AND the contiguous delivery offset has reached the FIN frame's end offset AND the assembled message has been handed to the application. Retiring upon merely observing a FIN frame is incorrect — the FIN may arrive ahead of lost or reordered earlier frames, and premature retirement permanently blackholes the message: the tombstone drops every retransmission of the missing data while packet-level acknowledgments (rule 3 below) simultaneously stop the sender from retrying (see the out-of-order FIN pitfall under [Data Reassembly](#data-reassembly)).
+- **Scope.** Only remote-initiated streams whose receive side has completed are retired. Sender-side cleanup of locally opened streams does not retire the ID: in the current Java implementation, local and remote stream IDs are allocated from the same number space (see [Stream ID Encoding](#stream-id-encoding)), so a tombstone on a locally used ID could wrongly block a future legitimate remote stream with the same number.
+- **Permanence.** A remote peer allocates stream IDs monotonically and never reuses an ID within a connection, so retirement is permanent for the life of the connection.
+- **Bounded memory.** The retired-stream set SHOULD be bounded (the Java reference implementation keeps the most recent 4096 retired IDs in FIFO order). Evicting old entries is safe in practice because retransmissions of very old streams are bounded by the Max Retransmit Count (FUDP3).
+- **Peer restart.** On peer restart detection (FUDP1), the retired-stream set MUST be cleared along with the rest of the stream state: the restarted peer's stream IDs begin again at the lowest value, and stale tombstones would wrongly drop its new streams.
 
 ### Error Handling
 
@@ -248,7 +290,7 @@ The following error conditions are defined for stream operations:
 
 Upon detecting a flow control violation or stream limit violation, an implementation MUST close the connection by sending a CONNECTION_CLOSE frame with the appropriate error code.
 
-Upon detecting a stream state error, an implementation SHOULD close the connection with an appropriate CONNECTION_CLOSE error code.
+Upon detecting a stream state error, an implementation SHOULD close the connection with an appropriate CONNECTION_CLOSE error code. Exception: STREAM frames referencing a retired stream ID are an expected artifact of retransmission and MUST be silently dropped, not treated as STREAM_STATE_ERROR (see [Stream Retirement](#stream-retirement)).
 
 ## Security Considerations
 
@@ -265,6 +307,10 @@ Upon detecting a stream state error, an implementation SHOULD close the connecti
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-03-28|Initial specification.|
+|1 (rev)|2026-07-11|Added Stream Retirement: completed remote streams are tombstoned so retransmitted frames cannot re-create them and deliver the same message twice (duplicate request execution). Qualified lazy stream creation and STREAM_STATE_ERROR handling accordingly.|
+|1 (rev)|2026-07-13|Made receive-completion detection explicit: retirement MUST be gated on the contiguous delivery offset reaching the FIN frame's end offset, never on FIN observation alone. Documented the out-of-order FIN pitfall (premature retirement + packet-level ACKs permanently blackhole the message) discovered via multi-frame upload failures on lossy networks.|
+|1 (rev)|2026-07-14|Added mandatory [Parity Assignment (bit 0)](#stream-id-encoding): each endpoint's local stream ID allocator MUST use a parity derived deterministically from identity comparison, not connection role. Discovered via a field failure where a NAT rebind (FUDP1, Path Migration) restarted one side's allocator, colliding with IDs the peer had already retired and silently swallowing responses.|
+|1 (rev)|2026-07-17|Clarified in Data Reassembly that the message-assembly layer above stream reassembly SHOULD bound its in-memory footprint independently of the maximum message size (spilling large messages to backing storage), cross-referencing FUDP6 §Receive-Side Memory Management. Delivery ordering/gap-free contract unchanged.|
 
 ## Related Protocols
 
@@ -281,5 +327,7 @@ The reference implementation is located in the FC-JDK repository under the `fudp
 
 - `fudp.connection.ConnectionContext` -- Manages stream state and flow control within a connection.
 - `fudp.connection.PeerConnection` -- Handles stream multiplexing over a peer connection.
+- `fudp.stream.Stream` -- Per-stream reassembly buffer and receive-completion detection (`isRecvComplete()`: FIN seen and contiguous delivery reached the FIN end offset).
+- `fudp.stream.StreamManager` -- Stream lifecycle: lazy creation, removal, and retirement (bounded tombstone set for completed remote streams).
 - `fudp.handler.MessageHandler` -- Processes incoming STREAM frames and performs data reassembly.
-- `fudp.node.FudpNode` -- Top-level node that manages connections and their associated streams.
+- `fudp.node.FudpNode` -- Top-level node that manages connections and their associated streams; retires a remote stream after its message is fully delivered.

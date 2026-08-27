@@ -1,6 +1,7 @@
 package freeim;
 
 import core.crypto.KeyTools;
+import fudp.FileTransfer;
 import fudp.node.FudpNode;
 import fudp.node.NodeConfig;
 import fudp.node.NodeEventListener;

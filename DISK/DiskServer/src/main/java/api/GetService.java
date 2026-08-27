@@ -10,11 +10,11 @@ import utils.http.AuthType;
 import server.HttpRequestChecker;
 import config.Settings;
 
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 @WebServlet(name = DiskApiNames.GET_SERVICE, value =  "/"+ DiskApiNames.GET_SERVICE+"/"+ DiskApiNames.VER_1)

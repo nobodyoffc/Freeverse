@@ -1543,7 +1543,20 @@ public class Settings {
 
             switch (module.getType()) {
                 case SERVICE -> initClientGroup(ServiceType.valueOf(module.getName()));
-                case MANAGER -> initManager(Manager.ManagerType.valueOf(module.getName()));
+                case MANAGER -> {
+                    // Managers such as ACCOUNT dereference the service (settings.getService().getId()).
+                    // An APIP/FAPI server can't run without a service, and it is loaded lazily while the
+                    // SERVICE modules (ES/APIP) init above. If it's still null by the time we reach the
+                    // managers, abort cleanly so initiateServer's null-service guard can trigger the
+                    // "Try again" loop in Starter.startServer instead of crashing with an NPE.
+                    if (service == null && (serverType == APIP || ServiceType.isFapi(serverType))) {
+                        System.out.println("No service is loaded for this " + serverType
+                                + " server. Cannot initialize the " + module.getName()
+                                + " manager. Aborting startup.");
+                        return;
+                    }
+                    initManager(Manager.ManagerType.valueOf(module.getName()));
+                }
                 case NODE -> initNode(module.getName());
                 default -> log.warn("Unknown module type: " + module.getName());
             }

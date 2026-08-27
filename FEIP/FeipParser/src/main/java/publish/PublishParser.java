@@ -239,7 +239,11 @@ public class PublishParser {
 					text = new Text();
 
 					text.setId(textHist.getTextId());
-					text.setVer(textHist.getVer());
+					// A first edition is ver 1. The op's own ver is not copied into
+					// the history and must not be honoured if it were: the entity's
+					// ver is the indexer's count of editions, not the publisher's
+					// claim. Leaving it null made every update fail on parseInt.
+					text.setVer("1");
 					text.setType(textHist.getType());
 					text.setDid(textHist.getDid());
 
@@ -334,8 +338,13 @@ public class PublishParser {
 				for (Text textItem : texts) {
 
 					if (!textItem.getPublisher().equals(textHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, textHist.getSigner(), Freer.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(textHist.getSigner())) {
+						// FEIP6 master bypass: the publisher's own master may
+						// delete or recover on their behalf. It is the
+						// publisher's Freer that has to be loaded here - asking
+						// whether the signer is their own master answers a
+						// question nobody posed, and never passes.
+						Freer publisherCid = EsUtils.getById(esClient, IndicesNames.FREER, textItem.getPublisher(), Freer.class);
+						if (publisherCid == null || publisherCid.getMaster() == null || !publisherCid.getMaster().equals(textHist.getSigner())) {
 							continue;
 						}
 					}
@@ -652,8 +661,10 @@ public class PublishParser {
 				for (Remark remarkItem : remarks) {
 
 					if (!remarkItem.getPublisher().equals(remarkHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, remarkHist.getSigner(), Freer.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(remarkHist.getSigner())) {
+						// FEIP6 master bypass - the publisher's Freer, not the
+						// signer's. See the same gate in parseText.
+						Freer publisherCid = EsUtils.getById(esClient, IndicesNames.FREER, remarkItem.getPublisher(), Freer.class);
+						if (publisherCid == null || publisherCid.getMaster() == null || !publisherCid.getMaster().equals(remarkHist.getSigner())) {
 							continue;
 						}
 					}
@@ -1090,8 +1101,10 @@ public class PublishParser {
 				for (Sound soundItem : sounds) {
 
 					if (!soundItem.getPublisher().equals(soundHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, soundHist.getSigner(), Freer.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(soundHist.getSigner())) {
+						// FEIP6 master bypass - the publisher's Freer, not the
+						// signer's. See the same gate in parseText.
+						Freer publisherCid = EsUtils.getById(esClient, IndicesNames.FREER, soundItem.getPublisher(), Freer.class);
+						if (publisherCid == null || publisherCid.getMaster() == null || !publisherCid.getMaster().equals(soundHist.getSigner())) {
 							continue;
 						}
 					}
@@ -1411,8 +1424,10 @@ public class PublishParser {
 				for (Image imageItem : images) {
 
 					if (!imageItem.getPublisher().equals(imageHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, imageHist.getSigner(), Freer.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(imageHist.getSigner())) {
+						// FEIP6 master bypass - the publisher's Freer, not the
+						// signer's. See the same gate in parseText.
+						Freer publisherCid = EsUtils.getById(esClient, IndicesNames.FREER, imageItem.getPublisher(), Freer.class);
+						if (publisherCid == null || publisherCid.getMaster() == null || !publisherCid.getMaster().equals(imageHist.getSigner())) {
 							continue;
 						}
 					}
@@ -1730,8 +1745,10 @@ public class PublishParser {
 				for (Video videoItem : videos) {
 
 					if (!videoItem.getPublisher().equals(videoHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, videoHist.getSigner(), Freer.class);
-						if (resultCid ==null || resultCid.getMaster() == null || !resultCid.getMaster().equals(videoHist.getSigner())) {
+						// FEIP6 master bypass - the publisher's Freer, not the
+						// signer's. See the same gate in parseText.
+						Freer publisherCid = EsUtils.getById(esClient, IndicesNames.FREER, videoItem.getPublisher(), Freer.class);
+						if (publisherCid == null || publisherCid.getMaster() == null || !publisherCid.getMaster().equals(videoHist.getSigner())) {
 							continue;
 						}
 					}

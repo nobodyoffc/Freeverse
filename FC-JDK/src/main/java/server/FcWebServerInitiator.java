@@ -4,8 +4,8 @@ import config.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.ServletConfig;
-import javax.servlet.http.HttpServlet;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.http.HttpServlet;
 import java.io.Serial;
 
 import static config.Configure.makeConfigFileName;

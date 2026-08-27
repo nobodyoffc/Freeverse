@@ -71,13 +71,16 @@ public class ErrorMessage extends AppMessage {
     }
 
     @Override
-    public void decodePayload(byte[] payload) {
-        if (payload == null || payload.length < 5) {
+    public void decodePayload(byte[] buf, int offset, int length) {
+        if (buf == null || length < 5) {
             throw new IllegalArgumentException("Invalid error payload");
         }
-        ByteBuffer buffer = ByteBuffer.wrap(payload);
+        ByteBuffer buffer = ByteBuffer.wrap(buf, offset, length);
         errorCode = buffer.getInt();
         int msgLength = (int) Varint.decode(buffer);
+        if (msgLength < 0 || buffer.remaining() < msgLength) {
+            throw new IllegalArgumentException("Invalid error payload: message truncated");
+        }
         byte[] msgBytes = new byte[msgLength];
         buffer.get(msgBytes);
         errorMessage = new String(msgBytes, StandardCharsets.UTF_8);

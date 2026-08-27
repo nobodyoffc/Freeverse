@@ -69,17 +69,17 @@ public class NotifyMessage extends AppMessage {
     }
 
     @Override
-    public void decodePayload(byte[] payload) {
-        if (payload == null || payload.length < 5) {
+    public void decodePayload(byte[] buf, int offset, int length) {
+        if (buf == null || length < 5) {
             throw new IllegalArgumentException("Invalid notify message payload");
         }
-        ByteBuffer buffer = ByteBuffer.wrap(payload);
+        ByteBuffer buffer = ByteBuffer.wrap(buf, offset, length);
         dataType = buffer.get() & 0xFF;
-        int length = buffer.getInt();
-        if (buffer.remaining() < length) {
+        int dataLen = buffer.getInt();
+        if (dataLen < 0 || buffer.remaining() < dataLen) {
             throw new IllegalArgumentException("Invalid notify message payload: data truncated");
         }
-        data = new byte[length];
+        data = new byte[dataLen];
         buffer.get(data);
     }
 

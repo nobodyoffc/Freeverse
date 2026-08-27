@@ -18,10 +18,10 @@ import server.HttpRequestChecker;
 import utils.http.AuthType;
 import data.feipData.Nid;
 
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import static constants.FieldNames.*;
 import static constants.IndicesNames.FREER;

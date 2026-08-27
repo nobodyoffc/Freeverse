@@ -5,6 +5,13 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * CUBIC-based congestion control.
  *
+ * The CUBIC growth function operates on the window measured in PACKETS
+ * (MSS units), per RFC 8312 — running it on a byte-denominated window makes
+ * K = cbrt(wMax*(1-beta)/C) come out in the tens of seconds (e.g. 47s for a
+ * 137KB window), freezing all growth between loss events while each loss
+ * still multiplies the window down by beta. That asymmetry pinned real-WAN
+ * uploads at the minimum window (~35KB/s on a 1MB/s path).
+ *
  * Thread safety: onSend() is called from the sender thread, onAck() from the
  * ACK-processing thread, and canSend() from the sender thread.  All methods
  * that mutate shared state are synchronized to prevent lost updates on
@@ -19,6 +26,11 @@ public class CongestionControl {
     // the sender to stall after a congestion collapse with almost no recovery.
     private static final long MIN_WINDOW = 14400; // ~10 packets for 1350-byte MTU
     private static final long MAX_WINDOW = 100_000_000; // 100 MB
+
+    // Segment size used to convert the byte window into CUBIC's packet units.
+    // An estimate of the typical full packet is sufficient (RFC 8312 only
+    // needs a consistent unit); internet MTU config sends ~1350-byte packets.
+    private static final double MSS = 1350.0;
 
     // CUBIC parameters
     private static final double BETA = 0.7;
@@ -63,13 +75,29 @@ public class CongestionControl {
                 }
             }
             case CONGESTION_AVOIDANCE, RECOVERY -> {
-                // CUBIC growth function
+                // CUBIC growth function in packet (MSS) units per RFC 8312:
+                //   K = cbrt(W_max * (1-beta) / C), W in packets, K in seconds
+                //   W_cubic(t) = C * (t-K)^3 + W_max
+                // At t=0 this equals beta*W_max (the post-loss window), rises
+                // back to W_max by t=K (a few seconds), then probes beyond it.
                 double t = (System.currentTimeMillis() - epochStart) / 1000.0;
-                double k = Math.cbrt(wMax * (1 - BETA) / C);
-                double target = C * Math.pow(t - k, 3) + wMax;
+                double wMaxPkts = wMax / MSS;
+                double k = Math.cbrt(wMaxPkts * (1 - BETA) / C);
+                double targetPkts = C * Math.pow(t - k, 3) + wMaxPkts;
+                long target = (long) (targetPkts * MSS);
 
-                if (target > congestionWindow) {
-                    congestionWindow = (long) target;
+                // Reno-style AIMD floor (~1 MSS per window of ACKed data), so
+                // growth never stalls in the flat region of the cubic curve.
+                long renoIncrement = Math.max(1,
+                        (long) (MSS * ackedBytes / Math.max(1, congestionWindow)));
+
+                // Growth per ACK is capped at the ACKed byte count (slow-start
+                // rate): guards against a huge cubic target after an idle or
+                // app-limited period from opening the window in one jump.
+                long growth = Math.max(renoIncrement, target - congestionWindow);
+                growth = Math.min(growth, ackedBytes);
+                if (growth > 0) {
+                    congestionWindow += growth;
                 }
 
                 if (state == State.RECOVERY) {

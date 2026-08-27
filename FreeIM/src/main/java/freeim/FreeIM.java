@@ -3,6 +3,7 @@ package freeim;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import core.crypto.KeyTools;
+import fudp.FileTransfer;
 import fudp.node.FudpNode;
 import fudp.node.NodeConfig;
 import fudp.node.NodeEventListener;

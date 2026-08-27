@@ -705,39 +705,49 @@ public class StartFapiClient {
             return;
         }
 
-        System.out.println("Found " + files.size() + " file(s).");
+        int total = files.size();
+        System.out.println("Found " + total + " file(s).");
         java.nio.file.Path dirBase = dir.toPath();
         // Keep insertion order so the saved map mirrors the traversal order.
         Map<String, String> didMap = new java.util.LinkedHashMap<>();
         int uploaded = 0;
         int skipped = 0;
         int failed = 0;
-        for (java.io.File file : files) {
+        for (int i = 0; i < total; i++) {
+            java.io.File file = files.get(i);
             String relativePath = dirBase.relativize(file.toPath()).toString();
+            // Overall [i/N] prefix so the user sees how far along the whole batch is.
+            String prefix = "[" + (i + 1) + "/" + total + "] ";
             String did;
             try {
                 did = Hash.sha256x2(file);
             } catch (java.io.IOException e) {
-                System.out.println("Failed to read " + relativePath + ": " + e.getMessage());
+                System.out.println(prefix + "Failed to read " + relativePath + ": " + e.getMessage());
                 failed++;
                 continue;
             }
 
             // Check first: if the server already holds this did, skip the upload but still record it.
             if (fapiClient.diskCheck(did) != null) {
-                System.out.println("Already on server, skip: " + relativePath + " (did=" + did + ")");
+                System.out.println(prefix + "Already on server, skip: " + relativePath + " (did=" + did + ")");
                 didMap.put(relativePath, did);
                 skipped++;
                 continue;
             }
 
-            System.out.println("Uploading (" + label + "): " + relativePath);
-            data.fcData.DiskItem result = permanent ? fapiClient.diskCarve(file) : fapiClient.diskPut(file);
+            System.out.println(prefix + "Uploading (" + label + "): " + relativePath);
+            long fileSize = file.length();
+            ProgressBar progressBar = new ProgressBar(prefix + label, fileSize);
+            data.fcData.DiskItem result = permanent
+                    ? fapiClient.diskCarve(file, progressBar::update)
+                    : fapiClient.diskPut(file, null, progressBar::update);
             if (result != null) {
+                progressBar.finish();
                 didMap.put(relativePath, result.getId() != null ? result.getId() : did);
                 uploaded++;
             } else {
-                System.out.println("Upload failed: " + relativePath);
+                progressBar.fail();
+                System.out.println("Upload failed: " + relativePath + "(did="+did+")");
                 printLastError();
                 failed++;
             }

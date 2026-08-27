@@ -1,4 +1,4 @@
-package freeim;
+package fudp;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;

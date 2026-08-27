@@ -13,11 +13,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,7 +71,7 @@ public class GetPrices extends HttpServlet {
      * @return calculated price, or 0.05 as fallback
      */
     private double getPriceFromSwapInfo() {
-        String apiUrl = "https://cid.cash/APIP/swapHall/v1/swapInfo";
+        String apiUrl = "https://freecash.info/APIP/swapHall/v1/swapInfo";
         double defaultPrice = 0.05;
         
         try {

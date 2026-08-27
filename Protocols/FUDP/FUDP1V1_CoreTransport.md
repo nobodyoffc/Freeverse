@@ -113,9 +113,11 @@ Receivers MUST reject encrypted DATA/ACK packets with an unrecognized version. P
 
 #### Connection ID (bytes 5-12)
 
-A 64-bit random value that identifies the sender's local connection record. Each endpoint allocates the value it writes into outbound DATA and ACK packets. The Java reference implementation maps inbound packets to a connection primarily after decryption by peer identity and source address, then stores an endpoint-local connection ID for routing, replay windows, and application callbacks.
+A 64-bit random value that identifies the sender's local connection record. Each endpoint allocates the value it writes into outbound DATA and ACK packets.
 
 Implementations MUST use a cryptographically secure random number generator or equivalent secure randomness for locally allocated Connection IDs.
+
+**Connection ID is the PRIMARY routing key for inbound packets, not source address.** After decryption, an implementation MUST first look up the local connection record by the remote peer's Connection ID (the value the peer itself stamped in the packet, learned from the peer's earlier packets), and only fall back to `(peer identity, source address)` lookup when that remote Connection ID has not been seen before. Address is treated purely as the current network path for an already-identified connection, not as part of the connection's identity. See [Path Migration](#path-migration) for the rationale and required behavior when a peer's source address changes mid-connection.
 
 #### Packet Number (bytes 13-20)
 
@@ -504,6 +506,8 @@ Stream IDs are varint-encoded unsigned integers. The two least significant bits 
 | 0x02 | Initiator | Unidirectional |
 | 0x03 | Responder | Unidirectional |
 
+See FUDP2 (Stream ID Encoding) for the required parity-assignment rule (bit 0) and the failure mode it closes: two independent local allocators sharing one ID space cannot stay collision-free by convention alone, so each endpoint MUST derive its parity deterministically rather than by negotiation.
+
 ---
 
 ## Connection Lifecycle
@@ -578,6 +582,58 @@ A peer (identified by its FID / public key) MAY maintain multiple simultaneous c
 
 Implementations SHOULD enforce a maximum number of concurrent connections per peer. The recommended limit is **5** connections per peer. The Java reference implementation evicts the idlest or least-recently-used connection when this limit is exceeded.
 
+### Path Migration
+
+A peer's network-visible source address can change mid-connection without the peer restarting — most commonly a NAT rebinding the mapped external port on a long-lived UDP flow (observed in the field on mobile/carrier NAT and consumer routers after tens of seconds to a few minutes of the path being otherwise idle, e.g. while a large upload's ACKs are the only traffic in one direction). This is NOT a peer restart: the Session Epoch (see [Encrypted Payload Structure](#encrypted-payload-structure)) is unchanged, and the peer's connection state — packet-number space, open streams, congestion window — is still valid and MUST be preserved.
+
+An implementation that keys connection lookup by `(peer identity, source address)` cannot distinguish this from a genuinely new connection: it creates a second connection record at the new address while the first is still tracked at the old one. This causes cascading failure:
+
+1. The new record's packet numbers start fresh (e.g. from a low value), which the *old* record's replay-protection window judges as replayed/stale traffic — packets may be silently dropped.
+2. Outbound packets (ACKs, responses) already queued or newly generated for the old record are sent to the now-unreachable old address and are never delivered.
+3. If the implementation's local stream ID allocator is a single per-connection counter (see [Stream ID Encoding](#stream-id-encoding) requirements in FUDP2 for details), the phantom new connection restarts that counter from its base value. If the base value coincides with a stream ID the peer already used and retired on the "real" connection, the peer's stream-retirement tombstone silently drops every frame of the response sent on the colliding ID — the request succeeds server-side but the requester observes only a timeout.
+
+Implementations MUST therefore resolve inbound packets to a connection primarily by the sender's Connection ID (per [Connection ID](#connection-id-bytes-5-12)), not by source address, and MUST migrate an existing connection's tracked address rather than creating a new connection when:
+
+- The decrypted peer identity matches an existing connection's peer identity, AND
+- The packet's Connection ID matches that connection's previously observed remote Connection ID, AND
+- The packet's source address differs from the connection's currently tracked address.
+
+```
+PROCEDURE resolve_connection(senderId, remoteConnId, sourceAddress):
+    conn = lookup_by_remote_connection_id(remoteConnId)
+    IF conn != NULL AND conn.peerId == senderId:
+        IF conn.trackedAddress != sourceAddress:
+            migrate_address(conn, sourceAddress)   -- keep all connection state
+        RETURN conn
+
+    conn = lookup_or_create_by(senderId, sourceAddress)
+    IF conn.knownRemoteConnectionId == 0:
+        bind_remote_connection_id(remoteConnId, conn)
+    ELSE IF conn.knownRemoteConnectionId != remoteConnId:
+        -- Same peer+address, but the peer is using a DIFFERENT connection id
+        -- than before: it rebuilt its connection object (fresh packet-number
+        -- space and streams) without a full restart. Treat like peer restart.
+        reset_connection_state(conn)               -- see Peer Restart handling
+        bind_remote_connection_id(remoteConnId, conn)
+    RETURN conn
+```
+
+Migration MUST preserve the connection's packet-number space, replay-protection window, open streams (including retired-stream tombstones), congestion controller state, and RTT estimate — only the tracked destination address changes. Migration SHOULD be logged (address, connection ID) for operational diagnosis, since a rebind is otherwise invisible to the application layer.
+
+The second branch of the procedure above also handles a related but distinct case: the same peer identity and address are observed, but with a Connection ID the implementation has not associated with that connection before. This means the peer rebuilt its local connection object (e.g. after an internal reconnect) while keeping the same identity and address. Because the peer's packet-number space and stream allocator have restarted, the implementation MUST reset its own tracked state for that connection (equivalent to the [Peer Restart](#connection-establishment-handshake) handling below) rather than reject the new packet numbers as replays.
+
+### Peer Endpoint Selection
+
+An implementation MAY persist multiple known network addresses (endpoints) for the same peer FID, accumulated from outbound connections, inbound connections, and configuration. Persisted endpoints go stale: servers change IP addresses, and addresses learned from inbound connections behind NAT (ephemeral source ports) are usually not reachable for new outbound traffic.
+
+When initiating communication with a peer, implementations MUST prefer the most recently **verified** endpoint — one that answered a HELLO with a PUBLIC_KEY matching the peer's FID, or that produced authenticated (decryptable) traffic. In particular:
+
+1. When an endpoint answers a HELLO, it SHOULD be promoted to the peer's primary endpoint so subsequent connections and retries target it before older persisted endpoints. Demoted endpoints MAY be retained as fallbacks.
+2. Creating a local connection record is not evidence of reachability. An outbound connection that never reaches ESTABLISHED SHOULD be discarded after a request timeout (e.g. an unanswered application-level PING) rather than reused for later requests.
+3. Endpoints learned from inbound connections SHOULD NOT take precedence over endpoints verified by outbound handshakes.
+
+Without these rules, a stale primary endpoint can shadow a freshly verified address indefinitely: each cycle re-verifies the correct address via HELLO, then sends application traffic to the stale endpoint and times out.
+
 ### Connection Termination
 
 Either endpoint MAY terminate the connection at any time:
@@ -651,6 +707,11 @@ This document defines FUDP Core Transport version 1. Future versions MAY introdu
 The Version field in the packet header identifies the wire format. The Java reference implementation accepts version `1` on encrypted DATA and ACK packets and silently drops encrypted packets with unsupported versions. CONTROL packets are plaintext and version-agnostic in v1.
 
 Backward-compatible extensions (e.g., new frame types with type values not defined in this specification) MAY be introduced without incrementing the version number. The Java reference implementation currently treats an unknown frame type as a packet parse error and drops the packet.
+
+|Ver|Date|Changes|
+|---|---|---|
+|1|2026-03-28|Initial specification.|
+|1 (rev)|2026-07-14|Added [Path Migration](#path-migration): Connection ID (not source address) MUST be the primary key for resolving inbound packets to a connection, and an address change on an already-known Connection ID MUST migrate the existing connection rather than create a phantom new one. Discovered via a field failure where a NAT rebind mid-upload caused colliding stream IDs between a phantom connection and the real one, silently swallowing responses via stream-retirement tombstones.
 
 ---
 

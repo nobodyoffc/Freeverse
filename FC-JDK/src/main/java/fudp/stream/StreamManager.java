@@ -5,8 +5,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Deque;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -26,12 +29,39 @@ public class StreamManager {
     private final AtomicLong dataReceived = new AtomicLong(0);
     private final AtomicLong dataSent = new AtomicLong(0);
 
+    // Local stream ID parity (bit 0): keeps the two endpoints' allocators in
+    // DISJOINT ID spaces. Historically both sides allocated 0,4,8,... and only
+    // stayed collision-free while their allocators advanced in lockstep (one
+    // response per request). Any desync (a rebuilt connection restarting one
+    // allocator, a retried request, ...) made one side allocate an ID the
+    // other side had already used and RETIRED — its tombstone then silently
+    // swallowed the new stream (field failure: responses never delivered).
+    // The parity is derived deterministically on both ends from comparing
+    // FIDs, so no negotiation is needed: lower FID uses even IDs, higher odd.
+    private volatile int localStreamParity = 0;
+    private volatile boolean parityInitialized = false;
+
     public StreamManager(PeerConnection connection) {
         this.connection = connection;
         this.streams = new ConcurrentHashMap<>();
-        // Stream ID bit 0: 0 = initiated by lower public key, 1 = initiated by higher
-        // For now, we'll use even numbers for local streams
+        // Stream ID bit 0: 0 = initiated by lower FID, 1 = initiated by higher
+        // (set via initLocalStreamParity once the local FID is known).
         this.nextLocalStreamId = new AtomicLong(0);
+    }
+
+    /**
+     * Set the local allocator's ID parity (0 or 1). Idempotent; must be called
+     * before the first openStream() — Protocol wires it when the connection is
+     * first used. No-op once streams have been allocated.
+     */
+    public void initLocalStreamParity(int parity) {
+        if (parityInitialized) return;
+        synchronized (this) {
+            if (parityInitialized) return;
+            localStreamParity = parity & 0x01;
+            nextLocalStreamId.compareAndSet(0, localStreamParity);
+            parityInitialized = true;
+        }
     }
 
     /**
@@ -113,6 +143,48 @@ public class StreamManager {
         streams.remove(streamId);
     }
 
+    // Retired remote streams: FIN received and message fully delivered.
+    // A late/retransmitted frame for a retired stream must be DROPPED, not
+    // re-create the stream via getOrCreateStream — otherwise the entire message
+    // is reassembled and processed a second time (duplicate request/response;
+    // for requests this means the server re-executes and re-charges the call).
+    // A remote peer never reuses a stream ID on the same connection (its
+    // allocator is monotonic), so retirement is permanent; the set is bounded
+    // to cap memory. Only remote-completed streams are retired — sender-side
+    // cleanup keeps using removeStream, since local and remote stream IDs share
+    // the same number space and a tombstone on a local ID could block a
+    // legitimate future remote stream.
+    private static final int MAX_RETIRED_STREAMS = 4096;
+    private final Set<Long> retiredStreams = ConcurrentHashMap.newKeySet();
+    private final Deque<Long> retiredOrder = new ConcurrentLinkedDeque<>();
+
+    /**
+     * Retire a remote stream after its message has been fully delivered.
+     * Subsequent frames for this stream ID are dropped by the frame handler.
+     */
+    public void retireStream(long streamId) {
+        streams.remove(streamId);
+        log.debug("[StreamManager] retiring stream {} (conn={})", streamId,
+                connection != null ? connection.getConnectionId() : -1);
+        if (retiredStreams.add(streamId)) {
+            retiredOrder.addLast(streamId);
+            while (retiredOrder.size() > MAX_RETIRED_STREAMS) {
+                Long oldest = retiredOrder.pollFirst();
+                if (oldest != null) {
+                    retiredStreams.remove(oldest);
+                }
+            }
+        }
+    }
+
+    /**
+     * @return true if this remote stream already delivered its message and
+     *         incoming frames for it should be dropped.
+     */
+    public boolean isRetired(long streamId) {
+        return retiredStreams.contains(streamId);
+    }
+
     /**
      * Get all streams
      */
@@ -153,9 +225,13 @@ public class StreamManager {
      */
     public void resetForRestart() {
         streams.clear();
-        nextLocalStreamId.set(0);
+        nextLocalStreamId.set(localStreamParity);
         dataReceived.set(0);
         dataSent.set(0);
+        // The restarted peer's stream IDs start over — old tombstones
+        // would wrongly drop its new streams.
+        retiredStreams.clear();
+        retiredOrder.clear();
     }
 
     /**

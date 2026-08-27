@@ -210,10 +210,12 @@ public class FinanceParser {
                     log.info("Content is null");
                     return null;
                 }
-                if (opre.getHeight() > StartFEIP.CddCheckHeight && opre.getCdd() < StartFEIP.CddRequired * FeipConstants.CDD_MULTIPLIER)
-                {
-                    log.info("Height is greater than CddCheckHeight and Cdd is less than CddRequired");
-                    return null;
+                if (opre.getHeight() > StartFEIP.CddCheckHeight) {
+                    Long cdd = opre.getCdd();
+                    if (cdd == null || cdd < StartFEIP.CddRequired * FeipConstants.CDD_MULTIPLIER) {
+                        log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
+                        return null;
+                    }
                 }
                 proofHist.setId(opre.getId());
                 proofHist.setProofId(opre.getId());
@@ -233,9 +235,20 @@ public class FinanceParser {
                 proofHist.setAllSignsRequired(proofRaw.isAllSignsRequired());
                 break;
             case OpNames.SIGN:
+                if(proofRaw.getProofId()==null){
+                    log.info("Proof id is null");
+                    return null;
+                }
+                proofHist.setProofId(proofRaw.getProofId());
+                proofHist.setId(opre.getId());
+                proofHist.setHeight(opre.getHeight());
+                proofHist.setIndex(opre.getTxIndex());
+                proofHist.setTime(opre.getTime());
+                proofHist.setSigner(opre.getSigner());
+                break;
             case OpNames.DESTROY:
-                if(proofRaw.getProofIds()==null){
-                    log.info("Proof IDs is null");
+                if(proofRaw.getProofIds()==null||proofRaw.getProofIds().isEmpty()){
+                    log.info("Proof ids is null or empty");
                     return null;
                 }
                 proofHist.setProofIds(proofRaw.getProofIds());
@@ -785,6 +798,9 @@ public class FinanceParser {
                 }
 
                 proof.setOwner(proofHist.getRecipient());
+                proof.setLastTxId(proofHist.getId());
+                proof.setLastTime(proofHist.getTime());
+                proof.setLastHeight(proofHist.getHeight());
 
                 Proof finalProof1 = proof;
                 IndexResponse result3 = esClient.index(i->i.index(IndicesNames.PROOF).id(proofHist.getProofId()).document(finalProof1));
@@ -808,6 +824,7 @@ public class FinanceParser {
                     return false;
                 }
                 BulkRequest.Builder br = new BulkRequest.Builder();
+                int destroyedCount = 0;
                 for(Proof proofItem:result.getResultList()){
                     if(Boolean.TRUE.equals(proofItem.isDestroyed())){
                         log.info("Proof item is destroyed");
@@ -821,14 +838,23 @@ public class FinanceParser {
 
                     proofItem.setDestroyed(true);
                     proofItem.setActive(false);
+                    proofItem.setLastTxId(proofHist.getId());
+                    proofItem.setLastTime(proofHist.getTime());
+                    proofItem.setLastHeight(proofHist.getHeight());
 
                     br.operations(op -> op
                         .index(idx -> idx
-                            .index(IndicesNames.PROTOCOL)
+                            .index(IndicesNames.PROOF)
                             .id(proofItem.getId())
                             .document(proofItem)
                         )
                     );
+                    destroyedCount++;
+                }
+
+                if(destroyedCount==0){
+                    log.info("No proof to destroy");
+                    return false;
                 }
 
                 BulkResponse result4 = esClient.bulk(br.build());

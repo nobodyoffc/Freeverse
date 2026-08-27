@@ -10,6 +10,7 @@ import utils.Hex;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +24,7 @@ public class StartFudpNode implements NodeEventListener {
     private static final String VERSION = "1.0.0";
 
     private FudpNode node;
+    private FileTransfer fileTransfer;
     private byte[] privateKey;
     private BufferedReader br;
     private boolean running = false;
@@ -52,6 +54,8 @@ public class StartFudpNode implements NodeEventListener {
         mainMenu.add("Performance Stats", this::showPerformanceStats);
         mainMenu.add("Peer Management", this::peerMenu);
         mainMenu.add("Send Notify", this::sendNotifyMenu);
+        mainMenu.add("Send File", this::sendFileMenu);
+        mainMenu.add("Pending File Offers", this::fileOffersMenu);
         mainMenu.add("Ping Peer", this::pingPeer);
         mainMenu.add("Send Request", this::sendRequest);
         mainMenu.add("Generate New Key", this::generateNewKey);
@@ -122,6 +126,7 @@ public class StartFudpNode implements NodeEventListener {
             node = new FudpNode(privateKey, config);
             node.setEventListener(this);
             node.start();
+            fileTransfer = new FileTransfer(node, Paths.get(config.getDataDir(), "downloads"));
             running = true;
 
             System.out.println("\nNode started successfully!");
@@ -453,6 +458,62 @@ public class StartFudpNode implements NodeEventListener {
         }
     }
 
+    private void sendFileMenu() {
+        if (node == null || !node.isRunning()) {
+            System.out.println("Start node first.");
+            return;
+        }
+
+        try {
+            System.out.print("Peer FID or alias: ");
+            String peer = br.readLine().trim();
+            if (peer.isEmpty()) return;
+
+            Peer target = node.getPeer(peer);
+            if (target == null) {
+                System.out.println("Unknown peer: " + peer);
+                return;
+            }
+
+            System.out.print("File path: ");
+            String path = br.readLine().trim();
+            if (path.isEmpty()) return;
+
+            if (path.startsWith("~")) {
+                path = System.getProperty("user.home") + path.substring(1);
+            }
+
+            fileTransfer.sendFile(target.getId(), new File(path));
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private void fileOffersMenu() {
+        if (node == null || !node.isRunning()) {
+            System.out.println("Start node first.");
+            return;
+        }
+
+        fileTransfer.listPendingOffers();
+        try {
+            System.out.print("Accept (a) / Reject (r) / Back (Enter): ");
+            String input = br.readLine().trim().toLowerCase();
+            if (input.isEmpty()) return;
+
+            System.out.print("Request ID: ");
+            long requestId = Long.parseLong(br.readLine().trim());
+
+            if ("a".equals(input)) {
+                fileTransfer.acceptOffer(requestId);
+            } else if ("r".equals(input)) {
+                fileTransfer.rejectOffer(requestId);
+            }
+        } catch (Exception e) {
+            // Back to menu
+        }
+    }
+
     private void pingPeer() {
         if (node == null || !node.isRunning()) {
             System.out.println("Start node first.");
@@ -561,11 +622,21 @@ public class StartFudpNode implements NodeEventListener {
 
     @Override
     public void onRequestReceived(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {
+        if (fileTransfer != null && fileTransfer.onRequestReceived(peerId, connectionId, requestId, serviceName, data)) {
+            return;
+        }
         System.out.println("\n[REQUEST] From " + peerId + " (conn=" + connectionId + ") - Service: " + serviceName);
         if (data != null) {
             System.out.println("  Data: " + new String(data));
         }
         System.out.println("  RequestId: " + requestId + " (use respond command to reply)");
+    }
+
+    @Override
+    public void onStreamAssemblyProgress(String peerId, long streamId, long bytesAssembled) {
+        if (fileTransfer != null) {
+            fileTransfer.onAssemblyProgress(peerId, streamId, bytesAssembled);
+        }
     }
 
     @Override

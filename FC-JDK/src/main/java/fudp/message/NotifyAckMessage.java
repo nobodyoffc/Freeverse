@@ -39,11 +39,11 @@ public class NotifyAckMessage extends AppMessage {
     }
 
     @Override
-    public void decodePayload(byte[] payload) {
-        if (payload == null || payload.length < 8) {
+    public void decodePayload(byte[] buf, int offset, int length) {
+        if (buf == null || length < 8) {
             throw new IllegalArgumentException("Invalid notify ack payload");
         }
-        ByteBuffer buffer = ByteBuffer.wrap(payload);
+        ByteBuffer buffer = ByteBuffer.wrap(buf, offset, length);
         ackedMessageId = buffer.getLong();
     }
 

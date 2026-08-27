@@ -1869,7 +1869,17 @@ public class StartApipClient {
                 didMap.put(relativePath, did);
                 uploaded++;
             } else {
-                JsonUtils.printJson(replyBody);
+                // When the server/proxy rejects the upload (e.g. 413 Request Entity Too Large),
+                // responseBody stays null and the real cause lives on the client event. Surface it
+                // instead of printing "The object is null.".
+                if (replyBody != null) {
+                    JsonUtils.printJson(replyBody);
+                } else {
+                    Integer eventCode = apipClient.getFcClientEvent().getCode();
+                    String eventMsg = apipClient.getFcClientEvent().getMessage();
+                    System.out.println(progress + "Upload failed for " + relativePath
+                            + " (" + file.length() + " bytes): code=" + eventCode + ", message=" + eventMsg);
+                }
                 failed++;
             }
         }

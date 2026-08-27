@@ -9,6 +9,9 @@ import fapi.components.disk.DiskSyncSource;
 import fapi.components.disk.DiskSyncState;
 import fapi.menu.BalanceIncomeMenu;
 import fapi.service.FapiServer;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.Appender;
 import fudp.node.FudpNode;
 import fudp.security.DDoSConfig;
 import org.slf4j.Logger;
@@ -35,10 +38,14 @@ import java.util.Map;
 public class StartFapiServer {
     private static final Logger log = LoggerFactory.getLogger(StartFapiServer.class);
 
-    public static final String SERVER_NAME = "FAPI Server v1.0";
-    
+    public static final String SERVER_NAME = "FAPI Server v2.0";
+
+    public static final String KEY_CONSOLE_LOG_ENABLED = "consoleLogEnabled";
+    private static final String CONSOLE_APPENDER_NAME = "STDOUT";
+
     private static BufferedReader br;
     private static FapiServer fapiServer;
+    private static Appender<ILoggingEvent> detachedConsoleAppender;
 
     public static void main(String[] args) {
         Menu.welcome(SERVER_NAME);
@@ -74,8 +81,9 @@ public class StartFapiServer {
                 }
             }
             
+            applyPersistedConsoleLogSetting();
             showMainMenu();
-            
+
         } catch (Exception e) {
             log.error("Failed to start FAPI Server", e);
         } finally {
@@ -135,6 +143,7 @@ public class StartFapiServer {
             menu.add("Settings", () -> {
                 fapiServer.getSettings().setting(br, ServiceType.FAPI_No1_NrC7);
             });
+            menu.add("Console Log", StartFapiServer::consoleLogMenu);
             menu.add("DDoS Defence", StartFapiServer::ddosDefenceMenu);
             menu.add("DOCK Forward", StartFapiServer::dockForwardMenu);
             menu.add("DISK Sync", StartFapiServer::diskSyncMenu);
@@ -175,6 +184,85 @@ public class StartFapiServer {
         Menu.anyKeyToContinue(br);
     }
     
+    /**
+     * Console log display toggle menu.
+     * Logs are always written to the file appender; this only controls console output.
+     */
+    private static void consoleLogMenu() {
+        boolean enabled = isConsoleLogEnabled();
+        System.out.println("\n=== Console Log ===");
+        System.out.println("Current status: " + (enabled ? "ON" : "OFF"));
+        System.out.println("Logs are always written to logs/fapiServer.log; this switch only controls console display.");
+        System.out.println();
+
+        try {
+            System.out.print("Toggle console log? (y/N): ");
+            String input = br.readLine().trim().toLowerCase();
+            if ("y".equals(input) || "yes".equals(input)) {
+                boolean newState = !enabled;
+                if (!setConsoleLogEnabled(newState)) {
+                    System.out.println("Logback is not in use; console logging can not be controlled at runtime.");
+                } else {
+                    Map<String, Object> settingMap = getOrCreateSettingMap();
+                    settingMap.put(KEY_CONSOLE_LOG_ENABLED, newState);
+                    saveSettings();
+                    System.out.println("Console log is now " + (isConsoleLogEnabled() ? "ON" : "OFF") + " (effective immediately)");
+                }
+            } else {
+                System.out.println("No change.");
+            }
+        } catch (Exception e) {
+            log.error("Error in console log menu", e);
+        }
+        Menu.anyKeyToContinue(br);
+    }
+
+    /**
+     * Re-apply the persisted console log setting after bootstrap.
+     */
+    private static void applyPersistedConsoleLogSetting() {
+        Map<String, Object> sm = fapiServer.getSettings().getSettingMap();
+        if (sm == null || !sm.containsKey(KEY_CONSOLE_LOG_ENABLED)) return;
+        Object val = sm.get(KEY_CONSOLE_LOG_ENABLED);
+        boolean enabled = val instanceof Boolean ? (Boolean) val : !"false".equalsIgnoreCase(String.valueOf(val));
+        if (!enabled) setConsoleLogEnabled(false);
+    }
+
+    private static ch.qos.logback.classic.Logger getRootLogger() {
+        if (LoggerFactory.getILoggerFactory() instanceof LoggerContext context) {
+            return context.getLogger(Logger.ROOT_LOGGER_NAME);
+        }
+        return null;
+    }
+
+    private static boolean isConsoleLogEnabled() {
+        ch.qos.logback.classic.Logger root = getRootLogger();
+        return root != null && root.getAppender(CONSOLE_APPENDER_NAME) != null;
+    }
+
+    /**
+     * Attach or detach the console appender on the root logger.
+     * The file appender is untouched, so nothing is lost while the console is off.
+     *
+     * @return false when logback is not the active SLF4J backend
+     */
+    private static boolean setConsoleLogEnabled(boolean enabled) {
+        ch.qos.logback.classic.Logger root = getRootLogger();
+        if (root == null) return false;
+        if (enabled) {
+            if (root.getAppender(CONSOLE_APPENDER_NAME) == null && detachedConsoleAppender != null) {
+                root.addAppender(detachedConsoleAppender);
+            }
+        } else {
+            Appender<ILoggingEvent> stdout = root.getAppender(CONSOLE_APPENDER_NAME);
+            if (stdout != null) {
+                detachedConsoleAppender = stdout;
+                root.detachAppender(stdout);
+            }
+        }
+        return true;
+    }
+
     /**
      * DDoS防御开关菜单
      */
@@ -273,7 +361,8 @@ public class StartFapiServer {
         if (syncManager == null) {
             System.out.println("Sync manager not initialized (no diskSyncSources configured).");
         } else {
-            System.out.println("Running: " + syncManager.isRunning());
+            System.out.println("Running: " + syncManager.isRunning()
+                    + (syncManager.isSyncing() ? " (sync cycle in progress)" : ""));
             System.out.println("Sources:");
             for (DiskSyncSource src : syncManager.getSources()) {
                 System.out.printf("  SID: %s  URL: %s  Enabled: %s\n", src.getSid(), src.getUrl(), src.isEnabled());
@@ -284,13 +373,18 @@ public class StartFapiServer {
                 System.out.println("\nSync progress:");
                 for (Map.Entry<String, DiskSyncState> entry : states.entrySet()) {
                     DiskSyncState s = entry.getValue();
-                    System.out.printf("  [%s] lastSince=%s  lastId=%s  items=%d  bytes=%d  lastTime=%s\n",
+                    System.out.printf("  [%s] lastSince=%s  lastId=%s  items=%d  bytes=%d  pendingRetry=%d  lastTime=%s\n",
                             entry.getKey(),
                             s.getLastSyncSince() != null ? s.getLastSyncSince() : "-",
                             s.getLastSyncId() != null ? abbreviate(s.getLastSyncId()) : "-",
                             s.getItemsSynced(),
                             s.getBytesSynced(),
+                            s.getFailedItems().size(),
                             s.getLastSyncTime() > 0 ? new java.util.Date(s.getLastSyncTime()).toString() : "never");
+                    if (s.getLastError() != null) {
+                        System.out.printf("      lastError: %s (%s)\n", s.getLastError(),
+                                s.getLastErrorTime() > 0 ? new java.util.Date(s.getLastErrorTime()).toString() : "-");
+                    }
                 }
             } else {
                 System.out.println("\nNo sync progress recorded yet.");
@@ -308,16 +402,13 @@ public class StartFapiServer {
             Menu.anyKeyToContinue(br);
             return;
         }
-        System.out.println("Starting manual sync...");
-        new Thread(() -> {
-            try {
-                syncManager.syncAll();
-                System.out.println("Manual sync completed.");
-            } catch (Exception e) {
-                System.out.println("Manual sync failed: " + e.getMessage());
-            }
-        }, "disk-sync-manual").start();
-        System.out.println("Sync triggered in background.");
+        if (syncManager.isSyncing()) {
+            System.out.println("A sync cycle is already in progress.");
+        } else if (syncManager.triggerSync()) {
+            System.out.println("Sync triggered in background. Check 'View sync status' for progress.");
+        } else {
+            System.out.println("Sync manager is not running.");
+        }
         Menu.anyKeyToContinue(br);
     }
 
@@ -361,6 +452,7 @@ public class StartFapiServer {
         menu.add("Add server", () -> addDiskServer(settingMap));
         menu.add("Remove server", () -> removeDiskServer(settingMap));
         menu.add("Enable/Disable server", () -> toggleDiskServer(settingMap));
+        menu.add("Set recharge amount", () -> setDiskServerRecharge(settingMap));
         menu.showAndSelect(br);
     }
 
@@ -375,19 +467,26 @@ public class StartFapiServer {
         for (int i = 0; i < sources.size(); i++) {
             Map<String, Object> s = sources.get(i);
             boolean enabled = !"false".equals(String.valueOf(s.getOrDefault("enabled", true)));
-            System.out.printf("  %d. [%s] sid=%s  url=%s\n",
+            System.out.printf("  %d. [%s] sid=%s  url=%s  recharge=%s\n",
                     i + 1, enabled ? "ON" : "OFF",
-                    s.getOrDefault("sid", "-"), s.getOrDefault("url", "-"));
+                    s.getOrDefault("sid", "-"), s.getOrDefault("url", "-"),
+                    formatRechargeFch(s));
         }
         System.out.println("====================\n");
         Menu.anyKeyToContinue(br);
     }
 
+    private static String formatRechargeFch(Map<String, Object> source) {
+        Object v = source.get("rechargeFch");
+        if (v instanceof Number n && n.doubleValue() > 0) {
+            return n.doubleValue() + " FCH";
+        }
+        return "default";
+    }
+
     private static void addDiskServer(Map<String, Object> settingMap) {
         String sid = ui.Inputer.inputString(br, "Input the SID of the remote FAPI DISK service:");
         if (sid == null || sid.isEmpty()) return;
-        String url = ui.Inputer.inputString(br, "Input the URL (host:port) of the remote FAPI DISK service:");
-        if (url == null || url.isEmpty()) return;
 
         java.util.List<Map<String, Object>> sources = getSyncSourceList(settingMap);
         for (Map<String, Object> existing : sources) {
@@ -398,15 +497,95 @@ public class StartFapiServer {
             }
         }
 
+        DiskComponent disk = fapiServer.getComponent(DiskComponent.class);
+        String url = null;
+        Service service = disk != null ? disk.resolveServiceOnChain(sid) : null;
+        if (service != null) {
+            url = fapi.client.FapiClient.normalizeUrl(service.getApiUrl());
+            System.out.println("\nService found on chain:");
+            System.out.println("  Name:  " + (service.getStdName() != null ? service.getStdName() : "-"));
+            System.out.println("  Owner: " + (service.getOwner() != null ? service.getOwner() : "-"));
+            System.out.println("  URL:   " + (url != null ? url : "-"));
+            if (service.isClosed()) {
+                System.out.println("  WARNING: this service is closed on chain.");
+            }
+            if (url != null && !ui.Inputer.askIfYes(br, "Use this service?")) return;
+        }
+        if (url == null) {
+            System.out.println("Could not resolve the service URL from the local chain data.");
+            url = ui.Inputer.inputString(br, "Input the URL (host:port) of the remote FAPI DISK service:");
+            if (url == null || url.isEmpty()) return;
+        }
+
         Map<String, Object> entry = new java.util.HashMap<>();
         entry.put("sid", sid);
         entry.put("url", url);
         entry.put("enabled", true);
+
+        Double rechargeFch = ui.Inputer.inputDouble(br,
+                "Recharge amount per top-up in FCH (empty for default):");
+        if (rechargeFch != null && rechargeFch > 0) {
+            entry.put("rechargeFch", rechargeFch);
+        }
+
         sources.add(entry);
         saveSettings();
-        System.out.println("Added: sid=" + sid + " url=" + url);
-        System.out.println("Restart required to activate the new source.");
+        System.out.println("Added: sid=" + sid + " url=" + url
+                + " recharge=" + formatRechargeFch(entry));
+        reloadDiskSync();
         Menu.anyKeyToContinue(br);
+    }
+
+    private static void setDiskServerRecharge(Map<String, Object> settingMap) {
+        java.util.List<Map<String, Object>> sources = getSyncSourceList(settingMap);
+        if (sources.isEmpty()) {
+            System.out.println("No DISK servers configured.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        System.out.println("\nServers:");
+        for (int i = 0; i < sources.size(); i++) {
+            Map<String, Object> s = sources.get(i);
+            System.out.printf("  %d. sid=%s  url=%s  recharge=%s\n",
+                    i + 1, s.getOrDefault("sid", "-"), s.getOrDefault("url", "-"),
+                    formatRechargeFch(s));
+        }
+        Long idx = ui.Inputer.inputLong(br, "Enter number to set (0 to cancel)", 0L);
+        if (idx == null || idx <= 0 || idx > sources.size()) {
+            System.out.println("Cancelled.");
+            return;
+        }
+        Map<String, Object> target = sources.get(idx.intValue() - 1);
+        Double rechargeFch = ui.Inputer.inputDouble(br,
+                "Recharge amount per top-up in FCH (0 to use default):");
+        if (rechargeFch == null) {
+            System.out.println("No change.");
+            Menu.anyKeyToContinue(br);
+            return;
+        }
+        if (rechargeFch > 0) {
+            target.put("rechargeFch", rechargeFch);
+        } else {
+            target.remove("rechargeFch");
+        }
+        saveSettings();
+        System.out.println("Server sid=" + target.getOrDefault("sid", "-")
+                + " recharge=" + formatRechargeFch(target));
+        reloadDiskSync();
+        Menu.anyKeyToContinue(br);
+    }
+
+    /**
+     * Rebuild the sync manager so settingMap changes take effect immediately.
+     */
+    private static void reloadDiskSync() {
+        DiskComponent disk = fapiServer.getComponent(DiskComponent.class);
+        if (disk != null) {
+            disk.reloadSyncManager();
+            System.out.println("Sync configuration applied (no restart needed).");
+        } else {
+            System.out.println("DISK component not loaded; the configuration will be used when it starts.");
+        }
     }
 
     private static void removeDiskServer(Map<String, Object> settingMap) {
@@ -429,7 +608,7 @@ public class StartFapiServer {
         Map<String, Object> removed = sources.remove(idx.intValue() - 1);
         saveSettings();
         System.out.println("Removed: sid=" + removed.getOrDefault("sid", "-"));
-        System.out.println("Restart required to apply.");
+        reloadDiskSync();
         Menu.anyKeyToContinue(br);
     }
 
@@ -458,7 +637,7 @@ public class StartFapiServer {
         target.put("enabled", !wasEnabled);
         saveSettings();
         System.out.println("Server sid=" + target.getOrDefault("sid", "-") + " is now " + (!wasEnabled ? "ON" : "OFF"));
-        System.out.println("Restart required to apply.");
+        reloadDiskSync();
         Menu.anyKeyToContinue(br);
     }
 
@@ -485,24 +664,28 @@ public class StartFapiServer {
             settingMap.put(DiskSyncManager.KEY_MAX_DATA_SIZE, v);
             saveSettings();
             System.out.println("Set to " + formatBytes(v));
+            reloadDiskSync();
         });
         menu.add("Set maxTotalDiskUsage", () -> {
             Long v = ui.Inputer.inputLong(br, "maxTotalDiskUsage (bytes)", longVal(settingMap, DiskSyncManager.KEY_MAX_TOTAL_DISK_USAGE, DiskSyncManager.DEFAULT_MAX_TOTAL_DISK_USAGE));
             settingMap.put(DiskSyncManager.KEY_MAX_TOTAL_DISK_USAGE, v);
             saveSettings();
             System.out.println("Set to " + formatBytes(v));
+            reloadDiskSync();
         });
         menu.add("Set minDealerBalance", () -> {
             Long v = ui.Inputer.inputLong(br, "minDealerBalance (satoshi)", longVal(settingMap, DiskSyncManager.KEY_MIN_DEALER_BALANCE, DiskSyncManager.DEFAULT_MIN_DEALER_BALANCE));
             settingMap.put(DiskSyncManager.KEY_MIN_DEALER_BALANCE, v);
             saveSettings();
             System.out.println("Set to " + v + " sat");
+            reloadDiskSync();
         });
         menu.add("Set syncIntervalHours", () -> {
             Long v = ui.Inputer.inputLong(br, "diskSyncIntervalHours", longVal(settingMap, DiskSyncManager.KEY_DISK_SYNC_INTERVAL_HOURS, DiskSyncManager.DEFAULT_SYNC_INTERVAL_HOURS));
             settingMap.put(DiskSyncManager.KEY_DISK_SYNC_INTERVAL_HOURS, v);
             saveSettings();
             System.out.println("Set to " + v + " h");
+            reloadDiskSync();
         });
 
         menu.showAndSelect(br);

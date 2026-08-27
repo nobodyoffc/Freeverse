@@ -34,11 +34,19 @@ public class ConnectionManager {
     // Address -> ConnectionId (for identifying which connection a packet belongs to)
     private final ConcurrentHashMap<SocketAddress, Long> addressToConnId;
 
+    // Remote connectionId (the peer's own id, stamped in its packet headers)
+    // -> local connectionId. Primary lookup for incoming packets: it survives
+    // source-address changes (NAT rebind), so the same wire connection keeps
+    // its packet-number space, streams and replay window instead of being
+    // mistaken for a brand-new connection.
+    private final ConcurrentHashMap<Long, Long> remoteConnIdToLocal = new ConcurrentHashMap<>();
+
     // Configurable max connections per FID
     private int maxConnectionsPerFid = DEFAULT_MAX_CONNECTIONS_PER_FID;
 
-    // Loss detection minimum time threshold (passed to new PeerConnections)
-    private long lossDetectionMinThresholdMs = 2000;
+    // Loss detection minimum time threshold (passed to new PeerConnections).
+    // Kept in sync with NodeConfig.lossDetectionMinThresholdMs default.
+    private long lossDetectionMinThresholdMs = 500;
 
     public ConnectionManager() {
         this.connectionsByPeerId = new ConcurrentHashMap<>();
@@ -141,6 +149,39 @@ public class ConnectionManager {
     }
 
     /**
+     * Look up the local connection a peer's packet belongs to, by the REMOTE
+     * connectionId stamped in the packet header.
+     */
+    public PeerConnection getByRemoteConnId(long remoteConnId) {
+        Long local = remoteConnIdToLocal.get(remoteConnId);
+        return local != null ? connectionsByConnId.get(local) : null;
+    }
+
+    /**
+     * Bind the peer's own connectionId to this local connection (learned from
+     * the first packet carrying it).
+     */
+    public void bindRemoteConnId(long remoteConnId, PeerConnection conn) {
+        remoteConnIdToLocal.put(remoteConnId, conn.getConnectionId());
+        conn.setRemoteConnectionId(remoteConnId);
+    }
+
+    public void unbindRemoteConnId(long remoteConnId, PeerConnection conn) {
+        remoteConnIdToLocal.remove(remoteConnId, conn.getConnectionId());
+    }
+
+    /**
+     * Path migration: the peer's packets for an existing connection now come
+     * from a new source address (NAT rebind). Re-point the address index and
+     * the connection's send target.
+     */
+    public void migrateAddress(PeerConnection conn, SocketAddress newAddress) {
+        addressToConnId.remove(conn.getPeerAddress(), conn.getConnectionId());
+        conn.updateAddress(newAddress);
+        addressToConnId.put(newAddress, conn.getConnectionId());
+    }
+
+    /**
      * Get all connections for a peer.
      *
      * @return unmodifiable collection of connections, or empty collection if none
@@ -214,6 +255,9 @@ public class ConnectionManager {
         PeerConnection conn = connectionsByConnId.remove(connectionId);
         if (conn != null) {
             addressToConnId.remove(conn.getPeerAddress());
+            if (conn.getRemoteConnectionId() != 0) {
+                remoteConnIdToLocal.remove(conn.getRemoteConnectionId(), connectionId);
+            }
 
             // Remove from the per-peer map
             ConcurrentHashMap<Long, PeerConnection> peerConns =

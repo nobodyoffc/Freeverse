@@ -26,6 +26,11 @@ public class Stream {
     private long recvOffset = 0;
     private long recvData = 0;
     private long maxRecvData;
+    // End offset of the stream (offset + length of the FIN frame), or -1 until
+    // a FIN frame has been seen. The FIN frame may arrive out of order, so
+    // seeing it does NOT mean all preceding data has arrived — receive is only
+    // complete once recvOffset has advanced to this offset (see isRecvComplete).
+    private long finOffset = -1;
 
     // Received data queue for application
     private final LinkedBlockingQueue<byte[]> receivedData;
@@ -76,6 +81,7 @@ public class Stream {
             // This is duplicate/retransmitted data we've already processed
             if (fin) {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
+                finOffset = offset + data.length;
             }
             return null;
         }
@@ -85,6 +91,7 @@ public class Stream {
             // Already have this data, ignore duplicate
             if (fin) {
                 recvState = StreamState.HALF_CLOSED_REMOTE;
+                finOffset = offset + data.length;
             }
             return null;
         }
@@ -96,7 +103,18 @@ public class Stream {
         // signal a flow-control violation. Note: in-order data does not stay
         // in recvBuffer — it is drained into receivedData below — so legitimate
         // bulk transfers do not hit this limit.
-        if (recvData + data.length > maxRecvData) {
+        //
+        // The cap applies ONLY to out-of-order frames (offset > recvOffset),
+        // which are what actually get buffered. An in-order frame
+        // (offset == recvOffset) is the gap-filling frame: it is drained
+        // immediately and can trigger a large contiguous drain of the buffer,
+        // so it can only *reduce* recvData, never grow it. It must never be
+        // rejected — doing so deadlocks the transfer, because once the buffer
+        // is near maxRecvData behind a lost early frame, the retransmitted
+        // frame that would fill the gap and free the whole buffer would itself
+        // be rejected here, and the connection torn down as a flow-control
+        // violation (killing every other stream on it too).
+        if (offset > recvOffset && recvData + data.length > maxRecvData) {
             throw new FlowControlViolationException(
                     "Stream " + streamId + " buffered " + recvData
                     + " bytes, +" + data.length + " would exceed maxRecvData=" + maxRecvData);
@@ -124,6 +142,7 @@ public class Stream {
 
         if (fin) {
             recvState = StreamState.HALF_CLOSED_REMOTE;
+            finOffset = offset + data.length;
         }
 
         byte[] assembled = output.toByteArray();
@@ -132,6 +151,39 @@ public class Stream {
             return assembled;
         }
         return null;
+    }
+
+    /**
+     * @return true once the FIN frame has been seen AND every byte up to the
+     *         FIN offset has been assembled in order. Only then has the peer's
+     *         message been fully received — a FIN frame alone is not enough,
+     *         since it can arrive ahead of lost/reordered earlier frames.
+     */
+    public synchronized boolean isRecvComplete() {
+        return finOffset >= 0 && recvOffset >= finOffset;
+    }
+
+    /**
+     * @return true once a FIN frame has been seen (regardless of whether all
+     *         preceding data has arrived — see {@link #isRecvComplete()}).
+     */
+    public synchronized boolean isFinSeen() {
+        return finOffset >= 0;
+    }
+
+    /** @return the end offset of the stream, or -1 until a FIN frame has been seen. */
+    public synchronized long getFinOffset() {
+        return finOffset;
+    }
+
+    /** @return bytes currently buffered out-of-order, waiting for a gap to be filled. */
+    public synchronized long getBufferedBytes() {
+        return recvData;
+    }
+
+    /** @return number of out-of-order chunks currently buffered. */
+    public synchronized int getBufferedChunkCount() {
+        return recvBuffer.size();
     }
 
     /**

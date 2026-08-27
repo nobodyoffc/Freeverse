@@ -8,10 +8,10 @@ import server.FcHttpRequestHandler;
 import utils.http.AuthType;
 import server.HttpRequestChecker;
 
-import javax.servlet.annotation.WebServlet;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @WebServlet(name = ApipApiNames.PING, value = "/"+ ApipApiNames.PING+ "/" + ApipApiNames.VER_1)
 public class Ping extends HttpServlet {

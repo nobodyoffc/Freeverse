@@ -401,7 +401,14 @@ public abstract class FcClient {
         String urlTail = ApiUrl.makeUrlTail(null,PING.getName(),ver);//"/"+ ver +"/"+ PING;
         Object data = requestBase(urlTail, ApipClientEvent.RequestBodyType.FCDSL, null, null, null, null, null, ApipClientEvent.ResponseBodyType.FC_REPLY, null, null, authType, null, requestMethod);
         if(requestMethod.equals(RequestMethod.POST)) {
-            return checkBalance(apiAccount, apipClientEvent, symkey, apipClient);
+            // apipClient may be null when this client was built without a helper client
+            // (e.g. connectApip uses the 3-arg constructor). Fall back to this client
+            // itself so buyApi doesn't drop to the default free node (localhost). This
+            // mirrors the guard in checkResult().
+            ApipClient clientForBalance = apipClient;
+            if(clientForBalance==null && this instanceof ApipClient)
+                clientForBalance = (ApipClient) this;
+            return checkBalance(apiAccount, apipClientEvent, symkey, clientForBalance);
         }else  {
             if(serviceType !=null && Settings.freeApiListMap!=null)setFreeApiState(data, serviceType);
             return data;

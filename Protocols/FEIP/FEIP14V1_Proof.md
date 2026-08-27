@@ -103,12 +103,13 @@ Records one invited cosigner’s signature on an existing proof.
 
 **Consensus rules**
 
-7. The proof MUST exist, MUST NOT be **`destroyed`**, and MUST have a non-empty **`cosignersInvited`** list.
-8. The transaction **signer** MUST be one of **`cosignersInvited`** and MUST NOT already appear in **`cosignersSigned`**.
-9. Append the signer to **`cosignersSigned`**. If the number of signed cosigners **equals** the number of invited cosigners, set **`active`** to **`true`** (reference activates when lengths match).
-10. Update last-* fields from this transaction.
+7. **`proofId`** MUST be present. **One sign transaction signs exactly one proof**; **`proofIds`** is not accepted for **sign** and an op carrying only **`proofIds`** is invalid.
+8. The proof MUST exist, MUST NOT be **`destroyed`**, and MUST have a non-empty **`cosignersInvited`** list.
+9. The transaction **signer** MUST be one of **`cosignersInvited`** and MUST NOT already appear in **`cosignersSigned`**.
+10. Append the signer to **`cosignersSigned`**. If the number of signed cosigners **equals** the number of invited cosigners, set **`active`** to **`true`** (reference activates when lengths match). Signing is permitted while the proof is **`active`** — activation is the effect of the final signature, not a precondition.
+11. Update last-* fields from this transaction.
 
-*Batch sign:* [ProofOpData](../../FC-JDK/src/main/java/data/feipData/ProofOpData.java) only defines **`proofId`** for **sign**. A separate **sign** transaction is used per proof; bulk **destroy** uses **`proofIds`**.
+*One proof per sign:* [ProofOpData](../../FC-JDK/src/main/java/data/feipData/ProofOpData.java) defines only **`proofId`** for **sign**, and `ProofOpData.makeSign(proofId)` builds it that way. Cosigning several proofs requires one **sign** transaction each; only **destroy** batches over **`proofIds`**.
 
 #### 3. transfer
 
@@ -121,10 +122,10 @@ Moves **ownership** to a new FID.
 
 **Consensus rules**
 
-11. The proof MUST exist, MUST NOT be **`destroyed`**, and MUST be **`active`**.
-12. **`signer`** MUST equal current **`owner`**.
-13. A **recipient** FID MUST be present in the transaction context (reference rejects null `recipient`); **`owner`** becomes that recipient.
-14. Update last-* fields.
+12. The proof MUST exist, MUST NOT be **`destroyed`**, and MUST be **`active`**.
+13. **`signer`** MUST equal current **`owner`**.
+14. A **recipient** FID MUST be present in the transaction context (reference rejects null `recipient`); **`owner`** becomes that recipient.
+15. Update last-* fields.
 
 *Note:* Reference **transfer** does not re-check **`transferable`**; clients SHOULD refuse to build transfer txs when **`transferable`** is false.
 
@@ -139,7 +140,9 @@ Marks proofs as destroyed (and inactive).
 
 **Consensus rules**
 
-15. For each id, if the proof exists, is not already **`destroyed`**, and **`owner`** equals **signer**, set **`destroyed`** = **`true`**, **`active`** = **`false`**, and update last-* fields. Other entries in the list are skipped (reference: per-item `continue`).
+16. **`proofIds`** MUST be present and non-empty.
+17. For each id, if the proof exists, is not already **`destroyed`**, and **`owner`** equals **signer**, set **`destroyed`** = **`true`**, **`active`** = **`false`**, and update last-* fields. Other entries in the list are skipped (reference: per-item `continue`).
+18. If **no** listed proof qualifies, the operation as a whole is **invalid**: nothing is written and **no `ProofHistory` is recorded** (the reference parser records history only for operations that changed indexed state).
 
 ### OP_RETURN envelope
 
@@ -275,6 +278,6 @@ The new **owner** is the transaction **recipient** FID (same notion as other fin
 
 ### Implementation notes (non-normative)
 
-- **`makeProof`** uses a shared branch for **`sign`** and **`destroy`** that requires **`proofIds`** and does not set **`proofId`** for **sign**, while **`parseProof`** reads **`getProofId()`** for **sign** — the reference path for **sign** is inconsistent. Indexers SHOULD treat **`proofId`** as normative for **sign** (as in `ProofOpData`) or map a single-element **`proofIds`** to **`proofId`** before `parseProof`.
-- **`parseProof` / destroy** bulk indexing uses **`IndicesNames.PROTOCOL`** in the reference snippet; this is likely a typo for **`PROOF`** and SHOULD be corrected in code.
 - **`transferable`** is stored on the entity but not enforced in **`parseProof`** for **transfer**; enforcement is a client concern unless tightened in a later FEIP version.
+- **CDD on issue**: a missing (`null`) CDD is treated as insufficient, i.e. the same as a CDD below the threshold.
+- **`destroy`** writes the whole batch in one bulk request to the **`proof`** index; a batch in which every entry is skipped produces no bulk request at all (see rule 18).

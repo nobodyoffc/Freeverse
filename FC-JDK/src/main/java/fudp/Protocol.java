@@ -373,6 +373,9 @@ public class Protocol {
         String peerId = KeyTools.pubkeyToFchAddr(peerPublicKey);
         PeerConnection conn = connectionManager.getOrCreate(peerId, address);
         conn.setPeerPublicKey(peerPublicKey);
+        // Disjoint stream-ID spaces per endpoint (see handleIncomingPacket).
+        conn.getStreamManager().initLocalStreamParity(
+                getLocalFid().compareTo(peerId) < 0 ? 0 : 1);
     }
 
     /**
@@ -438,6 +441,51 @@ public class Protocol {
     }
 
     /**
+     * Rate-based pacing for bulk send loops: sleep so this packet leaves at
+     * ~PACING_GAIN * cwnd/sRTT instead of in line-rate bursts. Fixed-burst
+     * pacing (paceSending) emitted 16KB back-to-back at NIC speed — shallow
+     * bottleneck buffers and VPS ingress policers clip such bursts even when
+     * the average rate is far below path capacity, feeding a constant drip of
+     * loss events that ratchets the congestion window down. On fast paths
+     * (localhost/LAN) cwnd/sRTT is huge, the delay rounds to ~zero and this
+     * is effectively a no-op.
+     */
+    private void paceByRate(PeerConnection conn, int bytes) {
+        long delayNanos = conn.reservePacingDelayNanos(bytes);
+        if (delayNanos > 0) {
+            java.util.concurrent.locks.LockSupport.parkNanos(delayNanos);
+        }
+    }
+
+    // Estimated per-packet overhead (header + crypto + frame framing) added on
+    // top of the stream chunk when reserving congestion-window space.
+    private static final int CWND_PACKET_OVERHEAD = 128;
+
+    /**
+     * Congestion gate for application bulk-send loops: block until the CUBIC
+     * window has room for one more packet, or the stall budget elapses.
+     * <p>
+     * The window only opens as ACKs come back, so waiting here paces the sender
+     * to the rate the network actually delivers. Without it the sender blasts at
+     * local I/O speed; on a WAN bottleneck most packets are dropped in transit
+     * and the receiver sees only a trickle of rate-limited retransmissions —
+     * the transfer effectively never completes.
+     *
+     * @return true when window space is available; false if the window stayed
+     *         closed for the whole budget (no ACK progress — link is dead).
+     */
+    private static boolean awaitCongestionWindow(PeerConnection conn, int bytes, long stallBudgetMs) {
+        var cc = conn.getCongestionControl();
+        if (cc.canSend(bytes)) return true;
+        long deadline = System.currentTimeMillis() + stallBudgetMs;
+        while (System.currentTimeMillis() < deadline) {
+            java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L); // ~1ms
+            if (cc.canSend(bytes)) return true;
+        }
+        return false;
+    }
+
+    /**
      * Send data on a stream.
      * For large data, automatically splits into multiple MTU-safe StreamFrames
      * to avoid relying on IP fragmentation for UDP datagrams.
@@ -462,19 +510,20 @@ public class Protocol {
             StreamFrame frame = new StreamFrame(stream.getStreamId(), offset, data, false);
             sendFrame(conn, frame);
         } else {
-            // Large data: split into multiple MTU-safe frames with pacing
+            // Large data: split into multiple MTU-safe frames, rate-paced
             int pos = 0;
-            int framesSent = 0;
-            int pacingBurst = calculatePacingBurst();
             while (pos < data.length) {
                 int chunkSize = Math.min(maxChunkSize, data.length - pos);
+                if (!awaitCongestionWindow(conn, chunkSize + CWND_PACKET_OVERHEAD, APP_SEND_STALL_ABORT_MS)) {
+                    throw new IOException("Send stalled: congestion window closed for "
+                            + APP_SEND_STALL_ABORT_MS + "ms (no ACKs from peer)");
+                }
+                paceByRate(conn, chunkSize + CWND_PACKET_OVERHEAD);
                 byte[] chunk = Arrays.copyOfRange(data, pos, pos + chunkSize);
                 long offset = stream.consumeSendOffset(chunkSize);
                 StreamFrame frame = new StreamFrame(stream.getStreamId(), offset, chunk, false);
                 sendFrame(conn, frame);
                 pos += chunkSize;
-                framesSent++;
-                paceSending(conn, framesSent, pacingBurst);
             }
         }
     }
@@ -510,26 +559,27 @@ public class Protocol {
             sendFrame(conn, frame);
             if (progress != null) progress.accept((long) data.length, (long) data.length);
         } else {
-            // Large data: split into multiple frames with pacing, FIN on last.
-            // Flow control is done via pacing only (not congestion window),
-            // because the congestion control's loss detection creates phantom loss
-            // events on fast networks, collapsing the window and throttling throughput.
+            // Large data: split into multiple frames, FIN on last. Sending is
+            // gated on the congestion window (only what ACKs confirm the path
+            // carries) and rate-paced (no line-rate bursts that shallow
+            // bottleneck buffers or ingress policers would clip).
             int pos = 0;
-            int framesSent = 0;
-            int pacingBurst = calculatePacingBurst();
             while (pos < data.length) {
                 int chunkSize = Math.min(maxChunkSize, data.length - pos);
-                byte[] chunk = Arrays.copyOfRange(data, pos, pos + chunkSize);
+                if (!awaitCongestionWindow(conn, chunkSize + CWND_PACKET_OVERHEAD, APP_SEND_STALL_ABORT_MS)) {
+                    throw new IOException("Send stalled: congestion window closed for "
+                            + APP_SEND_STALL_ABORT_MS + "ms (no ACKs from peer)");
+                }
                 boolean isLast = (pos + chunkSize >= data.length);
+                if (!isLast) {
+                    paceByRate(conn, chunkSize + CWND_PACKET_OVERHEAD);
+                }
+                byte[] chunk = Arrays.copyOfRange(data, pos, pos + chunkSize);
                 long offset = stream.consumeSendOffset(chunkSize);
                 StreamFrame frame = new StreamFrame(stream.getStreamId(), offset, chunk, isLast);
                 sendFrame(conn, frame);
                 pos += chunkSize;
-                framesSent++;
                 if (progress != null) progress.accept((long) pos, (long) data.length);
-                if (!isLast) {
-                    paceSending(conn, framesSent, pacingBurst);
-                }
             }
         }
         stream.closeSend();
@@ -556,8 +606,8 @@ public class Protocol {
 
         byte[] buffer = new byte[maxChunkSize];
         long remaining = totalLength;
-        int framesSent = 0;
-        int pacingBurst = calculatePacingBurst();
+        long lastSendProgressMs = System.currentTimeMillis();
+        long lastProgressLogMs = lastSendProgressMs;
 
         while (remaining > 0) {
             int toRead = (int) Math.min(maxChunkSize, remaining);
@@ -568,13 +618,40 @@ public class Protocol {
             remaining -= bytesRead;
             boolean isLast = (remaining <= 0);
 
+            // Congestion gate: only push what the ACK clock confirms the path
+            // carries — the true pacing for slow WAN links. The OS-buffer
+            // backpressure below only protects against local buffer overrun.
+            if (!awaitCongestionWindow(conn, bytesRead + CWND_PACKET_OVERHEAD, APP_SEND_STALL_ABORT_MS)) {
+                throw new IOException("Upload stalled: congestion window closed for "
+                        + APP_SEND_STALL_ABORT_MS + "ms (no ACKs from peer)");
+            }
+            // Rate pacing: spread packets at ~cwnd/sRTT, no line-rate bursts.
+            if (!isLast) {
+                paceByRate(conn, bytesRead + CWND_PACKET_OVERHEAD);
+            }
+
             byte[] chunk = (bytesRead == buffer.length) ? buffer.clone() : Arrays.copyOf(buffer, bytesRead);
             long offset = stream.consumeSendOffset(bytesRead);
             StreamFrame frame = new StreamFrame(stream.getStreamId(), offset, chunk, isLast);
-            sendFrame(conn, frame);
-            framesSent++;
-            if (!isLast) {
-                paceSending(conn, framesSent, pacingBurst);
+            // Backpressure: waits for the OS send buffer to drain when it is full,
+            // pacing this loop to the real uplink rate instead of overrunning the
+            // buffer and dropping packets locally (which triggers a retransmit storm).
+            boolean sent = sendFrameBackpressured(conn, frame);
+            if (sent) {
+                lastSendProgressMs = System.currentTimeMillis();
+            } else if (System.currentTimeMillis() - lastSendProgressMs > APP_SEND_STALL_ABORT_MS) {
+                throw new IOException("Upload stalled: OS send buffer full for "
+                        + APP_SEND_STALL_ABORT_MS + "ms (link may be down)");
+            }
+
+            long now = System.currentTimeMillis();
+            if (totalLength >= 1024 * 1024 && now - lastProgressLogMs >= 5000) {
+                lastProgressLogMs = now;
+                var cc = conn.getCongestionControl();
+                log.info("[Protocol] Sending stream {} to {}: {}/{} bytes handed to network, cwnd={}, inFlight={}, ccState={}, retrans={}, spuriousLoss={}, reorderThreshold={}",
+                        stream.getStreamId(), conn.getPeerId(), totalLength - remaining, totalLength,
+                                cc.getCongestionWindow(), cc.getBytesInFlight(), cc.getState(),
+                                conn.getRetransmitCount(), conn.getAckedAfterSuspectedLost(), conn.getPacketReorderThreshold());
             }
         }
         stream.closeSend();
@@ -600,8 +677,8 @@ public class Protocol {
 
         byte[] buffer = new byte[maxChunkSize];
         long remaining = totalLength;
-        int framesSent = 0;
-        int pacingBurst = calculatePacingBurst();
+        long lastSendProgressMs = System.currentTimeMillis();
+        long lastProgressLogMs = lastSendProgressMs;
 
         while (remaining > 0) {
             int toRead = (int) Math.min(maxChunkSize, remaining);
@@ -611,12 +688,35 @@ public class Protocol {
             }
             remaining -= bytesRead;
 
+            // Congestion gate (see sendAndCloseFromInputStream).
+            if (!awaitCongestionWindow(conn, bytesRead + CWND_PACKET_OVERHEAD, APP_SEND_STALL_ABORT_MS)) {
+                throw new IOException("Stream send stalled: congestion window closed for "
+                        + APP_SEND_STALL_ABORT_MS + "ms (no ACKs from peer)");
+            }
+            // Rate pacing: spread packets at ~cwnd/sRTT, no line-rate bursts.
+            paceByRate(conn, bytesRead + CWND_PACKET_OVERHEAD);
+
             byte[] chunk = (bytesRead == buffer.length) ? buffer.clone() : Arrays.copyOf(buffer, bytesRead);
             long offset = stream.consumeSendOffset(bytesRead);
             StreamFrame frame = new StreamFrame(stream.getStreamId(), offset, chunk, false);
-            sendFrame(conn, frame);
-            framesSent++;
-            paceSending(conn, framesSent, pacingBurst);
+            // Backpressure (see sendAndCloseFromInputStream): pace to the uplink.
+            boolean sent = sendFrameBackpressured(conn, frame);
+            if (sent) {
+                lastSendProgressMs = System.currentTimeMillis();
+            } else if (System.currentTimeMillis() - lastSendProgressMs > APP_SEND_STALL_ABORT_MS) {
+                throw new IOException("Stream send stalled: OS send buffer full for "
+                        + APP_SEND_STALL_ABORT_MS + "ms (link may be down)");
+            }
+
+            long now = System.currentTimeMillis();
+            if (totalLength >= 1024 * 1024 && now - lastProgressLogMs >= 5000) {
+                lastProgressLogMs = now;
+                var cc = conn.getCongestionControl();
+                log.info("[Protocol] Sending stream {} to {}: {}/{} bytes handed to network, cwnd={}, inFlight={}, ccState={}, retrans={}, spuriousLoss={}, reorderThreshold={}",
+                        stream.getStreamId(), conn.getPeerId(), totalLength - remaining, totalLength,
+                                cc.getCongestionWindow(), cc.getBytesInFlight(), cc.getState(),
+                                conn.getRetransmitCount(), conn.getAckedAfterSuspectedLost(), conn.getPacketReorderThreshold());
+            }
         }
     }
 
@@ -675,6 +775,39 @@ public class Protocol {
         sendPacket(conn, frames);
     }
 
+    // Backpressure budget for application bulk-send loops: how long a single
+    // datagram may wait for the OS send buffer to drain before it is dropped.
+    // On a live-but-slow uplink a slot frees within a few ms, so this is almost
+    // never approached; it bounds the wait if the buffer is momentarily full.
+    private static final long APP_SEND_BUFFER_WAIT_MS = 1_000;
+
+    // If an application send loop makes NO forward progress (every datagram
+    // dropped because the buffer never drains) for this long, the link is
+    // effectively down — abort the transfer instead of hanging. Matches the
+    // request idle-timeout budget in spirit.
+    private static final long APP_SEND_STALL_ABORT_MS = 30_000;
+
+    /**
+     * Send a single frame on the application bulk-send path, applying send-buffer
+     * backpressure so the sender paces itself to the real uplink rate.
+     *
+     * @return true if the datagram was sent, false if it was dropped (buffer full).
+     */
+    private boolean sendFrameBackpressured(PeerConnection conn, Frame frame) throws IOException {
+        List<Frame> frames = new ArrayList<>();
+        frames.add(frame);
+
+        // Piggyback any pending ACKs, exactly like sendFrame.
+        if (conn.getAckManager().hasPendingAcks()) {
+            AckFrame ackFrame = conn.getAckManager().generateAckFrame();
+            if (ackFrame != null) {
+                frames.add(0, ackFrame);
+            }
+        }
+
+        return sendPacket(conn, frames, 0, APP_SEND_BUFFER_WAIT_MS);
+    }
+
     /**
      * Send a packet with frames.
      */
@@ -686,9 +819,32 @@ public class Protocol {
      * Send a packet with frames, optionally inheriting a retransmit count from a previous attempt.
      */
     private void sendPacket(PeerConnection conn, List<Frame> frames, int retransmitCount) throws IOException {
+        sendPacket(conn, frames, retransmitCount, DEFAULT_SEND_BUFFER_WAIT_MS);
+    }
+
+    // Default budget for waiting on a full OS send buffer before dropping a
+    // datagram (loss recovery will retransmit it). Best-effort senders
+    // (retransmit task, control packets) use this small value so they never
+    // block the shared scheduler thread for long. Application bulk-send loops
+    // pass a larger budget to get real backpressure (see APP_SEND_BUFFER_WAIT_MS).
+    private static final long DEFAULT_SEND_BUFFER_WAIT_MS = 10;
+
+    /**
+     * Send a packet with frames.
+     *
+     * @param bufferWaitMs how long to wait for the OS send buffer to drain if it
+     *        is full, before giving up and dropping the datagram. A live-but-slow
+     *        uplink frees a slot within milliseconds, so a large budget here acts
+     *        as backpressure that paces the sender to the real link rate instead
+     *        of overrunning the buffer and dropping packets locally.
+     * @return true if the datagram was handed to the OS, false if the send buffer
+     *         stayed full for the whole budget (datagram dropped; it remains in
+     *         sentPackets and loss recovery will retransmit it).
+     */
+    private boolean sendPacket(PeerConnection conn, List<Frame> frames, int retransmitCount, long bufferWaitMs) throws IOException {
         // Check if channel is still open
         if (!running || !channel.isOpen()) {
-            return;
+            return false;
         }
 
         // Allocate packet number
@@ -717,32 +873,55 @@ public class Protocol {
         byte[] data = packet.toBytes();
         boolean ackEliciting = packet.isAckEliciting();
         conn.recordSentPacket(packetNumber, frames, data.length, ackEliciting, retransmitCount);
-        conn.getCongestionControl().onSend(data.length);
+        // Only ack-eliciting packets count toward bytesInFlight (QUIC RFC 9002):
+        // ACK-only packets are never acknowledged nor tracked in sentPackets, so
+        // counting them would leak bytesInFlight upward until the congestion
+        // window jams shut for senders gated on it.
+        if (ackEliciting) {
+            conn.getCongestionControl().onSend(data.length);
+        }
 
-        // Send with retry if OS buffer is full (non-blocking channel returns 0)
+        return writeDatagram(conn, data, bufferWaitMs);
+    }
+
+    /**
+     * Write an already-serialized datagram to the socket, waiting up to
+     * {@code bufferWaitMs} for the OS send buffer to drain if it is full.
+     *
+     * @return true if sent, false if the buffer stayed full for the whole budget.
+     */
+    private boolean writeDatagram(PeerConnection conn, byte[] data, long bufferWaitMs) throws IOException {
         ByteBuffer buffer = ByteBuffer.wrap(data);
         try {
             int sent = channel.send(buffer, conn.getPeerAddress());
             if (sent == 0) {
                 sendDropCount.incrementAndGet();
-                // OS send buffer full; retry with backoff (up to 10ms total)
-                for (int retry = 0; retry < 10 && sent == 0; retry++) {
-                    try { Thread.sleep(1); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); return; }
+                // OS send buffer full: the uplink is draining slower than we are
+                // sending. Wait for a slot to free up (backpressure) with escalating
+                // backoff, up to bufferWaitMs, instead of immediately dropping.
+                long deadline = System.currentTimeMillis() + bufferWaitMs;
+                long backoffNanos = 200_000L; // 200us, doubles up to ~4ms
+                while (sent == 0 && System.currentTimeMillis() < deadline) {
+                    java.util.concurrent.locks.LockSupport.parkNanos(backoffNanos);
+                    if (backoffNanos < 4_000_000L) backoffNanos *= 2;
                     buffer.rewind();
                     sent = channel.send(buffer, conn.getPeerAddress());
                 }
                 if (sent == 0) {
                     long fails = sendFailCount.incrementAndGet();
                     if (fails <= 5 || fails % 100 == 0) {
-                        System.err.println("[SEND-FAIL] Dropped packet after retries! drops=" + sendDropCount.get() + 
-                                " fails=" + fails + " total=" + sendTotalCount.get());
+                        System.err.println("[SEND-FAIL] Dropped packet after " + bufferWaitMs + "ms buffer wait! drops="
+                                + sendDropCount.get() + " fails=" + fails + " total=" + sendTotalCount.get());
                     }
+                    sendTotalCount.incrementAndGet();
+                    return false;
                 }
             }
             sendTotalCount.incrementAndGet();
+            return true;
         } catch (java.nio.channels.ClosedChannelException e) {
             // Channel closed during shutdown, ignore
-            return;
+            return false;
         }
     }
 
@@ -791,12 +970,12 @@ public class Protocol {
                 }
             } catch (Exception e) {
                 if (running) {
-                    e.printStackTrace();
+                    log.warn("[Protocol] Error in receive loop: {}", e.getMessage(), e);
                 }
             }
         }
     }
-    
+
     private void handleIncomingPacket(byte[] data, SocketAddress from) {
         try {
             // IP verification (DDoS defense) - before any expensive crypto
@@ -862,8 +1041,8 @@ public class Protocol {
             } catch (Exception e) {
                 long dfCount = decryptFailCount.incrementAndGet();
                 if (dfCount <= 5 || dfCount % 100 == 0) {
-                    System.err.println("[DECRYPT-FAIL] count=" + dfCount +
-                            " pktNum=" + packet.getPacketNumber() + " from=" + from);
+                    log.warn("[Protocol] Decrypt failure (count={}, pktNum={}, from={})",
+                            dfCount, packet.getPacketNumber(), from);
                 }
                 // Track failure for per-source rate limiting (N1).
                 decryptRateLimiter.recordFailure(from);
@@ -899,8 +1078,48 @@ public class Protocol {
                 return;
             }
 
-            // Get or create connection
-            PeerConnection conn = connectionManager.getOrCreate(senderId, from);
+            // Resolve the connection. PRIMARY key: the remote connectionId the
+            // peer stamps in every packet header — it identifies the peer's
+            // connection state (packet-number space, streams, tombstones) and
+            // survives source-address changes. Address is only the current path.
+            long remoteConnId = packet.getConnectionId();
+            PeerConnection conn = connectionManager.getByRemoteConnId(remoteConnId);
+            if (conn != null && conn.getPeerId().equals(senderId)) {
+                if (!from.equals(conn.getPeerAddress())) {
+                    // NAT rebind / path change for an existing connection.
+                    // Without migration this would create a phantom "new"
+                    // connection: its fresh packet numbers would look like
+                    // replays to the old one, ACKs and responses would go to
+                    // a dead address, and a restarted stream allocator would
+                    // collide with retired stream IDs — every request after
+                    // the rebind timing out (field failure 2026-07-14).
+                    log.info("[Protocol] Peer {} connection {} migrated address {} -> {}",
+                            senderId, conn.getConnectionId(), conn.getPeerAddress(), from);
+                    connectionManager.migrateAddress(conn, from);
+                }
+            } else {
+                conn = connectionManager.getOrCreate(senderId, from);
+                long knownRemoteId = conn.getRemoteConnectionId();
+                if (knownRemoteId == 0) {
+                    connectionManager.bindRemoteConnId(remoteConnId, conn);
+                } else if (knownRemoteId != remoteConnId) {
+                    // Same peer+address but a NEW remote connectionId: the peer
+                    // rebuilt its connection object (fresh packet numbers and
+                    // streams) without restarting its process. Reset our
+                    // receive state so the fresh state isn't judged as
+                    // replays/duplicates against the old one.
+                    log.info("[Protocol] Peer {} rebuilt its connection (remote connId {} -> {}), resetting state on {}",
+                            senderId, knownRemoteId, remoteConnId, conn.getConnectionId());
+                    connectionManager.unbindRemoteConnId(knownRemoteId, conn);
+                    conn.resetForPeerRestart();
+                    replayProtection.removeConnection(conn.getConnectionId());
+                    connectionManager.bindRemoteConnId(remoteConnId, conn);
+                }
+            }
+            // Keep the two endpoints' stream allocators in disjoint ID spaces
+            // (lower FID even, higher FID odd) so they can never collide.
+            conn.getStreamManager().initLocalStreamParity(
+                    getLocalFid().compareTo(senderId) < 0 ? 0 : 1);
             if (packet.getPeerPublicKey() != null) {
                 conn.setPeerPublicKey(packet.getPeerPublicKey());
             }
@@ -944,7 +1163,7 @@ public class Protocol {
                     conn.getConnectionId(), packet.getPacketNumber(), packet.getTimestamp(), incomingEpoch);
 
             if (result == ReplayProtection.CheckResult.INVALID_TIMESTAMP) {
-                System.err.println("[Protocol] Invalid timestamp from " + senderId);
+                log.warn("[Protocol] Invalid timestamp from {}", senderId);
                 close(conn.getConnectionId(), ConnectionCloseFrame.INTERNAL_ERROR, "Invalid timestamp");
                 return;
             }
@@ -952,7 +1171,7 @@ public class Protocol {
             // Handle peer restart
             if (result == ReplayProtection.CheckResult.PEER_RESTART) {
                 if (conn.tryMarkPeerRestartHandled()) {
-                    System.err.println("[Protocol] Peer restart detected for " + senderId);
+                    log.info("[Protocol] Peer restart detected for {}", senderId);
                     conn.resetForPeerRestart();
                 }
             }
@@ -991,7 +1210,9 @@ public class Protocol {
 
         } catch (Exception e) {
             if (running) {
-                System.err.println("[HANDLE-EX] " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                // Goes through the logger (not System.err) so it lands in the log
+                // file — an exception here silently kills processing of the packet.
+                log.error("[Protocol] Error handling packet from {}: {}", from, e.getMessage(), e);
             }
         }
     }
@@ -1140,6 +1361,16 @@ public class Protocol {
         switch (frame.getType()) {
             case STREAM -> {
                 StreamFrame streamFrame = (StreamFrame) frame;
+                if (conn.getStreamManager().isRetired(streamFrame.getStreamId())) {
+                    // Late/retransmitted frame for a stream whose message was already
+                    // delivered. Drop it — re-creating the stream would reassemble and
+                    // process the whole message again (duplicate request execution).
+                    // The packet itself was ACKed at packet level, so the sender's
+                    // retransmission of it stops.
+                    log.debug("[Protocol] Dropping frame for retired stream {} offset={} fin={} peer={}",
+                            streamFrame.getStreamId(), streamFrame.getOffset(), streamFrame.isFin(), conn.getPeerId());
+                    return;
+                }
                 Stream stream = conn.getStreamManager().getOrCreateStream(streamFrame.getStreamId());
                 if (stream == null) {
                     log.warn("Stream limit exceeded, dropping frame for stream {}", streamFrame.getStreamId());
@@ -1222,7 +1453,8 @@ public class Protocol {
                 try {
                     sendAck(conn);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    log.warn("[Protocol] Failed to send ACK on connection {}: {}",
+                            conn.getConnectionId(), e.getMessage());
                 }
             }
         }
@@ -1233,24 +1465,42 @@ public class Protocol {
      */
     private void retransmitTask() {
         for (PeerConnection conn : connectionManager.getAllConnections()) {
-            List<SentPacket> lost = conn.detectLostPackets();
+            PeerConnection.LossDetection detection = conn.detectLostPackets();
+            List<SentPacket> lost = detection.packets();
             if (lost.isEmpty()) continue;
 
             // Rate-limit retransmission to avoid overwhelming the receiver.
+            // Also budget retransmitted BYTES to the pacer rate for this cycle:
+            // 50 back-to-back retransmits (~70KB) is exactly the kind of
+            // line-rate burst that shallow bottleneck buffers clip, turning one
+            // loss into a self-sustaining loss storm.
             int maxRetransmitPerCycle = 50;
+            long byteBudget = Math.max(8 * 1024, conn.pacingBudgetBytes(50));
+            long retransmittedBytes = 0;
             int retransmitted = 0;
+            int abandoned = 0;
+            StreamFrame abandonedSample = null;
 
             for (SentPacket packet : lost) {
-                if (packet.getRetransmitCount() >= 30) {
+                if (packet.getRetransmitCount() >= MAX_RETRANSMITS_BEFORE_ABANDON) {
                     // Abandon the undeliverable packet but keep the connection alive.
                     // Closing the connection for a single lost stream frame is too aggressive
                     // — other streams on this connection may be working fine.
                     conn.removeSentPacket(packet.packetNumber);
+                    abandoned++;
+                    if (abandonedSample == null) {
+                        for (Frame f : packet.frames) {
+                            if (f instanceof StreamFrame s) {
+                                abandonedSample = s;
+                                break;
+                            }
+                        }
+                    }
                     continue;
                 }
 
                 // Rate limit: leave remaining packets for the next cycle
-                if (retransmitted >= maxRetransmitPerCycle) {
+                if (retransmitted >= maxRetransmitPerCycle || retransmittedBytes >= byteBudget) {
                     break;
                 }
 
@@ -1280,17 +1530,50 @@ public class Protocol {
                         sendPacket(conn, framesToRetransmit, inheritedRetransmitCount);
                         conn.recordRetransmit();
                         retransmitted++;
+                        retransmittedBytes += removed.size;
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        log.warn("[Protocol] Failed to retransmit packet {} on connection {}: {}",
+                                packet.packetNumber, conn.getConnectionId(), e.getMessage());
                     }
                 }
             }
 
-            if (retransmitted > 0) {
+            if (abandoned > 0) {
+                // An abandoned STREAM frame leaves the receiver with a permanent gap:
+                // its stream can never complete and the peer's request/response on it
+                // is silently lost. Loud so a stalled transfer is diagnosable.
+                if (abandonedSample != null) {
+                    log.warn("[Protocol] Abandoned {} packet(s) after {} failed retransmits (conn={}, peer={}; "
+                            + "e.g. stream {} offset {} len {} fin={}) — receiver has a permanent gap, "
+                            + "that stream's transfer cannot complete",
+                            abandoned, MAX_RETRANSMITS_BEFORE_ABANDON, conn.getConnectionId(), conn.getPeerId(),
+                            abandonedSample.getStreamId(), abandonedSample.getOffset(),
+                            abandonedSample.getData().length, abandonedSample.isFin());
+                } else {
+                    log.warn("[Protocol] Abandoned {} non-stream packet(s) after {} failed retransmits (conn={}, peer={})",
+                            abandoned, MAX_RETRANSMITS_BEFORE_ABANDON, conn.getConnectionId(), conn.getPeerId());
+                }
+            }
+
+            // Congestion signal ONLY for gap-detected loss (a later packet was
+            // ACKed past a missing one — real drop evidence). Timeout-detected
+            // loss retransmits WITHOUT shrinking the window, per QUIC RFC 9002
+            // PTO semantics: on jittery paths an RTT spike expires the whole
+            // flight spuriously, and shrinking on those pinned the window at
+            // its floor (~35KB/s) while the path could carry 1MB/s.
+            if (retransmitted > 0 && detection.gapLoss()) {
                 conn.trySignalLoss();
             }
         }
     }
+
+    // How many times a lost packet is retransmitted before it is abandoned
+    // (removed from the retransmit queue, leaving the receiver's stream with
+    // a permanent, unrecoverable gap). With per-packet exponential backoff on
+    // the timeout threshold, 60 attempts span minutes — abandonment is a last
+    // resort for genuinely dead flows; application-level idle timers give up
+    // long before it.
+    private static final int MAX_RETRANSMITS_BEFORE_ABANDON = 60;
 
     /**
      * Get connection for a stream.

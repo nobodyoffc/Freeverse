@@ -86,6 +86,23 @@ public class MessageHandler {
         handleIncomingData(peerId, 0L, data);
     }
 
+    /**
+     * Route an already-decoded message. Used for large, file-backed messages that were
+     * spilled to disk during reassembly and cannot be re-decoded from a byte[].
+     *
+     * @param meterBytes total wire size of the message, for metering
+     */
+    public void handleDecodedMessage(String peerId, long connectionId, AppMessage message, int meterBytes) {
+        try {
+            emitMeter(peerId, message.getType(), meterBytes, MeterDirection.INBOUND);
+            routeMessage(peerId, connectionId, message);
+        } catch (Exception e) {
+            if (eventListener != null) {
+                eventListener.onError(peerId, 1, "Error handling message: " + e.getMessage());
+            }
+        }
+    }
+
     private void emitMeter(String peerId, MessageType type, int payloadBytes, MeterDirection direction) {
         if (meterSink == null) return;
         try {
@@ -151,6 +168,12 @@ public class MessageHandler {
         } else {
             log.warn("[FudpNode] RESP_NO_MATCH peer={} msgId={} pendingKeys={}",
                     peerId, responseId, pendingRequests.keySet());
+            // No waiter (already timed out / cancelled). If this response spilled to a
+            // temp file during reassembly, nothing downstream will consume it — delete
+            // the backing file now so it does not leak.
+            if (response.isFileBacked()) {
+                response.deleteBackingFile();
+            }
         }
     }
 

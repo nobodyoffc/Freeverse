@@ -275,7 +275,9 @@ public class FapiClient {
                     new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis());
             LongConsumer activityTracker = bytes -> {
                 lastActivityMs.set(System.currentTimeMillis());
-                if (receiveProgress != null) {
+                // bytes == 0 is a transport keepalive (peer ACKed our upload) — it
+                // refreshes the idle deadline but is not receive progress.
+                if (receiveProgress != null && bytes > 0) {
                     receiveProgress.accept(bytes);
                 }
             };
@@ -1183,6 +1185,8 @@ public class FapiClient {
             
             // Pass 2: Stream file content through FUDP transport with progress tracking
             java.util.concurrent.CompletableFuture<fudp.message.ResponseMessage> future;
+            java.util.concurrent.atomic.AtomicLong lastActivityMs =
+                    new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis());
             try (java.io.FileInputStream rawStream = new java.io.FileInputStream(file)) {
                 java.io.InputStream fileStream;
                 if (progressCallback != null) {
@@ -1190,11 +1194,19 @@ public class FapiClient {
                 } else {
                     fileStream = rawStream;
                 }
+                // The activity tracker refreshes the idle deadline on any sign of life
+                // from the server: ACKs while retransmissions of the upload are still
+                // being absorbed (bytes == 0) and response data arriving (bytes > 0).
                 future = fudpNode.requestWithStream(
-                    servicePeerId, serviceSid, headerData, fileStream, fileSize);
+                    servicePeerId, serviceSid, headerData, fileStream, fileSize,
+                    bytes -> lastActivityMs.set(System.currentTimeMillis()));
             }
-            
-            fudp.message.ResponseMessage response = future.get(requestTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS);
+
+            // Idle-based wait: a large upload keeps the deadline alive via ACK
+            // keepalives long after the local send loop has finished, so only
+            // real silence (dead peer / hung server) times out.
+            lastActivityMs.set(System.currentTimeMillis());
+            fudp.message.ResponseMessage response = awaitWithIdleTimeout(future, requestTimeoutSeconds, lastActivityMs);
             
             if (response.getStatusCode() != fudp.message.ResponseMessage.STATUS_SUCCESS) {
                 this.lastError = new IOException("Request failed with status: " + response.getStatusCode());
@@ -1219,9 +1231,15 @@ public class FapiClient {
             
         } catch (java.util.concurrent.TimeoutException e) {
             lastError = e;
-            log.warn("FAPI streaming upload timeout ({}s): api={}", requestTimeoutSeconds, api);
+            log.warn("FAPI streaming upload idle timeout ({}s): api={}", requestTimeoutSeconds, api);
             return null;
         } catch (Exception e) {
+            // The transport's own idle timer surfaces as ExecutionException(TimeoutException)
+            if (e instanceof ExecutionException && e.getCause() instanceof TimeoutException) {
+                lastError = (TimeoutException) e.getCause();
+                log.warn("FAPI streaming upload transport idle timeout: api={}", api);
+                return null;
+            }
             lastError = e;
             log.error("Failed to store file: {}", e.getMessage());
             return null;
@@ -2031,6 +2049,9 @@ public class FapiClient {
         }
         String peerId = KeyTools.pubkeyToFchAddr(pubkey);
         fudpNode.addPeer(peerId, pubkey, host, port);
+        // This address just answered the HELLO — make it the primary endpoint
+        // so the ping below (and reconnects) target it instead of a stale one.
+        fudpNode.promotePeerEndpoint(peerId, host, port);
 
         PongMessage pong;
         try {

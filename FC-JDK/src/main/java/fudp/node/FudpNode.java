@@ -11,11 +11,13 @@ import fudp.message.*;
 import fudp.metrics.MeterListener;
 import fudp.metrics.MeterRecord;
 import fudp.packet.Packet;
+import fudp.packet.frames.AckFrame;
 import fudp.packet.frames.StreamFrame;
 import fudp.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -85,9 +87,32 @@ public class FudpNode implements Protocol.PacketListener {
 
     private NodeEventListener eventListener;
     private volatile boolean running = false;
-    
+
+    /** Hard ceiling on a single assembled incoming message (RAM + spilled-to-disk combined). */
+    private final long maxAssembledMessageBytes;
+    /** Messages whose declared length exceeds this are spilled to a temp file during reassembly. */
+    private final long maxInMemoryMessageBytes;
+    /** Directory for spilled reassembly temp files. */
+    private final File recvSpillDir;
+
+    // Throttling for large-transfer receive logging
+    private static final long RECEIVE_LOG_MIN_BYTES = 1024 * 1024;   // only log transfers > 1MB
+    private static final long RECEIVE_LOG_INTERVAL_MS = 5000;        // at most one progress line per 5s per stream
+
     public FudpNode(byte[] privateKey, NodeConfig config) throws IOException {
         this.config = config;
+        // The assembler cap must exceed the largest message the app layer accepts
+        // (a full file, plus header slack). Large messages are now spilled to disk
+        // during reassembly, so this ceiling no longer sizes the heap — the RAM
+        // footprint is bounded by maxInMemoryMessageBytes instead.
+        this.maxAssembledMessageBytes = Math.max(
+                config.getMaxAssembledMessageBytes(),
+                config.getMaxFileSize() + 1024 * 1024);
+        this.maxInMemoryMessageBytes = config.getMaxInMemoryMessageBytes();
+        this.recvSpillDir = new File(config.getResolvedDataDir(), "recv-spill");
+        //noinspection ResultOfMethodCallIgnored
+        this.recvSpillDir.mkdirs();
+        purgeSpillDir(); // clear any temp files orphaned by a previous run/crash
         this.protocol = new Protocol(privateKey, config.getPort(), config.getResolvedDataDir(),
                 config.getMaxPacketSize(), config.getPacingBurstOverride(),
                 config.getPacingIntervalNanos(), config.getSocketBufferSize());
@@ -352,8 +377,17 @@ public class FudpNode implements Protocol.PacketListener {
     }
 
     /**
-     * Inbound stream data from a peer counts as response activity: refresh the idle
-     * deadline of that peer's pending requests and report receive progress.
+     * Activity from a peer refreshes the idle deadline of that peer's pending requests.
+     * Two kinds of activity count:
+     * - Inbound stream data (a response arriving): bytesAssembled > 0, also drives the
+     *   receive-progress callback.
+     * - Inbound ACK frames (bytesAssembled == 0): the peer is acknowledging data we are
+     *   sending — a large REQUEST still being uploaded. Without this, any upload that
+     *   takes longer than the idle budget times out even while transferring fine,
+     *   because an upload produces no inbound stream data until it completes.
+     * The receiveProgress consumer is invoked in both cases (with 0 for ACK-only
+     * activity) so higher-level idle timers (FapiClient) are refreshed too; callers
+     * must treat 0 as a keepalive, not as receive progress.
      * Attribution is per-peer (a response arrives on a new stream, so it cannot be
      * matched to a messageId until fully assembled); concurrent requests to the same
      * peer share activity, which errs on the side of waiting.
@@ -364,7 +398,7 @@ public class FudpNode implements Protocol.PacketListener {
         for (PendingRequest pending : pendingRequestWatch.values()) {
             if (pending.peerId.equals(peerId)) {
                 pending.lastActivityMs = now;
-                if (pending.receiveProgress != null && bytesAssembled > 0) {
+                if (pending.receiveProgress != null) {
                     try {
                         pending.receiveProgress.accept(bytesAssembled);
                     } catch (Exception ignored) {
@@ -435,6 +469,8 @@ public class FudpNode implements Protocol.PacketListener {
     private void sendResponseOnConnection(PeerConnection conn, long requestId, int statusCode, byte[] data) throws IOException {
         Stream stream = conn.openStream();
         long responseStreamId = stream.getStreamId();
+        log.debug("[FudpNode] Sending response requestId={} on streamId={} (conn={})",
+                requestId, responseStreamId, conn.getConnectionId());
         ResponseMessage response = new ResponseMessage(requestId, statusCode, data);
         byte[] encoded = MessageCodec.encode(response);
         protocol.sendAndClose(stream, encoded);
@@ -470,6 +506,21 @@ public class FudpNode implements Protocol.PacketListener {
     public CompletableFuture<ResponseMessage> requestWithStream(
             String peerId, String serviceName, byte[] headerData,
             java.io.InputStream dataStream, long dataStreamLength) throws IOException {
+        return requestWithStream(peerId, serviceName, headerData, dataStream, dataStreamLength, null);
+    }
+
+    /**
+     * Send a request with streaming binary data and an activity callback.
+     * The receiveProgress consumer doubles as an idle keepalive: it is invoked with
+     * assembled response byte counts when the response arrives, and with 0 whenever
+     * the peer shows signs of life (ACKs for our outbound upload). Callers running
+     * their own idle timers should refresh on every invocation but treat only
+     * values &gt; 0 as receive progress.
+     */
+    public CompletableFuture<ResponseMessage> requestWithStream(
+            String peerId, String serviceName, byte[] headerData,
+            java.io.InputStream dataStream, long dataStreamLength,
+            java.util.function.LongConsumer receiveProgress) throws IOException {
 
         PeerConnection conn = getOrConnectPeer(peerId);
         Stream stream = conn.openStream();
@@ -524,10 +575,10 @@ public class FudpNode implements Protocol.PacketListener {
 
         // Idle deadline: base config timeout + extra time for large payloads
         // (1 second per 100KB, covering server-side hashing/storing of the upload).
-        // Extended whenever response data arrives.
+        // Extended whenever response data arrives or the peer ACKs our upload.
         long idleTimeoutMs = config.getRequestTimeoutMs()
                 + (totalOnWire / (100L * 1024)) * 1000L;
-        watchPendingRequest(messageId, peerId, future, idleTimeoutMs, null);
+        watchPendingRequest(messageId, peerId, future, idleTimeoutMs, receiveProgress);
 
         return future;
     }
@@ -671,6 +722,14 @@ public class FudpNode implements Protocol.PacketListener {
             if (!future.isDone()) {
                 log.warn("[FudpNode] Ping timeout for peer {} (messageId={}, timeoutMs={})", peerId, msgId, timeoutMs);
                 messageHandler.cancelPong(msgId);
+                // A connection that never became ESTABLISHED points at an
+                // unreachable address; drop it so the next attempt reconnects
+                // instead of reusing it.
+                if (conn.getState() != ConnectionState.ESTABLISHED) {
+                    log.debug("[FudpNode] Removing unestablished connection {} to {} after ping timeout",
+                            conn.getConnectionId(), conn.getPeerAddress());
+                    protocol.getConnectionManager().removeConnection(conn.getConnectionId());
+                }
                 future.completeExceptionally(new TimeoutException("Ping timeout"));
             }
         }, timeoutMs, TimeUnit.MILLISECONDS);
@@ -831,6 +890,15 @@ public class FudpNode implements Protocol.PacketListener {
     }
 
     /**
+     * Promote a verified address to the peer's primary endpoint.
+     * Call after the address answered a HELLO so subsequent pings/connects
+     * target it instead of a stale persisted endpoint.
+     */
+    public void promotePeerEndpoint(String peerId, String host, int port) {
+        peerBook.promoteEndpoint(peerId, host, port);
+    }
+
+    /**
      * Add a currently connected peer to the peer book.
      */
     public boolean addConnectedPeer(String peerId, String alias) {
@@ -936,6 +1004,16 @@ public class FudpNode implements Protocol.PacketListener {
         // Update peer book with current address
         peerBook.updateFromConnection(peerId, connection.getPeerPublicKey(), connection.getPeerAddress());
 
+        // ACKs from the peer mean our outbound data (e.g. a large request still being
+        // uploaded) is getting through — refresh pending-request idle deadlines so a
+        // slow upload is not killed mid-transfer. 0 = keepalive, no receive progress.
+        for (var frame : packet.getFrames()) {
+            if (frame instanceof AckFrame) {
+                touchPendingRequests(peerId, 0);
+                break;
+            }
+        }
+
         // Process stream data
         for (var frame : packet.getFrames()) {
             if (frame instanceof StreamFrame sf) {
@@ -949,36 +1027,98 @@ public class FudpNode implements Protocol.PacketListener {
                         Map<Long, MessageFrameAssembler> connAssemblers =
                                 streamAssemblers.computeIfAbsent(connId, k -> new ConcurrentHashMap<>());
                         MessageFrameAssembler assembler =
-                                connAssemblers.computeIfAbsent(streamId, k -> new MessageFrameAssembler());
+                                connAssemblers.computeIfAbsent(streamId,
+                                        k -> new MessageFrameAssembler(
+                                                maxAssembledMessageBytes, maxInMemoryMessageBytes, recvSpillDir));
 
                         // Synchronize on the assembler: MessageFrameAssembler is NOT thread-safe,
                         // and onPacketReceived can be called from multiple threads concurrently
                         // for frames belonging to the same stream.
-                        List<byte[]> completeMessages;
+                        List<AssembledMessage> completeMessages = java.util.Collections.emptyList();
                         boolean cleanUp = false;
-                        long bufferedBytes;
+                        boolean overflow = false;
+                        long bufferedBytes = 0;
+                        long assembleElapsedMs = 0;
                         synchronized (assembler) {
-                            // Poll all available data chunks and feed into assembler
-                            byte[] chunk;
-                            while ((chunk = stream.poll()) != null) {
-                                if (chunk.length > 0) {
-                                    assembler.addData(chunk);
+                            long now = System.currentTimeMillis();
+                            if (assembler.getFirstDataMs() == 0) {
+                                assembler.setFirstDataMs(now);
+                            }
+                            // Poll all available data chunks and feed into assembler.
+                            // Both addData (buffer overrun) and extractMessages (header
+                            // declaring an impossible length) throw IllegalStateException
+                            // for messages that can never be assembled.
+                            try {
+                                byte[] chunk;
+                                while ((chunk = stream.poll()) != null) {
+                                    if (chunk.length > 0) {
+                                        assembler.addData(chunk);
+                                    }
+                                }
+                                completeMessages = assembler.extractMessages();
+                            } catch (IllegalStateException e) {
+                                // Message larger than the assembler cap — it can never be
+                                // delivered. Drop it cleanly (the sender's request will
+                                // time out) instead of silently corrupting the assembler.
+                                overflow = true;
+                                log.error("[FudpNode] Incoming message on stream {} from peer {} exceeded the "
+                                        + "assembler limit and is dropped — the sender will get no response: {}",
+                                        streamId, peerId, e.getMessage());
+                            }
+
+                            if (!overflow) {
+                                bufferedBytes = assembler.getBufferedBytes();
+                                assembleElapsedMs = now - assembler.getFirstDataMs();
+
+                                // Throttled progress log so large incoming transfers are
+                                // visible in the server log while they are still running.
+                                if (bufferedBytes >= RECEIVE_LOG_MIN_BYTES
+                                        && now - assembler.getLastProgressLogMs() >= RECEIVE_LOG_INTERVAL_MS) {
+                                    assembler.setLastProgressLogMs(now);
+                                    log.info("[FudpNode] Receiving message on stream {} from {}: {} bytes assembled, {}s elapsed",
+                                            streamId, peerId, bufferedBytes, assembleElapsedMs / 1000);
+                                }
+
+                                // Fire assembly progress callback for large transfer tracking
+                                if (eventListener != null && bufferedBytes > 0) {
+                                    eventListener.onStreamAssemblyProgress(peerId, streamId, bufferedBytes);
+                                }
+
+                                // Clean up only when the stream's receive side is truly complete:
+                                // FIN seen AND all bytes up to the FIN offset assembled in order,
+                                // AND the assembler holds no partial message. Checking sf.isFin()
+                                // here would be wrong — a FIN frame that arrives ahead of lost or
+                                // reordered earlier frames would retire (tombstone) the stream
+                                // while data is still missing, permanently dropping the peer's
+                                // retransmissions and blackholing the message.
+                                if (stream.isRecvComplete() && !assembler.hasPendingData()) {
+                                    cleanUp = true;
+                                }
+
+                                // FIN seen but earlier bytes still missing: the transfer is
+                                // waiting on retransmissions. If the sender abandoned a lost
+                                // packet, this is the state the stream is stuck in forever —
+                                // log it (throttled) so a stall is diagnosable server-side.
+                                if (!cleanUp && stream.isFinSeen() && !stream.isRecvComplete()
+                                        && now - assembler.getLastProgressLogMs() >= RECEIVE_LOG_INTERVAL_MS) {
+                                    assembler.setLastProgressLogMs(now);
+                                    log.warn("[FudpNode] Stream {} from {}: FIN at offset {} but contiguous data ends at {} "
+                                            + "({} bytes in {} out-of-order chunks buffered) — waiting for retransmission of the gap",
+                                            streamId, peerId, stream.getFinOffset(), stream.getRecvOffset(),
+                                            stream.getBufferedBytes(), stream.getBufferedChunkCount());
                                 }
                             }
-                            bufferedBytes = assembler.getBufferSize();
+                        }
 
-                            // Fire assembly progress callback for large transfer tracking
-                            if (eventListener != null && bufferedBytes > 0) {
-                                eventListener.onStreamAssemblyProgress(peerId, streamId, bufferedBytes);
+                        if (overflow) {
+                            connAssemblers.remove(streamId);
+                            if (connAssemblers.isEmpty()) {
+                                streamAssemblers.remove(connId);
                             }
-
-                            // Extract and handle all complete messages
-                            completeMessages = assembler.extractMessages();
-
-                            // Clean up assembler when stream is finished and buffer is empty
-                            if (sf.isFin() && !assembler.hasPendingData()) {
-                                cleanUp = true;
-                            }
+                            // Retire so late frames of the oversized message are dropped
+                            // instead of re-creating the stream and assembler.
+                            connection.getStreamManager().retireStream(streamId);
+                            continue;
                         }
 
                         // Response data arriving keeps this peer's pending requests alive
@@ -987,11 +1127,12 @@ public class FudpNode implements Protocol.PacketListener {
 
                         // Handle messages outside the synchronized block to avoid holding
                         // the lock during potentially slow message processing
-//                        if (!completeMessages.isEmpty()) {
-//                            log.debug("[FudpNode] Assembled {} message(s) from stream {} (peer={}, conn={})",
-//                                    completeMessages.size(), streamId, peerId, connId);
-//                        }
-                        for (byte[] message : completeMessages) {
+                        for (AssembledMessage message : completeMessages) {
+                            if (message.length() >= RECEIVE_LOG_MIN_BYTES) {
+                                log.info("[FudpNode] Received complete {}-byte message on stream {} from {} in {}s{}",
+                                        message.length(), streamId, peerId, assembleElapsedMs / 1000,
+                                        message.isFileBacked() ? " (spilled to disk)" : "");
+                            }
                             handleIncomingData(ctx, message);
                         }
 
@@ -1001,15 +1142,168 @@ public class FudpNode implements Protocol.PacketListener {
                             if (connAssemblers.isEmpty()) {
                                 streamAssemblers.remove(connId);
                             }
-                            // Remove the stream from StreamManager to prevent stream leak.
-                            // Each stream carries exactly one message; once FIN is received
-                            // and the message is fully delivered, the stream is no longer needed.
-                            connection.getStreamManager().removeStream(streamId);
+                            // Retire the stream: prevents the stream leak AND tombstones the
+                            // ID so late/retransmitted frames can't re-create the stream and
+                            // deliver the same message again. Each stream carries exactly one
+                            // message; once FIN is received and the message is fully delivered,
+                            // any further frame for this stream is a duplicate.
+                            connection.getStreamManager().retireStream(streamId);
                         }
                     }
+                } else if (connection.getStreamManager().isRetired(sf.getStreamId())) {
+                    // Late retransmission of a stream whose message was already
+                    // delivered — expected traffic, dropped by the frame handler.
+                    log.debug("[FudpNode] Dropping late frame for retired stream {} from peer {} (conn={})",
+                            sf.getStreamId(), peerId, connId);
                 } else {
                     log.warn("[FudpNode] Missing stream for peer {} streamId={} conn={}", peerId, sf.getStreamId(), connId);
                 }
+            }
+        }
+    }
+
+    /**
+     * Handle a complete assembled message. In-RAM messages take the normal byte[]
+     * decode path; large messages that were spilled to a temp file are decoded
+     * directly from the file so their payload is never fully materialised in RAM.
+     */
+    private void handleIncomingData(ConnectionContext ctx, AssembledMessage message) {
+        if (!message.isFileBacked()) {
+            handleIncomingData(ctx, message.bytes());
+            return;
+        }
+        handleIncomingFileBacked(ctx, message);
+    }
+
+    /** Fixed framing header: type(1) + messageId(8) + flags(1). */
+    private static final int FUDP_FIXED_HEADER = 10;
+
+    /**
+     * Decode and route a large, file-backed message. RESPONSE payloads (large
+     * downloads, e.g. server-to-server disk sync) are delivered as a file-backed
+     * {@link ResponseMessage} so adopters can stream them; REQUEST payloads (large
+     * uploads) are delivered as a file-backed {@link RequestMessage} — the service
+     * name is read from the front of the spill file and the bulk data stays on disk
+     * until the handler reads it. The temp file is deleted on any failure or for a
+     * message type that is never legitimately large here.
+     */
+    private void handleIncomingFileBacked(ConnectionContext ctx, AssembledMessage message) {
+        String peerId = ctx.peerId();
+        boolean handedOff = false;
+        try {
+            long total = message.length();
+            // Enough leading bytes for: fixed header + varint payloadLen + (status(2)
+            // for RESPONSE, or sidLen varint + a bounded service name for REQUEST).
+            int headBytes = (int) Math.min(total, FUDP_FIXED_HEADER + 10L + 10L + 1024L);
+            byte[] header = message.readHeader(headBytes);
+
+            MessageType type = MessageCodec.peekType(header);
+            long msgId = MessageCodec.peekMessageId(header);
+            int flags = header[9] & 0xFF;
+
+            fudp.util.Varint.DecodeResult vr = fudp.util.Varint.decode(header, FUDP_FIXED_HEADER);
+            long payloadLength = vr.value;
+            int payloadOffset = FUDP_FIXED_HEADER + vr.bytesConsumed;
+
+            if (type == MessageType.RESPONSE) {
+                if (payloadLength < 2 || payloadOffset + 2 > header.length) {
+                    log.error("[FudpNode] Malformed large RESPONSE from {} (len={}, payloadLen={})",
+                            peerId, total, payloadLength);
+                    return;
+                }
+                int statusCode = ((header[payloadOffset] & 0xFF) << 8) | (header[payloadOffset + 1] & 0xFF);
+                long dataOffset = payloadOffset + 2L;
+                long dataLength = payloadLength - 2;
+
+                ResponseMessage response = new ResponseMessage();
+                response.setMessageId(msgId);
+                response.setFlags(flags);
+                response.setStatusCode(statusCode);
+                response.setFileBackedData(message.file(), dataOffset, dataLength);
+
+                log.debug("[FudpNode] Routing file-backed RESPONSE from {} (messageId={}, dataLen={}, spill={})",
+                        peerId, msgId, dataLength, message.file().getName());
+                handedOff = true;
+                messageHandler.handleDecodedMessage(peerId, ctx.connectionId(), response,
+                        (int) Math.min(Integer.MAX_VALUE, total));
+                return;
+            }
+
+            if (type == MessageType.REQUEST) {
+                // payload = [sidLen varint][sid][data]; sid is small and read from the header.
+                fudp.util.Varint.DecodeResult sidVr = fudp.util.Varint.decode(header, payloadOffset);
+                int sidLen = (int) sidVr.value;
+                int sidOffset = payloadOffset + sidVr.bytesConsumed;
+                if (sidLen < 0 || sidOffset + sidLen > header.length || sidLen > payloadLength) {
+                    log.error("[FudpNode] Malformed large REQUEST from {} (len={}, sidLen={}) — service name "
+                            + "did not fit in the header window; dropping", peerId, total, sidLen);
+                    return;
+                }
+                String sid = new String(header, sidOffset, sidLen, java.nio.charset.StandardCharsets.UTF_8);
+                long dataOffset = sidOffset + (long) sidLen;
+                long dataLength = payloadLength - sidVr.bytesConsumed - sidLen;
+
+                RequestMessage request = new RequestMessage();
+                request.setMessageId(msgId);
+                request.setFlags(flags);
+                request.setSid(sid);
+                request.setFileBackedData(message.file(), dataOffset, dataLength);
+
+                if (msgId != 0) {
+                    requestIdToConnectionId.put(msgId, new RequestEntry(ctx.connectionId(), System.currentTimeMillis()));
+                }
+                log.debug("[FudpNode] Routing file-backed REQUEST from {} (messageId={}, sid={}, dataLen={}, spill={})",
+                        peerId, msgId, sid, dataLength, message.file().getName());
+                // The handler owns the temp file; it is reaped by the spill sweeper if the
+                // handler never materialises/deletes it (byte[]-based handlers self-clean
+                // once they call getData(); streaming handlers should delete when done).
+                handedOff = true;
+                messageHandler.handleDecodedMessage(peerId, ctx.connectionId(), request,
+                        (int) Math.min(Integer.MAX_VALUE, total));
+                return;
+            }
+
+            log.warn("[FudpNode] Dropping large file-backed {} message from {} (len={}): unexpected type on the "
+                    + "streaming receive path", type, peerId, total);
+        } catch (Exception e) {
+            log.warn("[FudpNode] Error processing file-backed message from {}: {}", peerId, e.getMessage(), e);
+            if (eventListener != null) {
+                eventListener.onError(peerId, 1, "Error processing message: " + e.getMessage());
+            }
+        } finally {
+            if (!handedOff) {
+                message.deleteBackingFile();
+            }
+        }
+    }
+
+    /** Delete any temp spill files left in the receive-spill directory. */
+    private void purgeSpillDir() {
+        try {
+            File[] files = recvSpillDir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            }
+        } catch (Exception ignored) {
+            // best-effort
+        }
+    }
+
+    /** Delete spill temp files whose last-modified time is older than {@code maxAgeMs}. */
+    private void sweepStaleSpillFiles(long now, long maxAgeMs) {
+        File[] files = recvSpillDir.listFiles();
+        if (files == null) return;
+        for (File f : files) {
+            try {
+                if (now - f.lastModified() > maxAgeMs) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                }
+            } catch (Exception ignored) {
+                // best-effort
             }
         }
     }
@@ -1113,6 +1407,13 @@ public class FudpNode implements Protocol.PacketListener {
             // Clean stale lastPongInfoSent entries
             long pongCutoff = System.currentTimeMillis() - 2 * config.getIdleConnectionTimeoutMs();
             lastPongInfoSent.entrySet().removeIf(e -> e.getValue() < pongCutoff);
+
+            // Sweep orphaned spill temp files: a large message whose file-backed
+            // handler never materialised/deleted it leaves a temp file behind. Reap
+            // files untouched for longer than the transfer timeout; active/handed-off
+            // transfers are much newer than this.
+            sweepStaleSpillFiles(System.currentTimeMillis(),
+                    Math.max(2 * config.getTransferTimeoutMs(), 600_000L));
         } catch (Exception e) {
             log.warn("[FudpNode] Idle connection cleanup failed: {}", e.getMessage());
         }
@@ -1281,6 +1582,9 @@ public class FudpNode implements Protocol.PacketListener {
                     if (publicKey != null) {
                         SocketAddress addr = new InetSocketAddress(ep.host, ep.port);
                         peerBook.updateFromConnection(peer.getId(), publicKey, addr);
+                        // This endpoint just proved reachable; try it first below
+                        peerBook.promoteEndpoint(peer.getId(), ep.host, ep.port);
+                        endpoints = peer.getEndpoints();
                         break;
                     }
                 } catch (Exception e) {

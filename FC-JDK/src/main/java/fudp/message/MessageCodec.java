@@ -76,17 +76,18 @@ public class MessageCodec {
         int payloadLength = (int) Varint.decode(buffer);
 
         // Payload
-        if (buffer.remaining() < payloadLength) {
+        if (payloadLength < 0 || buffer.remaining() < payloadLength) {
             throw new IllegalArgumentException("Invalid message data: payload truncated");
         }
-        byte[] payload = new byte[payloadLength];
-        buffer.get(payload);
+        int payloadOffset = buffer.position();
 
-        // Create specific message type
+        // Create specific message type. Decode reads the payload directly from
+        // `data` at [payloadOffset, payloadOffset+payloadLength) — no separate
+        // payload copy is allocated, which halves peak memory on large messages.
         AppMessage message = createMessage(type);
         message.setMessageId(messageId);
         message.setFlags(flags);
-        message.decodePayload(payload);
+        message.decodePayload(data, payloadOffset, payloadLength);
 
         return message;
     }

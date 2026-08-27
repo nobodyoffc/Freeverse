@@ -87,6 +87,19 @@ public class PeerBook {
     }
 
     /**
+     * Promote a just-verified address to the peer's primary endpoint so
+     * reconnects try it before stale persisted endpoints.
+     */
+    public void promoteEndpoint(String peerId, String host, int port) {
+        Peer peer = peers.get(peerId);
+        if (peer == null) return;
+        if (peer.promoteEndpoint(resolveToIp(host), port)) {
+            peer.setLastSeen(System.currentTimeMillis());
+            save();
+        }
+    }
+
+    /**
      * Remove a peer.
      */
     public void remove(String peerId) {

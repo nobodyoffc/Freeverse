@@ -186,6 +186,31 @@ public class Peer {
     }
 
     /**
+     * Promote an endpoint to primary, demoting the current primary into the
+     * endpoints list. Used when an address has just been verified (e.g. it
+     * answered a HELLO), so reconnects try it before stale endpoints.
+     * Returns true if anything changed.
+     */
+    public boolean promoteEndpoint(String epHost, int epPort) {
+        if (epHost == null || epHost.isEmpty() || epPort <= 0) return false;
+        if (epHost.equals(host) && epPort == port) return false;
+
+        if (endpoints == null) {
+            endpoints = new ArrayList<>();
+        }
+        endpoints.remove(new Endpoint(epHost, epPort));
+        if (host != null && !host.isEmpty() && port > 0) {
+            Endpoint old = new Endpoint(host, port);
+            if (!endpoints.contains(old)) {
+                endpoints.add(old);
+            }
+        }
+        this.host = epHost;
+        this.port = epPort;
+        return true;
+    }
+
+    /**
      * Get display name (alias or truncated FID).
      */
     public String getDisplayName() {

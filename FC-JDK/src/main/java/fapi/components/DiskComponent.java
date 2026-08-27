@@ -4,6 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.apipData.Fcdsl;
 import data.apipData.Sort;
 import data.fcData.DiskItem;
+import data.feipData.Service;
 import data.feipData.ServiceType;
 import data.feipData.serviceParams.DiskParams;
 import com.google.gson.Gson;
@@ -174,7 +175,77 @@ public class DiskComponent extends AbstractFapiComponent {
                 server, diskHandler, sources,
                 maxDataSize, maxTotalDiskUsage, minDealerBalance,
                 defaultDataLifeDays, dbDir, syncIntervalHours);
+        diskSyncManager.setUrlResolver(this::resolveServiceUrl);
+        diskSyncManager.setUrlPersister(this::persistSourceUrl);
         diskSyncManager.start();
+    }
+
+    /**
+     * Rebuild the sync manager from the current settingMap so source and
+     * parameter changes take effect without a server restart. A running sync
+     * cycle stops gracefully and resumes from its persisted cursor.
+     */
+    public synchronized void reloadSyncManager() {
+        if (diskSyncManager != null) {
+            diskSyncManager.stop();
+            diskSyncManager = null;
+        }
+        Map<String, Object> settingMap = settings.getSettingMap();
+        if (settingMap != null) {
+            Object v = settingMap.get(DiskSyncManager.KEY_MAX_DATA_SIZE);
+            if (v instanceof Number) maxDataSize = ((Number) v).longValue();
+            v = settingMap.get(DiskSyncManager.KEY_MAX_TOTAL_DISK_USAGE);
+            if (v instanceof Number) maxTotalDiskUsage = ((Number) v).longValue();
+        }
+        initSyncManager(settingMap);
+    }
+
+    /**
+     * Resolve a service declared on chain from the local service index.
+     */
+    public Service resolveServiceOnChain(String sid) {
+        if (sid == null || sid.isEmpty() || queryExecutor == null) return null;
+        try {
+            Map<String, Service> map = queryExecutor.executeIdsQuery(
+                    constants.IndicesNames.SERVICE, Service.class, List.of(sid));
+            return map != null ? map.get(sid) : null;
+        } catch (Exception e) {
+            log.warn("Failed to resolve service {} from local index: {}", sid, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Resolve a service's normalized fudp URL from its SID, or null if the
+     * service is unknown locally or declares no API URL.
+     */
+    public String resolveServiceUrl(String sid) {
+        Service service = resolveServiceOnChain(sid);
+        if (service == null || service.getApiUrl() == null) return null;
+        return fapi.client.FapiClient.normalizeUrl(service.getApiUrl());
+    }
+
+    /**
+     * Persist a refreshed source URL back to the settingMap so the cached
+     * value stays usable when the on-chain lookup fails later.
+     */
+    private void persistSourceUrl(String sid, String url) {
+        Map<String, Object> settingMap = settings.getSettingMap();
+        if (settingMap == null) return;
+        Object srcObj = settingMap.get(DiskSyncManager.KEY_DISK_SYNC_SOURCES);
+        if (!(srcObj instanceof List<?> list)) return;
+        boolean changed = false;
+        for (Object o : list) {
+            if (o instanceof Map<?, ?> m && sid.equals(m.get("sid"))) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> entry = (Map<String, Object>) m;
+                entry.put("url", url);
+                changed = true;
+            }
+        }
+        if (changed && server != null && server.getService() != null) {
+            settings.saveServerSettings(server.getService().getId());
+        }
     }
     
     /**
@@ -309,8 +380,13 @@ public class DiskComponent extends AbstractFapiComponent {
 
             // Store using streaming path (wraps byte[] in ByteArrayInputStream,
             // computes hash incrementally and writes to disk in single pass)
+            long storeStartMs = System.currentTimeMillis();
+            log.info("disk.{}: storing {} bytes...", permanent ? "carve" : "put", binaryData.length);
             DiskItem diskItem = diskHandler.storeFromBytes(binaryData, permanent, dataLifeDays);
-            
+            log.info("disk.{}: stored did={} ({} bytes) in {}ms", permanent ? "carve" : "put",
+                    diskItem != null ? diskItem.getId() : null, binaryData.length,
+                    System.currentTimeMillis() - storeStartMs);
+
             // Return success response with metadata
             return new UnifiedResponse(successResponse(requestId, diskItem), null);
             
