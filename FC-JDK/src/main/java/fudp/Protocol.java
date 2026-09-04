@@ -214,14 +214,17 @@ public class Protocol {
             return null;
         }
         
-        String ip = inet.getAddress().getHostAddress();
-        int port = inet.getPort();
-        
-        // First, try exact match
+        // First, try exact match (no name resolution needed)
         String exactKey = addr.toString();
         if (pendingPublicKeyRequests.containsKey(exactKey)) {
             return exactKey;
         }
+
+        String ip = InetSocketAddressUtil.resolveHostAddress(inet);
+        if (ip == null) {
+            return null;
+        }
+        int port = inet.getPort();
         
         // Search for matching IP:port in all pending requests
         for (String key : pendingPublicKeyRequests.keySet()) {
@@ -1698,7 +1701,11 @@ public class Protocol {
         // Pre-whitelist the target IP since we're actively initiating this connection.
         // This ensures the peer's responses (e.g., PUBLIC_KEY) won't be challenged.
         if (to instanceof InetSocketAddress inet) {
-            String targetIp = inet.getAddress().getHostAddress();
+            String targetIp = InetSocketAddressUtil.resolveHostAddress(inet);
+            if (targetIp == null) {
+                throw new UnknownHostException("Cannot resolve FUDP target "
+                        + inet.getHostString() + ":" + inet.getPort());
+            }
             addVerifiedIp(targetIp);
         }
         

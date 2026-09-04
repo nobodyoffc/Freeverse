@@ -1601,7 +1601,9 @@ public class FapiServer implements NodeEventListener {
                 log.warn("getOrCreateClient: no FAPI services found at {}", url);
             }
         } catch (Throwable e) {
-            log.warn("getOrCreateClient: failed to connect to {}: {}", url, e.getMessage());
+            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            log.warn("getOrCreateClient: failed to connect to {}: {}: {}",
+                    url, e.getClass().getSimpleName(), reason);
         }
         return null;
     }

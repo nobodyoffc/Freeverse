@@ -1,7 +1,9 @@
 # Freeverse
 
 
-
+[] 切换主身份后，长时间连不到fapi服务器。从后台唤醒或从其他页面返回主页面后才连上。
+[] 身份离线后再上线可以获取信息，但ACK似乎没有获取，因为，发送者的信息状态始终为sent，即使接受者已经上线收到并看到了信息。
+[] 新功能：ssh。用主身份私钥实现ssh鉴权，在mac上将主身份公钥注册到远程linux的ssh徐克清单，在Freer中通过主私钥签名，用ssh打开远程终端。
 [x] update the bundle prefix of the algorithm.
 
 []  1. Decryptor.java — likely a real AES-GCM bug in FC-JDK, fixed in Safe.

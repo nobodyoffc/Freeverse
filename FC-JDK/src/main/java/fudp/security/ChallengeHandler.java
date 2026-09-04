@@ -307,7 +307,10 @@ public class ChallengeHandler {
     
     private String extractPeerKey(SocketAddress address) {
         if (address instanceof InetSocketAddress inet) {
-            return inet.getAddress().getHostAddress() + ":" + inet.getPort();
+            String ip = fudp.InetSocketAddressUtil.resolveHostAddress(inet);
+            if (ip != null) {
+                return ip + ":" + inet.getPort();
+            }
         }
         return address.toString();
     }

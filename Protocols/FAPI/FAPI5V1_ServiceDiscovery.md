@@ -119,7 +119,7 @@ Clients that do not yet have a connection to any FAPI node MUST begin by connect
 |---|---|
 | `fudp://127.0.0.1:8500` | Local development |
 | `fudp://fapi.cid.cash:8500` | Production |
-| `fudp://fapi.apip.cash:8500` | Production (alternative) |
+| `fudp://fapi.freecash.org:8500` | Production (alternative) |
 
 The default FAPI port is **8500**.
 

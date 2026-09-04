@@ -397,7 +397,7 @@ public class IpVerifier {
      */
     private String extractIpKey(SocketAddress address) {
         if (address instanceof InetSocketAddress inet) {
-            return inet.getAddress().getHostAddress();
+            return fudp.InetSocketAddressUtil.resolveHostAddress(inet);
         }
         return null;
     }

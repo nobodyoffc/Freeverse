@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -949,7 +950,10 @@ public class FudpNode implements Protocol.PacketListener {
      * Discover peer public key via HELLO/PUBLIC_KEY.
      */
     public CompletableFuture<byte[]> discoverPublicKey(String host, int port, long timeoutMs) throws IOException {
-        SocketAddress addr = new InetSocketAddress(host, port);
+        InetSocketAddress addr = new InetSocketAddress(host, port);
+        if (addr.isUnresolved()) {
+            throw new UnknownHostException("Cannot resolve FUDP host " + host + ":" + port);
+        }
         return protocol.sendHelloForPublicKey(addr, timeoutMs);
     }
 

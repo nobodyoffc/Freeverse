@@ -19,9 +19,9 @@ public final class FapiDefaults {
      * 2. 公共服务（生产环境）
      */
     public static final String[] DEFAULT_ENDPOINTS = {
-        "fudp://127.0.0.1:8500",       // 本地服务（开发调试）
+//        "fudp://127.0.0.1:8500",       // 本地服务（开发调试）
         "fudp://fapi.cid.cash:8500",   // 公共服务（生产环境）
-        "fudp://fapi.apip.cash:8500"    // 公共服务（生产环境）
+        "fudp://fapi.freecash.org:8500"    // 公共服务（生产环境）
     };
     
     /**
