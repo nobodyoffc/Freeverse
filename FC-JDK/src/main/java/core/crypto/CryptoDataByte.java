@@ -144,11 +144,7 @@ public class CryptoDataByte {
         }
 
         // Algorithms with built-in authentication (GCM, Poly1305) don't need a separate sum
-        boolean requiresSum = (alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
-                              alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
-                              alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7 &&
-                              alg != AlgorithmId.FC_ChaCha20Poly1305_No1_NrC7 &&
-                              alg != AlgorithmId.FC_EccK1ChaCha20Poly1305_No1_NrC7);
+        boolean requiresSum = !alg.isAead();
 
         if (requiresSum && sum == null) {
             return null; // sum is required but missing for non-GCM algorithms
@@ -309,11 +305,7 @@ public class CryptoDataByte {
         offset += ivLength;
 
         // Algorithms with built-in authentication (GCM, Poly1305) don't include a separate sum
-        boolean hasSum = (alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
-                         alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
-                         alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7 &&
-                         alg != AlgorithmId.FC_ChaCha20Poly1305_No1_NrC7 &&
-                         alg != AlgorithmId.FC_EccK1ChaCha20Poly1305_No1_NrC7);
+        boolean hasSum = !alg.isAead();
 
         // Calculate cipher length dynamically. BitCore carries the full 32-byte
         // HMAC-SHA256 tag as its sum; other algorithms use a 4-byte sum.

@@ -156,14 +156,20 @@ public class ChaCha20Poly1305 {
 
             var hasherIn = Hashing.sha256().newHasher();
 
-            try (CipherOutputStream cos = new CipherOutputStream(outputStream, cipher)) {
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    hasherIn.putBytes(buffer, 0, bytesRead);
-                    cos.write(buffer, 0, bytesRead);
-                }
+            // Buffer the ciphertext and use doFinal() rather than CipherOutputStream:
+            // CipherOutputStream.close() swallows AEADBadTagException, which would let
+            // a tampered ciphertext through as a successful decryption.
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                hasherIn.putBytes(buffer, 0, bytesRead);
+                baos.write(buffer, 0, bytesRead);
             }
+
+            // Throws AEADBadTagException if the Poly1305 tag does not verify.
+            byte[] plaintext = cipher.doFinal(baos.toByteArray());
+            outputStream.write(plaintext);
 
             byte[] cipherId = Decryptor.sha256(hasherIn.hash().asBytes());
             cryptoDataByte.setCipherId(cipherId);

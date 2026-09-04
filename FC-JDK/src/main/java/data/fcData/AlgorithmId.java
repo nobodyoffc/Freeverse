@@ -33,6 +33,25 @@ public enum AlgorithmId {
         return displayName;
     }
 
+    /**
+     * True for algorithms whose ciphertext carries its own authentication tag
+     * (AES-GCM, ChaCha20-Poly1305). These need no separate 4-byte sum: the tag
+     * is verified by the cipher itself on decryption.
+     *
+     * Non-AEAD algorithms (AES-CBC, raw ChaCha20) rely on the sum field instead,
+     * so encryption must produce it and the bundle format must carry it.
+     */
+    public boolean isAead() {
+        return switch (this) {
+            case FC_AesGcm256_No1_NrC7,
+                 FC_EccK1AesGcm256_No1_NrC7,
+                 FC_X25519AesGcm256_No1_NrC7,
+                 FC_ChaCha20Poly1305_No1_NrC7,
+                 FC_EccK1ChaCha20Poly1305_No1_NrC7 -> true;
+            default -> false;
+        };
+    }
+
     public static String[] getDisplayNames() {
         String[] values = new String[AlgorithmId.values().length];
         for (int i = 0; i < AlgorithmId.values().length; i++) {

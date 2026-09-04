@@ -160,7 +160,7 @@ public class Decryptor {
     public CryptoDataByte decrypt(CryptoDataByte cryptoDataByte){
         switch (cryptoDataByte.getAlg()){
             case FC_AesCbc256_No1_NrC7, FC_AesGcm256_No1_NrC7, FC_ChaCha20_No1_NrC7, FC_ChaCha20Poly1305_No1_NrC7 -> decryptBySymkey(cryptoDataByte);
-            case FC_EccK1AesCbc256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7, FC_EccK1ChaCha20_No1_NrC7, FC_EccK1ChaCha20Poly1305_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
+            case EccAes256K1P7_No1_NrC7, FC_EccK1AesCbc256_No1_NrC7, FC_EccK1AesGcm256_No1_NrC7, FC_X25519AesGcm256_No1_NrC7, FC_EccK1ChaCha20_No1_NrC7, FC_EccK1ChaCha20Poly1305_No1_NrC7 -> decryptByAsyKey(cryptoDataByte);
             case BitCore_EccAes256 -> decryptBitcore(cryptoDataByte);
             default -> cryptoDataByte.setCodeMessage(CodeMessage.Code4002NoSuchAlgorithm);
         }
@@ -366,13 +366,11 @@ public class Decryptor {
             }
             cryptoDataByte.setDid(did);
 
-            // Skip sum check for AES-GCM algorithms (they have built-in authentication)
-            // ChaCha20 requires sum check as it doesn't have built-in authentication
+            // AEAD algorithms (GCM, ChaCha20-Poly1305) are authenticated by their
+            // own tag and carry no sum. Others must have theirs verified.
             AlgorithmId alg = cryptoDataByte.getAlg();
-            if(alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
-               alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
-               alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
-                cryptoDataByte.checkSum(cryptoDataByte.getAlg());
+            if(alg == null || !alg.isAead()) {
+                cryptoDataByte.checkSum(alg);
             }
             return cryptoDataByte;
         }
@@ -683,12 +681,10 @@ public class Decryptor {
             byte[] did = Hash.sha256x2Bytes(new File(destFileForFos));
             cryptoDataByte.setDid(did);
 
-            // Skip sum check for AES-GCM algorithms (they have built-in authentication)
-            // ChaCha20 requires sum check as it doesn't have built-in authentication
+            // AEAD algorithms (GCM, ChaCha20-Poly1305) are authenticated by their
+            // own tag and carry no sum. Others must have theirs verified.
             AlgorithmId alg = cryptoDataByte.getAlg();
-            if(alg != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
-               alg != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
-               alg != AlgorithmId.FC_X25519AesGcm256_No1_NrC7) {
+            if(alg == null || !alg.isAead()) {
                 if(!cryptoDataByte.checkSum())cryptoDataByte.setCodeMessage(CodeMessage.Code4011BadSum);
             }
 
@@ -781,10 +777,9 @@ public class Decryptor {
             cryptoDataByte.setAlg(algo);
         }
 
-        // Only check sum for non-GCM algorithms (GCM has built-in authentication)
-        boolean requiresSum = (algo != AlgorithmId.FC_AesGcm256_No1_NrC7 &&
-                               algo != AlgorithmId.FC_EccK1AesGcm256_No1_NrC7 &&
-                               algo != AlgorithmId.FC_X25519AesGcm256_No1_NrC7);
+        // AEAD algorithms (GCM, ChaCha20-Poly1305) authenticate via their own tag
+        // and carry no sum; the others must have one present.
+        boolean requiresSum = !algo.isAead();
 
         if(requiresSum && cryptoDataByte.getSum()==null) {
             cryptoDataByte.setCodeMessage(CodeMessage.Code4011BadSum);
@@ -838,6 +833,19 @@ public class Decryptor {
                 cryptoDataByte.setType(EncryptType.Symkey);
                 cryptoDataByte.setAlg(AlgorithmId.FC_ChaCha20_No1_NrC7);
                 ChaCha20.decryptStream(is,os,cryptoDataByte);
+            }
+            case FC_EccK1ChaCha20Poly1305_No1_NrC7 -> {
+                try {
+                    symkey = Ecc256K1ChaCha20Poly1305.getInstance().asyKeyToSymkey(prikeyX,pubkeyY, iv);
+                } catch (Exception e) {
+                    cryptoDataByte.setCode(CodeMessage.Code1020OtherError);
+                    cryptoDataByte.setMessage(e.getMessage());
+                    return;
+                }
+                cryptoDataByte.setSymkey(symkey);
+                cryptoDataByte.setType(EncryptType.Symkey);
+                cryptoDataByte.setAlg(AlgorithmId.FC_ChaCha20Poly1305_No1_NrC7);
+                ChaCha20Poly1305.decryptStream(is,os,cryptoDataByte);
             }
             default -> {
                 symkey = EccAes256K1P7.asyKeyToSymkey(prikeyX,pubkeyY,iv);
