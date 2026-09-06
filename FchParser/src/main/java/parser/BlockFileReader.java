@@ -31,6 +31,12 @@ public class BlockFileReader {
 	public static final int FILE_END = -1;
 	public static final int WRONG = -2;
 	public static final int HEADER_FORK = -3;
+	/**
+	 * The 8-byte magic+size header at the pointer is not (yet) a usable header, but we are
+	 * reading the tip file, where the fullnode may be part-way through writing it. Caller
+	 * should wait for the file to change and re-read the same pointer, up to a retry budget.
+	 */
+	public static final int HEADER_INCOMPLETE = -4;
 	public static final int BLANK_8 = 8;
 	public static final int WAIT_MORE = 0;
 	public static final long MAX_BLOCK_SIZE = 32 * 1024 * 1024; // 32MB max block size
@@ -47,6 +53,18 @@ public class BlockFileReader {
 
 	public BlockFileReader(ChainState state) {
 		this.state = state;
+	}
+
+	/**
+	 * Positions {@code fis} at the absolute offset {@code pos}.
+	 * <p>
+	 * {@link java.io.InputStream#skip} is only contractually obliged to skip <em>up to</em> the
+	 * requested number of bytes, so using it (and ignoring its return value) to seek to a block
+	 * boundary risks landing mid-block and reading the rest of the file as garbage. Seeking
+	 * through the channel is exact.
+	 */
+	static void seek(FileInputStream fis, long pos) throws IOException {
+		fis.getChannel().position(pos);
 	}
 
 	/**
@@ -105,7 +123,7 @@ public class BlockFileReader {
 			if (!BlockFileUtils.getLastBlockFileName(state.getPath()).equals(state.getCurrentFile())) {
 				try (FileInputStream fisTemp = new FileInputStream(new File(state.getPath(), state.getCurrentFile()))) {
 					long newPointer = state.getPointer() + 8;
-					fisTemp.skip(newPointer);
+					seek(fisTemp, newPointer);
 					b8 = new byte[8];
 					int tempRead = readFully(fisTemp, b8, 8);
 					if (tempRead == 8) {
@@ -123,7 +141,8 @@ public class BlockFileReader {
 
 		b4 = Arrays.copyOfRange(b8, 0, 4);
 		if (!Arrays.equals(b4, Constants.MAGIC_BYTES)) {
-			checkResult.setBlockLength(WRONG);
+			checkResult.setBlockLength(headerNotUsable(
+					"magic mismatch, read " + BytesUtils.bytesToHexStringBE(b8)));
 			return checkResult;
 		}
 
@@ -137,9 +156,17 @@ public class BlockFileReader {
 		}
 
 		if (blockSize > MAX_BLOCK_SIZE) {
-			log.error("Block size {} exceeds maximum {} at pointer {}. Possible corrupted data.",
-					blockSize, MAX_BLOCK_SIZE, state.getPointer());
-			checkResult.setBlockLength(WRONG);
+			checkResult.setBlockLength(headerNotUsable(
+					"size " + blockSize + " exceeds maximum " + MAX_BLOCK_SIZE));
+			return checkResult;
+		}
+
+		// A size below the 80-byte block header cannot describe a block. A half-written size
+		// field reads as a small number (the unwritten high bytes are zero), so this is the
+		// usual shape of a torn header — and without the guard the body allocation below
+		// would throw NegativeArraySizeException.
+		if (blockSize < 80) {
+			checkResult.setBlockLength(headerNotUsable("size " + blockSize + " is below the 80-byte block header"));
 			return checkResult;
 		}
 
@@ -231,6 +258,26 @@ public class BlockFileReader {
 	}
 
 	/**
+	 * Classifies an unusable 8-byte magic+size header.
+	 * <p>
+	 * On the tip file this is expected under normal operation: the fullnode writes the header
+	 * through a buffered stdio stream, and a reader can catch that write half-copied into the
+	 * page cache — the leading magic bytes present, the tail still zero-fill. That is "not
+	 * written yet", not corruption, so the caller retries the same pointer. Anywhere else in
+	 * the block files nothing is still being written, so it is real corruption.
+	 */
+	private int headerNotUsable(String reason) {
+		if (isReadingTipFile()) {
+			log.warn("Unusable block header at pointer {} of tip file {} ({}). Fullnode is likely mid-write; will re-read.",
+					state.getPointer(), state.getCurrentFile(), reason);
+			return HEADER_INCOMPLETE;
+		}
+		log.error("Unusable block header at pointer {} of file {} ({}). Data looks corrupted.",
+				state.getPointer(), state.getCurrentFile(), reason);
+		return WRONG;
+	}
+
+	/**
 	 * Returns true when {@code state.getCurrentFile()} is the highest-numbered
 	 * blk*.dat file (the chain tip), where the fullnode may still be appending.
 	 * The result is cached per file to avoid a directory scan on every block.
@@ -256,7 +303,7 @@ public class BlockFileReader {
 		// Read from disk
 		File file = new File(state.getPath(), BlockFileUtils.getFileNameWithOrder(bm.get_fileOrder()));
 		try (FileInputStream fis = new FileInputStream(file)) {
-			fis.skip(bm.get_pointer() + 8);
+			seek(fis, bm.get_pointer() + 8);
 			byte[] blockBytes = new byte[Math.toIntExact(bm.getSize())];
 			int bytesRead = readFully(fis, blockBytes, blockBytes.length);
 			if (bytesRead < blockBytes.length) {

@@ -52,6 +52,16 @@ public class ChainParser {
 	/** Max consecutive re-reads of the same incomplete (not-yet-flushed) block before giving up. */
 	private static final int MAX_INCOMPLETE_BLOCK_RETRIES = 30;
 
+	/** Max consecutive re-reads of an unusable magic+size header on the tip file before giving up. */
+	private static final int MAX_INCOMPLETE_HEADER_RETRIES = 30;
+
+	/**
+	 * Settle time before re-reading a header the fullnode was mid-write of. The directory
+	 * watcher fires on any change under blocks/ (rev*.dat included), so without this the
+	 * retry budget could be spent on wake-ups that arrive before the write has landed.
+	 */
+	private static final long INCOMPLETE_HEADER_SETTLE_MILLIS = 200;
+
 	public int startParse(ElasticsearchClient esClient) throws Exception {
 
 		System.out.println("Started parsing file:  " + state.getCurrentFile() + " ...");
@@ -60,11 +70,12 @@ public class ChainParser {
 		File file = new File(state.getPath(), state.getCurrentFile());
 		FileInputStream fis = new FileInputStream(file);
 		try {
-			fis.skip(state.getPointer());
+			BlockFileReader.seek(fis, state.getPointer());
 
 			long blockLength;
 			long cdMakeTime = System.currentTimeMillis();
 			int incompleteRetries = 0;
+			int incompleteHeaderRetries = 0;
 
 			while (true) {
 
@@ -94,18 +105,38 @@ public class ChainParser {
 						TimeUnit.SECONDS.sleep(30);
 						fis.close();
 						fis = new FileInputStream(file);
-						fis.skip(state.getPointer());
+						BlockFileReader.seek(fis, state.getPointer());
 					}
 				} else if (blockLength == BlockFileReader.WRONG) {
 					System.out.println("Read Magic wrong. pointer: " + state.getPointer());
 					log.info("Read Magic wrong. pointer: {}", state.getPointer());
 					return WRONG;
 
+				} else if (blockLength == BlockFileReader.HEADER_INCOMPLETE) {
+					// The header at the pointer is not usable yet, but we are on the tip file
+					// where the fullnode may be part-way through writing it (a buffered write
+					// can be observed half-copied into the page cache). Do NOT advance the
+					// pointer: wait for the file to change and re-read the same header.
+					if (++incompleteHeaderRetries > MAX_INCOMPLETE_HEADER_RETRIES) {
+						System.out.println("Read Magic wrong. pointer: " + state.getPointer());
+						log.error("Block header at pointer {} of file {} still unusable after {} retries. Stopping.",
+								state.getPointer(), state.getCurrentFile(), MAX_INCOMPLETE_HEADER_RETRIES);
+						return WRONG;
+					}
+					log.info("Waiting for the fullnode to finish the block header at pointer {} (retry {}/{}).",
+							state.getPointer(), incompleteHeaderRetries, MAX_INCOMPLETE_HEADER_RETRIES);
+					AtomicBoolean running = new AtomicBoolean(true);
+					FchUtils.waitForChangeInDirectory(state.getPath(), running);
+					TimeUnit.MILLISECONDS.sleep(INCOMPLETE_HEADER_SETTLE_MILLIS);
+					fis.close();
+					fis = new FileInputStream(file);
+					BlockFileReader.seek(fis, state.getPointer());
+
 				} else if (blockLength == BlockFileReader.HEADER_FORK) {
 					state.setPointer(state.getPointer() + 88);
 					fis.close();
 					fis = new FileInputStream(file);
-					fis.skip(state.getPointer());
+					BlockFileReader.seek(fis, state.getPointer());
 
 				} else if (blockLength == BlockFileReader.WAIT_MORE) {
 					System.out.print(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
@@ -114,7 +145,7 @@ public class ChainParser {
 					FchUtils.waitForChangeInDirectory(state.getPath(), running);
 					fis.close();
 					fis = new FileInputStream(file);
-					fis.skip(state.getPointer());
+					BlockFileReader.seek(fis, state.getPointer());
 
 				} else if (blockLength == BlockFileReader.BLANK_8) {
 					state.setPointer(state.getPointer() + blockLength);
@@ -137,10 +168,11 @@ public class ChainParser {
 						FchUtils.waitForChangeInDirectory(state.getPath(), running);
 						fis.close();
 						fis = new FileInputStream(file);
-						fis.skip(state.getPointer());
+						BlockFileReader.seek(fis, state.getPointer());
 						continue;
 					}
 					incompleteRetries = 0;
+					incompleteHeaderRetries = 0;
 					recheckOrphans(esClient);
 					state.setPointer(state.getPointer() + blockLength);
 				}
