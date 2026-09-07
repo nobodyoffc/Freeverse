@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<!-- saved from url=(0253)https://d4b988f1-5176-47de-ba36-2d43866234b7.frame.claudeusercontent.com/_f/1788000176-c99d/?__frame_t=bLd4OUAE3WMQbIxBhqKHkGfS.82d0f64c-1a44-4198-a105-2aecaba3e859.cb6d3a3f-ace9-493e-8d3c-826783716e0f.1788003778&__frame_v=manifest.155e997702a4b8fc.json -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!-- frame-runtime --><!--<base href="/_f/1788000176-c99d/">--><base href="."><script>window.__FRAME_PREAMBLE={"v":1,"capabilities":{"artifact":"artifact.D_F1mx8d.js","assets":"assets.8Gk803W0.js","comments":"comments.GLuHR3zP.js","db":"db.h-3sndFg.js","downloads":"downloads.C3GSvEDP.js","embed":"embed.CxGAyc-v.js","mcp":"mcp.Bvma3qD7.js","network":"network.B5UA9Su4.js","notifications":"notifications.ssU4jy7G.js","permissions":"permissions.BNySkLV5.js","room":"room.BMMoe2BY.js","sample":"sample.BW2Uysoh.js","self":"artifact.D_F1mx8d.js","user":"user.BpKav-Rf.js"},"transforms":"_transforms.DSB5x63f.js","comments":"_comments.BoakUwmM.js","translate":"_translate.5HCW4BJh.js"}</script><script>(function(){"use strict";var te=["light","dark","system"],re=/^[A-Za-z0-9_-]{1,64}$/,$=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,ne=new Set(["class","hidden","value","checked","style","title","alt","placeholder","lang","dir","role","tabindex","disabled","readonly","contenteditable","open","colspan","rowspan"]);function oe(e){const t=e.toLowerCase();return t.startsWith("data-")||t.startsWith("aria-")||ne.has(t)}var Be="http://www.w3.org/1999/xhtml",se="http://www.w3.org/2000/svg",ae=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),ie=new Set(["script","style"]);function ce(e){const t=e.localName.toLowerCase();return e.namespaceURI==="http://www.w3.org/1999/xhtml"?!ae.has(t):e.namespaceURI===se?!ie.has(t):!1}function M(e,t){return e===t||(e===160||e===32)&&(t===160||t===32)}function le(e,t){const r=e.length,n=t.length;let s=0;for(;s<r&&s<n&&M(e.charCodeAt(s),t.charCodeAt(s));)s++;let o=0;for(;o<r-s&&o<n-s&&M(e.charCodeAt(r-1-o),t.charCodeAt(n-1-o));)o++;return{p:s,s:o}}function ue(e,t){const r=e.firstChild;if(e.childNodes.length!==1||r===null||r.nodeType!==Node.TEXT_NODE){e.textContent=t;return}const n=r.data,s=n.length,o=t.length,{p:i,s:c}=le(n,t);i===s&&c===0&&s===o||r.replaceData(i,s-i-c,t.slice(i,o-c));const h=r.data,p=e.ownerDocument.getSelection?.()??null,w=p!==null&&p.rangeCount>0&&(p.anchorNode===r||p.focusNode===r)?{anchor:p.anchorNode,anchorOffset:p.anchorOffset,focus:p.focusNode,focusOffset:p.focusOffset}:null;let m=-1,g=-1;for(let f=0;f<h.length&&f<t.length;f++){const v=h.charCodeAt(f),b=t.charCodeAt(f);v!==b&&M(v,b)&&(m<0&&(m=f),g=f)}const a=m>=0;if(a&&r.replaceData(m,g-m+1,t.slice(m,g+1)),a&&w!==null&&w.anchor!==null&&w.focus!==null)try{p.setBaseAndExtent(w.anchor,w.anchorOffset,w.focus,w.focusOffset)}catch{}}var fe=new Set(["html","head","body","frameset"]);function de(e){return e.namespaceURI==="http://www.w3.org/1999/xhtml"&&fe.has(e.localName)}function pe(e){if(e===null||typeof e!="object")return!1;const t=e;if(typeof t.target!="string"||!re.test(t.target)||t.text!==void 0&&typeof t.text!="string")return!1;if(t.attrsSet!==void 0){if(t.attrsSet===null||typeof t.attrsSet!="object")return!1;for(const[r,n]of Object.entries(t.attrsSet))if(!$.test(r)||typeof n!="string")return!1}if(t.attrsRemoved!==void 0){if(!Array.isArray(t.attrsRemoved))return!1;for(const r of t.attrsRemoved)if(typeof r!="string"||!$.test(r))return!1}return!0}function me(e,t){if(e===null||typeof e!="object")return!1;const{seq:r,elements:n}=e;if(typeof r!="number"||!Number.isSafeInteger(r)||!Array.isArray(n)||n.length===0||n.length>64)return!1;for(let s=0;s<n.length;s++)if(!t(n[s]))return!1;return!0}function he(e){return e===null||typeof e!="object"?!1:me(e.__frame_patch,pe)}function _e(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_init;return t!==null&&typeof t=="object"}function ve(e){return e!==null&&typeof e=="object"&&e.__frame_size_poke===!0}function ye(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_theme;if(t===null||typeof t!="object")return!1;const r=t.theme;return typeof r=="string"&&te.includes(r)}var A=/^[\w.-]+\.js$/;function we(e,t,r){return r?"inert":typeof t=="string"&&A.test(t)?e?[t]:"inert":e?"inert":"framed"}function ge(){return{post(e,t){parent.postMessage(e,t)},on(e){const t=r=>{r.source===parent&&e(r.data,r.origin,r.isTrusted)};return addEventListener("message",t),()=>removeEventListener("message",t)}}}function be(){return{post:()=>{},on:()=>()=>{}}}var j="__frame_scroll",Ee=150,Ae=310,Se=160,Te=3e4;function ke(){let e=0,t=!1,r=!1,n=!1,s=0,o=null;const i=l=>{try{sessionStorage.setItem(j,JSON.stringify({y:l}))}catch{}},c=()=>{if(clearTimeout(e),o===null)return;const l=o;o=null,i(l)},h=()=>{if(t){t=!1;return}r=!0,o=scrollY,clearTimeout(e),e=setTimeout(c,Ee)};try{addEventListener("scroll",h,{passive:!0}),addEventListener("pagehide",c)}catch{}const p=()=>{let l;try{l=sessionStorage.getItem(j)}catch{return null}if(l===null)return null;let _;try{_=JSON.parse(l)}catch{_=null}const d=_?.y;if(!(typeof d=="number"&&Number.isFinite(d)&&d>=0)){try{sessionStorage.removeItem(j)}catch{}return null}return d};let w=!1;const m=l=>{try{const _=scrollY;scrollTo({top:l,left:0,behavior:"instant"}),s=l,n=!0,clearTimeout(e),o=null,i(l);const d=scrollY;d!==_&&(t=!0),d!==l&&!w&&(w=!0,addEventListener("load",()=>{try{if(scrollY===d){const T=p();m(T!==null?T:s)}}catch{}},{once:!0}))}catch{}},g=()=>{try{return!!location.hash}catch{return!0}};let a=!1;const f=()=>{try{if(a||innerWidth>Ae||innerHeight>Se)return;a=!0;const l=Date.now(),_=()=>{try{removeEventListener("resize",_)}catch{}if(Date.now()-l>Te||r||g())return;const d=p();m(d!==null?d:s)};addEventListener("resize",_)}catch{}};let v=!1,b=!1;return{restore(){if(v||(v=!0,g()))return;const l=p();l!==null&&(m(l),f())},promoted(){if(b||(b=!0,g()))return;const l=p();l!==null?(m(l),f()):n&&m(s)}}}function Re(e,t,r,n){let s=null;try{s=window.trustedTypes?.createPolicy("frame-runtime",{createScriptURL:h=>h})??null}catch{}const o=window.Worker,i=o?.prototype,c=Object.freeze({Worker:o,workerOn:i?.addEventListener,workerPost:i?.postMessage,workerTerminate:i?.terminate,fetch:window.fetch.bind(window),preventDefault:Event.prototype.preventDefault,policy:s,origins:t});r(e).then(h=>h?.bootTopLevel?h.bootTopLevel(c,n):n.settle()).catch(()=>n.settle())}var De="modulepreload",Ie=function(e){return"/"+e},Ue={},Le=function(t,r,n){let s=Promise.resolve();function o(i){const c=new Event("vite:preloadError",{cancelable:!0});if(c.payload=i,window.dispatchEvent(c),!c.defaultPrevented)throw i}return s.then(i=>{for(const c of i||[])c.status==="rejected"&&o(c.reason);return t().catch(o)})},Oe=window===top,q=Object.getOwnPropertyDescriptor(window,"claude"),k=we(Oe,window.__FRAME_PREAMBLE?.topLevel,q?.writable===!1),N=typeof k=="object"&&k[0],y=N?be():ge();(function(){const e=Object.defineProperty,t=globalThis,r=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let n=0;for(let s=0;s<r.length;s++){const o=r[s];try{e(t,o,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[o]}catch{}try{e(t,o,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[o]=="function"&&n++}if(n&&k==="framed")try{y.post({__frame_rtc_lockdown_failed:n},"*")}catch{}})();var Pe=1e4,Y=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function X(e){for(const t of Y)if(t.endsWith(":*"))try{const r=new URL(e);if(`${r.protocol}//${r.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}var R=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),B=window.__FRAME_PREAMBLE?.transforms,D=window.__FRAME_PREAMBLE?.comments,I=window.__FRAME_PREAMBLE?.translate;function S(e){return Le(()=>import("/_runtime/"+e),void 0)}function G(e,t){return{contract:e.contract,changes:new Set(e.changes??[]),flags:new Set(e.flags??[]),capabilities:e.capabilities??{},capBudgets:e.capBudgets??{},transforms:new Map,shellOrigin:t,mount:x,hooks:O,pipe:()=>({wrap:(r,n)=>(...s)=>{try{return n(...s)}catch(o){return Promise.reject(o)}}})}}var L=null,E=null;function V(e,t,r){try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var U=!1,O={editBefore:null,edit:null};function Ce(e,t,r=!1){const n=[];let s;if(r)try{O.editBefore?.(e)}catch{}for(const o of e.elements){const i=document.querySelector(`[data-id="${o.target}"]`);if(!i){s=o.target;break}if([...Object.keys(o.attrsSet??{}),...o.attrsRemoved??[]].some(c=>!oe(c))){s=o.target;break}if(o.text!==void 0&&(!ce(i)||de(i))){s=o.target;break}for(const[c,h]of Object.entries(o.attrsSet??{}))if(!J(i,c)){try{i.setAttribute(c,h)}catch{}Z(i,c,h)}for(const c of o.attrsRemoved??[])J(i,c)||(i.removeAttribute(c),Z(i,c,null));typeof o.text=="string"&&ue(i,o.text),n.push(o.target)}if(r)try{O.edit?.(e.seq,n,s)}catch{}if(s!==void 0){y.post({__frame_patch_miss:{seq:e.seq}},t);return}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:e.seq,targets:n}}))}catch{}}function Z(e,t,r){if(!(e instanceof HTMLInputElement))return;const n=t.toLowerCase();n==="checked"?e.checked=r!==null:n==="value"&&e.type!=="file"&&(e.value=r??"")}function J(e,t){const r=t.toLowerCase(),n=e;return r==="data-id"||(r==="value"||r==="checked")&&(n.__artifactSecret===!0||/^(password|hidden|file)$/.test(n.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${e.getAttribute("autocomplete")??""} ${n.autocomplete??""}`))}function Q(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,U=!0):U&&(delete t.dataset.theme,t.style.colorScheme="",U=!1)}var P=new Map;function Me(){let e;const t={u:new Promise(r=>{e=r}),r:r=>{t.done=!0,e(r)},done:!1,nulled:!1};return t}function F(){for(const e of P.values())e.done||(e.nulled=!0,e.r(null))}var je=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),x=(e,t)=>{const r=P.get(e);if(!r||r.done){r?.nulled&&E&&y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:e}},E);return}const n=typeof t=="function"?Object.setPrototypeOf(t,je):Object.assign(Object.create(null),t);typeof n.then=="function"&&delete n.then,r.r(Object.freeze(n))};function ee(){const e=q?.value??{};V(window,"claude",e);for(const t of Object.keys(R)){if(e[t]!==void 0){V(e,t,e[t]);continue}P.set(t,Me())}if(e.use===void 0){const t=r=>{if(typeof r!="string"||!Object.hasOwn(R,r))return Promise.resolve(null);const n=P.get(r);return n?n.u:Promise.resolve(e[r]??null)};try{Object.defineProperty(e,"use",{value:t,writable:!0,configurable:!0,enumerable:!1})}catch{}}}if(k==="framed"){const e=B&&A.test(B)?S(B).catch(()=>{}):Promise.resolve(void 0),t=a=>{if(a.type==="auxclick"&&a.button!==1)return;const f=a.target,v=f&&f.closest?f.closest("a[href],area[href]"):null;if(!v)return;const b=v.getAttribute("href");if(!b)return;let l;try{l=new URL(b,document.baseURI)}catch{return}if((l.protocol==="http:"||l.protocol==="https:")&&l.origin!==location.origin){a.preventDefault();const _=(v.getAttribute("target")??"").toLowerCase(),d=a.type==="auxclick"||a.metaKey||a.ctrlKey||a.shiftKey||a.altKey||!["","_self","_top","_parent"].includes(_);y.post({__frame_nav:!0,url:l.href,newTab:d},"*")}};addEventListener("click",t,!0),addEventListener("auxclick",t,!0);const r={},n=a=>{a.isTrusted&&(r.pointer=!0)},s=a=>{a.isTrusted&&(r.click=!0)};addEventListener("pointermove",n,{capture:!0,passive:!0}),addEventListener("click",s,{capture:!0,passive:!0}),e.then(a=>{a?.wireNav&&(a.wireNav(),removeEventListener("click",t,!0),removeEventListener("auxclick",t,!0),removeEventListener("pointermove",n,!0),removeEventListener("click",s,!0),a.wireEngagement?.(r))});let o=null;try{o=ke()}catch{}ee();let i=null,c=null,h=0;const p=y.on((a,f)=>{X(f)&&_e(a)&&(i=a.__frame_init,E=f,p(),clearTimeout(h),c?.())});y.post({__frame_connect:!0},"*");const w=new Promise(a=>{c=a,h=setTimeout(()=>{p(),a()},Pe)}),m=document.readyState==="loading"?new Promise(a=>document.addEventListener("DOMContentLoaded",()=>a(),{once:!0})):Promise.resolve();m.then(()=>{try{o?.restore()}catch{}});const g={cb:null};y.on((a,f)=>{if(X(f)&&ve(a)){try{o?.promoted()}catch{}g.cb?.()}}),w.then(async()=>{if(!i||!E){F();return}Q(i.theme);const a=E;let f=!1,v=!1;y.on((u,z,C)=>{if(z!==a)return;ye(u)&&Q(u.__frame_theme.theme),he(u)&&Ce(u.__frame_patch,a,C);const H=u?.__fc_mode;H&&typeof H=="object"&&!f&&D&&A.test(D)&&(f=!0,S(D).then(K=>K.install?.(a,H.on===!0)).catch(()=>{}));const W=u?.__ft_cmd;W&&typeof W=="object"&&!v&&I&&A.test(I)&&(v=!0,S(I).then(K=>K.install?.(a,W)).catch(()=>{}))});const b=Object.keys(i.capabilities??{}).filter(u=>Object.hasOwn(R,u)).map(u=>[u,R[u]]).filter(u=>typeof u[1]=="string"&&A.test(u[1])),l=await Promise.allSettled(b.map(([,u])=>S(u))),_=await e,d=E;if(_?.buildBoot||y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},d),_?.buildBoot)try{L=_.buildBoot(i,_.TRANSFORMS??{},{shellOrigin:d,mount:x,hooks:O},u=>y.post({__frame_cap_telemetry:u},d))}catch{y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},d),L=G(i,d)}else L=G(i,d);const T=u=>y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:u}},d),Ne=L;l.forEach((u,z)=>{const C=b[z][0];if(u.status!=="fulfilled"){T(C);return}try{u.value?.install?.(Ne)}catch{T(C)}}),F(),await m,y.post({__frame_ready:!0},E),e.then(u=>u?.installSizeReporter?.(d,g))})}else N&&(ee(),Re(N,Y,S,{settle:F,mount:x}))})();</script><!-- /frame-runtime --><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found]){display:none!important}</style></head><body>
+<title>FapiServer 资费与容量规划</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link rel="stylesheet" href="./css2">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#EDF0F3; --surface:#FFFFFF; --surface-2:#E3E8ED; --surface-3:#F5F7F9;
+  --ink:#0F1A23; --ink-2:#2C3B48; --muted:#5B6B78;
+  --line:#C4CFD8; --line-soft:#DEE5EB;
+  --accent:#8F5F00; --accent-2:#A66E00; --accent-soft:#F6EAD1;
+  --pos:#12604A; --neg:#8E2329;
+  --s1:#2a78d6; --s2:#e87ba4; --s3:#eda100;
+  --w-text:82ch; --w-wide:1180px;
+  --f-display:"Archivo","Noto Sans SC","PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Serif 4","Noto Serif SC",Georgia,"Songti SC","SimSun","Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,"Noto Sans SC","PingFang SC",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#0B1117; --surface:#131C24; --surface-2:#1B2630; --surface-3:#182129;
+    --ink:#E9EFF4; --ink-2:#C6D2DC; --muted:#8FA1AE;
+    --line:#28353F; --line-soft:#1F2A33;
+    --accent:#E7AE33; --accent-2:#E0A526; --accent-soft:#33280F;
+    --pos:#5CBE98; --neg:#E5787F;
+    --s1:#3987e5; --s2:#d55181; --s3:#c98500;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#0B1117; --surface:#131C24; --surface-2:#1B2630; --surface-3:#182129;
+  --ink:#E9EFF4; --ink-2:#C6D2DC; --muted:#8FA1AE;
+  --line:#28353F; --line-soft:#1F2A33;
+  --accent:#E7AE33; --accent-2:#E0A526; --accent-soft:#33280F;
+  --pos:#5CBE98; --neg:#E5787F;
+  --s1:#3987e5; --s2:#d55181; --s3:#c98500;
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:17px; line-height:1.85; -webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--w-wide); margin:0 auto; padding:0 24px 96px}
+.col{max-width:var(--w-text)}
+h1,h2,h3,h4{font-family:var(--f-display); text-wrap:balance; margin:0; line-height:1.32}
+p{margin:0 0 1em}
+a{color:var(--accent-2)}
+strong{font-weight:700}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-display); font-size:11.5px; font-weight:700; letter-spacing:.14em; color:var(--muted)}
+.mast{border-bottom:3px solid var(--ink); padding:56px 0 22px}
+.mast h1{font-size:clamp(32px,5.2vw,58px); font-weight:700; letter-spacing:0; margin:14px 0 16px}
+.mast .thesis{font-size:clamp(17px,2vw,21px); color:var(--ink-2); max-width:44em; margin:0}
+.meta{display:flex; flex-wrap:wrap; gap:0; margin-top:30px; border-top:1px solid var(--line); font-family:var(--f-mono); font-size:12.5px}
+.meta div{flex:1 1 170px; padding:12px 16px 12px 0; border-right:1px solid var(--line-soft)}
+.meta div:last-child{border-right:0}
+.meta span{display:block; color:var(--muted); font-size:11px; letter-spacing:.1em; margin-bottom:3px}
+section{padding-top:56px}
+.shead{display:flex; align-items:baseline; gap:14px; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:26px}
+.snum{font-family:var(--f-mono); font-size:13px; color:var(--accent-2); font-weight:600; flex:none}
+.shead h2{font-size:clamp(21px,2.6vw,28px); font-weight:700; letter-spacing:0}
+h3{font-size:18.5px; font-weight:700; margin:34px 0 10px}
+h4{font-size:13px; font-weight:700; margin:22px 0 8px; letter-spacing:.06em; color:var(--muted); font-family:var(--f-display)}
+.ratecard{background:var(--surface); border:1px solid var(--line); border-top:3px solid var(--accent-2); margin-top:38px}
+.rc-head{padding:20px 24px 4px}
+.rc-head h2{font-size:22px; font-weight:700}
+.rc-head p{color:var(--muted); font-size:14.5px; margin:6px 0 0; max-width:44em; line-height:1.75}
+.rc-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1px; background:var(--line-soft); margin-top:20px}
+.rc-cell{background:var(--surface); padding:20px 24px 22px}
+.rc-cell .k{font-family:var(--f-mono); font-size:12px; color:var(--muted); margin-bottom:10px}
+.rc-cell .v{font-family:var(--f-mono); font-size:clamp(26px,3.6vw,34px); font-weight:600; color:var(--accent); letter-spacing:-.02em; line-height:1.05}
+.rc-cell .u{font-family:var(--f-mono); font-size:12.5px; color:var(--ink-2); margin-top:9px; line-height:1.85}
+.rc-foot{padding:16px 24px; border-top:1px solid var(--line-soft); font-size:14.5px; color:var(--ink-2); background:var(--surface-3)}
+.note{border-left:3px solid var(--accent-2); background:var(--surface-3); padding:16px 20px; margin:26px 0; font-size:15.5px}
+.note.warn{border-left-color:var(--neg)}
+.note.good{border-left-color:var(--pos)}
+.note p:last-child{margin-bottom:0}
+.note .lbl{font-family:var(--f-display); font-size:11.5px; font-weight:700; letter-spacing:.12em; color:var(--muted); display:block; margin-bottom:6px}
+.tw{overflow-x:auto; margin:22px 0 8px; border:1px solid var(--line); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-family:var(--f-mono); font-size:13px; font-variant-numeric:tabular-nums}
+th,td{padding:9px 14px; text-align:right; border-bottom:1px solid var(--line-soft); white-space:nowrap; line-height:1.6}
+th{background:var(--surface-2); font-family:var(--f-display); font-weight:700; font-size:11.5px; letter-spacing:.06em; color:var(--ink-2); border-bottom:1px solid var(--line); position:sticky; top:0}
+td:first-child,th:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-3)}
+tbody tr.rule td{border-top:2px solid var(--line)}
+.tbl-note{font-size:13.5px; color:var(--muted); margin:0 0 6px; line-height:1.75}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .acc{color:var(--accent)}
+.wrapcell{white-space:normal; min-width:210px}
+.chart{border:1px solid var(--line); background:var(--surface); padding:24px; margin:24px 0 10px}
+.chart h4{margin:0 0 4px}
+.chart .sub{font-size:14px; color:var(--muted); margin:0 0 20px; font-family:var(--f-body); max-width:48em; line-height:1.8}
+.legend{display:flex; flex-wrap:wrap; gap:18px; margin-bottom:22px; font-family:var(--f-mono); font-size:12px; color:var(--ink-2)}
+.legend i{display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:7px; vertical-align:-1px}
+.brow{display:grid; grid-template-columns:190px 1fr 76px; align-items:center; gap:12px; margin-bottom:9px}
+.brow .bl{font-family:var(--f-mono); font-size:11.5px; color:var(--ink-2); text-align:right; line-height:1.45}
+.brow .bv{font-family:var(--f-mono); font-size:12.5px; font-weight:600; text-align:right; font-variant-numeric:tabular-nums}
+.bar{display:flex; height:24px; gap:2px}
+.seg{position:relative; min-width:1px; outline-offset:2px}
+.seg:first-child{border-radius:2px 0 0 2px}
+.seg:last-child{border-radius:0 2px 2px 0}
+.seg::after{content:attr(data-t); position:absolute; left:50%; bottom:calc(100% + 7px); transform:translateX(-50%); background:var(--ink); color:var(--bg); font-family:var(--f-mono); font-size:11.5px; line-height:1.6; padding:5px 9px; border-radius:3px; white-space:pre; opacity:0; pointer-events:none; transition:opacity .12s; z-index:5}
+.seg:hover::after,.seg:focus-visible::after{opacity:1}
+.axis{display:grid; grid-template-columns:190px 1fr 76px; gap:12px; margin-top:6px; font-family:var(--f-mono); font-size:10.5px; color:var(--muted)}
+.axis .ticks{display:flex; justify-content:space-between}
+ul,ol{margin:0 0 1em; padding-left:1.4em}
+li{margin-bottom:.5em}
+code{font-family:var(--f-mono); font-size:.87em; background:var(--surface-2); padding:1px 5px; border-radius:3px; word-break:break-word}
+pre{font-family:var(--f-mono); font-size:12.5px; background:var(--surface); color:var(--ink-2); border:1px solid var(--line); padding:16px 18px; overflow-x:auto; line-height:1.75; margin:16px 0}
+pre b{color:var(--accent); font-weight:600}
+.formula{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent-2); padding:18px 22px; margin:22px 0; font-family:var(--f-mono); font-size:13.5px; line-height:2; overflow-x:auto}
+.formula em{color:var(--muted); font-style:normal}
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:22px; margin:24px 0}
+.card{background:var(--surface); border:1px solid var(--line); padding:20px 22px}
+.card h4{margin-top:0}
+.card p:last-child,.card ul:last-child{margin-bottom:0}
+.stat{display:flex; flex-wrap:wrap; gap:1px; background:var(--line-soft); border:1px solid var(--line); margin:26px 0}
+.stat > div{background:var(--surface); flex:1 1 200px; padding:18px 20px}
+.stat .n{font-family:var(--f-mono); font-size:27px; font-weight:600; color:var(--accent); letter-spacing:-.02em}
+.stat .l{font-size:13.5px; color:var(--muted); margin-top:5px; line-height:1.65}
+:focus-visible{outline:2px solid var(--accent-2); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:680px){
+  body{font-size:16px}
+  .brow,.axis{grid-template-columns:118px 1fr 62px; gap:8px}
+  .brow .bl{font-size:10px}
+}
+footer{margin-top:72px; padding-top:22px; border-top:1px solid var(--line); font-size:13.5px; color:var(--muted); line-height:1.8}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Freeverse · FAPI 服务运营</div>
+  <h1>FapiServer 资费与容量规划</h1>
+  <p class="thesis">为 Freer 运行一个 FAPI 服务商要花多少钱、各个阶段该选哪家主机、每 GB 该定什么价才能让计费覆盖账单。全文以美元计价。</p>
+  <div class="meta">
+    <div><span>计价货币</span>USD · EUR 按 1.161 折算</div>
+    <div><span>链高度</span>约 3,415,000</div>
+    <div><span>组件</span>BASE DISK DOCK MAP ROAD</div>
+    <div><span>人力单价</span>$50 / 小时</div>
+    <div><span>成文日期</span>2026-08-29</div>
+  </div>
+</header>
+
+<section id="verdict">
+  <div class="col">
+    <p style="margin-top:34px;font-size:19px;color:var(--ink-2)">本文一律以美元计价，因为账单就是以美元送到你手上的。折算成 FCH 只是 §7 里的一个公式，代入你想模拟的任何汇率即可。</p>
+  </div>
+
+  <div class="ratecard">
+    <div class="rc-head">
+      <div class="eyebrow">建议挂牌价</div>
+      <h2 style="margin-top:8px">每 GB 就按这个价收</h2>
+      <p>推导过程见 §5。真正重要的是第一个数字：随用户规模增长的成本只有出站字节这一项，其余相对它都只是舍入误差。</p>
+    </div>
+    <div class="rc-grid">
+      <div class="rc-cell">
+        <div class="k">出站 · pricePerKBOut</div>
+        <div class="v">$0.20</div>
+        <div class="u">每发出 1 GB<br>$0.000195 / MB<br>$1.907 × 10⁻⁷ / KB</div>
+      </div>
+      <div class="rc-cell">
+        <div class="k">入站 · pricePerKBIn</div>
+        <div class="v">$0.04</div>
+        <div class="u">每上传 1 GB<br>$0.000039 / MB<br>所有主机商入站流量都免费——<br>这一项定的是 CPU 与磁盘写入</div>
+      </div>
+      <div class="rc-cell">
+        <div class="k">存储 · pricePerKBDay</div>
+        <div class="v">$0.10</div>
+        <div class="u">每 GB 每月<br>$0.00333 / GB·天<br>覆盖 DOCK 留存<br>与 DISK 载荷存储</div>
+      </div>
+    </div>
+    <div class="rc-foot">一名典型 Freer 用户每月产生约 250 MB 流量，付费 <strong>$0.052</strong>。扣除 20% 渠道分成后为 <strong>每用户每月 $0.042</strong>。下文所有盈亏平衡点都是用这个数去除成本得来的。</div>
+  </div>
+
+  <div class="stat">
+    <div><div class="n">$0.15–0.19</div><div class="l">1 万用户规模下，一个 GB 的真实交付成本——在任何靠谱主机上都如此，前提是把你自己的时间算进去</div></div>
+    <div><div class="n">约 3,800</div><div class="l">把每月 2.5 小时的运维投入计入后，服务器开始自负盈亏的用户数</div></div>
+    <div><div class="n">6.3×</div><div class="l">1 万用户下，最便宜与最贵主机之间的差距——只看账单</div></div>
+    <div><div class="n">2.6×</div><div class="l">加上人力成本后的同一差距。账单不等于成本。</div></div>
+  </div>
+</section>
+
+<section id="drivers">
+  <div class="shead"><span class="snum">§1</span><h2>你实际在为什么付钱</h2></div>
+  <div class="col">
+    <p>一个 FapiServer 节点跑五个进程：Elasticsearch、Docker 里的 Freecash 全节点、FchParser、FeipParser，以及监听 UDP 8500 的 FapiServer 本身。它们的成本特征完全不同，而真正影响账单的只有两个。</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>内存——你花钱买的东西</h4>
+      <p>Elasticsearch 是绝对大头。它要吃掉半台机器作堆内存，另外半台作页缓存。Freecash 节点、两个解析器和 FapiServer 加起来还要 5–6&nbsp;GB。这就给单机部署划出了 <strong>16&nbsp;GB 的下限</strong>，也让「每美元买到多少内存」成为选型时该盯的指标。</p>
+    </div>
+    <div class="card">
+      <h4>出站流量——随规模增长的那一项</h4>
+      <p>FUDP 发给手机的每一个字节，都会在某处被计量。AWS 上是 <strong>$0.09/GB</strong>；欧洲平价主机上是 <strong>$0.001/GB</strong>；带不限量千兆口的独服上则是 <strong>免费</strong>。同样的字节，80 倍的价差。这一个选择所左右的金额，超过本文其余所有决策的总和。</p>
+    </div>
+    <div class="card">
+      <h4>存储——便宜且增长缓慢</h4>
+      <p>Freecash 出块间隔约 1 分钟，且区块大多是空的。340 万个区块在磁盘上只占个位数 GB；由此构建的 ES 索引在无副本时约 15–30&nbsp;GB，每月增长远低于 1&nbsp;GB。真正随用户增长的只有 DISK 和 DOCK 的载荷存储，而那部分有自己的计费项。</p>
+    </div>
+    <div class="card">
+      <h4>你的时间——没人给你开发票的成本</h4>
+      <p>非托管 VPS 账单更便宜、工时更贵：没有快照即服务、没有托管备份，硬件故障归你处理。1 万用户规模下，各家主机的账单差距是 18 倍；把每月 2–5 小时按 $50/小时计价后，差距塌缩到 2.6 倍。两个数字都真实，但只有后者够格用来做决策。</p>
+    </div>
+  </div>
+
+  <h3>计费字节与账单金额之间的差额</h3>
+  <div class="col">
+    <p>FAPI 计量的是 FUDP 载荷，主机商计量的是离开网卡的字节。两者之间差着一个可预测的系数：</p>
+  </div>
+  <div class="formula">
+    FUDP 头部 + 加密包 …………… 每个 1350 字节数据报 73 字节<br>
+    IP + UDP 头部 ………………… 28 字节<br>
+    ACK、重传、路径探测 ………… 通常 ~5–12%<br>
+    <em>────────────────────────────────────────</em><br>
+    <b>链路字节 ≈ 1.20 × 可计费载荷字节</b>
+  </div>
+  <div class="col">
+    <p>重传的字节是刻意不向客户端重复收费的，但主机商照收不误。下文每一个容量数字都同时给出两种单位：<em>计费字节</em>（你开给客户的）和 <em>链路字节</em>（主机商开给你的）。</p>
+  </div>
+</section>
+
+<section id="where">
+  <div class="shead"><span class="snum">§2</span><h2>该把它跑在哪里</h2></div>
+  <div class="col">
+    <p>就这套负载而言，主机商可分为五档。真正的决策是选档而非选品牌——而且随着服务器成长，合适的档位也会变。</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>档位</th><th>代表厂商</th><th>出站单价</th><th>内存 / 美元</th><th class="wrapcell">你放弃了什么</th></tr></thead>
+      <tbody>
+        <tr><td>超大规模云</td><td>AWS EC2、GCP、Azure</td><td>$0.090 / GB</td><td>差</td><td class="wrapcell">什么都不放弃——你就是在为此付钱</td></tr>
+        <tr><td>含流量包云</td><td>Lightsail、DigitalOcean、Vultr、Linode</td><td>超额部分 $0.010 / GB</td><td>一般</td><td class="wrapcell">自动伸缩、托管数据服务</td></tr>
+        <tr><td>欧洲平价云</td><td>Hetzner Cloud、OVH、Scaleway</td><td>超 20 TB 后 $0.001 / GB</td><td>好</td><td class="wrapcell">SLA、全球区域、手把手支持</td></tr>
+        <tr><td>独服 / 裸金属</td><td>Hetzner AX、OVH、Liquid Web</td><td>免费（不限量千兆）</td><td>极好</td><td class="wrapcell">弹性；硬件故障归你</td></tr>
+        <tr><td>超低价 VPS</td><td>Contabo、廉价分销商</td><td>免费（含 32 TB）</td><td>最好</td><td class="wrapcell">SLA、IO 稳定性、支持质量</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tbl-note">出站单价均指用完赠送额度后的边际费率。Hetzner 新加坡区是例外——€7.40/TB 且赠送额度小得多，这使它实际落在含流量包云那一档，而非平价档。</p>
+
+  <div class="chart">
+    <h4>1 万用户规模下五家主机的月度成本</h4>
+    <p class="sub">同一套负载——数据节点与边缘节点合计 64 GB 内存，2.5 TB 可计费出站流量。运维人力按每月估计工时 × $50/小时计价，而正是这一段改变了排名。</p>
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i>基础设施</span>
+      <span><i style="background:var(--s2)"></i>超额出站流量</span>
+      <span><i style="background:var(--s3)"></i>运维人力</span>
+    </div>
+
+    <div class="brow"><div class="bl">Contabo<br>VDS XL 64GB + VPS</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:14.29%" data-t="基础设施 $140
+含 32 TB 流量，无超额费"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:25.51%" data-t="运维人力 $250
+每月 5.0 小时——无 SLA，支持最弱"></div>
+    </div><div class="bv">$390</div></div>
+
+    <div class="brow"><div class="bl">Hetzner 独服<br>AX42 64GB + CX43</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:15.20%" data-t="基础设施 $149
+含摊销的上架费；不限量千兆"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:25.51%" data-t="运维人力 $250
+每月 5.0 小时——裸金属，硬件故障归你"></div>
+    </div><div class="bv">$399</div></div>
+
+    <div class="brow"><div class="bl">Hetzner Cloud<br>CCX33 + CX43 边缘</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:18.27%" data-t="基础设施 $179
+含 50 TB 赠送流量"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:20.41%" data-t="运维人力 $200
+每月 4.0 小时"></div>
+    </div><div class="bv">$379</div></div>
+
+    <div class="brow"><div class="bl">AWS Lightsail<br>内存型 64GB + 通用型 16GB</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:38.57%" data-t="基础设施 $378
+13 TB 共享额度可覆盖 3 TB 链路流量"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:10.20%" data-t="运维人力 $100
+每月 2.0 小时——快照与备份是托管的"></div>
+    </div><div class="bv">$478</div></div>
+
+    <div class="brow"><div class="bl">AWS EC2<br>r7i.2xl + m7i.xl + 800GB</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:63.16%" data-t="基础设施 $619
+算力 + gp3 + 快照 + 2 个 IPv4"></div>
+      <div class="seg" tabindex="0" style="background:var(--s2);width:26.63%" data-t="出站流量 $261
+3 TB 链路流量 × $0.09/GB"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:10.20%" data-t="运维人力 $100
+每月 2.0 小时"></div>
+    </div><div class="bv">$980</div></div>
+
+    <div class="axis"><div></div><div class="ticks"><span>$0</span><span>$250</span><span>$500</span><span>$750</span><span>$1,000</span></div><div></div></div>
+  </div>
+  <p class="tbl-note">完整数字见 §4 的表格，以该表为准。将鼠标悬停或用 Tab 聚焦任一色块可查看明细。</p>
+
+  <div class="note good">
+    <span class="lbl">结论</span>
+    <p><strong>不要把自己绑死在一家主机上。随着服务器成长，换档。</strong>在 T1 之前，账单只是噪音——$19 的机器和 $74 的机器是同一个决策，那就买最省你工时的那台。从 T2 起出站账单开始有分量，平价档开始物有所值。到了 T3，用不限量独服跑数据面、再配上多个区域云边缘节点，比 Lightsail 便宜 4 倍、比 EC2 便宜 14 倍，而那时的业务量也足以支撑相应的运维投入。</p>
+  </div>
+
+  <h3>AWS 仍然值得付费的地方</h3>
+  <div class="col">
+    <p>有两件事，无论服务器本身跑在哪里都成立。<strong>用于备份的对象存储</strong>——余额账本、它的 WAL 和审计日志从第一天起就该放进 S3 或 Backblaze B2，无论算力在哪，这项开销都只有每月一美元左右。以及<strong>亚太覆盖</strong>，如果 Freer 的用户在那边的话：Hetzner 只有一个新加坡区且流量条款差得多，而 AWS、Vultr 和 DigitalOcean 都有东京、首尔和悉尼。对一个 UDP 协议来说，延迟和可达性比一张便宜的账单更值钱。</p>
+  </div>
+</section>
+
+<section id="tiers">
+  <div class="shead"><span class="snum">§3</span><h2>各规模阶段该买什么</h2></div>
+  <div class="col">
+    <p>档位按 Freer 在 Android 与 macOS 上的月活用户划分。全文的流量假设是<strong>典型用户每月 250&nbsp;MB 可计费出站流量</strong>——包含链上查询、经 DOCK 与 ROAD 的聊天，以及经 DISK 的中等量媒体。轻度用户约 50&nbsp;MB，重媒体用户约 1&nbsp;GB。峰值并发取月活的 8–15%，且随基数增长而下降。</p>
+    <p>按需求指标采购，而不是按品牌：</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>档位</th><th>月活</th><th>峰值并发</th><th>内存</th><th>vCPU</th><th>磁盘</th><th>计费出站</th><th>链路出站</th><th>节点数</th></tr></thead>
+      <tbody>
+        <tr><td>T0 试点</td><td>≤ 300</td><td>约 45</td><td>16 GB</td><td>4–8</td><td>160 GB</td><td>75 GB</td><td>90 GB</td><td>1</td></tr>
+        <tr><td>T1 种子</td><td>1,000–3,000</td><td>约 350</td><td>32 GB</td><td>8–16</td><td>320 GB</td><td>250–750 GB</td><td>0.3–0.9 TB</td><td>1</td></tr>
+        <tr><td>T2 增长</td><td>10,000</td><td>约 1,000</td><td>64 GB</td><td>16–24</td><td>600 GB</td><td>2.5 TB</td><td>3.0 TB</td><td>2</td></tr>
+        <tr><td>T3 规模化</td><td>100,000</td><td>约 8,000</td><td>160 GB</td><td>48+</td><td>约 2 TB</td><td>25 TB</td><td>30 TB</td><td>4–5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>进程分布与内存切分</h3>
+  <div class="col">
+    <p>T1 之前所有东西跑在一台机器上。到 T2，数据面与报文面分离，因为它们的扩展轴不同——Elasticsearch 吃内存，FapiServer 吃报文与带宽。边缘节点是 T3 时要横向复制的那个，也是该部署在离用户近处的那个。</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>进程</th><th>T0/T1 · 单机</th><th>T2/T3 · 数据节点</th><th>T2/T3 · 边缘节点</th><th>备注</th></tr></thead>
+      <tbody>
+        <tr><td>Elasticsearch 8</td><td>6 GB 堆（共 16）</td><td>16–31 GB 堆</td><td>—</td><td class="wrapcell">堆内存永不超过 31 GB；单节点时副本数设 0</td></tr>
+        <tr><td>freecash 节点（Docker）</td><td>1.5 GB · dbcache 450</td><td>2 GB</td><td>—</td><td class="wrapcell">v1.0.5，镜像为 amd64——见 §8</td></tr>
+        <tr><td>FchParser</td><td>1 GB</td><td>2 GB</td><td>—</td><td class="wrapcell">需要节点的区块目录在本地磁盘上</td></tr>
+        <tr><td>FeipParser</td><td>1 GB</td><td>2 GB</td><td>—</td><td class="wrapcell">读取 FchParser 写出的 opreturn/*.byte</td></tr>
+        <tr><td>FapiServer（UDP 8500）</td><td>2 GB</td><td>—</td><td>4–8 GB</td><td class="wrapcell">承载全部出站流量；DISK/DOCK 载荷在此</td></tr>
+        <tr><td>操作系统 + 余量</td><td>约 1 GB</td><td>约 2 GB</td><td>约 2 GB</td><td class="wrapcell">要给 ES 留出真实的页缓存</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="lbl">要实测，别轻信</span>
+    <p>上面的存储数字是从区块数量与区块结构推算的，不是实测值。在敲定卷大小之前，在一台已同步的节点上跑这几条命令，用真实数字：</p>
+    <pre>du -sh ~/.freecash/blocks ~/.freecash/chainstate
+curl -s "localhost:9200/_cat/indices?v&amp;h=index,docs.count,store.size&amp;s=store.size:desc"
+du -sh /path/to/fapiDiskDataPath</pre>
+  </div>
+</section>
+
+<section id="cost">
+  <div class="shead"><span class="snum">§4</span><h2>按档位与主机拆解的账单</h2></div>
+  <p class="tbl-note">单位为每月美元。「基础设施」= 算力 + 存储 + 固定 IP；「出站」= 超出赠送额度的流量费；「人力」= 估计工时 × $50。「合计」不含人力，「全成本」含人力。把小时单价换成你自己的，排名就会变——这正是重点所在。</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>档位</th><th>主机</th><th>基础设施</th><th>出站</th><th>合计</th><th>工时/月</th><th>全成本</th><th>$/交付 GB</th></tr></thead>
+      <tbody>
+        <tr><td>T0 · 300 月活</td><td>Hetzner Cloud CX43</td><td>19</td><td>0</td><td class="acc">19</td><td>2.5</td><td>144</td><td>1.92</td></tr>
+        <tr><td></td><td>Contabo VPS（16–32 GB）</td><td>25</td><td>0</td><td>25</td><td>3.0</td><td>175</td><td>2.33</td></tr>
+        <tr><td></td><td>AWS Lightsail 内存型 16GB</td><td>74</td><td>0</td><td>74</td><td>1.0</td><td class="acc">124</td><td>1.65</td></tr>
+        <tr><td></td><td>AWS EC2 r7i.large</td><td>125</td><td>0</td><td>125</td><td>1.0</td><td>175</td><td>2.33</td></tr>
+
+        <tr class="rule"><td>T1 · 3,000 月活</td><td>Hetzner Cloud CX53</td><td>34</td><td>0</td><td class="acc">34</td><td>2.5</td><td class="acc">159</td><td>0.21</td></tr>
+        <tr><td></td><td>Contabo Cloud VPS 5（64 GB）</td><td>49</td><td>0</td><td>49</td><td>3.0</td><td>199</td><td>0.27</td></tr>
+        <tr><td></td><td>AWS Lightsail 内存型 32GB</td><td>144</td><td>0</td><td>144</td><td>1.0</td><td>194</td><td>0.26</td></tr>
+        <tr><td></td><td>AWS EC2 r7i.xlarge</td><td>236</td><td>72</td><td>308</td><td>1.0</td><td>358</td><td>0.48</td></tr>
+
+        <tr class="rule"><td>T2 · 10,000 月活</td><td>Contabo VDS XL + VPS 边缘</td><td>140</td><td>0</td><td>140</td><td>5.0</td><td>390</td><td>0.156</td></tr>
+        <tr><td></td><td>Hetzner AX42 独服 + CX43 边缘</td><td>149</td><td>0</td><td>149</td><td>5.0</td><td>399</td><td>0.160</td></tr>
+        <tr><td></td><td>Hetzner CCX33 + CX43 边缘</td><td>179</td><td>0</td><td class="acc">179</td><td>4.0</td><td class="acc">379</td><td>0.152</td></tr>
+        <tr><td></td><td>AWS Lightsail 内存型 64GB + 通用型</td><td>378</td><td>0</td><td>378</td><td>2.0</td><td>478</td><td>0.191</td></tr>
+        <tr><td></td><td>AWS EC2 r7i.2xl + m7i.xl</td><td>619</td><td>261</td><td>880</td><td>2.0</td><td>980</td><td>0.392</td></tr>
+
+        <tr class="rule"><td>T3 · 100,000 月活</td><td>Contabo 2× VDS XL + 3× VPS</td><td>305</td><td>0</td><td>305</td><td>12.0</td><td>905</td><td>0.036</td></tr>
+        <tr><td></td><td>Hetzner 2× AX42 + 3× CX53</td><td>364</td><td>0</td><td class="acc">364</td><td>10.0</td><td>864</td><td>0.035</td></tr>
+        <tr><td></td><td>Hetzner CCX43 + 3× CX53</td><td>423</td><td>0</td><td>423</td><td>8.0</td><td class="acc">823</td><td>0.033</td></tr>
+        <tr><td></td><td>AWS Lightsail 内存型 128GB + 3× 通用型</td><td>1,076</td><td>27</td><td>1,103</td><td>6.0</td><td>1,403</td><td>0.056</td></tr>
+        <tr><td></td><td>AWS EC2 3× r7i.2xl + 3× m7i.2xl</td><td>2,356</td><td>2,593</td><td>4,949</td><td>6.0</td><td>5,249</td><td>0.210</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>横着读每一档的最后一列。在 T0，无论你怎么折腾，交付一个 GB 都要花 $1.65–$2.33，因为流量太少，固定成本摊不下去。到 T2，差距已经收敛到<strong>五家里有四家落在 $0.152–$0.191 之间</strong>，只有 EC2 在区间之外。正是这种收敛，让单一挂牌价成为可能。</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="shead"><span class="snum">§5</span><h2>定价</h2></div>
+  <div class="col">
+    <p>价格必须依次越过四道门槛：字节的边际成本、按流量摊薄的机器固定成本、从收入顶端被抽走的推荐分成，以及一份用于积累储备金的毛利。</p>
+  </div>
+
+  <div class="formula">
+    <em>1 · 边际底线——多发一个 GB 的成本</em><br>
+    超大规模云 <b>$0.090/GB</b> · 含流量包云 <b>$0.010</b> · 平价云 <b>$0.001</b> · 独服 <b>$0.000</b><br><br>
+    <em>2 · 加上固定成本，按目标规模的可计费流量摊薄</em><br>
+    价格 = ( 每月全成本 ÷ 可计费 GB ) × ( 1 + 毛利率 ) ÷ ( 1 − 渠道分成 )<br><br>
+    <em>3 · 取 T2、中位主机、30% 毛利、20% 消费渠道分成</em><br>
+    $379 ÷ 2,500 GB × 1.30 ÷ 0.80 = <b>$0.246 / GB</b><br>
+    <em>……而同一算式用在 T2 最便宜的主机上得到</em> <b>$0.152 × 1.625 = $0.247</b><br>
+    <em>……用在 Lightsail 上则是</em> <b>$0.191 × 1.625 = $0.311</b><br><br>
+    <em>4 · 向下取整为一个站得住脚的挂牌数字</em><br>
+    pricePerKBOut = <b>$0.20 每 GB = $1.907 × 10⁻⁷ 每 KB</b>
+  </div>
+
+  <div class="col">
+    <p>从算式结果<em>向下</em>取整是刻意为之。$0.246 是恰好在 1 万用户处收回全部成本的价格；$0.20 则在约 1.2 万用户处收回成本，并留出成长空间。它同时是超大规模云边际费率的 2.2 倍、平价云费率的 200 倍——这才是诚实的价差：你卖的绝大部分不是原始带宽，而是一个吃内存的数据库和两个不管有没有人查询都在跑的解析器。</p>
+    <p>由此引出两处调整。<strong>所有主机的入站流量都是免费的</strong>，所以入站定价只需覆盖一次上传引发的 CPU 与磁盘写入；取出站费率的 20%，既能遏制滥用，又不至于惩罚上传。<strong>已存储的字节</strong>只要还在那里就一直占磁盘——$0.10/GB·月 高于 AWS gp3 的 $0.08，更远高于磁盘随套餐赠送的 Hetzner 机器，而这部分差价正是用来给这些字节做备份的。</p>
+  </div>
+
+  <h3>换一个价格会怎样</h3>
+  <p class="tbl-note">各挂牌价下的盈亏平衡月活数，成本为含人力的全成本。推荐档位已高亮。</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>$ / 出站 GB</th><th>净收入 $ / 月活 / 月</th><th>T1 Hetzner（$159）</th><th>T2 Hetzner（$379）</th><th>T2 Lightsail（$478）</th><th>T3 Hetzner（$823）</th></tr></thead>
+      <tbody>
+        <tr><td>0.05</td><td>0.0104</td><td>15,230</td><td>36,303</td><td>45,785</td><td>78,831</td></tr>
+        <tr><td>0.10</td><td>0.0209</td><td>7,615</td><td>18,151</td><td>22,893</td><td>39,416</td></tr>
+        <tr><td>0.15</td><td>0.0313</td><td>5,077</td><td>12,101</td><td>15,262</td><td>26,277</td></tr>
+        <tr><td class="acc">0.20 · 推荐</td><td class="acc">0.0418</td><td class="acc">3,807</td><td class="acc">9,076</td><td class="acc">11,446</td><td class="acc">19,708</td></tr>
+        <tr><td>0.30</td><td>0.0626</td><td>2,538</td><td>6,050</td><td>7,631</td><td>13,139</td></tr>
+        <tr><td>0.50</td><td>0.1044</td><td>1,523</td><td>3,630</td><td>4,579</td><td>7,883</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <p>注意价格<em>不</em>受什么约束：即便按 $0.50/GB，典型用户每月也只付 $0.13，所以这里没有任何东西受限于用户的支付意愿。真正的约束是相对其他 FAPI 服务商的可信度——每个客户端在连接之前都能从链上读到所有人的价格。按你自己真实的成本基准定价，剩下的交给规模。</p>
+  </div>
+</section>
+
+<section id="pl">
+  <div class="shead"><span class="snum">§6</span><h2>盈亏</h2></div>
+  <p class="tbl-note">按出站 $0.20/GB、入站 $0.04/GB、典型 250 MB/用户的画像，扣除 20% 消费渠道分成后。两列成本：账单，以及账单加上你的时间。</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>档位</th><th>月活</th><th>可计费 GB</th><th>毛收入 $</th><th>净收入 $</th><th>最优账单</th><th>结果</th><th>全成本</th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td>T0 试点</td><td>300</td><td>75</td><td>15.66</td><td>12.53</td><td>19</td><td class="neg">−6</td><td>124</td><td class="neg">−111</td></tr>
+        <tr><td>T1 种子</td><td>3,000</td><td>750</td><td>156.60</td><td>125.28</td><td>34</td><td class="pos">+91</td><td>159</td><td class="neg">−34</td></tr>
+        <tr><td>T2 增长</td><td>10,000</td><td>2,500</td><td>522.00</td><td>417.60</td><td>140</td><td class="pos">+278</td><td>379</td><td class="pos">+39</td></tr>
+        <tr><td>T3 规模化</td><td>100,000</td><td>25,000</td><td>5,220.00</td><td>4,176.00</td><td>305</td><td class="pos">+3,871</td><td>823</td><td class="pos">+3,353</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>每用户净收入是<strong>每月 $0.042</strong>。只看账单，服务器约在 800 用户处开始盈利。把你自己的时间算进去，约在 3,800 用户处盈利，过了 1 万才算真正宽裕——那时毛利才终于超出投入的努力，值得为它花这份力气。</p>
+    <p>因为成本是阶跃函数而收入是一条直线，服务器在每次升级之后都会短暂地陷入亏损。这意味着应当尽量晚升级：平价主机上的 T1 机器带 20 TB 流量额度，相当于 6.5 万典型用户的流量。那里真正的瓶颈是 CPU 与报文数，不是带宽，所以该由并发数——而不是带宽曲线——来触发升级。</p>
+  </div>
+
+  <h3>推荐分成是第二大成本</h3>
+  <div class="col">
+    <p>当前配置把 <code>orderViaShare</code> 设为 30%、<code>consumeViaShare</code> 设为 20%。两者叠加，一个经第三方渠道获取的用户会交出其毛支出的 50%——在每一个档位上都高于基础设施成本。今天这没有危害，因为 <code>defaultVia</code> 指向运营者自己的 FID，分成又回到你手里。但真实渠道一旦出现，它就不再无害了。</p>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>经第三方渠道来的用户占比</th><th>净收入 $ / 月活</th><th>对 $159 全成本的盈亏平衡点</th><th>对 $379 全成本的盈亏平衡点</th></tr></thead>
+      <tbody>
+        <tr><td>0%（defaultVia = 自己）</td><td>0.0522</td><td>3,046</td><td>7,261</td></tr>
+        <tr><td>25%</td><td>0.0457</td><td>3,481</td><td>8,297</td></tr>
+        <tr><td>50%</td><td>0.0392</td><td>4,061</td><td>9,679</td></tr>
+        <tr><td>100%</td><td>0.0261</td><td>6,092</td><td>14,521</td></tr>
+        <tr><td>100%，分成降至 10% + 10%</td><td>0.0418</td><td>3,807</td><td>9,076</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <p>把两项分成都降到 10%，可以在渠道完全渗透的情况下收回大部分损失。要在启动渠道计划<em>之前</em>做，而不是之后——分成比例是从链上服务声明中读取的，事后调低会被每一个合作方看见。</p>
+  </div>
+</section>
+
+<section id="fch">
+  <div class="shead"><span class="snum">§7</span><h2>折算为 FCH</h2></div>
+  <div class="col">
+    <p>上面的资费以美元计，因为账单以美元计。而服务声明要的是每 KB 多少 FCH。一个公式即可打通：</p>
+  </div>
+
+  <div class="formula">
+    <b>每 KB 聪数 = 95.367 × ( 每 GB 美元价 ) ÷ ( FCH 的美元价 )</b><br>
+    <b>每 KB FCH &nbsp;= 每 KB 聪数 ÷ 100,000,000</b><br><br>
+    <em>该常数为 10⁸ ÷ 1,048,576——即每 FCH 的聪数，除以每 GB 的 KB 数</em>
+  </div>
+
+  <div class="col">
+    <p>按推荐的 $0.20 / $0.04 / $0.10 资费，在四种汇率下的结果：</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>FCH 价格</th><th>pricePerKBOut 聪</th><th>链上 FCH/KB</th><th>pricePerKBIn 聪</th><th>pricePerKBDay 聪</th><th>典型用户月付</th></tr></thead>
+      <tbody>
+        <tr><td>$0.0010</td><td>19,073</td><td>0.00019073</td><td>3,815</td><td>318</td><td>52.2 FCH/月</td></tr>
+        <tr><td>$0.00265</td><td>7,198</td><td>0.00007198</td><td>1,440</td><td>120</td><td>19.7 FCH/月</td></tr>
+        <tr><td>$0.0100</td><td>1,907</td><td>0.00001907</td><td>381</td><td>32</td><td>5.2 FCH/月</td></tr>
+        <tr><td>$0.0500</td><td>381</td><td>0.00000381</td><td>76</td><td>6</td><td>1.0 FCH/月</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>调价不是免费的，所以节奏比精度更重要。价格存放在链上服务声明中，在服务器启动或手动刷新时读取，并被每一个客户端缓存。<strong>每月复核一次，只在汇率变动超过 30% 时才调价</strong>，并在交易上链之前于应用内公告。两次复核之间由毛利吸收漂移，这也正是那 30% 存在的部分理由。</p>
+    <p>两个方向的伤害各不相同。如果 FCH <em>下跌</em>，美元收入随之下跌，在你调价之前一直亏损。如果 FCH <em>上涨</em>，你实际上是在超额收费，而带 <code>maxPayment</code> 保护的客户端——FC-JDK 客户端默认在超过 1 FCH 时停止自动充值——会开始拒绝续费。同一套按月纪律可以同时解决这两种情况。</p>
+  </div>
+</section>
+
+<section id="config">
+  <div class="shead"><span class="snum">§8</span><h2>由此引出的配置修改</h2></div>
+  <div class="col">
+    <p>当前的测试声明把所有项都定为每 KB 1 聪——在任何合理的 FCH 汇率下，这都不到成本的百分之一的零头。有四项设置必须一起改动，其中还有一项无论价格如何都会阻塞上线。请按 §7 用你发布当天的汇率计算 FCH 数值。</p>
+  </div>
+
+  <h4>config/&lt;sid&gt;_settings.json → service</h4>
+  <pre>"pricePerKB"     "0.00000001"  →  <b>95.367 × 0.20 / FCH_USD</b>   单位为聪，字段需 ÷1e8
+"pricePerKBIn"   "0.00000001"  →  <b>95.367 × 0.04 / FCH_USD</b>
+"pricePerKBOut"  "0.00000001"  →  <b>95.367 × 0.20 / FCH_USD</b>
+"pricePerKBDay"  "0.00000001"  →  <b>95.367 × 0.10 / 30 / FCH_USD</b>
+"minPayment"     "0.01"        →  <b>约 $0.03 等值</b>  <em>// ≈ 每次充值 150 MB</em>
+"minCredit"      "0.0001"      →  <b>约 $0.00003 等值</b>  <em>// ≈ 150 KB 试用额度</em>
+"home" {"api": "fudp://10.0.2.2:8500"} → <b>"fudp://fapi.yourhost:8500"</b></pre>
+
+  <h4>config/&lt;sid&gt;_settings.json → settingMap</h4>
+  <pre>"creditLimit"        10000     →  <b>与 minCredit 对齐，单位为聪</b>
+"maxTotalDiskUsage"  10 GB     →  <b>按档位设定（§3）</b>
+"minDealerBalance"   1000000   →  <b>按数个结算周期的规模设定</b></pre>
+
+  <div class="note warn">
+    <span class="lbl">当前配置中的三个陷阱</span>
+    <p><strong>信用额度只够一千字节。</strong><code>creditLimit</code> 是 10,000 聪。在任何现实价格下，一个全新用户大约只能用 1 KB 就会撞上 <code>402 PAYMENT_REQUIRED</code>。<code>FapiBalanceManager</code> 在启动时就会针对这一点打出警告——不要带着它上线。另请注意 <code>service.minCredit</code>（以 FCH 计）会覆盖 <code>settingMap.creditLimit</code>（以聪计），所以只调其中一个是无效的。</p>
+    <p><strong><code>home.api</code> 指向的是 Android 模拟器。</strong><code>10.0.2.2</code> 是模拟器对宿主回环地址的别名。一旦这样发布到链上，任何真实设备都无法访问该服务。声明发出去之前，这里必须换成公网主机名。</p>
+    <p><strong><code>minPayment</code> 还是按旧价设的。</strong>0.01 FCH 在新资费下只能买约 150 KB，会导致每隔几分钟就触发一次自动充值交易。应当把它设为典型用户约一个月的流量。</p>
+  </div>
+
+  <h3>一处值得改的代码</h3>
+  <div class="col">
+    <p><code>FapiBalanceManager</code> 的免费列表初始包含 <code>PING</code>、<code>PONG</code>、<code>PEER_INFO</code> 和 <code>CHAT_ACK</code>。<code>map.register</code> 不在其中，而费用按 <code>ceil(bytes/1024) × price</code> 计算——于是一个 250 字节的 NAT 保活包被按整整一千字节计费，虚增四倍，每 25 秒一次。一个每天在线三小时的用户每月要发出约 13,000 个这样的包，被按 13 MB 收费，而实际只有 3 MB——约占其账单的 5%，而这全部是为了一个只为撑开防火墙而存在的报文。</p>
+    <p>要么把 <code>map.register</code> 加入默认免费集合，要么按字节而非取整的千字节计费。前者是一行改动，也是更诚实的做法；保活包是基础设施开销，不是用户主动请求的服务。</p>
+  </div>
+</section>
+
+<section id="factors">
+  <div class="shead"><span class="snum">§9</span><h2>风险与其他因素</h2></div>
+
+  <div class="note warn">
+    <span class="lbl">最要紧的那一条</span>
+    <p><strong>FCH 收入付不了主机账单。</strong>Freecash 在三个市场交易，日成交量近乎为零。资费赚到的一切，都以一种无法在任何价位可靠卖出的代币形式到账。请把服务器规划成一项以美元供养、以 FCH 计量的运营：持有覆盖 6–12 个月主机费用的美元储备，并把 FCH 收入当作生态内的信用额度——可用于支付其他 FAPI 服务商、购买 DISK 空间、与利益相关方及渠道结算——而不是当作营收。在 FCH 拥有真实市场之前，§6 中每一个盈利数字在算术上都正确，在经济上都只是理论。</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>廉价主机会封停中继</h4>
+      <p>ROAD 在对等节点之间转发不透明字节。那就是中继，而中继无论实际转发的是什么，都会招来滥用投诉。低价与平价主机对投诉的处理是先动手后问话；超大规模云则有正规流程。这是迁离 AWS 时最大的非价格风险。缓解手段：FAPI15 中已有的 2 跳上限、按对端的中继限速、公开的滥用举报联系方式，以及一条演练过的迁往备用主机的路径。</p>
+    </div>
+    <div class="card">
+      <h4>今天的价格不是明年的价格</h4>
+      <p>Hetzner 在 2026 年调价两次——4 月最高上调 37%，6 月 CPX 与 CCX 系列上调 113–175%。Oracle 未经公告就把免费套餐砍半，并终止了超出新限额的实例。不要建立一个只在某一家主机当前价目表下成立的模型。§5 的敏感性表格存在的意义，就是让你在任何一家主机下次涨价后能重新推导价格。</p>
+    </div>
+    <div class="card">
+      <h4>免费额度是女巫攻击的目标</h4>
+      <p>每个新 FID 都能拿到信用额度，而 FID 是可以免费铸造的。把试用额度控制在几百 KB，任何更慷慨的额度都要绑定到有链上历史的 FID，并按源地址对新账号创建限速。按每个身份 150 KB 计，一千个假身份只让你损失约三美分——这正是合适的量级。</p>
+    </div>
+    <div class="card">
+      <h4>UDP 暴露面</h4>
+      <p>8500 端口对公网开放，且会响应未认证的报文。AWS 免费提供 Shield Standard；Hetzner 和 OVH 自带 DDoS 过滤；Contabo 的就薄弱一些。无论用哪家主机，都要在 FapiServer 上加按源地址的报文速率限制，并对每个对端每分钟的 <code>road.relay</code> 设上限——应用层的限制才是你在任何地方都能掌控的那一层。</p>
+    </div>
+    <div class="card">
+      <h4>Docker 镜像来自 2021 年</h4>
+      <p>freecash v1.0.5 于 2021 年 2 月以镜像存档形式发布，几乎可以肯定只支持 amd64。这就排除了用 ARM 实例跑节点的可能——而 ARM 恰恰是每美元内存最划算的地方（Hetzner CAX41 用 $48 给 32 GB）。用 <code>docker image inspect --format '{{.Architecture}}'</code> 验证。如果确是 amd64，要么全程留在 x86，要么只把节点放在 x86，而把 ES 和 FapiServer 放到 ARM 上。</p>
+    </div>
+    <div class="card">
+      <h4>你的用户在哪里</h4>
+      <p>Hetzner 有德国、芬兰、两个美国区和新加坡——而新加坡的流量条款差得多。如果 Freer 的用户集中在亚洲，平价档的吸引力会大幅下降，含流量包的云（Vultr、DigitalOcean、Lightsail）凭借东京、首尔和悉尼的节点胜出。对一个 UDP 协议来说，可达性与 RTT 比账单差额更值钱。</p>
+    </div>
+    <div class="card">
+      <h4>余额账本就是钱</h4>
+      <p>LevelDB 余额库、它的 WAL 和审计日志，是每个用户付了多少钱的唯一记录。丢了它们就等于丢了余额和结算能力。每天异地备份到对象存储，保持审计日志的哈希链完整，并在真正需要之前先演练一遍「快照 → WAL → 审计」的恢复路径。这是唯一一份无法通过重放链数据重建的状态——也是无论算力放在哪里、都值得在超大规模云保留一只脚的最有力理由。</p>
+    </div>
+    <div class="card">
+      <h4>DISK 的存储分层</h4>
+      <p>DISK 载荷放在 AWS gp3 上是 $0.08/GB·月；同样的数据块放在 S3 Standard 上是 $0.023，且传输到同区域实例免费。在平价主机上，磁盘随套餐赠送，在用尽之前基本等于免费。无论哪种方式，字节最终仍然要经 FapiServer 发出，出站成本不变——这只影响存储那一行。</p>
+    </div>
+    <div class="card">
+      <h4>预付折扣</h4>
+      <p>如果你确实要留在 EC2，1 年期无预付的 Compute Savings Plan 大约能给算力打七折，3 年期约打五折。它对出站流量毫无帮助，而那正是真正疼的一行。Lightsail、Hetzner 和 Contabo 没有预付折扣，也不需要；独服则改为收一次性上架费，上文已按 12 个月摊销。</p>
+    </div>
+    <div class="card">
+      <h4>链上运行开销</h4>
+      <p>结算每 14,400 个区块（约 10 天）执行一次并广播分账；充值检测需要一个有余额的收款地址；修改资费本身也是一笔交易。Freecash 的手续费可忽略不计，但收款地址需要常备浮存——<code>minDealerBalance</code> 目前是 0.01 FCH，应当按数个结算周期的规模来设定。</p>
+    </div>
+    <div class="card">
+      <h4>竞争对手决定价格上限</h4>
+      <p>客户端从链上发现 FAPI 服务商，并能在连接前读到每一家的价格。除了服务质量所能支撑的部分之外，你没有任何定价权；每次调价前都应把推荐费率与别人挂牌的价格对照一遍。运营参考实现带来的优势在于信任，而不在于价格。</p>
+    </div>
+    <div class="card">
+      <h4>增值税与结算摩擦</h4>
+      <p>欧洲主机商报价不含增值税。欧盟以外的客户无需额外支付；没有增值税号的欧盟个人消费者要额外付 19–20%，这会抵消掉平价档的一部分优势。独服还带一次性上架费——AX42 约 $62——而且多数平价主机在卖给你大配置机器之前会要求身份验证。</p>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <div class="shead"><span class="snum">§10</span><h2>运营节奏</h2></div>
+  <div class="col">
+    <p>模型的质量取决于输入，而其中有三项目前只是猜测——服务器自己在有了一个月真实流量之后就能用实测值替换它们：每用户字节数、链路与计费字节之比，以及峰值并发。</p>
+  </div>
+
+  <h4>按月跟踪</h4>
+  <ul>
+    <li><strong>可计费的入站与出站 KB 数</strong>，取自 <code>EconomicsMetricsCollector</code>——与主机网络计数器给出的<strong>链路字节</strong>对照。二者之比就是你真实的开销系数；本文所用的 1.20 只是一个估计值。</li>
+    <li><strong>每交付 GB 的成本</strong>，分别按账单和全成本统计。这是价格必须跑赢的数字，且应当随用户增长逐月下降。</li>
+    <li><strong>花在服务器上的工时。</strong>本文中最被低估的一行，而在 T3 以下的每一档上它都是最大的一行。</li>
+    <li><strong>每月活用户的 FCH 收入</strong>，以及按当月汇率折算的美元值。两条独立的序列，不要混在一起。</li>
+    <li><strong>核销掉的信用额度</strong>——余额为负且再未充值的账户。这才是免费额度的真实成本。</li>
+    <li><strong>DISK 与 DOCK 的 GB·天存储量</strong>，对照存储收入，确认已存储的字节能覆盖自身成本。</li>
+    <li><strong>峰值并发对端数与每秒报文数</strong>，这才是真正触发下一次升级的指标——不是带宽。</li>
+  </ul>
+
+  <h4>按季度决策</h4>
+  <ol>
+    <li>若汇率自上次调整以来变动超过 30%，则重新以 FCH 定价（§7）。</li>
+    <li>若任一主机的价目表发生实质变化，或你自己的小时单价变了，则重新推导美元价格（§5）。</li>
+    <li>在峰值 CPU 超过 70% 或 ES 堆压力成为常态时升级——而不是在带宽用尽时，那要晚得多。</li>
+    <li>用实际的第三方推荐量重新核对渠道分成设置（§6）。</li>
+    <li>将 ES 与节点磁盘的实测值对照预测重新测量，并在卷用到 80% 之前扩容。</li>
+  </ol>
+
+  <div class="note">
+    <span class="lbl">执行顺序</span>
+    <p>先修 §8 里的配置陷阱和 <code>home.api</code> 主机名——不管价格怎么定，它们都会阻塞上线。把资费放在同一次链上更新里发布，让客户端看到一次连贯的变更。试点跑在满足 §3 需求的最便宜机器上，因为在那个规模下账单无关紧要，唯一真实的成本是你的注意力。然后让上述指标取代 §3 中的假设，在 T1 升级之前用你自己的数字重新推导价格。</p>
+  </div>
+</section>
+
+<footer>
+  <p>核实于 2026-08-29：AWS EC2、EBS 与数据传输费率取自 AWS us-east-1 区按需价目；Lightsail 套餐取自 AWS 文档；Hetzner Cloud 与独服价格为 2026 年 6 月调价之后的价格；Contabo 与 Oracle 数据取自公开价目；EUR/USD 按 1.161 折算。服务参数、组件行为与默认设置读自 Freeverse 仓库 commit <span class="mono">513a994</span>。每用户流量、链路开销、并发比例与运维工时为建模假设，已在使用处标注。本文为英文版《FapiServer Tariff &amp; Capacity Plan》的中文版。</p>
+</footer>
+
+</div>
+
+</body></html>

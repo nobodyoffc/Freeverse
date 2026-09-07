@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<!-- saved from url=(0253)https://bf8d3248-c656-41af-8338-4b1f55ddbcd6.frame.claudeusercontent.com/_f/1787999178-5770/?__frame_t=lbNRl8nm43aTcCLKyhefi7Ao.82d0f64c-1a44-4198-a105-2aecaba3e859.cb6d3a3f-ace9-493e-8d3c-826783716e0f.1788002779&__frame_v=manifest.155e997702a4b8fc.json -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!-- frame-runtime --><!--<base href="/_f/1787999178-5770/">--><base href="."><script>window.__FRAME_PREAMBLE={"v":1,"capabilities":{"artifact":"artifact.D_F1mx8d.js","assets":"assets.8Gk803W0.js","comments":"comments.GLuHR3zP.js","db":"db.h-3sndFg.js","downloads":"downloads.C3GSvEDP.js","embed":"embed.CxGAyc-v.js","mcp":"mcp.Bvma3qD7.js","network":"network.B5UA9Su4.js","notifications":"notifications.ssU4jy7G.js","permissions":"permissions.BNySkLV5.js","room":"room.BMMoe2BY.js","sample":"sample.BW2Uysoh.js","self":"artifact.D_F1mx8d.js","user":"user.BpKav-Rf.js"},"transforms":"_transforms.DSB5x63f.js","comments":"_comments.BoakUwmM.js","translate":"_translate.5HCW4BJh.js"}</script><script>(function(){"use strict";var te=["light","dark","system"],re=/^[A-Za-z0-9_-]{1,64}$/,$=/^[a-zA-Z_:][a-zA-Z0-9_:.-]{0,127}$/,ne=new Set(["class","hidden","value","checked","style","title","alt","placeholder","lang","dir","role","tabindex","disabled","readonly","contenteditable","open","colspan","rowspan"]);function oe(e){const t=e.toLowerCase();return t.startsWith("data-")||t.startsWith("aria-")||ne.has(t)}var Be="http://www.w3.org/1999/xhtml",se="http://www.w3.org/2000/svg",ae=new Set(["script","style","iframe","noscript","noframes","noembed","xmp","plaintext","template","title","textarea","object","embed"]),ie=new Set(["script","style"]);function ce(e){const t=e.localName.toLowerCase();return e.namespaceURI==="http://www.w3.org/1999/xhtml"?!ae.has(t):e.namespaceURI===se?!ie.has(t):!1}function M(e,t){return e===t||(e===160||e===32)&&(t===160||t===32)}function le(e,t){const r=e.length,n=t.length;let s=0;for(;s<r&&s<n&&M(e.charCodeAt(s),t.charCodeAt(s));)s++;let o=0;for(;o<r-s&&o<n-s&&M(e.charCodeAt(r-1-o),t.charCodeAt(n-1-o));)o++;return{p:s,s:o}}function ue(e,t){const r=e.firstChild;if(e.childNodes.length!==1||r===null||r.nodeType!==Node.TEXT_NODE){e.textContent=t;return}const n=r.data,s=n.length,o=t.length,{p:i,s:c}=le(n,t);i===s&&c===0&&s===o||r.replaceData(i,s-i-c,t.slice(i,o-c));const h=r.data,p=e.ownerDocument.getSelection?.()??null,w=p!==null&&p.rangeCount>0&&(p.anchorNode===r||p.focusNode===r)?{anchor:p.anchorNode,anchorOffset:p.anchorOffset,focus:p.focusNode,focusOffset:p.focusOffset}:null;let m=-1,g=-1;for(let f=0;f<h.length&&f<t.length;f++){const v=h.charCodeAt(f),b=t.charCodeAt(f);v!==b&&M(v,b)&&(m<0&&(m=f),g=f)}const a=m>=0;if(a&&r.replaceData(m,g-m+1,t.slice(m,g+1)),a&&w!==null&&w.anchor!==null&&w.focus!==null)try{p.setBaseAndExtent(w.anchor,w.anchorOffset,w.focus,w.focusOffset)}catch{}}var fe=new Set(["html","head","body","frameset"]);function de(e){return e.namespaceURI==="http://www.w3.org/1999/xhtml"&&fe.has(e.localName)}function pe(e){if(e===null||typeof e!="object")return!1;const t=e;if(typeof t.target!="string"||!re.test(t.target)||t.text!==void 0&&typeof t.text!="string")return!1;if(t.attrsSet!==void 0){if(t.attrsSet===null||typeof t.attrsSet!="object")return!1;for(const[r,n]of Object.entries(t.attrsSet))if(!$.test(r)||typeof n!="string")return!1}if(t.attrsRemoved!==void 0){if(!Array.isArray(t.attrsRemoved))return!1;for(const r of t.attrsRemoved)if(typeof r!="string"||!$.test(r))return!1}return!0}function me(e,t){if(e===null||typeof e!="object")return!1;const{seq:r,elements:n}=e;if(typeof r!="number"||!Number.isSafeInteger(r)||!Array.isArray(n)||n.length===0||n.length>64)return!1;for(let s=0;s<n.length;s++)if(!t(n[s]))return!1;return!0}function he(e){return e===null||typeof e!="object"?!1:me(e.__frame_patch,pe)}function _e(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_init;return t!==null&&typeof t=="object"}function ve(e){return e!==null&&typeof e=="object"&&e.__frame_size_poke===!0}function ye(e){if(e===null||typeof e!="object")return!1;const t=e.__frame_theme;if(t===null||typeof t!="object")return!1;const r=t.theme;return typeof r=="string"&&te.includes(r)}var A=/^[\w.-]+\.js$/;function we(e,t,r){return r?"inert":typeof t=="string"&&A.test(t)?e?[t]:"inert":e?"inert":"framed"}function ge(){return{post(e,t){parent.postMessage(e,t)},on(e){const t=r=>{r.source===parent&&e(r.data,r.origin,r.isTrusted)};return addEventListener("message",t),()=>removeEventListener("message",t)}}}function be(){return{post:()=>{},on:()=>()=>{}}}var j="__frame_scroll",Ee=150,Ae=310,Se=160,Te=3e4;function ke(){let e=0,t=!1,r=!1,n=!1,s=0,o=null;const i=l=>{try{sessionStorage.setItem(j,JSON.stringify({y:l}))}catch{}},c=()=>{if(clearTimeout(e),o===null)return;const l=o;o=null,i(l)},h=()=>{if(t){t=!1;return}r=!0,o=scrollY,clearTimeout(e),e=setTimeout(c,Ee)};try{addEventListener("scroll",h,{passive:!0}),addEventListener("pagehide",c)}catch{}const p=()=>{let l;try{l=sessionStorage.getItem(j)}catch{return null}if(l===null)return null;let _;try{_=JSON.parse(l)}catch{_=null}const d=_?.y;if(!(typeof d=="number"&&Number.isFinite(d)&&d>=0)){try{sessionStorage.removeItem(j)}catch{}return null}return d};let w=!1;const m=l=>{try{const _=scrollY;scrollTo({top:l,left:0,behavior:"instant"}),s=l,n=!0,clearTimeout(e),o=null,i(l);const d=scrollY;d!==_&&(t=!0),d!==l&&!w&&(w=!0,addEventListener("load",()=>{try{if(scrollY===d){const T=p();m(T!==null?T:s)}}catch{}},{once:!0}))}catch{}},g=()=>{try{return!!location.hash}catch{return!0}};let a=!1;const f=()=>{try{if(a||innerWidth>Ae||innerHeight>Se)return;a=!0;const l=Date.now(),_=()=>{try{removeEventListener("resize",_)}catch{}if(Date.now()-l>Te||r||g())return;const d=p();m(d!==null?d:s)};addEventListener("resize",_)}catch{}};let v=!1,b=!1;return{restore(){if(v||(v=!0,g()))return;const l=p();l!==null&&(m(l),f())},promoted(){if(b||(b=!0,g()))return;const l=p();l!==null?(m(l),f()):n&&m(s)}}}function Re(e,t,r,n){let s=null;try{s=window.trustedTypes?.createPolicy("frame-runtime",{createScriptURL:h=>h})??null}catch{}const o=window.Worker,i=o?.prototype,c=Object.freeze({Worker:o,workerOn:i?.addEventListener,workerPost:i?.postMessage,workerTerminate:i?.terminate,fetch:window.fetch.bind(window),preventDefault:Event.prototype.preventDefault,policy:s,origins:t});r(e).then(h=>h?.bootTopLevel?h.bootTopLevel(c,n):n.settle()).catch(()=>n.settle())}var De="modulepreload",Ie=function(e){return"/"+e},Ue={},Le=function(t,r,n){let s=Promise.resolve();function o(i){const c=new Event("vite:preloadError",{cancelable:!0});if(c.payload=i,window.dispatchEvent(c),!c.defaultPrevented)throw i}return s.then(i=>{for(const c of i||[])c.status==="rejected"&&o(c.reason);return t().catch(o)})},Oe=window===top,q=Object.getOwnPropertyDescriptor(window,"claude"),k=we(Oe,window.__FRAME_PREAMBLE?.topLevel,q?.writable===!1),N=typeof k=="object"&&k[0],y=N?be():ge();(function(){const e=Object.defineProperty,t=globalThis,r=["RTCPeerConnection","webkitRTCPeerConnection","RTCDataChannel","RTCIceCandidate","RTCSessionDescription","RTCRtpSender","RTCRtpReceiver"];let n=0;for(let s=0;s<r.length;s++){const o=r[s];try{e(t,o,{value:void 0,writable:!1,configurable:!1})}catch{try{delete t[o]}catch{}try{e(t,o,{value:void 0,writable:!1,configurable:!0})}catch{}}typeof t[o]=="function"&&n++}if(n&&k==="framed")try{y.post({__frame_rtc_lockdown_failed:n},"*")}catch{}})();var Pe=1e4,Y=Object.freeze([...window.__FRAME_PREAMBLE?.origins??["https://claude.ai","https://preview.claude.ai"]]);function X(e){for(const t of Y)if(t.endsWith(":*"))try{const r=new URL(e);if(`${r.protocol}//${r.hostname}:*`===t)return!0}catch{}else if(e===t)return!0;return!1}var R=Object.freeze({...window.__FRAME_PREAMBLE?.capabilities}),B=window.__FRAME_PREAMBLE?.transforms,D=window.__FRAME_PREAMBLE?.comments,I=window.__FRAME_PREAMBLE?.translate;function S(e){return Le(()=>import("/_runtime/"+e),void 0)}function G(e,t){return{contract:e.contract,changes:new Set(e.changes??[]),flags:new Set(e.flags??[]),capabilities:e.capabilities??{},capBudgets:e.capBudgets??{},transforms:new Map,shellOrigin:t,mount:x,hooks:O,pipe:()=>({wrap:(r,n)=>(...s)=>{try{return n(...s)}catch(o){return Promise.reject(o)}}})}}var L=null,E=null;function V(e,t,r){try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!1,enumerable:!0})}catch{try{Object.defineProperty(e,t,{value:r,writable:!1,configurable:!0,enumerable:!0})}catch{}}}var U=!1,O={editBefore:null,edit:null};function Ce(e,t,r=!1){const n=[];let s;if(r)try{O.editBefore?.(e)}catch{}for(const o of e.elements){const i=document.querySelector(`[data-id="${o.target}"]`);if(!i){s=o.target;break}if([...Object.keys(o.attrsSet??{}),...o.attrsRemoved??[]].some(c=>!oe(c))){s=o.target;break}if(o.text!==void 0&&(!ce(i)||de(i))){s=o.target;break}for(const[c,h]of Object.entries(o.attrsSet??{}))if(!J(i,c)){try{i.setAttribute(c,h)}catch{}Z(i,c,h)}for(const c of o.attrsRemoved??[])J(i,c)||(i.removeAttribute(c),Z(i,c,null));typeof o.text=="string"&&ue(i,o.text),n.push(o.target)}if(r)try{O.edit?.(e.seq,n,s)}catch{}if(s!==void 0){y.post({__frame_patch_miss:{seq:e.seq}},t);return}try{document.dispatchEvent(new CustomEvent("claude:edit",{detail:{seq:e.seq,targets:n}}))}catch{}}function Z(e,t,r){if(!(e instanceof HTMLInputElement))return;const n=t.toLowerCase();n==="checked"?e.checked=r!==null:n==="value"&&e.type!=="file"&&(e.value=r??"")}function J(e,t){const r=t.toLowerCase(),n=e;return r==="data-id"||(r==="value"||r==="checked")&&(n.__artifactSecret===!0||/^(password|hidden|file)$/.test(n.type??"")||/(^|\s)(cc-|one-time-code|current-password|new-password)/i.test(`${e.getAttribute("autocomplete")??""} ${n.autocomplete??""}`))}function Q(e){const t=document.documentElement;e==="light"||e==="dark"?(t.dataset.theme=e,t.style.colorScheme=e,U=!0):U&&(delete t.dataset.theme,t.style.colorScheme="",U=!1)}var P=new Map;function Me(){let e;const t={u:new Promise(r=>{e=r}),r:r=>{t.done=!0,e(r)},done:!1,nulled:!1};return t}function F(){for(const e of P.values())e.done||(e.nulled=!0,e.r(null))}var je=Object.freeze(Object.assign(Object.create(null),{call:Function.prototype.call,apply:Function.prototype.apply,bind:Function.prototype.bind})),x=(e,t)=>{const r=P.get(e);if(!r||r.done){r?.nulled&&E&&y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:e}},E);return}const n=typeof t=="function"?Object.setPrototypeOf(t,je):Object.assign(Object.create(null),t);typeof n.then=="function"&&delete n.then,r.r(Object.freeze(n))};function ee(){const e=q?.value??{};V(window,"claude",e);for(const t of Object.keys(R)){if(e[t]!==void 0){V(e,t,e[t]);continue}P.set(t,Me())}if(e.use===void 0){const t=r=>{if(typeof r!="string"||!Object.hasOwn(R,r))return Promise.resolve(null);const n=P.get(r);return n?n.u:Promise.resolve(e[r]??null)};try{Object.defineProperty(e,"use",{value:t,writable:!0,configurable:!0,enumerable:!1})}catch{}}}if(k==="framed"){const e=B&&A.test(B)?S(B).catch(()=>{}):Promise.resolve(void 0),t=a=>{if(a.type==="auxclick"&&a.button!==1)return;const f=a.target,v=f&&f.closest?f.closest("a[href],area[href]"):null;if(!v)return;const b=v.getAttribute("href");if(!b)return;let l;try{l=new URL(b,document.baseURI)}catch{return}if((l.protocol==="http:"||l.protocol==="https:")&&l.origin!==location.origin){a.preventDefault();const _=(v.getAttribute("target")??"").toLowerCase(),d=a.type==="auxclick"||a.metaKey||a.ctrlKey||a.shiftKey||a.altKey||!["","_self","_top","_parent"].includes(_);y.post({__frame_nav:!0,url:l.href,newTab:d},"*")}};addEventListener("click",t,!0),addEventListener("auxclick",t,!0);const r={},n=a=>{a.isTrusted&&(r.pointer=!0)},s=a=>{a.isTrusted&&(r.click=!0)};addEventListener("pointermove",n,{capture:!0,passive:!0}),addEventListener("click",s,{capture:!0,passive:!0}),e.then(a=>{a?.wireNav&&(a.wireNav(),removeEventListener("click",t,!0),removeEventListener("auxclick",t,!0),removeEventListener("pointermove",n,!0),removeEventListener("click",s,!0),a.wireEngagement?.(r))});let o=null;try{o=ke()}catch{}ee();let i=null,c=null,h=0;const p=y.on((a,f)=>{X(f)&&_e(a)&&(i=a.__frame_init,E=f,p(),clearTimeout(h),c?.())});y.post({__frame_connect:!0},"*");const w=new Promise(a=>{c=a,h=setTimeout(()=>{p(),a()},Pe)}),m=document.readyState==="loading"?new Promise(a=>document.addEventListener("DOMContentLoaded",()=>a(),{once:!0})):Promise.resolve();m.then(()=>{try{o?.restore()}catch{}});const g={cb:null};y.on((a,f)=>{if(X(f)&&ve(a)){try{o?.promoted()}catch{}g.cb?.()}}),w.then(async()=>{if(!i||!E){F();return}Q(i.theme);const a=E;let f=!1,v=!1;y.on((u,z,C)=>{if(z!==a)return;ye(u)&&Q(u.__frame_theme.theme),he(u)&&Ce(u.__frame_patch,a,C);const H=u?.__fc_mode;H&&typeof H=="object"&&!f&&D&&A.test(D)&&(f=!0,S(D).then(K=>K.install?.(a,H.on===!0)).catch(()=>{}));const W=u?.__ft_cmd;W&&typeof W=="object"&&!v&&I&&A.test(I)&&(v=!0,S(I).then(K=>K.install?.(a,W)).catch(()=>{}))});const b=Object.keys(i.capabilities??{}).filter(u=>Object.hasOwn(R,u)).map(u=>[u,R[u]]).filter(u=>typeof u[1]=="string"&&A.test(u[1])),l=await Promise.allSettled(b.map(([,u])=>S(u))),_=await e,d=E;if(_?.buildBoot||y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},d),_?.buildBoot)try{L=_.buildBoot(i,_.TRANSFORMS??{},{shellOrigin:d,mount:x,hooks:O},u=>y.post({__frame_cap_telemetry:u},d))}catch{y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:"_transforms"}},d),L=G(i,d)}else L=G(i,d);const T=u=>y.post({__frame_cap_telemetry:{kind:"cap-load-error",cap:u}},d),Ne=L;l.forEach((u,z)=>{const C=b[z][0];if(u.status!=="fulfilled"){T(C);return}try{u.value?.install?.(Ne)}catch{T(C)}}),F(),await m,y.post({__frame_ready:!0},E),e.then(u=>u?.installSizeReporter?.(d,g))})}else N&&(ee(),Re(N,Y,S,{settle:F,mount:x}))})();</script><!-- /frame-runtime --><meta name="viewport" content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style></head><body>
+<title>FapiServer Tariff &amp; Capacity Plan (Copy)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link rel="stylesheet" href="./css2">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#EDF0F3; --surface:#FFFFFF; --surface-2:#E3E8ED; --surface-3:#F5F7F9;
+  --ink:#0F1A23; --ink-2:#2C3B48; --muted:#5B6B78;
+  --line:#C4CFD8; --line-soft:#DEE5EB;
+  --accent:#8F5F00; --accent-2:#A66E00; --accent-soft:#F6EAD1;
+  --pos:#12604A; --neg:#8E2329;
+  --s1:#2a78d6; --s2:#e87ba4; --s3:#eda100;
+  --w-text:70ch; --w-wide:1180px;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#0B1117; --surface:#131C24; --surface-2:#1B2630; --surface-3:#182129;
+    --ink:#E9EFF4; --ink-2:#C6D2DC; --muted:#8FA1AE;
+    --line:#28353F; --line-soft:#1F2A33;
+    --accent:#E7AE33; --accent-2:#E0A526; --accent-soft:#33280F;
+    --pos:#5CBE98; --neg:#E5787F;
+    --s1:#3987e5; --s2:#d55181; --s3:#c98500;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#0B1117; --surface:#131C24; --surface-2:#1B2630; --surface-3:#182129;
+  --ink:#E9EFF4; --ink-2:#C6D2DC; --muted:#8FA1AE;
+  --line:#28353F; --line-soft:#1F2A33;
+  --accent:#E7AE33; --accent-2:#E0A526; --accent-soft:#33280F;
+  --pos:#5CBE98; --neg:#E5787F;
+  --s1:#3987e5; --s2:#d55181; --s3:#c98500;
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--w-wide); margin:0 auto; padding:0 24px 96px}
+.col{max-width:var(--w-text)}
+h1,h2,h3,h4{font-family:var(--f-display); text-wrap:balance; margin:0; line-height:1.18}
+p{margin:0 0 1em}
+a{color:var(--accent-2)}
+strong{font-weight:600}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-display); font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+.mast{border-bottom:3px solid var(--ink); padding:56px 0 22px}
+.mast h1{font-size:clamp(34px,5.6vw,62px); font-weight:700; letter-spacing:-.02em; margin:14px 0 16px}
+.mast .thesis{font-size:clamp(18px,2.1vw,22px); color:var(--ink-2); max-width:62ch; margin:0}
+.meta{display:flex; flex-wrap:wrap; gap:0; margin-top:30px; border-top:1px solid var(--line); font-family:var(--f-mono); font-size:12.5px}
+.meta div{flex:1 1 165px; padding:12px 16px 12px 0; border-right:1px solid var(--line-soft)}
+.meta div:last-child{border-right:0}
+.meta span{display:block; color:var(--muted); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:3px}
+section{padding-top:56px}
+.shead{display:flex; align-items:baseline; gap:14px; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:26px}
+.snum{font-family:var(--f-mono); font-size:13px; color:var(--accent-2); font-weight:600; flex:none}
+.shead h2{font-size:clamp(21px,2.6vw,28px); font-weight:600; letter-spacing:-.01em}
+h3{font-size:18px; font-weight:600; margin:34px 0 10px; letter-spacing:-.005em}
+h4{font-size:13px; font-weight:600; margin:22px 0 8px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); font-family:var(--f-display)}
+.ratecard{background:var(--surface); border:1px solid var(--line); border-top:3px solid var(--accent-2); margin-top:38px}
+.rc-head{padding:20px 24px 4px}
+.rc-head h2{font-size:22px; font-weight:600}
+.rc-head p{color:var(--muted); font-size:14.5px; margin:6px 0 0; max-width:66ch}
+.rc-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1px; background:var(--line-soft); margin-top:20px}
+.rc-cell{background:var(--surface); padding:20px 24px 22px}
+.rc-cell .k{font-family:var(--f-mono); font-size:12px; color:var(--muted); margin-bottom:10px}
+.rc-cell .v{font-family:var(--f-mono); font-size:clamp(26px,3.6vw,34px); font-weight:600; color:var(--accent); letter-spacing:-.02em; line-height:1.05}
+.rc-cell .u{font-family:var(--f-mono); font-size:12.5px; color:var(--ink-2); margin-top:9px; line-height:1.75}
+.rc-foot{padding:16px 24px; border-top:1px solid var(--line-soft); font-size:14px; color:var(--ink-2); background:var(--surface-3)}
+.note{border-left:3px solid var(--accent-2); background:var(--surface-3); padding:16px 20px; margin:26px 0; font-size:15.5px}
+.note.warn{border-left-color:var(--neg)}
+.note.good{border-left-color:var(--pos)}
+.note p:last-child{margin-bottom:0}
+.note .lbl{font-family:var(--f-display); font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px}
+.tw{overflow-x:auto; margin:22px 0 8px; border:1px solid var(--line); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-family:var(--f-mono); font-size:13px; font-variant-numeric:tabular-nums}
+th,td{padding:9px 14px; text-align:right; border-bottom:1px solid var(--line-soft); white-space:nowrap}
+th{background:var(--surface-2); font-family:var(--f-display); font-weight:600; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); border-bottom:1px solid var(--line); position:sticky; top:0}
+td:first-child,th:first-child{text-align:left}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-3)}
+tbody tr.rule td{border-top:2px solid var(--line)}
+.tbl-note{font-size:13px; color:var(--muted); margin:0 0 6px; font-style:italic}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .acc{color:var(--accent)}
+.wrapcell{white-space:normal; min-width:200px}
+.chart{border:1px solid var(--line); background:var(--surface); padding:24px; margin:24px 0 10px}
+.chart h4{margin:0 0 4px}
+.chart .sub{font-size:13.5px; color:var(--muted); margin:0 0 20px; font-family:var(--f-body); max-width:74ch}
+.legend{display:flex; flex-wrap:wrap; gap:18px; margin-bottom:22px; font-family:var(--f-mono); font-size:12px; color:var(--ink-2)}
+.legend i{display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:7px; vertical-align:-1px}
+.brow{display:grid; grid-template-columns:180px 1fr 76px; align-items:center; gap:12px; margin-bottom:9px}
+.brow .bl{font-family:var(--f-mono); font-size:11.5px; color:var(--ink-2); text-align:right; line-height:1.35}
+.brow .bv{font-family:var(--f-mono); font-size:12.5px; font-weight:600; text-align:right; font-variant-numeric:tabular-nums}
+.bar{display:flex; height:24px; gap:2px}
+.seg{position:relative; min-width:1px; outline-offset:2px}
+.seg:first-child{border-radius:2px 0 0 2px}
+.seg:last-child{border-radius:0 2px 2px 0}
+.seg::after{content:attr(data-t); position:absolute; left:50%; bottom:calc(100% + 7px); transform:translateX(-50%); background:var(--ink); color:var(--bg); font-family:var(--f-mono); font-size:11px; line-height:1.45; padding:5px 9px; border-radius:3px; white-space:pre; opacity:0; pointer-events:none; transition:opacity .12s; z-index:5}
+.seg:hover::after,.seg:focus-visible::after{opacity:1}
+.axis{display:grid; grid-template-columns:180px 1fr 76px; gap:12px; margin-top:6px; font-family:var(--f-mono); font-size:10.5px; color:var(--muted)}
+.axis .ticks{display:flex; justify-content:space-between}
+ul,ol{margin:0 0 1em; padding-left:1.3em}
+li{margin-bottom:.42em}
+code{font-family:var(--f-mono); font-size:.87em; background:var(--surface-2); padding:1px 5px; border-radius:3px; word-break:break-word}
+pre{font-family:var(--f-mono); font-size:12.5px; background:var(--surface); color:var(--ink-2); border:1px solid var(--line); padding:16px 18px; overflow-x:auto; line-height:1.6; margin:16px 0}
+pre b{color:var(--accent); font-weight:600}
+.formula{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--accent-2); padding:18px 22px; margin:22px 0; font-family:var(--f-mono); font-size:13.5px; line-height:1.9; overflow-x:auto}
+.formula em{color:var(--muted); font-style:normal}
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:22px; margin:24px 0}
+.card{background:var(--surface); border:1px solid var(--line); padding:20px 22px}
+.card h4{margin-top:0}
+.card p:last-child,.card ul:last-child{margin-bottom:0}
+.stat{display:flex; flex-wrap:wrap; gap:1px; background:var(--line-soft); border:1px solid var(--line); margin:26px 0}
+.stat > div{background:var(--surface); flex:1 1 190px; padding:18px 20px}
+.stat .n{font-family:var(--f-mono); font-size:27px; font-weight:600; color:var(--accent); letter-spacing:-.02em}
+.stat .l{font-size:13px; color:var(--muted); margin-top:5px; line-height:1.45}
+:focus-visible{outline:2px solid var(--accent-2); outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:680px){
+  body{font-size:16px}
+  .brow,.axis{grid-template-columns:112px 1fr 62px; gap:8px}
+  .brow .bl{font-size:10px}
+}
+footer{margin-top:72px; padding-top:22px; border-top:1px solid var(--line); font-size:13px; color:var(--muted)}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Freeverse · FAPI service operations</div>
+  <h1>FapiServer Tariff &amp; Capacity Plan</h1>
+  <p class="thesis">What it costs to run a FAPI provider for Freer, which host to run it on at each stage, and what to charge per gigabyte so the meter covers the bill. Everything in USD.</p>
+  <div class="meta">
+    <div><span>Currency</span>USD · EUR at 1.161</div>
+    <div><span>Chain height</span>~3,415,000</div>
+    <div><span>Components</span>BASE DISK DOCK MAP ROAD</div>
+    <div><span>Labor priced at</span>$50 / hour</div>
+    <div><span>Dated</span>2026-08-29</div>
+  </div>
+</header>
+
+<section id="verdict">
+  <div class="col">
+    <p style="margin-top:34px;font-size:19px;color:var(--ink-2)">Everything here is denominated in dollars, because the dollar is the currency the invoices arrive in. The FCH conversion is a single formula in §7, applied at whatever rate you want to model.</p>
+  </div>
+
+  <div class="ratecard">
+    <div class="rc-head">
+      <div class="eyebrow">Recommended list price</div>
+      <h2 style="margin-top:8px">Charge this per gigabyte</h2>
+      <p>Derived in §5. The number that matters is the first one: outbound bytes are the only cost that scales with users, and everything else is a rounding error against it.</p>
+    </div>
+    <div class="rc-grid">
+      <div class="rc-cell">
+        <div class="k">egress · pricePerKBOut</div>
+        <div class="v">$0.20</div>
+        <div class="u">per GB delivered<br>$0.000195 per MB<br>$1.907 × 10⁻⁷ per KB</div>
+      </div>
+      <div class="rc-cell">
+        <div class="k">ingress · pricePerKBIn</div>
+        <div class="v">$0.04</div>
+        <div class="u">per GB uploaded<br>$0.000039 per MB<br>inbound is free at every host —<br>this prices CPU and disk writes</div>
+      </div>
+      <div class="rc-cell">
+        <div class="k">storage · pricePerKBDay</div>
+        <div class="v">$0.10</div>
+        <div class="u">per GB per month<br>$0.00333 per GB-day<br>covers DOCK retention<br>and the DISK payload store</div>
+      </div>
+    </div>
+    <div class="rc-foot">A typical Freer user moves ~250 MB/month and pays <strong>$0.052</strong>. Net of a 20% channel share, <strong>$0.042 per user per month</strong>. That is the number every break-even below divides into.</div>
+  </div>
+
+  <div class="stat">
+    <div><div class="n">$0.15–0.19</div><div class="l">What a delivered GB actually costs at 10k users — on any sane host, once your own time is counted</div></div>
+    <div><div class="n">~3,800</div><div class="l">Users where the server pays for itself including 2.5 h/month of your attention</div></div>
+    <div><div class="n">6.3×</div><div class="l">Spread between the cheapest and dearest host at 10k users, on the invoice alone</div></div>
+    <div><div class="n">2.6×</div><div class="l">That same spread after adding labor. The invoice is not the cost.</div></div>
+  </div>
+</section>
+
+<section id="drivers">
+  <div class="shead"><span class="snum">§1</span><h2>What you are actually paying for</h2></div>
+  <div class="col">
+    <p>A FapiServer node runs five processes: Elasticsearch, a Freecash full node in Docker, FchParser, FeipParser, and the FapiServer itself on UDP 8500. Their cost profiles are nothing alike, and only two of them matter.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Memory — what you buy</h4>
+      <p>Elasticsearch dominates. It wants half the box for heap and the other half for page cache. The Freecash node, both parsers and the FapiServer need another 5–6&nbsp;GB between them. That sets a <strong>16&nbsp;GB floor</strong> for a single-box deployment, and makes RAM-per-dollar the number to shop on.</p>
+    </div>
+    <div class="card">
+      <h4>Egress — what scales</h4>
+      <p>Every byte FUDP sends to a phone is metered somewhere. On AWS that is <strong>$0.09/GB</strong>; at a European value host it is <strong>$0.001/GB</strong>; on a dedicated box with an unmetered gigabit port it is <strong>free</strong>. Same bytes, an 80× spread. This single choice moves more money than every other decision in this document.</p>
+    </div>
+    <div class="card">
+      <h4>Storage — cheap and slow-growing</h4>
+      <p>Freecash blocks are ~1 minute apart and mostly empty. 3.4M blocks is single-digit GB on disk; the ES indices built from them are ~15–30&nbsp;GB with no replicas, growing well under 1&nbsp;GB/month. Only the DISK and DOCK payload store grows with users, and that has its own meter.</p>
+    </div>
+    <div class="card">
+      <h4>Your time — the cost nobody invoices</h4>
+      <p>An unmanaged VPS is cheaper on the bill and dearer in hours: no snapshots-as-a-service, no managed backup, hardware failure is your problem. At 10k users the invoice spread between hosts is 18×; after costing 2–5 hours a month at $50/hour it collapses to 2.6×. Both numbers are real; only the second one is decision-grade.</p>
+    </div>
+  </div>
+
+  <h3>The gap between billed bytes and billed dollars</h3>
+  <div class="col">
+    <p>FAPI meters the FUDP payload. The host meters what leaves the network card. Those differ by a predictable factor:</p>
+  </div>
+  <div class="formula">
+    FUDP header + crypto bundle …… 73 bytes per 1350-byte datagram<br>
+    IP + UDP headers …………………… 28 bytes<br>
+    ACKs, retransmissions, path probes … ~5–12% typical<br>
+    <em>────────────────────────────────────────</em><br>
+    <b>wire bytes ≈ 1.20 × billable payload bytes</b>
+  </div>
+  <div class="col">
+    <p>Retransmitted bytes are deliberately not re-charged to the client, but the host charges you for them. Every capacity number below is stated in both units: <em>billable</em> (what you invoice) and <em>wire</em> (what the host invoices you).</p>
+  </div>
+</section>
+
+<section id="where">
+  <div class="shead"><span class="snum">§2</span><h2>Where to run it</h2></div>
+  <div class="col">
+    <p>Hosts fall into five bands for this workload. The band, not the brand, is the decision — and the right band changes as the server grows.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Band</th><th>Examples</th><th>Egress cost</th><th>RAM / $</th><th class="wrapcell">What you give up</th></tr></thead>
+      <tbody>
+        <tr><td>Hyperscaler</td><td>AWS EC2, GCP, Azure</td><td>$0.090 / GB</td><td>poor</td><td class="wrapcell">nothing — you pay for that</td></tr>
+        <tr><td>Bundled-transfer cloud</td><td>Lightsail, DigitalOcean, Vultr, Linode</td><td>$0.010 / GB over allowance</td><td>fair</td><td class="wrapcell">autoscaling, managed data services</td></tr>
+        <tr><td>European value cloud</td><td>Hetzner Cloud, OVH, Scaleway</td><td>$0.001 / GB over 20 TB</td><td>good</td><td class="wrapcell">SLA, global regions, hand-holding</td></tr>
+        <tr><td>Dedicated / bare metal</td><td>Hetzner AX, OVH, Liquid Web</td><td>free (unmetered 1 Gbps)</td><td>excellent</td><td class="wrapcell">elasticity; hardware failure is yours</td></tr>
+        <tr><td>Ultra-budget VPS</td><td>Contabo, budget resellers</td><td>free (32 TB included)</td><td>best</td><td class="wrapcell">SLA, IO consistency, support quality</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="tbl-note">Egress figures are the marginal rate once any included allowance is used. Hetzner's Singapore region is the exception — €7.40/TB and far smaller allowances, which puts it in the bundled-cloud band rather than the value band.</p>
+
+  <div class="chart">
+    <h4>Monthly cost at 10,000 users, five hosts</h4>
+    <p class="sub">Same workload — 64 GB of RAM across a data node and an edge node, 2.5 TB of billable egress. Ops labor is estimated hours per month at $50/hour, and it is the segment that changes the ranking.</p>
+    <div class="legend">
+      <span><i style="background:var(--s1)"></i>Infrastructure</span>
+      <span><i style="background:var(--s2)"></i>Egress over allowance</span>
+      <span><i style="background:var(--s3)"></i>Ops labor</span>
+    </div>
+
+    <div class="brow"><div class="bl">Contabo<br>VDS XL 64GB + VPS</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:14.29%" data-t="Infrastructure $140
+32 TB included, no overage"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:25.51%" data-t="Ops labor $250
+5.0 h/month — no SLA, weakest support"></div>
+    </div><div class="bv">$390</div></div>
+
+    <div class="brow"><div class="bl">Hetzner dedicated<br>AX42 64GB + CX43</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:15.20%" data-t="Infrastructure $149
+incl. amortized setup fee; unmetered 1 Gbps"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:25.51%" data-t="Ops labor $250
+5.0 h/month — bare metal, you own the hardware failure"></div>
+    </div><div class="bv">$399</div></div>
+
+    <div class="brow"><div class="bl">Hetzner Cloud<br>CCX33 + CX43 edge</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:18.27%" data-t="Infrastructure $179
+50 TB of included traffic"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:20.41%" data-t="Ops labor $200
+4.0 h/month"></div>
+    </div><div class="bv">$379</div></div>
+
+    <div class="brow"><div class="bl">AWS Lightsail<br>Mem-opt 64GB + GP 16GB</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:38.57%" data-t="Infrastructure $378
+13 TB pooled allowance covers 3 TB of wire traffic"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:10.20%" data-t="Ops labor $100
+2.0 h/month — snapshots and backup are managed"></div>
+    </div><div class="bv">$478</div></div>
+
+    <div class="brow"><div class="bl">AWS EC2<br>r7i.2xl + m7i.xl + 800GB</div><div class="bar">
+      <div class="seg" tabindex="0" style="background:var(--s1);width:63.16%" data-t="Infrastructure $619
+compute + gp3 + snapshots + 2 IPv4"></div>
+      <div class="seg" tabindex="0" style="background:var(--s2);width:26.63%" data-t="Egress $261
+3 TB of wire traffic at $0.09/GB"></div>
+      <div class="seg" tabindex="0" style="background:var(--s3);width:10.20%" data-t="Ops labor $100
+2.0 h/month"></div>
+    </div><div class="bv">$980</div></div>
+
+    <div class="axis"><div></div><div class="ticks"><span>$0</span><span>$250</span><span>$500</span><span>$750</span><span>$1,000</span></div><div></div></div>
+  </div>
+  <p class="tbl-note">Full figures in the §4 table, which is authoritative. Hover or tab to any segment for its breakdown.</p>
+
+  <div class="note good">
+    <span class="lbl">The recommendation</span>
+    <p><strong>Do not standardise on one host. Move bands as the server grows.</strong> Through T1 the invoice is noise — a $19 box and a $74 box are the same decision, so buy the one that costs you the fewest hours. From T2 the egress bill starts to matter and the value band earns its keep. At T3 an unmetered dedicated box for the data plane plus regional cloud edges is 4× cheaper than Lightsail and 14× cheaper than EC2, and by then the volume justifies the operational work.</p>
+  </div>
+
+  <h3>What AWS is still worth paying for</h3>
+  <div class="col">
+    <p>Two things, regardless of where the server itself lives. <strong>Object storage for backups</strong> — the balance ledger, its WAL and the audit log belong in S3 or Backblaze B2 from day one, and that costs about a dollar a month wherever the compute runs. And <strong>Asia-Pacific reach</strong>, if Freer's users are there: Hetzner has one Singapore region with much worse traffic terms, while AWS, Vultr and DigitalOcean all have Tokyo, Seoul and Sydney. Latency and reachability for a UDP protocol are worth more than a cheap invoice.</p>
+  </div>
+</section>
+
+<section id="tiers">
+  <div class="shead"><span class="snum">§3</span><h2>What to buy at each scale</h2></div>
+  <div class="col">
+    <p>Tiers are set by monthly active users of Freer on Android and macOS. The traffic assumption throughout is a <strong>typical user at 250&nbsp;MB of billable egress per month</strong> — chain queries, chat through DOCK and ROAD, and moderate media through DISK. Light users run ~50&nbsp;MB, media-heavy users ~1&nbsp;GB. Peak concurrency is taken at 8–15% of MAU, falling as the base grows.</p>
+    <p>Buy against the requirement, not the brand:</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Tier</th><th>MAU</th><th>Peak conc.</th><th>RAM</th><th>vCPU</th><th>Disk</th><th>Billable out</th><th>Wire out</th><th>Nodes</th></tr></thead>
+      <tbody>
+        <tr><td>T0 Pilot</td><td>≤ 300</td><td>~45</td><td>16 GB</td><td>4–8</td><td>160 GB</td><td>75 GB</td><td>90 GB</td><td>1</td></tr>
+        <tr><td>T1 Seed</td><td>1,000–3,000</td><td>~350</td><td>32 GB</td><td>8–16</td><td>320 GB</td><td>250–750 GB</td><td>0.3–0.9 TB</td><td>1</td></tr>
+        <tr><td>T2 Growth</td><td>10,000</td><td>~1,000</td><td>64 GB</td><td>16–24</td><td>600 GB</td><td>2.5 TB</td><td>3.0 TB</td><td>2</td></tr>
+        <tr><td>T3 Scale</td><td>100,000</td><td>~8,000</td><td>160 GB</td><td>48+</td><td>~2 TB</td><td>25 TB</td><td>30 TB</td><td>4–5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Process placement and memory split</h3>
+  <div class="col">
+    <p>Through T1 everything runs on one box. At T2 the data plane and the packet plane separate, because they scale on different axes — Elasticsearch on memory, FapiServer on packets and bandwidth. The edge node is the one you replicate at T3, and the one to place near your users.</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Process</th><th>T0/T1 · one box</th><th>T2/T3 · data node</th><th>T2/T3 · edge node</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Elasticsearch 8</td><td>6 GB heap (of 16)</td><td>16–31 GB heap</td><td>—</td><td class="wrapcell">Never exceed 31 GB heap; replicas 0 on a single node</td></tr>
+        <tr><td>freecash node (Docker)</td><td>1.5 GB · dbcache 450</td><td>2 GB</td><td>—</td><td class="wrapcell">v1.0.5, image is amd64 — see §8</td></tr>
+        <tr><td>FchParser</td><td>1 GB</td><td>2 GB</td><td>—</td><td class="wrapcell">Needs the node's block directory on local disk</td></tr>
+        <tr><td>FeipParser</td><td>1 GB</td><td>2 GB</td><td>—</td><td class="wrapcell">Reads opreturn/*.byte written by FchParser</td></tr>
+        <tr><td>FapiServer (UDP 8500)</td><td>2 GB</td><td>—</td><td>4–8 GB</td><td class="wrapcell">Carries all egress; DISK/DOCK payloads live here</td></tr>
+        <tr><td>OS + headroom</td><td>~1 GB</td><td>~2 GB</td><td>~2 GB</td><td class="wrapcell">Leave real page cache for ES</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Measure, don't trust</span>
+    <p>The storage figures are derived from block count and block structure, not measured. Before committing to a volume size, run this on a synced node and use the real numbers:</p>
+    <pre>du -sh ~/.freecash/blocks ~/.freecash/chainstate
+curl -s "localhost:9200/_cat/indices?v&amp;h=index,docs.count,store.size&amp;s=store.size:desc"
+du -sh /path/to/fapiDiskDataPath</pre>
+  </div>
+</section>
+
+<section id="cost">
+  <div class="shead"><span class="snum">§4</span><h2>The bill, by tier and host</h2></div>
+  <p class="tbl-note">USD per month. "Infra" is compute plus storage plus fixed IP; "Egress" is traffic beyond the included allowance; "Labor" is estimated hours × $50. "Total" excludes labor; "All-in" includes it. Change the hourly rate to your own and the ranking shifts — that is the point.</p>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>Tier</th><th>Host</th><th>Infra</th><th>Egress</th><th>Total</th><th>h/mo</th><th>All-in</th><th>$/GB delivered</th></tr></thead>
+      <tbody>
+        <tr><td>T0 · 300 MAU</td><td>Hetzner Cloud CX43</td><td>19</td><td>0</td><td class="acc">19</td><td>2.5</td><td>144</td><td>1.92</td></tr>
+        <tr><td></td><td>Contabo VPS (16–32 GB)</td><td>25</td><td>0</td><td>25</td><td>3.0</td><td>175</td><td>2.33</td></tr>
+        <tr><td></td><td>AWS Lightsail Mem-opt 16GB</td><td>74</td><td>0</td><td>74</td><td>1.0</td><td class="acc">124</td><td>1.65</td></tr>
+        <tr><td></td><td>AWS EC2 r7i.large</td><td>125</td><td>0</td><td>125</td><td>1.0</td><td>175</td><td>2.33</td></tr>
+
+        <tr class="rule"><td>T1 · 3,000 MAU</td><td>Hetzner Cloud CX53</td><td>34</td><td>0</td><td class="acc">34</td><td>2.5</td><td class="acc">159</td><td>0.21</td></tr>
+        <tr><td></td><td>Contabo Cloud VPS 5 (64 GB)</td><td>49</td><td>0</td><td>49</td><td>3.0</td><td>199</td><td>0.27</td></tr>
+        <tr><td></td><td>AWS Lightsail Mem-opt 32GB</td><td>144</td><td>0</td><td>144</td><td>1.0</td><td>194</td><td>0.26</td></tr>
+        <tr><td></td><td>AWS EC2 r7i.xlarge</td><td>236</td><td>72</td><td>308</td><td>1.0</td><td>358</td><td>0.48</td></tr>
+
+        <tr class="rule"><td>T2 · 10,000 MAU</td><td>Contabo VDS XL + VPS edge</td><td>140</td><td>0</td><td>140</td><td>5.0</td><td>390</td><td>0.156</td></tr>
+        <tr><td></td><td>Hetzner AX42 dedic. + CX43 edge</td><td>149</td><td>0</td><td>149</td><td>5.0</td><td>399</td><td>0.160</td></tr>
+        <tr><td></td><td>Hetzner CCX33 + CX43 edge</td><td>179</td><td>0</td><td class="acc">179</td><td>4.0</td><td class="acc">379</td><td>0.152</td></tr>
+        <tr><td></td><td>AWS Lightsail Mem-opt 64GB + GP</td><td>378</td><td>0</td><td>378</td><td>2.0</td><td>478</td><td>0.191</td></tr>
+        <tr><td></td><td>AWS EC2 r7i.2xl + m7i.xl</td><td>619</td><td>261</td><td>880</td><td>2.0</td><td>980</td><td>0.392</td></tr>
+
+        <tr class="rule"><td>T3 · 100,000 MAU</td><td>Contabo 2× VDS XL + 3× VPS</td><td>305</td><td>0</td><td>305</td><td>12.0</td><td>905</td><td>0.036</td></tr>
+        <tr><td></td><td>Hetzner 2× AX42 + 3× CX53</td><td>364</td><td>0</td><td class="acc">364</td><td>10.0</td><td>864</td><td>0.035</td></tr>
+        <tr><td></td><td>Hetzner CCX43 + 3× CX53</td><td>423</td><td>0</td><td>423</td><td>8.0</td><td class="acc">823</td><td>0.033</td></tr>
+        <tr><td></td><td>AWS Lightsail Mem-opt 128GB + 3× GP</td><td>1,076</td><td>27</td><td>1,103</td><td>6.0</td><td>1,403</td><td>0.056</td></tr>
+        <tr><td></td><td>AWS EC2 3× r7i.2xl + 3× m7i.2xl</td><td>2,356</td><td>2,593</td><td>4,949</td><td>6.0</td><td>5,249</td><td>0.210</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Read the last column across each tier. At T0 a delivered gigabyte costs $1.65–$2.33 no matter what you do, because there is barely any traffic to divide the fixed cost into. By T2 the spread has closed to <strong>$0.152–$0.191 on four of the five hosts</strong>, and only EC2 sits outside it. That convergence is what makes a single published price possible.</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="shead"><span class="snum">§5</span><h2>Setting the price</h2></div>
+  <div class="col">
+    <p>The price has to clear four hurdles in order: the marginal cost of the byte, the fixed cost of the box spread over the traffic, the referral shares skimmed off the top, and a margin that funds the reserve.</p>
+  </div>
+
+  <div class="formula">
+    <em>1 · marginal floor — the cost of one more gigabyte</em><br>
+    hyperscaler <b>$0.090/GB</b> · bundled cloud <b>$0.010</b> · value cloud <b>$0.001</b> · dedicated <b>$0.000</b><br><br>
+    <em>2 · add fixed cost, spread over billable traffic at target scale</em><br>
+    price = ( all-in monthly cost ÷ billable GB ) × ( 1 + margin ) ÷ ( 1 − channel share )<br><br>
+    <em>3 · at T2, the median host, 30% margin, 20% consume channel</em><br>
+    $379 ÷ 2,500 GB × 1.30 ÷ 0.80 = <b>$0.246 / GB</b><br>
+    <em>…but the same sum on the cheapest T2 host gives</em> <b>$0.152 × 1.625 = $0.247</b><br>
+    <em>…and on Lightsail,</em> <b>$0.191 × 1.625 = $0.311</b><br><br>
+    <em>4 · round down to a defensible published number</em><br>
+    pricePerKBOut = <b>$0.20 per GB = $1.907 × 10⁻⁷ per KB</b>
+  </div>
+
+  <div class="col">
+    <p>Rounding <em>down</em> from the arithmetic is deliberate. $0.246 is the price that recovers full cost at exactly 10,000 users; $0.20 recovers it at about 12,000 and leaves room to grow into. It is also 2.2× the hyperscaler marginal rate and 200× the value-cloud rate, which is the honest spread — most of what you are selling is a memory-heavy database and two parsers that run whether or not anyone queries them, not raw bandwidth.</p>
+    <p>Two adjustments follow. <strong>Inbound is free at every host</strong>, so ingress only needs to price the CPU and disk write an upload causes; 20% of the outbound rate deters abuse without punishing uploads. <strong>Stored bytes</strong> cost disk for as long as they sit there — $0.10/GB-month is above AWS gp3 at $0.08 and far above a Hetzner box where disk is bundled, which is the margin that pays for backing those bytes up.</p>
+  </div>
+
+  <h3>What a different price would do</h3>
+  <p class="tbl-note">Break-even MAU at each list price, all-in cost including labor. The recommended row is highlighted.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>$ / GB out</th><th>Net $ / MAU / mo</th><th>T1 Hetzner ($159)</th><th>T2 Hetzner ($379)</th><th>T2 Lightsail ($478)</th><th>T3 Hetzner ($823)</th></tr></thead>
+      <tbody>
+        <tr><td>0.05</td><td>0.0104</td><td>15,230</td><td>36,303</td><td>45,785</td><td>78,831</td></tr>
+        <tr><td>0.10</td><td>0.0209</td><td>7,615</td><td>18,151</td><td>22,893</td><td>39,416</td></tr>
+        <tr><td>0.15</td><td>0.0313</td><td>5,077</td><td>12,101</td><td>15,262</td><td>26,277</td></tr>
+        <tr><td class="acc">0.20 · recommended</td><td class="acc">0.0418</td><td class="acc">3,807</td><td class="acc">9,076</td><td class="acc">11,446</td><td class="acc">19,708</td></tr>
+        <tr><td>0.30</td><td>0.0626</td><td>2,538</td><td>6,050</td><td>7,631</td><td>13,139</td></tr>
+        <tr><td>0.50</td><td>0.1044</td><td>1,523</td><td>3,630</td><td>4,579</td><td>7,883</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <p>Note what the price does <em>not</em> control: even at $0.50/GB a typical user pays $0.13 a month, so nothing here is limited by what users will bear. The constraint is credibility against other FAPI providers, whose prices every client can read off the chain before connecting. Price for the cost basis you actually have, and let volume do the rest.</p>
+  </div>
+</section>
+
+<section id="pl">
+  <div class="shead"><span class="snum">§6</span><h2>Profit and loss</h2></div>
+  <p class="tbl-note">At $0.20/GB out and $0.04/GB in, typical 250 MB/user profile, after a 20% consume-channel share. Two cost columns: the invoice, and the invoice plus your time.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Tier</th><th>MAU</th><th>Billable GB</th><th>Gross $</th><th>Net $</th><th>Best invoice</th><th>Result</th><th>All-in</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>T0 Pilot</td><td>300</td><td>75</td><td>15.66</td><td>12.53</td><td>19</td><td class="neg">−6</td><td>124</td><td class="neg">−111</td></tr>
+        <tr><td>T1 Seed</td><td>3,000</td><td>750</td><td>156.60</td><td>125.28</td><td>34</td><td class="pos">+91</td><td>159</td><td class="neg">−34</td></tr>
+        <tr><td>T2 Growth</td><td>10,000</td><td>2,500</td><td>522.00</td><td>417.60</td><td>140</td><td class="pos">+278</td><td>379</td><td class="pos">+39</td></tr>
+        <tr><td>T3 Scale</td><td>100,000</td><td>25,000</td><td>5,220.00</td><td>4,176.00</td><td>305</td><td class="pos">+3,871</td><td>823</td><td class="pos">+3,353</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Net revenue per user is <strong>$0.042/month</strong>. On the invoice alone the server is profitable from about 800 users. Counting your own time it is profitable from about 3,800, and genuinely comfortable past 10,000 — where the margin finally exceeds the effort by enough to justify the effort.</p>
+    <p>Because cost is a step function and revenue is a straight line, the server briefly goes underwater after every upgrade. That argues for upgrading late: the T1 box on a value host carries 20 TB of allowance, which is 65,000 typical users' worth of traffic. The real limit there is CPU and packets, not bandwidth, so let concurrency — not the bandwidth graph — trigger the move.</p>
+  </div>
+
+  <h3>The referral shares are the second-largest cost</h3>
+  <div class="col">
+    <p>The current configuration sets <code>orderViaShare</code> to 30% and <code>consumeViaShare</code> to 20%. Applied together, a user acquired through a third-party channel hands over 50% of their gross spend — more than the infrastructure costs at every tier. Today this is harmless because <code>defaultVia</code> points at the operator's own FID and the share returns to you. It stops being harmless the moment real channels appear.</p>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Users via third-party channels</th><th>Net $ / MAU</th><th>Break-even vs $159 all-in</th><th>Break-even vs $379 all-in</th></tr></thead>
+      <tbody>
+        <tr><td>0% (defaultVia = self)</td><td>0.0522</td><td>3,046</td><td>7,261</td></tr>
+        <tr><td>25%</td><td>0.0457</td><td>3,481</td><td>8,297</td></tr>
+        <tr><td>50%</td><td>0.0392</td><td>4,061</td><td>9,679</td></tr>
+        <tr><td>100%</td><td>0.0261</td><td>6,092</td><td>14,521</td></tr>
+        <tr><td>100%, shares cut to 10% + 10%</td><td>0.0418</td><td>3,807</td><td>9,076</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="col">
+    <p>Cutting both shares to 10% recovers most of the loss at full channel penetration. Do it before opening a channel programme, not after — the shares are read from the on-chain service declaration and lowering them later is visible to every partner.</p>
+  </div>
+</section>
+
+<section id="fch">
+  <div class="shead"><span class="snum">§7</span><h2>Converting to FCH</h2></div>
+  <div class="col">
+    <p>The tariff above is in dollars because the invoices are. The service declaration wants FCH per KB. One formula bridges them:</p>
+  </div>
+
+  <div class="formula">
+    <b>satoshi per KB = 95.367 × ( USD per GB ) ÷ ( FCH price in USD )</b><br>
+    <b>FCH per KB &nbsp;&nbsp;&nbsp; = satoshi per KB ÷ 100,000,000</b><br><br>
+    <em>the constant is 10⁸ ÷ 1,048,576 — satoshi per FCH, over KB per GB</em>
+  </div>
+
+  <div class="col">
+    <p>Worked at four rates, for the recommended $0.20 / $0.04 / $0.10 tariff:</p>
+  </div>
+
+  <div class="tw">
+    <table>
+      <thead><tr><th>FCH price</th><th>pricePerKBOut sat</th><th>FCH/KB on-chain</th><th>pricePerKBIn sat</th><th>pricePerKBDay sat</th><th>Typical user pays</th></tr></thead>
+      <tbody>
+        <tr><td>$0.0010</td><td>19,073</td><td>0.00019073</td><td>3,815</td><td>318</td><td>52.2 FCH/mo</td></tr>
+        <tr><td>$0.00265</td><td>7,198</td><td>0.00007198</td><td>1,440</td><td>120</td><td>19.7 FCH/mo</td></tr>
+        <tr><td>$0.0100</td><td>1,907</td><td>0.00001907</td><td>381</td><td>32</td><td>5.2 FCH/mo</td></tr>
+        <tr><td>$0.0500</td><td>381</td><td>0.00000381</td><td>76</td><td>6</td><td>1.0 FCH/mo</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col">
+    <p>Repricing is not free, so the cadence matters more than the precision. The price lives in the on-chain service declaration, is read at server start or on a manual refresh, and is cached by every client. <strong>Review monthly, reprice only when the rate has moved more than 30%</strong>, and announce it in the app before the transaction lands. Between reviews the margin absorbs the drift, which is part of what the 30% is for.</p>
+    <p>Both directions hurt differently. If FCH <em>falls</em>, dollar revenue falls with it and you are underwater until you reprice. If FCH <em>rises</em>, you are overcharging in real terms and clients with a <code>maxPayment</code> guard — the FC-JDK client stops auto-recharge above 1 FCH by default — start refusing to top up. Same monthly discipline fixes both.</p>
+  </div>
+</section>
+
+<section id="config">
+  <div class="shead"><span class="snum">§8</span><h2>Configuration changes this implies</h2></div>
+  <div class="col">
+    <p>The current test declaration prices everything at 1 satoshi per KB — at any plausible FCH rate, a small fraction of one percent of cost. Four settings have to move together, and one of them blocks production regardless of price. Compute the FCH values from §7 at the rate on the day you publish.</p>
+  </div>
+
+  <h4>config/&lt;sid&gt;_settings.json → service</h4>
+  <pre>"pricePerKB"     "0.00000001"  →  <b>95.367 × 0.20 / FCH_USD</b>   satoshi, ÷1e8 for the field
+"pricePerKBIn"   "0.00000001"  →  <b>95.367 × 0.04 / FCH_USD</b>
+"pricePerKBOut"  "0.00000001"  →  <b>95.367 × 0.20 / FCH_USD</b>
+"pricePerKBDay"  "0.00000001"  →  <b>95.367 × 0.10 / 30 / FCH_USD</b>
+"minPayment"     "0.01"        →  <b>~$0.03 worth</b>  <em>// ≈150 MB per recharge</em>
+"minCredit"      "0.0001"      →  <b>~$0.00003 worth</b>  <em>// ≈150 KB of trial credit</em>
+"home" {"api": "fudp://10.0.2.2:8500"} → <b>"fudp://fapi.yourhost:8500"</b></pre>
+
+  <h4>config/&lt;sid&gt;_settings.json → settingMap</h4>
+  <pre>"creditLimit"        10000     →  <b>match minCredit, in satoshi</b>
+"maxTotalDiskUsage"  10 GB     →  <b>per tier (§3)</b>
+"minDealerBalance"   1000000   →  <b>size to a few settlement cycles</b></pre>
+
+  <div class="note warn">
+    <span class="lbl">Three traps in the current config</span>
+    <p><strong>The credit limit becomes one kilobyte.</strong> <code>creditLimit</code> is 10,000 satoshi. At any realistic price a brand-new user can afford roughly 1 KB before hitting <code>402 PAYMENT_REQUIRED</code>. <code>FapiBalanceManager</code> logs a warning about precisely this at startup — do not ship past it. Note also that <code>service.minCredit</code> (in FCH) overrides <code>settingMap.creditLimit</code> (in satoshi), so raising only one of them does nothing.</p>
+    <p><strong><code>home.api</code> points at the Android emulator.</strong> <code>10.0.2.2</code> is the emulator's alias for the host loopback. Published on-chain, no real device can reach the service. This must be a public hostname before the declaration goes out.</p>
+    <p><strong><code>minPayment</code> is set for the old price.</strong> At 0.01 FCH it buys around 150 KB at the new tariff, triggering an auto-recharge transaction every few minutes. Size it to roughly a month of a typical user's traffic.</p>
+  </div>
+
+  <h3>One code change worth making</h3>
+  <div class="col">
+    <p><code>FapiBalanceManager</code> seeds its free list with <code>PING</code>, <code>PONG</code>, <code>PEER_INFO</code> and <code>CHAT_ACK</code>. <code>map.register</code> is not on it, and cost is computed as <code>ceil(bytes/1024) × price</code> — so a 250-byte NAT keepalive is billed as a full kilobyte, four times over, every 25 seconds. A user online three hours a day sends about 13,000 of them a month and is charged for 13 MB of traffic that was really 3 MB — roughly 5% of their bill, all of it for a packet that exists only to hold the firewall open.</p>
+    <p>Either add <code>map.register</code> to the default free set, or meter it in bytes rather than rounded kilobytes. The first is a one-line change and the honest one; the keepalive is infrastructure overhead, not a service the user asked for.</p>
+  </div>
+</section>
+
+<section id="factors">
+  <div class="shead"><span class="snum">§9</span><h2>Risks and other factors</h2></div>
+
+  <div class="note warn">
+    <span class="lbl">The one that matters most</span>
+    <p><strong>FCH revenue does not pay hosting invoices.</strong> Freecash trades on three markets with roughly zero daily volume. Whatever the tariff earns arrives as a token that cannot reliably be sold at any price. Plan the server as a dollar-funded operation with an FCH-denominated meter: hold a USD reserve covering 6–12 months of hosting, and treat FCH income as ecosystem credit — usable for paying other FAPI providers, funding DISK space, and settling with stakeholders and channels — rather than as revenue. Every profit figure in §6 is arithmetically correct and economically theoretical until FCH has a market.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h4>Cheap hosts suspend relays</h4>
+      <p>ROAD forwards opaque bytes between peers. That is a relay, and relays attract abuse complaints regardless of what is actually being relayed. Budget and value hosts act on complaints fast and ask questions later; hyperscalers have process. This is the single largest non-price risk in moving off AWS. Mitigate it with the 2-hop cap already in FAPI15, per-peer relay rate limits, a published abuse contact, and a rehearsed migration path to a second host.</p>
+    </div>
+    <div class="card">
+      <h4>Today's price is not next year's</h4>
+      <p>Hetzner repriced twice in 2026 — up to 37% in April and 113–175% on the CPX and CCX lines in June. Oracle halved its free tier with no announcement and terminated instances above the new limit. Do not build a model that only works at one host's current sheet. The §5 sensitivity table exists so you can re-derive the price after any host's next increase.</p>
+    </div>
+    <div class="card">
+      <h4>Free credit is a Sybil target</h4>
+      <p>Every new FID gets the credit limit, and FIDs are free to mint. Keep trial credit to a few hundred kilobytes, tie anything more generous to an FID with on-chain history, and rate-limit new-account creation per source address. At 150 KB per identity, a thousand fake identities cost you about three cents — which is the right order of magnitude.</p>
+    </div>
+    <div class="card">
+      <h4>UDP exposure</h4>
+      <p>Port 8500 is open to the internet and answers unauthenticated packets. AWS gives you Shield Standard free; Hetzner and OVH include DDoS filtering; Contabo's is thinner. Whatever the host, add per-source packet-rate limits at the FapiServer and cap <code>road.relay</code> per peer per minute — the application-layer limit is the one you control everywhere.</p>
+    </div>
+    <div class="card">
+      <h4>The Docker image is from 2021</h4>
+      <p>freecash v1.0.5 shipped February 2021 as a saved image archive, almost certainly amd64-only. That rules out ARM instances for the node — and ARM is where the cheapest RAM per dollar sits (Hetzner CAX41 gives 32 GB for $48). Verify with <code>docker image inspect --format '{{.Architecture}}'</code>. If it is amd64, either stay on x86 throughout, or run only the node on x86 and put ES and the FapiServer on ARM.</p>
+    </div>
+    <div class="card">
+      <h4>Where your users are</h4>
+      <p>Hetzner has Germany, Finland, two US regions and Singapore — and Singapore has far worse traffic terms. If Freer's users are concentrated in Asia, the value band gets much less attractive and the bundled-transfer cloud (Vultr, DigitalOcean, Lightsail) wins on Tokyo, Seoul and Sydney presence. For a UDP protocol, reachability and RTT are worth more than the invoice difference.</p>
+    </div>
+    <div class="card">
+      <h4>The balance ledger is money</h4>
+      <p>The LevelDB balance store, its WAL and the audit log are the record of what every user has paid. Losing them means losing balances and the ability to settle. Back them up off-instance daily to object storage, keep the audit log's hash chain intact, and test the snapshot → WAL → audit recovery path before you need it. This is the one piece of state a rebuild from chain cannot reconstruct — and it is the strongest argument for keeping one foot at a hyperscaler regardless of where compute lives.</p>
+    </div>
+    <div class="card">
+      <h4>Storage tiering for DISK</h4>
+      <p>DISK payloads on AWS gp3 cost $0.08/GB-month; on S3 Standard the same blobs cost $0.023 and transfer to an in-region instance is free. On a value host, disk is bundled with the plan and effectively free until you exhaust it. Either way the bytes still leave through the FapiServer, so egress is unchanged — this only moves the storage line.</p>
+    </div>
+    <div class="card">
+      <h4>Commitment discounts</h4>
+      <p>If you do stay on EC2, a 1-year no-upfront Compute Savings Plan takes roughly 30% off compute and a 3-year commitment roughly 50%. It does nothing for egress, which is the line that actually hurts. Lightsail, Hetzner and Contabo have no commitment discounts and need none; dedicated boxes carry a one-time setup fee instead, amortized above over 12 months.</p>
+    </div>
+    <div class="card">
+      <h4>On-chain running costs</h4>
+      <p>Settlement runs every 14,400 blocks (~10 days) and broadcasts payouts; recharge detection needs a funded dealer address; changing the tariff is itself a transaction. Freecash fees are negligible, but the dealer needs a standing float — <code>minDealerBalance</code> is currently 0.01 FCH and should be sized to a few settlement cycles.</p>
+    </div>
+    <div class="card">
+      <h4>Competitors set the ceiling</h4>
+      <p>Clients discover FAPI providers from the chain and can read every provider's price before connecting. There is no pricing power beyond what service quality justifies, and the recommended rate should be checked against what others publish before each repricing. Operating the reference implementation is an advantage in trust, not in price.</p>
+    </div>
+    <div class="card">
+      <h4>VAT and billing friction</h4>
+      <p>European hosts quote ex-VAT. Customers outside the EU pay nothing extra; EU consumers without a VAT ID pay 19–20% on top, which erases part of the value-band advantage. Dedicated servers also carry a one-time setup fee — around $62 on the AX42 — and most value hosts require identity verification before they will sell you a large box.</p>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <div class="shead"><span class="snum">§10</span><h2>Operating rhythm</h2></div>
+  <div class="col">
+    <p>The model is only as good as its inputs, and three of them are guesses the server itself can replace within a month of real traffic: bytes per user, the wire-to-billable ratio, and peak concurrency.</p>
+  </div>
+
+  <h4>Track monthly</h4>
+  <ul>
+    <li><strong>Billable KB in and out</strong>, from <code>EconomicsMetricsCollector</code> — against <strong>wire bytes</strong> from the host's network counters. The ratio is your real overhead multiplier; the 1.20 used here is an estimate.</li>
+    <li><strong>Cost per delivered GB</strong>, invoice and all-in. This is the number the price has to beat, and it should fall every month users grow.</li>
+    <li><strong>Hours spent on the server.</strong> The most under-measured line in this document, and at every tier below T3 the largest one.</li>
+    <li><strong>Revenue per MAU in FCH</strong>, and its dollar value at that month's rate. Two separate series; do not blend them.</li>
+    <li><strong>Credit written off</strong> — accounts sitting at negative balance that never recharged. This is the true cost of the free tier.</li>
+    <li><strong>DISK and DOCK GB-days stored</strong> against storage revenue, to confirm stored bytes pay for themselves.</li>
+    <li><strong>Peak concurrent peers and packets/second</strong>, which is what actually triggers the next upgrade — not bandwidth.</li>
+  </ul>
+
+  <h4>Decide quarterly</h4>
+  <ol>
+    <li>Reprice in FCH if the rate has moved more than 30% since the last change (§7).</li>
+    <li>Re-derive the USD price if any host's sheet has changed materially, or if your own hourly rate has (§5).</li>
+    <li>Upgrade when peak CPU passes 70% or ES heap pressure becomes routine — not when bandwidth runs out, which happens far later.</li>
+    <li>Re-check the channel shares against actual third-party referral volume (§6).</li>
+    <li>Re-measure ES and node disk against the projection, and resize before the volume is 80% full.</li>
+  </ol>
+
+  <div class="note">
+    <span class="lbl">Sequence</span>
+    <p>Fix the config traps in §8 and the <code>home.api</code> hostname first — they block production regardless of pricing. Publish the tariff on the same on-chain update so clients see one coherent change. Run the pilot on the cheapest box that meets the §3 requirement, because at that scale the invoice is irrelevant and the only real cost is your attention. Then let the metrics above replace the assumptions in §3, and re-derive the price from your own numbers before the T1 upgrade.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Verified 2026-08-29: AWS EC2, EBS and data-transfer rates from AWS on-demand listings for us-east-1; Lightsail bundles from AWS documentation; Hetzner Cloud and dedicated pricing post the June 2026 repricing; Contabo and Oracle figures from public listings; EUR/USD at 1.161. Service parameters, component behaviour and default settings read from the Freeverse repository at commit <span class="mono">513a994</span>. Traffic per user, wire overhead, concurrency ratios and ops hours are modelled assumptions, labelled as such where used.</p>
+</footer>
+
+</div>
+
+</body></html>
