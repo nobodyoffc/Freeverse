@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"fid":{"type":"keyword"},"tokenId":{"type":"keyword"},"balance":{"type":"double"},"firstHeight":{"type":"long"},"lastHeight":{"type":"long"}}}}

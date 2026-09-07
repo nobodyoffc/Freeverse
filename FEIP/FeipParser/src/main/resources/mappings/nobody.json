@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"prikey":{"type":"keyword"},"leakTime":{"type":"long"},"leakTxIndex":{"type":"integer"},"leakTxId":{"type":"keyword"}}}}

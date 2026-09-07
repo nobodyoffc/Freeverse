@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"alg":{"type":"wildcard"},"cipher":{"type":"keyword"},"owner":{"type":"wildcard"},"birthTime":{"type":"long"},"birthHeight":{"type":"long"},"lastHeight":{"type":"long"},"active":{"type":"boolean"}}}}

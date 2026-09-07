@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"fileName":{"type":"wildcard"},"lastHeight":{"type":"long"},"lastId":{"type":"keyword"},"lastIndex":{"type":"long"},"length":{"type":"short"},"pointer":{"type":"long"}}}}

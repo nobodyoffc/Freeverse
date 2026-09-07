@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"height":{"type":"long"},"index":{"type":"short"},"time":{"type":"long"},"signer":{"type":"wildcard"},"squareId":{"type":"keyword"},"op":{"type":"keyword"},"name":{"type":"wildcard"},"desc":{"type":"text"},"home":{"type":"object"},"cdd":{"type":"long"}}}}

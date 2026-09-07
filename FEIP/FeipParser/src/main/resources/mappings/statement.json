@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"title":{"type":"text"},"content":{"type":"text"},"publisher":{"type":"wildcard"},"birthTime":{"type":"long"},"birthHeight":{"type":"long"}}}}

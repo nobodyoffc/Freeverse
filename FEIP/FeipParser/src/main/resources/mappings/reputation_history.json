@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"cause":{"type":"text"},"rate":{"type":"keyword"},"height":{"type":"long"},"hot":{"type":"long"},"id":{"type":"keyword"},"index":{"type":"short"},"ratee":{"type":"wildcard"},"rater":{"type":"wildcard"},"reputation":{"type":"long"},"time":{"type":"long"}}}}

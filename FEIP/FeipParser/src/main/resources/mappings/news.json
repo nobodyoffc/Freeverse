@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"doer":{"type":"wildcard"},"act":{"type":"keyword"},"objectType":{"type":"keyword"},"objectId":{"type":"keyword"},"objectName":{"type":"text"},"objectBrief":{"type":"text"},"height":{"type":"long"},"time":{"type":"long"}}}}

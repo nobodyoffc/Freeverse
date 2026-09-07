@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"name":{"type":"wildcard"},"desc":{"type":"text"},"contain":{"type":"text"},"active":{"type":"boolean"},"owner":{"type":"wildcard"},"birthTime":{"type":"long"},"birthHeight":{"type":"long"},"lastTxId":{"type":"keyword"},"lastTime":{"type":"long"},"lastHeight":{"type":"long"}}}}

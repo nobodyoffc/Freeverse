@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"nid":{"type":"wildcard"},"name":{"type":"wildcard"},"desc":{"type":"text"},"oid":{"type":"wildcard"},"active":{"type":"boolean"},"namer":{"type":"wildcard"},"birthTime":{"type":"long"},"birthHeight":{"type":"long"},"lastTxId":{"type":"keyword"},"lastTime":{"type":"long"},"lastHeight":{"type":"long"}}}}
