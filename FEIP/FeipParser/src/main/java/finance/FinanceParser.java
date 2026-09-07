@@ -349,38 +349,18 @@ public class FinanceParser {
                     return false;
                 }
 
-                ArrayList<String> tokenRecipientIdListIssue = new ArrayList<>();
-                Map<String,Double> receiverAmountMapIssue = new HashMap<>();
-                Map<String,String> idReceiverMapIssue = new HashMap<>();
-                Double amount = 0d;
-
                 if(tokenHist.getIssueTo()==null){
                     log.info("Issue to is null");
                     return false;
                 }
 
-                for (TokenHistory.FidAmount issueTo : tokenHist.getIssueTo()) {
-                    if(!KeyTools.isGoodFid(issueTo.getFid())){
-                        log.info("Issue to owner is not good");
-                        return false;
-                    }
-                    if(isBadAmount(issueTo.getAmount())){
-                        log.info("Issue to amount is null, not finite, or not positive");
-                        return false;
-                    }
-                    if(isBadDecimal(token, issueTo)){
-                        log.info("Issue to amount is bad");
-                        return false;
-                    }
-                    amount += issueTo.getAmount();
-                    // Aggregate duplicates rather than overwriting: `amount` sums every entry, so a
-                    // repeated fid whose amount was overwritten would mint less than was counted.
-                    receiverAmountMapIssue.merge(issueTo.getFid(), issueTo.getAmount(), Double::sum);
-                    String tokenHolderId = TokenHolder.getTokenHolderId(issueTo.getFid(), tokenHist.getTokenId());
-                    idReceiverMapIssue.put(tokenHolderId,issueTo.getFid());
-                    if(!tokenRecipientIdListIssue.contains(tokenHolderId))
-                        tokenRecipientIdListIssue.add(tokenHolderId);
-                }
+                RecipientTotals issueTotals = aggregateRecipients(tokenHist.getIssueTo(), token, tokenHist.getTokenId());
+                if(issueTotals==null) return false;
+
+                ArrayList<String> tokenRecipientIdListIssue = issueTotals.holderIds;
+                Map<String,Double> receiverAmountMapIssue = issueTotals.amountByFid;
+                Map<String,String> idReceiverMapIssue = issueTotals.fidByHolderId;
+                Double amount = issueTotals.total;
 
                 if(Boolean.TRUE.equals(token.getOpenIssue())){
                     if(token.getMaxAmtPerIssue()!=null){
@@ -492,34 +472,13 @@ public class FinanceParser {
                 double senderOldBalance = tokenHolder.getBalance() != null ? tokenHolder.getBalance() : 0d;
 
                 ArrayList<TokenHolder> newHolderListTransfer = new ArrayList<>();
-                ArrayList<String> tokenHolderIdListTransfer = new ArrayList<>();
-                Map<String,String> idReceiverMapTransfer = new HashMap<>();
+                RecipientTotals transferTotals = aggregateRecipients(tokenHist.getTransferTo(), token, tokenHist.getTokenId());
+                if(transferTotals==null) return false;
 
-                double sum = 0;
-                Map<String,Double> receiverAmountMap = new HashMap<>();
-
-                for (TokenHistory.FidAmount sendTo : tokenHist.getTransferTo()) {
-                    if(!KeyTools.isGoodFid(sendTo.getFid())){
-                        log.info("Send to owner is not good");
-                        return false;
-                    }
-                    if(isBadAmount(sendTo.getAmount())){
-                        log.info("Transfer amount is null, not finite, or not positive");
-                        return false;
-                    }
-                    if(isBadDecimal(token, sendTo)){
-                        log.info("Send to amount is bad");
-                        return false;
-                    }
-                    String id = TokenHolder.getTokenHolderId(sendTo.getFid(), tokenHist.getTokenId());
-                    if(!tokenHolderIdListTransfer.contains(id))
-                        tokenHolderIdListTransfer.add(id);
-                    sum+=sendTo.getAmount();
-                    // Aggregate duplicates: `sum` is debited from the sender in full, so a repeated
-                    // fid whose amount was overwritten would destroy the difference.
-                    receiverAmountMap.merge(sendTo.getFid(), sendTo.getAmount(), Double::sum);
-                    idReceiverMapTransfer.put(id,sendTo.getFid());
-                }
+                ArrayList<String> tokenHolderIdListTransfer = transferTotals.holderIds;
+                Map<String,String> idReceiverMapTransfer = transferTotals.fidByHolderId;
+                Map<String,Double> receiverAmountMap = transferTotals.amountByFid;
+                double sum = transferTotals.total;
 
                 if(sum>senderOldBalance){
                     log.info("Sum is greater than sender old balance");
@@ -671,6 +630,52 @@ public class FinanceParser {
         token.setLastHeight(tokenHist.getHeight());
         token.setLastTime(tokenHist.getTime());
         token.setLastTxId(tokenHist.getId());
+    }
+
+    /**
+     * Validate a list of recipients and aggregate their amounts.
+     *
+     * Returns null if any entry is unusable. Duplicate fids are summed, never overwritten: the
+     * running total counts every entry, so an overwritten duplicate silently destroys the
+     * difference between what the sender is debited and what the recipients are credited.
+     *
+     * Extracted from the issue and transfer branches so this arithmetic can be tested without
+     * an Elasticsearch client -- the parser writes to the live `token` / `token_holder` indices.
+     */
+    static RecipientTotals aggregateRecipients(List<TokenHistory.FidAmount> recipients, Token token, String tokenId) {
+        if (recipients == null) {
+            log.info("Recipient list is null");
+            return null;
+        }
+        RecipientTotals totals = new RecipientTotals();
+        for (TokenHistory.FidAmount to : recipients) {
+            if (!KeyTools.isGoodFid(to.getFid())) {
+                log.info("Recipient fid is not good");
+                return null;
+            }
+            if (isBadAmount(to.getAmount())) {
+                log.info("Recipient amount is null, not finite, or not positive");
+                return null;
+            }
+            if (isBadDecimal(token, to)) {
+                log.info("Recipient amount has too many decimal places");
+                return null;
+            }
+            totals.total += to.getAmount();
+            totals.amountByFid.merge(to.getFid(), to.getAmount(), Double::sum);
+            String holderId = TokenHolder.getTokenHolderId(to.getFid(), tokenId);
+            totals.fidByHolderId.put(holderId, to.getFid());
+            if (!totals.holderIds.contains(holderId)) totals.holderIds.add(holderId);
+        }
+        return totals;
+    }
+
+    /** Aggregated recipients: one entry per distinct fid, with the total across all entries. */
+    static class RecipientTotals {
+        final Map<String, Double> amountByFid = new HashMap<>();
+        final Map<String, String> fidByHolderId = new HashMap<>();
+        final ArrayList<String> holderIds = new ArrayList<>();
+        double total = 0d;
     }
 
     /**
