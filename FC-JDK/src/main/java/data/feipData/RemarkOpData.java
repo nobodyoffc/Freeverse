@@ -23,6 +23,7 @@ public class RemarkOpData {
 	private String summary;
 
 	private Integer rate;
+	private String cause;
 
 	public enum Op {
 		PUBLISH(FeipOp.PUBLISH),
@@ -62,7 +63,7 @@ public class RemarkOpData {
 		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.REMARK_ID, FieldNames.TITLE, FieldNames.DID, FieldNames.ON_DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.REMARK_IDS});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.REMARK_IDS});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.REMARK_ID, FieldNames.RATE});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.REMARK_ID, FieldNames.RATE, FieldNames.CAUSE});
 	}
 
 	// Factory methods
@@ -104,11 +105,17 @@ public class RemarkOpData {
 		return data;
 	}
 
-	public static RemarkOpData makeRate(String remarkId, Integer rate) {
+	/**
+	 * @param rate  0 to {@code FeipConstants.MAX_RATE}
+	 * @param cause optional free text saying why; pass null when blank so the
+	 *              field is omitted rather than carved as an empty string
+	 */
+	public static RemarkOpData makeRate(String remarkId, Integer rate, String cause) {
 		RemarkOpData data = new RemarkOpData();
 		data.setOp(Op.RATE.toLowerCase());
 		data.setRemarkId(remarkId);
 		data.setRate(rate);
+		data.setCause(cause);
 		return data;
 	}
 
@@ -177,6 +184,12 @@ public class RemarkOpData {
 	}
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+	public String getCause() {
+		return cause;
+	}
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 	public String getSummary() {
 		return summary;

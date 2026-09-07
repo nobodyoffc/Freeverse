@@ -193,6 +193,7 @@ Submit a numeric rating for someone else's service, weighted by the transaction'
 |op|Y|String|Fixed: `rate`|
 |sid|Y|String|Target service id.|
 |rate|Y|Integer|Rating value, 0–5.|
+|cause|N|String|Free text saying **why**, carried with the rating and stored on history. Omit the field entirely when there is no reason to give; a client MUST NOT carve it as an empty string. Counts against the OP_RETURN size limit like any other field.|
 
 ### Parsing rules
 
@@ -269,6 +270,7 @@ Submit a numeric rating for someone else's service, weighted by the transaction'
 |stdName, localNames, desc, ver, type, components, dealer, dealerPubkey, home, waiters, protocols, codes, services, params|Various|Copies when present.|
 |Pricing fields|String|As in entity when present.|
 |rate|Integer|For `rate`.|
+|cause|String|For `rate`, when the op supplied one.|
 |cdd|Long|CDD snapshot for `rate`.|
 |closeStatement|String|For `close` when provided.|
 
@@ -320,13 +322,13 @@ Same pattern as FEIP2: `sids` lists; `close` may include `closeStatement`.
 
 ### Example 4: Rate
 
-Another FID rates `txServicePublish1` with `"rate": 5` and sufficient CDD; owner cannot rate their own service.
+Another FID rates `txServicePublish1` with `"rate": 5`, an optional `"cause": "Never missed a window in six months."`, and sufficient CDD; owner cannot rate their own service.
 
 ## Versioning
 
 |Version|Changes|
 |---|---|
-|3|Current version; aligns with `Feip.FeipProtocol.SERVICE` (`"5"`, `"3"`) and `ConstructParser`.|
+|3|Current version; aligns with `Feip.FeipProtocol.SERVICE` (`"5"`, `"3"`) and `ConstructParser`. Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start. The `rate` null check is now made before the range comparison, which used to unbox a null `Integer` and throw on arbitrary on-chain data.|
 |…|Earlier versions: fields for pricing, components, dealer, bulk lifecycle ops, CDD-weighted ratings.|
 
 ## Related Protocols

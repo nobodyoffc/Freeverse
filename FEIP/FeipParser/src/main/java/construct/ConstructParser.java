@@ -137,12 +137,21 @@ public class ConstructParser {
 					log.info("Pid is null");
 					return null;
 				}
+				if(protocolRaw.getRate()==null){
+					log.info("Rate is null");
+					return null;
+				}
+				if(protocolRaw.getRate()<0 || protocolRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
+					return null;
+				}
 				if (opre.getCdd() < StartFEIP.CddRequired){
 					log.info("Cdd is less than CddRequired");
 					return null;
 				}
 				protocolHist.setPid(protocolRaw.getPid());
 				protocolHist.setRate(protocolRaw.getRate());
+				protocolHist.setCause(protocolRaw.getCause());
 				protocolHist.setCdd(opre.getCdd());
 
 				protocolHist.setId(opre.getId());
@@ -317,8 +326,12 @@ public class ConstructParser {
 					log.info("Sid is null");
 					return null;
 				}
-				if(serviceRaw.getRate()<0 ||serviceRaw.getRate()>FeipConstants.MAX_RATE){
-					log.info("Rate should be between 0 and 5");
+				if(serviceRaw.getRate()==null){
+					log.info("Rate is null");
+					return null;
+				}
+				if(serviceRaw.getRate()<0 || serviceRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
 					return null;
 				}
 				if (opre.getCdd() < StartFEIP.CddRequired){
@@ -332,6 +345,7 @@ public class ConstructParser {
 				serviceHist.setTime(opre.getTime());
 				serviceHist.setSigner(opre.getSigner());
 				serviceHist.setRate(serviceRaw.getRate());
+				serviceHist.setCause(serviceRaw.getCause());
 				serviceHist.setCdd(opre.getCdd());
 				break;
 			default:
@@ -457,8 +471,12 @@ public class ConstructParser {
 					log.info("Aid is null");
 					return null;
 				}
-				if(appRaw.getRate()<0 ||appRaw.getRate()>FeipConstants.MAX_RATE){
-					log.info("Rate should be between 0 and 5");
+				if(appRaw.getRate()==null){
+					log.info("Rate is null");
+					return null;
+				}
+				if(appRaw.getRate()<0 || appRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
 					return null;
 				}
             if (opre.getCdd() < StartFEIP.CddRequired){
@@ -467,6 +485,7 @@ public class ConstructParser {
 			}
 				appHist.setAid(appRaw.getAid());
 				appHist.setRate(appRaw.getRate());
+				appHist.setCause(appRaw.getCause());
 				appHist.setCdd(opre.getCdd());
 
 				appHist.setId(opre.getId());
@@ -584,8 +603,12 @@ public class ConstructParser {
 					log.info("CodeId is null");
 					return null;
 				}
-				if(codeRaw.getRate()<0 ||codeRaw.getRate()>FeipConstants.MAX_RATE){
-					log.info("Rate should be between 0 and 5");
+				if(codeRaw.getRate()==null){
+					log.info("Rate is null");
+					return null;
+				}
+				if(codeRaw.getRate()<0 || codeRaw.getRate()>FeipConstants.MAX_RATE){
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
 					return null;
 				}
 				if (opre.getCdd() < StartFEIP.CddRequired){
@@ -599,6 +622,7 @@ public class ConstructParser {
 				codeHist.setTime(opre.getTime());
 				codeHist.setSigner(opre.getSigner());
 				codeHist.setRate(codeRaw.getRate());
+				codeHist.setCause(codeRaw.getCause());
 				codeHist.setCdd(opre.getCdd());
 				break;
 			default:

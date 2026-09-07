@@ -286,8 +286,11 @@ public class TeamManager extends Manager<Team> {
         String tid = team.getId();
         Integer rate = Inputer.inputInteger(br, "Input rating (0-5):", 0, 5);
         if(rate == null) return;
-        
-        TeamOpData data = TeamOpData.makeRate(tid, rate);
+
+        String cause = Inputer.inputString(br, "Input the reason (optional, press enter to skip):");
+        if(cause != null && cause.isBlank()) cause = null;
+
+        TeamOpData data = TeamOpData.makeRate(tid, rate, cause);
         String result = FeipClient.team(priKey, myFid, null, data, apipClient, null, br);
         if(!Hex.isHexString(result)) System.out.println(result);
         else System.out.println("Rating submitted successfully.");

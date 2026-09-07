@@ -97,7 +97,9 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 #### 5. rate
 
 - **Required:** **`imageId`**, **`rate`**, non-null **CDD** ≥ **`CddRequired`** (**makeImage** validates **null** **rate**/**CDD**).
+- **`rate` range:** MUST be present and **0–5** inclusive; an absent or out-of-range value ignores the operation. Earlier revisions of this document said the reference did not clamp `rate`, and it did not: a value outside the range was indexed and folded into `tRate`, where no client could correct it and no op removes it. Bounded in place rather than by a version bump — the range was always the intended one (`FeipConstants.MAX_RATE`), and the Construct protocols have enforced it since v1.
 - Signer MUST NOT be **`publisher`**.
+- **Optional `cause`:** free text saying **why**, carried with the rating and stored on **ImageHistory**. Omit the field entirely when there is no reason to give; a client MUST NOT carve it as an empty string. Counts against the OP_RETURN size limit like any other field.
 - **`tRate`** / **`tCdd`** updated by CDD-weighted average (same formula as Sound/Text).
 
 ### OP_RETURN envelope
@@ -114,7 +116,7 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 
 ### ImageHistory (audit)
 
-[ImageHistory](../../FC-JDK/src/main/java/data/feipData/ImageHistory.java) stores block context, `signer`, `cdd` (**rate**), `op`, `imageId` / `imageIds`, and metadata fields.
+[ImageHistory](../../FC-JDK/src/main/java/data/feipData/ImageHistory.java) stores block context, `signer`, `op`, `imageId` / `imageIds`, the metadata fields, and — for **rate** — `rate`, `cdd`, and `cause` when the op supplied one.
 
 ## Examples
 
@@ -178,7 +180,8 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
   "data": {
     "op": "rate",
     "imageId": "<publish_txid>",
-    "rate": 4
+    "rate": 4,
+    "cause": "Good scan; the colour profile is off."
   }
 }
 ```
@@ -188,6 +191,8 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 |Version|Date|Summary|
 |---|---|---|
 |1|2026-03-24|Initial spec; aligned with `Feip.IMAGE` (`24`/`1`).|
+|1|2026-09-06|Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start.|
+|1|2026-09-06|**`rate` is now bounded to 0–5** in the reference parser. It previously required only a non-null value, so an out-of-range score was indexed and folded into `tRate` permanently. Bounded in place: the range matches `FeipConstants.MAX_RATE`, which the Construct protocols have enforced all along.|
 
 ## Related Protocols
 

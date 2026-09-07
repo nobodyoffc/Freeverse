@@ -154,6 +154,7 @@ Same semantics as FEIP5 Service, with **`aids`** instead of **`sids`**.
 |op|Y|String|Fixed: `rate`|
 |aid|Y|String|Target app id.|
 |rate|Y|Integer|0–5.|
+|cause|N|String|Free text saying **why**, carried with the rating and stored on history. Omit the field entirely when there is no reason to give; a client MUST NOT carve it as an empty string. Counts against the OP_RETURN size limit like any other field.|
 
 ### Parsing rules
 
@@ -218,6 +219,7 @@ Same semantics as FEIP5 Service, with **`aids`** instead of **`sids`**.
 |aids|List\<String\>|For bulk lifecycle ops.|
 |stdName, ver, localNames, desc, types, home, downloads, waiters, protocols, codes, services|Various|When present.|
 |rate|Integer|For `rate`.|
+|cause|String|For `rate`, when the op supplied one.|
 |cdd|Long|For `rate`.|
 |closeStatement|String|For `close`.|
 
@@ -283,6 +285,13 @@ If the app was previously **`stop`**ped (`active` = false), the reference parser
 |[FEIP2V7_Code](FEIP2V7_Code.md)|Apps list `codeId`.|
 |[FEIP5V3_Service](FEIP5V3_Service.md)|Apps list `sid`.|
 |FEIP6 Master|Bulk lifecycle authorization.|
+
+## Versioning
+
+|Version|Date|Summary|
+|---|---|---|
+|1|2026-03-23|Initial spec; aligned with `Feip.FeipProtocol.APP` (`15`/`1`) and `ConstructParser`.|
+|1|2026-09-06|Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start. The `rate` null check is now made before the range comparison, which used to unbox a null `Integer` and throw on arbitrary on-chain data.|
 
 ## Reference Implementation
 

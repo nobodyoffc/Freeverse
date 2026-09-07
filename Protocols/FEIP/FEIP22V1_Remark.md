@@ -97,9 +97,35 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 
 #### 5. rate
 
-- **Required:** **`remarkId`**, **`rate`**, non-null **CDD** ≥ **`CddRequired`** (**makeRemark**).
-- Signer MUST NOT be **`publisher`**.
-- **`tRate`** / **`tCdd`** by CDD-weighted average.
+Score somebody else's remark, weighted by the transaction's **CDD**. A
+remark is rated exactly as the work it annotates is: same fields, same
+range, same weighting, same publisher bar.
+
+**`data` fields:**
+
+|Field|Required|Type|Description|
+|---|---|---|---|
+|`op`|Y|String|`"rate"`|
+|`remarkId`|Y|String|Target remark **`id`**. Absent or unparsable ignores the operation.|
+|`rate`|Y|Integer|MUST be present and **0–5** inclusive; an absent or out-of-range value ignores the operation.|
+|`cause`|N|String|Free text saying **why**, carried with the rating and stored on **RemarkHistory**. Omit the field entirely when there is no reason to give; a client MUST NOT carve it as an empty string. Counts against the OP_RETURN size limit like any other field.|
+
+**Consensus rules**
+
+- **CDD** on the operation MUST be non-null and **≥ `CddRequired`** (**makeRemark**); otherwise ignore.
+- **Signer MUST NOT equal `publisher`.** A remark's author cannot rate their own remark.
+- The remark MUST exist; otherwise no state change.
+- **`tRate`** / **`tCdd`**: if unset, initialize from this op; else CDD-weighted average:
+  **`tRate ← (tRate * tCdd + rate * cdd) / (tCdd + cdd)`**, **`tCdd ← tCdd + cdd`**.
+- `cause` does **not** affect `tRate` / `tCdd`; it is recorded on the history row only.
+- Refresh **`lastTxId`** / **`lastTime`** / **`lastHeight`**.
+
+**On the range.** Earlier revisions of this document said the reference
+did not clamp `rate`, and it did not: a value outside the range was
+indexed and folded into `tRate`, where no client could correct it and no
+op removes it. Bounded in place rather than by a version bump — the
+range was always the intended one (`FeipConstants.MAX_RATE`), and the
+Construct protocols have enforced it since v1.
 
 ### OP_RETURN envelope
 
@@ -115,7 +141,9 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 
 ### RemarkHistory (audit)
 
-[RemarkHistory](../../FC-JDK/src/main/java/data/feipData/RemarkHistory.java) stores block context, `signer`, `cdd` (**rate**), `op`, `remarkId` / `remarkIds`, `onDid`, and other metadata fields.
+[RemarkHistory](../../FC-JDK/src/main/java/data/feipData/RemarkHistory.java) stores block context, `signer`, `op`, `remarkId` / `remarkIds`, `onDid`, the other metadata fields, and — for **rate** — `rate`, `cdd`, and `cause` when the op supplied one.
+
+The `remark_history` index mapping previously declared neither **`rate`** nor **`remarkIds`**, so a rating's score was dynamic-mapped as `long` where every sibling index uses `short`, and the plural key `delete` / `recover` write was dynamic-mapped as text. Both are declared now.
 
 ## Examples
 
@@ -179,7 +207,8 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
   "data": {
     "op": "rate",
     "remarkId": "<publish_txid>",
-    "rate": 4
+    "rate": 4,
+    "cause": "Adds the benchmark the parent post was missing."
   }
 }
 ```
@@ -189,6 +218,8 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 |Version|Date|Summary|
 |---|---|---|
 |1|2026-03-24|Initial spec; aligned with `Feip.REMARK` (`22`/`1`).|
+|1|2026-09-06|Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start. **`remark_history`** additionally gained explicit `rate` and `cause` mappings; `rate` had never been mapped at all, so a Remark rating's score was dynamic-mapped as `long` where every sibling index uses `short`.|
+|1|2026-09-06|**`rate` is now bounded to 0–5** in the reference parser. It previously required only a non-null value, so an out-of-range score was indexed and folded into `tRate` permanently. Bounded in place: the range matches `FeipConstants.MAX_RATE`, which the Construct protocols have enforced all along.|
 
 ## Related Protocols
 

@@ -26,6 +26,7 @@ public class AppOpData{
 	private List<String> codes;
 	private List<String> services;
 	private Integer rate;
+	private String cause;
 	private String closeStatement;
 
 	public enum Op {
@@ -68,7 +69,7 @@ public class AppOpData{
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.AIDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.AIDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.AIDS});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.AID, FieldNames.RATE});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.AID, FieldNames.RATE, FieldNames.CAUSE});
 	}
 
 	public String getAid() {
@@ -157,6 +158,12 @@ public class AppOpData{
 
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+	public String getCause() {
+		return cause;
+	}
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 
 	public List<String> getCodes() {
@@ -250,11 +257,17 @@ public class AppOpData{
 		return data;
 	}
 
-	public static AppOpData makeRate(String aid, Integer rate) {
+	/**
+	 * @param rate  0 to {@code FeipConstants.MAX_RATE}
+	 * @param cause optional free text saying why; pass null when blank so the
+	 *              field is omitted rather than carved as an empty string
+	 */
+	public static AppOpData makeRate(String aid, Integer rate, String cause) {
 		AppOpData data = new AppOpData();
 		data.setOp(Op.RATE.toLowerCase());
 		data.setAid(aid);
 		data.setRate(rate);
+		data.setCause(cause);
 		return data;
 	}
 

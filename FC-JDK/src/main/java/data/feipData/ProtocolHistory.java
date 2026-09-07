@@ -26,6 +26,8 @@ public class ProtocolHistory extends FcObject {
 	private List<String> pids;
 	private String op;
 	private Integer rate;
+	/** Free text the rater attached to a {@code rate} op. Optional. */
+	private String cause;
 	private Long cdd;
 	private String closeStatement;
 
@@ -165,6 +167,14 @@ public class ProtocolHistory extends FcObject {
 
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+
+	public String getCause() {
+		return cause;
+	}
+
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 
 	public Long getCdd() {

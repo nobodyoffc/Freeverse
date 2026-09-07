@@ -602,6 +602,7 @@ public class OrganizationParser {
 				}
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setRate(teamRaw.getRate());
+				teamHist.setCause(teamRaw.getCause());
 				teamHist.setCdd(opre.getCdd());
 
 				teamHist.setId(opre.getId());

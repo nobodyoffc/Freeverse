@@ -25,6 +25,8 @@ public class TeamHistory extends FcObject {
 	private String transferee;
 	private String[] list;
 	private Integer rate;
+	/** Free text the rater attached to a {@code rate} op. Optional. */
+	private String cause;
 
 	public Long getHeight() {
 		return height;
@@ -109,6 +111,14 @@ public class TeamHistory extends FcObject {
 	}
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+
+	public String getCause() {
+		return cause;
+	}
+
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 
 	public String[] getWaiters() {

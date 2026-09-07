@@ -186,6 +186,7 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
 |op|Y|String|Fixed: `rate`|
 |codeId|Y|String|Target code id.|
 |rate|Y|Integer|Rating value, 0–5.|
+|cause|N|String|Free text saying **why**, carried with the rating and stored on history. Omit the field entirely when there is no reason to give; a client MUST NOT carve it as an empty string. Counts against the OP_RETURN size limit like any other field.|
 
 ### Parsing rules
 
@@ -267,6 +268,7 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
 |codeIds|List\<String\>|For `stop` / `recover` / `close`.|
 |name, ver, did, desc, langs, home, protocols, waiters|Various|Copies from op when present.|
 |rate|Integer|For `rate`.|
+|cause|String|For `rate`, when the op supplied one.|
 |cdd|Long|CDD snapshot for `rate`.|
 |closeStatement|String|For `close` when provided.|
 
@@ -431,7 +433,8 @@ Another FID rates `txCodePublish1` with `rate: 4` and sufficient CDD:
   "data": {
     "op": "rate",
     "codeId": "txCodePublish1",
-    "rate": 4
+    "rate": 4,
+    "cause": "Builds clean and the tests are real, but the docs lag the API."
   }
 }
 ```
@@ -454,7 +457,7 @@ A different FID `F9x2kqz7B5jRwPdd2ipziFvqq6y2tVkUV` sends `update` for `codeId: 
 
 |Version|Changes|
 |---|---|
-|7|Current version; aligns with construct parser. Adds `langs`, `protocols`, `waiters`, CDD-weighted ratings, bulk `stop`/`recover`/`close`, `closeStatement`|
+|7|Current version; aligns with construct parser. Adds `langs`, `protocols`, `waiters`, CDD-weighted ratings, bulk `stop`/`recover`/`close`, `closeStatement` Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start. The `rate` null check is now made before the range comparison, which used to unbox a null `Integer` and throw on arbitrary on-chain data.|
 |…|Earlier versions: incremental field and rule additions.|
 
 ## Related Protocols

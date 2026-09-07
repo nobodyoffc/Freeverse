@@ -207,8 +207,13 @@ public class PublishParser {
 					log.info("Rate is null");
 					return null;
 				}
+				if (textRaw.getRate() < 0 || textRaw.getRate() > FeipConstants.MAX_RATE) {
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
+					return null;
+				}
 				textHist.setTextId(textRaw.getTextId());
 				textHist.setRate(textRaw.getRate());
+				textHist.setCause(textRaw.getCause());
 				textHist.setCdd(opre.getCdd());
 
 				textHist.setId(opre.getId());
@@ -529,6 +534,10 @@ public class PublishParser {
 					log.info("Rate is null");
 					return null;
 				}
+				if (remarkRaw.getRate() < 0 || remarkRaw.getRate() > FeipConstants.MAX_RATE) {
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
+					return null;
+				}
 				Long remarkRateCdd = opre.getCdd();
 				if (remarkRateCdd == null) {
 					log.info("Cdd is null");
@@ -540,6 +549,7 @@ public class PublishParser {
 				}
 				remarkHist.setRemarkId(remarkRaw.getRemarkId());
 				remarkHist.setRate(remarkRaw.getRate());
+				remarkHist.setCause(remarkRaw.getCause());
 				remarkHist.setCdd(remarkRateCdd);
 
 				remarkHist.setId(opre.getId());
@@ -965,6 +975,10 @@ public class PublishParser {
 					log.info("Rate is null");
 					return null;
 				}
+				if (soundRaw.getRate() < 0 || soundRaw.getRate() > FeipConstants.MAX_RATE) {
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
+					return null;
+				}
 				Long rateCdd = opre.getCdd();
 				if (rateCdd == null) {
 					log.info("Cdd is null");
@@ -976,6 +990,7 @@ public class PublishParser {
 				}
 				soundHist.setSoundId(soundRaw.getSoundId());
 				soundHist.setRate(soundRaw.getRate());
+				soundHist.setCause(soundRaw.getCause());
 				soundHist.setCdd(rateCdd);
 
 				soundHist.setId(opre.getId());
@@ -1288,6 +1303,10 @@ public class PublishParser {
 					log.info("Rate is null");
 					return null;
 				}
+				if (imageRaw.getRate() < 0 || imageRaw.getRate() > FeipConstants.MAX_RATE) {
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
+					return null;
+				}
 				Long imageRateCdd = opre.getCdd();
 				if (imageRateCdd == null) {
 					log.info("Cdd is null");
@@ -1299,6 +1318,7 @@ public class PublishParser {
 				}
 				imageHist.setImageId(imageRaw.getImageId());
 				imageHist.setRate(imageRaw.getRate());
+				imageHist.setCause(imageRaw.getCause());
 				imageHist.setCdd(imageRateCdd);
 
 				imageHist.setId(opre.getId());
@@ -1609,6 +1629,10 @@ public class PublishParser {
 					log.info("Rate is null");
 					return null;
 				}
+				if (videoRaw.getRate() < 0 || videoRaw.getRate() > FeipConstants.MAX_RATE) {
+					log.info("Rate should be between 0 and "+FeipConstants.MAX_RATE);
+					return null;
+				}
 				Long videoRateCdd = opre.getCdd();
 				if (videoRateCdd == null) {
 					log.info("Cdd is null");
@@ -1620,6 +1644,7 @@ public class PublishParser {
 				}
 				videoHist.setVideoId(videoRaw.getVideoId());
 				videoHist.setRate(videoRaw.getRate());
+				videoHist.setCause(videoRaw.getCause());
 				videoHist.setCdd(videoRateCdd);
 
 				videoHist.setId(opre.getId());

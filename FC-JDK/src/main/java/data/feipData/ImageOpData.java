@@ -22,6 +22,7 @@ public class ImageOpData {
 	private String summary;
 
 	private Integer rate;
+	private String cause;
 
 	public enum Op {
 		PUBLISH(FeipOp.PUBLISH),
@@ -61,7 +62,7 @@ public class ImageOpData {
 		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{"imageId", FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{"imageIds"});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{"imageIds"});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{"imageId", FieldNames.RATE});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{"imageId", FieldNames.RATE, FieldNames.CAUSE});
 	}
 
 	// Factory methods
@@ -102,11 +103,17 @@ public class ImageOpData {
 		return data;
 	}
 
-	public static ImageOpData makeRate(String imageId, Integer rate) {
+	/**
+	 * @param rate  0 to {@code FeipConstants.MAX_RATE}
+	 * @param cause optional free text saying why; pass null when blank so the
+	 *              field is omitted rather than carved as an empty string
+	 */
+	public static ImageOpData makeRate(String imageId, Integer rate, String cause) {
 		ImageOpData data = new ImageOpData();
 		data.setOp(Op.RATE.toLowerCase());
 		data.setImageId(imageId);
 		data.setRate(rate);
+		data.setCause(cause);
 		return data;
 	}
 
@@ -181,6 +188,12 @@ public class ImageOpData {
 
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+	public String getCause() {
+		return cause;
+	}
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 
 

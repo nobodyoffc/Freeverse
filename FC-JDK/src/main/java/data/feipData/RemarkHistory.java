@@ -29,6 +29,8 @@ public class RemarkHistory extends FcObject {
 	private String summary;
 
 	private Integer rate;
+	/** Free text the rater attached to a {@code rate} op. Optional. */
+	private String cause;
 	
 	private Long cdd;
 
@@ -118,6 +120,14 @@ public class RemarkHistory extends FcObject {
 
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+
+	public String getCause() {
+		return cause;
+	}
+
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 
 	public Long getCdd() {

@@ -214,6 +214,7 @@ public class FieldNames {
     public static final String AIDS = "aids";
 
     public static final String RATE = "rate";
+    public static final String CAUSE = "cause";
 
     public static final String CODE_IDS = "codeIds";
     public static final String BOOK_ID = "bookId";

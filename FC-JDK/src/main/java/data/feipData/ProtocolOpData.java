@@ -22,7 +22,8 @@ public class ProtocolOpData {
 	private String lang;
 	private String preDid;
 	private Map<String, String> home;
-	private int rate;
+	private Integer rate;
+	private String cause;
 	private String closeStatement;
 
 	public enum Op {
@@ -65,7 +66,7 @@ public class ProtocolOpData {
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.PIDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.PIDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.PIDS});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.PID, FieldNames.RATE});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.PID, FieldNames.RATE, FieldNames.CAUSE});
 	}
 
 	public static ProtocolOpData makePublish(String sn, String name, String type, String ver, String did,
@@ -125,11 +126,17 @@ public class ProtocolOpData {
 		return data;
 	}
 
-	public static ProtocolOpData makeRate(String pid, int rate) {
+	/**
+	 * @param rate  0 to {@code FeipConstants.MAX_RATE}
+	 * @param cause optional free text saying why; pass null when blank so the
+	 *              field is omitted rather than carved as an empty string
+	 */
+	public static ProtocolOpData makeRate(String pid, Integer rate, String cause) {
 		ProtocolOpData data = new ProtocolOpData();
 		data.setOp(Op.RATE.toLowerCase());
 		data.setPid(pid);
 		data.setRate(rate);
+		data.setCause(cause);
 		return data;
 	}
 
@@ -200,11 +207,17 @@ public class ProtocolOpData {
 	public void setHome(Map<String, String> home) {
 		this.home = home;
 	}
-	public int getRate() {
+	public Integer getRate() {
 		return rate;
 	}
-	public void setRate(int rate) {
+	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+	public String getCause() {
+		return cause;
+	}
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 	public String getDid() {
 		return did;

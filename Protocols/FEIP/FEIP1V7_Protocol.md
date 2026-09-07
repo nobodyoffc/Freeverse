@@ -192,7 +192,8 @@ Submit a numeric rating for someone else’s protocol, weighted by the transacti
 |---|---|---|---|
 |op|Y|String|Fixed: `rate`|
 |pid|Y|String|Target protocol id.|
-|rate|Y|Integer|Rating value. Parsers MAY restrict the range (e.g. 0–5) in a later version; v7 reference accepts any integer present in JSON.|
+|rate|Y|Integer|Rating value, **0–5** inclusive. MUST NOT be null. Any other value ignores the operation.|
+|cause|N|String|Free text saying **why**, carried with the rating and stored on history. Omit the field entirely when there is no reason to give; a client MUST NOT carve it as an empty string. Counts against the OP_RETURN size limit like any other field.|
 
 ### Parsing rules
 
@@ -224,7 +225,9 @@ Submit a numeric rating for someone else’s protocol, weighted by the transacti
 
 5. **`rate`**
    - `pid` is required; otherwise ignore.
+   - `rate` MUST be present and MUST be **0–5** inclusive; otherwise ignore. Refusing an absent or out-of-range value outright is deliberate: `rate` was a primitive in the reference `ProtocolOpData`, so an omitted field deserialized to `0` and silently scored the protocol zero, and no bound was checked at all. The three sibling Construct protocols already refused both, and Protocol was the odd one out.
    - Signer MUST NOT equal `owner`; otherwise ignore.
+   - `cause`, when present, is copied to **ProtocolHistory** and does not affect `tRate` / `tCdd`.
    - Transaction MUST satisfy **CDD ≥ 1** (reference uses `CddRequired`) for the rating to apply.
    - Let `cdd` be the transaction’s CDD and `r` the submitted `rate`. Update aggregate fields:
      - First rating: `tRate = r`, `tCdd = cdd`.
@@ -277,6 +280,7 @@ Submit a numeric rating for someone else’s protocol, weighted by the transacti
 |pids|List\<String\>|For `stop` / `recover` / `close`.|
 |type, sn, ver, did, name, desc, lang, prePid, home|Various|Copies from op when present (`prePid` from `preDid`).|
 |rate|Integer|For `rate`.|
+|cause|String|For `rate`, when the op supplied one.|
 |cdd|Long|CDD snapshot for `rate`.|
 |closeStatement|String|For `close` when provided.|
 |waiters|List\<String\>|When provided on `publish` / `update`.|
@@ -320,7 +324,7 @@ Another FID rates `txPublish1` with `rate: 5` and sufficient CDD → `tRate` / `
 
 |Version|Changes|
 |---|---|
-|7|Current version; aligns with `Feip.FeipProtocol.PROTOCOL` (`"1"`,`"7"`) and construct parser.|
+|7|Current version; aligns with `Feip.FeipProtocol.PROTOCOL` (`"1"`,`"7"`) and construct parser. Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start. Parsing rule 5 additionally now **requires** `rate` to be present and **0–5**: the reference `ProtocolOpData.rate` was a primitive `int`, so an omitted field deserialized to `0` and scored the protocol zero, and no range was checked at all — the field is now `Integer` and both checks are made, matching Code / Service / App.|
 |…|Earlier versions: incremental fields (`waiters`, `closeStatement`, CDD-weighted ratings, bulk `stop`/`recover`/`close`).|
 
 ## Related Protocols

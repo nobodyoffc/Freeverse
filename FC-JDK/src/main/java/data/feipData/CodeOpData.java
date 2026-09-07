@@ -22,6 +22,7 @@ public class CodeOpData {
 	private List<String> protocols;
 	private List<String> waiters;
 	private Integer rate;
+	private String cause;
 	private String closeStatement;
 
 	public enum Op {
@@ -64,7 +65,7 @@ public class CodeOpData {
 		OP_FIELDS.put(Op.STOP.toLowerCase(), new String[]{FieldNames.CODE_IDS});
 		OP_FIELDS.put(Op.CLOSE.toLowerCase(), new String[]{FieldNames.CODE_IDS, FieldNames.CLOSE_STATEMENT});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.CODE_IDS});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.RATE});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.CODE_ID, FieldNames.RATE, FieldNames.CAUSE});
 	}
 
 	public static CodeOpData makePublish(String name, String version, String did, String desc,
@@ -120,11 +121,17 @@ public class CodeOpData {
 		return data;
 	}
 
-	public static CodeOpData makeRate(String codeId, Integer rate) {
+	/**
+	 * @param rate  0 to {@code FeipConstants.MAX_RATE}
+	 * @param cause optional free text saying why; pass null when blank so the
+	 *              field is omitted rather than carved as an empty string
+	 */
+	public static CodeOpData makeRate(String codeId, Integer rate, String cause) {
 		CodeOpData data = new CodeOpData();
 		data.setOp(Op.RATE.toLowerCase());
 		data.setCodeId(codeId);
 		data.setRate(rate);
+		data.setCause(cause);
 		return data;
 	}
 
@@ -187,6 +194,12 @@ public class CodeOpData {
 	}
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+	public String getCause() {
+		return cause;
+	}
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 	public String getCloseStatement() {
 		return closeStatement;

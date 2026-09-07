@@ -22,6 +22,7 @@ public class SoundOpData {
 	private String summary;
 
 	private Integer rate;
+	private String cause;
 
 	public enum Op {
 		PUBLISH(FeipOp.PUBLISH),
@@ -61,7 +62,7 @@ public class SoundOpData {
 		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{"soundId", FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{"soundIds"});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{"soundIds"});
-		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{"soundId", FieldNames.RATE});
+		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{"soundId", FieldNames.RATE, FieldNames.CAUSE});
 	}
 
 	// Factory methods
@@ -102,11 +103,17 @@ public class SoundOpData {
 		return data;
 	}
 
-	public static SoundOpData makeRate(String soundId, Integer rate) {
+	/**
+	 * @param rate  0 to {@code FeipConstants.MAX_RATE}
+	 * @param cause optional free text saying why; pass null when blank so the
+	 *              field is omitted rather than carved as an empty string
+	 */
+	public static SoundOpData makeRate(String soundId, Integer rate, String cause) {
 		SoundOpData data = new SoundOpData();
 		data.setOp(Op.RATE.toLowerCase());
 		data.setSoundId(soundId);
 		data.setRate(rate);
+		data.setCause(cause);
 		return data;
 	}
 
@@ -181,6 +188,12 @@ public class SoundOpData {
 
 	public void setRate(Integer rate) {
 		this.rate = rate;
+	}
+	public String getCause() {
+		return cause;
+	}
+	public void setCause(String cause) {
+		this.cause = cause;
 	}
 
 
