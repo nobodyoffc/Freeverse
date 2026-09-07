@@ -12,6 +12,7 @@ import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
+import data.fchData.Freer;
 import data.feipData.FreerHist;
 import data.feipData.RepuHist;
 import utils.JsonUtils;
@@ -144,11 +145,16 @@ public class IdentityRollbacker {
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 		
 		if(rateeList==null || rateeList.isEmpty())return error;
-		
+
 		deleteRolledHists(esClient, IndicesNames.REPUTATION_HISTORY, histIdList);
-		
+		// reviseCidRepuAndHot re-aggregates the rows that survive the
+		// delete, and a bulk delete is not visible to search until the
+		// index refreshes. Without this the aggregation can still count
+		// the rows just removed and "restore" the pre-rollback totals.
+		esClient.indices().refresh(r->r.index(IndicesNames.REPUTATION_HISTORY));
+
 		reviseCidRepuAndHot(esClient,rateeList);
-		
+
 		return error;
 
 	}
@@ -191,9 +197,22 @@ public class IdentityRollbacker {
 				if(j>=rateeList.size())break;
 				rateeSubList.add(rateeList.get(j));
 			}
-			Map<String,HashMap<String,Long>> reviseMapMap 
+			Map<String,HashMap<String,Long>> reviseMapMap
 				= aggsRepuAndHot(esClient,rateeSubList);
-			
+
+			// A ratee whose every rating fell inside the rolled-back
+			// range has no surviving history row, so the terms
+			// aggregation yields no bucket for it and it would be left
+			// carrying the totals the rollback was meant to undo.
+			// Absent history means zero, not "unchanged".
+			for(String ratee:rateeSubList) {
+				if(reviseMapMap.containsKey(ratee))continue;
+				HashMap<String,Long> zeroed = new HashMap<String,Long>();
+				zeroed.put("reputation", 0L);
+				zeroed.put("hot", 0L);
+				reviseMapMap.put(ratee, zeroed);
+			}
+
 			updataRepuAndHot(esClient,reviseMapMap);
 
 			i += rateeSubList.size();
@@ -247,20 +266,52 @@ public class IdentityRollbacker {
 	}
 	private void updataRepuAndHot(ElasticsearchClient esClient, Map<String, HashMap<String, Long>> reviseMapMap) throws Exception {
 		if(reviseMapMap.isEmpty())return;
+
+		// Weight is derived from reputation, so restoring reputation
+		// without recomputing it leaves a number that was calculated
+		// from a rating history that no longer exists.
+		// IdentityParser.parseReputation calls reCalcWeight on every
+		// write; the rollback has to do the same or it half-undoes the
+		// parse. cd and cdd are read as they stand - this protocol never
+		// touches them, and their own rollback owns them.
+		List<String> rateeIdList = new ArrayList<String>(reviseMapMap.keySet());
+		Map<String,Freer> freerMap = new HashMap<String,Freer>();
+		EsUtils.MgetResult<Freer> mgetResult
+			= EsUtils.getMultiByIdList(esClient, IndicesNames.FREER, rateeIdList, Freer.class);
+		if(mgetResult!=null && mgetResult.getResultList()!=null) {
+			for(Freer freer:mgetResult.getResultList()) {
+				if(freer==null || freer.getId()==null)continue;
+				freerMap.put(freer.getId(), freer);
+			}
+		}
+
 		BulkRequest.Builder br = new BulkRequest.Builder();
-		
+
 		Set<String> rateeSet = reviseMapMap.keySet();
 		for(String ratee:rateeSet) {
+			HashMap<String,Long> doc = reviseMapMap.get(ratee);
+			Freer freer = freerMap.get(ratee);
+			if(freer==null) {
+				// No Freer to read cd and cdd from. The update below
+				// will fail for this id anyway; leaving weight out is
+				// better than writing one computed from assumed zeros.
+				log.info("Freer is not found, weight is not revised: " + ratee);
+			}else {
+				doc.put("weight", core.fch.Weight.calcWeight(
+						freer.getCd() != null ? freer.getCd() : 0,
+						freer.getCdd() != null ? freer.getCdd() : 0,
+						doc.get("reputation")));
+			}
 			br.operations(o->o
 					.update(u->u
 							.index(IndicesNames.FREER)
 							.id(ratee)
 							.action(a->a
-									.doc(reviseMapMap.get(ratee)))));
+									.doc(doc))));
 		}
-		br.timeout(t->t.time("600s"));			
+		br.timeout(t->t.time("600s"));
 		esClient.bulk(br.build());
-		 
+
 	}
 
 

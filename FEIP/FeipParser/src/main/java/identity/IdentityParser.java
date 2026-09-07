@@ -295,6 +295,39 @@ public class IdentityParser {
 			log.info("Rate is null");
 			return null;
 		}
+		// Only good and bad carry a delta. Any other string used to fall
+		// through with a null reputation, which parseReputation then
+		// unboxed into a long - an NPE reachable from arbitrary
+		// on-chain data. An unknown verdict is not parseable, so it is
+		// refused here where refusing is free.
+		if(!reputationRaw.getRate().equals(Values.GOOD)
+				&& !reputationRaw.getRate().equals(Values.BAD)){
+			log.info("Rate is neither good nor bad");
+			return null;
+		}
+		// The ratee is data.fid. It used to be taken from
+		// opre.getRecipient() - the first non-signer output owner, with
+		// the "nobody" sentinel when there was none - which made it
+		// impossible to rate anyone without paying them and lost the
+		// rating whenever the output was absent or reordered. A rating
+		// is an opinion about a FID, not a transfer to one, so it names
+		// its subject in the payload and the outputs are not consulted.
+		if(reputationRaw.getFid()==null){
+			log.info("Ratee fid is null");
+			return null;
+		}
+		if(!KeyTools.isGoodFid(reputationRaw.getFid())){
+			log.info("Ratee is not a good fid");
+			return null;
+		}
+		// Naming the ratee in the payload reopens something the old
+		// recipient rule excluded by construction: the signer could not
+		// be the recipient. Without this a FID could raise its own
+		// reputation for the price of its own coin-days.
+		if(reputationRaw.getFid().equals(opre.getSigner())){
+			log.info("A fid can not rate itself");
+			return null;
+		}
 
 		RepuHist repuHist = new RepuHist();
 
@@ -304,7 +337,7 @@ public class IdentityParser {
 		repuHist.setTime(opre.getTime());
 
 		repuHist.setRater(opre.getSigner());
-		repuHist.setRatee(opre.getRecipient());
+		repuHist.setRatee(reputationRaw.getFid());
 
 		repuHist.setHot(opre.getCdd());
 
