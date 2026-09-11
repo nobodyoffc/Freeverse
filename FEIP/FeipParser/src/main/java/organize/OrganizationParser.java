@@ -921,7 +921,9 @@ public class OrganizationParser {
 					return false;
 				}
 
-				if(!teamHist.getConsensusId().equals(team.getConsensusId())){
+				// makeTeam requires the id now, but a history stored before it did can still be
+				// replayed by a rollback.
+				if(teamHist.getConsensusId()==null || !teamHist.getConsensusId().equals(team.getConsensusId())){
 					log.info("ConsensusId is not the same");
 					return false;
 				}
@@ -1020,35 +1022,20 @@ public class OrganizationParser {
 					return false;
 				}
 
-				if(team.getManagers()!=null) {
-					for(String admin:team.getManagers()) {
-						if(admin.equals(teamHist.getSigner())) {
-
-							if(team.getInvitees()==null || teamHist.getList()==null) {
-								log.info("No invitation to withdraw");
-								return false;
-							}
-							Set<String> inviteeSet = new HashSet<String>();
-							for(String invitee:team.getInvitees()) {
-								inviteeSet.add(invitee);
-							}
-							for(String invitee:teamHist.getList()) {
-								inviteeSet.remove(invitee);
-							}
-							String[] invitees = inviteeSet.toArray(new String[inviteeSet.size()]);
-							team.setInvitees(invitees);
-							team.setLastTxId(teamHist.getId());
-							team.setLastTime(teamHist.getTime());
-							team.setLastHeight(teamHist.getHeight());
-
-							Team team7 = team;
-
-							IndexResponse result8 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-							log.info("{}", result8.result());
-							return CREATED.equals(result8.result().jsonValue()) || UPDATED.equals(result8.result().jsonValue());
-						}
-					}
+				// This branch used to end without a return, so a signer who is not a manager fell
+				// through into "join" and threw on the op's null consensusId.
+				if(!applyWithdrawInvitation(team, teamHist.getSigner(), teamHist.getList())) {
+					return false;
 				}
+				team.setLastTxId(teamHist.getId());
+				team.setLastTime(teamHist.getTime());
+				team.setLastHeight(teamHist.getHeight());
+
+				Team withdrawn = team;
+
+				IndexResponse result8 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(withdrawn));
+				log.info("{}", result8.result());
+				return CREATED.equals(result8.result().jsonValue()) || UPDATED.equals(result8.result().jsonValue());
 
 			case "join":
 
@@ -1069,7 +1056,7 @@ public class OrganizationParser {
 					return false;
 				}
 
-				if(!teamHist.getConsensusId().equals(team.getConsensusId())){
+				if(teamHist.getConsensusId()==null || !teamHist.getConsensusId().equals(team.getConsensusId())){
 					log.info("ConsensusId is not the same");
 					return false;
 				}
@@ -1137,77 +1124,36 @@ public class OrganizationParser {
 					log.info("Teams not found: "+result1.getMissList());
 				}
 
+				// The bulk used to run inside the loop, after the first active team the signer did not
+				// own: only that team was ever left, and when the signer was not a member of it the
+				// bulk had no operations and threw. A leave naming no team it could apply to ran off
+				// the end of this case into "dismiss".
 				BulkRequest.Builder br1 = new BulkRequest.Builder();
-
-				Iterator<Team> iterator = result1.getResultList().iterator();
-				while(iterator.hasNext()) {
-					team = iterator.next();
-
-					if(Boolean.FALSE.equals(team.isActive())) {
-						continue;
-					}
-
-					if(team.getOwner().equals(teamHist.getSigner())) {
-						continue;
-					}
-
-					found = false;
-					Set<String> activeMemberSet = new HashSet<String>();
-					for(String activeMember:team.getMembers()) {
-						if(activeMember.equals(teamHist.getSigner())) {
-							found = true;
-						}else {
-							activeMemberSet.add(activeMember);
-						}
-					}
-					if(found) {
-						String[] activeMembers = activeMemberSet.toArray(new String[0]);
-						team.setMembers(activeMembers);
-						team.setMemberNum((long) activeMembers.length);
-
-						Set<String> exMemberSet = new HashSet<String>();
-						if(team.getExMembers()!=null) {
-							exMemberSet.addAll(Arrays.asList(team.getExMembers()));
-							exMemberSet.add(teamHist.getSigner());
-							String[] exMembers = exMemberSet.toArray(new String[0]);
-							team.setExMembers(exMembers);
-						}else{
-							team.setExMembers(new String[]{teamHist.getSigner()});
-						}
-
-						if(team.getManagers()!=null) {
-							Set<String> magagerSet = new HashSet<String>();
-							for(String magager:team.getManagers()) {
-								if(!magager.equals(teamHist.getSigner())) {
-									magagerSet.add(magager);
-								}
-							}
-							String[] managers = magagerSet.toArray(new String[0]);
-							team.setManagers(managers);
-						}
-						team.setLastTxId(teamHist.getId());
-						team.setLastTime(teamHist.getTime());
-						team.setLastHeight(teamHist.getHeight());
-
-						Team team7 = team;
-
-						br1.operations(op -> op
-								.index(idx -> idx
-										.index(IndicesNames.TEAM)
-										.id(team7.getId())
-										.document(team7)
-								)
-						);
-					}
-					BulkResponse result6 = esClient.bulk(br1.build());
-					if(result6.errors()){
-						log.info("Failed");
-						return false;
-					} else {
-						log.info("Done");
-						return true;
-					}
+				int left = 0;
+				for(Team team1 : result1.getResultList()) {
+					if(!applyLeave(team1, teamHist.getSigner())) continue;
+					team1.setLastTxId(teamHist.getId());
+					team1.setLastTime(teamHist.getTime());
+					team1.setLastHeight(teamHist.getHeight());
+					left++;
+					br1.operations(op -> op
+							.index(idx -> idx
+									.index(IndicesNames.TEAM)
+									.id(team1.getId())
+									.document(team1)
+							)
+					);
 				}
+				if(left==0) {
+					log.info("Signer is not a non-owner member of any active team listed");
+					return false;
+				}
+				BulkResponse result6 = esClient.bulk(br1.build());
+				if(result6.errors()){
+					throw new java.io.IOException("Failed to bulk update teams on leave");
+				}
+				log.info("Done");
+				return true;
 
 			case "dismiss":
 				if(teamHist.getTid()==null) {
@@ -1227,67 +1173,20 @@ public class OrganizationParser {
 					return false;
 				}
 
-				for(String manager:team.getManagers()) {
-					if(manager.equals(teamHist.getSigner())) {
-
-						Set<String> activeMemberSet1 = new HashSet<String>();
-						if(team.getMembers()!=null) {
-							for(String activeMember:team.getMembers()) {
-								activeMemberSet1.add(activeMember);
-							}
-						}
-
-						Set<String>exMemberSet = new HashSet<String>();
-						if(team.getExMembers()!=null) {
-							for(String leftMember:team.getExMembers()) {
-								exMemberSet.add(leftMember);
-							}
-						}
-
-						Set<String>magagerSet = new HashSet<String>();
-						if(team.getManagers()!=null) {
-							for(String magager:team.getManagers()) {
-								magagerSet.add(magager);
-							}
-						}
-
-						for(String dismissedPerson:teamHist.getList()) {
-							if(dismissedPerson.equals(team.getOwner()))continue;
-							if(!activeMemberSet1.contains(dismissedPerson))continue;
-							exMemberSet.add(dismissedPerson);
-							magagerSet.remove(dismissedPerson);
-							activeMemberSet1.remove(dismissedPerson);
-						}
-
-						String[] activeMembers = activeMemberSet1.toArray(new String[activeMemberSet1.size()]);
-						team.setMembers(activeMembers);
-						team.setMemberNum((long) activeMembers.length);
-
-						if(exMemberSet.size()==0) {
-							team.setExMembers(null);
-						}else {
-							String[] leftMembers = exMemberSet.toArray(new String[exMemberSet.size()]);
-							team.setExMembers(leftMembers);
-						}
-
-						if(magagerSet.size()==0) {
-							team.setManagers(null);
-						}else {
-							String[] magagers = magagerSet.toArray(new String[magagerSet.size()]);
-							team.setManagers(magagers);
-						}
-
-						team.setLastTxId(teamHist.getId());
-						team.setLastTime(teamHist.getTime());
-						team.setLastHeight(teamHist.getHeight());
-
-						Team team7 = team;
-
-						IndexResponse result9 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(team7));
-						log.info("{}", result9.result());
-						return CREATED.equals(result9.result().jsonValue()) || UPDATED.equals(result9.result().jsonValue());
-					}
+				// This branch used to iterate a null managers list, and to end without a return, so a
+				// signer who is not a manager fell through into "appoint".
+				if(!applyDismiss(team, teamHist.getSigner(), teamHist.getList())) {
+					return false;
 				}
+				team.setLastTxId(teamHist.getId());
+				team.setLastTime(teamHist.getTime());
+				team.setLastHeight(teamHist.getHeight());
+
+				Team dismissed = team;
+
+				IndexResponse result9 = esClient.index(i->i.index(IndicesNames.TEAM).id(teamHist.getTid()).document(dismissed));
+				log.info("{}", result9.result());
+				return CREATED.equals(result9.result().jsonValue()) || UPDATED.equals(result9.result().jsonValue());
 
 			case "appoint":
 
@@ -1433,6 +1332,95 @@ public class OrganizationParser {
 				log.info("Invalid operation");
 				return false;
 		}
+	}
+
+	// ---- Team membership rules, kept apart from Elasticsearch so they can be tested ----
+
+	/**
+	 * Remove {@code list} from the team's invitees. Only a manager may, and only while there are
+	 * invitees; otherwise the team is left untouched and false is returned.
+	 */
+	static boolean applyWithdrawInvitation(Team team, String signer, String[] list) {
+		if(team.getManagers()==null || !Arrays.asList(team.getManagers()).contains(signer)) {
+			log.info("Signer is not a manager");
+			return false;
+		}
+		if(team.getInvitees()==null || list==null) {
+			log.info("No invitation to withdraw");
+			return false;
+		}
+		Set<String> inviteeSet = new HashSet<String>(Arrays.asList(team.getInvitees()));
+		for(String invitee : list) {
+			inviteeSet.remove(invitee);
+		}
+		team.setInvitees(inviteeSet.toArray(new String[0]));
+		return true;
+	}
+
+	/**
+	 * Move {@code list} from members to exMembers, dropping any manager role. Only a manager may;
+	 * the owner and non-members named are skipped. Returns false, with the team untouched, when
+	 * the signer is not a manager.
+	 */
+	static boolean applyDismiss(Team team, String signer, String[] list) {
+		if(team.getManagers()==null || !Arrays.asList(team.getManagers()).contains(signer)) {
+			log.info("Signer is not a manager");
+			return false;
+		}
+		Set<String> activeMemberSet = new HashSet<String>();
+		if(team.getMembers()!=null) Collections.addAll(activeMemberSet, team.getMembers());
+
+		Set<String> exMemberSet = new HashSet<String>();
+		if(team.getExMembers()!=null) Collections.addAll(exMemberSet, team.getExMembers());
+
+		Set<String> managerSet = new HashSet<String>();
+		Collections.addAll(managerSet, team.getManagers());
+
+		if(list!=null) {
+			for(String dismissedPerson : list) {
+				if(dismissedPerson.equals(team.getOwner())) continue;
+				if(!activeMemberSet.contains(dismissedPerson)) continue;
+				exMemberSet.add(dismissedPerson);
+				managerSet.remove(dismissedPerson);
+				activeMemberSet.remove(dismissedPerson);
+			}
+		}
+
+		String[] activeMembers = activeMemberSet.toArray(new String[0]);
+		team.setMembers(activeMembers);
+		team.setMemberNum((long) activeMembers.length);
+		team.setExMembers(exMemberSet.isEmpty() ? null : exMemberSet.toArray(new String[0]));
+		team.setManagers(managerSet.isEmpty() ? null : managerSet.toArray(new String[0]));
+		return true;
+	}
+
+	/**
+	 * Take {@code signer} out of one team: out of members and managers, into exMembers. Returns
+	 * false, with the team untouched, when the team is inactive, the signer owns it (an owner
+	 * transfers or disbands instead), or the signer is not a member.
+	 */
+	static boolean applyLeave(Team team, String signer) {
+		if(Boolean.FALSE.equals(team.isActive())) return false;
+		if(signer==null || signer.equals(team.getOwner())) return false;
+		if(team.getMembers()==null || !Arrays.asList(team.getMembers()).contains(signer)) return false;
+
+		Set<String> activeMemberSet = new HashSet<String>(Arrays.asList(team.getMembers()));
+		activeMemberSet.remove(signer);
+		String[] activeMembers = activeMemberSet.toArray(new String[0]);
+		team.setMembers(activeMembers);
+		team.setMemberNum((long) activeMembers.length);
+
+		Set<String> exMemberSet = new HashSet<String>();
+		if(team.getExMembers()!=null) Collections.addAll(exMemberSet, team.getExMembers());
+		exMemberSet.add(signer);
+		team.setExMembers(exMemberSet.toArray(new String[0]));
+
+		if(team.getManagers()!=null) {
+			Set<String> managerSet = new HashSet<String>(Arrays.asList(team.getManagers()));
+			managerSet.remove(signer);
+			team.setManagers(managerSet.toArray(new String[0]));
+		}
+		return true;
 	}
 
 }
