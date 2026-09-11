@@ -15,6 +15,7 @@ public class FeipConstants {
     public static final String CONFIRM_TRANSFER_TEAM = "I transfer the team to the transferee.";
     public static final String CONFIRM_AGREE_CONSENSUS = "I agree with the new consensus.";
     public static final String CONFIRM_JOIN_TEAM = "I join the team and agree with the team consensus.";
+    public static final String CONFIRM_TAKE_OVER_TEAM = "I take over the team and agree with the team consensus.";
     public static final String CONFIRM_STATEMENT = "This is a formal and irrevocable statement.";
 
     // --- FEIP-managed fields on the Freer index ---

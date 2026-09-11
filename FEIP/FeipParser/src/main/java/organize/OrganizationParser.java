@@ -486,8 +486,8 @@ public class OrganizationParser {
 					log.info("TID is null");
 					return null;
 				}
-				if(!teamRaw.getConfirm().equals("I take over the team and agree with the team consensus.")){
-					log.info("Confirm is not 'I take over the team and agree with the team consensus.'");
+				if(teamRaw.getConfirm()==null || !teamRaw.getConfirm().equals(FeipConstants.CONFIRM_TAKE_OVER_TEAM)){
+					log.info("Confirm absents or is not '" + FeipConstants.CONFIRM_TAKE_OVER_TEAM + "'");
 					return null;
 				}
 				teamHist.setTid(teamRaw.getTid());
@@ -535,13 +535,18 @@ public class OrganizationParser {
 					log.info("TID is null");
 					return null;
 				}
-				if(!teamRaw.getConfirm().equals(FeipConstants.CONFIRM_AGREE_CONSENSUS)){
-					log.info("Confirm is not '" + FeipConstants.CONFIRM_AGREE_CONSENSUS + "'");
+				if(teamRaw.getConfirm()==null || !teamRaw.getConfirm().equals(FeipConstants.CONFIRM_AGREE_CONSENSUS)){
+					log.info("Confirm absents or is not '" + FeipConstants.CONFIRM_AGREE_CONSENSUS + "'");
+					return null;
+				}
+				// The consensus being agreed to must be named: parseTeam compares it for equality
+				// with the team's current consensusId.
+				if(teamRaw.getConsensusId()==null){
+					log.info("ConsensusId is null");
 					return null;
 				}
 				teamHist.setTid(teamRaw.getTid());
-				if(teamRaw.getConsensusId()!=null)
-					teamHist.setConsensusId(teamRaw.getConsensusId());
+				teamHist.setConsensusId(teamRaw.getConsensusId());
 
 				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
@@ -577,12 +582,18 @@ public class OrganizationParser {
 					log.info("TID is null");
 					return null;
 				}
-				if(!teamRaw.getConfirm().equals(FeipConstants.CONFIRM_JOIN_TEAM)){
-					log.info("Confirm is not '" + FeipConstants.CONFIRM_JOIN_TEAM + "'");
+				if(teamRaw.getConfirm()==null || !teamRaw.getConfirm().equals(FeipConstants.CONFIRM_JOIN_TEAM)){
+					log.info("Confirm absents or is not '" + FeipConstants.CONFIRM_JOIN_TEAM + "'");
+					return null;
+				}
+				// The consensus being joined under must be named: parseTeam compares it for
+				// equality with the team's current consensusId.
+				if(teamRaw.getConsensusId()==null){
+					log.info("ConsensusId is null");
 					return null;
 				}
 				teamHist.setTid(teamRaw.getTid());
-				if(teamRaw.getConsensusId()!=null)teamHist.setConsensusId(teamRaw.getConsensusId());
+				teamHist.setConsensusId(teamRaw.getConsensusId());
 
 				teamHist.setId(opre.getId());
 				teamHist.setHeight(opre.getHeight());
@@ -886,13 +897,6 @@ public class OrganizationParser {
 					}
 				}
 
-
-				if(team.getConsensusId() !=null) {
-					if(! team.getConsensusId().equals(teamHist.getConsensusId())) {
-						team.setNotAgreeMembers(team.getMembers());
-					}
-				}
-
 				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());
 				team.setLastHeight(teamHist.getHeight());
@@ -1115,6 +1119,8 @@ public class OrganizationParser {
 						}
 					}
 				}
+				log.info("Signer is not an invitee of the team");
+				return false;
 
 			case "leave":
 				if(teamHist.getTids()==null||teamHist.getTids().isEmpty()) {
