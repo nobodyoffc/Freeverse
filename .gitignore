@@ -58,3 +58,8 @@ opreturn/opreturn0.byte
 opreturn/opreturn0.byte
 opreturn/opreturn0.byte
 /opreturn
+
+# Local task list and parser output: per-machine, not source.
+/task.md
+/opreturn/
+PublishProtocols/target/
