@@ -90,7 +90,7 @@ public class CdMaker {
 		Map<String, Freer> addrOldMap = new HashMap<>();
 		for(Freer addr : addrOldList){
 			addrOldMap.put(addr.getId(),addr);
-			sum+=addr.getBalance();
+			if (addr.getBalance() != null) sum+=addr.getBalance();
 		}
 
 		Map<String,Long> addrNewCdMap = makeAddrCdMap(esClient, addrOldList);
@@ -109,6 +109,8 @@ public class CdMaker {
 			addrOldMap = new HashMap<>();
 			for (Freer addr : addrOldList) {
 				addrOldMap.put(addr.getId(), addr);
+				// Every page counts toward circulating supply, not only the first.
+				if (addr.getBalance() != null) sum += addr.getBalance();
 			}
 
 			addrNewCdMap = makeAddrCdMap(esClient, addrOldList);

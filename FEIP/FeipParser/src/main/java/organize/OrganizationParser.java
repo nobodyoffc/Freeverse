@@ -1,5 +1,6 @@
 package organize;
 
+import startFEIP.Permission;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
@@ -222,13 +223,15 @@ public class OrganizationParser {
 					log.info("Square is not found");
 					return false;
 				}
-				String [] activeMembers = new String[square.getMembers().length+1];
-
 				Set<String>memberSet = new HashSet<String>();
+				if(square.getMembers()!=null) Collections.addAll(memberSet, square.getMembers());
 
-				for(String member:square.getMembers()) {
-					memberSet.add(member);
+				if(memberSet.contains(squareHist.getSigner())) {
+					// Joining again changed nothing but still added the op's CDD to the square's total.
+					log.info("Signer is already a member of the square");
+					return false;
 				}
+				String [] activeMembers;
 				memberSet.add(squareHist.getSigner());
 				activeMembers = memberSet.toArray(new String[memberSet.size()]);
 
@@ -321,7 +324,7 @@ public class OrganizationParser {
 				BulkRequest.Builder br = new BulkRequest.Builder();
 				for(Square square1:result.getResultList()){
 
-					String [] activeMembers1 = new String[square1.getMembers().length+1];
+					String [] activeMembers1;
 
 					Set<String>memberSet1 = new HashSet<String>();
 
@@ -342,10 +345,12 @@ public class OrganizationParser {
 					square1.setMemberNum((long) activeMembers1.length);
 
 					if(activeMembers1.length==0){
-						esClient.delete(d->d.index(IndicesNames.SQUARE).id(square1.getId()));
-						esClient.deleteByQuery(d->d.index(IndicesNames.SQUARE_HISTORY).query(q->q.term(t->t.field("squareId").value(square1.getId()))));
-						log.info("Square and square history are deleted");
-						return true;
+						// The last member left: the square goes. This used to return straight away,
+						// so any further squares in the op were never left; and it deleted the
+						// square's histories, which a rollback needs to rebuild the square.
+						br.operations(op -> op.delete(d -> d.index(IndicesNames.SQUARE).id(square1.getId())));
+						log.info("Square {} has no members left and is deleted", square1.getId());
+						continue;
 					}
 
 					square1.setLastTxId(squareHist.getId());
@@ -368,8 +373,7 @@ public class OrganizationParser {
 
 				BulkResponse result3 = esClient.bulk(br.build());
 				if(result3.errors()){
-					log.info("Failed");
-					return false;
+					throw new java.io.IOException("Failed to bulk update squares on leave");
 				} else {
 					log.info("Done");
 					return true;
@@ -692,13 +696,17 @@ public class OrganizationParser {
 				}
 
 				BulkRequest.Builder br = new BulkRequest.Builder();
+				int disbanded = 0;
 				for(Team team1:result.getResultList()) {
 					if(! team1.getOwner().equals(teamHist.getSigner())) {
-						continue;
+						// A team the signer does not own rejects the op before anything is written.
+						log.info("Signer does not own team {}", team1.getId());
+						return false;
 					}
 					if(Boolean.FALSE.equals(team1.isActive())) {
 						continue;
 					}
+					disbanded++;
 					team1.setLastTxId(teamHist.getId());
 					team1.setLastTime(teamHist.getTime());
 					team1.setLastHeight(teamHist.getHeight());
@@ -713,10 +721,14 @@ public class OrganizationParser {
 							)
 					);
 				}
+				if(disbanded==0) {
+					// An empty bulk request is rejected by Elasticsearch; and nothing was disbanded.
+					log.info("No active team to disband");
+					return false;
+				}
 				BulkResponse result4 = esClient.bulk(br.build());
 				if(result4.errors()){
-					log.info("Failed to bulk disband team");
-					return false;
+					throw new java.io.IOException("Failed to bulk disband team");
 				}
 				log.info("Done");
 
@@ -740,17 +752,9 @@ public class OrganizationParser {
 					return false;
 				}
 
-				if(!team.getOwner().equals(teamHist.getSigner())) {
-					Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, teamHist.getSigner(), Freer.class);
-					if(resultCid!=null && resultCid.getMaster()!=null) {
-						if(!resultCid.getMaster().equals(teamHist.getSigner())) {
-							log.info("Signer is not the master");
-							return false;
-						}
-					}else {
-						log.info("Signer is not the owner or the master");
-						return false;
-					}
+				if(!Permission.isOwnerOrMaster(esClient, team.getOwner(), teamHist.getSigner())) {
+					log.info("Signer is not the owner or the owner's master");
+					return false;
 				}
 
 				if(teamHist.getTransferee().equals(team.getOwner())) {
@@ -1016,6 +1020,10 @@ public class OrganizationParser {
 					for(String admin:team.getManagers()) {
 						if(admin.equals(teamHist.getSigner())) {
 
+							if(team.getInvitees()==null || teamHist.getList()==null) {
+								log.info("No invitation to withdraw");
+								return false;
+							}
 							Set<String> inviteeSet = new HashSet<String>();
 							for(String invitee:team.getInvitees()) {
 								inviteeSet.add(invitee);
@@ -1386,21 +1394,25 @@ public class OrganizationParser {
 					return false;
 				}
 
-				if(teamHist.getCdd()!=null)
-					if(team.gettCdd()!=null) {
-						if (team.gettCdd() + teamHist.getCdd() == 0) {
-							team.settRate(0f);
-						} else {
-							team.settRate(
-									(team.gettRate() * team.gettCdd() + teamHist.getRate() * teamHist.getCdd())
-											/ (team.gettCdd() + teamHist.getCdd())
-							);
-						}
-						team.settCdd(team.gettCdd() + teamHist.getCdd());
-					}
-				else {
-						log.info("CDD is null");
-						return false;
+				if(teamHist.getCdd()==null || teamHist.getRate()==null) {
+					log.info("CDD or rate is null");
+					return false;
+				}
+				// The else used to bind to the inner `if (tCdd != null)`, and nothing initialises
+				// tCdd, so the first rating of every team was rejected as "CDD is null" and no team
+				// could ever be rated.
+				if(team.gettCdd()==null || team.gettRate()==null) {
+					team.settRate(Float.valueOf(teamHist.getRate()));
+					team.settCdd(teamHist.getCdd());
+				} else if (team.gettCdd() + teamHist.getCdd() == 0) {
+					team.settRate(0f);
+					team.settCdd(0L);
+				} else {
+					team.settRate(
+							(team.gettRate() * team.gettCdd() + teamHist.getRate() * teamHist.getCdd())
+									/ (team.gettCdd() + teamHist.getCdd())
+					);
+					team.settCdd(team.gettCdd() + teamHist.getCdd());
 				}
 				team.setLastTxId(teamHist.getId());
 				team.setLastTime(teamHist.getTime());

@@ -1073,6 +1073,7 @@ public class CashManager extends Manager<Cash> {
         long lastHeight = localDB.getSize() == 0 ? 0 : getLongState(LAST_HEIGHT);
         if(lastHeight==0){
             freshValidCashes();
+            recordSyncedBlock();
             return;
         }
         if(apipClient==null && nasaClient==null && esClient==null){
@@ -1080,6 +1081,18 @@ public class CashManager extends Manager<Cash> {
             return;
         }
         bestHeight = Settings.getBestHeight(apipClient,nasaClient,esClient,null);
+
+        if(chainReorganizedSinceSync()){
+            // Refreshing only what changed above lastHeight cannot see a reorganization: not one at
+            // the same height, and not the spent cashes a rollback restored, whose heights are old.
+            log.warn("The block this wallet last synced to is no longer on the chain. Reloading all cashes.");
+            localDB.removeState(LAST);
+            freshValidCashes();
+            recordSyncedBlock();
+            freshCd();
+            freshUnconfirmed();
+            return;
+        }
 
         if(bestHeight>lastHeight){
             if(apipClient!=null){
@@ -1100,9 +1113,59 @@ public class CashManager extends Manager<Cash> {
                 if (freshCashDBByNasaRpc()) return;
             }
         }
+        recordSyncedBlock();
         freshCd();
         freshUnconfirmed();
 //        if(br!=null)Menu.anyKeyToContinue(br);
+    }
+
+    private static final String SYNCED_HEIGHT = "syncedHeight";
+    private static final String SYNCED_BLOCK_ID = "syncedBlockId";
+
+    /** Remember the chain's block at the current best height, to detect a reorg on the next refresh. */
+    private void recordSyncedBlock() {
+        String blockId = blockIdAtHeight(bestHeight);
+        if (blockId == null) return;
+        localDB.putState(SYNCED_HEIGHT, bestHeight);
+        localDB.putState(SYNCED_BLOCK_ID, blockId);
+    }
+
+    /**
+     * True if the block recorded at the last sync is no longer the chain's block at that height.
+     * A wallet synced before this was recorded has nothing to compare, and reloads once.
+     * The NaSa RPC refresh always reloads every cash, so it needs no check.
+     */
+    private boolean chainReorganizedSinceSync() {
+        if (apipClient == null && esClient == null) return false;
+        Object syncedId = localDB.getState(SYNCED_BLOCK_ID);
+        Long syncedHeight = getLongState(SYNCED_HEIGHT);
+        if (syncedId == null || syncedHeight == null || syncedHeight == 0) return true;
+        String currentId = blockIdAtHeight(syncedHeight);
+        if (currentId == null) {
+            log.warn("Could not read the block at height {} to check for a reorganization.", syncedHeight);
+            return false;
+        }
+        return !currentId.equals(syncedId);
+    }
+
+    private String blockIdAtHeight(long height) {
+        try {
+            if (apipClient != null) {
+                Map<String, Block> blocks = apipClient.blockByHeights(RequestMethod.POST, AuthType.ENCRYPTED, String.valueOf(height));
+                if (blocks == null || blocks.isEmpty()) return null;
+                Block block = blocks.values().iterator().next();
+                return block == null ? null : block.getId();
+            }
+            if (esClient != null) {
+                SearchResponse<Block> result = esClient.search(sr -> sr.index(IndicesNames.BLOCK).size(1)
+                        .query(q -> q.term(t -> t.field(HEIGHT).value(height))), Block.class);
+                if (result.hits().hits().isEmpty() || result.hits().hits().get(0).source() == null) return null;
+                return result.hits().hits().get(0).source().getId();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read the block at height {}: {}", height, e.getMessage());
+        }
+        return null;
     }
 
     public void freshCd() {
@@ -1202,7 +1265,11 @@ public class CashManager extends Manager<Cash> {
                     last = newLast;
                 if(hits.size()< DEFAULT_DISPLAY_LIST_SIZE)break;
             } catch (IOException e) {
-                log.error("EsClient error:{}", e.getMessage());
+                // This used to log and loop straight back into the same failing request, forever.
+                // Give up this refresh without recording progress; the next one starts from the
+                // same height.
+                log.error("EsClient error, cash refresh abandoned:{}", e.getMessage());
+                return;
             }
         }
         if(newLastHeight!=null) {
@@ -1528,10 +1595,12 @@ public class CashManager extends Manager<Cash> {
                             break;
                         }
                     }else cashList.addAll(newCashList);
-
+                    // The cursor is the sort values of the page's last hit. This used to be the
+                    // page's cash list converted to strings, which is no position at all.
+                    last = replyBody.getLast();
+                    if (newCashList.size() < DEFAULT_DISPLAY_LIST_SIZE || last == null || last.isEmpty()) break;
                 } else return cashList;
-                last = ObjectUtils.objectToList(replyBody.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
-            } while (cashList.size() < replyBody.getTotal());
+            } while (true);
         } else if (this.nasaClient != null) {
             replyBody = getCashListFromNasaNode(fid, null, true, nasaClient);
             if (replyBody.getCode() != 0) {
@@ -1621,18 +1690,20 @@ public class CashManager extends Manager<Cash> {
             sb.searchAfter(EsUtils.toFieldValueList(last));
 
         Query.Builder qb = new Query.Builder();
+        BoolQuery.Builder bb = new BoolQuery.Builder();
+        List<Query> queryList = new ArrayList<>();
         if (afterHeight != null) {
+            // A clause of the bool query: a Query.Builder holds one variant, and the bool set
+            // below used to replace this range.
             RangeQuery.Builder rb = new RangeQuery.Builder();
             if (valid != null && !valid) {
                 rb.field(FieldNames.SPEND_HEIGHT);
             } else {
-                rb.field(FieldNames.BIRTH_HEIGHT); 
+                rb.field(FieldNames.BIRTH_HEIGHT);
             }
             rb.gt(JsonData.of(afterHeight));
-            qb.range(rb.build());
+            queryList.add(new Query(rb.build()));
         }
-        BoolQuery.Builder bb = new BoolQuery.Builder();
-        List<Query> queryList = new ArrayList<>();
         
         // Replace multiple Term queries with a single Terms query
         List<FieldValue> fieldValues= new ArrayList<>();
@@ -1679,7 +1750,8 @@ public class CashManager extends Manager<Cash> {
                 }
                 replier.set0Success(cashList);
                 replier.setGot((long) cashList.size());
-                replier.setTotal((long) result.hits().hits().size());
+                // The number of matches, not the size of this page.
+                replier.setTotal(result.hits().total() != null ? result.hits().total().value() : (long) cashList.size());
                 if (newLast != null)
                     replier.setLast(newLast);
             }
@@ -1694,14 +1766,22 @@ public class CashManager extends Manager<Cash> {
                                                     boolean includeUnsafe, NaSaRpcClient naSaRpcClient) {
         UTXO[] utxos = new NaSaRpcClient(naSaRpcClient.getUrl(), naSaRpcClient.getUsername(), naSaRpcClient.getPassword()).listUnspent(fid, minConf, includeUnsafe);
         List<Cash> cashList = new ArrayList<>();
+        if (utxos == null) {
+            ReplyBody failed = new ReplyBody();
+            failed.setOtherError("listunspent returned nothing");
+            return failed;
+        }
+        // Built like every other Cash: an id, the output script as the lock script (it used to be
+        // given the redeem script, which is empty for ordinary outputs), and a birth height.
+        long bestHeight = 0;
+        try {
+            naSaRpcClient.freshBestBlock();
+            bestHeight = naSaRpcClient.getBestHeight();
+        } catch (Exception e) {
+            log.warn("Could not read the best height; cashes from listunspent have no birth height: {}", e.getMessage());
+        }
         for (UTXO utxo : utxos) {
-            Cash cash = new Cash();
-            cash.setOwner(utxo.getAddress());
-            cash.setBirthTxId(utxo.getTxid());
-            cash.setBirthIndex(utxo.getVout());
-            cash.setValue(utils.FchUtils.coinToSatoshi(utxo.getAmount()));
-            cash.setLockScript(utxo.getRedeemScript());
-            cashList.add(cash);
+            cashList.add(Cash.fromUtxo(utxo, bestHeight));
         }
         ReplyBody replyBody = new ReplyBody();
         replyBody.set0Success();
@@ -1832,7 +1912,8 @@ public class CashManager extends Manager<Cash> {
         if(apipClient!=null)bestheight = apipClient.getBestHeight();
         if(esClient!=null) {
             try {
-                bestheight = EsUtils.getBestBlock(esClient).getHeight();
+                Block bestBlock = EsUtils.getBestBlock(esClient);
+                if (bestBlock != null) bestheight = bestBlock.getHeight();
             } catch (IOException ignore) {
             }
         }

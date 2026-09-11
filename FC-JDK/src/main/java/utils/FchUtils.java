@@ -13,6 +13,8 @@ import data.fchData.Freer;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.file.*;
@@ -86,14 +88,11 @@ public class FchUtils {
         //Byte[] List for merge all bytes read./用于保存所读取字节数组的列表。
         ArrayList<byte[]> bl = new ArrayList<byte[]>();
         //Read 1 byte and turn it into unsigned./读1个字节并转换成整型。
-        byte[] b = new byte[1];
-        blockInputStream.read(b);
+        byte[] b = readExactly(blockInputStream, 1);
         bl.add(b);
 
-        //log.debug("Paring varint. first byte is :{}",(int)b[0]);
-
         int size = Byte.toUnsignedInt(b[0]);
-        long number = 0;
+        long number;
 
         /*
             Value	        Storage length	    Format
@@ -101,28 +100,26 @@ public class FchUtils {
             <= 0xFFFF	    3	                0xFD followed by the length as uint16_t
             <= 0xFFFFFFFF	5	                0xFE followed by the length as uint32_t
             -	            9	                0xFF followed by the length as uint64_t
+
+            The 4- and 8-byte forms used to be decoded with the 2-byte conversion, keeping only
+            the low 16 bits, and the 8-byte form then called System.exit(0).
          */
 
         if (size <= 252) {
-            number = (long) size;
-
+            number = size;
         } else if (size == 253) {
-            byte[] f = new byte[2];
-            blockInputStream.read(f);
+            byte[] f = readExactly(blockInputStream, 2);
             bl.add(f);
-            number = BytesUtils.bytes2ToIntLE(f);//Unpooled.wrappedBuffer(f).readUnsignedShortLE();
-
+            number = BytesUtils.bytes2ToIntLE(f);
         } else if (size == 254) {
-            byte[] f = new byte[4];
-            blockInputStream.read(f);
+            byte[] f = readExactly(blockInputStream, 4);
             bl.add(f);
-            number = BytesUtils.bytes2ToIntLE(f);
+            number = ByteBuffer.wrap(f).order(ByteOrder.LITTLE_ENDIAN).getInt() & 0xFFFFFFFFL;
         } else {
-            byte[] f = new byte[8];
-            blockInputStream.read(f);
+            byte[] f = readExactly(blockInputStream, 8);
             bl.add(f);
-            number = BytesUtils.bytes2ToIntLE(f);
-            System.exit(0);
+            number = ByteBuffer.wrap(f).order(ByteOrder.LITTLE_ENDIAN).getLong();
+            if (number < 0) throw new IOException("Varint exceeds the signed 64-bit range");
         }
         //For return./将要返回的值。
         byte[] mergeBytes = BytesUtils.bytesMerger(bl);
@@ -132,6 +129,28 @@ public class FchUtils {
         varint.number = number;
 
         return varint;
+    }
+
+    /**
+     * A varint that counts or sizes what follows it in the same buffer. Every counted item takes
+     * at least one byte, so a value larger than what is left cannot be genuine; rejecting it here
+     * keeps a corrupt or hostile length from reaching `new byte[(int) n]` or a loop bound.
+     */
+    public static VariantResult parseLength(ByteArrayInputStream in) throws IOException {
+        VariantResult varint = parseVarint(in);
+        if (varint.number > in.available()) {
+            throw new IOException("Length " + varint.number + " exceeds the " + in.available() + " bytes remaining");
+        }
+        return varint;
+    }
+
+    /** Read exactly n bytes, or throw: ByteArrayInputStream.read(byte[]) returns short at the end. */
+    public static byte[] readExactly(ByteArrayInputStream in, int n) throws IOException {
+        byte[] buf = new byte[n];
+        if (in.readNBytes(buf, 0, n) != n) {
+            throw new java.io.EOFException("Expected " + n + " bytes");
+        }
+        return buf;
     }
 
     /**
@@ -332,11 +351,34 @@ public class FchUtils {
         }
     }
 
+    /** Addresses per aggregation request; see {@link #aggsTxoByAddrs}. */
+    static final int AGGS_ADDR_BATCH = 10_000;
+
+    /**
+     * Per-address UTXO/STXO/TXO totals for every address in `addrAllList`.
+     *
+     * Requested in batches. One request for every address used a fixed 200,000-bucket terms size,
+     * past which owners were dropped from the result, and Elasticsearch refuses a terms query with
+     * more than 65,536 values or a response with more than 65,536 buckets well before that. A
+     * dropped owner is written back with a zero balance by the rollback that asked.
+     */
     public static Map<String, Map<String, Long>> aggsTxoByAddrs(ElasticsearchClient esClient, List<String> addrAllList) throws ElasticsearchException, IOException {
+        Map<String,Map<String, Long>> merged = new HashMap<>();
+        for (String key : List.of(UTXO_SUM, STXO_SUM, TXO_SUM, CDD, UTXO_COUNT)) merged.put(key, new HashMap<>());
+        for (int start = 0; start < addrAllList.size(); start += AGGS_ADDR_BATCH) {
+            List<String> batch = addrAllList.subList(start, Math.min(start + AGGS_ADDR_BATCH, addrAllList.size()));
+            Map<String, Map<String, Long>> part = aggsTxoByAddrBatch(esClient, batch);
+            for (Map.Entry<String, Map<String, Long>> e : part.entrySet()) merged.get(e.getKey()).putAll(e.getValue());
+        }
+        return merged;
+    }
+
+    private static Map<String, Map<String, Long>> aggsTxoByAddrBatch(ElasticsearchClient esClient, List<String> addrAllList) throws ElasticsearchException, IOException {
 
         List<FieldValue> fieldValueList = new ArrayList<>();
 
         for (String value : addrAllList) fieldValueList.add(FieldValue.of(value));
+        int bucketSize = Math.max(1, addrAllList.size());
 
         SearchResponse<Void> response = esClient.search(s->s
                         .index(IndicesNames.CASH)
@@ -351,7 +393,7 @@ public class FchUtils {
                                         .aggregations(UTXO_AGGS, a3->a3
                                                 .terms(t2->t2
                                                         .field(FieldNames.OWNER)
-                                                        .size(200000))
+                                                        .size(bucketSize))
                                                 .aggregations(UTXO_SUM, t5->t5
                                                         .sum(s1->s1
                                                                 .field("value"))))
@@ -361,7 +403,7 @@ public class FchUtils {
                                         .aggregations(STXO_AGGS, a1->a1
                                                 .terms(t2->t2
                                                         .field(FieldNames.OWNER)
-                                                        .size(200000))
+                                                        .size(bucketSize))
                                                 .aggregations(STXO_SUM, t3->t3
                                                         .sum(s1->s1
                                                                 .field("value")))
@@ -373,7 +415,7 @@ public class FchUtils {
                                 .aggregations(TXO_AGGS, a1->a1
                                         .terms(t2->t2
                                                 .field(FieldNames.OWNER)
-                                                .size(200000))
+                                                .size(bucketSize))
                                         .aggregations(TXO_SUM, t3->t3
                                                 .sum(s1->s1
                                                         .field("value")))

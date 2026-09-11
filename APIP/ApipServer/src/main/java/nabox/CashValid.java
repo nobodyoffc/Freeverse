@@ -97,6 +97,7 @@ public class CashValid extends HttpServlet {
                 List<Cash> meetList = fcHttpRequestHandler.doRequest(CASH, defaultSort, Cash.class);
                 if(meetList==null){
                     replier.replyHttp(fcHttpRequestHandler.getFinalReplyJson(),response);
+                    return;
                 }
                 MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
                 mempoolHandler.updateUnconfirmedValidCash(meetList, fid);

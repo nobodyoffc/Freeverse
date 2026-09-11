@@ -416,7 +416,21 @@ public class FinanceParser {
                     return false;
                 }
 
-                ArrayList<TokenHolder> newHolderList = new ArrayList<>();
+                // Keyed by each holder's own document id; see the transfer branch.
+                Map<String, TokenHolder> issuedHolders = new LinkedHashMap<>();
+
+                for( TokenHolder tokenHolder: resultMultiGet.getResultList()) {
+                    String fid = tokenHolder.getFid();
+                    Double credit = receiverAmountMapIssue.get(fid);
+                    if(credit==null){
+                        log.info("Stored token holder fid {} is not among the recipients", fid);
+                        return false;
+                    }
+                    double oldBalance = tokenHolder.getBalance() != null ? tokenHolder.getBalance() : 0d;
+                    tokenHolder.setBalance(oldBalance + credit);
+                    tokenHolder.setLastHeight(tokenHist.getHeight());
+                    issuedHolders.put(TokenHolder.getTokenHolderId(fid, tokenHist.getTokenId()), tokenHolder);
+                }
 
                 for (String tokenHolderId : resultMultiGet.getMissList()) {
                     TokenHolder tokenHolder = new TokenHolder();
@@ -430,22 +444,15 @@ public class FinanceParser {
 
                     Double perFid = receiverAmountMapIssue.get(toFid);
                     tokenHolder.setBalance(perFid != null ? perFid : 0d);
-                    newHolderList.add(tokenHolder);
+                    issuedHolders.put(tokenHolderId, tokenHolder);
                 }
 
-                for( TokenHolder tokenHolder: resultMultiGet.getResultList()) {
-                    String fid = tokenHolder.getFid();
-                    double oldBalance = tokenHolder.getBalance() != null ? tokenHolder.getBalance() : 0d;
-                    tokenHolder.setBalance(oldBalance + receiverAmountMapIssue.get(fid));
-                    tokenHolder.setLastHeight(tokenHist.getHeight());
-                    newHolderList.add(tokenHolder);
-                }
-
-                EsUtils.bulkWriteList(esClient,IndicesNames.TOKEN_HOLDER,newHolderList,tokenRecipientIdListIssue,TokenHolder.class);
+                writeHolders(esClient, issuedHolders);
                 Token finalToken3 = token;
                 IndexResponse result1 =  esClient.index(i->i.index(IndicesNames.TOKEN).id(tokenHist.getTokenId()).document(finalToken3));
                 log.info("{}", result1.result());
-                return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
+                requireWritten(result1, "token " + tokenHist.getTokenId() + " after crediting its holders");
+                return true;
 
             case OpNames.TRANSFER:
                 token = EsUtils.getById(esClient, IndicesNames.TOKEN, tokenHist.getTokenId(), Token.class);
@@ -471,13 +478,9 @@ public class FinanceParser {
                 }
                 double senderOldBalance = tokenHolder.getBalance() != null ? tokenHolder.getBalance() : 0d;
 
-                ArrayList<TokenHolder> newHolderListTransfer = new ArrayList<>();
                 RecipientTotals transferTotals = aggregateRecipients(tokenHist.getTransferTo(), token, tokenHist.getTokenId());
                 if(transferTotals==null) return false;
 
-                ArrayList<String> tokenHolderIdListTransfer = transferTotals.holderIds;
-                Map<String,String> idReceiverMapTransfer = transferTotals.fidByHolderId;
-                Map<String,Double> receiverAmountMap = transferTotals.amountByFid;
                 double sum = transferTotals.total;
 
                 if(sum>senderOldBalance){
@@ -485,58 +488,28 @@ public class FinanceParser {
                     return false;
                 }
 
-                tokenHolder.setBalance(NumberUtils.roundDouble(senderOldBalance-sum,decimal,RoundingMode.FLOOR));
-                tokenHolder.setLastHeight(tokenHist.getHeight());
+                List<String> otherRecipientIds = new ArrayList<>(transferTotals.holderIds);
+                otherRecipientIds.remove(tokenHolderId);
 
-                EsUtils.MgetResult<TokenHolder> resultTransfer = EsUtils.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, tokenHolderIdListTransfer, TokenHolder.class);
-                if (resultTransfer == null) {
-                    log.info("Token holder mget result is null");
-                    return false;
-                }
-
-                for(String id:resultTransfer.getMissList()) {
-                    TokenHolder tokenReceiver = new TokenHolder();
-
-                    tokenReceiver.setId(id);
-                    String toFid = idReceiverMapTransfer.get(id);
-                    tokenReceiver.setFid(toFid);
-                    tokenReceiver.setTokenId(tokenHist.getTokenId());
-                    tokenReceiver.setFirstHeight(tokenHist.getHeight());
-                    tokenReceiver.setLastHeight(tokenHist.getHeight());
-                    Double credit = receiverAmountMap.get(toFid);
-                    if(credit==null){
-                        log.info("No transfer amount for recipient {}", toFid);
+                List<TokenHolder> existingRecipients = new ArrayList<>();
+                List<String> newRecipientIds = new ArrayList<>();
+                if(!otherRecipientIds.isEmpty()) {
+                    EsUtils.MgetResult<TokenHolder> resultTransfer = EsUtils.getMultiByIdList(esClient, IndicesNames.TOKEN_HOLDER, otherRecipientIds, TokenHolder.class);
+                    if (resultTransfer == null) {
+                        log.info("Token holder mget result is null");
                         return false;
                     }
-                    tokenReceiver.setBalance(credit);
-
-                    newHolderListTransfer.add(tokenReceiver);
+                    existingRecipients.addAll(resultTransfer.getResultList());
+                    newRecipientIds.addAll(resultTransfer.getMissList());
                 }
 
-                for( TokenHolder tokenReceiver: resultTransfer.getResultList()) {
-                    String toFid = tokenReceiver.getFid();
-                    double oldBalance = tokenReceiver.getBalance() != null ? tokenReceiver.getBalance() : 0d;
-                    Double credit = receiverAmountMap.get(toFid);
-                    if(credit==null){
-                        log.info("No transfer amount for recipient {}", toFid);
-                        return false;
-                    }
-                    tokenReceiver.setBalance(NumberUtils.roundDouble(credit + oldBalance, decimal, RoundingMode.FLOOR));
-                    tokenReceiver.setLastHeight(tokenHist.getHeight());
-                    newHolderListTransfer.add(tokenReceiver);
-                }
+                Map<String, TokenHolder> changedHolders = planTransfer(tokenHolder, fromFid, transferTotals,
+                        existingRecipients, newRecipientIds, tokenHist.getTokenId(), tokenHist.getHeight(), decimal);
+                if(changedHolders==null) return false;
 
-                newHolderListTransfer.add(tokenHolder);
-                tokenHolderIdListTransfer.add(tokenHolderId);
-
-                BulkResponse result2 = EsUtils.bulkWriteList(esClient, IndicesNames.TOKEN_HOLDER, newHolderListTransfer, tokenHolderIdListTransfer, TokenHolder.class);
-                if(result2==null ||result2.errors()){
-                    log.info("Failed to bulk write token holder");
-                    return false;
-                }else{
-                    log.info("Done");
-                    return true;
-                }
+                writeHolders(esClient, changedHolders);
+                log.info("Done");
+                return true;
 
             case OpNames.DESTROY:
 
@@ -579,10 +552,7 @@ public class FinanceParser {
 
                 Token finalToken4 = token;
                 IndexResponse result4 = esClient.index(i->i.index(IndicesNames.TOKEN).id(tokenHist.getTokenId()).document(finalToken4));
-                if(result4==null || result4.result()==null){
-                    log.info("Failed to index token");
-                    return false;
-                }
+                requireWritten(result4, "token " + tokenHist.getTokenId() + " after zeroing a holder");
                 log.info(IndicesNames.TOKEN+":"+result4.result());
                 return true;
             case OpNames.CLOSE:
@@ -590,6 +560,9 @@ public class FinanceParser {
                     log.info("Token ids is null or empty");
                     return false;
                 }
+                // Validate every target before writing any: a later bad id used to reject the op
+                // after the earlier tokens had already been written as closed.
+                Map<String, Token> tokensToClose = new LinkedHashMap<>();
                 for (String tid : tokenHist.getTokenIds()) {
                     token = EsUtils.getById(esClient, IndicesNames.TOKEN, tid, Token.class);
                     if(token==null || Boolean.TRUE.equals(token.getClosed())){
@@ -601,20 +574,17 @@ public class FinanceParser {
                         log.info("Token signer is not the same as the deployer");
                         return false;
                     }
+                    tokensToClose.put(tid, token);
+                }
 
-                    token.setClosed(Boolean.TRUE);
-                    updateTokenLastInfo(tokenHist, token);
+                for (Map.Entry<String, Token> entry : tokensToClose.entrySet()) {
+                    Token closing = entry.getValue();
+                    closing.setClosed(Boolean.TRUE);
+                    updateTokenLastInfo(tokenHist, closing);
 
-                    Token finalToken = token;
-                    IndexResponse result5 = esClient.index(i->i.index(IndicesNames.TOKEN).id(tid).document(finalToken));
-                    if(result5==null || result5.result()==null){
-                        log.info("Failed to index token");
-                        return false;
-                    }
+                    IndexResponse result5 = esClient.index(i->i.index(IndicesNames.TOKEN).id(entry.getKey()).document(closing));
                     log.info("{}", result5.result());
-                    if (!CREATED.equals(result5.result().jsonValue()) && !UPDATED.equals(result5.result().jsonValue())) {
-                        return false;
-                    }
+                    requireWritten(result5, "closed token " + entry.getKey());
                 }
 
                 // Create News
@@ -623,6 +593,83 @@ public class FinanceParser {
                 return true;
         }
         return false;
+    }
+
+    /**
+     * The holder documents a transfer changes, keyed by each one's own document id, or null if a
+     * stored recipient does not match the transfer. The caller has already checked that the
+     * sender can cover `totals.total`.
+     *
+     * Keyed, not paired: the ids used to travel as a separate list in recipient order while the
+     * documents were built new-holders-first, so whenever new and existing recipients interleaved,
+     * balances were written under each other's ids.
+     *
+     * Sending to oneself moves nothing. The sender's own record used to be credited through the
+     * recipient path and debited separately -- two writes to one document -- and the debit,
+     * written last, won: sending your whole balance to yourself zeroed it.
+     *
+     * Pure, so it can be tested without Elasticsearch.
+     */
+    static Map<String, TokenHolder> planTransfer(TokenHolder sender, String senderFid, RecipientTotals totals,
+                                                 List<TokenHolder> existingRecipients, List<String> newRecipientIds,
+                                                 String tokenId, Long height, int decimal) {
+        Map<String, TokenHolder> changed = new LinkedHashMap<>();
+
+        double senderOldBalance = sender.getBalance() != null ? sender.getBalance() : 0d;
+        Double selfCredit = totals.amountByFid.get(senderFid);
+        double netDebit = totals.total - (selfCredit != null ? selfCredit : 0d);
+        sender.setBalance(NumberUtils.roundDouble(senderOldBalance - netDebit, decimal, RoundingMode.FLOOR));
+        sender.setLastHeight(height);
+        changed.put(TokenHolder.getTokenHolderId(senderFid, tokenId), sender);
+
+        for (TokenHolder receiver : existingRecipients) {
+            String toFid = receiver.getFid();
+            Double credit = totals.amountByFid.get(toFid);
+            if (credit == null || toFid.equals(senderFid)) {
+                log.info("Stored token holder {} does not match the transfer", toFid);
+                return null;
+            }
+            double oldBalance = receiver.getBalance() != null ? receiver.getBalance() : 0d;
+            receiver.setBalance(NumberUtils.roundDouble(credit + oldBalance, decimal, RoundingMode.FLOOR));
+            receiver.setLastHeight(height);
+            changed.put(TokenHolder.getTokenHolderId(toFid, tokenId), receiver);
+        }
+
+        for (String id : newRecipientIds) {
+            String toFid = totals.fidByHolderId.get(id);
+            Double credit = toFid == null ? null : totals.amountByFid.get(toFid);
+            if (credit == null) {
+                log.info("No transfer amount for new holder {}", id);
+                return null;
+            }
+            TokenHolder receiver = new TokenHolder();
+            receiver.setId(id);
+            receiver.setFid(toFid);
+            receiver.setTokenId(tokenId);
+            receiver.setFirstHeight(height);
+            receiver.setLastHeight(height);
+            receiver.setBalance(credit);
+            changed.put(id, receiver);
+        }
+        return changed;
+    }
+
+    private static void writeHolders(ElasticsearchClient esClient, Map<String, TokenHolder> holdersById) throws Exception {
+        BulkResponse response = EsUtils.bulkWriteList(esClient, IndicesNames.TOKEN_HOLDER,
+                new ArrayList<>(holdersById.values()), new ArrayList<>(holdersById.keySet()), TokenHolder.class);
+        if (response == null || response.errors()) {
+            // Some holders may already be written, so this is not a rejected op but a partial one.
+            // Throwing hands it to FileParser, which rolls the token back and replays.
+            throw new java.io.IOException("Failed to write token holders");
+        }
+    }
+
+    /** A write that follows other writes of the same op must not fail quietly; see writeHolders. */
+    private static void requireWritten(IndexResponse response, String what) throws java.io.IOException {
+        if (response == null || response.result() == null
+                || !(CREATED.equals(response.result().jsonValue()) || UPDATED.equals(response.result().jsonValue()))) {
+            throw new java.io.IOException("Failed to write " + what);
+        }
     }
 
     private static void updateTokenLastInfo(TokenHistory tokenHist, Token token) {

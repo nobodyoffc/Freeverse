@@ -1007,7 +1007,8 @@ public class AccountManager extends Manager<FcEntity> {
         }
     
         public void transferBalanceFromOneToMulti(int length, String from, List<String> toFidList, long kbPrice) {
-            int kb = (int) Math.ceil(length / 1024.0); // Round up to ensure partial KB counts as 1
+            // The same unit userSpend bills in: 1000 bytes, rounded up. This used 1024.
+            long kb = (length + 999L) / 1000;
             updateUserBalance(from,(-1)*(kbPrice*toFidList.size()+1)*kb);
             for(String fid:toFidList){
                 updateUserBalance(fid,kbPrice*kb);
@@ -1156,19 +1157,20 @@ public class AccountManager extends Manager<FcEntity> {
         if(viaShare<=0)return;
         if (useRedis) {
             try (var jedis = jedisPool.getResource()) {
-                String currentBalanceStr = jedis.hget(redisKeyViaBalance, viaFid);
-                long currentBalance = currentBalanceStr != null ? Long.parseLong(currentBalanceStr) : 0L;
-                jedis.hset(redisKeyViaBalance, viaFid, String.valueOf(currentBalance + viaShare));
+                // One server-side step, like the user balance: HGET then HSET lost concurrent shares.
+                jedis.hincrBy(redisKeyViaBalance, viaFid, viaShare);
             }
         } else {
-            Long currentViaBalance = viaBalance.get(viaFid);
-            if (currentViaBalance == null) {
-                currentViaBalance = 0L;
-                Long oldValue = getViaBalance(viaFid);
-                if (oldValue != null) currentViaBalance = oldValue;
+            synchronized (this) {
+                Long currentViaBalance = viaBalance.get(viaFid);
+                if (currentViaBalance == null) {
+                    currentViaBalance = 0L;
+                    Long oldValue = getViaBalance(viaFid);
+                    if (oldValue != null) currentViaBalance = oldValue;
+                }
+                Map.Entry<String, Long> oldest = viaBalance.put(viaFid, currentViaBalance + viaShare);
+                updateViaBalanceInLocalDB(oldest);
             }
-            Map.Entry<String, Long> oldest = viaBalance.put(viaFid, currentViaBalance + viaShare);
-            updateViaBalanceInLocalDB(oldest);
         }
     }
 

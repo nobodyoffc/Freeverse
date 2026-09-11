@@ -8,12 +8,14 @@ import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.bulk.BulkResponseItem;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
 import constants.Constants;
 import constants.FieldNames;
 import constants.IndicesNames;
 import core.fch.OpReFileUtils;
+import data.fchData.Block;
 import data.fchData.BlockMask;
 import data.fchData.Cash;
 import data.fchData.OpReturn;
@@ -37,9 +39,21 @@ public class RollBacker {
 
 	public void rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
 
-		long bestHeight = EsUtils.getBestBlock(esClient).getHeight();
+		Block bestBlock = EsUtils.getBestBlock(esClient);
+		if(bestBlock == null) {
+			log.warn("No best block in ES; nothing to roll back to {}.", lastHeight);
+			return;
+		}
+		long bestHeight = bestBlock.getHeight();
 		if(bestHeight==lastHeight) {
 			System.out.println("The height you rollback to is the best height:" +bestHeight );
+			// Nothing to delete, but an earlier rollback may have deleted without recomputing.
+			List<String> pending = loadPendingAddresses();
+			if (!pending.isEmpty()) {
+				esClient.indices().refresh(r -> r.index(IndicesNames.CASH));
+				bulkUpdateAddr(esClient, FchUtils.aggsTxoByAddrs(esClient, pending), lastHeight);
+				clearPendingAddresses();
+			}
 			return;
 		}
 
@@ -48,75 +62,111 @@ public class RollBacker {
 		System.out.println("Recover spent cashes.Wait for 2 seconds...");
 		TimeUnit.SECONDS.sleep(2);
 
-		ArrayList<String> addrList = readEffectedAddresses(esClient, lastHeight);
+		// The addresses to recompute are found from the cash above lastHeight, which the steps
+		// below delete or reset. A rollback that fails after those steps could not find them
+		// again, so they are saved first and carried into the next rollback until one recomputes
+		// them.
+		Set<String> addrSet = new HashSet<>(readEffectedAddresses(esClient, lastHeight));
+		addrSet.addAll(loadPendingAddresses());
+		ArrayList<String> addrList = new ArrayList<>(addrSet);
+		savePendingAddresses(addrList);
 
-		recoverStxoToUtxo(esClient, lastHeight);
+		// Announce the rollback to the FEIP parser before anything is deleted. Every OpReturn above
+		// lastHeight will be appended to the file again by the re-parse, so FEIP must roll back
+		// whether or not this rollback completes; announcing only a completed one left the records
+		// of a failed rollback followed by their re-parsed duplicates, with no marker between.
+		recordInOpReturnFile(lastHeight);
+
+		// Each step can be run again -- a range delete, or a reset of whatever still matches -- so
+		// a failed rollback is repaired by the next one. Every step still runs, so one failure does
+		// not strand the others, and then the rollback throws.
+		List<String> failed = new ArrayList<>();
+		runStep(failed, "recover spent cash", () -> recoverStxoToUtxo(esClient, lastHeight));
 		System.out.println("Cash recovered. Wait for 2 seconds...");
 		TimeUnit.SECONDS.sleep(2);
 
-		try {
-			System.out.println("Delete blocks...");
-			deleteBlocks(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
-
-		try {
-			System.out.println("Delete TX...");
-			deleteTxs(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
-
-		try {
-			System.out.println("Delete OpReturn...");
-			deleteOpReturns(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
-		try {
-			System.out.println("Delete cash...");
-			deleteUtxos(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
-		try {
-			System.out.println("Delete address...");
-			deleteNewAddresses(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
-		try {
-			System.out.println("Delete p2sh...");
-			deleteNewP2sh(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
-		try {
-			System.out.println("Delete block mark...");
-			deleteBlockMarks(esClient, lastHeight);
-		} catch (Exception e) {
-			log.error("Error when deleting in rollback",e);
-			e.printStackTrace();
-		}
+		runStep(failed, "delete blocks", () -> deleteBlocks(esClient, lastHeight));
+		runStep(failed, "delete txs", () -> deleteTxs(esClient, lastHeight));
+		runStep(failed, "delete opreturns", () -> deleteOpReturns(esClient, lastHeight));
+		runStep(failed, "delete cash", () -> deleteUtxos(esClient, lastHeight));
+		runStep(failed, "delete addresses", () -> deleteNewAddresses(esClient, lastHeight));
+		runStep(failed, "delete multisig", () -> deleteNewMultisig(esClient, lastHeight));
+		runStep(failed, "delete p2sh", () -> deleteNewP2sh(esClient, lastHeight));
+		runStep(failed, "delete block marks", () -> deleteBlockMarks(esClient, lastHeight));
 		System.out.println("Data deleted. Wait for 2 seconds...");
 		TimeUnit.SECONDS.sleep(2);
 		System.out.println("Recover address...");
 
+		runStep(failed, "recompute addresses", () -> {
+			esClient.indices().refresh(r -> r.index(IndicesNames.CASH));
+			Map<String, Map<String, Long>> aggsMaps = FchUtils.aggsTxoByAddrs(esClient, addrList);
+			bulkUpdateAddr(esClient, aggsMaps, lastHeight);
+		});
 
-		Map<String, Map<String, Long>> aggsMaps = FchUtils.aggsTxoByAddrs(esClient, addrList);
-		bulkUpdateAddr(esClient, aggsMaps, lastHeight);
+		if (!failed.isEmpty()) {
+			log.error("Rollback to {} failed at: {}. The indices are between heights; run the rollback again.", lastHeight, failed);
+			throw new IOException("Rollback to " + lastHeight + " failed at: " + failed);
+		}
 
-		recordInOpReturnFile(lastHeight);
+		clearPendingAddresses();
 
 		System.out.println("Prepare parsing again. Wait for 2 seconds...");
 		TimeUnit.SECONDS.sleep(2);
+	}
+
+	@FunctionalInterface
+	private interface Step {
+		void run() throws Exception;
+	}
+
+	private static void runStep(List<String> failed, String name, Step step) {
+		try {
+			step.run();
+		} catch (Exception e) {
+			log.error("Rollback step '{}' failed", name, e);
+			failed.add(name);
+		}
+	}
+
+	/** Delete-by-query reports per-document failures in its response rather than by throwing. */
+	private static void requireNoFailures(String what, long deleted, List<?> failures) throws IOException {
+		if (failures != null && !failures.isEmpty()) {
+			throw new IOException(what + ": " + failures.size() + " failures (" + deleted + " done)");
+		}
+	}
+
+	/**
+	 * Cash owners that have a freer document. OP_RETURN and unparseable outputs carry the
+	 * placeholder owners "OpReturn" and "Unknown", which BlockMaker never indexes as addresses;
+	 * updating them failed with document_missing on every rollback that touched such an output.
+	 */
+	static boolean isAddressOwner(String owner) {
+		return owner != null && !owner.isEmpty()
+				&& !"Unknown".equalsIgnoreCase(owner) && !"OpReturn".equalsIgnoreCase(owner);
+	}
+
+	/** Relative to the working directory, like CdMaker's state.json. */
+	static final String PENDING_ADDRESSES_FILE = "fch_rollback_pending_addresses.json";
+
+	private static List<String> loadPendingAddresses() throws IOException {
+		java.nio.file.Path path = java.nio.file.Paths.get(PENDING_ADDRESSES_FILE);
+		if (!java.nio.file.Files.exists(path)) return new ArrayList<>();
+		List<String> pending = utils.JsonUtils.listFromJson(java.nio.file.Files.readString(path), String.class);
+		if (pending == null) return new ArrayList<>();
+		log.warn("Carrying {} addresses from an earlier rollback that did not recompute them.", pending.size());
+		return pending;
+	}
+
+	private static void savePendingAddresses(List<String> addrList) throws IOException {
+		java.nio.file.Path path = java.nio.file.Paths.get(PENDING_ADDRESSES_FILE);
+		java.nio.file.Path temp = java.nio.file.Paths.get(PENDING_ADDRESSES_FILE + ".tmp");
+		java.nio.file.Files.writeString(temp, utils.JsonUtils.toJson(addrList));
+		java.nio.file.Files.move(temp, path, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+				java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+	}
+
+	private static void clearPendingAddresses() throws IOException {
+		java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(PENDING_ADDRESSES_FILE));
 	}
 
 	private ArrayList<String> readEffectedAddresses(ElasticsearchClient esClient, long lastHeight) throws IOException {
@@ -148,7 +198,7 @@ public class RollBacker {
 			if (hits.isEmpty()) break;
 
 			for (Hit<Cash> item : hits) {
-				if (item.source() != null) {
+				if (item.source() != null && isAddressOwner(item.source().getOwner())) {
 					addrSet.add(item.source().getOwner());
 				}
 			}
@@ -172,8 +222,10 @@ public class RollBacker {
 		if(addrSet.isEmpty())return;
 
 		BulkRequest.Builder br = new BulkRequest.Builder();
+		int ops = 0;
 
 		for(String addr : addrSet) {
+			if (!isAddressOwner(addr)) continue;
 
 			Map<String,Object> updateMap = new HashMap<>();
 
@@ -204,22 +256,44 @@ public class RollBacker {
 			br.operations(o1->o1.update(u->u
 					.index(IndicesNames.FREER)
 					.id(addr)
+					// The FEIP parser writes the same documents; a version conflict is not a failure.
+					.retryOnConflict(5)
 					.action(a->a
 							.doc(updateMap)))
 			);
+			ops++;
 		}
+		if (ops == 0) return;
 
 		br.timeout(t->t.time("600s"));
 		BulkResponse response = esClient.bulk(br.build());
-		if (response != null && response.errors()) {
-			log.error("Rollback: bulk address update reported errors; address balances may be stale.");
-			throw new IOException("Rollback bulk address update failed");
+		if (response == null || !response.errors()) return;
+
+		// An address with no freer document has no balance to restore. Anything else is a real
+		// failure, and the reasons are logged: "reported errors" alone could not be diagnosed.
+		List<String> failures = new ArrayList<>();
+		int missing = 0;
+		for (BulkResponseItem item : response.items()) {
+			if (item.error() == null) continue;
+			if ("document_missing_exception".equals(item.error().type())) {
+				missing++;
+				continue;
+			}
+			if (failures.size() < 10) failures.add(item.id() + ": " + item.error().type() + " " + item.error().reason());
+			else if (failures.size() == 10) failures.add("...");
+		}
+		if (missing > 0) log.warn("Rollback: {} addresses have no freer document; skipped.", missing);
+		if (!failures.isEmpty()) {
+			log.error("Rollback: bulk address update failed: {}", failures);
+			throw new IOException("Rollback bulk address update failed: " + failures);
 		}
 	}
 
 	private void recoverStxoToUtxo(ElasticsearchClient esClient, long lastHeight) throws Exception {
-		esClient.updateByQuery(u->u
+		var response = esClient.updateByQuery(u->u
 				.index(IndicesNames.CASH)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
+				.refresh(true)
 				.query(q->q.bool(b->b
 						.must(m->m.range(r->r.field(SPEND_HEIGHT).gt(JsonData.of(lastHeight))))
 						.must(m1->m1.range(r1->r1.field(BIRTH_HEIGHT).lte(JsonData.of(lastHeight))))))
@@ -233,8 +307,14 @@ public class RollBacker {
 								+ "ctx._source.sequence=null;"
 								+ "ctx._source.cdd=0;"
 								+ "ctx._source.valid=true;"
+								// These were left holding the undone spend.
+								+ "ctx._source.spendBlockId=null;"
+								+ "ctx._source.spendTxIndex=null;"
+								+ "ctx._source.lastTime=ctx._source.birthTime;"
+								+ "ctx._source.lastHeight=ctx._source.birthHeight;"
 				)))
 		);
+		requireNoFailures("recover spent cash", response.updated() == null ? 0 : response.updated(), response.failures());
 	}
 
 	private void deleteOpReturns(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -258,8 +338,13 @@ public class RollBacker {
 		deleteHigherThan(esClient, IndicesNames.FREER,"birthHeight",lastHeight);
 	}
 
-	private void deleteNewP2sh(ElasticsearchClient esClient, long lastHeight) throws Exception {
+	private void deleteNewMultisig(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		deleteHigherThan(esClient, IndicesNames.MULTISIG,"birthHeight",lastHeight);
+	}
+
+	/** BlockWriter indexes P2SH separately from multisig; this index was never rolled back. */
+	private void deleteNewP2sh(ElasticsearchClient esClient, long lastHeight) throws Exception {
+		deleteHigherThan(esClient, IndicesNames.P2SH,"birthHeight",lastHeight);
 	}
 
 	private void deleteBlockMarks(ElasticsearchClient esClient, long lastHeight) throws IOException {
@@ -278,6 +363,7 @@ public class RollBacker {
 												.gt(JsonData.of(lastHeight))))))
 		);
 		log.info("Deleted {} block marks above height {} (linked or orphaned).", response.deleted(), lastHeight);
+		requireNoFailures("delete block marks", response.deleted() == null ? 0 : response.deleted(), response.failures());
 	}
 
 	/**
@@ -315,14 +401,16 @@ public class RollBacker {
 
 	private void deleteHigherThan(ElasticsearchClient esClient, String index, String rangeField, long lastHeight) throws Exception {
 
-		esClient.deleteByQuery(d->d
+		var response = esClient.deleteByQuery(d->d
 				.index(index)
 				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
+				.refresh(true)
 				.query(q->q
 						.range(r->r
 								.field(rangeField)
 								.gt(JsonData.of(lastHeight))))
 		);
+		requireNoFailures("delete from " + index, response.deleted() == null ? 0 : response.deleted(), response.failures());
 
 	}
 

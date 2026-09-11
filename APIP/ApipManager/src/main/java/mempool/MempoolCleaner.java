@@ -38,6 +38,7 @@ public class MempoolCleaner implements Runnable {
                     TimeUnit.SECONDS.sleep(2);
                     jedis1.select(Constants.RedisDb0Common);
                     Block block = getBestBlock(esClient);
+                    if (block == null) continue;
 
                     jedis1.set(Strings.BEST_HEIGHT,String.valueOf(block.getHeight()));
                     jedis1.set(Strings.BEST_BLOCK_ID,block.getId());

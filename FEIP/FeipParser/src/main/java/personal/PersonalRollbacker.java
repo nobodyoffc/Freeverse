@@ -1,5 +1,6 @@
 package personal;
 
+import startFEIP.Reparser;
 import constants.OpNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,13 +56,13 @@ public class PersonalRollbacker {
 		log.warn("If rolling back is interrupted, reparse all effected ids of index 'box': ");
 		JsonUtils.printJson(itemIdList);
 
-		List<BoxHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY, BID, BIDS, itemIdList, BoxHistory.class);
+		List<BoxHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY, BID, BIDS, itemIdList, lastHeight, BoxHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.BOX, itemIdList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.BOX_HISTORY, histIdList);
 
-		reparseBox(esClient, reparseHistList);
+		error |= reparseBox(esClient, reparseHistList);
 
 		return error;
 	}
@@ -116,12 +117,9 @@ public class PersonalRollbacker {
 		return resultMap;
 	}
 
-	private void reparseBox(ElasticsearchClient esClient, List<BoxHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
+	private boolean reparseBox(ElasticsearchClient esClient, List<BoxHistory> reparseHistList) {
 		PersonalParser parser = new PersonalParser();
-		for(BoxHistory boxHist: reparseHistList) {
-			parser.parseBox(esClient, boxHist);
-		}
+		return Reparser.replay("box", reparseHistList, h -> parser.parseBox(esClient, h));
 	}
 
 	private boolean deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {

@@ -215,6 +215,9 @@ public class Signature extends FcObject{
         switch (Arrays.toString(algBytes)) {
             case "[0, 0, 0, 0, 0, 3]" -> {
                 alg = AlgorithmId.FC_Sha256SymSignMsg_No1_NrC7;
+                // Every copy below checks the bytes are there: the only length check used to be
+                // the 12-byte minimum, so a short bundle threw instead of failing to parse.
+                if (bundle.length < offset + 6) return null;
                 byte[] keyNameBytes = new byte[6];
                 System.arraycopy(bundle, offset, keyNameBytes, 0, 6);
                 offset+=6;
@@ -222,6 +225,7 @@ public class Signature extends FcObject{
             }
             case "[0, 0, 0, 0, 0, 4]" -> {
                 alg = AlgorithmId.BTC_EcdsaSignMsg_No1_NrC7;
+                if (bundle.length < offset + 20) return null;
                 byte[] hash160 = new byte[20];
                 System.arraycopy(bundle, offset, hash160, 0, 20);
                 offset+=20;
@@ -230,6 +234,7 @@ public class Signature extends FcObject{
             }
             case "[0, 0, 0, 0, 0, 5]" -> {
                 alg = AlgorithmId.FC_SchnorrSignMsg_No1_NrC7;
+                if (bundle.length < offset + 20) return null;
                 byte[] hash160Schnorr = new byte[20];
                 System.arraycopy(bundle, offset, hash160Schnorr, 0, 20);
                 offset+=20;
@@ -242,11 +247,13 @@ public class Signature extends FcObject{
         }
         signature.setAlg(alg);
 
+        if (bundle.length < offset + 2) return null;
         byte[] signLengthBytes = new byte[2];
         System.arraycopy(bundle, offset, signLengthBytes, 0, 2);
         offset+=2;
 
-        int signBytesLength = BytesUtils.bytes2ToIntBE(signLengthBytes);
+        int signBytesLength = BytesUtils.bytes2ToIntBE(signLengthBytes) & 0xFFFF;
+        if (bundle.length < offset + signBytesLength) return null;
         byte[] signBytes = new byte[signBytesLength];
         System.arraycopy(bundle, offset, signBytes, 0, signBytesLength);
         offset+=signBytesLength;

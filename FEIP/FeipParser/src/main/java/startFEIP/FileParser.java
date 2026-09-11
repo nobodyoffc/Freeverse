@@ -10,6 +10,9 @@ import co.elastic.clients.elasticsearch.core.BulkRequest;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
+import co.elastic.clients.elasticsearch._types.SortOrder;
+import co.elastic.clients.json.JsonData;
+import constants.FieldNames;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import constants.Constants;
@@ -88,30 +91,40 @@ public class FileParser {
 
 	private static final int MAX_CONSECUTIVE_ERRORS = 50;
 
+	/** First OpReturn file; replay starts here when no parse mark precedes an interrupted op. */
+	static final String FIRST_OP_FILE = "opreturn0.byte";
+
+	/**
+	 * FEIP_MARK document naming the op currently being applied; see {@link #beginOp}. It carries
+	 * no lastHeight, so the parse-mark searches (which require one) never mistake it for a mark.
+	 */
+	static final String INFLIGHT_ID = "inflight";
+	private static final String INFLIGHT_FILE = "inflightFile";
+	private static final String INFLIGHT_POINTER = "inflightPointer";
+	private static final String INFLIGHT_HEIGHT = "inflightHeight";
+	private static final String INFLIGHT_OP_ID = "inflightOpId";
+
+	/** A history document produced by a protocol's make step, and the index it belongs to. */
+	record HistRef(String index, String id, Object doc) {
+		static HistRef of(String index, data.fcData.FcEntity hist) {
+			return hist == null ? null : new HistRef(index, hist.getId(), hist);
+		}
+	}
+
+	private final IdentityParser identityParser = new IdentityParser();
+	private final ConstructParser constructParser = new ConstructParser();
+	private final PersonalParser personalParser = new PersonalParser();
+	private final PublishParser publishParser = new PublishParser();
+	private final FinanceParser financeParser = new FinanceParser();
+	private final OrganizationParser organizationParser = new OrganizationParser();
+
+	/** Ops that threw part-way through in this run and were rolled back; they are not re-applied. */
+	private final Set<String> poisonedOps = new HashSet<>();
+
 	public boolean parseFile(ElasticsearchClient esClient, boolean isRollback) throws Exception {
 
-		IdentityRollbacker cidRollbacker = new IdentityRollbacker();
-		IdentityParser identityParser = new IdentityParser();
-
-		ConstructParser constructParser = new ConstructParser();
-		ConstructRollbacker constructRollbacker = new ConstructRollbacker();
-
-		PersonalParser personalParser = new PersonalParser();
-		PersonalRollbacker personalRollbacker = new PersonalRollbacker();
-
-		PublishParser publishParser = new PublishParser();
-		PublishRollbacker publishRollbacker = new PublishRollbacker();
-
-		FinanceParser financeParser = new FinanceParser();
-		FinanceRollbacker financeRollbacker = new FinanceRollbacker();
-
-		OrganizationParser organizationParser = new OrganizationParser();
-		OrganizationRollbacker organizationRollbacker = new OrganizationRollbacker();
-
-
 		if(isRollback) {
-			rollbackAll(esClient, lastHeight, cidRollbacker, constructRollbacker, personalRollbacker,
-					publishRollbacker, organizationRollbacker, financeRollbacker);
+			rollbackAll(esClient, lastHeight);
 		}
 
 		pointer += length;
@@ -127,7 +140,7 @@ public class FileParser {
 
 		try {
 		while(!error && running.get()) {
-			// Reopen file if fileName changed (file switch)
+			// Reopen file if fileName changed (file switch, or a rewind by recoverPartialOp)
 			if (!currentFileName.equals(fileName)) {
 				raf.close();
 				currentFileName = fileName;
@@ -137,8 +150,6 @@ public class FileParser {
 			opReReadResult readOpResult = OpReFileUtils.readOpReFromFile(raf);
 			length = readOpResult.getLength();
 			pointer += length;
-
-			boolean isValid= false;
 
 			if(readOpResult.isFileEnd()) {
 				if(pointer> Constants.MaxOpFileSize) {
@@ -171,9 +182,14 @@ public class FileParser {
 
 
 			if(readOpResult.isRollback()) {
-				rollbackAll(esClient, readOpResult.getOpReturn().getHeight(), cidRollbacker,
-						constructRollbacker, personalRollbacker, publishRollbacker,
-						organizationRollbacker, financeRollbacker);
+				long rollbackHeight = readOpResult.getOpReturn().getHeight();
+				rollbackAll(esClient, rollbackHeight);
+				// Mark the marker itself, or a restart before the next valid op resumes from a mark
+				// the rollback just deleted -- or from one written before this marker.
+				lastHeight = rollbackHeight;
+				lastIndex = Integer.MAX_VALUE;
+				lastId = "rollback@" + fileName + ":" + (pointer - length);
+				writeHistoryAndMark(esClient, null, length);
 				continue;
 			}
 
@@ -198,153 +214,25 @@ public class FileParser {
 
 			log.info("");
 
-			String historyIndex = null;
-			Object historyDoc = null;
-			String historyId = null;
-
 			showFound(protocolName.name(), opre);
+
+			HistRef hist = null;
+			boolean isValid = false;
+			boolean begun = false;
 			try {
-				switch (protocolName) {
-					case CID -> {
-						FreerHist identityHist = identityParser.makeCid(opre, feip);
-						if (identityHist == null) break;
-						isValid = identityParser.parseCidInfo(esClient, identityHist);
-						if (isValid) { historyIndex = IndicesNames.FREER_HISTORY; historyId = identityHist.getId(); historyDoc = identityHist; }
-					}
-					case NOBODY -> {
-						FreerHist identityHist4 = identityParser.makeNobody(opre, feip);
-						if (identityHist4 == null) break;
-						isValid = identityParser.parseCidInfo(esClient, identityHist4);
-						if (isValid) { historyIndex = IndicesNames.FREER_HISTORY; historyId = identityHist4.getId(); historyDoc = identityHist4; }
-					}
-					case MASTER -> {
-						FreerHist identityHist1 = identityParser.makeMaster(opre, feip);
-						if (identityHist1 == null) break;
-						isValid = identityParser.parseCidInfo(esClient, identityHist1);
-						if (isValid) { historyIndex = IndicesNames.FREER_HISTORY; historyId = identityHist1.getId(); historyDoc = identityHist1; }
-					}
-					case HOME -> {
-						FreerHist identityHist2 = identityParser.makeHome(opre, feip);
-						if (identityHist2 == null) break;
-						isValid = identityParser.parseCidInfo(esClient, identityHist2);
-						if (isValid) { historyIndex = IndicesNames.FREER_HISTORY; historyId = identityHist2.getId(); historyDoc = identityHist2; }
-					}
-					case NOTICE_FEE -> {
-						FreerHist identityHist3 = identityParser.makeNoticeFee(opre, feip);
-						if (identityHist3 == null) break;
-						isValid = identityParser.parseCidInfo(esClient, identityHist3);
-						if (isValid) { historyIndex = IndicesNames.FREER_HISTORY; historyId = identityHist3.getId(); historyDoc = identityHist3; }
-					}
-					case REPUTATION -> {
-						RepuHist repuHist = identityParser.makeReputation(opre, feip);
-						if (repuHist == null) break;
-						isValid = identityParser.parseReputation(esClient, repuHist);
-						if (isValid) { historyIndex = IndicesNames.REPUTATION_HISTORY; historyId = repuHist.getId(); historyDoc = repuHist; }
-					}
-					case PROTOCOL -> {
-						ProtocolHistory freeProtocolHist = constructParser.makeProtocol(opre, feip);
-						if (freeProtocolHist == null) break;
-						isValid = constructParser.parseProtocol(esClient, freeProtocolHist);
-						if (isValid) { historyIndex = IndicesNames.PROTOCOL_HISTORY; historyId = freeProtocolHist.getId(); historyDoc = freeProtocolHist; }
-					}
-					case SERVICE -> {
-						ServiceHistory serviceHist = constructParser.makeService(opre, feip);
-						if (serviceHist == null) break;
-						isValid = constructParser.parseService(esClient, serviceHist);
-						if (isValid) { historyIndex = IndicesNames.SERVICE_HISTORY; historyId = serviceHist.getId(); historyDoc = serviceHist; }
-					}
-					case APP -> {
-						AppHistory appHist = constructParser.makeApp(opre, feip);
-						if (appHist == null) break;
-						isValid = constructParser.parseApp(esClient, appHist);
-						if (isValid) { historyIndex = IndicesNames.APP_HISTORY; historyId = appHist.getId(); historyDoc = appHist; }
-					}
-					case CODE -> {
-						CodeHistory codeHist = constructParser.makeCode(opre, feip);
-						if (codeHist == null) break;
-						isValid = constructParser.parseCode(esClient, codeHist);
-						if (isValid) { historyIndex = IndicesNames.CODE_HISTORY; historyId = codeHist.getId(); historyDoc = codeHist; }
-					}
-					case NID -> {
-						isValid = identityParser.parseNid(esClient, opre, feip);
-					}
-					case CONTACT -> {
-						isValid = personalParser.parseContact(esClient, opre, feip);
-					}
-					case MAIL -> {
-						isValid = personalParser.parseMail(esClient, opre, feip);
-					}
-					case SECRET -> {
-						isValid = personalParser.parseSecret(esClient, opre, feip);
-					}
-					case STATEMENT -> {
-						isValid = publishParser.parseStatement(esClient, opre, feip);
-					}
-					case TEXT -> {
-						TextHistory textHist = publishParser.makeText(opre, feip);
-						if (textHist == null) break;
-						isValid = publishParser.parseText(esClient, textHist);
-						if (isValid) { historyIndex = IndicesNames.TEXT_HISTORY; historyId = textHist.getId(); historyDoc = textHist; }
-					}
-					case REMARK -> {
-						RemarkHistory remarkHist = publishParser.makeRemark(opre, feip);
-						if (remarkHist == null) break;
-						isValid = publishParser.parseRemark(esClient, remarkHist);
-						if (isValid) { historyIndex = IndicesNames.REMARK_HISTORY; historyId = remarkHist.getId(); historyDoc = remarkHist; }
-					}
-					case SQUARE -> {
-						SquareHistory squareHist = organizationParser.makeSquare(opre, feip);
-						if (squareHist == null) break;
-						isValid = organizationParser.parseSquare(esClient, squareHist);
-						if (isValid) { historyIndex = IndicesNames.SQUARE_HISTORY; historyId = squareHist.getId(); historyDoc = squareHist; }
-					}
-					case TEAM -> {
-						TeamHistory teamHist = organizationParser.makeTeam(opre, feip);
-						if (teamHist == null) break;
-						isValid = organizationParser.parseTeam(esClient, teamHist);
-						if (isValid) { historyIndex = IndicesNames.TEAM_HISTORY; historyId = teamHist.getId(); historyDoc = teamHist; }
-					}
-					case BOX -> {
-						BoxHistory boxHist = personalParser.makeBox(opre, feip);
-						if (boxHist == null) break;
-						isValid = personalParser.parseBox(esClient, boxHist);
-						if (isValid) { historyIndex = IndicesNames.BOX_HISTORY; historyId = boxHist.getId(); historyDoc = boxHist; }
-					}
-					case PROOF -> {
-						ProofHistory proofHist = financeParser.makeProof(opre, feip);
-						if (proofHist == null) break;
-						isValid = financeParser.parseProof(esClient, proofHist);
-						if (isValid) { historyIndex = IndicesNames.PROOF_HISTORY; historyId = proofHist.getId(); historyDoc = proofHist; }
-					}
-					case TOKEN -> {
-						TokenHistory tokenHist = financeParser.makeToken(opre, feip);
-						if (tokenHist == null) break;
-						try {
-							isValid = financeParser.parseToken(esClient, tokenHist);
-						} catch (NumberFormatException e) {
-							log.error("NumberFormatException parsing token at {}.", opre.getId(), e);
-						}
-						if (isValid) { historyIndex = IndicesNames.TOKEN_HISTORY; historyId = tokenHist.getId(); historyDoc = tokenHist; }
-					}
-					case SOUND -> {
-						SoundHistory soundHist = publishParser.makeSound(opre, feip);
-						if (soundHist == null) break;
-						isValid = publishParser.parseSound(esClient, soundHist);
-						if (isValid) { historyIndex = IndicesNames.SOUND_HISTORY; historyId = soundHist.getId(); historyDoc = soundHist; }
-					}
-					case IMAGE -> {
-						ImageHistory imageHist = publishParser.makeImage(opre, feip);
-						if (imageHist == null) break;
-						isValid = publishParser.parseImage(esClient, imageHist);
-						if (isValid) { historyIndex = IndicesNames.IMAGE_HISTORY; historyId = imageHist.getId(); historyDoc = imageHist; }
-					}
-					case VIDEO -> {
-						VideoHistory videoHist = publishParser.makeVideo(opre, feip);
-						if (videoHist == null) break;
-						isValid = publishParser.parseVideo(esClient, videoHist);
-						if (isValid) { historyIndex = IndicesNames.VIDEO_HISTORY; historyId = videoHist.getId(); historyDoc = videoHist; }
-					}
-					default -> {
+				if (poisonedOps.contains(opre.getId())) {
+					log.warn("Not applying {} {}: it threw part-way through earlier in this run and was rolled back.",
+							protocolName, opre.getId());
+				} else if (writesOwnDocuments(protocolName)) {
+					beginOp(esClient, opre);
+					begun = true;
+					isValid = applyInline(esClient, protocolName, opre, feip);
+				} else {
+					hist = makeHistory(protocolName, opre, feip);
+					if (hist != null) {
+						beginOp(esClient, opre);
+						begun = true;
+						isValid = applyHistory(esClient, protocolName, hist.doc());
 					}
 				}
 				consecutiveErrors = 0;
@@ -355,8 +243,15 @@ public class FileParser {
 					log.error("Reached {} consecutive errors. Stopping parser.", MAX_CONSECUTIVE_ERRORS);
 					error = true;
 				}
+				if (begun && hist != null) {
+					// It threw after it may already have written. Undo it by rebuilding what it
+					// touched, then replay from before it without it.
+					poisonedOps.add(opre.getId());
+					recoverPartialOp(esClient, opre, hist);
+					continue;
+				}
 			}
-			if(isValid) writeHistoryAndMark(esClient, historyIndex, historyId, historyDoc, readOpResult.getLength());
+			writeHistoryAndMark(esClient, isValid ? hist : null, readOpResult.getLength());
 		}
 		} finally {
 			raf.close();
@@ -364,13 +259,106 @@ public class FileParser {
 		return error;
 	}
 
+	/** Protocols whose parse step indexes its own documents and keeps no *_HISTORY record. */
+	static boolean writesOwnDocuments(Feip.FeipProtocol protocol) {
+		return switch (protocol) {
+			case NID, CONTACT, MAIL, SECRET, STATEMENT -> true;
+			default -> false;
+		};
+	}
+
+	/** Pure: builds the history document for an op, or null if the op is malformed. */
+	HistRef makeHistory(Feip.FeipProtocol protocol, OpReturn opre, Feip feip) {
+		return switch (protocol) {
+			case CID -> HistRef.of(IndicesNames.FREER_HISTORY, identityParser.makeCid(opre, feip));
+			case NOBODY -> HistRef.of(IndicesNames.FREER_HISTORY, identityParser.makeNobody(opre, feip));
+			case MASTER -> HistRef.of(IndicesNames.FREER_HISTORY, identityParser.makeMaster(opre, feip));
+			case HOME -> HistRef.of(IndicesNames.FREER_HISTORY, identityParser.makeHome(opre, feip));
+			case NOTICE_FEE -> HistRef.of(IndicesNames.FREER_HISTORY, identityParser.makeNoticeFee(opre, feip));
+			case REPUTATION -> HistRef.of(IndicesNames.REPUTATION_HISTORY, identityParser.makeReputation(opre, feip));
+			case PROTOCOL -> HistRef.of(IndicesNames.PROTOCOL_HISTORY, constructParser.makeProtocol(opre, feip));
+			case SERVICE -> HistRef.of(IndicesNames.SERVICE_HISTORY, constructParser.makeService(opre, feip));
+			case APP -> HistRef.of(IndicesNames.APP_HISTORY, constructParser.makeApp(opre, feip));
+			case CODE -> HistRef.of(IndicesNames.CODE_HISTORY, constructParser.makeCode(opre, feip));
+			case TEXT -> HistRef.of(IndicesNames.TEXT_HISTORY, publishParser.makeText(opre, feip));
+			case REMARK -> HistRef.of(IndicesNames.REMARK_HISTORY, publishParser.makeRemark(opre, feip));
+			case SQUARE -> HistRef.of(IndicesNames.SQUARE_HISTORY, organizationParser.makeSquare(opre, feip));
+			case TEAM -> HistRef.of(IndicesNames.TEAM_HISTORY, organizationParser.makeTeam(opre, feip));
+			case BOX -> HistRef.of(IndicesNames.BOX_HISTORY, personalParser.makeBox(opre, feip));
+			case PROOF -> HistRef.of(IndicesNames.PROOF_HISTORY, financeParser.makeProof(opre, feip));
+			case TOKEN -> HistRef.of(IndicesNames.TOKEN_HISTORY, financeParser.makeToken(opre, feip));
+			case SOUND -> HistRef.of(IndicesNames.SOUND_HISTORY, publishParser.makeSound(opre, feip));
+			case IMAGE -> HistRef.of(IndicesNames.IMAGE_HISTORY, publishParser.makeImage(opre, feip));
+			case VIDEO -> HistRef.of(IndicesNames.VIDEO_HISTORY, publishParser.makeVideo(opre, feip));
+			default -> null;
+		};
+	}
+
+	private boolean applyHistory(ElasticsearchClient esClient, Feip.FeipProtocol protocol, Object hist) throws Exception {
+		return switch (protocol) {
+			case CID, NOBODY, MASTER, HOME, NOTICE_FEE -> identityParser.parseCidInfo(esClient, (FreerHist) hist);
+			case REPUTATION -> identityParser.parseReputation(esClient, (RepuHist) hist);
+			case PROTOCOL -> constructParser.parseProtocol(esClient, (ProtocolHistory) hist);
+			case SERVICE -> constructParser.parseService(esClient, (ServiceHistory) hist);
+			case APP -> constructParser.parseApp(esClient, (AppHistory) hist);
+			case CODE -> constructParser.parseCode(esClient, (CodeHistory) hist);
+			case TEXT -> publishParser.parseText(esClient, (TextHistory) hist);
+			case REMARK -> publishParser.parseRemark(esClient, (RemarkHistory) hist);
+			case SQUARE -> organizationParser.parseSquare(esClient, (SquareHistory) hist);
+			case TEAM -> organizationParser.parseTeam(esClient, (TeamHistory) hist);
+			case BOX -> personalParser.parseBox(esClient, (BoxHistory) hist);
+			case PROOF -> financeParser.parseProof(esClient, (ProofHistory) hist);
+			case TOKEN -> {
+				try {
+					yield financeParser.parseToken(esClient, (TokenHistory) hist);
+				} catch (NumberFormatException e) {
+					log.error("NumberFormatException parsing token {}.", ((TokenHistory) hist).getId(), e);
+					yield false;
+				}
+			}
+			case SOUND -> publishParser.parseSound(esClient, (SoundHistory) hist);
+			case IMAGE -> publishParser.parseImage(esClient, (ImageHistory) hist);
+			case VIDEO -> publishParser.parseVideo(esClient, (VideoHistory) hist);
+			default -> false;
+		};
+	}
+
+	private boolean applyInline(ElasticsearchClient esClient, Feip.FeipProtocol protocol, OpReturn opre, Feip feip) throws Exception {
+		return switch (protocol) {
+			case NID -> identityParser.parseNid(esClient, opre, feip);
+			case CONTACT -> personalParser.parseContact(esClient, opre, feip);
+			case MAIL -> personalParser.parseMail(esClient, opre, feip);
+			case SECRET -> personalParser.parseSecret(esClient, opre, feip);
+			case STATEMENT -> publishParser.parseStatement(esClient, opre, feip);
+			default -> false;
+		};
+	}
+
 	/**
-	 * Atomically writes the history document and ParseMark in a single bulk request.
-	 * This ensures that either both are written or neither is, preventing checkpoint
-	 * inconsistency on crash.
+	 * Record the op about to be applied, before any of its writes.
+	 *
+	 * An op's state writes, its history and its ParseMark are separate Elasticsearch requests, so
+	 * a crash between them used to leave the op applied but unmarked, and the restart applied it
+	 * again: a token issue or transfer counted twice. With this record present at startup,
+	 * {@link #recoverInterruptedOp} rolls back to before the op and replays it once. The record is
+	 * deleted in the same bulk that writes the op's ParseMark.
 	 */
-	@SuppressWarnings("unchecked")
-	private void writeHistoryAndMark(ElasticsearchClient esClient, String historyIndex, String historyId, Object historyDoc, int length) throws IOException {
+	private void beginOp(ElasticsearchClient esClient, OpReturn opre) throws IOException {
+		Map<String, Object> doc = new HashMap<>();
+		doc.put(INFLIGHT_FILE, fileName);
+		doc.put(INFLIGHT_POINTER, pointer - length);
+		doc.put(INFLIGHT_HEIGHT, opre.getHeight());
+		doc.put(INFLIGHT_OP_ID, opre.getId());
+		EsRetry.executeWithRetry(() -> esClient.index(i -> i.index(IndicesNames.FEIP_MARK).id(INFLIGHT_ID).document(doc)));
+	}
+
+	/**
+	 * Write the history document (if any) and the ParseMark, and clear the in-flight record, in
+	 * one bulk. Bulk items are not atomic with each other, so a failure here stops the parser
+	 * rather than carrying on without a mark; the in-flight record, if it survived, makes the
+	 * next start roll back and replay the op.
+	 */
+	private void writeHistoryAndMark(ElasticsearchClient esClient, HistRef hist, int length) throws IOException {
 		ParseMark parseMark = new ParseMark();
 		parseMark.setFileName(fileName);
 		parseMark.setPointer(pointer - length);
@@ -381,28 +369,121 @@ public class FileParser {
 
 		BulkRequest.Builder br = new BulkRequest.Builder();
 
-		// Add history document if present (some protocols like NID, CONTACT, MAIL, SECRET, STATEMENT index internally)
-		if (historyIndex != null && historyId != null && historyDoc != null) {
-			final String idx = historyIndex;
-			final String id = historyId;
-			final Object doc = historyDoc;
-			br.operations(op -> op.index(i -> i.index(idx).id(id).document(doc)));
+		if (hist != null) {
+			br.operations(op -> op.index(i -> i.index(hist.index()).id(hist.id()).document(hist.doc())));
 		}
 
-		// Add ParseMark
 		br.operations(op -> op.index(i -> i.index(IndicesNames.FEIP_MARK).id(parseMark.getLastId()).document(parseMark)));
+		br.operations(op -> op.delete(d -> d.index(IndicesNames.FEIP_MARK).id(INFLIGHT_ID)));
 
 		BulkRequest bulkRequest = br.build();
 		co.elastic.clients.elasticsearch.core.BulkResponse bulkResponse = EsRetry.bulkWithRetry(esClient, bulkRequest);
 		if (bulkResponse.errors()) {
-			log.error("Bulk write failed for history+mark at height {}. Errors: {}", lastHeight,
-					bulkResponse.items().stream()
-							.filter(item -> item.error() != null)
-							.map(item -> item.error().reason())
-							.toList());
+			List<String> reasons = bulkResponse.items().stream()
+					.filter(item -> item.error() != null)
+					.map(item -> item.error().reason())
+					.toList();
+			log.error("Bulk write failed for history+mark at height {}. Errors: {}", lastHeight, reasons);
+			throw new IOException("Failed to write history and parse mark at height " + lastHeight + ": " + reasons);
 		}
 	}
 
+	/**
+	 * An op threw after it may have written. Roll back to before it and move the read position
+	 * back to the last mark below its height, so everything after that mark is replayed. The op
+	 * itself is in {@link #poisonedOps} and is marked but not re-applied when the replay reaches it.
+	 */
+	private void recoverPartialOp(ElasticsearchClient esClient, OpReturn opre, HistRef hist) throws Exception {
+		log.warn("Rolling back to before {} at height {} after it failed part-way.", opre.getId(), opre.getHeight());
+		ParseMark resume = rollBackPartialOp(esClient, opre.getHeight(), hist);
+		if (resume == null) {
+			fileName = FIRST_OP_FILE;
+			pointer = 0;
+		} else {
+			fileName = resume.getFileName();
+			pointer = resume.getPointer() + resume.getLength();
+		}
+		length = 0;
+	}
+
+	/**
+	 * Index the op's history so the rollbackers can see what it touched, then roll back to the
+	 * last parse mark below its height.
+	 *
+	 * @return that mark, from which parsing must resume; null if there is none, in which case
+	 * parsing must restart from the first file
+	 */
+	private static ParseMark rollBackPartialOp(ElasticsearchClient esClient, long opHeight, HistRef hist) throws Exception {
+		if (hist != null) {
+			esClient.index(i -> i.index(hist.index()).id(hist.id()).document(hist.doc())
+					.refresh(co.elastic.clients.elasticsearch._types.Refresh.True));
+		}
+		ParseMark resume = findLatestMark(esClient, opHeight - 1);
+		long rollbackHeight = resume != null ? resume.getLastHeight() : opHeight - 1;
+		rollbackAll(esClient, rollbackHeight);
+		return resume;
+	}
+
+	/**
+	 * If the previous run stopped while an op was being applied, roll back to before it so the
+	 * resumed parse applies it exactly once. Must run before the resume mark is chosen: the
+	 * rollback deletes the marks above the height it rolls back to.
+	 */
+	public static void recoverInterruptedOp(ElasticsearchClient esClient, String path) throws Exception {
+		co.elastic.clients.elasticsearch.core.GetResponse<Map> got =
+				esClient.get(g -> g.index(IndicesNames.FEIP_MARK).id(INFLIGHT_ID), Map.class);
+		if (!got.found() || got.source() == null) return;
+
+		Map<?, ?> inflight = got.source();
+		String file = (String) inflight.get(INFLIGHT_FILE);
+		long opPointer = ((Number) inflight.get(INFLIGHT_POINTER)).longValue();
+		long opHeight = ((Number) inflight.get(INFLIGHT_HEIGHT)).longValue();
+		log.warn("The last run stopped while applying op {} at height {}. Rolling back to before it.",
+				inflight.get(INFLIGHT_OP_ID), opHeight);
+
+		HistRef hist = null;
+		try (RandomAccessFile raf = new RandomAccessFile(new File(path, file), "r")) {
+			raf.seek(opPointer);
+			opReReadResult read = OpReFileUtils.readOpReFromFile(raf);
+			if (!read.isFileEnd() && !read.isRollback() && read.getOpReturn() != null) {
+				OpReturn opre = read.getOpReturn();
+				Feip feip = parseFeip(opre);
+				Feip.FeipProtocol protocol = (feip == null || feip.getSn() == null) ? null : Feip.FeipProtocol.fromSn(feip.getSn());
+				if (protocol != null && !writesOwnDocuments(protocol)) {
+					hist = new FileParser().makeHistory(protocol, opre, feip);
+				}
+			}
+		}
+
+		rollBackPartialOp(esClient, opHeight, hist);
+		esClient.delete(d -> d.index(IndicesNames.FEIP_MARK).id(INFLIGHT_ID)
+				.refresh(co.elastic.clients.elasticsearch._types.Refresh.True));
+	}
+
+	/**
+	 * The mark of the last op parsed at or below `maxHeight` (null for no bound).
+	 *
+	 * Marks are ordered by (lastHeight, lastIndex). This used to be written as two `.field()` calls
+	 * on one FieldSort builder, which keeps only the second, so the sort was by height alone and
+	 * several ops in one block resumed from an arbitrary one of them -- replaying the ops after it.
+	 */
+	public static ParseMark findLatestMark(ElasticsearchClient esClient, Long maxHeight) throws IOException {
+		esClient.indices().refresh(r -> r.index(IndicesNames.FEIP_MARK));
+		SearchResponse<ParseMark> result = esClient.search(s -> s
+						.index(IndicesNames.FEIP_MARK)
+						.query(q -> q.bool(b -> {
+							b.filter(f -> f.exists(e -> e.field(FieldNames.LAST_HEIGHT)));
+							if (maxHeight != null)
+								b.filter(f -> f.range(r -> r.field(FieldNames.LAST_HEIGHT).lte(JsonData.of(maxHeight))));
+							return b;
+						}))
+						.size(1)
+						.sort(s1 -> s1.field(f -> f.field(FieldNames.LAST_HEIGHT).order(SortOrder.Desc)))
+						.sort(s1 -> s1.field(f -> f.field(FieldNames.LAST_INDEX).order(SortOrder.Desc)))
+				, ParseMark.class);
+		if (result.hits() == null || result.hits().hits().isEmpty()) return null;
+		return result.hits().hits().get(0).source();
+	}
 	/**
 	 * Signals the parser to stop gracefully after the current record.
 	 */
@@ -477,7 +558,7 @@ public class FileParser {
 				clearFeipFieldsFromFreer(esClient, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
-				ArrayList<FreerHist> reparseCidList = getReparseHistList(esClient, IndicesNames.FREER_HISTORY,idList,"signer", FreerHist.class);
+				ArrayList<FreerHist> reparseCidList = getReparseHistList(esClient, IndicesNames.FREER_HISTORY,idList,FieldNames.SIGNER, FreerHist.class);
 
 				for(FreerHist idHist: reparseCidList) {
 					new IdentityParser().parseCidInfo(esClient,idHist);
@@ -488,7 +569,7 @@ public class FileParser {
 				EsUtils.bulkDeleteList(esClient, IndicesNames.PROTOCOL, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
-				ArrayList<ProtocolHistory> reparseFreeProtocolList = getReparseHistList(esClient, IndicesNames.PROTOCOL_HISTORY,idList,"pid", ProtocolHistory.class);
+				ArrayList<ProtocolHistory> reparseFreeProtocolList = getReparseHistList(esClient, IndicesNames.PROTOCOL_HISTORY,idList,FieldNames.PID, ProtocolHistory.class);
 
 				for(ProtocolHistory idHist: reparseFreeProtocolList) {
 					new ConstructParser().parseProtocol(esClient, idHist);
@@ -498,7 +579,7 @@ public class FileParser {
 				EsUtils.bulkDeleteList(esClient, IndicesNames.CODE, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
-				ArrayList<CodeHistory> reparseCodeList = getReparseHistList(esClient, IndicesNames.CODE_HISTORY,idList,"coid",CodeHistory.class);
+				ArrayList<CodeHistory> reparseCodeList = getReparseHistList(esClient, IndicesNames.CODE_HISTORY,idList,FieldNames.CODE_ID,CodeHistory.class);
 
 				for(CodeHistory idHist: reparseCodeList) {
 					new ConstructParser().parseCode(esClient, idHist);
@@ -508,7 +589,7 @@ public class FileParser {
 				EsUtils.bulkDeleteList(esClient, IndicesNames.APP, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
 
-				ArrayList<AppHistory> reparseAppList = getReparseHistList(esClient, IndicesNames.APP_HISTORY,idList,"aid",AppHistory.class);
+				ArrayList<AppHistory> reparseAppList = getReparseHistList(esClient, IndicesNames.APP_HISTORY,idList,FieldNames.AID,AppHistory.class);
 
 				for(AppHistory idHist: reparseAppList) {
 					new ConstructParser().parseApp(esClient, idHist);
@@ -517,7 +598,7 @@ public class FileParser {
 			case IndicesNames.SERVICE:
 				EsUtils.bulkDeleteList(esClient, IndicesNames.SERVICE, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
-				ArrayList<ServiceHistory> reparseServiceList = getReparseHistList(esClient, IndicesNames.SERVICE_HISTORY,idList,"sid",ServiceHistory.class);
+				ArrayList<ServiceHistory> reparseServiceList = getReparseHistList(esClient, IndicesNames.SERVICE_HISTORY,idList,FieldNames.SID,ServiceHistory.class);
 
 				for(ServiceHistory idHist: reparseServiceList) {
 					new ConstructParser().parseService(esClient, idHist);
@@ -526,7 +607,7 @@ public class FileParser {
 			case IndicesNames.SQUARE:
 				EsUtils.bulkDeleteList(esClient, IndicesNames.SQUARE, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
-				ArrayList<SquareHistory> reparseSquareList = getReparseHistList(esClient, IndicesNames.SQUARE_HISTORY,idList,"gid",SquareHistory.class);
+				ArrayList<SquareHistory> reparseSquareList = getReparseHistList(esClient, IndicesNames.SQUARE_HISTORY,idList,FieldNames.SQUARE_ID,SquareHistory.class);
 
 				for(SquareHistory idHist: reparseSquareList) {
 					new OrganizationParser().parseSquare(esClient, idHist);
@@ -535,7 +616,7 @@ public class FileParser {
 			case IndicesNames.TEAM:
 				EsUtils.bulkDeleteList(esClient, IndicesNames.TEAM, (ArrayList<String>) idList);
 				TimeUnit.SECONDS.sleep(2);
-				ArrayList<TeamHistory> reparseTeamList = getReparseHistList(esClient, IndicesNames.TEAM_HISTORY,idList,"tid",TeamHistory.class);
+				ArrayList<TeamHistory> reparseTeamList = getReparseHistList(esClient, IndicesNames.TEAM_HISTORY,idList,FieldNames.TID,TeamHistory.class);
 
 				for(TeamHistory idHist: reparseTeamList) {
 					new OrganizationParser().parseTeam(esClient, idHist);
@@ -549,30 +630,10 @@ public class FileParser {
 	private <T>ArrayList<T> getReparseHistList(ElasticsearchClient esClient, String histIndex,
 											   List<String> idList, String idField, Class<T> clazz)
 			throws ElasticsearchException, IOException {
-
-		List<FieldValue> fieldValueList = new ArrayList<FieldValue>();
-		for(String id:idList) {
-			fieldValueList.add(FieldValue.of(id));
-		}
-
-		SearchResponse<T> result = esClient.search(s->s
-						.index(histIndex)
-						.query(q->q
-								.terms(t->t
-										.field(idField)
-										.terms(t1->t1.value(fieldValueList))))
-				, clazz);
-		if(result.hits()==null||result.hits().total()==null){
-			log.info("Result is null");
-			return null;
-		}
-		if(result.hits().total().value()==0)return null;
-		List<Hit<T>> hitList = result.hits().hits();
-		ArrayList <T> reparseList = new ArrayList<T>();
-		for(Hit<T> hit:hitList) {
-			reparseList.add(hit.source());
-		}
-		return reparseList;
+		// Paginated and in (height, index) order: a replay out of order, or of only the first ten
+		// histories, rebuilds a different entity.
+		return new ArrayList<>(EsUtils.getHistsForReparse(esClient, histIndex, idField, null,
+				new ArrayList<>(idList), clazz));
 	}
 
 	/**
@@ -600,31 +661,60 @@ public class FileParser {
 	/**
 	 * Run every category rollbacker for `height` and fail loudly if any of them reported an error.
 	 *
-	 * All six must run even when an earlier one fails: skipping the rest would leave the indices
-	 * holding a mixture of pre- and post-reorg state. But once a failure has happened the database
-	 * IS in that mixed state, so parsing must not continue on top of it -- BlockWriter takes the
-	 * same line and throws rather than advancing the chain after a failed write.
+	 * All six must run even when an earlier one fails, or throws: skipping the rest would leave
+	 * the indices holding a mixture of pre- and post-reorg state. But once a failure has happened
+	 * the database IS in that mixed state, so parsing must not continue on top of it --
+	 * BlockWriter takes the same line and throws rather than advancing the chain after a failed
+	 * write.
 	 */
-	private static void rollbackAll(ElasticsearchClient esClient, long height,
-									IdentityRollbacker cidRollbacker,
-									ConstructRollbacker constructRollbacker,
-									PersonalRollbacker personalRollbacker,
-									PublishRollbacker publishRollbacker,
-									OrganizationRollbacker organizationRollbacker,
-									FinanceRollbacker financeRollbacker) throws Exception {
+	static void rollbackAll(ElasticsearchClient esClient, long height) throws Exception {
+		// The rollbackers find their work by searching, and search only sees what has been
+		// refreshed. Histories and marks written in the last second would otherwise be missed.
+		esClient.indices().refresh();
+
 		boolean error = false;
-		error |= cidRollbacker.rollback(esClient, height);
-		error |= constructRollbacker.rollback(esClient, height);
-		error |= personalRollbacker.rollback(esClient, height);
-		error |= publishRollbacker.rollback(esClient, height);
-		error |= organizationRollbacker.rollback(esClient, height);
-		error |= financeRollbacker.rollback(esClient, height);
+		error |= runRollback("identity", height, () -> new IdentityRollbacker().rollback(esClient, height));
+		error |= runRollback("construct", height, () -> new ConstructRollbacker().rollback(esClient, height));
+		error |= runRollback("personal", height, () -> new PersonalRollbacker().rollback(esClient, height));
+		error |= runRollback("publish", height, () -> new PublishRollbacker().rollback(esClient, height));
+		error |= runRollback("organization", height, () -> new OrganizationRollbacker().rollback(esClient, height));
+		error |= runRollback("finance", height, () -> new FinanceRollbacker().rollback(esClient, height));
+		// Marks above the height describe ops that no longer exist. Left behind, a restart would
+		// resume from one of them and skip the replay.
+		error |= runRollback("parse marks", height, () -> deleteMarksAbove(esClient, height));
 
 		if (error) {
 			log.error("Rollback to height {} did not complete cleanly. FEIP indices may hold a "
 					+ "mixture of pre- and post-reorg state; refusing to parse further.", height);
 			throw new Exception("Incomplete FEIP rollback at height " + height);
 		}
+	}
+
+	@FunctionalInterface
+	private interface RollbackStep {
+		boolean run() throws Exception;
+	}
+
+	private static boolean runRollback(String name, long height, RollbackStep step) {
+		try {
+			return step.run();
+		} catch (Exception e) {
+			log.error("The {} rollback to height {} threw.", name, height, e);
+			return true;
+		}
+	}
+
+	private static boolean deleteMarksAbove(ElasticsearchClient esClient, long height) throws IOException {
+		var response = esClient.deleteByQuery(d -> d
+				.index(IndicesNames.FEIP_MARK)
+				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
+				.refresh(true)
+				.query(q -> q.range(r -> r.field(FieldNames.LAST_HEIGHT).gt(JsonData.of(height)))));
+		if (response.failures() != null && !response.failures().isEmpty()) {
+			log.error("Rollback: deleting parse marks above {} reported {} failures", height, response.failures().size());
+			return true;
+		}
+		return false;
 	}
 
 }

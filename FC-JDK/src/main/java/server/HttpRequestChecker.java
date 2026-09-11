@@ -189,6 +189,22 @@ public class HttpRequestChecker {
             }
         }
 
+        // Recorded only now that the signature and time have passed, so a forged request cannot
+        // spend someone else's nonce.
+        if (!useNonce(signInfo.nonce, response)) return false;
+
+        return true;
+    }
+
+    private boolean useNonce(Integer nonce, HttpServletResponse response) {
+        if (nonce == null) {
+            replyBody.replyHttp(CodeMessage.Code1018NonceMissed, response);
+            return false;
+        }
+        if (nonceHandler != null && !nonceHandler.useNonce(nonce)) {
+            replyBody.replyHttp(CodeMessage.Code1007UsedNonce, response);
+            return false;
+        }
         return true;
     }
 
@@ -294,6 +310,8 @@ public class HttpRequestChecker {
         if (requestBody.getVia() != null) {
             setVia(requestBody.getVia());
         }
+
+        if (!useNonce(requestBody.getNonce(), response)) return false;
 
         return true;
     }

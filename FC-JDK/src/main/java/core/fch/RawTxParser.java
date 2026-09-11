@@ -20,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static constants.IndicesNames.CASH;
-import static utils.FchUtils.parseVarint;
+import static utils.FchUtils.parseLength;
 
 public class RawTxParser {
 
@@ -103,7 +103,7 @@ public class RawTxParser {
 
         // Get input count./获得输入数量
         utils.FchUtils.VariantResult varintParseResult;
-        varintParseResult = parseVarint(txInputStream);
+        varintParseResult = parseLength(txInputStream);
         long inputCount = varintParseResult.number;
 
         // Read inputs /读输入
@@ -117,7 +117,7 @@ public class RawTxParser {
 
 
             // Read the length of script./读脚本长度。
-            varintParseResult = parseVarint(txInputStream);
+            varintParseResult = parseLength(txInputStream);
             long scriptCount = varintParseResult.number;
 
             if (scriptCount != 0) {
@@ -128,8 +128,8 @@ public class RawTxParser {
                 // Parse sigHash.
                 // 解析sigHash。
                 int sigLen = Byte.toUnsignedInt(bvScript[0]);// Length of signature;
-                // Skip signature/跳过签名。
-                byte sigHash = bvScript[sigLen];// 交易类型标志
+                // Skip signature/跳过签名。 A short or non-signature script has no sigHash byte.
+                byte sigHash = (sigLen > 0 && sigLen < bvScript.length) ? bvScript[sigLen] : 0;// 交易类型标志
                 switch (sigHash) {
                     case 0x41:
                         spentCash.setSigHash("ALL");
@@ -164,7 +164,7 @@ public class RawTxParser {
         // Parse Outputs./解析输出。
         // Parse output count.
         // 解析输出数量。
-        utils.FchUtils.VariantResult varintParseResult1 = parseVarint(txInputStream);
+        utils.FchUtils.VariantResult varintParseResult1 = parseLength(txInputStream);
         long outputCount = varintParseResult1.number;
 
         // Starting operators in output script.
@@ -188,18 +188,20 @@ public class RawTxParser {
 
             // Parse the length of script.
             // 解析脚本长度。
-            varintParseResult1 = parseVarint(txInputStream);
+            varintParseResult1 = parseLength(txInputStream);
             long scriptSize = varintParseResult1.number;
 
             byte[] bScript = new byte[(int) scriptSize];
             txInputStream.read(bScript);
 
-            b1Script = bScript[0];
+            // An empty output script has no first opcode; it falls through to Unknown.
+            b1Script = bScript.length > 0 ? bScript[0] : 0x00;
 
             switch (b1Script) {
                 case OP_DUP -> {
                     newCash.setType("P2PKH");
                     newCash.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+                    if (bScript.length < 23) throw new IOException("P2PKH output script too short: " + bScript.length);
                     byte[] hash160Bytes = Arrays.copyOfRange(bScript, 3, 23);
                     newCash.setOwner(KeyTools.hash160ToFchAddr(hash160Bytes));
                 }
@@ -212,6 +214,7 @@ public class RawTxParser {
                 case OP_HASH160 -> {
                     newCash.setType("P2SH");
                     newCash.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+                    if (bScript.length < 22) throw new IOException("P2SH output script too short: " + bScript.length);
                     byte[] hash160Bytes1 = Arrays.copyOfRange(bScript, 2, 22);
                     newCash.setOwner(KeyTools.hash160ToMultiAddr(hash160Bytes1));
                 }
@@ -224,7 +227,8 @@ public class RawTxParser {
 
             // Add block and tx information to output./给输出添加区块和交易信息。
             // Add information where it from/添加来源信息
-            newCash.setValid(true);
+            // Keep an OP_RETURN output's valid=false: it is unspendable.
+            if (newCash.isValid() == null) newCash.setValid(true);
 
             // Add this output to List.
             // 添加输出到列表。
@@ -250,20 +254,22 @@ public class RawTxParser {
         if (op_return[0] != 0x6a) return null;
 
         bis.read(opcode);
-        if (opcode[0] < 76) {
-            msgBytes = new byte[opcode[0]];
-        }
-        if (opcode[0] == 76) {
+        // Unsigned: a push opcode of 0x80 or above read as a negative length and threw.
+        int op = Byte.toUnsignedInt(opcode[0]);
+        int msgLength;
+        if (op < 76) {
+            msgLength = op;
+        } else if (op == 76) {
             bis.read(dataLen1);
-            msgBytes = new byte[(dataLen1[0] & 0xFF)];//new byte[bScript.length-3];
-        }
-        if (opcode[0] == 77) {
+            msgLength = dataLen1[0] & 0xFF;
+        } else if (op == 77) {
             bis.read(dataLen2);
-            msgBytes = new byte[BytesUtils.bytes2ToIntLE(dataLen2)];//new byte[bScript.length-4];
+            msgLength = BytesUtils.bytes2ToIntLE(dataLen2);
+        } else {
+            msgLength = Math.max(0, bScript.length - 2);
         }
-        if (opcode[0] > 77) {
-            msgBytes = new byte[bScript.length - 2];
-        }
+        // Never allocate more than the script can hold.
+        msgBytes = new byte[Math.min(msgLength, bis.available())];
 
         bis.read(msgBytes);
         bis.close();
@@ -274,7 +280,7 @@ public class RawTxParser {
 
         // Get input count./获得输入数量
         utils.FchUtils.VariantResult varintParseResult;
-        varintParseResult = parseVarint(rawTxInputStream);
+        varintParseResult = parseLength(rawTxInputStream);
         long inputCount = varintParseResult.number;
 
         // Read inputs /读输入
@@ -290,7 +296,7 @@ public class RawTxParser {
             spentCash.setId(cashId);
 
             // Read the length of script./读脚本长度。
-            varintParseResult = parseVarint(rawTxInputStream);
+            varintParseResult = parseLength(rawTxInputStream);
             long scriptCount = varintParseResult.number;
 
             // Get script./获取脚本。
@@ -300,9 +306,10 @@ public class RawTxParser {
 
             // Parse sigHash.
             // 解析sigHash。
-            int sigLen = Byte.toUnsignedInt(bvScript[0]);// Length of signature;
+            // An empty unlock script, or one that is not <sig><pubkey>, has no sigHash byte to read.
+            int sigLen = bvScript.length > 0 ? Byte.toUnsignedInt(bvScript[0]) : 0;// Length of signature;
             // Skip signature/跳过签名。
-            byte sigHash = bvScript[sigLen];// 交易类型标志
+            byte sigHash = (sigLen > 0 && sigLen < bvScript.length) ? bvScript[sigLen] : 0;// 交易类型标志
             switch (sigHash) {
                 case 0x41:
                     spentCash.setSigHash("ALL");
@@ -342,7 +349,7 @@ public class RawTxParser {
         // Parse output count.
         // 解析输出数量。
         utils.FchUtils.VariantResult varintParseResult = new utils.FchUtils.VariantResult();
-        varintParseResult = parseVarint(rawTxInputStream);
+        varintParseResult = parseLength(rawTxInputStream);
         long outputCount = varintParseResult.number;
 
         // Starting operators in output script.
@@ -369,18 +376,20 @@ public class RawTxParser {
 
             // Parse the length of script.
             // 解析脚本长度。
-            varintParseResult = parseVarint(rawTxInputStream);
+            varintParseResult = parseLength(rawTxInputStream);
             long scriptSize = varintParseResult.number;
 
             byte[] bScript = new byte[(int) scriptSize];
             rawTxInputStream.read(bScript);
 
-            b1Script = bScript[0];
+            // An empty output script has no first opcode; it falls through to Unknown.
+            b1Script = bScript.length > 0 ? bScript[0] : 0x00;
 
             switch (b1Script) {
                 case OP_DUP -> {
                     newCash.setType("P2PKH");
                     newCash.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+                    if (bScript.length < 23) throw new IOException("P2PKH output script too short: " + bScript.length);
                     byte[] hash160Bytes = Arrays.copyOfRange(bScript, 3, 23);
                     newCash.setOwner(KeyTools.hash160ToFchAddr(hash160Bytes));
                 }
@@ -392,6 +401,7 @@ public class RawTxParser {
                 case OP_HASH160 -> {
                     newCash.setType("P2SH");
                     newCash.setLockScript(BytesUtils.bytesToHexStringBE(bScript));
+                    if (bScript.length < 22) throw new IOException("P2SH output script too short: " + bScript.length);
                     byte[] hash160Bytes1 = Arrays.copyOfRange(bScript, 2, 22);
                     newCash.setOwner(KeyTools.hash160ToMultiAddr(hash160Bytes1));
                 }
@@ -404,7 +414,8 @@ public class RawTxParser {
 
             // Add block and tx information to output./给输出添加区块和交易信息。
             // Add information where it from/添加来源信息
-            newCash.setValid(true);
+            // Keep an OP_RETURN output's valid=false: it is unspendable.
+            if (newCash.isValid() == null) newCash.setValid(true);
 
             // Add this output to List.
             // 添加输出到列表。

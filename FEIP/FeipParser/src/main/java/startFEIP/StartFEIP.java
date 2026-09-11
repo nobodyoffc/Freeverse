@@ -159,22 +159,13 @@ public class StartFEIP {
 
 	private static void restartFromFile(ElasticsearchClient esClient, String path)  {
 		try {
-			SearchResponse<ParseMark> result = esClient.search(s->s
-							.index(IndicesNames.FEIP_MARK)
-							.size(1)
-							.sort(s1->s1
-									.field(f->f
-											.field(LAST_INDEX).order(SortOrder.Desc)
-											.field(LAST_HEIGHT).order(SortOrder.Desc)
-									)
-							)
-					, ParseMark.class);
+			FileParser.recoverInterruptedOp(esClient, path);
+			ParseMark parseMark = FileParser.findLatestMark(esClient, null);
 
-			if (result.hits() == null || result.hits().hits() == null || result.hits().hits().isEmpty()) {
+			if (parseMark == null) {
 				log.error("No parse mark found in FEIP_MARK index. Use 'Start New Parse' instead.");
 				return;
 			}
-			ParseMark parseMark = result.hits().hits().get(0).source();
 
 			if (parseMark == null) throw new AssertionError();
 			JsonUtils.printJson(parseMark);
@@ -203,31 +194,21 @@ public class StartFEIP {
 
 	private static void manualRestartFromFile(ElasticsearchClient esClient, String path, long height) throws Exception {
 
-		SearchResponse<ParseMark> result = esClient.search(s->s
-						.index(IndicesNames.FEIP_MARK)
-						.query(q->q.range(r->r.field(LAST_HEIGHT).lte(JsonData.of(height))))
-						.size(1)
-						.sort(s1->s1
-								.field(f->f
-										.field(LAST_INDEX).order(SortOrder.Desc)
-										.field(LAST_HEIGHT).order(SortOrder.Desc)))
-				, ParseMark.class);
+		FileParser.recoverInterruptedOp(esClient, path);
+		ParseMark parseMark = FileParser.findLatestMark(esClient, height);
 
-		if (result==null||result.hits()==null||result.hits().total()==null) {
-			log.error("Result is null");
-			return;
+		if (parseMark == null) {
+			// Nothing was parsed at or below this height, so replay the files from the start after
+			// rolling back everything above it. Resuming from the latest mark instead, as this used
+			// to, skipped every op between the requested height and that mark.
+			log.info("No parse mark at or below height {}. Replaying from {}.", height, FileParser.FIRST_OP_FILE);
+			parseMark = new ParseMark();
+			parseMark.setFileName(FileParser.FIRST_OP_FILE);
+			parseMark.setPointer(0);
+			parseMark.setLength(0);
+			parseMark.setLastHeight(height);
+			parseMark.setLastIndex(0);
 		}
-
-		if(result.hits().total().value()==0) {
-			restartFromFile(esClient, path);
-			return;
-		}
-
-		if (result.hits().hits() == null || result.hits().hits().isEmpty()) {
-			log.error("No parse mark found at or below height {}.", height);
-			return;
-		}
-		ParseMark parseMark = result.hits().hits().get(0).source();
 
 		FileParser fileParser = new FileParser();
 		activeParser = fileParser;

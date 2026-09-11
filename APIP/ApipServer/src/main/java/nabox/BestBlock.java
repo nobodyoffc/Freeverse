@@ -55,6 +55,14 @@ public class BestBlock extends HttpServlet {
         }
 
         Block bestBlock = EsUtils.getBestBlock(esClient);
+
+        if (bestBlock == null) {
+
+            replier.replyOtherErrorHttp("No block has been indexed yet.", response);
+
+            return;
+
+        }
         
         replier.setBestHeight(bestBlock.getHeight());
         replier.setBestBlockId(bestBlock.getId());

@@ -21,6 +21,8 @@ import static constants.Strings.LISTEN_PATH;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -178,12 +180,13 @@ public class MempoolManager extends Manager<FcEntity> {
             outCashList.clear();
             return;
         }
-        for(String txId : mempoolTxIds){
-            txIdList.remove(txId);
-            txList.removeIf(tx -> tx.getId().equals(txId));
-            inCashList.removeIf(cash -> cash.getSpendTxId().equals(txId));
-            outCashList.removeIf(cash -> cash.getBirthTxId().equals(txId));
-        }
+        // Keep what is still in the mempool and drop what has left it (confirmed or evicted). This
+        // used to do the opposite: remove every transaction still pending and keep the gone ones.
+        Set<String> stillPending = new HashSet<>(Arrays.asList(mempoolTxIds));
+        txIdList.removeIf(txId -> !stillPending.contains(txId));
+        txList.removeIf(tx -> !stillPending.contains(tx.getId()));
+        inCashList.removeIf(cash -> !stillPending.contains(cash.getSpendTxId()));
+        outCashList.removeIf(cash -> !stillPending.contains(cash.getBirthTxId()));
     }
     
     public void shutdown() {

@@ -1,5 +1,6 @@
 package api;
 
+import data.feipData.serviceParams.DiskParams;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import data.fcData.DiskItem;
@@ -46,9 +47,20 @@ public class Carve extends HttpServlet {
         if (!httpRequestChecker.checkRequestHttp(request, response, authType)) return;
 
         //Do request
+        long maxBytes = Put.maxPutBytes(DiskParams.fromObject(settings.getService().getParams()));
+        if (request.getContentLengthLong() > maxBytes) {
+            replier.replyOtherErrorHttp("Data exceeds the limit of " + maxBytes + " bytes.", response);
+            return;
+        }
         InputStream inputStream = request.getInputStream();
         DiskManager diskHandler = (DiskManager)settings.getManager(Manager.ManagerType.DISK);
-        Hat hat = diskHandler.put(inputStream);
+        Hat hat;
+        try {
+            hat = diskHandler.put(inputStream, maxBytes);
+        } catch (IOException e) {
+            replier.replyOtherErrorHttp("Failed to store the data: " + e.getMessage(), response);
+            return;
+        }
 
         Map<String,String> dataMap = new HashMap<>();
         dataMap.put("did", hat.getId());

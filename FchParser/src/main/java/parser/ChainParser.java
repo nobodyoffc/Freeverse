@@ -562,6 +562,10 @@ public class ChainParser {
 			Thread cdThread = new Thread(() -> {
 				try {
 					Block bestBlock = EsUtils.getBestBlock(esClient);
+					if (bestBlock == null) {
+						log.warn("No best block in ES; skipping the CD update.");
+						return;
+					}
 					CdMaker cdMaker = new CdMaker();
 					cdMaker.makeUtxoCd(esClient, bestBlock);
 					log.info("All cd of UTXOs updated.");

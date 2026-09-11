@@ -161,6 +161,23 @@ public class RollbackDiscoveryEsIT {
     }
 
     @Test
+    @DisplayName("getHistsForReparse with a height cap leaves out the histories being rolled back")
+    void reparseStopsAtRollbackHeight() throws Exception {
+        // 5 histories at or below the rollback height survive it; 7 above it are being undone.
+        indexHistories(5, "pidD", false, -10);
+        indexHistories(7, "pidD", true, 1);
+
+        List<ProtocolHistory> found = EsUtils.getHistsForReparse(
+                esClient, IDX, "pid", "pids", new ArrayList<>(List.of("pidD")), ROLLBACK_HEIGHT,
+                ProtocolHistory.class);
+
+        // Pre-fix the rollbackers read this list with no cap, before deleting the 7, and replayed
+        // all 12 -- re-applying exactly the operations the rollback was undoing.
+        assertEquals(5, found.size());
+        assertTrue(found.stream().allMatch(h -> h.getHeight() <= ROLLBACK_HEIGHT));
+    }
+
+    @Test
     @DisplayName("getHistsForReparse returns an empty list, not null, when nothing matches")
     void reparseReturnsEmptyListNotNull() throws Exception {
         List<ProtocolHistory> found = EsUtils.getHistsForReparse(

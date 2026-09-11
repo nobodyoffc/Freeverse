@@ -1,5 +1,6 @@
 package construct;
 
+import startFEIP.Permission;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
@@ -753,11 +754,11 @@ public class ConstructParser {
 						continue;
 					}
 
-					if (!protocolItem.getOwner().equals(protocolHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, protocolHist.getSigner(), Freer.class);
-						if (resultCid == null ||resultCid.getMaster() == null || !resultCid.getMaster().equals(protocolHist.getSigner())) {
-							continue;
-						}
+					if (!Permission.isOwnerOrMaster(esClient, protocolItem.getOwner(), protocolHist.getSigner())) {
+						// One target the signer has no right to rejects the whole op, before anything
+						// is written; it used to be skipped and the rest applied.
+						log.info("Signer is neither the owner nor the owner's master of protocol {}", protocolItem.getId());
+						return false;
 					}
 
 					switch (protocolHist.getOp()) {
@@ -793,8 +794,8 @@ public class ConstructParser {
 					}
 					BulkResponse result1 = esClient.bulk(br.build());
 					if(result1.errors()){
-						log.info("Failed to bulk update protocol");
-						return false;
+						// Some targets may be written: a partial op, not a rejected one.
+						throw new java.io.IOException("Failed to bulk update protocol");
 					}else log.info("Done");
 					// Create news
 					News.createNews(esClient, protocolHist.getId(), protocolHist.getSigner(), protocolHist.getOp(),
@@ -950,12 +951,9 @@ public class ConstructParser {
 						continue;
 					}
 
-					if (!serviceItem.getOwner().equals(serviceHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, serviceHist.getSigner(), Freer.class);
-						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(serviceHist.getSigner())) {
-							log.info("Service owner is not the same as the signer");
-							continue;
-						}
+					if (!Permission.isOwnerOrMaster(esClient, serviceItem.getOwner(), serviceHist.getSigner())) {
+						log.info("Signer is neither the owner nor the owner's master of service {}", serviceItem.getId());
+						return false;
 					}
 
 					switch (serviceHist.getOp()) {
@@ -991,8 +989,7 @@ public class ConstructParser {
 					}
 					BulkResponse result1 = esClient.bulk(br.build());
 					if(result1.errors()){
-						log.info("Failed to bulk update service");
-						return false;
+						throw new java.io.IOException("Failed to bulk update service");
 					} else log.info("Done");
 
 					// Create news
@@ -1189,12 +1186,9 @@ public class ConstructParser {
 						continue;
 					}
 
-					if (!appItem.getOwner().equals(appHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, appHist.getSigner(), Freer.class);
-						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(appHist.getSigner())) {
-							log.info("App owner is not the same as the signer");
-							continue;
-						}
+					if (!Permission.isOwnerOrMaster(esClient, appItem.getOwner(), appHist.getSigner())) {
+						log.info("Signer is neither the owner nor the owner's master of app {}", appItem.getId());
+						return false;
 					}
 
 					switch (appHist.getOp()) {
@@ -1230,8 +1224,7 @@ public class ConstructParser {
 					}
 					BulkResponse result1 = esClient.bulk(br.build());
 					if(result1.errors()){
-						log.info("Failed to bulk update app");
-						return false;
+						throw new java.io.IOException("Failed to bulk update app");
 					} else log.info("Done");
 
 					// Create news
@@ -1406,12 +1399,9 @@ public class ConstructParser {
 						continue;
 					}
 
-					if (!codeItem.getOwner().equals(codeHist.getSigner())) {
-						Freer resultCid = EsUtils.getById(esClient, IndicesNames.FREER, codeHist.getSigner(), Freer.class);
-						if (resultCid.getMaster() == null || !resultCid.getMaster().equals(codeHist.getSigner())) {
-							log.info("Code owner is not the same as the signer");
-							continue;
-						}
+					if (!Permission.isOwnerOrMaster(esClient, codeItem.getOwner(), codeHist.getSigner())) {
+						log.info("Signer is neither the owner nor the owner's master of code {}", codeItem.getId());
+						return false;
 					}
 
 					switch (codeHist.getOp()) {
@@ -1431,8 +1421,9 @@ public class ConstructParser {
 				}
 
 				if(updatedCodes.isEmpty()){
+					// Nothing changed, so there is nothing for a history to record.
 					log.info("No valid codes to be updated");
-					return true;
+					return false;
 				}
 
 				BulkRequest.Builder br = new BulkRequest.Builder();
@@ -1447,8 +1438,7 @@ public class ConstructParser {
 				}
 				BulkResponse result1 = esClient.bulk(br.build());
 				if(result1.errors()){
-					log.info("Failed to bulk update code");
-					return false;
+					throw new java.io.IOException("Failed to bulk update code");
 				} else log.info("Done");
 				// Create news
 				News.createNews(esClient, codeHist.getId(), codeHist.getSigner(), codeHist.getOp(),
@@ -1527,7 +1517,6 @@ public class ConstructParser {
 					code.settCdd(code.gettCdd() + codeHist.getCdd());
 				}
 
-				code.settCdd(code.gettCdd()+codeHist.getCdd());
 				code.setLastTxId(codeHist.getId());
 				code.setLastTime(codeHist.getTime());
 				code.setLastHeight(codeHist.getHeight());

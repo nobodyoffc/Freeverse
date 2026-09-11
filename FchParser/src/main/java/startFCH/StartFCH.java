@@ -146,8 +146,8 @@ public class StartFCH {
     private static final int MAX_RESTART_RETRIES = 5;
 
     private static void restart(ElasticsearchClient esClient, String blockDir, Map<String, Object> settingMap) {
+        long lastTarget = -1;
         for (int attempt = 1; attempt <= MAX_RESTART_RETRIES; attempt++) {
-            long bestHeight;
             Block bestBlock;
             try {
                 bestBlock = EsUtils.getBestBlock(esClient);
@@ -159,7 +159,13 @@ public class StartFCH {
                 log.error("Get bestHeight wrong.", e);
                 return;
             }
-            bestHeight = bestBlock.getHeight() - 1;
+            // Restart one below the current best block, but never below the previous attempt's
+            // target. An attempt that fails without progress leaves the best block at that target,
+            // and best - 1 would unwind one more block per attempt. An attempt that did progress
+            // must restart from where it got to: fixing the height once before the first attempt
+            // threw away everything it parsed -- 13,385 blocks when a reorg failed at the tip.
+            long bestHeight = Math.max(lastTarget, bestBlock.getHeight() - 1);
+            lastTarget = bestHeight;
 
             log.info("Restarting from BestHeight: {} (attempt {}/{}) ...", bestHeight, attempt, MAX_RESTART_RETRIES);
 

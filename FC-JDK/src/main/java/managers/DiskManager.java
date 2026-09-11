@@ -108,24 +108,44 @@ public class DiskManager extends Manager<FcObject> {
         return null;
     }
 
+    /** Upload limit when the service sets none. */
+    public static final long DEFAULT_MAX_PUT_BYTES = (long) Constants.MAX_FILE_SIZE_M * Constants.M_BYTES;
+
     @NotNull
-    public Hat put(InputStream inputStream){
+    public Hat put(InputStream inputStream) throws IOException {
+        return put(inputStream, DEFAULT_MAX_PUT_BYTES);
+    }
+
+    /**
+     * Store a stream under its content id.
+     *
+     * It used to read until EOF with no limit, so one request could fill the disk; and it
+     * swallowed every failure, including a failed move into place, returning a Hat for a file that
+     * was never stored -- which the caller then indexed and reported as saved. Any failure now
+     * throws, and the temp file never outlives the call.
+     *
+     * @throws IOException if the stream exceeds maxBytes, or the file cannot be written or moved
+     */
+    @NotNull
+    public Hat put(InputStream inputStream, long maxBytes) throws IOException {
         Hat hat = new Hat();
 
-        String tempFileName = FileUtils.getTempFileName();
-        try (OutputStream outputStream = new FileOutputStream(tempFileName)) {
-
+        Path tempPath = Paths.get(FileUtils.getTempFileName());
+        try {
             HashFunction hashFunction = Hashing.sha256();
             Hasher hasher = hashFunction.newHasher();
-            // Adjust buffer size as per your requirement
-            byte[] buffer = new byte[8192];
-            int bytesRead;
             long bytesLength = 0;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                // Write the bytes read from the request input stream to the output stream
-                outputStream.write(buffer, 0, bytesRead);
-                hasher.putBytes(buffer, 0, bytesRead);
-                bytesLength +=bytesRead;
+            try (OutputStream outputStream = new FileOutputStream(tempPath.toFile())) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    bytesLength += bytesRead;
+                    if (bytesLength > maxBytes) {
+                        throw new IOException("Upload exceeds the limit of " + maxBytes + " bytes");
+                    }
+                    outputStream.write(buffer, 0, bytesRead);
+                    hasher.putBytes(buffer, 0, bytesRead);
+                }
             }
 
             String did = Hex.toHex(Hash.sha256(hasher.hash().asBytes()));
@@ -137,20 +157,16 @@ public class DiskManager extends Manager<FcObject> {
 
             File file = new File(path);
             if(!file.exists() || Boolean.FALSE.equals(checkFileOfDisk( did))) {
-                try {
-                    Path source = Paths.get(tempFileName);
-                    Path target = Paths.get(path);
-                    Files.createDirectories(target.getParent());
-                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                } catch (IOException e) {
-                    System.err.println("Error moving file: " + e.getMessage());
-                }
+                Path target = Paths.get(path);
+                Files.createDirectories(target.getParent());
+                Files.move(tempPath, target, StandardCopyOption.REPLACE_EXISTING);
             }
             hat.setSize(bytesLength);
-        } catch (IOException e) {
-            log.error("Failed to save file with a inputStream.");
+            return hat;
+        } finally {
+            // Already moved into place, or not needed because the content was already stored.
+            Files.deleteIfExists(tempPath);
         }
-        return hat;
     }
 
     /**

@@ -1,5 +1,6 @@
 package finance;
 
+import startFEIP.Reparser;
 import constants.OpNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +8,7 @@ import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.DeleteByQueryResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
 import co.elastic.clients.json.JsonData;
@@ -41,13 +43,13 @@ public class FinanceRollbacker {
 		log.warn("If Rollbacking is interrupted, reparse all effected ids of index 'proof': ");
 		JsonUtils.printJson(itemIdList);
 
-		List<ProofHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY, PROOF_ID, PROOF_IDS, itemIdList, ProofHistory.class);
+		List<ProofHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROOF_HISTORY, PROOF_ID, PROOF_IDS, itemIdList, lastHeight, ProofHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.PROOF, itemIdList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.PROOF_HISTORY, histIdList);
 
-		reparseProof(esClient, reparseHistList);
+		error |= reparseProof(esClient, reparseHistList);
 
 		return error;
 	}
@@ -103,12 +105,9 @@ public class FinanceRollbacker {
 		return resultMap;
 	}
 
-	private void reparseProof(ElasticsearchClient esClient, List<ProofHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
+	private boolean reparseProof(ElasticsearchClient esClient, List<ProofHistory> reparseHistList) {
 		FinanceParser parser = new FinanceParser();
-		for(ProofHistory proofHist: reparseHistList) {
-			parser.parseProof(esClient, proofHist);
-		}
+		return Reparser.replay("proof", reparseHistList, h -> parser.parseProof(esClient, h));
 	}
 
 	private boolean rollbackToken(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -121,14 +120,14 @@ public class FinanceRollbacker {
 		log.warn("If Rollback is interrupted, reparse all effected ids of index 'token': ");
 		JsonUtils.printJson(tokenIdList);
 
-		List<TokenHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY, TOKEN_ID, TOKEN_IDS, tokenIdList, TokenHistory.class);
+		List<TokenHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TOKEN_HISTORY, TOKEN_ID, TOKEN_IDS, tokenIdList, lastHeight, TokenHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.TOKEN, tokenIdList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.TOKEN_HISTORY, histIdList);
-		deleteEffectedTokenHolders(esClient, tokenIdList);
+		error |= deleteEffectedTokenHolders(esClient, tokenIdList);
 
-		reparseToken(esClient, reparseHistList);
+		error |= reparseToken(esClient, reparseHistList);
 
 		return error;
 	}
@@ -184,27 +183,27 @@ public class FinanceRollbacker {
 		return resultMap;
 	}
 
-	private void deleteEffectedTokenHolders(ElasticsearchClient esClient,List<String> tokenIdList) throws Exception {
+	private boolean deleteEffectedTokenHolders(ElasticsearchClient esClient,List<String> tokenIdList) throws Exception {
 		List<FieldValue> fieldValueList = new ArrayList<>();
 		tokenIdList.forEach(tokenId->fieldValueList.add(FieldValue.of(tokenId)));
 
-		esClient.deleteByQuery(d->d.index(IndicesNames.TOKEN_HOLDER)
+		DeleteByQueryResponse response = esClient.deleteByQuery(d->d.index(IndicesNames.TOKEN_HOLDER)
 				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
 				.query(q->q
 						.terms(t->t
 								.field("tokenId")
 								.terms(ts->ts.value(fieldValueList))
 						)));
+		if (response != null && response.failures() != null && !response.failures().isEmpty()) {
+			log.error("Rollback: deleteByQuery reported {} failures on token_holder", response.failures().size());
+			return true;
+		}
+		return false;
 	}
 
-	private void reparseToken(ElasticsearchClient esClient, List<TokenHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
+	private boolean reparseToken(ElasticsearchClient esClient, List<TokenHistory> reparseHistList) {
 		FinanceParser parser = new FinanceParser();
-		for(TokenHistory tokenHist: reparseHistList) {
-			try {
-				parser.parseToken(esClient, tokenHist);
-			}catch (NumberFormatException ignore){}
-		}
+		return Reparser.replay("token", reparseHistList, h -> parser.parseToken(esClient, h));
 	}
 
 	private boolean deleteEffectedItems(ElasticsearchClient esClient,String index, ArrayList<String> itemIdList) throws Exception {

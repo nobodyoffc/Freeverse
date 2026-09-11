@@ -263,6 +263,9 @@ public class CryptoDataByte {
         cryptoData.setAlg(alg);
 
         // Extract the EncryptType byte
+        // Each field below is copied only if the bundle still holds it. The single minimum-length
+        // check above covers the algorithm and type, not the key, key name, IV or sum, so a short
+        // bundle threw ArrayIndexOutOfBounds instead of being rejected.
         byte typeByte = bundle[6];
         offset++;
         EncryptType type = EncryptType.fromNumber(typeByte); // Assuming EncryptType has a method to get type from a number
@@ -275,6 +278,7 @@ public class CryptoDataByte {
         if (type == EncryptType.AsyOneWay || type == EncryptType.AsyTwoWay) {
             // Determine public key size based on algorithm
             int pubKeySize = (alg == AlgorithmId.FC_X25519AesGcm256_No1_NrC7) ? CryptoConstants.PUBKEY_X25519_LENGTH : CryptoConstants.PUBKEY_COMPRESSED_LENGTH;
+            if (bundle.length < offset + pubKeySize) return null;
             byte[] pubKeyA = new byte[pubKeySize];
             System.arraycopy(bundle, offset, pubKeyA, 0, pubKeySize);
             cryptoData.setPubkeyA(pubKeyA);
@@ -283,6 +287,7 @@ public class CryptoDataByte {
 
         // Check if keyName exists for Symkey or Password
         if (type == EncryptType.Symkey) {
+            if (bundle.length < offset + CryptoConstants.KEY_NAME_LENGTH) return null;
             byte[] keyName = new byte[CryptoConstants.KEY_NAME_LENGTH];
             System.arraycopy(bundle, offset, keyName, 0, CryptoConstants.KEY_NAME_LENGTH);
             cryptoData.setKeyName(keyName);
@@ -299,6 +304,7 @@ public class CryptoDataByte {
                                 alg == AlgorithmId.FC_EccK1ChaCha20Poly1305_No1_NrC7);
 
         int ivLength = uses12ByteIv ? CryptoConstants.IV_LENGTH_GCM : CryptoConstants.IV_LENGTH_CBC;
+        if (bundle.length < offset + ivLength) return null;
         byte[] iv = new byte[ivLength];
         System.arraycopy(bundle, offset, iv, 0, ivLength);
         cryptoData.setIv(iv);

@@ -423,7 +423,9 @@ protected void waitNewOrder() {
 
     protected ArrayList<Order> getNewOrderList(List<Cash> cashList) {
         double minPayment = Double.parseDouble(this.minPayment);
-        long minPaymentLong = (long) minPayment * 100000000;
+        // Convert before truncating: `(long) minPayment * 1e8` cast first, so any minimum below
+        // 1 coin -- the configured 0.01 and 0.001 -- became 0 and every payment qualified.
+        long minPaymentLong = utils.FchUtils.coinToSatoshi(minPayment);
 
         ArrayList<Order> orderList = new ArrayList<>();
 

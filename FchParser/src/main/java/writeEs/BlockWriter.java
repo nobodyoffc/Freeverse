@@ -30,6 +30,12 @@ public class BlockWriter {
 		Map<String, P2SH> p2SHMap = readyBlock.getP2SHMap();
 		Map<String, Multisig> multisigMap = readyBlock.getMultisigMap();
 
+		// Large lists go out in their own bulks before the final one, and Elasticsearch has no
+		// transaction across them, so a failure can leave part of this block indexed. That state is
+		// never built on: every failure throws, nothing below advances ChainState or the OpReturn
+		// file, and StartFCH.restart rolls back to one below the best block in ES -- which deletes
+		// everything this block wrote, whether or not its block document landed -- before
+		// re-parsing it.
 		Builder br = new Builder();
 		putBlock(block, br);
 		putTx(esClient, txMap, br);

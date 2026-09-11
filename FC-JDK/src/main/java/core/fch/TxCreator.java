@@ -1275,7 +1275,7 @@ public class TxCreator {
         if(sigListMap==null || sigListMap.isEmpty())return null;
 
         if (sigListMap.size() > multisig.getM())
-            sigListMap = dropRedundantSigs(sigListMap, multisig.getM());
+            sigListMap = dropRedundantSigs(sigListMap, multisig.getFids(), multisig.getM());
 
         Transaction transaction = new Transaction(mainnetwork, rawTx);
 
@@ -1313,9 +1313,6 @@ public class TxCreator {
         if (rawTx == null) rawTx = rawTxInfo.getRawTx();
         if (rawTx == null) return null;
 
-        if (sigListMap.size() > multisig.getM())
-            sigListMap = dropRedundantStringSigs(sigListMap, multisig.getM());
-
         Transaction transaction = new Transaction(mainnetwork, rawTx);
 
         // Ensure lockTime and sequences are set for any CLTV inputs.
@@ -1337,36 +1334,29 @@ public class TxCreator {
             }
         }
 
+        // Only signers whose every signature verifies against this transaction are used, and the
+        // first m of them in the multisig's own order. Signatures used to be combined unverified,
+        // chosen by HashMap iteration order, so one bad signer could be kept while a good one was
+        // dropped and the whole transaction rejected by the network.
+        sigListMap = verifiedSigners(transaction, sigListMap, multisig, cashList);
+        if (sigListMap.size() < multisig.getM()) {
+            log.error("Only {} of the required {} signers supplied valid signatures.", sigListMap.size(), multisig.getM());
+            return null;
+        }
+        if (sigListMap.size() > multisig.getM())
+            sigListMap = dropRedundantStringSigs(sigListMap, multisig.getFids(), multisig.getM());
+
         // Build scriptSig for each input using the correct redeemScript for that input.
         for (int i = 0; i < transaction.getInputs().size(); i++) {
             List<byte[]> sigListByTx = new ArrayList<>();
             for (String fid : multisig.getFids()) {
-                try {
-                    String sig = sigListMap.get(fid).get(i);
-                    sigListByTx.add(Hex.fromHex(sig));
-                } catch (Exception ignore) {
+                List<String> sigs = sigListMap.get(fid);
+                if (sigs != null && i < sigs.size() && sigs.get(i) != null) {
+                    sigListByTx.add(Hex.fromHex(sigs.get(i)));
                 }
             }
 
-            byte[] redeemScriptForBuild;
-            Cash cashInput = (cashList != null && i < cashList.size()) ? cashList.get(i) : null;
-
-            if (cashInput != null && cashInput.getRedeemScript() != null && !cashInput.getRedeemScript().isEmpty()) {
-                redeemScriptForBuild = Hex.fromHex(cashInput.getRedeemScript());
-                log.debug("Building scriptSig with stored redeemScript for input " + i);
-            } else if (cashInput != null && cashInput.getLockTime() != null && cashInput.getLockTime() > 0) {
-                Script cltvMultisigScript = P2SH.makeMultisigLockTimeRedeemScript(
-                        cashInput.getLockTime(),
-                        multisig.getPubkeys(),
-                        multisig.getM(),
-                        multisig.getN()
-                );
-                redeemScriptForBuild = cltvMultisigScript.getProgram();
-                log.debug("Building scriptSig with CLTV+multisig redeemScript for input " + i);
-            } else {
-                redeemScriptForBuild = Hex.fromHex(multisig.getRedeemScript());
-                log.debug("Building scriptSig with plain multisig redeemScript for input " + i);
-            }
+            byte[] redeemScriptForBuild = redeemScriptForInput(multisig, cashList, i);
 
             Script inputScript = createSchnorrMultiSigInputScriptBytes(sigListByTx, redeemScriptForBuild);
             transaction.getInput(i).setScriptSig(inputScript);
@@ -1375,15 +1365,64 @@ public class TxCreator {
         return Hex.toHex(transaction.bitcoinSerialize());
     }
 
-    private static Map<String, List<String>> dropRedundantStringSigs(Map<String, List<String>> sigListMap, int m) {
-        Map<String, List<String>> newMap = new HashMap<>();
-        int i = 0;
-        for (String key : sigListMap.keySet()) {
-            newMap.put(key, sigListMap.get(key));
-            i++;
-            if (i == m) return newMap;
+    /** The first m signers in the multisig's member order; HashMap order is arbitrary. */
+    static <S> Map<String, S> dropRedundantStringSigs(Map<String, S> sigListMap, List<String> memberFids, int m) {
+        Map<String, S> newMap = new LinkedHashMap<>();
+        for (String fid : memberFids) {
+            if (newMap.size() == m) break;
+            S sigs = sigListMap.get(fid);
+            if (sigs != null) newMap.put(fid, sigs);
         }
         return newMap;
+    }
+
+    private static byte[] redeemScriptForInput(Multisig multisig, List<Cash> cashList, int i) {
+        Cash cashInput = (cashList != null && i < cashList.size()) ? cashList.get(i) : null;
+        if (cashInput != null && cashInput.getRedeemScript() != null && !cashInput.getRedeemScript().isEmpty()) {
+            return Hex.fromHex(cashInput.getRedeemScript());
+        }
+        if (cashInput != null && cashInput.getLockTime() != null && cashInput.getLockTime() > 0) {
+            return P2SH.makeMultisigLockTimeRedeemScript(cashInput.getLockTime(), multisig.getPubkeys(),
+                    multisig.getM(), multisig.getN()).getProgram();
+        }
+        return Hex.fromHex(multisig.getRedeemScript());
+    }
+
+    /**
+     * The signers whose signature on every input verifies against `transaction`. Without input
+     * values the signature hash cannot be computed, so nothing is verified and every signer is kept.
+     */
+    private static Map<String, List<String>> verifiedSigners(Transaction transaction, Map<String, List<String>> sigListMap,
+                                                             Multisig multisig, List<Cash> cashList) {
+        int inputCount = transaction.getInputs().size();
+        if (cashList == null || cashList.size() < inputCount) {
+            log.warn("Input values are missing; multisig signatures cannot be verified before combining.");
+            return sigListMap;
+        }
+        Map<String, byte[]> pubkeyByFid = new HashMap<>();
+        for (String pubkeyHex : multisig.getPubkeys()) {
+            pubkeyByFid.put(KeyTools.pubkeyToFchAddr(pubkeyHex), Hex.fromHex(pubkeyHex));
+        }
+        Map<String, List<String>> valid = new LinkedHashMap<>();
+        for (String fid : multisig.getFids()) {
+            List<String> sigs = sigListMap.get(fid);
+            byte[] pubkey = pubkeyByFid.get(fid);
+            if (sigs == null || pubkey == null || sigs.size() < inputCount) continue;
+            boolean allValid = true;
+            for (int i = 0; i < inputCount && allValid; i++) {
+                try {
+                    Script script = new Script(redeemScriptForInput(multisig, cashList, i));
+                    Sha256Hash hash = transaction.hashForSignatureWitness(i, script,
+                            Coin.valueOf(cashList.get(i).getValue()), Transaction.SigHash.ALL, false);
+                    allValid = SchnorrSignature.schnorr_verify(hash.getBytes(), pubkey, Hex.fromHex(sigs.get(i)));
+                } catch (Exception e) {
+                    allValid = false;
+                }
+            }
+            if (allValid) valid.put(fid, sigs);
+            else log.warn("Dropping the signatures of {}: they do not verify against this transaction.", fid);
+        }
+        return valid;
     }
 
     /**
@@ -1478,19 +1517,13 @@ public class TxCreator {
         return buildSchnorrMultiSigTx(finalRawTxInfo, mainnetwork);
     }
 
-    private static Map<String, List<byte[]>> dropRedundantSigs(Map<String, List<byte[]>> sigListMap, int m) {
-        Map<String, List<byte[]>> newMap = new HashMap<>();
-        int i = 0;
-        for (String key : sigListMap.keySet()) {
-            newMap.put(key, sigListMap.get(key));
-            i++;
-            if (i == m) return newMap;
-        }
-        return newMap;
+    private static Map<String, List<byte[]>> dropRedundantSigs(Map<String, List<byte[]>> sigListMap, List<String> memberFids, int m) {
+        return dropRedundantStringSigs(sigListMap, memberFids, m);
     }
 
     public static Script createSchnorrMultiSigInputScriptBytes(List<byte[]> signatures, byte[] multisigProgramBytes) {
-        if (signatures.size() >= 16) return null;
+        // OP_16 is the largest m; 16 signatures is valid.
+        if (signatures.size() > 16) return null;
         ScriptBuilder builder = new ScriptBuilder();
         builder.smallNum(0);
         Iterator<byte[]> var3 = signatures.iterator();

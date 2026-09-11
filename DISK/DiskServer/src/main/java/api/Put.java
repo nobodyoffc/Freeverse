@@ -56,15 +56,39 @@ public class Put extends HttpServlet {
 
         dataLifeDays = Long.parseLong(diskParams.getDataLifeDays());
         //Do request
+        long maxBytes = maxPutBytes(diskParams);
+        if (request.getContentLengthLong() > maxBytes) {
+            replier.replyOtherErrorHttp("Data exceeds the limit of " + maxBytes + " bytes.", response);
+            return;
+        }
         InputStream inputStream = request.getInputStream();
         DiskManager diskHandler = (DiskManager)settings.getManager(Manager.ManagerType.DISK);
-        Hat hat = diskHandler.put(inputStream);
+        Hat hat;
+        try {
+            hat = diskHandler.put(inputStream, maxBytes);
+        } catch (IOException e) {
+            // Nothing was stored, so nothing may be indexed or reported as saved.
+            replier.replyOtherErrorHttp("Failed to store the data: " + e.getMessage(), response);
+            return;
+        }
 
         Map<String,String> dataMap = new HashMap<>();
         dataMap.put(DID, hat.getId());
         String result = updateDataInfoToEs(dataLifeDays, hat.getSize(), hat.getId(),settings);
         dataMap.put(RESULT,result);
         replier.reply0SuccessHttp(dataMap,response);
+    }
+
+    /** The service's maxDataSize in bytes, or DiskManager's default when unset or unreadable. */
+    static long maxPutBytes(DiskParams diskParams) {
+        try {
+            if (diskParams != null && diskParams.getMaxDataSize() != null) {
+                long configured = Long.parseLong(diskParams.getMaxDataSize().trim());
+                if (configured > 0) return configured;
+            }
+        } catch (NumberFormatException ignored) {
+        }
+        return DiskManager.DEFAULT_MAX_PUT_BYTES;
     }
 
     public static String updateDataInfoToEs(long dataLifeDays, long bytesLength, String did, Settings settings) throws IOException {

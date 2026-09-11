@@ -310,12 +310,25 @@ public class Cash extends FcObject {
 
 	public static Cash fromUtxo(UTXO utxo) {
 		Cash cash = new Cash();
+		cash.setId(makeCashId(utxo.getTxid(), utxo.getVout()));
 		cash.setBirthTxId(utxo.getTxid());
 		cash.setBirthIndex(utxo.getVout());
 		cash.setOwner(utxo.getAddress());
 		cash.setLockScript(utxo.getScriptPubKey());
+		if (utxo.getRedeemScript() != null) cash.setRedeemScript(utxo.getRedeemScript());
 		cash.setValue(utils.FchUtils.coinToSatoshi(utxo.getAmount()));
 		cash.setValid(true);
+		return cash;
+	}
+
+	/** As above, with the birth height derived from the confirmation count at `bestHeight`. */
+	public static Cash fromUtxo(UTXO utxo, long bestHeight) {
+		Cash cash = fromUtxo(utxo);
+		if (bestHeight > 0 && utxo.getConfirmations() > 0) {
+			long birthHeight = bestHeight - utxo.getConfirmations() + 1;
+			cash.setBirthHeight(birthHeight);
+			cash.setLastHeight(birthHeight);
+		}
 		return cash;
 	}
 

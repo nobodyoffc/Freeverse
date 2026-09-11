@@ -377,11 +377,14 @@ public class Wallet {
                     log.debug(replyBody.getMessage());
                     break;
                 }
-                if (replyBody.getData() != null) {
-                    cashList.addAll(ObjectUtils.objectToList(replyBody.getData(), Cash.class));//DataGetter.getCashList(fcReplier.getData()));
-                } else return cashList;
-                last = ObjectUtils.objectToList(replyBody.getData(), String.class);//DataGetter.getStringList(fcReplier.getLast());
-            } while (cashList.size() < replyBody.getTotal());
+                if (replyBody.getData() == null) return cashList;
+                List<Cash> page = ObjectUtils.objectToList(replyBody.getData(), Cash.class);
+                cashList.addAll(page);
+                // The cursor is the sort values of the page's last hit, not the page's data; and
+                // a short page, not a total, is what says there is no more.
+                last = replyBody.getLast();
+                if (page.size() < (size > 0 ? size : DEFAULT_DISPLAY_LIST_SIZE) || last == null || last.isEmpty()) break;
+            } while (true);
         } else if (this.nasaClient != null) {
             replyBody = getCashListFromNasaNode(fid, null, true, nasaClient);
             if (replyBody.getCode() != 0) {

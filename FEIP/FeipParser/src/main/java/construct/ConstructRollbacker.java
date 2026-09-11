@@ -1,5 +1,6 @@
 package construct;
 
+import startFEIP.Reparser;
 import constants.OpNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,13 +53,13 @@ public class ConstructRollbacker {
 		JsonUtils.printJson(itemPidList);
 
 		// Query reparse data BEFORE deleting to prevent data loss on crash
-		List<ProtocolHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROTOCOL_HISTORY, PID, PIDS, itemPidList, ProtocolHistory.class);
+		List<ProtocolHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.PROTOCOL_HISTORY, PID, PIDS, itemPidList, lastHeight, ProtocolHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.PROTOCOL, itemPidList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.PROTOCOL_HISTORY, histIdList);
 
-		reparseProtocol(esClient, reparseHistList);
+		error |= reparseProtocol(esClient, reparseHistList);
 
 		return error;
 	}
@@ -132,13 +133,9 @@ public class ConstructRollbacker {
 		return false;
 	}
 	
-	private void reparseProtocol(ElasticsearchClient esClient, List<ProtocolHistory> reparseHistList) throws Exception {
-
-		if(reparseHistList==null)return;
+	private boolean reparseProtocol(ElasticsearchClient esClient, List<ProtocolHistory> reparseHistList) {
 		ConstructParser parser = new ConstructParser();
-		for(ProtocolHistory freeProtocolHist: reparseHistList) {
-			parser.parseProtocol(esClient, freeProtocolHist);
-		}
+		return Reparser.replay("protocol", reparseHistList, h -> parser.parseProtocol(esClient, h));
 	}
 
 	private boolean rollbackService(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -152,13 +149,13 @@ public class ConstructRollbacker {
 		log.warn("If rolling back is interrupted, reparse all effected ids of index 'service': ");
 		JsonUtils.printJson(itemIdList);
 
-		List<ServiceHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SERVICE_HISTORY, SID, SIDS, itemIdList, ServiceHistory.class);
+		List<ServiceHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SERVICE_HISTORY, SID, SIDS, itemIdList, lastHeight, ServiceHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.SERVICE, itemIdList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.SERVICE_HISTORY, histIdList);
 
-		reparseService(esClient, reparseHistList);
+		error |= reparseService(esClient, reparseHistList);
 
 		return error;
 	}
@@ -213,12 +210,9 @@ public class ConstructRollbacker {
 		return resultMap;
 	}
 
-	private void reparseService(ElasticsearchClient esClient, List<ServiceHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
+	private boolean reparseService(ElasticsearchClient esClient, List<ServiceHistory> reparseHistList) {
 		ConstructParser parser = new ConstructParser();
-		for(ServiceHistory serviceHist: reparseHistList) {
-			parser.parseService(esClient, serviceHist);
-		}
+		return Reparser.replay("service", reparseHistList, h -> parser.parseService(esClient, h));
 	}
 
 	private boolean rollbackApp(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -232,13 +226,13 @@ public class ConstructRollbacker {
 		log.warn("If rolling back is interrupted, reparse all effected ids of index 'app': ");
 		JsonUtils.printJson(itemIdList);
 
-		List<AppHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.APP_HISTORY, AID, AIDS, itemIdList, AppHistory.class);
+		List<AppHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.APP_HISTORY, AID, AIDS, itemIdList, lastHeight, AppHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.APP, itemIdList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.APP_HISTORY, histIdList);
 
-		reparseApp(esClient, reparseHistList);
+		error |= reparseApp(esClient, reparseHistList);
 
 		return error;
 	}
@@ -293,12 +287,9 @@ public class ConstructRollbacker {
 		return resultMap;
 	}
 
-	private void reparseApp(ElasticsearchClient esClient, List<AppHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
+	private boolean reparseApp(ElasticsearchClient esClient, List<AppHistory> reparseHistList) {
 		ConstructParser parser = new ConstructParser();
-		for(AppHistory appHist: reparseHistList) {
-			parser.parseApp(esClient, appHist);
-		}
+		return Reparser.replay("app", reparseHistList, h -> parser.parseApp(esClient, h));
 	}
 
 	private boolean rollbackCode(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -312,13 +303,13 @@ public class ConstructRollbacker {
 		log.warn("If rolling back is interrupted, reparse all effected ids of index 'code': ");
 		JsonUtils.printJson((itemIdList));
 
-		List<CodeHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.CODE_HISTORY, CODE_ID, CODE_IDS, itemIdList, CodeHistory.class);
+		List<CodeHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.CODE_HISTORY, CODE_ID, CODE_IDS, itemIdList, lastHeight, CodeHistory.class);
 
 		error |= deleteEffectedItems(esClient, IndicesNames.CODE, itemIdList);
 		if(histIdList!=null&&!histIdList.isEmpty())
 			error |= deleteRolledHists(esClient, IndicesNames.CODE_HISTORY, histIdList);
 
-		reparseCode(esClient, reparseHistList);
+		error |= reparseCode(esClient, reparseHistList);
 
 		return error;
 	}
@@ -373,12 +364,9 @@ public class ConstructRollbacker {
 		return resultMap;
 	}
 
-	private void reparseCode(ElasticsearchClient esClient, List<CodeHistory> reparseHistList) throws Exception {
-		if(reparseHistList==null)return;
+	private boolean reparseCode(ElasticsearchClient esClient, List<CodeHistory> reparseHistList) {
 		ConstructParser parser = new ConstructParser();
-		for(CodeHistory codeHist: reparseHistList) {
-			parser.parseCode(esClient, codeHist);
-		}
+		return Reparser.replay("code", reparseHistList, h -> parser.parseCode(esClient, h));
 	}
 
 }

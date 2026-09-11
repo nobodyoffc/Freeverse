@@ -71,6 +71,8 @@ public class EsUtils {
                         .size(1)
                         .sort(so->so.field(f->f.field("height").order(SortOrder.Desc)))
                 , Block.class);
+        // An empty or freshly recreated block index has no best block; say so rather than throw.
+        if (result.hits() == null || result.hits().hits().isEmpty()) return null;
         return result.hits().hits().get(0).source();
     }
     public static void createIndex(ElasticsearchClient esClient, String index, String mappingJsonStr) {
@@ -374,13 +376,17 @@ public class EsUtils {
 
     public static <T> ArrayList<T> getAllList(ElasticsearchClient esClient, String index, String sortField, SortOrder order, Class<T> clazz) throws IOException {
 
+        // Every page must carry the same sort: search_after is a position in that sort, and the
+        // first page used to have none, so its (empty) sort values could not continue the scan
+        // past READ_MAX. `_doc` breaks ties so equal sortField values are not skipped.
+        List<SortOptions> sortList = new ArrayList<>();
+        sortList.add(SortOptions.of(so -> so.field(f -> f.field(sortField).order(order))));
+        sortList.add(SortOptions.of(so -> so.field(f -> f.field("_doc").order(SortOrder.Asc))));
+
         SearchResponse<T> result = esClient.search(s -> s.index(index)
                         .query(q -> q.matchAll(m -> m))
                         .size(EsUtils.READ_MAX)
-//                .sort(s1 -> s1
-//                        .field(f -> f
-//                                .field(sortField).order(order)
-//                        ))
+                        .sort(sortList)
                 , clazz);
 
         if (result.hits().hits().isEmpty()) return null;
@@ -401,10 +407,7 @@ public class EsUtils {
                 result = esClient.search(s -> s.index(index)
                         .query(q -> q.matchAll(m -> m))
                         .size(EsUtils.READ_MAX)
-                        .sort(s1 -> s1
-                                .field(f -> f
-                                        .field(sortField).order(order)
-                                ))
+                        .sort(sortList)
                         .searchAfter(lastSort1), clazz);
 
                 if (result.hits().hits().isEmpty()) break;
@@ -598,6 +601,18 @@ public class EsUtils {
      * multi-id field were lost once the result set exceeded READ_MAX.
      */
     public static <T> List<T> getHistsForReparse(ElasticsearchClient esClient, String index, String termsField1, String termField2, ArrayList<String> itemIdList, Class<T> clazz) throws ElasticsearchException, IOException {
+        return getHistsForReparse(esClient, index, termsField1, termField2, itemIdList, null, clazz);
+    }
+
+    /**
+     * As above, keeping only histories at or below `maxHeight` (null keeps every height).
+     *
+     * A rollback to height H has to rebuild each entity from the histories that survive it. The
+     * rollbackers read this list before deleting the histories above H, so without the bound the
+     * list still holds the rolled-back operations, and replaying it re-applies exactly what the
+     * rollback was meant to undo.
+     */
+    public static <T> List<T> getHistsForReparse(ElasticsearchClient esClient, String index, String termsField1, String termField2, ArrayList<String> itemIdList, Long maxHeight, Class<T> clazz) throws ElasticsearchException, IOException {
         List<T> historyList = new ArrayList<T>();
         if (itemIdList == null || itemIdList.isEmpty()) return historyList;
 
@@ -613,6 +628,9 @@ public class EsUtils {
             b.should(s1 -> s1.terms(t -> t.field(termsField1).terms(t1 -> t1.value(itemValueList))));
             if (termField2 != null && !termField2.isEmpty()) {
                 b.should(s2 -> s2.terms(t -> t.field(termField2).terms(t1 -> t1.value(itemValueList))));
+            }
+            if (maxHeight != null) {
+                b.filter(f -> f.range(r -> r.field(HEIGHT).lte(JsonData.of(maxHeight))));
             }
             return b.minimumShouldMatch("1");
         }));

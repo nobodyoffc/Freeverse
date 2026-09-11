@@ -33,7 +33,16 @@ public class BlockParser {
 
 		parseBlockHead(blockHeadBytes, block);
 
-		ReadyBlock readyBlock = parseBlockBody(blockBodyBytes, block);
+		ReadyBlock readyBlock;
+		try {
+			readyBlock = parseBlockBody(blockBodyBytes, block);
+		} catch (IncompleteBlockException e) {
+			throw e;
+		} catch (IOException | RuntimeException e) {
+			// A body whose counts or lengths run past its end is the same condition the merkle
+			// check below catches -- a tip block not yet fully flushed -- and must stay retryable.
+			throw new IncompleteBlockException("Block " + block.getId() + " body is malformed: " + e.getMessage());
+		}
 
 		// Verify the body against the header's merkle root. A mismatch means the
 		// block bytes are not a complete, valid block — almost always because the
@@ -127,7 +136,7 @@ public class BlockParser {
 		ReadyBlock readyBlock = new ReadyBlock();
 		ByteArrayInputStream blockInputStream = new ByteArrayInputStream(blockBodyBytes);
 
-		long txCount = utils.FchUtils.parseVarint(blockInputStream).number;
+		long txCount = utils.FchUtils.parseLength(blockInputStream).number;
 		block1.setTxCount((int) txCount);
 
 		LinkedHashMap<String, Tx> txMap = new LinkedHashMap<>();
@@ -236,7 +245,7 @@ public class BlockParser {
 		// Parse output count.
 		// 解析输出数量。
 		utils.FchUtils.VariantResult varintParseResult;
-		varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
+		varintParseResult = utils.FchUtils.parseLength(blockInputStream);
 		long outputCount = varintParseResult.number;
 		byte[] b0 = varintParseResult.rawBytes;
 		rawBytesList.add(b0);
@@ -272,7 +281,7 @@ public class BlockParser {
 
 			// Parse the length of script.
 			// 解析脚本长度。
-			varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
+			varintParseResult = utils.FchUtils.parseLength(blockInputStream);
 			long scriptSize = varintParseResult.number;
 			byte[] b2 = varintParseResult.rawBytes;
 			rawBytesList.add(b2);
@@ -385,7 +394,9 @@ public class BlockParser {
 
 			// Add block and tx information to output./给输出添加区块和交易信息。
 			// Add information where it from/添加来源信息
-			out.setValid(true);
+			// An OP_RETURN output was marked invalid above and is unspendable; this used to
+			// overwrite that and index every OP_RETURN output as a valid UTXO.
+			if (out.isValid() == null) out.setValid(true);
 			out.setBirthTime(tx1.getBlockTime());
 			out.setBirthTxIndex(tx1.getTxIndex());
 			out.setLastTime(tx1.getBlockTime());
@@ -493,7 +504,7 @@ public class BlockParser {
 
 		// Get input count./获得输入数量
 		FchUtils.VariantResult varintParseResult;
-		varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
+		varintParseResult = utils.FchUtils.parseLength(blockInputStream);
 		long inputCount = varintParseResult.number;
 		tx1.setInCount((int) inputCount);
 
@@ -522,7 +533,7 @@ public class BlockParser {
 			input.setId(Cash.makeCashId(b36PreTxIdAndIndex));
 
 			// Read the length of script./读脚本长度。
-			varintParseResult = utils.FchUtils.parseVarint(blockInputStream);
+			varintParseResult = utils.FchUtils.parseLength(blockInputStream);
 			long scriptLength = varintParseResult.number;
 			byte[] bvVarint1 = varintParseResult.rawBytes;
 			rawBytesList.add(bvVarint1);

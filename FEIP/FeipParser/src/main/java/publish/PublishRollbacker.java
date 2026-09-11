@@ -1,5 +1,6 @@
 package publish;
 
+import startFEIP.Reparser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
@@ -45,13 +46,13 @@ public class PublishRollbacker {
         log.warn("If rolling back is interrupted, reparse all effected ids of index 'text': ");
         JsonUtils.printJson(itemIdList);
 
-        List<TextHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEXT_HISTORY, TEXT_ID, TEXT_IDS, itemIdList, TextHistory.class);
+        List<TextHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.TEXT_HISTORY, TEXT_ID, TEXT_IDS, itemIdList, lastHeight, TextHistory.class);
 
         error |= deleteEffectedItems(esClient, IndicesNames.TEXT, itemIdList);
         if (histIdList != null && !histIdList.isEmpty())
             error |= deleteRolledHists(esClient, IndicesNames.TEXT_HISTORY, histIdList);
 
-        reparseText(esClient, reparseHistList);
+        error |= reparseText(esClient, reparseHistList);
 
         return error;
     }
@@ -107,12 +108,9 @@ public class PublishRollbacker {
         return resultMap;
     }
 
-    private void reparseText(ElasticsearchClient esClient, List<TextHistory> reparseHistList) throws Exception {
-        if (reparseHistList == null) return;
-        PublishParser parser = new PublishParser();
-        for (TextHistory textHist : reparseHistList) {
-            parser.parseText(esClient, textHist);
-        }
+    private boolean reparseText(ElasticsearchClient esClient, List<TextHistory> reparseHistList) {
+    	PublishParser parser = new PublishParser();
+    	return Reparser.replay("text", reparseHistList, h -> parser.parseText(esClient, h));
     }
 
 	public boolean rollbackStatement(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -158,13 +156,13 @@ public class PublishRollbacker {
         log.warn("If rolling back is interrupted, reparse all effected ids of index 'remark': ");
         JsonUtils.printJson(itemIdList);
 
-        List<RemarkHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.REMARK_HISTORY, REMARK_ID, REMARK_IDS, itemIdList, RemarkHistory.class);
+        List<RemarkHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.REMARK_HISTORY, REMARK_ID, REMARK_IDS, itemIdList, lastHeight, RemarkHistory.class);
 
         error |= deleteEffectedItems(esClient, IndicesNames.REMARK, itemIdList);
         if (histIdList != null && !histIdList.isEmpty())
             error |= deleteRolledHists(esClient, IndicesNames.REMARK_HISTORY, histIdList);
 
-        reparseRemark(esClient, reparseHistList);
+        error |= reparseRemark(esClient, reparseHistList);
 
         return error;
     }
@@ -219,12 +217,9 @@ public class PublishRollbacker {
         return resultMap;
     }
 
-    private void reparseRemark(ElasticsearchClient esClient, List<RemarkHistory> reparseHistList) throws Exception {
-        if (reparseHistList == null) return;
-        PublishParser parser = new PublishParser();
-        for (RemarkHistory remarkHist : reparseHistList) {
-            parser.parseRemark(esClient, remarkHist);
-        }
+    private boolean reparseRemark(ElasticsearchClient esClient, List<RemarkHistory> reparseHistList) {
+    	PublishParser parser = new PublishParser();
+    	return Reparser.replay("remark", reparseHistList, h -> parser.parseRemark(esClient, h));
     }
 
     private boolean rollbackSound(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -237,13 +232,13 @@ public class PublishRollbacker {
         log.warn("If rolling back is interrupted, reparse all effected ids of index 'sound': ");
         JsonUtils.printJson(itemIdList);
 
-        List<SoundHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SOUND_HISTORY, SOUND_ID, SOUND_IDS, itemIdList, SoundHistory.class);
+        List<SoundHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.SOUND_HISTORY, SOUND_ID, SOUND_IDS, itemIdList, lastHeight, SoundHistory.class);
 
         error |= deleteEffectedItems(esClient, IndicesNames.SOUND, itemIdList);
         if (histIdList != null && !histIdList.isEmpty())
             error |= deleteRolledHists(esClient, IndicesNames.SOUND_HISTORY, histIdList);
 
-        reparseSound(esClient, reparseHistList);
+        error |= reparseSound(esClient, reparseHistList);
 
         return error;
     }
@@ -297,12 +292,9 @@ public class PublishRollbacker {
         return resultMap;
     }
 
-    private void reparseSound(ElasticsearchClient esClient, List<SoundHistory> reparseHistList) throws Exception {
-        if (reparseHistList == null) return;
-        PublishParser parser = new PublishParser();
-        for (SoundHistory soundHist : reparseHistList) {
-            parser.parseSound(esClient, soundHist);
-        }
+    private boolean reparseSound(ElasticsearchClient esClient, List<SoundHistory> reparseHistList) {
+    	PublishParser parser = new PublishParser();
+    	return Reparser.replay("sound", reparseHistList, h -> parser.parseSound(esClient, h));
     }
 
     private boolean rollbackImage(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -315,13 +307,13 @@ public class PublishRollbacker {
         log.warn("If rolling back is interrupted, reparse all effected ids of index 'image': ");
         JsonUtils.printJson(itemIdList);
 
-        List<ImageHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.IMAGE_HISTORY, IMAGE_ID, IMAGE_IDS, itemIdList, ImageHistory.class);
+        List<ImageHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.IMAGE_HISTORY, IMAGE_ID, IMAGE_IDS, itemIdList, lastHeight, ImageHistory.class);
 
         error |= deleteEffectedItems(esClient, IndicesNames.IMAGE, itemIdList);
         if (histIdList != null && !histIdList.isEmpty())
             error |= deleteRolledHists(esClient, IndicesNames.IMAGE_HISTORY, histIdList);
 
-        reparseImage(esClient, reparseHistList);
+        error |= reparseImage(esClient, reparseHistList);
 
         return error;
     }
@@ -375,12 +367,9 @@ public class PublishRollbacker {
         return resultMap;
     }
 
-    private void reparseImage(ElasticsearchClient esClient, List<ImageHistory> reparseHistList) throws Exception {
-        if (reparseHistList == null) return;
-        PublishParser parser = new PublishParser();
-        for (ImageHistory imageHist : reparseHistList) {
-            parser.parseImage(esClient, imageHist);
-        }
+    private boolean reparseImage(ElasticsearchClient esClient, List<ImageHistory> reparseHistList) {
+    	PublishParser parser = new PublishParser();
+    	return Reparser.replay("image", reparseHistList, h -> parser.parseImage(esClient, h));
     }
 
     private boolean rollbackVideo(ElasticsearchClient esClient, long lastHeight) throws Exception {
@@ -393,13 +382,13 @@ public class PublishRollbacker {
         log.warn("If rolling back is interrupted, reparse all effected ids of index 'video': ");
         JsonUtils.printJson(itemIdList);
 
-        List<VideoHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.VIDEO_HISTORY, VIDEO_ID, VIDEO_IDS, itemIdList, VideoHistory.class);
+        List<VideoHistory> reparseHistList = EsUtils.getHistsForReparse(esClient, IndicesNames.VIDEO_HISTORY, VIDEO_ID, VIDEO_IDS, itemIdList, lastHeight, VideoHistory.class);
 
         error |= deleteEffectedItems(esClient, IndicesNames.VIDEO, itemIdList);
         if (histIdList != null && !histIdList.isEmpty())
             error |= deleteRolledHists(esClient, IndicesNames.VIDEO_HISTORY, histIdList);
 
-        reparseVideo(esClient, reparseHistList);
+        error |= reparseVideo(esClient, reparseHistList);
 
         return error;
     }
@@ -455,11 +444,8 @@ public class PublishRollbacker {
         return resultMap;
     }
 
-    private void reparseVideo(ElasticsearchClient esClient, List<VideoHistory> reparseHistList) throws Exception {
-        if (reparseHistList == null) return;
-        PublishParser parser = new PublishParser();
-        for (VideoHistory videoHist : reparseHistList) {
-            parser.parseVideo(esClient, videoHist);
-        }
+    private boolean reparseVideo(ElasticsearchClient esClient, List<VideoHistory> reparseHistList) {
+    	PublishParser parser = new PublishParser();
+    	return Reparser.replay("video", reparseHistList, h -> parser.parseVideo(esClient, h));
     }
 }

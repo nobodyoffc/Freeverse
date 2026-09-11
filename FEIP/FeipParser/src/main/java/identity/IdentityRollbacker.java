@@ -1,5 +1,6 @@
 package identity;
 
+import startFEIP.Reparser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import startFEIP.FeipConstants;
@@ -61,12 +62,12 @@ public class IdentityRollbacker {
 		JsonUtils.printJson(signerList);
 
 		// Query reparse data BEFORE deleting, so it's available even if crash occurs mid-rollback
-		List<FreerHist> reparseList = EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY, SIGNER, null, signerList, FreerHist.class);
+		List<FreerHist> reparseList = EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY, SIGNER, null, signerList, height, FreerHist.class);
 
-		deleteEffectedCids(esClient, signerList);
+		error |= deleteEffectedCids(esClient, signerList);
 		error |= deleteRolledHists(esClient, IndicesNames.FREER_HISTORY, histIdList);
 
-		reparse(esClient, reparseList);
+		error |= reparse(esClient, reparseList);
 
 		return error;
 	}
@@ -102,8 +103,8 @@ public class IdentityRollbacker {
 	 * so that blockchain fields (balance, cash, income, cd, cdd, weight, etc.) written
 	 * by BlockWriter are preserved.
 	 */
-	private void deleteEffectedCids(ElasticsearchClient esClient, ArrayList<String> signerList) throws Exception {
-		if (signerList == null || signerList.isEmpty()) return;
+	private boolean deleteEffectedCids(ElasticsearchClient esClient, ArrayList<String> signerList) throws Exception {
+		if (signerList == null || signerList.isEmpty()) return false;
 
 		Map<String, Object> clearFields = new HashMap<>();
 		for (String field : FeipConstants.FREER_FEIP_FIELDS) {
@@ -117,7 +118,12 @@ public class IdentityRollbacker {
 					.id(signer)
 					.action(a -> a.doc(clearFields))));
 		}
-		esClient.bulk(br.build());
+		BulkResponse response = esClient.bulk(br.build());
+		if (response.errors()) {
+			log.error("Rollback: clearing FEIP fields on freer reported errors");
+			return true;
+		}
+		return false;
 	}
 
 	private boolean deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {
@@ -129,13 +135,9 @@ public class IdentityRollbacker {
 		return false;
 	}
 
-	private void reparse(ElasticsearchClient esClient, List<FreerHist> reparseList) throws Exception {
-
-		if(reparseList==null)return;
+	private boolean reparse(ElasticsearchClient esClient, List<FreerHist> reparseList) {
 		IdentityParser parser = new IdentityParser();
-		for(FreerHist freerHist : reparseList) {
-			parser.parseCidInfo(esClient, freerHist);
-		}
+		return Reparser.replay("freer", reparseList, h -> parser.parseCidInfo(esClient, h));
 	}
 
 	private boolean rollbackRepu(ElasticsearchClient esClient, long height) throws Exception {
@@ -153,14 +155,14 @@ public class IdentityRollbacker {
 		// the rows just removed and "restore" the pre-rollback totals.
 		esClient.indices().refresh(r->r.index(IndicesNames.REPUTATION_HISTORY));
 
-		reviseCidRepuAndHot(esClient,rateeList);
+		error |= reviseCidRepuAndHot(esClient,rateeList);
 
 		return error;
 
 	}
 
 	private Map<String, ArrayList<String>> getEffectedCidAndRepuHistory(ElasticsearchClient esClient, long height) throws Exception {
-		List<Hit<RepuHist>> effectedHits = EsUtils.scanHitsAboveHeight(esClient, IndicesNames.REPUTATION_HISTORY, "height", height, true, RepuHist.class);
+		List<Hit<RepuHist>> effectedHits = EsUtils.scanHitsAboveHeight(esClient, IndicesNames.REPUTATION_HISTORY, "height", height, RepuHist.class);
 		
 		Set<String> rateeSet = new HashSet<String>();
 		ArrayList<String> idList = new ArrayList<String>();
@@ -183,7 +185,11 @@ public class IdentityRollbacker {
 		
 		return resultMap;
 	}
-	public void reviseCidRepuAndHot(ElasticsearchClient esClient, ArrayList<String> rateeList) throws Exception {
+	/**
+	 * @return true if any of the bulk updates reported errors
+	 */
+	public boolean reviseCidRepuAndHot(ElasticsearchClient esClient, ArrayList<String> rateeList) throws Exception {
+		boolean error = false;
 		int i = 0;
 		while(true) {
 			ArrayList<String> rateeSubList = new ArrayList<String> ();
@@ -207,12 +213,12 @@ public class IdentityRollbacker {
 				reviseMapMap.put(ratee, zeroed);
 			}
 
-			updataRepuAndHot(esClient,reviseMapMap);
+			error |= updataRepuAndHot(esClient,reviseMapMap);
 
 			i += rateeSubList.size();
 			if(i>=rateeList.size())break;
 		}
-
+		return error;
 	}
 	private Map<String, HashMap<String, Long>> aggsRepuAndHot(ElasticsearchClient esClient,
 			ArrayList<String> rateeSubList) throws Exception {
@@ -231,8 +237,12 @@ public class IdentityRollbacker {
 										.field("ratee")
 										.terms(t1->t1.value(fieldValueList))))
 						.aggregations("rateeTerm",a1->a1
+								// One bucket per ratee asked for. Without a size the terms
+								// aggregation returns 10 buckets, and the caller zeroes every
+								// ratee it did not get a bucket for.
 								.terms(t2->t2
-										.field("ratee"))
+										.field("ratee")
+										.size(rateeSubList.size()))
 								.aggregations("repuSum",a2->a2.sum(s1->s1.field("reputation")))
 								.aggregations("hotSum",a2->a2.sum(s1->s1.field("hot")))
 								))
@@ -258,8 +268,8 @@ public class IdentityRollbacker {
 		 }
 		return reviseMapMap;
 	}
-	private void updataRepuAndHot(ElasticsearchClient esClient, Map<String, HashMap<String, Long>> reviseMapMap) throws Exception {
-		if(reviseMapMap.isEmpty())return;
+	private boolean updataRepuAndHot(ElasticsearchClient esClient, Map<String, HashMap<String, Long>> reviseMapMap) throws Exception {
+		if(reviseMapMap.isEmpty())return false;
 
 		// Weight is derived from reputation, so restoring reputation
 		// without recomputing it leaves a number that was calculated
@@ -304,8 +314,12 @@ public class IdentityRollbacker {
 									.doc(doc))));
 		}
 		br.timeout(t->t.time("600s"));
-		esClient.bulk(br.build());
-
+		BulkResponse response = esClient.bulk(br.build());
+		if (response.errors()) {
+			log.error("Rollback: revising reputation and hot on freer reported errors");
+			return true;
+		}
+		return false;
 	}
 
 
