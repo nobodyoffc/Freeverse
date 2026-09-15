@@ -34,8 +34,8 @@ public class CryptoDataByte {
     private static final String ALG_PID_PREFIX_BitCore = "e308bc027946";                  //PID:e308bc02794604f6819dd86ae89d56a70f48c5d17263287d90c6ae2b5320651d
 
     // Whether toBundle() writes Password ciphers as type 4 (with a KDF id) instead of the
-    // legacy type 3. Stays false until every reader accepts type 4.
-    public static final boolean WRITE_PASSWORD_BUNDLE_WITH_KDF = false;
+    // legacy type 3. On since the release after every reader learned type 4 (FTSP30).
+    public static final boolean WRITE_PASSWORD_BUNDLE_WITH_KDF = true;
 
     private EncryptType type;
     private AlgorithmId alg;
