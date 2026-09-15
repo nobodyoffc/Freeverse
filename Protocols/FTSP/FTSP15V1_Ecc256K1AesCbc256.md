@@ -44,13 +44,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|3ea47cd61381bdd97f3e36d4c71c8075a684a860db46791cc505abefbb8e923e|
 
 Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**Ecc256K1AesCbc256** is the Freeverse **legacy** profile **secp256k1 ECDH → SHA-512 key derivation → AES-256-CBC** (PKCS#7). The **16-byte** nonce is both the **CBC IV** and the **leading** part of the KDF input. ECDH uses **`Ecc256K1.getSharedSecret`** (raw **`BigInteger.toByteArray()`**, **not** the 32-byte padded encoding in [FTSP11](FTSP11V1_Ecc256K1AesGcm256.md)). Symmetric encryption, **`did`**, and **`sum`** follow [FTSP14](FTSP14V1_AesCbc256.md). **`AlgorithmId`**: **`EccK1AesCbc256@No1_NrC7`**; bundle prefix last byte **`0x02`**. Envelope: [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
+**Ecc256K1AesCbc256** is the Freeverse **legacy** profile **secp256k1 ECDH → SHA-512 key derivation → AES-256-CBC** (PKCS#7). The **16-byte** nonce is both the **CBC IV** and the **leading** part of the KDF input. ECDH uses **`Ecc256K1.getSharedSecret`** (raw **`BigInteger.toByteArray()`**, **not** the 32-byte padded encoding in [FTSP11](FTSP11V1_Ecc256K1AesGcm256.md)). Symmetric encryption, **`did`**, and **`sum`** follow [FTSP14](FTSP14V1_AesCbc256.md). **`AlgorithmId`**: **`EccK1AesCbc256@No1_NrC7`**; bundle prefix (6 bytes) **`3ea47cd61381`**. Envelope: [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
 
 ## Motivation
 
@@ -75,7 +75,7 @@ Mixing FTSP11 ECDH/HKDF with this **`AlgorithmId`** will **not** interoperate.
 |---|---|
 |Display name (JSON `alg`)|`EccK1AesCbc256@No1_NrC7`|
 |Enum (reference)|`AlgorithmId.FC_EccK1AesCbc256_No1_NrC7`|
-|Bundle `algBytes` (6 bytes)|`00 00 00 00 00 02`|
+|Bundle `algBytes` (6 bytes)|`3e a4 7c d6 13 81`|
 
 ### Parameters
 

@@ -25,6 +25,11 @@ public final class CryptoConstants {
     public static final int KEY_NAME_LENGTH = 6;
     public static final int PUBKEY_COMPRESSED_LENGTH = 33;
     public static final int PUBKEY_X25519_LENGTH = 32;
+    public static final int KDF_ID_LENGTH = 1;
+
+    // Bundle type byte for EncryptType.Password with a recorded KDF id (FTSP30).
+    // Type byte 3 remains the legacy Password layout, which records no KDF.
+    public static final byte BUNDLE_TYPE_PASSWORD_WITH_KDF = 4;
 
     // GCM tag size (bits, as required by GCMParameterSpec)
     public static final int GCM_TAG_LENGTH_BITS = 128;

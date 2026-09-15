@@ -122,6 +122,8 @@ Every FTSP protocol SHOULD include test vectors — specific input/output pairs 
 
 **FC-JDK regression suite:** [FtspProtocolVectorTest.java](../../FC-JDK/src/test/java/core/crypto/FtspProtocolVectorTest.java) exercises **FTSP11–FTSP24** together (`mvn test -pl FC-JDK -Dtest=FtspProtocolVectorTest`). Individual FTSP documents link the relevant test method where vectors were pinned.
 
+**Cross-implementation vectors:** [vectors/](vectors/) holds language-neutral JSON vectors — KDFs, symmetric JSON ciphers, bundles, phrase keys — generated from FC-JDK. Every implementation (FC-JDK, the Android FC-AJDK copies, SafeForMac, FreerForMac) MUST pass them; see [vectors/README.md](vectors/README.md).
+
 #### 2.1 Shared example keys (developer JSON samples)
 
 FTSP11–FTSP24 include a **Developer JSON example** with wire-format JSON matching FC-JDK `CryptoDataByte.toNiceJson()` / `Signature.toNiceJson()` (fields such as `alg`, `cipher`, `iv`, `sum`, `type`, `fid`, `sign`). The same identities are reused across those samples unless the protocol states otherwise (e.g. [FTSP18](FTSP18V1_X25519.md) / [FTSP19](FTSP19V1_X25519AesGcm256.md) use **raw 32-byte X25519 scalars**, not secp256k1 FID keys).
@@ -244,4 +246,9 @@ More categories can be added as needed.
 |22|[BTC_EcdsaSignMsg](FTSP22V1_BTC_EcdsaSignMsg.md)|Signing|Bitcoin message ECDSA (`ECKey.signMessage`); `BTC_EcdsaSignMsg@No1_NrC7`; see FVEP7.|
 |23|[Sha256SymSignMsg](FTSP23V1_Sha256SymSignMsg.md)|Signing|Double-SHA256 over `msg ‖ symkey`; `FC_Sha256SymSignMsg@No1_NrC7`; see FVEP7.|
 |24|[SchnorrSignMsg](FTSP24V1_SchnorrSignMsg.md)|Signing|BIP340-style Schnorr over `sha256x2(msg)`; `FC_SchnorrSignMsg@No1_NrC7`; see FVEP7.|
-|25|[PasswordToSymkey](FTSP25V1_PasswordToSymkey.md)|Hashing / KeyDerivation|SHA256-based password-to-symkey KDF: `symkey = SHA256(SHA256(password) ‖ iv)`; used by `EncryptType.Password` before dispatching to FTSP12/14/20.|
+|25|[PasswordToSymkey](FTSP25V1_PasswordToSymkey.md)|Hashing / KeyDerivation|Legacy SHA256-based password KDF: `symkey = SHA256(SHA256(password) ‖ iv)`; KDF id `Sha256Iv@No1_NrC7`, bundle KDF byte `0x01`. Decrypt-only; superseded by FTSP29.|
+|26|[ChaCha20Poly1305](FTSP26V1_ChaCha20Poly1305.md)|Encryption|ChaCha20-Poly1305 AEAD; 32-byte key, 12-byte nonce, 128-bit tag, no `sum`; `ChaCha20Poly1305@No1_NrC7`.|
+|27|[EccK1ChaCha20Poly1305](FTSP27V1_EccK1ChaCha20Poly1305.md)|Encryption / KeyExchange|secp256k1 ECDH + HKDF (`hkdf-chacha20` info) + FTSP26; `EccK1ChaCha20Poly1305@No1_NrC7`. Reserved: the dedicated helper is not yet implemented.|
+|28|[PhraseToPriKey](FTSP28V1_PhraseToPriKey.md)|Hashing / KeyDerivation|Brainwallet: passphrase → secp256k1 private key via Argon2id (`Argon2id@No1_NrC7` parameters, empty salt).|
+|29|[Argon2idPasswordToSymkey](FTSP29V1_Argon2idPasswordToSymkey.md)|Hashing / KeyDerivation|Default `EncryptType.Password` KDF: Argon2id (t=3, 64 MiB, p=1), salt = IV; KDF id `Argon2id@No1_NrC7`, bundle KDF byte `0x02`.|
+|30|[CryptoBundle](FTSP30V1_CryptoBundle.md)|Encoding|Binary `CryptoDataByte` bundle: algorithm PID prefix, type byte (incl. type 4 = Password + KDF id), keys, IV, cipher, `sum`; KDF registry; which profiles new writes may use.|

@@ -86,13 +86,12 @@ The public key doubles as both the encryption key and the node's identity. No se
 For DATA and ACK packets, the payload after the 21-byte header (as defined in FUDP1) is an encrypted bundle in CryptoDataByte format per FTSP11:
 
 ```
-Encrypted Bundle (CryptoDataByte format per FTSP11):
-  - Ciphertext (variable length, includes AES-GCM 128-bit auth tag)
-  - IV (12 bytes, random per packet)
-  - Type indicator: AsyTwoWay
+Encrypted Bundle (layout per FTSP30, cipher per FTSP11), in wire order:
+  - Algorithm ID (6 bytes): a5acd7077805 = EccK1AesGcm256@No1_NrC7
+  - Type (1 byte): 2 = AsyTwoWay
   - Public Key A (33 bytes, sender's compressed public key)
-  - Public Key B (33 bytes, receiver's compressed public key)
-  - Algorithm ID: "EccK1AesGcm256@No1_NrC7"
+  - IV (12 bytes, random per packet)
+  - Ciphertext (variable length, includes AES-GCM 128-bit auth tag)
 ```
 
 The plaintext before encryption has the following layout:
@@ -147,7 +146,7 @@ The plaintext HELLO/PUBLIC_KEY exchange is vulnerable to man-in-the-middle attac
 
 - Once the first encrypted packet is sent, the ECDH shared secret binds both parties' identities cryptographically.
 - Applications that require authentication SHOULD verify the peer's public key or FID through an out-of-band mechanism (e.g., blockchain-published identity records).
-- The CryptoDataByte bundle in every encrypted packet includes both public keys, allowing either party to verify the peer's identity on every packet.
+- The CryptoDataByte bundle in every encrypted packet carries the sender's public key (`pubkeyA`), so the receiver can verify the peer's identity on every packet. The receiver's own public key is not carried; it is implied by which private key opens the packet.
 
 An attacker who intercepts the HELLO/PUBLIC_KEY exchange and substitutes their own public key would need to maintain an active man-in-the-middle position for the entire connection, decrypting and re-encrypting every packet. Out-of-band public key verification eliminates this attack.
 
@@ -283,7 +282,7 @@ Applications that require forward secrecy MUST implement ephemeral key exchange 
 
 ### 2. Identity Binding
 
-The peer's public key in the CryptoDataByte bundle provides identity binding on every encrypted packet. An attacker cannot inject packets into an existing connection without possessing the private key corresponding to the sender's public key embedded in the bundle. Tampering with the public key fields in the bundle will cause decryption failure due to ECDH key mismatch.
+The peer's public key in the CryptoDataByte bundle provides identity binding on every encrypted packet. An attacker cannot inject packets into an existing connection without possessing the private key corresponding to the sender's public key embedded in the bundle. Tampering with the public key field in the bundle will cause decryption failure due to ECDH key mismatch.
 
 ### 3. Replay Protection
 

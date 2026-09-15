@@ -247,20 +247,68 @@ public class Decryptor {
         return decryptByPassword(cryptoDataByte, password);
     }
 
+    /**
+     * Decrypts a Password cipher. A cipher that records its KDF (JSON {@code kdf}, or a type-4
+     * bundle) runs only that KDF. One that doesn't -- a type-3 bundle, or JSON written before
+     * KDFs were recorded -- tries Argon2id and then Sha256Iv, so old and new ciphers both open.
+     */
     @NotNull
-    private static CryptoDataByte decryptByPassword(@NotNull CryptoDataByte cryptoDataByte, @NotNull char[] password) {
-        Kdf kdf = cryptoDataByte.getKdf() != null ? cryptoDataByte.getKdf() : Kdf.Sha256Iv_No1_NrC7;
-        byte[] symkey = kdf.deriveSymkey(password, cryptoDataByte.getIv());
-        cryptoDataByte.setType(EncryptType.Symkey);
-        cryptoDataByte.setSymkey(symkey);
-        decryptBySymkey(cryptoDataByte);
+    public static CryptoDataByte decryptByPassword(@NotNull CryptoDataByte cryptoDataByte, @NotNull char[] password) {
+        Kdf[] candidates = cryptoDataByte.getKdf() != null
+                ? new Kdf[]{cryptoDataByte.getKdf()}
+                : new Kdf[]{Kdf.Argon2id_No1_NrC7, Kdf.Sha256Iv_No1_NrC7};
+        CryptoDataByte attempt = null;
+        Kdf matched = null;
+        for (Kdf kdf : candidates) {
+            // Each attempt decrypts a fresh copy, so a failed KDF leaves no data or error code behind.
+            attempt = copyCipherFields(cryptoDataByte);
+            attempt.setType(EncryptType.Symkey);
+            attempt.setSymkey(kdf.deriveSymkey(password, cryptoDataByte.getIv()));
+            decryptBySymkey(attempt);
+            if (isSuccess(attempt)) {
+                matched = kdf;
+                break;
+            }
+        }
+        // Callers read the result from either the argument or the return value, so fill in both.
         cryptoDataByte.setType(EncryptType.Password);
-        cryptoDataByte.setKdf(kdf);
+        if (matched != null) cryptoDataByte.setKdf(matched);
+        cryptoDataByte.setSymkey(attempt.getSymkey());
+        cryptoDataByte.setData(attempt.getData());
+        cryptoDataByte.setDid(attempt.getDid());
+        cryptoDataByte.setCodeMessage(attempt.getCode(), attempt.getMessage());
         // Delay on failure to mitigate brute-force attacks
-        if (cryptoDataByte.getCode() != null && cryptoDataByte.getCode() != 0) {
+        if (matched == null) {
             try { Thread.sleep(200); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
         }
         return cryptoDataByte;
+    }
+
+    public static CryptoDataByte decryptByPassword(String cipherJson, @NotNull String password) {
+        CryptoDataByte cryptoDataByte;
+        try {
+            cryptoDataByte = CryptoDataByte.fromJson(cipherJson);
+        } catch (Exception e) {
+            cryptoDataByte = new CryptoDataByte();
+            cryptoDataByte.setCodeMessage(CodeMessage.Code4013BadCipher);
+            return cryptoDataByte;
+        }
+        return decryptByPassword(cryptoDataByte, password.toCharArray());
+    }
+
+    private static CryptoDataByte copyCipherFields(CryptoDataByte source) {
+        CryptoDataByte copy = new CryptoDataByte();
+        copy.setAlg(source.getAlg());
+        copy.setIv(source.getIv());
+        copy.setCipher(source.getCipher());
+        copy.setSum(source.getSum());
+        copy.setKeyName(source.getKeyName());
+        return copy;
+    }
+
+    private static boolean isSuccess(CryptoDataByte cryptoDataByte) {
+        if (cryptoDataByte.getCode() != null) return cryptoDataByte.getCode() == 0;
+        return cryptoDataByte.getData() != null;
     }
 
     public CryptoDataByte decryptJsonBySymkey(@NotNull String cryptoDataJson, @NotNull byte[]symkey) {
@@ -499,36 +547,15 @@ public class Decryptor {
 //        return decryptBySymkey(cipher,iv,key,sum,algBytes);
     }
     public CryptoDataByte decryptBundleByPassword(@NotNull byte[]bundle, @NotNull char[] password) {
-        // Bundles carry no KDF marker, so try the new default (Argon2id) first and
-        // fall back to the legacy Sha256Iv KDF for data encrypted before the change.
+        // A type-4 bundle names its KDF; a legacy type-3 bundle doesn't, and decryptByPassword
+        // then tries Argon2id and Sha256Iv in turn.
         CryptoDataByte parsed = CryptoDataByte.fromBundle(bundle);
         if (parsed == null) {
             CryptoDataByte err = new CryptoDataByte();
             err.setCodeMessage(CodeMessage.Code4013BadCipher);
             return err;
         }
-        byte[] iv = parsed.getIv();
-
-        byte[] argonKey = Kdf.Argon2id_No1_NrC7.deriveSymkey(password, iv);
-        CryptoDataByte attempt = decryptBundleBySymkey(bundle, argonKey);
-        if (attempt != null && attempt.getCode() != null && attempt.getCode() == 0) {
-            attempt.setType(EncryptType.Password);
-            attempt.setKdf(Kdf.Argon2id_No1_NrC7);
-            return attempt;
-        }
-
-        byte[] legacyKey = Kdf.Sha256Iv_No1_NrC7.deriveSymkey(password, iv);
-        CryptoDataByte legacy = decryptBundleBySymkey(bundle, legacyKey);
-        if (legacy != null) {
-            legacy.setType(EncryptType.Password);
-            if (legacy.getCode() != null && legacy.getCode() == 0) {
-                legacy.setKdf(Kdf.Sha256Iv_No1_NrC7);
-                return legacy;
-            }
-        }
-        // Both KDFs failed; apply brute-force mitigation delay before returning.
-        try { Thread.sleep(200); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-        return legacy;
+        return decryptByPassword(parsed, password);
     }
 
     public CryptoDataByte decryptBundleByAsyOneWay(@NotNull byte[] bundle, @NotNull byte[]prikey){

@@ -12,13 +12,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-05-31|
-|PID||
+|PID|b1788c3b73208c85f0afdec4bc5c366755c2f9de07dc01973d877fc1b31010a3|
 
 Parent: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**ChaCha20-Poly1305** (reference) is the **AEAD** counterpart of plain ChaCha20 ([FTSP20](FTSP20V1_ChaCha20.md)): **`Cipher.getInstance("ChaCha20-Poly1305")`**, **32-byte** key, **12-byte** nonce/IV, **`GCMParameterSpec(128, iv)`** (RFC 8439). Unlike [FTSP20](FTSP20V1_ChaCha20.md), authentication is **built-in** via the **128-bit Poly1305 tag** appended to the ciphertext (**`cipher` = ciphertext ∥ tag**), so there is **no `sum`** — integrity is provided by the tag, exactly as in **AES-GCM** ([FTSP12](FTSP12V1_AesGcm256.md)). The reference sets **`did = SHA256( SHA256(plaintext) )`** during encrypt (Guava SHA-256 over plaintext, then **`Decryptor.sha256`**). **`AlgorithmId`**: **`ChaCha20Poly1305@No1_NrC7`**; bundle last byte **`0x08`**.
+**ChaCha20-Poly1305** (reference) is the **AEAD** counterpart of plain ChaCha20 ([FTSP20](FTSP20V1_ChaCha20.md)): **`Cipher.getInstance("ChaCha20-Poly1305")`**, **32-byte** key, **12-byte** nonce/IV, **`GCMParameterSpec(128, iv)`** (RFC 8439). Unlike [FTSP20](FTSP20V1_ChaCha20.md), authentication is **built-in** via the **128-bit Poly1305 tag** appended to the ciphertext (**`cipher` = ciphertext ∥ tag**), so there is **no `sum`** — integrity is provided by the tag, exactly as in **AES-GCM** ([FTSP12](FTSP12V1_AesGcm256.md)). The reference sets **`did = SHA256( SHA256(plaintext) )`** during encrypt (Guava SHA-256 over plaintext, then **`Decryptor.sha256`**). **`AlgorithmId`**: **`ChaCha20Poly1305@No1_NrC7`**; bundle prefix (6 bytes) **`b1788c3b7320`**.
 
 ## Specification
 
@@ -33,7 +33,7 @@ Parent: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 |Item|Value|
 |---|---|
 |`EncryptType`|**Symkey** (byte **0**)|
-|Bundle `algBytes` (6 bytes)|`00 00 00 00 00 08`|
+|Bundle `algBytes` (6 bytes)|`b1 78 8c 3b 73 20`|
 |Binary bundle after `algBytes` + type|**`keyName` [6]** + **`iv` [12]** + **`cipher` [variable, ciphertext ∥ tag]**|
 |`keyName`|First **6** bytes of **`SHA256(symkey)`** (FVEP8)|
 |`sum`|Omitted for this profile (AEAD)|

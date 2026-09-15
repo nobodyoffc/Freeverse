@@ -19,8 +19,8 @@ import java.nio.charset.StandardCharsets;
  * so parameter changes require minting a new Kdf id.
  */
 public enum Kdf {
-    Sha256Iv_No1_NrC7(Constants.SHA256_IV_NO1_NRC7),
-    Argon2id_No1_NrC7(Constants.ARGON2ID_NO1_NRC7);
+    Sha256Iv_No1_NrC7(Constants.SHA256_IV_NO1_NRC7, (byte) 0x01),
+    Argon2id_No1_NrC7(Constants.ARGON2ID_NO1_NRC7, (byte) 0x02);
 
     public static final int ARGON2ID_ITERATIONS = 3;
     public static final int ARGON2ID_MEMORY_KIB = 65536;
@@ -28,13 +28,28 @@ public enum Kdf {
     public static final int DERIVED_KEY_LEN = 32;
 
     private final String displayName;
+    /** Registry byte written into type-4 Password bundles (FTSP30). Never reuse or renumber. */
+    private final byte id;
 
-    Kdf(String displayName) {
+    Kdf(String displayName, byte id) {
         this.displayName = displayName;
+        this.id = id;
     }
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public byte getId() {
+        return id;
+    }
+
+    /** @return the Kdf registered under {@code id}, or null if the byte is not registered. */
+    public static Kdf fromId(byte id) {
+        for (Kdf k : Kdf.values()) {
+            if (k.id == id) return k;
+        }
+        return null;
     }
 
     public byte[] deriveSymkey(char[] password, byte[] salt) {

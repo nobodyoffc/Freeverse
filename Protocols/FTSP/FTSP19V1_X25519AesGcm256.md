@@ -12,13 +12,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|b4a25b3c3043105fd3a568a628bf2edfb2ae543c229f491276c0d166a4de46ee|
 
 Parent: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**X25519AesGcm256** composes **[FTSP18](FTSP18V1_X25519.md)** (32-byte keys, 32-byte shared secret), **[FTSP13](FTSP13V1_HKDF.md)** HKDF with **`info = "hkdf"`** and **12-byte** salt = nonce, and **[FTSP12](FTSP12V1_AesGcm256.md)** AES-256-GCM (no separate **`sum`**). **`AlgorithmId`**: **`X25519AesGcm256@No1_NrC7`**; bundle last byte **`0x05`**; **`pubkeyA`** in bundles is **32** bytes (not 33 like secp256k1).
+**X25519AesGcm256** composes **[FTSP18](FTSP18V1_X25519.md)** (32-byte keys, 32-byte shared secret), **[FTSP13](FTSP13V1_HKDF.md)** HKDF with **`info = "hkdf"`** and **12-byte** salt = nonce, and **[FTSP12](FTSP12V1_AesGcm256.md)** AES-256-GCM (no separate **`sum`**). **`AlgorithmId`**: **`X25519AesGcm256@No1_NrC7`**; bundle prefix (6 bytes) **`b4a25b3c3043`**; **`pubkeyA`** in bundles is **32** bytes (not 33 like secp256k1).
 
 ## Composition (normative)
 

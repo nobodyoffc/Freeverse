@@ -12,13 +12,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|355319f84bd534be45548621edf56ebd467e8905d78cfe8c8741bb8555f76d4a|
 
 Parent: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**EccK1ChaCha20** chains **secp256k1 ECDH** with **32-byte** shared secret (**`Ecc256K1Hkdf.getSharedSecret`** — same encoding as [FTSP11](FTSP11V1_Ecc256K1AesGcm256.md)), **[FTSP13](FTSP13V1_HKDF.md)** with **`info = ASCII "hkdf-chacha20"`** (not the string **`hkdf`**), **12-byte** salt = nonce, and **[FTSP20](FTSP20V1_ChaCha20.md)** ChaCha20 encryption (including **`did`** + **`sum`**). **`AlgorithmId`**: **`EccK1ChaCha20@No1_NrC7`**; bundle last byte **`0x07`**.
+**EccK1ChaCha20** chains **secp256k1 ECDH** with **32-byte** shared secret (**`Ecc256K1Hkdf.getSharedSecret`** — same encoding as [FTSP11](FTSP11V1_Ecc256K1AesGcm256.md)), **[FTSP13](FTSP13V1_HKDF.md)** with **`info = ASCII "hkdf-chacha20"`** (not the string **`hkdf`**), **12-byte** salt = nonce, and **[FTSP20](FTSP20V1_ChaCha20.md)** ChaCha20 encryption (including **`did`** + **`sum`**). **`AlgorithmId`**: **`EccK1ChaCha20@No1_NrC7`**; bundle prefix (6 bytes) **`355319f84bd5`**.
 
 ## Composition (normative)
 

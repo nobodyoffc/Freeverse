@@ -33,6 +33,10 @@ public class CryptoDataByte {
     private static final String ALG_PID_PREFIX_EccK1ChaCha20Poly1305 = "d1691132aee1";    //PID:d1691132aee137b59002552b2909f8a33b9cbfcbbf3ca12bad20965e2f968a59
     private static final String ALG_PID_PREFIX_BitCore = "e308bc027946";                  //PID:e308bc02794604f6819dd86ae89d56a70f48c5d17263287d90c6ae2b5320651d
 
+    // Whether toBundle() writes Password ciphers as type 4 (with a KDF id) instead of the
+    // legacy type 3. Stays false until every reader accepts type 4.
+    public static final boolean WRITE_PASSWORD_BUNDLE_WITH_KDF = false;
+
     private EncryptType type;
     private AlgorithmId alg;
     private Kdf kdf;
@@ -150,9 +154,8 @@ public class CryptoDataByte {
             return null; // sum is required but missing for non-GCM algorithms
         }
 
-        if (type.equals(EncryptType.Symkey) || type.equals(EncryptType.Password)) {
-            if (keyName == null) return null;
-        }
+        // Only Symkey bundles carry keyName; Password bundles never have, so don't require it.
+        if (type.equals(EncryptType.Symkey) && keyName == null) return null;
 
         // Create algorithm byte array: the first 12 hex chars (6 bytes) of each
         // algorithm's on-chain protocol PID. See ALG_PID_PREFIX_* constants.
@@ -180,8 +183,10 @@ public class CryptoDataByte {
             // Write algBytes (6 bytes)
             outputStream.write(algBytes);
 
-            // Write EncryptType (1 byte)
-            outputStream.write(type.getNumber());
+            // Write EncryptType (1 byte). A Password cipher that knows its KDF is written as
+            // type 4 followed by the KDF id; otherwise as legacy type 3 with no KDF recorded.
+            boolean writeKdf = type == EncryptType.Password && kdf != null && WRITE_PASSWORD_BUNDLE_WITH_KDF;
+            outputStream.write(writeKdf ? CryptoConstants.BUNDLE_TYPE_PASSWORD_WITH_KDF : type.getNumber());
 
             // Conditionally write pubKeyA based on EncryptType
             if (type == EncryptType.AsyOneWay || type == EncryptType.AsyTwoWay) {
@@ -192,6 +197,10 @@ public class CryptoDataByte {
             // Conditionally write keyName based on EncryptType
             if (type == EncryptType.Symkey) {
                 outputStream.write(keyName);
+            }
+
+            if (writeKdf) {
+                outputStream.write(kdf.getId());
             }
 
             // Write iv (12 or 16 bytes depending on algorithm)
@@ -268,7 +277,8 @@ public class CryptoDataByte {
         // bundle threw ArrayIndexOutOfBounds instead of being rejected.
         byte typeByte = bundle[6];
         offset++;
-        EncryptType type = EncryptType.fromNumber(typeByte); // Assuming EncryptType has a method to get type from a number
+        boolean hasKdfId = typeByte == CryptoConstants.BUNDLE_TYPE_PASSWORD_WITH_KDF;
+        EncryptType type = hasKdfId ? EncryptType.Password : EncryptType.fromNumber(typeByte);
 
         if (type == null) return null;
 
@@ -292,6 +302,14 @@ public class CryptoDataByte {
             System.arraycopy(bundle, offset, keyName, 0, CryptoConstants.KEY_NAME_LENGTH);
             cryptoData.setKeyName(keyName);
             offset += CryptoConstants.KEY_NAME_LENGTH;
+        }
+
+        if (hasKdfId) {
+            if (bundle.length < offset + CryptoConstants.KDF_ID_LENGTH) return null;
+            Kdf kdf = Kdf.fromId(bundle[offset]);
+            if (kdf == null) return null; // An unregistered KDF can't be decrypted; reject rather than guess.
+            cryptoData.setKdf(kdf);
+            offset += CryptoConstants.KDF_ID_LENGTH;
         }
 
         // Extract iv (length depends on algorithm: 12 bytes for GCM/ChaCha20, 16 bytes for CBC)
@@ -627,6 +645,12 @@ public class CryptoDataByte {
     public static CryptoDataByte fromBase64(String base64) {
         byte[] bundle = Base64.getDecoder().decode(base64);
         return fromBundle(bundle);
+    }
+
+    public String toBase64() {
+        byte[] bundle = toBundle();
+        if(bundle==null)return null;
+        return Base64.getEncoder().encodeToString(bundle);
     }
 
     public void printCodeMessage() {

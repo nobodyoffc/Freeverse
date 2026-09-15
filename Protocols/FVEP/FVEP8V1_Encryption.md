@@ -50,10 +50,11 @@ Applications need one consistent model for “encrypted payloads”: whether the
 |---|---|
 |**EncryptType**|Enumerates how the **content encryption key (symkey)** is established or used.|
 |**Symkey (0)**|A **32-byte** symmetric key encrypts the plaintext directly (after optional algorithm-specific setup). This is the **base** mode: other types derive a symkey (or equivalent) before applying the symmetric cipher.|
-|**Password (3)**|A user **password** (UTF-8, SHOULD be at most **64 bytes** before KDF) is converted to a symkey using the **IV** embedded in the payload: `symkey = SHA-256( SHA-256(passwordUTF8) \|\| iv )` (byte concatenation; see reference `Encryptor.passwordToSymkey`).|
+|**Password (3)**|A user **password** (UTF-8, SHOULD be at most **64 bytes** before KDF) is converted to a symkey by the KDF named in **`kdf`**, salted with the **IV** embedded in the payload. Registered KDFs: `Argon2id@No1_NrC7` ([FTSP29](../FTSP/FTSP29V1_Argon2idPasswordToSymkey.md), default for new ciphers) and `Sha256Iv@No1_NrC7` ([FTSP25](../FTSP/FTSP25V1_PasswordToSymkey.md), decrypt-only). When `kdf` is absent, readers MUST try Argon2id and then Sha256Iv.|
 |**AsyOneWay (1)**|Encrypt for a recipient **pubkey B**. An **ephemeral** key pair is generated; **pubkeyA** in the ciphertext header is the ephemeral public key. Decryption uses the recipient's **prikey** matching **pubkeyB** (and the recorded **pubkeyA**).|
 |**AsyTwoWay (2)**|Encrypt using **prikeyA** (sender) and **pubkeyB** (recipient). Decryption is possible with **(prikeyB, pubkeyA)** or **(prikeyA, pubkeyB)** depending on role; ECDH derives the symkey per FTSP.|
 |**alg**|Symmetric or composite algorithm id (`AlgorithmId`), serialized in JSON by **display name** (e.g. `AesGcm256@No1_NrC7`, `EccK1AesGcm256@No1_NrC7`).|
+|**kdf**|Password KDF id (`Kdf`), serialized in JSON by display name (`Argon2id@No1_NrC7`, `Sha256Iv@No1_NrC7`). Only for **Password**. Bundles carry it as a 1-byte registry id in type 4 ([FTSP30](../FTSP/FTSP30V1_CryptoBundle.md)).|
 |**cipher**|Ciphertext bytes, Base64-encoded in JSON.|
 |**iv**|Initialization vector, **hex-encoded** in JSON. Length depends on algorithm profile (see IV rules).|
 |**sum**|Four-byte integrity tag for algorithms **without** built-in AEAD authentication in the reference stack (e.g. AES-CBC, ChaCha20 in FC-JDK). **Omit** from JSON when using AES-GCM profiles that rely on the cipher's auth tag only (see rules).|
@@ -70,21 +71,13 @@ Applications need one consistent model for “encrypted payloads”: whether the
 |AsyTwoWay|2|
 |Password|3|
 
+JSON always writes `Password`. In **bundles**, type byte **4** also means Password, followed by a 1-byte KDF id; type byte 3 is the legacy Password layout that records no KDF ([FTSP30](../FTSP/FTSP30V1_CryptoBundle.md)).
+
 ### Algorithm ID bytes (bundle prefix, encryption)
 
-First **6 bytes** of a crypto bundle; trailing byte distinguishes symmetric/AEAD suite in the reference:
+The first **6 bytes** of a crypto bundle are the first 6 bytes of the algorithm's on-chain protocol **PID** (e.g. `76f7b226a8b3` for `AesGcm256@No1_NrC7`). The full table, and the legacy sequential prefixes `000000000001`–`000000000009` that readers still accept, are in [FTSP30](../FTSP/FTSP30V1_CryptoBundle.md).
 
-|Last byte|Typical `AlgorithmId`|
-|---|---|
-|1|`FC_AesCbc256_No1_NrC7`|
-|2|`FC_EccK1AesCbc256_No1_NrC7`|
-|3|`FC_AesGcm256_No1_NrC7`|
-|4|`FC_EccK1AesGcm256_No1_NrC7`|
-|5|`FC_X25519AesGcm256_No1_NrC7`|
-|6|`FC_ChaCha20_No1_NrC7`|
-|7|`FC_EccK1ChaCha20_No1_NrC7`|
-
-New algorithms MUST register mapping in FTSP and implementations.
+New algorithms MUST register their mapping in FTSP and implementations.
 
 ### Data formats — JSON (`CryptoDataStr`)
 
@@ -94,6 +87,7 @@ Fields commonly present in **public** JSON (sensitive material MUST be transient
 |---|---|---|
 |`type`|Y|`Symkey`, `AsyOneWay`, `AsyTwoWay`, `Password` (enum name).|
 |`alg`|Y|Algorithm display name.|
+|`kdf`|Password|KDF display name. Writers MUST emit it for Password; absent means unspecified (see **Password** above).|
 |`cipher`|Y|Base64 ciphertext.|
 |`iv`|Y|Hex IV.|
 |`pubkeyA`|Asy|Hex ephemeral or sender pubkey (33-byte secp256k1 compressed, or 32-byte X25519 per algorithm).|
@@ -105,16 +99,17 @@ Fields commonly present in **public** JSON (sensitive material MUST be transient
 
 ### Data formats — binary bundle (`CryptoDataByte.toBundle` / `fromBundle`)
 
-Layout:
+Layout (normative definition: [FTSP30](../FTSP/FTSP30V1_CryptoBundle.md)):
 
 ```
-algBytes[6]
-+ typeByte[1]                    // EncryptType.getNumber()
+algBytes[6]                      // PID prefix, see FTSP30
++ typeByte[1]                    // 0 Symkey, 1 AsyOneWay, 2 AsyTwoWay, 3 Password (no KDF recorded), 4 Password + kdfId
 + [if AsyOneWay or AsyTwoWay: pubkeyA — 33 bytes for secp256k1 profiles, 32 bytes for X25519-GCM profile]
 + [if Symkey: keyName[6]]
++ [if type 4: kdfId[1]]          // 0x01 Sha256Iv, 0x02 Argon2id
 + iv[]                           // 12 bytes for GCM / ChaCha20 profiles; 16 bytes for AES-CBC in reference
-+ cipher[]                       // variable
-+ [if non-GCM profile: sum[4]]   // absent for FC_AesGcm256, FC_EccK1AesGcm256, FC_X25519AesGcm256 in reference
++ cipher[]                       // variable; AEAD profiles append the tag
++ [if non-AEAD profile: sum[4]]  // absent for GCM and ChaCha20-Poly1305 profiles; BitCore carries a 32-byte HMAC
 ```
 
 **IV length and compatibility**
@@ -166,6 +161,7 @@ For large payloads, the reference implementation MAY write **one JSON object** (
 |6|IV uniqueness: implementations SHOULD use a fresh random IV per encryption under the same key (per FTSP / best practice).|
 |7|Algorithm and encoding details (ECDH, HKDF, cipher modes) belong in **FTSP**, not FVEP8.|
 |8|RFC 2119 applies.|
+|9|New ciphers MUST use an AEAD profile (`AesGcm256@No1_NrC7` for Symkey/Password, `EccK1AesGcm256@No1_NrC7` for AsyOneWay/AsyTwoWay) and, for Password, the Argon2id KDF. AES-CBC, ChaCha20 and the legacy profiles remain decryptable but MUST NOT be used for new writes.|
 
 ### Relationship to FTSP
 

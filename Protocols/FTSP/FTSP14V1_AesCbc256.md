@@ -40,13 +40,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|51515d32878c8eabdab8b768386b2affedc50b3d00d1f6f697396266b34c235e|
 
 Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**AesCbc256** is the Freeverse reference profile for **symmetric AES-256-CBC** with **PKCS#7** padding (`AES/CBC/PKCS7Padding`, BouncyCastle **BC**). The key is **32** bytes; the IV is **16** bytes. Unlike GCM profiles, CBC does not provide authentication—interchange uses a **4-byte `sum`** derived from **`symkey`**, **`iv`**, and **`did`**. The **`AlgorithmId`** display name is **`AesCbc256@No1_NrC7`**; bundle prefix last byte **`0x01`**. Envelope rules follow [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
+**AesCbc256** is the Freeverse reference profile for **symmetric AES-256-CBC** with **PKCS#7** padding (`AES/CBC/PKCS7Padding`, BouncyCastle **BC**). The key is **32** bytes; the IV is **16** bytes. Unlike GCM profiles, CBC does not provide authentication—interchange uses a **4-byte `sum`** derived from **`symkey`**, **`iv`**, and **`did`**. The **`AlgorithmId`** display name is **`AesCbc256@No1_NrC7`**; bundle prefix (6 bytes) **`51515d32878c`**. Envelope rules follow [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
 
 ## Motivation
 
@@ -72,7 +72,7 @@ Implementations claiming compatibility with **FTSP14** MUST:
 |---|---|
 |Display name (JSON `alg`)|`AesCbc256@No1_NrC7`|
 |Enum (reference)|`AlgorithmId.FC_AesCbc256_No1_NrC7`|
-|Bundle `algBytes` (6 bytes)|`00 00 00 00 00 01`|
+|Bundle `algBytes` (6 bytes)|`51 51 5d 32 87 8c`|
 
 ### Parameters
 

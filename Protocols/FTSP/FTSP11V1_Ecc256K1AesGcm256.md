@@ -36,13 +36,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|a5acd7077805d3e8ae6ddf7fb9d9ebd52c665942e5096e3d308f66d4cf5e844a|
 
 Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**Ecc256K1AesGcm256** is the Freeverse reference profile **secp256k1 ECDH → HKDF → AES-256-GCM**. A **32-byte** shared secret is derived with **ECDH** (compressed **33-byte** public keys), expanded to a **32-byte** content key with **HKDF** using the **12-byte** nonce as **salt** and fixed **info** `hkdf`, then **AES/GCM/NoPadding** encrypts the plaintext with a **128-bit** GCM authentication tag appended to the ciphertext. The **`AlgorithmId`** is **`EccK1AesGcm256@No1_NrC7`** (bundle prefix last byte **`0x04`**). Envelope fields (`EncryptType`, JSON layout, absence of **`sum`**) follow [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
+**Ecc256K1AesGcm256** is the Freeverse reference profile **secp256k1 ECDH → HKDF → AES-256-GCM**. A **32-byte** shared secret is derived with **ECDH** (compressed **33-byte** public keys), expanded to a **32-byte** content key with **HKDF** using the **12-byte** nonce as **salt** and fixed **info** `hkdf`, then **AES/GCM/NoPadding** encrypts the plaintext with a **128-bit** GCM authentication tag appended to the ciphertext. The **`AlgorithmId`** is **`EccK1AesGcm256@No1_NrC7`** (bundle prefix (6 bytes) **`a5acd7077805`**). Envelope fields (`EncryptType`, JSON layout, absence of **`sum`**) follow [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
 
 ## Motivation
 
@@ -67,7 +67,7 @@ Implementations MUST **not** substitute HKDF-SHA256 or a different IV length wit
 |---|---|
 |Display name (JSON `alg`)|`EccK1AesGcm256@No1_NrC7`|
 |Enum (reference)|`AlgorithmId.FC_EccK1AesGcm256_No1_NrC7`|
-|Bundle `algBytes` (6 bytes)|`00 00 00 00 00 04`|
+|Bundle `algBytes` (6 bytes)|`a5 ac d7 07 78 05`|
 
 ### Cryptographic primitives
 
@@ -158,7 +158,7 @@ Reference (`AesGcm256.decrypt`) may set an internal symmetric algorithm id durin
 |---|---|
 |IV length|**12** bytes|
 |`sum`|Omitted (AEAD tag)|
-|Bundle `algBytes`|**… 04**|
+|Bundle `algBytes`|**a5 ac d7 07 78 05**|
 |`EncryptType`|**AsyOneWay** / **AsyTwoWay** (and interchange metadata)|
 
 Full JSON and binary bundle layout: [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).

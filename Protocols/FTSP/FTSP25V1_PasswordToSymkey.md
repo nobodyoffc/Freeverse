@@ -33,7 +33,7 @@
 |SN|25|
 |Ver|1|
 |Category|Hashing / KeyDerivation|
-|Status|Draft|
+|Status|Deprecated|
 |Author|C_armX, No1_NrC7|
 |Created|2026-04-14|
 |PID||
@@ -43,6 +43,8 @@ Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 ## Abstract
 
 **PasswordToSymkey** defines the Freeverse key derivation procedure that converts a UTF-8 password and an IV into a **32-byte AES symmetric key** using two rounds of SHA-256. It is **not** an encryption algorithm itself — it is a key derivation step used by **`EncryptType.Password`** before dispatching to a symmetric cipher profile such as [FTSP12](FTSP12V1_AesGcm256.md) (AesGcm256), [FTSP14](FTSP14V1_AesCbc256.md) (AesCbc256), or [FTSP20](FTSP20V1_ChaCha20.md) (ChaCha20).
+
+It is registered as KDF id **`Sha256Iv@No1_NrC7`** (bundle KDF byte **`0x01`**, see [FTSP30](FTSP30V1_CryptoBundle.md)). **New ciphers MUST use [FTSP29](FTSP29V1_Argon2idPasswordToSymkey.md) (Argon2id).** This KDF stays specified so that existing ciphers remain decryptable.
 
 ## Motivation
 
@@ -82,17 +84,17 @@ function passwordToSymkey(password, iv):
 
 ### Usage in Encryption / Decryption
 
-**Encrypt** (`Encryptor.encryptByPassword`):
+**Encrypt** (legacy — `Encryptor.encryptByPassword` after `setKdf(Kdf.Sha256Iv_No1_NrC7)`; new ciphers use FTSP29):
 
 1. Generate a random IV (length determined by the `AlgorithmId`).
 2. `symkey = passwordToSymkey(password, iv)`.
 3. Encrypt plaintext with the chosen cipher profile using `symkey` and `iv`.
-4. Set `EncryptType` to **Password** in the output `CryptoDataByte`.
+4. Set `EncryptType` to **Password** and `kdf` to **`Sha256Iv@No1_NrC7`** in the output `CryptoDataByte`.
 
 **Decrypt** (`Decryptor.decryptByPassword`):
 
-1. Read `iv` from the cipher data.
-2. `symkey = passwordToSymkey(password, iv)`.
+1. Read `iv` and `kdf` from the cipher data.
+2. If `kdf` is `Sha256Iv@No1_NrC7`, `symkey = passwordToSymkey(password, iv)`. If `kdf` is **absent** (JSON written before KDFs were recorded, or a type-3 bundle), try [FTSP29](FTSP29V1_Argon2idPasswordToSymkey.md) first and then this KDF, and keep the first that decrypts successfully.
 3. Set `EncryptType` to **Symkey** and delegate to `decryptBySymkey`, which dispatches by `AlgorithmId`.
 4. Restore `EncryptType` to **Password** in the result.
 5. On failure, a **200 ms delay** is applied to mitigate brute-force attempts.
@@ -162,6 +164,7 @@ The `cipher` field (Base64) depends on the AES-GCM encryption output with the de
 
 ## Security Considerations
 
+- **Superseded.** This KDF is GPU-grindable. Use [FTSP29](FTSP29V1_Argon2idPasswordToSymkey.md) for every new cipher; implement this one only to decrypt existing data.
 - **Single-pass SHA-256 — no iteration count or memory-hardness.** Unlike PBKDF2, bcrypt, or Argon2, this KDF uses only two SHA-256 invocations. It is fast to compute and therefore susceptible to brute-force if password entropy is low. GPU/ASIC-accelerated SHA-256 can test billions of candidate passwords per second.
 - **IV as salt:** Same password + different IV = different symkey. This prevents rainbow-table and precomputation attacks. However, the IV is transmitted in cleartext alongside the ciphertext, so an attacker who knows the IV can still attempt brute-force against the password.
 - **Password strength is the primary security factor.** High-entropy passwords (long, random, mixed-character) are essential. Short or dictionary-based passwords offer minimal protection regardless of the cipher profile used.
@@ -183,7 +186,9 @@ The `cipher` field (Base64) depends on the AES-GCM encryption output with the de
 |FTSP12|AesGcm256 — symmetric cipher dispatched after PasswordToSymkey derivation (GCM profile).|
 |FTSP14|AesCbc256 — symmetric cipher dispatched after PasswordToSymkey derivation (CBC profile).|
 |FTSP20|ChaCha20 — symmetric cipher dispatched after PasswordToSymkey derivation (ChaCha20 profile).|
-|FVEP8|Encryption envelope — defines `EncryptType.Password`, `keyName`, and bundle layout.|
+|FVEP8|Encryption envelope — defines `EncryptType.Password`, `kdf`, and `keyName`.|
+|FTSP29|Argon2idPasswordToSymkey — the default Password KDF that supersedes this one.|
+|FTSP30|CryptoBundle — binary layout; KDF byte `0x01` names this KDF in type-4 bundles.|
 
 ## Reference Implementation
 

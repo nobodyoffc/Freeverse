@@ -12,13 +12,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|bcc39a9628e265320ea5dfcdf35a50b1ac190cd62b9692a64de87fad925c4ade|
 
 Parent: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**ChaCha20** (reference) is **symmetric** stream encryption: **`Cipher.getInstance("ChaCha20", "BC")`**, **32-byte** key, **12-byte** nonce/IV, **`IvParameterSpec`**. There is **no** built-in authentication — the reference sets **`did = SHA256( SHA256(plaintext) )`** during encrypt (via Guava SHA-256 over plaintext, then **`Decryptor.sha256`**) and calls **`makeSum4`** (**`sum` = first 4 bytes of `SHA256(symkey ‖ iv ‖ did)`**, same as other non-GCM profiles in **`CryptoDataByte`**). **`AlgorithmId`**: **`ChaCha20@No1_NrC7`**; bundle last byte **`0x06`**.
+**ChaCha20** (reference) is **symmetric** stream encryption: **`Cipher.getInstance("ChaCha20", "BC")`**, **32-byte** key, **12-byte** nonce/IV, **`IvParameterSpec`**. There is **no** built-in authentication — the reference sets **`did = SHA256( SHA256(plaintext) )`** during encrypt (via Guava SHA-256 over plaintext, then **`Decryptor.sha256`**) and calls **`makeSum4`** (**`sum` = first 4 bytes of `SHA256(symkey ‖ iv ‖ did)`**, same as other non-GCM profiles in **`CryptoDataByte`**). **`AlgorithmId`**: **`ChaCha20@No1_NrC7`**; bundle prefix (6 bytes) **`bcc39a9628e2`**.
 
 ## Specification
 

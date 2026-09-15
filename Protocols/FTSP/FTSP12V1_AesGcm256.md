@@ -36,13 +36,13 @@
 |Status|Draft|
 |Author|C_armX, No1_NrC7|
 |Created|2026-03-24|
-|PID||
+|PID|76f7b226a8b3eed8296b73f4c9317d4c01c02c57eac021bc04beb61ff8ad0efd|
 
 Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
 ## Abstract
 
-**AesGcm256** is the Freeverse reference profile for **symmetric** **AES-256-GCM**: a **32-byte** key and **12-byte** IV encrypt plaintext with **`AES/GCM/NoPadding`** (BouncyCastle **BC**), **128-bit** authentication tag, ciphertext layout **ciphertext ∥ tag**. The **`AlgorithmId`** is **`AesGcm256@No1_NrC7`** (bundle prefix last byte **`0x03`**). It is used with **`EncryptType.Symkey`**; envelope rules (`iv`, `cipher`, **`keyName`** in bundles, no **`sum`**) follow [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
+**AesGcm256** is the Freeverse reference profile for **symmetric** **AES-256-GCM**: a **32-byte** key and **12-byte** IV encrypt plaintext with **`AES/GCM/NoPadding`** (BouncyCastle **BC**), **128-bit** authentication tag, ciphertext layout **ciphertext ∥ tag**. The **`AlgorithmId`** is **`AesGcm256@No1_NrC7`** (bundle prefix (6 bytes) **`76f7b226a8b3`**). It is used with **`EncryptType.Symkey`**; envelope rules (`iv`, `cipher`, **`keyName`** in bundles, no **`sum`**) follow [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md).
 
 ## Motivation
 
@@ -69,7 +69,7 @@ Implementations claiming compatibility with **FTSP12** MUST:
 |---|---|
 |Display name (JSON `alg`)|`AesGcm256@No1_NrC7`|
 |Enum (reference)|`AlgorithmId.FC_AesGcm256_No1_NrC7`|
-|Bundle `algBytes` (6 bytes)|`00 00 00 00 00 03`|
+|Bundle `algBytes` (6 bytes)|`76 f7 b2 26 a8 b3`|
 
 ### Parameters
 
