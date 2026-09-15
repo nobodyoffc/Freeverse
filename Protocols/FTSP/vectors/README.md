@@ -11,6 +11,7 @@ All byte values are lowercase hex unless the field name says `Base64`. Inputs ar
 | `cipher-json.json` | FVEP8 | Decrypting `cipherJson` with `secret` gives `plaintextHex`. For Password, the KDF that worked equals `derivedWith`, including when the JSON has no `kdf` (`kdfRecorded: false`). |
 | `bundle.json` | FTSP30 | `expect: "decrypt"`: parsing gives `alg`, `type` and `kdfRecorded`, and decrypting with `secret` gives `plaintextHex`. `expect: "reject"`: the parser must refuse the bytes. `canonical: true`: re-serialising the parsed bundle reproduces the bytes exactly. |
 | `algorithms.json` | FTSP11–27 | Every other cipher profile — ChaCha20 variants, the legacy ECC CBC and P7 profiles and X25519 — as JSON (`cipherJson`) and bundle (`bundleHex`); BitCore only as its raw `encbufHex`, since Bitcore ciphers have no JSON form. `expect: "decrypt"` must give `plaintextHex`; `expect: "reject-decrypt"` is a tampered cipher that must not decrypt successfully. `knownGaps` lists tampering FC-JDK does not yet detect. |
+| `vault.json` | FTSP29, FVEP8 | A wallet vault's data key wrapped as a Password cipher. `expect: "unwrap"`: unwrapping `dekCipher` with `password` gives `dekHex`, and a wrong password gives nothing. `expect: "reject"`: must be refused even with the right password, because only an Argon2id-wrapped key may open a vault. |
 
 `secret` holds one of `symkey`, `password`, or `prikey` (plus the peer's `pubkey` for AsyTwoWay).
 

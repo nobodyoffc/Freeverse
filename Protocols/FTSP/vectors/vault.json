@@ -1,0 +1,27 @@
+{
+  "description": "Wallet vault data keys. dekCipher is a Password cipher (AesGcm256) of the 32-byte DEK. expect=unwrap: VaultKey.unwrap(dekCipher, password) gives dekHex, and a wrong password gives nothing. expect=reject: must be refused even with the right password, because only an Argon2id-wrapped key may open a vault.",
+  "generatedBy": "FC-JDK core.crypto.CryptoVectorsGenerator",
+  "vectors": [
+    {
+      "id": "VAULT-DEK-ARGON2ID",
+      "expect": "unwrap",
+      "password": "MyPassword",
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Argon2id@No1_NrC7\",\"cipher\":\"KaQk85vYBZbYtuTSh/+L/u+bXlxPOZvNaGKbxYysPjRvgP0JrSr+NHwW1cow2L5/\",\"keyName\":\"f700db5983ea\",\"iv\":\"000102030405060708090a0b\"}"
+    },
+    {
+      "id": "VAULT-DEK-SHA256IV",
+      "expect": "reject",
+      "password": "MyPassword",
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Sha256Iv@No1_NrC7\",\"cipher\":\"1Pn0AQvcsE5aQ+wSBm6ilddXuaLgg2MJVFwpIVDUS7qYihHbNWh9qxABNvF5IsRL\",\"keyName\":\"bbeddbe89c74\",\"iv\":\"000102030405060708090a0b\"}"
+    },
+    {
+      "id": "VAULT-DEK-KDF-STRIPPED",
+      "expect": "reject",
+      "password": "MyPassword",
+      "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"KaQk85vYBZbYtuTSh/+L/u+bXlxPOZvNaGKbxYysPjRvgP0JrSr+NHwW1cow2L5/\",\"keyName\":\"f700db5983ea\",\"iv\":\"000102030405060708090a0b\"}"
+    }
+  ]
+}

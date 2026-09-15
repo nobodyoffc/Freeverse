@@ -62,6 +62,7 @@ public final class CryptoVectorsGenerator {
         write(dir.resolve("cipher-json.json"), gson, doc("CryptoDataStr JSON ciphers (FVEP8). Decrypt cipherJson with secret; plaintext must equal plaintextHex. derivedWith is the KDF that actually produced the key; kdfRecorded says whether the JSON names it.", json));
         write(dir.resolve("bundle.json"), gson, doc("Binary CryptoDataByte bundles (FTSP30). expect=decrypt: parse, check alg/type/kdfRecorded, decrypt with secret. expect=reject: a conforming parser must refuse the bytes. canonical=true: current writers produce exactly these bytes.", bundles));
         write(dir.resolve("algorithms.json"), gson, algorithmVectors());
+        write(dir.resolve("vault.json"), gson, vaultVectors());
         System.out.println("Wrote vectors to " + dir.toAbsolutePath().normalize());
     }
 
@@ -227,6 +228,40 @@ public final class CryptoVectorsGenerator {
         JsonObject doc = doc("Other FTSP cipher profiles. form=json: decrypt cipherJson; form=bundle: parse bundleHex, check alg, decrypt; form=bitcoreEncbuf: Bitcore.decrypt(encbufHex, prikey). expect=decrypt: plaintext must equal plaintextHex. expect=reject-decrypt: a tampered cipher that must not decrypt successfully. knownGaps lists tamper cases FC-JDK itself does not yet detect.", v);
         doc.add("knownGaps", gaps);
         return doc;
+    }
+
+    /**
+     * Wallet vault data keys: a fixed 32-byte DEK wrapped as a Password cipher. Only the
+     * Argon2id wrapping may unwrap; the same DEK wrapped with Sha256Iv, or with the KDF field
+     * stripped, must be refused even with the right password.
+     */
+    static JsonObject vaultVectors() {
+        JsonArray v = new JsonArray();
+        byte[] dek = HF.parseHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+        v.add(vaultEntry("VAULT-DEK-ARGON2ID", "unwrap", wrapDekFixed(dek, Kdf.Argon2id_No1_NrC7, true), dek));
+        v.add(vaultEntry("VAULT-DEK-SHA256IV", "reject", wrapDekFixed(dek, Kdf.Sha256Iv_No1_NrC7, true), dek));
+        v.add(vaultEntry("VAULT-DEK-KDF-STRIPPED", "reject", wrapDekFixed(dek, Kdf.Argon2id_No1_NrC7, false), dek));
+        return doc("Wallet vault data keys. dekCipher is a Password cipher (AesGcm256) of the 32-byte DEK. expect=unwrap: VaultKey.unwrap(dekCipher, password) gives dekHex, and a wrong password gives nothing. expect=reject: must be refused even with the right password, because only an Argon2id-wrapped key may open a vault.", v);
+    }
+
+    static String wrapDekFixed(byte[] dek, Kdf kdf, boolean recordKdf) {
+        byte[] key = kdf.deriveSymkey(PASSWORD.toCharArray(), IV12);
+        CryptoDataByte c = new Encryptor(FC_AesGcm256_No1_NrC7).encryptBySymkey(dek.clone(), key, IV12);
+        c.setAlg(FC_AesGcm256_No1_NrC7);
+        c.setType(EncryptType.Password);
+        c.setKdf(kdf);
+        requireOk(c);
+        return cipherJson(c, recordKdf);
+    }
+
+    static JsonObject vaultEntry(String id, String expect, String dekCipher, byte[] dek) {
+        JsonObject o = new JsonObject();
+        o.addProperty("id", id);
+        o.addProperty("expect", expect);
+        o.addProperty("password", PASSWORD);
+        o.addProperty("dekHex", HF.formatHex(dek));
+        o.addProperty("dekCipher", dekCipher);
+        return o;
     }
 
     static CryptoDataByte asyOneWay(AlgorithmId alg, byte[] pubB) {

@@ -177,6 +177,21 @@ public class CryptoVectorsTest {
         }
     }
 
+    @Test
+    void vault() throws Exception {
+        for (JsonElement e : vectors("vault.json")) {
+            JsonObject v = e.getAsJsonObject();
+            String id = str(v, "id");
+            byte[] dek = VaultKey.unwrap(str(v, "dekCipher"), str(v, "password").toCharArray());
+            if ("reject".equals(str(v, "expect"))) {
+                assertNull(dek, id + " must be refused");
+            } else {
+                assertEquals(str(v, "dekHex"), dek == null ? null : HF.formatHex(dek), id);
+                assertNull(VaultKey.unwrap(str(v, "dekCipher"), "not the password".toCharArray()), id + ": a wrong password must not unwrap");
+            }
+        }
+    }
+
     private static CryptoDataByte decryptAlgorithmVector(JsonObject v) throws Exception {
         String id = str(v, "id");
         JsonObject secret = v.getAsJsonObject("secret");
