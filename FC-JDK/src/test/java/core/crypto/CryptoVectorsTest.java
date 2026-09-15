@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import core.crypto.Algorithm.Bitcore;
 import data.fcData.AlgorithmId;
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
 import org.bouncycastle.crypto.params.Argon2Parameters;
@@ -153,6 +154,65 @@ public class CryptoVectorsTest {
             return;
         }
         fail("BUNDLE-T3-PASSWORD-GCM-ARGON2ID missing from bundle.json");
+    }
+
+    @Test
+    void algorithms() throws Exception {
+        for (JsonElement e : vectors("algorithms.json")) {
+            JsonObject v = e.getAsJsonObject();
+            String id = str(v, "id");
+            boolean reject = "reject-decrypt".equals(str(v, "expect"));
+            CryptoDataByte result;
+            try {
+                result = decryptAlgorithmVector(v);
+            } catch (Exception ex) {
+                if (reject) continue;
+                throw new AssertionError(id + " threw", ex);
+            }
+            if (reject) {
+                assertFalse(result != null && Integer.valueOf(0).equals(result.getCode()), id + ": tampered cipher reported success");
+            } else {
+                assertDecrypted(v, result);
+            }
+        }
+    }
+
+    private static CryptoDataByte decryptAlgorithmVector(JsonObject v) throws Exception {
+        String id = str(v, "id");
+        JsonObject secret = v.getAsJsonObject("secret");
+        byte[] prikey = secret.has("prikey") ? hex(secret, "prikey") : null;
+        Decryptor d = new Decryptor();
+        switch (str(v, "form")) {
+            case "json": {
+                String json = str(v, "cipherJson");
+                return switch (EncryptType.valueOf(str(v, "type"))) {
+                    case Symkey -> d.decryptJsonBySymkey(json, hex(secret, "symkey"));
+                    case Password -> d.decryptJsonByPassword(json, str(secret, "password").toCharArray());
+                    case AsyOneWay -> d.decryptJsonByAsyOneWay(json, prikey);
+                    case AsyTwoWay -> d.decryptJsonByAsyTwoWay(json, prikey, hex(secret, "pubkey"));
+                };
+            }
+            case "bundle": {
+                byte[] bundle = hex(v, "bundleHex");
+                CryptoDataByte parsed = CryptoDataByte.fromBundle(bundle);
+                assertNotNull(parsed, id);
+                assertEquals(AlgorithmId.fromDisplayName(str(v, "alg")), parsed.getAlg(), id);
+                return switch (parsed.getType()) {
+                    case Symkey -> d.decryptBundleBySymkey(bundle, hex(secret, "symkey"));
+                    case Password -> d.decryptBundleByPassword(bundle, str(secret, "password").toCharArray());
+                    case AsyOneWay -> d.decryptBundleByAsyOneWay(bundle, prikey);
+                    case AsyTwoWay -> d.decryptBundleByAsyTwoWay(bundle, prikey, hex(secret, "pubkey"));
+                };
+            }
+            case "bitcoreEncbuf": {
+                CryptoDataByte r = new CryptoDataByte();
+                r.setData(Bitcore.decrypt(hex(v, "encbufHex"), prikey));
+                r.set0CodeMessage();
+                return r;
+            }
+            default:
+                throw new AssertionError("unknown form in " + id);
+        }
     }
 
     private static void assertDecrypted(JsonObject v, CryptoDataByte result) {

@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import core.crypto.Algorithm.Bitcore;
+import core.crypto.Algorithm.X25519;
 import data.fcData.AlgorithmId;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
@@ -59,6 +61,7 @@ public final class CryptoVectorsGenerator {
         cipherVectors(json, bundles);
         write(dir.resolve("cipher-json.json"), gson, doc("CryptoDataStr JSON ciphers (FVEP8). Decrypt cipherJson with secret; plaintext must equal plaintextHex. derivedWith is the KDF that actually produced the key; kdfRecorded says whether the JSON names it.", json));
         write(dir.resolve("bundle.json"), gson, doc("Binary CryptoDataByte bundles (FTSP30). expect=decrypt: parse, check alg/type/kdfRecorded, decrypt with secret. expect=reject: a conforming parser must refuse the bytes. canonical=true: current writers produce exactly these bytes.", bundles));
+        write(dir.resolve("algorithms.json"), gson, algorithmVectors());
         System.out.println("Wrote vectors to " + dir.toAbsolutePath().normalize());
     }
 
@@ -172,6 +175,128 @@ public final class CryptoVectorsGenerator {
         bundles.add(rejectEntry("REJECT-UNKNOWN-KDF", "KDF id 0x7f is not registered", unknownKdf));
         bundles.add(rejectEntry("REJECT-KDF-ZERO", "KDF id 0x00 is invalid", zeroKdf));
         bundles.add(rejectEntry("REJECT-TYPE4-NO-KDF-BYTE", "type 4 with nothing after the type byte", Arrays.copyOf(t4GcmArgon, 7)));
+    }
+
+    /**
+     * Every other FTSP cipher profile — the ChaCha20 variants, the legacy CBC and P7 ECC
+     * profiles, X25519 and BitCore — plus tampered ciphers that readers must reject. A tamper
+     * case is only emitted if FC-JDK itself rejects it; otherwise it is listed in knownGaps.
+     */
+    static JsonObject algorithmVectors() throws Exception {
+        JsonArray v = new JsonArray();
+        JsonArray gaps = new JsonArray();
+        byte[] xPriA = new byte[32];
+        byte[] xPriB = new byte[32];
+        Arrays.fill(xPriA, (byte) 0x41);
+        Arrays.fill(xPriB, (byte) 0x42);
+        byte[] xPubA = X25519.generatePublicKey(xPriA);
+        byte[] xPubB = X25519.generatePublicKey(xPriB);
+
+        addForms(v, "SYMKEY-CHACHA20", symkeyCipher(FC_ChaCha20_No1_NrC7, IV12), symkeySecret(), true);
+        addForms(v, "SYMKEY-CHACHA20POLY1305", symkeyCipher(FC_ChaCha20Poly1305_No1_NrC7, IV12), symkeySecret(), true);
+        addForms(v, "ASYONEWAY-ECCK1AESCBC256", asyOneWay(FC_EccK1AesCbc256_No1_NrC7, PUB_FID_A), prikeySecret(PRI_FID_A, null), true);
+        addForms(v, "ASYTWOWAY-ECCK1AESCBC256", asyTwoWay(FC_EccK1AesCbc256_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A), true);
+        addForms(v, "ASYTWOWAY-ECCK1CHACHA20", asyTwoWay(FC_EccK1ChaCha20_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A), true);
+        addForms(v, "ASYONEWAY-ECCK1CHACHA20POLY1305", asyOneWay(FC_EccK1ChaCha20Poly1305_No1_NrC7, PUB_FID_A), prikeySecret(PRI_FID_A, null), true);
+        addForms(v, "ASYTWOWAY-ECCK1CHACHA20POLY1305", asyTwoWay(FC_EccK1ChaCha20Poly1305_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A), true);
+        addForms(v, "ASYTWOWAY-X25519AESGCM256", asyTwoWay(FC_X25519AesGcm256_No1_NrC7, xPriA, xPubB), prikeySecret(xPriB, xPubA), true);
+        // EccAes256K1P7 has no bundle prefix, so it only travels as JSON.
+        addForms(v, "ASYTWOWAY-ECCAES256K1P7", asyTwoWay(EccAes256K1P7_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A), false);
+
+        JsonObject bitcore = new JsonObject();
+        bitcore.addProperty("id", "BITCORE-ENCBUF");
+        bitcore.addProperty("expect", "decrypt");
+        bitcore.addProperty("form", "bitcoreEncbuf");
+        bitcore.addProperty("type", EncryptType.AsyOneWay.name());
+        bitcore.addProperty("alg", BitCore_EccAes256.getDisplayName());
+        bitcore.add("secret", prikeySecret(PRI_FID_A, null));
+        bitcore.addProperty("plaintextHex", HF.formatHex(PLAINTEXT));
+        bitcore.addProperty("encbufHex", HF.formatHex(Bitcore.encrypt(PLAINTEXT, Bitcore.createKeyPair(PRI_FID_A).getPublic())));
+        v.add(bitcore);
+
+        tamper(v, gaps, "TAMPER-SYMKEY-AESGCM256", symkeyCipher(FC_AesGcm256_No1_NrC7, IV12), symkeySecret());
+        tamper(v, gaps, "TAMPER-SYMKEY-AESCBC256", symkeyCipher(FC_AesCbc256_No1_NrC7, IV16), symkeySecret());
+        tamper(v, gaps, "TAMPER-SYMKEY-CHACHA20", symkeyCipher(FC_ChaCha20_No1_NrC7, IV12), symkeySecret());
+        tamper(v, gaps, "TAMPER-SYMKEY-CHACHA20POLY1305", symkeyCipher(FC_ChaCha20Poly1305_No1_NrC7, IV12), symkeySecret());
+        tamper(v, gaps, "TAMPER-ASYTWOWAY-ECCK1AESGCM256", asyTwoWay(FC_EccK1AesGcm256_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A));
+        tamper(v, gaps, "TAMPER-ASYTWOWAY-ECCK1AESCBC256", asyTwoWay(FC_EccK1AesCbc256_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A));
+        tamper(v, gaps, "TAMPER-ASYTWOWAY-ECCK1CHACHA20", asyTwoWay(FC_EccK1ChaCha20_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A));
+        tamper(v, gaps, "TAMPER-ASYTWOWAY-ECCK1CHACHA20POLY1305", asyTwoWay(FC_EccK1ChaCha20Poly1305_No1_NrC7, PRI_FID_A, PUB_FID_B), prikeySecret(PRI_FID_B, PUB_FID_A));
+        tamper(v, gaps, "TAMPER-ASYTWOWAY-X25519AESGCM256", asyTwoWay(FC_X25519AesGcm256_No1_NrC7, xPriA, xPubB), prikeySecret(xPriB, xPubA));
+
+        JsonObject doc = doc("Other FTSP cipher profiles. form=json: decrypt cipherJson; form=bundle: parse bundleHex, check alg, decrypt; form=bitcoreEncbuf: Bitcore.decrypt(encbufHex, prikey). expect=decrypt: plaintext must equal plaintextHex. expect=reject-decrypt: a tampered cipher that must not decrypt successfully. knownGaps lists tamper cases FC-JDK itself does not yet detect.", v);
+        doc.add("knownGaps", gaps);
+        return doc;
+    }
+
+    static CryptoDataByte asyOneWay(AlgorithmId alg, byte[] pubB) {
+        CryptoDataByte c = new Encryptor(alg).encryptByAsyOneWay(PLAINTEXT.clone(), pubB.clone());
+        return requireOk(c);
+    }
+
+    static CryptoDataByte asyTwoWay(AlgorithmId alg, byte[] priA, byte[] pubB) {
+        CryptoDataByte c = new Encryptor(alg).encryptByAsyTwoWay(PLAINTEXT.clone(), priA.clone(), pubB.clone());
+        return requireOk(c);
+    }
+
+    static void addForms(JsonArray v, String id, CryptoDataByte c, JsonObject secret, boolean bundleable) {
+        if (c.getAlg() == null || c.getType() == null) throw new IllegalStateException(id + ": encryptor left alg or type unset");
+        byte[] bundle = bundleable ? c.toBundle() : null;
+        if (bundleable && bundle == null) throw new IllegalStateException(id + ": toBundle returned null");
+        JsonObject json = formEntry(id + "-JSON", c, "json", "decrypt", secret);
+        json.addProperty("cipherJson", cipherJson(c, false));
+        v.add(json);
+        if (bundle != null) {
+            JsonObject b = formEntry(id + "-BUNDLE", c, "bundle", "decrypt", secret);
+            b.addProperty("bundleHex", HF.formatHex(bundle));
+            v.add(b);
+        }
+    }
+
+    /** Flips the last cipher byte — inside the tag for AEAD, the final block otherwise. */
+    static void tamper(JsonArray v, JsonArray gaps, String id, CryptoDataByte c, JsonObject secret) {
+        byte[] bundle = c.toBundle();
+        if (bundle == null) throw new IllegalStateException(id + ": toBundle returned null");
+        int sumLength = c.getAlg().isAead() ? 0 : CryptoConstants.SUM_LENGTH;
+        bundle[bundle.length - 1 - sumLength] ^= 0x01;
+        CryptoDataByte result;
+        try {
+            result = decryptBundle(bundle, c.getType(), secret);
+        } catch (Exception e) {
+            result = null;
+        }
+        boolean accepted = result != null && Integer.valueOf(0).equals(result.getCode());
+        if (accepted) {
+            if (c.getAlg().isAead()) throw new IllegalStateException(id + ": FC-JDK accepted a tampered AEAD cipher");
+            gaps.add(id + ": FC-JDK does not detect this tampering, so it is not a vector yet");
+            return;
+        }
+        JsonObject o = formEntry(id, c, "bundle", "reject-decrypt", secret);
+        o.addProperty("bundleHex", HF.formatHex(bundle));
+        v.add(o);
+    }
+
+    static CryptoDataByte decryptBundle(byte[] bundle, EncryptType type, JsonObject secret) {
+        Decryptor d = new Decryptor();
+        byte[] prikey = secret.has("prikey") ? HF.parseHex(secret.get("prikey").getAsString()) : null;
+        return switch (type) {
+            case Symkey -> d.decryptBundleBySymkey(bundle, HF.parseHex(secret.get("symkey").getAsString()));
+            case AsyOneWay -> d.decryptBundleByAsyOneWay(bundle, prikey);
+            case AsyTwoWay -> d.decryptBundleByAsyTwoWay(bundle, prikey, HF.parseHex(secret.get("pubkey").getAsString()));
+            case Password -> d.decryptBundleByPassword(bundle, secret.get("password").getAsString().toCharArray());
+        };
+    }
+
+    static JsonObject formEntry(String id, CryptoDataByte c, String form, String expect, JsonObject secret) {
+        JsonObject o = new JsonObject();
+        o.addProperty("id", id);
+        o.addProperty("expect", expect);
+        o.addProperty("form", form);
+        o.addProperty("type", c.getType().name());
+        o.addProperty("alg", c.getAlg().getDisplayName());
+        o.add("secret", secret);
+        o.addProperty("plaintextHex", HF.formatHex(PLAINTEXT));
+        return o;
     }
 
     static CryptoDataByte symkeyCipher(AlgorithmId alg, byte[] iv) {
