@@ -84,6 +84,8 @@ At most one of fields 3–5 is present, because each belongs to a different type
 
 Writers MUST use the PID prefix. Readers MUST accept both columns.
 
+**BitCore is not a native bundle profile.** Bitcore and bitcoin-qt ciphers are the raw `encbuf` of [FTSP16](FTSP16V1_BitCore_EccAes256.md) — `ephemeralPub ‖ IV ‖ ciphertext ‖ HMAC-SHA256` — with no prefix and no type byte, and they have no JSON form. That layout MUST stay unchanged so these ciphers remain compatible with Bitcore software. The `e308bc027946` row covers only FC's optional wrapper around the same bytes (`prefix ‖ type 1 ‖ ephemeralPub(33) ‖ IV(16) ‖ ciphertext ‖ HMAC(32)`), which readers accept. Anything exchanged with Bitcore software MUST use the raw `encbuf`.
+
 ### Type byte
 
 |Byte|Meaning|JSON form|
@@ -111,7 +113,7 @@ A new KDF takes the next unused byte. Bytes are never reused or renumbered.
 ### sum length
 
 - **0** for the AEAD profiles: `AesGcm256`, `EccK1AesGcm256`, `X25519AesGcm256`, `ChaCha20Poly1305`, `EccK1ChaCha20Poly1305`.
-- **32** for BitCore (its HMAC-SHA256).
+- **32** for the BitCore wrapper (the unchanged Bitcore HMAC-SHA256).
 - **4** for every other algorithm (the FVEP8 `sum`).
 
 ### Parsing

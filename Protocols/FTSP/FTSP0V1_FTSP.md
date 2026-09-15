@@ -237,7 +237,7 @@ More categories can be added as needed.
 |13|[HKDF](FTSP13V1_HKDF.md)|Hashing|RFC 5869–style HKDF with HMAC-SHA512, `HashLen` 64; used by ECDH key derivation and elsewhere.|
 |14|[AesCbc256](FTSP14V1_AesCbc256.md)|Encryption|AES-256-CBC, PKCS7, 16-byte IV, `sum` + `did`; `AesCbc256@No1_NrC7`.|
 |15|[Ecc256K1AesCbc256](FTSP15V1_Ecc256K1AesCbc256.md)|Encryption / KeyExchange|Legacy secp256k1 ECDH (`Ecc256K1`) + SHA512 KDF + FTSP14; `EccK1AesCbc256@No1_NrC7`.|
-|16|[BitCore_EccAes256](FTSP16V1_BitCore_EccAes256.md)|Encryption / KeyExchange|Standalone Bitcore: secp256k1 ECDH, SHA-512 split KDF, AES-256-CBC, HMAC-SHA256 MAC; not `CryptoDataByte` / FVEP8 `AlgorithmId`.|
+|16|[BitCore_EccAes256](FTSP16V1_BitCore_EccAes256.md)|Encryption / KeyExchange|Bitcore / bitcoin-qt compatible: secp256k1 ECDH, SHA-512 split KDF, AES-256-CBC, HMAC-SHA256 MAC. Exchanged as the raw `encbuf` (no prefix, no JSON form), which must not change; FC can also wrap the same bytes in a bundle with prefix `e308bc027946` (FTSP30).|
 |17|[EccAes256K1P7](FTSP17V1_EccAes256K1P7.md)|Encryption / KeyExchange|Legacy P7 KDF (`SHA256` chain + `symkey`), AES-256-CBC, 4-byte `sum4`; differs from FTSP14 `sum`.|
 |18|[X25519](FTSP18V1_X25519.md)|KeyExchange|Curve25519 scalar mult; 32-byte keys/secrets; optional HKDF (`info` = `hkdf`).|
 |19|[X25519AesGcm256](FTSP19V1_X25519AesGcm256.md)|Encryption / KeyExchange|X25519 ECDH + HKDF + FTSP12; `X25519AesGcm256@No1_NrC7`.|
