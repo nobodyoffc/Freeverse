@@ -38,12 +38,48 @@ public interface NodeEventListener {
 
     /**
      * Called when a notify message is received.
+     *
+     * <p>The payload arrives as one array, so a notify larger than the node's
+     * {@code maxMaterializedMessageBytes} is refused rather than delivered here.
+     * To receive notifies of any size, implement {@link #onNotifyStream} instead
+     * and return true from {@link #handlesNotifyStream()}.
+     *
      * @param peerId the sender peer ID
      * @param messageId the message ID
      * @param dataType the data type hint (0=raw, 1=json, 2=protobuf, etc.)
      * @param data the raw byte array
      */
     default void onNotifyReceived(String peerId, long messageId, int dataType, byte[] data) {}
+
+    /**
+     * Whether this listener implements {@link #onNotifyStream} and should receive
+     * notifies through it instead of {@link #onNotifyReceived}.
+     *
+     * <p>The node asks this before acknowledging a notify, because the answer
+     * decides whether an oversized one can be accepted at all. A listener that
+     * returns true is not subject to the materialisation limit, since it never
+     * forces the payload into a single array; it is then bounded only by the
+     * assembler's ceiling on a whole message.
+     */
+    default boolean handlesNotifyStream() {
+        return false;
+    }
+
+    /**
+     * Called instead of {@link #onNotifyReceived} when {@link #handlesNotifyStream()}
+     * returns true, with the payload as a stream rather than an array.
+     *
+     * <p>The node owns the payload's backing file and reclaims it as soon as this
+     * method returns, so the payload must be consumed here — neither it nor a
+     * stream opened from it may be retained past the call. The call runs on a
+     * receive thread, so a long consumer should hand the bytes onward promptly.
+     *
+     * @param peerId    the sender peer ID
+     * @param messageId the message ID
+     * @param dataType  the data type hint (0=raw, 1=json, 2=protobuf, etc.)
+     * @param payload   read access to the data, in memory or on disk
+     */
+    default void onNotifyStream(String peerId, long messageId, int dataType, NotifyPayload payload) {}
 
     /**
      * Called when a notify acknowledgment is received.

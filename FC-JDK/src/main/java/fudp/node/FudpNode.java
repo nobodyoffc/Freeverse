@@ -1295,20 +1295,6 @@ public class FudpNode implements Protocol.PacketListener {
                     return;
                 }
 
-                // onNotifyReceived takes a byte[], so delivering this means allocating
-                // dataLength bytes in one go. Reassembly can spill far more than the heap
-                // can hold, so refuse past the cap instead of trying — and tell the sender,
-                // which is otherwise blocked until its ACK timer runs out.
-                if (dataLength > maxMaterializedMessageBytes) {
-                    log.warn("[FudpNode] Refusing {}-byte NOTIFY from {} (messageId={}): over the {}-byte "
-                            + "materialisation limit for byte[] delivery", dataLength, peerId, msgId,
-                            maxMaterializedMessageBytes);
-                    sendErrorFor(peerId, ctx.connectionId(), msgId, ERROR_CODE_PAYLOAD_TOO_LARGE,
-                            "NOTIFY payload " + dataLength + " exceeds the receiver's "
-                                    + maxMaterializedMessageBytes + "-byte limit");
-                    return;
-                }
-
                 NotifyMessage notify = new NotifyMessage();
                 notify.setMessageId(msgId);
                 notify.setFlags(flags);
@@ -1547,16 +1533,47 @@ public class FudpNode implements Protocol.PacketListener {
      * Handle incoming notify message.
      */
     private void handleNotifyMessage(String peerId, long connectionId, NotifyMessage message) {
-        // Send ACK if requested
-        if (message.hasFlag(AppMessage.FLAG_NEED_ACK)) {
-            sendNotifyAck(peerId, connectionId, message.getMessageId());
+        NodeEventListener listener = eventListener;
+        long messageId = message.getMessageId();
+        boolean streaming = listener != null && listener.handlesNotifyStream();
+
+        // Decide before acknowledging. An ACK promises delivery, so a notify we are
+        // going to refuse must get an ERROR and never both. A listener that takes a
+        // stream never forces the payload into one array, so the materialisation
+        // limit does not apply to it.
+        if (!streaming && message.dataLength() > maxMaterializedMessageBytes) {
+            log.warn("[FudpNode] Refusing {}-byte NOTIFY from {} (messageId={}): over the {}-byte "
+                            + "materialisation limit for byte[] delivery. Implement "
+                            + "NodeEventListener.onNotifyStream to receive notifies of any size.",
+                    message.dataLength(), peerId, messageId, maxMaterializedMessageBytes);
+            sendErrorFor(peerId, connectionId, messageId, ERROR_CODE_PAYLOAD_TOO_LARGE,
+                    "NOTIFY payload " + message.dataLength() + " exceeds the receiver's "
+                            + maxMaterializedMessageBytes + "-byte limit");
+            return;
         }
 
-        // Notify listener
-        if (eventListener != null) {
-            eventListener.onNotifyReceived(peerId, message.getMessageId(),
-                    message.getDataType(), message.getData());
+        // Send ACK if requested
+        if (message.hasFlag(AppMessage.FLAG_NEED_ACK)) {
+            sendNotifyAck(peerId, connectionId, messageId);
         }
+
+        if (listener == null) return;
+
+        if (streaming) {
+            // The backing file is reclaimed by the caller once this returns, which is
+            // why NotifyPayload must not outlive the callback. A listener that throws
+            // must not take the receive loop down with it.
+            try {
+                listener.onNotifyStream(peerId, messageId, message.getDataType(),
+                        new NotifyPayload(message));
+            } catch (Exception e) {
+                log.warn("[FudpNode] onNotifyStream threw for messageId={} from {}: {}",
+                        messageId, peerId, e.getMessage(), e);
+            }
+            return;
+        }
+
+        listener.onNotifyReceived(peerId, messageId, message.getDataType(), message.getData());
     }
 
     /**

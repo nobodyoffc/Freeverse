@@ -6,6 +6,7 @@ import fudp.node.MessageFrameAssembler;
 import fudp.node.NodeConfig;
 import fudp.message.NotifyMessage;
 import fudp.node.NodeEventListener;
+import fudp.node.NotifyPayload;
 import fudp.util.ByteUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -13,13 +14,17 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -202,5 +207,110 @@ public class LargeNotifySpillTest {
         File[] leftover = spillDir.listFiles();
         assertTrue(leftover == null || leftover.length == 0,
                 "Refused notify must not leave a spill file behind");
+    }
+
+    /**
+     * A listener that takes the payload as a stream is not subject to the
+     * materialisation limit: it never forces the notify into one array, so a notify
+     * well past the limit is delivered whole instead of refused. The payload must
+     * also be readable as a stream without ever calling getData().
+     */
+    @Test
+    @Timeout(300)
+    void streamingListenerReceivesNotifyOverTheMaterialisationCap() throws Exception {
+        long cap = 8L * 1024 * 1024;
+        NodeBundle sender = createNode();
+        NodeBundle receiver = createNode(cap);
+
+        sender.node.addPeer(receiver.fid, receiver.pubKey, "127.0.0.1", receiver.port, "receiver");
+        receiver.node.addPeer(sender.fid, sender.pubKey, "127.0.0.1", sender.port, "sender");
+
+        CountDownLatch delivered = new CountDownLatch(1);
+        AtomicReference<String> digest = new AtomicReference<>();
+        AtomicLong seenLength = new AtomicLong(-1);
+        AtomicBoolean wasFileBacked = new AtomicBoolean();
+        AtomicBoolean byteArrayPathUsed = new AtomicBoolean();
+
+        receiver.node.setEventListener(new NodeEventListener() {
+            @Override
+            public boolean handlesNotifyStream() {
+                return true;
+            }
+
+            @Override
+            public void onNotifyStream(String peerId, long messageId, int dataType, NotifyPayload payload) {
+                seenLength.set(payload.length());
+                wasFileBacked.set(payload.isFileBacked());
+                try (InputStream in = payload.open()) {
+                    digest.set(sha256Hex(in));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                delivered.countDown();
+            }
+
+            @Override
+            public void onNotifyReceived(String peerId, long messageId, int dataType, byte[] data) {
+                byteArrayPathUsed.set(true);
+            }
+        });
+
+        // Warm the connection up through the streaming callback too.
+        assertTrue(sender.node.sendNotifyWaitAck(receiver.fid, "warmup".getBytes(), 30_000),
+                "Warmup notify should be acked");
+        assertTrue(delivered.await(30, TimeUnit.SECONDS), "Warmup notify should reach the stream callback");
+
+        CountDownLatch big = new CountDownLatch(1);
+        AtomicReference<CountDownLatch> gate = new AtomicReference<>(big);
+
+        // Four times the cap, and past the spill threshold, so it is on disk.
+        byte[] payload = new byte[(int) (MessageFrameAssembler.DEFAULT_SPILL_THRESHOLD + (16L * 1024 * 1024))];
+        new SecureRandom().nextBytes(payload);
+        String expected = sha256Hex(new java.io.ByteArrayInputStream(payload));
+
+        digest.set(null);
+        receiver.node.setEventListener(new NodeEventListener() {
+            @Override
+            public boolean handlesNotifyStream() {
+                return true;
+            }
+
+            @Override
+            public void onNotifyStream(String peerId, long messageId, int dataType, NotifyPayload p) {
+                seenLength.set(p.length());
+                wasFileBacked.set(p.isFileBacked());
+                try (InputStream in = p.open()) {
+                    digest.set(sha256Hex(in));
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                gate.get().countDown();
+            }
+
+            @Override
+            public void onNotifyReceived(String peerId, long messageId, int dataType, byte[] data) {
+                byteArrayPathUsed.set(true);
+            }
+        });
+
+        assertTrue(sender.node.sendNotifyWaitAck(receiver.fid, payload,
+                        NotifyMessage.DATA_TYPE_RAW, 180_000),
+                "A streaming listener should accept and ack a notify past the materialisation cap");
+        assertTrue(big.await(60, TimeUnit.SECONDS), "Streaming listener should be called");
+
+        assertEquals(payload.length, seenLength.get(), "Stream callback should see the full length");
+        assertTrue(wasFileBacked.get(), "A payload this size should be file-backed");
+        assertEquals(expected, digest.get(), "Streamed bytes should match what was sent");
+        assertFalse(byteArrayPathUsed.get(), "The byte[] callback must not be used by a streaming listener");
+    }
+
+    private static String sha256Hex(InputStream in) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        byte[] buf = new byte[64 * 1024];
+        int n;
+        while ((n = in.read(buf)) > 0) md.update(buf, 0, n);
+        StringBuilder sb = new StringBuilder();
+        for (byte b : md.digest()) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 }
