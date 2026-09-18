@@ -25,6 +25,7 @@ class IpVerifierTest {
     @BeforeEach
     void setUp() {
         config = new DDoSConfig()
+                .setEnabled(true)  // Defense is opt-in (off by default); these tests exercise it on
                 .setBaseDifficulty(8)  // Low difficulty for fast tests
                 .setMaxDifficulty(12)
                 .setChallengeTtlMs(5000)
@@ -156,6 +157,7 @@ class IpVerifierTest {
     void testChallengeOverload() {
         // Create a fresh config with minimum max pending (100 is the minimum per DDoSConfig constraint)
         DDoSConfig overloadConfig = new DDoSConfig()
+                .setEnabled(true)
                 .setBaseDifficulty(8)
                 .setMaxPendingChallenges(100);  // This is the minimum allowed
         

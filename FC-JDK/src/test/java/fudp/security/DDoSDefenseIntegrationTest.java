@@ -47,6 +47,7 @@ class DDoSDefenseIntegrationTest {
 
         // Peer B's config (responder settings)  
         configB = new DDoSConfig()
+                .setEnabled(true)  // Defense is opt-in (off by default); B plays an internet-facing responder
                 .setBaseDifficulty(8)
                 .setMaxDifficulty(12)
                 .setChallengeTtlMs(5000)
