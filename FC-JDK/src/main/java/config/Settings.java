@@ -421,6 +421,8 @@ public class Settings {
     public void initiateMuteServer(String serverName, byte[] symkey, Configure config){
         if(clientGroups==null)clientGroups = new HashMap<>();
         if(this.config==null)this.config = config;
+        // br is transient: settings loaded from file come back without it
+        if(this.br==null)this.br = this.config.getBr();
         this.symkey = symkey;
 
         System.out.println("Initiating mute server settings...");
@@ -761,7 +763,7 @@ public class Settings {
             group.addApiAccount(apiAccount);
             group.getAccountIds().add(apiAccount.getId());
             if (apiAccount.getClient() != null) group.getClientMap().put(apiAccount.getId(), apiAccount.getClient());
-        } while (br == null || askIfYes(br, "\nAdd more " + groupType + " account?"));
+        } while (br != null && askIfYes(br, "\nAdd more " + groupType + " account?"));
 
         if(group.getAccountIds().size()>1){
             ClientGroup.GroupStrategy strategy = Inputer.chooseOne(ClientGroup.GroupStrategy.values(),null,"Chose the strategy",br);

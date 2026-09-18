@@ -97,7 +97,7 @@ StartApipManager {
 		autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "distribute", 10*SEC_PER_DAY));
 		autoTaskList.add(new AutoTask(Manager.ManagerType.ACCOUNT, "saveMapsToLocalDB", SEC_PER_DAY));
 
-		Menu.welcome("APIP Manager");
+		Menu.welcome("APIP Manager v2.1");
 
 		br = new BufferedReader(new InputStreamReader(System.in));
 		settings = Starter.startServer(serverType, settingMap, ApipApi.apiNameList, modules, br, autoTaskList);

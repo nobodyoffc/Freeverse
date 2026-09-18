@@ -38,7 +38,7 @@ import java.util.Map;
 public class StartFapiServer {
     private static final Logger log = LoggerFactory.getLogger(StartFapiServer.class);
 
-    public static final String SERVER_NAME = "FAPI Server v2.0";
+    public static final String SERVER_NAME = "FAPI Server v1.1";
 
     public static final String KEY_CONSOLE_LOG_ENABLED = "consoleLogEnabled";
     private static final String CONSOLE_APPENDER_NAME = "STDOUT";

@@ -43,7 +43,7 @@ public class StartFCH {
         settingMap.put(Preparer.REORG_PROTECT_KEY, Preparer.DEFAULT_REORG_PROTECT);
     }
     public static void main(String[] args)  {
-        String name = "Freecash Chain Parser v2.0";
+        String name = "Freecash Chain Parser v2.1";
         Menu.welcome(name);
 
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));

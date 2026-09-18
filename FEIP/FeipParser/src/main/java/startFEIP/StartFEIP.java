@@ -39,7 +39,7 @@ public class StartFEIP {
 	// Active parser reference for graceful shutdown
 	private static volatile FileParser activeParser;
 
-	private final static String serverName = "FEIP";
+	private final static String serverName = "FEIP v2.1";
 
 
 	public static void main(String[] args) {
