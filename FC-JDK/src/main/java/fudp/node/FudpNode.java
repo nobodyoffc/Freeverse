@@ -1188,8 +1188,11 @@ public class FudpNode implements Protocol.PacketListener {
      * {@link ResponseMessage} so adopters can stream them; REQUEST payloads (large
      * uploads) are delivered as a file-backed {@link RequestMessage} — the service
      * name is read from the front of the spill file and the bulk data stays on disk
-     * until the handler reads it. The temp file is deleted on any failure or for a
-     * message type that is never legitimately large here.
+     * until the handler reads it. NOTIFY payloads (large one-way sends) are delivered
+     * as a file-backed {@link NotifyMessage} through the same path as an in-memory
+     * NOTIFY, so a NOTIFY that asked for one still gets its NOTIFY_ACK. The temp file
+     * is deleted on any failure or for a message type that is never legitimately large
+     * here.
      */
     private void handleIncomingFileBacked(ConnectionContext ctx, AssembledMessage message) {
         String peerId = ctx.peerId();
@@ -1267,6 +1270,43 @@ public class FudpNode implements Protocol.PacketListener {
                 return;
             }
 
+            if (type == MessageType.NOTIFY) {
+                // payload = [dataType(1)][dataLen(4)][data]; both scalars sit in the header window.
+                if (payloadLength < 5 || payloadOffset + 5 > header.length) {
+                    log.error("[FudpNode] Malformed large NOTIFY from {} (len={}, payloadLen={})",
+                            peerId, total, payloadLength);
+                    return;
+                }
+                int dataType = header[payloadOffset] & 0xFF;
+                long declaredLen = ((long) (header[payloadOffset + 1] & 0xFF) << 24)
+                        | ((long) (header[payloadOffset + 2] & 0xFF) << 16)
+                        | ((long) (header[payloadOffset + 3] & 0xFF) << 8)
+                        | ((long) (header[payloadOffset + 4] & 0xFF));
+                long dataOffset = payloadOffset + 5L;
+                long dataLength = payloadLength - 5;
+                if (declaredLen != dataLength) {
+                    log.error("[FudpNode] Malformed large NOTIFY from {} (len={}): declared dataLen={} "
+                            + "but payload carries {}", peerId, total, declaredLen, dataLength);
+                    return;
+                }
+
+                NotifyMessage notify = new NotifyMessage();
+                notify.setMessageId(msgId);
+                notify.setFlags(flags);
+                notify.setDataType(dataType);
+                notify.setFileBackedData(message.file(), dataOffset, dataLength);
+
+                log.debug("[FudpNode] Routing file-backed NOTIFY from {} (messageId={}, dataType={}, dataLen={}, spill={})",
+                        peerId, msgId, dataType, dataLength, message.file().getName());
+                // handedOff stays false on purpose: handleNotifyMessage delivers a byte[]
+                // to the listener via NotifyMessage.getData(), so nothing downstream owns
+                // the spill file and the finally-block below deletes it.
+                handleNotifyMessage(peerId, ctx.connectionId(), notify);
+                return;
+            }
+
+            // NOTIFY_ACK, PING, PONG and ERROR are small by construction — a >16 MB one is
+            // malformed or hostile, so drop it and reclaim the spill file.
             log.warn("[FudpNode] Dropping large file-backed {} message from {} (len={}): unexpected type on the "
                     + "streaming receive path", type, peerId, total);
         } catch (Exception e) {

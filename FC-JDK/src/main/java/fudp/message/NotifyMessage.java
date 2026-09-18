@@ -1,5 +1,9 @@
 package fudp.message;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -24,6 +28,15 @@ public class NotifyMessage extends AppMessage {
 
     private int dataType;
     private byte[] data;
+
+    // File-backed notify data: for a large notify spilled to disk during
+    // reassembly, `data` lives at [dataFileOffset, +dataFileLength) inside
+    // dataFile (dataType stays in memory — it is one byte). `data` is null
+    // until first materialised via getData(); adopters should stream via
+    // openData().
+    private File dataFile;
+    private long dataFileOffset;
+    private long dataFileLength;
 
     public NotifyMessage() {
         super(MessageType.NOTIFY);
@@ -51,20 +64,74 @@ public class NotifyMessage extends AppMessage {
         this.dataType = dataType;
     }
 
+    /**
+     * The notify data. For a file-backed notify this lazily reads the whole
+     * region into memory on first call (backward compatibility with byte[]-based
+     * consumers, including {@code NodeEventListener.onNotifyReceived}); prefer
+     * {@link #openData()} for large payloads.
+     */
     public byte[] getData() {
+        if (data == null && dataFile != null) {
+            try (InputStream in = openData()) {
+                data = in.readAllBytes();
+            } catch (IOException e) {
+                throw new UncheckedIOException("Failed to read file-backed notify data", e);
+            }
+        }
         return data;
     }
 
     public void setData(byte[] data) {
         this.data = data != null ? data : new byte[0];
+        this.dataFile = null;
+    }
+
+    public boolean isFileBacked() {
+        return dataFile != null;
+    }
+
+    public File getDataFile() {
+        return dataFile;
+    }
+
+    /** Point this notify's data at [offset, offset+length) inside {@code file}. */
+    public void setFileBackedData(File file, long offset, long length) {
+        this.dataFile = file;
+        this.dataFileOffset = offset;
+        this.dataFileLength = length;
+        this.data = null;
+    }
+
+    /** Length of the notify data, whether held in RAM or file-backed. */
+    public long dataLength() {
+        if (dataFile != null) return dataFileLength;
+        return data != null ? data.length : 0;
+    }
+
+    /** Open a stream over the notify data (works for both in-RAM and file-backed). */
+    public InputStream openData() throws IOException {
+        if (dataFile != null) {
+            return new FileRegionInputStream(dataFile, dataFileOffset, dataFileLength);
+        }
+        return new java.io.ByteArrayInputStream(data != null ? data : new byte[0]);
+    }
+
+    /** Delete the backing temp file, if file-backed. Call once done reading. */
+    public void deleteBackingFile() {
+        if (dataFile != null) {
+            //noinspection ResultOfMethodCallIgnored
+            dataFile.delete();
+            dataFile = null;
+        }
     }
 
     @Override
     public byte[] encodePayload() {
-        ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + data.length);
+        byte[] body = getData();
+        ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + body.length);
         buffer.put((byte) dataType);
-        buffer.putInt(data.length);
-        buffer.put(data);
+        buffer.putInt(body.length);
+        buffer.put(body);
         return buffer.array();
     }
 
@@ -88,7 +155,8 @@ public class NotifyMessage extends AppMessage {
         return "NotifyMessage{" +
                 "messageId=" + messageId +
                 ", dataType=" + dataType +
-                ", dataLength=" + data.length +
+                ", dataLength=" + dataLength() +
+                (dataFile != null ? ", fileBacked=true" : "") +
                 '}';
     }
 }
