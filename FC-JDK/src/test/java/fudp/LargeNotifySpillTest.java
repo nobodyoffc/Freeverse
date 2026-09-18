@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.File;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -54,6 +55,11 @@ public class LargeNotifySpillTest {
     private record NodeBundle(FudpNode node, String fid, byte[] pubKey, int port) {}
 
     private NodeBundle createNode() throws IOException {
+        return createNode(-1);
+    }
+
+    /** @param materialCap bytes, or -1 to leave the default in place. */
+    private NodeBundle createNode(long materialCap) throws IOException {
         int port = portCounter++;
         byte[] privKey = ByteUtils.randomBytes(32);
         byte[] pubKey = KeyTools.prikeyToPubkey(privKey);
@@ -63,6 +69,7 @@ public class LargeNotifySpillTest {
         config.setMaxPacketSize(1400);
         config.setSocketBufferSize(2 * 1024 * 1024);
         config.setDataDir(System.getProperty("java.io.tmpdir") + "/fudp_notify_spill_" + port);
+        if (materialCap >= 0) config.setMaxMaterializedMessageBytes(materialCap);
 
         FudpNode node = new FudpNode(privKey, config);
         nodes.add(node);
@@ -139,5 +146,61 @@ public class LargeNotifySpillTest {
         // disk and delivery goes through the file-backed receive path.
         int size = (int) (MessageFrameAssembler.DEFAULT_SPILL_THRESHOLD + (4L * 1024 * 1024));
         assertNotifyRoundTrips(size);
+    }
+
+    /**
+     * A NOTIFY past the receiver's materialisation limit is refused rather than
+     * turned into a byte[] that the heap may not have room for. The sender must
+     * learn this from an ERROR and give up immediately -- waiting out the ACK timer
+     * would be the same silent stall the drop used to cause -- and the spill file
+     * must not be left behind.
+     */
+    @Test
+    @Timeout(180)
+    void notifyOverMaterialisationCapIsRefusedAndSenderFailsFast() throws Exception {
+        long cap = 20L * 1024 * 1024;
+        NodeBundle sender = createNode();
+        NodeBundle receiver = createNode(cap);
+
+        sender.node.addPeer(receiver.fid, receiver.pubKey, "127.0.0.1", receiver.port, "receiver");
+        receiver.node.addPeer(sender.fid, sender.pubKey, "127.0.0.1", sender.port, "sender");
+
+        CountDownLatch warm = new CountDownLatch(1);
+        CountDownLatch delivered = new CountDownLatch(1);
+        receiver.node.setEventListener(new NodeEventListener() {
+            @Override
+            public void onNotifyReceived(String peerId, long messageId, int dataType, byte[] data) {
+                if (data.length == "warmup".length()) warm.countDown();
+                else delivered.countDown();
+            }
+        });
+        assertTrue(sender.node.sendNotifyWaitAck(receiver.fid, "warmup".getBytes(), 30_000),
+                "Warmup notify should be acked");
+        assertTrue(warm.await(30, TimeUnit.SECONDS), "Warmup notify should be delivered");
+        Thread.sleep(300);
+
+        // Comfortably over the cap, and over the spill threshold so it takes the
+        // file-backed path where the limit is enforced.
+        byte[] payload = new byte[(int) cap + (8 * 1024 * 1024)];
+        new SecureRandom().nextBytes(payload);
+
+        long ackTimeoutMs = 60_000;
+        long startedAt = System.currentTimeMillis();
+        boolean acked = sender.node.sendNotifyWaitAck(receiver.fid, payload,
+                NotifyMessage.DATA_TYPE_RAW, ackTimeoutMs);
+        long elapsed = System.currentTimeMillis() - startedAt;
+
+        assertFalse(acked, "An over-cap notify must not be reported as acked");
+        assertTrue(elapsed < ackTimeoutMs / 2,
+                "Sender should fail fast on the ERROR, not wait out the ACK timer (took " + elapsed + "ms)");
+        assertFalse(delivered.await(2, TimeUnit.SECONDS),
+                "An over-cap notify must not be delivered to the listener");
+
+        // The refused message's spill file must be reclaimed, not leaked.
+        File spillDir = new File(System.getProperty("java.io.tmpdir")
+                + "/fudp_notify_spill_" + receiver.port, "recv-spill");
+        File[] leftover = spillDir.listFiles();
+        assertTrue(leftover == null || leftover.length == 0,
+                "Refused notify must not leave a spill file behind");
     }
 }

@@ -93,10 +93,14 @@ public class FudpNode implements Protocol.PacketListener {
     private final long maxAssembledMessageBytes;
     /** Messages whose declared length exceeds this are spilled to a temp file during reassembly. */
     private final long maxInMemoryMessageBytes;
+    private final long maxMaterializedMessageBytes;
     /** Directory for spilled reassembly temp files. */
     private final File recvSpillDir;
 
     // Throttling for large-transfer receive logging
+    /** Error code returned to a sender whose NOTIFY is too large to deliver as a byte[]. */
+    public static final int ERROR_CODE_PAYLOAD_TOO_LARGE = 2002;
+
     private static final long RECEIVE_LOG_MIN_BYTES = 1024 * 1024;   // only log transfers > 1MB
     private static final long RECEIVE_LOG_INTERVAL_MS = 5000;        // at most one progress line per 5s per stream
 
@@ -110,6 +114,7 @@ public class FudpNode implements Protocol.PacketListener {
                 config.getMaxAssembledMessageBytes(),
                 config.getMaxFileSize() + 1024 * 1024);
         this.maxInMemoryMessageBytes = config.getMaxInMemoryMessageBytes();
+        this.maxMaterializedMessageBytes = config.getMaxMaterializedMessageBytes();
         this.recvSpillDir = new File(config.getResolvedDataDir(), "recv-spill");
         //noinspection ResultOfMethodCallIgnored
         this.recvSpillDir.mkdirs();
@@ -1290,6 +1295,20 @@ public class FudpNode implements Protocol.PacketListener {
                     return;
                 }
 
+                // onNotifyReceived takes a byte[], so delivering this means allocating
+                // dataLength bytes in one go. Reassembly can spill far more than the heap
+                // can hold, so refuse past the cap instead of trying — and tell the sender,
+                // which is otherwise blocked until its ACK timer runs out.
+                if (dataLength > maxMaterializedMessageBytes) {
+                    log.warn("[FudpNode] Refusing {}-byte NOTIFY from {} (messageId={}): over the {}-byte "
+                            + "materialisation limit for byte[] delivery", dataLength, peerId, msgId,
+                            maxMaterializedMessageBytes);
+                    sendErrorFor(peerId, ctx.connectionId(), msgId, ERROR_CODE_PAYLOAD_TOO_LARGE,
+                            "NOTIFY payload " + dataLength + " exceeds the receiver's "
+                                    + maxMaterializedMessageBytes + "-byte limit");
+                    return;
+                }
+
                 NotifyMessage notify = new NotifyMessage();
                 notify.setMessageId(msgId);
                 notify.setFlags(flags);
@@ -1387,6 +1406,13 @@ public class FudpNode implements Protocol.PacketListener {
                 case NOTIFY_ACK -> {
                     handleNotifyAck(peerId, (NotifyAckMessage) message);
                     return;
+                }
+                case ERROR -> {
+                    // An ERROR keyed to a NOTIFY we are still waiting on releases that
+                    // waiter now; without this the sender sits out its full ACK timeout
+                    // even though the receiver has already said no. The message still
+                    // goes on to the handler for logging and onError.
+                    failPendingAck(peerId, (ErrorMessage) message);
                 }
                 default -> {}
             }
@@ -1534,6 +1560,23 @@ public class FudpNode implements Protocol.PacketListener {
     }
 
     /**
+     * Release a notify sender blocked on an ACK that will never come, because the
+     * peer rejected the message instead. Returns quietly when the ERROR refers to
+     * something other than a pending notify (a request, say), which the normal
+     * error handling deals with.
+     */
+    private void failPendingAck(String peerId, ErrorMessage error) {
+        long forId = error.getMessageId();
+        CompletableFuture<Boolean> future = pendingAckFutures.remove(forId);
+        if (future == null) return;
+
+        pendingNotifyAcks.remove(forId);
+        log.debug("[FudpNode] Peer {} rejected notify messageId={} (code={}): {}",
+                peerId, forId, error.getErrorCode(), error.getErrorMessage());
+        future.complete(false);
+    }
+
+    /**
      * Handle notify acknowledgment.
      */
     private void handleNotifyAck(String peerId, NotifyAckMessage ack) {
@@ -1551,6 +1594,33 @@ public class FudpNode implements Protocol.PacketListener {
         CompletableFuture<Boolean> future = pendingAckFutures.remove(ackedId);
         if (future != null) {
             future.complete(true);
+        }
+    }
+
+    /**
+     * Report a failure to the peer, tagged with the message it refers to so the
+     * sender can match it to what it sent and stop waiting.
+     */
+    private void sendErrorFor(String peerId, long connectionId, long forMessageId,
+                              int errorCode, String errorText) {
+        try {
+            PeerConnection conn = protocol.getConnectionManager().getByConnectionId(connectionId);
+            if (conn == null) {
+                conn = protocol.getConnectionManager().getAnyConnection(peerId);
+            }
+            if (conn == null) return;
+
+            Stream stream = conn.openStream();
+            ErrorMessage err = new ErrorMessage(errorCode, errorText);
+            // Keyed to the offending message, not to this reply: that is how the
+            // receiving side matches an ERROR to what it is waiting on.
+            err.setMessageId(forMessageId);
+
+            byte[] encoded = MessageCodec.encode(err);
+            protocol.sendAndClose(stream, encoded);
+        } catch (IOException e) {
+            log.debug("[FudpNode] Could not report error to {} for messageId={}: {}",
+                    peerId, forMessageId, e.getMessage());
         }
     }
 

@@ -32,6 +32,13 @@ public class NodeConfig {
     // a large maxFileSize does not size the heap.
     private long maxInMemoryMessageBytes = 16L * 1024 * 1024;  // 16MB stays in RAM
     private long maxAssembledMessageBytes = 1073741824L + 1024 * 1024; // 1GB + slack (spilled to disk)
+    // Ceiling on a payload that must be handed to the application as a single byte[]
+    // because the delivery API offers no stream. Reassembly can spill a message far
+    // larger than this to disk safely, but materialising one costs that much heap in
+    // one allocation, so a payload past this limit is refused rather than delivered.
+    // Streamed paths (a file-backed RESPONSE read through openData()) are not subject
+    // to it and remain bounded only by maxAssembledMessageBytes.
+    private long maxMaterializedMessageBytes = 64L * 1024 * 1024; // 64MB
 
     // Timeouts
     private long requestTimeoutMs = 30000;   // 30 seconds
@@ -210,6 +217,20 @@ public class NodeConfig {
      */
     public NodeConfig setMaxAssembledMessageBytes(long maxAssembledMessageBytes) {
         this.maxAssembledMessageBytes = maxAssembledMessageBytes;
+        return this;
+    }
+
+    public long getMaxMaterializedMessageBytes() {
+        return maxMaterializedMessageBytes;
+    }
+
+    /**
+     * Ceiling on a payload delivered as a single {@code byte[]} (currently NOTIFY,
+     * whose listener API takes no stream). A larger payload is refused with an ERROR
+     * to the sender instead of being materialised. Does not limit streamed delivery.
+     */
+    public NodeConfig setMaxMaterializedMessageBytes(long maxMaterializedMessageBytes) {
+        this.maxMaterializedMessageBytes = maxMaterializedMessageBytes;
         return this;
     }
 

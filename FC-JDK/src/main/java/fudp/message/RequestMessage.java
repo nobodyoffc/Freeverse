@@ -62,11 +62,24 @@ public class RequestMessage extends AppMessage {
      */
     public byte[] getData() {
         if (data == null && dataFile != null) {
+            // Read into one exactly-sized array: readAllBytes() grows a buffer and
+            // copies at the end, so it peaks at roughly twice the payload size.
+            if (dataFileLength > Integer.MAX_VALUE) {
+                throw new IllegalStateException("File-backed request too large to materialise: " + dataFileLength);
+            }
+            byte[] buf = new byte[(int) dataFileLength];
             try (InputStream in = openData()) {
-                data = in.readAllBytes();
+                int off = 0;
+                while (off < buf.length) {
+                    int n = in.read(buf, off, buf.length - off);
+                    if (n < 0) throw new IOException("Truncated file-backed request data at " + off
+                            + " of " + buf.length);
+                    off += n;
+                }
             } catch (IOException e) {
                 throw new UncheckedIOException("Failed to read file-backed request data", e);
             }
+            data = buf;
         }
         return data;
     }
