@@ -160,6 +160,8 @@ Each node generates a random 64-bit Session Epoch value at startup. This value:
 
 The Session Epoch MUST be generated using a cryptographically secure random number generator. The value `0` is reserved on the wire to mean "unknown or omitted" and SHOULD NOT be generated as a real session epoch.
 
+**The epoch is a random value, not a counter, so implementations MUST NOT order two epochs or treat a later one as superseding an earlier one.** A connection records the peer's epoch once, on the first packet that carries one, and does not overwrite it; detecting a *change* is the replay window's job (step 3 below), and a change means restart, not progress. An implementation that assigns the epoch from every packet lets a delayed or reordered packet carrying the previous epoch replace the current one, after which the connection believes a restart it has already handled is still to come. On handling a restart, the connection clears its stored epoch so the next packet establishes the new one, and clears `epochConfirmed` so its own epoch is announced again — a restarted peer has forgotten that it ever acknowledged it, and without this it can never detect the local node's restart for the remainder of the connection.
+
 ### Restart Detection
 
 When a receiver observes a change in the Session Epoch for an existing connection:
@@ -183,9 +185,27 @@ FUDP implements replay protection using a per-connection sliding window combined
 
 The following pseudocode defines the replay check procedure. Implementations MUST implement equivalent logic.
 
+**Before calling this, the caller MUST resolve an omitted session epoch to the connection's established one.** The epoch rides in the packet plaintext only until the peer has seen it acknowledged (see [Session Epoch](#session-epoch)); after that the `HAS_EPOCH` flag is cleared to save eight bytes per packet. A packet without the flag is therefore *not* a peer declaring epoch zero — zero means "unknown or omitted" — and passing a literal zero into step 3 compares it against the epoch already stored, does not match, and reports PEER_RESTART. Every packet after the flag goes away would reset the replay window, which destroys replay protection entirely for the rest of the connection while looking like normal operation.
+
+```
+// At the call site, before checkAndRecord:
+incomingEpoch = packet.sessionEpoch
+if incomingEpoch == 0 AND NOT packet.header.hasEpoch:
+    incomingEpoch = connection.sessionEpoch     // established value stands in
+```
+
+Both reference implementations do this (`Protocol.handleIncomingPacket`, marked E2). The window's own epoch is likewise set once and not overwritten: see [Session Epoch](#session-epoch).
+
 ```
 function checkAndRecord(connectionId, packetNumber, timestamp, sessionEpoch):
     // Step 1: Validate timestamp
+    //
+    // Compute the skew without trapping or wrapping: `timestamp` is an
+    // attacker-shaped field, and both the subtraction and abs() of its
+    // result are undefined at the edges of a signed 64-bit range
+    // (abs(INT64_MIN) has no representation). A difference that cannot
+    // be represented is further out of tolerance than any tolerance
+    // permits.
     if abs(timestamp - currentTime()) > TIMESTAMP_TOLERANCE:
         return INVALID_TIMESTAMP
 
@@ -257,8 +277,18 @@ The sliding window SHOULD be implemented as a bitset of size WINDOW_SIZE. The `m
 ### Handling of Results
 
 - **OK**: Process the packet normally.
-- **DUPLICATE**: Drop the packet silently. Implementations SHOULD NOT send any response to duplicate packets.
-- **INVALID_TIMESTAMP**: The Java reference implementation sends a CONNECTION_CLOSE with `INTERNAL_ERROR` and removes the connection. Other implementations MAY drop silently if they prefer not to reveal timestamp-validation policy.
+- **DUPLICATE**: Drop the packet silently. Implementations MUST NOT send any response to duplicate packets, including an ACK.
+
+  This is safe because a packet number is never reused: every send allocates a fresh one (FUDP3, §4.3, "Retransmitted packets carry new packet numbers. The original packet number is permanently retired and MUST NOT be reused"), so a repeated packet number is never the peer retrying something whose ACK was lost. It is a duplicated datagram or a replay, and the peer's loss recovery neither expects nor needs an answer to it.
+
+  Acknowledging one is actively harmful: it feeds an attacker-chosen packet number into the ACK generator, whose retention bookkeeping (FUDP3, §2.1) is keyed on when each number was first received. An implementation that refreshes that timestamp on a duplicate can have its retention pruning stalled indefinitely by a peer replaying a single old packet.
+- **INVALID_TIMESTAMP**: Drop the packet. Implementations MUST NOT close the connection on this result.
+
+  An out-of-tolerance timestamp is not evidence of a misbehaving peer, because the attacker chooses when the packet arrives. Any observer who can capture one genuine data packet holds a valid, correctly-signed packet forever; once the tolerance window has elapsed, replaying it fails this check by arithmetic alone. If that tears the connection down, one captured packet becomes an unlimited remote connection-reset primitive against any connection the attacker can observe, requiring no key material and no ability to forge anything.
+
+  Note also that this check runs *before* the sliding-window check, so a replayed packet that the window would otherwise have caught as a DUPLICATE never reaches that branch. Dropping here is therefore the only outcome that leaves the connection's other protections in play.
+
+  Earlier revisions of this document recorded the reference implementations as sending a CONNECTION_CLOSE with `INTERNAL_ERROR` and removing the connection, and permitted other implementations to "drop silently if they prefer not to reveal timestamp-validation policy". That framing treated the choice as a matter of information disclosure; it is not. See the revision history.
 - **PEER_RESTART**: Process the packet normally. The connection state has been reset. Implementations SHOULD log the peer restart event.
 
 ## Sensitive Data Handling
@@ -318,6 +348,13 @@ The reference implementation further applies a per-source decrypt-failure rate l
 |FUDP3 (Loss & Congestion)|Defines ACK processing and packet number assignment that the replay protection mechanism operates on.|
 |FUDP5 (DDoS Defense)|Defines additional defense mechanisms (proof-of-work, IP verification) that complement the security measures in this document.|
 
+## Versioning
+
+|Ver|Date|Changes|
+|---|---|---|
+|1|2026-03-28|Initial draft.|
+|1 (rev)|2026-09-18|Corrections from a cross-implementation audit (Swift/FC-Mac against FC-JDK and FC-AJDK), in each case resolved against the reference implementations rather than in their favour: (1) [Replay Protection](#handling-of-results) — INVALID_TIMESTAMP MUST NOT close the connection. Both references sent a CONNECTION_CLOSE, which turns a single captured packet into an unlimited remote connection-reset primitive, since the attacker chooses when to replay it and the tolerance elapses on its own. The previous text framed the choice as timestamp-policy disclosure, which it is not. (2) [Replay Protection](#handling-of-results) — DUPLICATE MUST NOT be answered, upgraded from SHOULD NOT, with the reason recorded: packet numbers are never reused (FUDP3 §4.3), so a repeated number is never a retransmission needing an ACK, and answering one lets a peer replaying a single old packet stall the ACK generator's retention pruning indefinitely. Both references answered duplicates. (3) [Replay Check Algorithm](#replay-check-algorithm) — documented the epoch fallback the pseudocode omitted: a packet whose HAS_EPOCH flag is clear means the established epoch, not zero, and implementing the pseudocode literally resets the replay window on every packet once the peer stops sending its epoch, silently disabling replay protection. Both references have this fallback; no revision of this document had described it. (4) [Session Epoch](#session-epoch) — stated that the epoch is random and MUST NOT be ordered or overwritten, and that a handled restart clears both the stored peer epoch and `epochConfirmed`.|
+
 ## Reference Implementation
 
 The reference implementation is in Java (FC-JDK), located in the `fudp` package:
@@ -327,4 +364,6 @@ The reference implementation is in Java (FC-JDK), located in the `fudp` package:
 - `fudp/handler/MessageHandler.java` -- Encryption and decryption of packet payloads.
 - `fudp/node/FudpNode.java` -- Handshake flow and public key exchange.
 
-The FC-JDK implementation is authoritative for resolving ambiguities in this specification.
+The FC-JDK implementation is authoritative for resolving *ambiguities* in this specification — questions this document leaves open, or leaves to the implementer.
+
+It is not authoritative where it **conflicts** with a requirement stated here. A conflict is a bug in one of the two, and which one is settled by argument, not by precedence: the 2026-09-18 revision above records three cases where the reference implementations were found to be wrong and this document right, and one where this document was silently incomplete and only the implementations were correct. A reader who finds a disagreement should expect either outcome and raise it rather than assume the code is the answer.

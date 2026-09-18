@@ -65,7 +65,19 @@ public class AckManager {
         if (newSinceLastAck == 0) {
             firstPendingAckTime = System.currentTimeMillis();
         }
-        if (receivedPackets.put(packetNumber, System.currentTimeMillis()) == null) {
+        // A number already here keeps its ORIGINAL receive time.
+        //
+        // putIfAbsent, not put: the retention prune in
+        // generateAckFrame() walks entries in key order and breaks at
+        // the first one newer than the cutoff, which is correct only
+        // while receive times ascend with packet numbers. Refreshing an
+        // existing entry parked a recent time at a low key and stopped
+        // the prune there — permanently, and taking the MAX_RETAINED
+        // check with it, since that test is inside the same loop.
+        //
+        // The retention window asks how long ago we first saw a number,
+        // which a second copy of it does not change.
+        if (receivedPackets.putIfAbsent(packetNumber, System.currentTimeMillis()) == null) {
             newSinceLastAck++;
         }
 

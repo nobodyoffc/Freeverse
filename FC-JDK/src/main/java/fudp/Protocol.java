@@ -34,6 +34,8 @@ public class Protocol {
     private final PacketCrypto packetCrypto;
     private final ReplayProtection replayProtection;
     private final DecryptRateLimiter decryptRateLimiter;
+    private final java.util.concurrent.atomic.AtomicLong invalidTimestampCount =
+            new java.util.concurrent.atomic.AtomicLong();
 
     private final DatagramChannel channel;
     private Thread receiveThread;
@@ -1166,8 +1168,24 @@ public class Protocol {
                     conn.getConnectionId(), packet.getPacketNumber(), packet.getTimestamp(), incomingEpoch);
 
             if (result == ReplayProtection.CheckResult.INVALID_TIMESTAMP) {
-                log.warn("[Protocol] Invalid timestamp from {}", senderId);
-                close(conn.getConnectionId(), ConnectionCloseFrame.INTERNAL_ERROR, "Invalid timestamp");
+                // Drop the packet; do NOT close the connection.
+                //
+                // Closing here handed anyone who could capture one
+                // genuine packet a connection reset they could replay at
+                // will: the packet is real, so it decrypts and resolves
+                // to the connection, and once the timestamp tolerance
+                // has elapsed it fails this check by arithmetic alone.
+                // Repeat to keep the peer permanently disconnected.
+                //
+                // FUDP4V1 allows the quieter reading ("other
+                // implementations MAY drop silently"), and a packet we
+                // have already decided not to act on is not grounds for
+                // ending a working session.
+                long n = invalidTimestampCount.incrementAndGet();
+                if (n <= 5 || n % 1000 == 0) {
+                    log.warn("[Protocol] Dropping packet with out-of-tolerance timestamp from {} (count={})",
+                            senderId, n);
+                }
                 return;
             }
 
@@ -1182,10 +1200,26 @@ public class Protocol {
             boolean ackEliciting = packet.isAckEliciting();
             if (result == ReplayProtection.CheckResult.DUPLICATE) {
                 replayDuplicateCount.incrementAndGet();
-                if (ackEliciting) {
-                    conn.getAckManager().onPacketReceived(packet.getPacketNumber());
-                    sendAck(conn);
-                }
+                // Drop it silently. FUDP4V1: "SHOULD NOT send any
+                // response to duplicate packets."
+                //
+                // This used to re-ACK, on the reasoning that a duplicate
+                // is the peer retransmitting something whose ACK went
+                // missing. It is not: sendPacket() allocates a fresh
+                // packet number on every send, retransmissions included
+                // (as QUIC does), so a repeated number is never a retry
+                // — it is a duplicated datagram or a replay.
+                //
+                // Answering one also fed an attacker-chosen packet
+                // number into AckManager.onPacketReceived, which
+                // refreshes that number's receive time. The retention
+                // prune in generateAckFrame() walks entries in key order
+                // and breaks at the first one newer than the cutoff, so
+                // refreshing an OLD number stops the prune there
+                // permanently — taking the MAX_RETAINED check with it,
+                // since that test lives inside the same loop. Replaying
+                // the lowest retained packet number then grew
+                // receivedPackets for as long as the replay continued.
                 return;
             }
 
