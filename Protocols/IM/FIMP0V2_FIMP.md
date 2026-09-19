@@ -218,7 +218,7 @@ FIMP is a language-agnostic protocol. Any platform able to produce and consume t
 |`sequence`|int64|No (local-only)|No|Tie-breaker for messages within the same millisecond. Local ordering aid.|
 |`contentType`|enum `ContentType`|Yes|Yes|See [Enumerations](#enumerations).|
 |`body`|byte string|Yes (flag)|Conditional|**The only private field.** Carries both the textual and the binary payload, framed as described in §3. Present whenever the message has any payload at all. When the mode seals at the IM layer, `body` holds the sealed bytes and nothing else in the envelope is encrypted. See [Encryption Model](#encryption-model).|
-|`symkeyVersion`|int32|Yes (flag)|Conditional|Identifies which version of the per-room or per-team symkey sealed `body`. REQUIRED whenever `body` is sealed symmetrically (Room, Team). MUST NOT be set otherwise.|
+|`symkeyVersion`|uint32|Yes (flag)|Conditional|Identifies which version of the per-room or per-team symkey sealed `body`. REQUIRED whenever `body` is sealed symmetrically (Room, Team). MUST NOT be set otherwise. Read as **unsigned**; see [Symkey id](#symkey-id).|
 |`requestType`|enum `RequestType`|Yes (flag)|Conditional|Set when `contentType` is `REQUEST`. See [Enumerations](#enumerations).|
 |`requestId`|string|Yes (flag)|Conditional|For `RESPONSE` and `RECEIPT` content types, the `id` of the message being answered or acknowledged.|
 |`replyToId`|string|Yes (flag)|No|`id` of the message being replied to.|
@@ -550,7 +550,24 @@ Defined by the corresponding on-chain FEIP entity. FIMP treats them as opaque st
 
 ### Symkey id
 
-Symkeys are addressed by `(entityId, version)` where `entityId` is the `roomId` or `teamId`. The `symkeyVersion` field of `ImMessage` carries the version. Versions are monotonic increasing 32-bit integers starting at 1.
+Symkeys are addressed by `(entityId, version)` where `entityId` is the `roomId` or `teamId`. The `symkeyVersion` field of `ImMessage` carries the version.
+
+A version is **the number of seconds since the Unix epoch at the moment the key was minted**, floored above every version the minting device already knows for that entity:
+
+```
+version = max(nowSeconds, highestKnownVersion(entityId) + 1)
+```
+
+The field is 32 bits on the wire and MUST be read as **unsigned**. A signed reading -- `(long) buf.getInt()`, `Int32(bitPattern:)` -- makes every version minted after January 2038 negative, and a negative value is not a version at all (see the last paragraph of this section), so every key minted from then on would be rejected. Unsigned, the field is good until 2106.
+
+Two properties follow, and the mode documents (FIMP2 §7.2, FIMP4 §7.2) depend on both:
+
+- **It orders itself.** The larger version is the later key, so "the current key" is the highest version held, with no counter to agree on and no coordination between the minter's devices.
+- **It cannot be minted twice by one device**, because of the floor. A device that mints twice within one second is forced to `highestKnown + 1`, and a device whose clock steps backwards cannot mint a key that sorts below one it already holds.
+
+Version numbers below **1,000,000,000** are pre-timestamp counters (1, 2, 3, ...) minted by earlier implementations. They remain valid and MUST be accepted. They cannot collide with a timestamp, and `max()` still selects the newest key, because every timestamp exceeds every such counter. A value of 0, or any value read as negative, is not a version.
+
+Two devices minting in the *same second* for the same entity -- possible only for two devices holding one identity's key, partitioned from each other -- produce two distinct keys at one version. Receivers MUST tolerate this rather than assume it away: see FIMP2 §7.2 and FIMP4 §7.2, which require that a stored symkey is never overwritten and that a receiver holding two keys at one version tries each.
 
 ## Changes from Version 1
 

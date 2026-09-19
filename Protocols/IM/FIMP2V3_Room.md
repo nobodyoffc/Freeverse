@@ -39,7 +39,7 @@
 - [5. Request / Response](#5-request--response)
   - [5.1. ROOM_INFO](#51-room_info)
   - [5.2. SYMKEY](#52-symkey)
-  - [5.3. SYMKEY_HISTORY](#53-symkey_history)
+  - [5.3. SYMKEY_HISTORY (deprecated)](#53-symkey_history-deprecated)
   - [5.4. HISTORY](#54-history)
 - [6. DOCK Use](#6-dock-use)
 - [7. Encryption](#7-encryption)
@@ -258,6 +258,16 @@ Push of a symmetric key for a room. Used by the owner to deliver the current sym
 
 The `asyOneWayCipherJson` is the JSON serialization of a `CryptoDataByte` of `type: "asy1way"` wrapping the raw symkey bytes to the recipient's pubkey, per FTSP.
 
+A receiver MUST store the delivered key only when one of these holds:
+
+1. the verified sender is the room **owner**; or
+2. the verified sender is the receiver's **own FID**; or
+3. the message carries a `requestId` matching a request **this device** has outstanding -- a `SYMKEY` request (§5.2) or a `ROOM_INFO` request (§5.1), since a member's `ROOM_INFO` response legitimately carries the key -- and the version delivered is one that request could be answered with.
+
+The second case is not a weakening. One FID may be signed in on several devices, and the envelope signature (FIMP0V3 §3) proves the sender holds this identity's prikey -- so the key comes from this identity, whatever device sent it. For a room, whose keys exist nowhere but on its members' devices, a sibling device is often the only copy left.
+
+Anything else is discarded. A key from a member who was not asked is an unsolicited write into the store that decides what this device can read, and since §7.1 forbids overwriting, accepting it would let any member add rows to any other member's key store indefinitely. A receiver MUST NOT infer solicitation from the mere presence of a `requestId`: the id must match a request the receiver still holds a record of (§7.4).
+
 ### 4.5. MEMBERS
 
 Push of a member list update without a full `RoomInfo`. OPTIONAL. Implementations MAY use `MEMBERS` for incremental updates that do not change the symkey or other metadata.
@@ -334,29 +344,25 @@ The responder MUST verify that the requester is a current member before respondi
 
 ### 5.2. SYMKEY
 
-Request the current room symkey (or a specific version) from any current member.
+Request room symkeys from any current member: the current one, one named version, or a batch. Used by a joiner the owner has not yet pushed to, by a member whose key store was lost, and by a member recovering the versions that seal messages sent before they arrived.
 
 |Direction|Field|Value|
 |---|---|---|
 |Request|`type`|`P2P`|
 |Request|`contentType`|`REQUEST`|
 |Request|`requestType`|`SYMKEY`|
-|Request|`content`|`"<roomId>"` for the current version, or `"<roomId>:<version>"` for a specific version|
-|Response|message form|a `SYMKEY` message (§4.4), with `requestId` set to the request's id|
+|Request|`content`|`"<roomId>"`, `"<roomId>:<version>"`, or `"<roomId>:<v1>,<v2>,..."`|
+|Response|message form|one `SYMKEY` message (§4.4) per version answered, each with `requestId` set to the request's id|
+
+The three content forms are one form. A bare `roomId` asks for whatever the responder holds as current; a single version is a list of one; a comma-separated list asks for each of them. Implementations MUST parse all three with one parser and answer them on one path, and MUST NOT treat the single-version form as a different kind of request from the batch.
 
 The responder MUST verify that the requester is a current member of the room before responding. Non-members MUST be refused, as MUST requests for rooms the responder has locally deactivated (`active = false`).
 
-### 5.3. SYMKEY_HISTORY
+### 5.3. SYMKEY_HISTORY (deprecated)
 
-Request a batch of historical symkeys, used by a member who is recovering past encrypted messages after rejoining or after a key-store loss.
+`SYMKEY_HISTORY` was the batch form of §5.2, with content `"<roomId>:<v1>,<v2>,..."` -- a string §5.2 now accepts. It is **deprecated**: implementations MUST NOT send it, MUST still accept it as an alias for §5.2, and MUST keep its `RequestType` ordinal reserved rather than reassigning it.
 
-|Direction|Field|Value|
-|---|---|---|
-|Request|`type`|`P2P`|
-|Request|`contentType`|`REQUEST`|
-|Request|`requestType`|`SYMKEY_HISTORY`|
-|Request|`content`|`"<roomId>:<v1>,<v2>,..."` (comma-separated list of versions)|
-|Response|message form|one or more `SYMKEY` messages (§4.4), each carrying one version, all with the same `requestId`|
+The rules below govern a batch in either form.
 
 A request MUST NOT name more than **64** versions, and a responder MUST answer at most the first 64 in ascending version order, ignoring the rest. A member needing more than 64 versions sends more than one request. See §8.8 for why the bound exists; the responder's half of it is what makes it a defence, since a requester that disregards the limit is exactly the case it is there for.
 
@@ -403,14 +409,24 @@ A receiver MUST de-duplicate incoming messages by `(senderId, id)` and discard a
 
 The room symkey is a 256-bit AES key generated by the owner via a CSPRNG. The owner stores it locally wrapped to its own pubkey. For each member, the owner produces a one-way asymmetric ciphertext (`CryptoDataByte` of `type: "asy1way"`) wrapping the symkey to that member's secp256k1 pubkey, per FTSP.
 
+A stored symkey MUST NOT be overwritten. A key that arrives for a `(roomId, version)` already held is either the same key -- in which case storing it is a no-op, and two members answering one request is the ordinary reason for it -- or a different key, in which case **both are kept**. No sender, the owner included, may replace a key already stored: the displaced key is the only thing that can open the messages sealed under it, and a room has no chain and no other copy to recover it from.
+
+A member holding two keys at one version MUST try each when opening a body that names that version, and MUST select by which one authenticates. AES-GCM's tag decides; a wrong key cannot produce a false positive. Implementations SHOULD distinguish stored keys locally by `SHA-256(symkey)`, which is computed from the key and is therefore never transmitted and costs no wire byte.
+
+An implementation MAY cap the number of keys it stores per room (256 is ample) to bound a misbehaving peer. §4.4 is what keeps that cap out of a peer's reach.
+
 ### 7.2. Versioning
 
-Symkeys are versioned by a monotonically increasing 32-bit integer. Version 1 is the initial key. The owner MUST increment the version when:
+A symkey version is the number of seconds since the Unix epoch at the moment the key was minted, floored above every version the minting device already knows for that room, and read as unsigned. FIMP0 §Symkey id defines it. The owner MUST mint a new version when:
 
 - A member is removed from the room.
 - The owner judges the current key compromised.
 
-The owner MAY increment the version at other times (e.g., periodic rotation).
+The owner MAY mint at other times (e.g., periodic rotation).
+
+**Minting is not single-device.** One FID may be signed in on several devices, so two devices of the same owner can be partitioned from each other and both mint for the same room. A counter cannot survive that: each device mints "the next version" from its own store, and a device that holds nothing -- reinstalled, restored, or newly signed in -- mints version 1 for a key that is not the version 1 the room already uses. A room is the worse case of the two group modes, because its membership and its keys exist nowhere but on its members' devices. A timestamp with the floor in FIMP0 §Symkey id reduces the collision to two devices minting in the same second, and §7.1's no-overwrite rule makes even that survivable rather than destructive.
+
+For the same reason, an implementation MUST NOT rotate automatically in response to a membership change without a single-writer rule or a per-device delay. A human action on one device at a time collides only by coincidence; "member removed, therefore rotate" fires on every one of the owner's devices at once.
 
 ### 7.3. Message encryption
 
@@ -424,15 +440,21 @@ Because the binary payload is inside the seal, a room attachment small enough to
 
 When a receiver decodes a chat message whose `symkeyVersion` is not in its local store, the receiver SHOULD:
 
-1. Request the missing symkey via §5.2 from the owner or any current member.
-2. Pending recovery, surface the message to the user as undecryptable (e.g., "[Encrypted -- missing key v3]").
-3. On storing a symkey for the room -- from any source: a response to the request above, a `ROOM_INFO` carrying the key (§4.2), a proactive push from the owner (§4.4), or a `SYMKEY_HISTORY` batch (§5.3) -- open the messages already stored under the version it supplies, and replace the undecryptable rendering with the recovered content.
+1. Request the missing symkey via §5.2 from **the message's verified sender**, who demonstrably holds that key. A receiver MAY additionally ask the owner or other members, and SHOULD let the user choose them, but it MUST NOT wait for the user to act before asking the sender: the automatic ask is what makes recovery the normal case rather than a feature the user has to find.
+2. Pending recovery, surface the message to the user as undecryptable, identifying the key by its **mint time** rather than by its raw version number -- the version is a timestamp (§7.2), and the era of the conversation a user is missing is what tells them who to ask. A rendering such as "[Encrypted -- missing key v1789813689]" is worse than useless.
+3. On storing a symkey for the room -- from any source: a response to the request above, a `ROOM_INFO` carrying the key (§4.2), a proactive push from the owner (§4.4), or a batch (§5.2) -- open the messages already stored under the version it supplies, and replace the undecryptable rendering with the recovered content.
 
 Step 3 completes the recovery and is REQUIRED for step 1 to have any effect a user can see. A receiver that performs steps 1 and 2 alone stores the key and changes nothing on screen, so a recovery that succeeded is indistinguishable from one that failed -- and asking again cannot help, because the key is already held. The sealed body retained under §7.2 is what makes step 3 possible without a second delivery of the same key, and a receiver MUST NOT require one.
 
 Step 3 MUST be idempotent per `(roomId, version)`. The same version may arrive more than once -- two members answering one request, or a `ROOM_INFO` racing a response -- and the repeat MUST NOT duplicate, reorder or re-count anything. In particular, opening a stored backlog MUST NOT raise the conversation's unread count: those messages were counted when they were stored, and their unread state is unchanged by becoming readable.
 
-A receiver SHOULD NOT request the same missing key more often than once per minute per `(roomId, version)` to avoid request storms.
+A receiver MUST rate-limit requests per `(roomId, version, responder)` to **at most one per two minutes**, counted from the last request actually sent to that responder, and MUST persist enough state to enforce it across a restart. (Version 3 raises this from once per minute and aligns it with FIMP4 §7.4, so one implementation serves both modes.)
+
+**Per responder, not per question.** The cost this bounds is borne by whoever answers (§8.8), so what must be limited is how often one member is made to answer the same thing. Counting per question instead would mean a receiver that asked one member and got nothing could not ask a second for two minutes -- which throttles recovery rather than traffic, since asking somebody else is not a repeat and costs the first member nothing. The limit is what makes step 1's automatic ask safe: without it, a backlog of a hundred messages under three missing versions is a hundred requests, paid for by the asker and delivered to members who may hold none of them.
+
+The state a receiver persists for this is the same state §4.4 requires to decide whether an unsolicited key may be stored -- the room, the version, who was asked, the `requestId`, and when. An implementation SHOULD keep one record per outstanding `(roomId, version)` and clear it when a key for that version is stored.
+
+A receiver SHOULD show an outstanding request to the user, naming who was asked and when, and SHOULD keep showing it until it is answered or the user abandons it. A request that produced nothing is the only signal that recovery has stalled, and which member to ask next is a judgement about people that only the user can make.
 
 ## 8. Security Considerations
 
@@ -462,7 +484,7 @@ Room control messages carry destructive or state-changing semantics and MUST be 
 
 - `ROOM_DISBAND` and `ROOM_REMOVED` MUST be accepted only from the room **owner**. Without this check, any member (or any peer who learns the `roomId`) could close another user's room view.
 - `ROOM_ACCEPT` and `ROOM_LEAVE` MUST be accepted only from a FID that is currently in the member list.
-- `ROOM_INFO` that changes membership, and a proactive `SYMKEY` push, MUST be accepted only from the owner; a `SYMKEY` from another member is valid only as the response to a request this device made.
+- `ROOM_INFO` that changes membership, and a proactive `SYMKEY` push, MUST be accepted only from the owner; a `SYMKEY` from another member is valid only as the response to a request this device made, on the terms §4.4 sets out -- a `requestId` matching a request the receiver still holds a record of (§7.4), naming a version that request could be answered with.
 - All are idempotent: replaying a control message MUST NOT produce additional effects, and the `(senderId, id)` check of §8.5 discards a replay before it is acted on.
 
 Because `ROOM_DISBAND`/`ROOM_REMOVED` only deactivate the receiver's local record (keys and history are retained), a notice that got past these checks would be a denial-of-room, not a confidentiality break; the owner check above is nevertheless REQUIRED.
@@ -481,6 +503,14 @@ An implementation SHOULD therefore keep a local, durable record of every symkey 
 - whether it was solicited (a response to a request) or unsolicited (a `ROOM_INFO` or an owner's push),
 - the time.
 
+A request the device **refused or could not answer** SHOULD be recorded on the same terms -- a version not held, a requester with no known pubkey, a requester absent from the local member list, a room locally deactivated. In a room these rows carry more than they would in a team: since membership has no authoritative source, a refusal is often the first sign that two members' copies of the member list have diverged.
+
+Since §7.2 makes a version its own mint time, a row needs no separate field for when the key was created; the version answers it. The row's own `time` remains the time of the exchange, which is the different question the record exists to answer.
+
+The record is bounded by §4.4 and §7.4 rather than by a retention policy: a `received` row can be caused only by the owner or by a request this device made, and a `sent` row only by a member the local list contains, no more often than the responder's own limits allow. So an implementation is not choosing between keeping the record and bounding its growth.
+
+One case that reasoning does not cover is a **refusal**, which costs the sender only the sending: a member pushing keys in a loop would write a row per attempt. An implementation SHOULD therefore fold repeats of the identical event -- same entity, version, counterparty, direction and outcome -- inside a window of about an hour into the row already written, carrying a count and a last-seen time. That preserves the signal exactly, since what a reader needs from a hundred identical refusals is that they happened, from whom, and between when and when. It is not a retention policy and MUST NOT be used as one: distinct events are never folded, and nothing is dropped.
+
 Three questions depend on this record, and for a Room nothing else can answer them:
 
 - **Leak radius.** §8.3 requires rotation on member removal where post-removal confidentiality matters. Knowing which versions a departing member actually received -- not which they were entitled to -- is what says whether rotation is sufficient or whether earlier versions are already compromised.
@@ -493,7 +523,7 @@ An implementation SHOULD retain the record for at least as long as it retains th
 
 ### 8.8. Request amplification
 
-A `SYMKEY_HISTORY` request (§5.3) is answered with one `SYMKEY` message per version named, and **the responder bears the whole cost of answering**: one asymmetric seal per version, and one DOCK item per version put at the requester's DOCK, whose ingress and storage the putting party pays for. The request that causes all of it is a single short message.
+A batch `SYMKEY` request -- several versions in one message, however it is spelled -- is answered with one `SYMKEY` message per version named, and **the responder bears the whole cost of answering**: one asymmetric seal per version, and one DOCK item per version put at the requester's DOCK, whose ingress and storage the putting party pays for. The request that causes all of it is a single short message.
 
 That asymmetry is an amplifier. Without the bound in §5.3, one member could name ten thousand versions and have another member's device perform ten thousand seals and pay to store ten thousand items -- using nothing but the protocol as specified. Nothing else in this document limits it: the membership check passes, the signature verifies, the replay check (§8.5) sees one message because there *is* one message, and the rate limit in §7.4 governs how often a request may be repeated rather than how much a single one may ask for.
 
@@ -506,6 +536,17 @@ A responder MAY apply a stricter limit, and SHOULD count the versions it has act
 ## 9. Versioning
 
 This document defines version 3 of the Room mode (FIMP2V3), which accompanies the version 3 envelope of FIMP0V3 and does not interoperate with version 2 or version 1.
+
+Amendments made within version 3, during development:
+
+1. A symkey version is a mint timestamp rather than a counter (§7.2, FIMP0 §Symkey id), read unsigned, with pre-timestamp counters still accepted.
+2. A stored symkey is never overwritten, two keys may share a version, and a receiver tries each (§7.1).
+3. `SYMKEY` takes zero, one or many versions; `SYMKEY_HISTORY` is deprecated to an accepted alias (§5.2, §5.3).
+4. A key is stored only from the owner, from the receiver's own FID, or as the answer to a request this device still holds a record of, `ROOM_INFO` responses included (§4.4, §8.6).
+5. Recovery asks the message's sender automatically; the retry limit is a MUST with persisted state, counted per responder, and rises from one minute to two to match FIMP4 (§7.4).
+6. Refused requests join the distribution record (§8.7).
+
+**None of these changes the wire**, so none requires a new version number: every one is either a constraint on the value carried in an existing field or a local record that is never transmitted. A build implementing them exchanges bytes with a build that does not; what differs is which values are minted and which messages are stored.
 
 Changes from FIMP2V2:
 
