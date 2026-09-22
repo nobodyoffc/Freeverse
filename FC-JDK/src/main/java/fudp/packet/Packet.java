@@ -145,6 +145,7 @@ public class Packet {
                 case MAX_DATA -> MaxDataFrame.parse(buffer);
                 case MAX_STREAM_DATA -> MaxStreamDataFrame.parse(buffer);
                 case MAX_STREAMS -> MaxStreamsFrame.parse(buffer);
+                case DATAGRAM -> DatagramFrame.parse(buffer);
             };
 
             if (frame != null) {
@@ -185,6 +186,18 @@ public class Packet {
     public boolean isAckEliciting() {
         for (Frame frame : frames) {
             if (frame.isAckEliciting()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if the packet carries at least one DATAGRAM frame
+     */
+    public boolean hasDatagram() {
+        for (Frame frame : frames) {
+            if (frame.getType() == FrameType.DATAGRAM) {
                 return true;
             }
         }

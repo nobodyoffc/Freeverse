@@ -82,6 +82,20 @@ public interface NodeEventListener {
     default void onNotifyStream(String peerId, long messageId, int dataType, NotifyPayload payload) {}
 
     /**
+     * Called for each DATAGRAM frame received (FUDP7), in arrival order.
+     *
+     * <p>Datagrams are unreliable: there is no retransmission, no ordering and
+     * no deduplication beyond the transport's packet replay window. The call
+     * runs on the node's single receive thread, so it must return quickly —
+     * anything slow here delays every packet on every connection.
+     *
+     * @param peerId       the sender's FID
+     * @param connectionId the connection it arrived on
+     * @param data         the datagram payload
+     */
+    default void onDatagram(String peerId, long connectionId, byte[] data) {}
+
+    /**
      * Called when a notify acknowledgment is received.
      * @param peerId the peer who acknowledged
      * @param messageId the ID of the acknowledged message

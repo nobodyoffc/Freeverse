@@ -87,6 +87,25 @@ public class AckManager {
     }
 
     /**
+     * Record a received packet number that does not elicit an ACK (a packet
+     * carrying DATAGRAM frames but nothing ack-eliciting).
+     * <p>
+     * It is listed in the next ACK frame sent for other reasons, so the ranges
+     * stay contiguous instead of gaining a hole for every datagram, but it never
+     * triggers an ACK on its own. The sender ignores the number (it does not
+     * track such packets).
+     */
+    public synchronized void onNonElicitingPacketReceived(long packetNumber) {
+        receivedPackets.putIfAbsent(packetNumber, System.currentTimeMillis());
+        if (packetNumber > largestReceived) {
+            largestReceived = packetNumber;
+        }
+        // No ACK frame may follow for a long time (a receive-only datagram
+        // flow), and pruning otherwise happens only when one is generated.
+        pruneRetained(System.currentTimeMillis());
+    }
+
+    /**
      * Check if ACK should be sent immediately
      */
     public synchronized boolean shouldSendAckImmediately() {
@@ -102,18 +121,7 @@ public class AckManager {
         if (newSinceLastAck == 0 || receivedPackets.isEmpty()) return null;
 
         long now = System.currentTimeMillis();
-
-        // Prune entries past the retention window / memory cap (oldest first).
-        long cutoff = now - ACK_RETAIN_MS;
-        Iterator<Map.Entry<Long, Long>> it = receivedPackets.entrySet().iterator();
-        while (it.hasNext() && receivedPackets.size() > 1) {
-            Map.Entry<Long, Long> e = it.next();
-            if (e.getValue() < cutoff || receivedPackets.size() > MAX_RETAINED) {
-                it.remove();
-            } else {
-                break; // TreeMap keys ascend with time in practice; stop at first keeper
-            }
-        }
+        pruneRetained(now);
 
         // Compute actual ACK delay in microseconds
         long ackDelayUs = (firstPendingAckTime > 0)
@@ -153,6 +161,20 @@ public class AckManager {
         newSinceLastAck = 0;
         firstPendingAckTime = 0;
         return new AckFrame(sorted.get(0), ackDelayUs, ranges);
+    }
+
+    /** Prune entries past the retention window / memory cap (oldest first). */
+    private void pruneRetained(long now) {
+        long cutoff = now - ACK_RETAIN_MS;
+        Iterator<Map.Entry<Long, Long>> it = receivedPackets.entrySet().iterator();
+        while (it.hasNext() && receivedPackets.size() > 1) {
+            Map.Entry<Long, Long> e = it.next();
+            if (e.getValue() < cutoff || receivedPackets.size() > MAX_RETAINED) {
+                it.remove();
+            } else {
+                break; // TreeMap keys ascend with time in practice; stop at first keeper
+            }
+        }
     }
 
     /**

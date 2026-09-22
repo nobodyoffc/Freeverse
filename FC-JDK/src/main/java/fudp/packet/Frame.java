@@ -31,13 +31,13 @@ public abstract class Frame {
      * Whether this frame should be retransmitted on loss
      */
     public boolean shouldRetransmit() {
-        return type != FrameType.ACK && type != FrameType.PADDING;
+        return type != FrameType.ACK && type != FrameType.PADDING && type != FrameType.DATAGRAM;
     }
 
     /**
      * Whether this frame elicits an ACK
      */
     public boolean isAckEliciting() {
-        return type != FrameType.ACK && type != FrameType.PADDING;
+        return type != FrameType.ACK && type != FrameType.PADDING && type != FrameType.DATAGRAM;
     }
 }

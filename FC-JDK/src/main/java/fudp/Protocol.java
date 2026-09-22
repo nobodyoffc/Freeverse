@@ -8,6 +8,8 @@ import fudp.packet.*;
 import fudp.packet.frames.*;
 import fudp.security.*;
 import fudp.stream.Stream;
+import fudp.transport.AckManager;
+import fudp.transport.DatagramResult;
 import fudp.transport.SentPacket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +18,8 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -39,6 +43,7 @@ public class Protocol {
 
     private final DatagramChannel channel;
     private Thread receiveThread;
+    private volatile Selector receiveSelector;
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> ackTask;
     private ScheduledFuture<?> retransmitTask;
@@ -325,7 +330,11 @@ public class Protocol {
         // Capture port before closing channel (localPort() returns -1 after close)
         int port = localPort();
 
-        // Close channel first to unblock receive loop
+        // Wake the receive loop if it is waiting, then close the channel
+        Selector selector = receiveSelector;
+        if (selector != null) {
+            selector.wakeup();
+        }
         try {
             channel.close();
         } catch (IOException e) {
@@ -739,6 +748,171 @@ public class Protocol {
         return totalRead;
     }
 
+    // ===== DATAGRAM frames (FUDP7) =====
+
+    // Plaintext bytes a packet spends before its first frame: the timestamp,
+    // which DATAGRAM packets always carry, and the session epoch, which they
+    // carry until the peer confirms it. Budgeting for both keeps the maximum
+    // datagram size constant for the life of the connection.
+    private static final int DATAGRAM_PACKET_PREFIX = 16;
+
+    // Actual size of the AsyTwoWay crypto bundle around the plaintext: 6-byte
+    // algorithm prefix + type (1) + sender pubkey (33) + IV (12) + GCM tag (16).
+    // HEADER_OVERHEAD budgets 52, which is 16 short — harmless slack for
+    // STREAM packets, but a datagram must provably fit in maxPacketSize.
+    private static final int PACKET_CRYPTO_OVERHEAD = 68;
+
+    private final AtomicLong datagramsSent = new AtomicLong();
+    private final AtomicLong datagramsReceived = new AtomicLong();
+    private final AtomicLong[] datagramDrops = new AtomicLong[DatagramResult.values().length];
+    {
+        for (int i = 0; i < datagramDrops.length; i++) datagramDrops[i] = new AtomicLong();
+    }
+
+    /**
+     * Largest DATAGRAM payload that fits in one packet. Larger ones are
+     * refused ({@link DatagramResult#TOO_LARGE}); datagrams are never fragmented.
+     */
+    public int getMaxDatagramSize() {
+        int room = datagramRoom();
+        int size = room - 2; // type and a 1-byte length; shrink as the length varint grows
+        while (size > 0 && DatagramFrame.encodedSize(size) > room) size--;
+        return Math.max(0, size);
+    }
+
+    /** Plaintext bytes available for frames in a packet carrying datagrams. */
+    private int datagramRoom() {
+        return maxPacketSize - PacketHeader.HEADER_SIZE - PACKET_CRYPTO_OVERHEAD - DATAGRAM_PACKET_PREFIX;
+    }
+
+    /**
+     * Send one DATAGRAM frame: unreliable, unordered, never retransmitted.
+     * It never waits — congestion window, pacing and a full socket buffer all
+     * mean it is dropped, not delayed.
+     */
+    public DatagramResult sendDatagram(PeerConnection conn, byte[] data) {
+        return sendDatagrams(conn, List.of(data))[0];
+    }
+
+    /**
+     * Send several DATAGRAM frames, packed into as few packets as they fit.
+     * Each is budgeted and may be dropped on its own.
+     *
+     * @return the outcome for each datagram, in order
+     */
+    public DatagramResult[] sendDatagrams(PeerConnection conn, List<byte[]> datagrams) {
+        DatagramResult[] results = new DatagramResult[datagrams.size()];
+        if (conn == null || !running || !channel.isOpen()
+                || conn.getState() == ConnectionState.CLOSED || conn.getState() == ConnectionState.CLOSING) {
+            return fill(results, 0, DatagramResult.NO_CONNECTION);
+        }
+        if (!conn.isDatagramsEnabled()) {
+            return fill(results, 0, DatagramResult.NOT_ENABLED);
+        }
+
+        int room = datagramRoom();
+        int maxSize = getMaxDatagramSize();
+        List<Frame> frames = new ArrayList<>();
+        List<Integer> packed = new ArrayList<>();
+        int used = 0;
+        for (int i = 0; i < results.length; i++) {
+            byte[] data = datagrams.get(i);
+            if (data.length > maxSize) {
+                results[i] = drop(DatagramResult.TOO_LARGE);
+                continue;
+            }
+            if (!conn.getDatagramBudget().tryConsume(data.length)) {
+                results[i] = drop(DatagramResult.OVER_BUDGET);
+                continue;
+            }
+            int size = DatagramFrame.encodedSize(data.length);
+            if (used + size > room) {
+                flushDatagramPacket(conn, frames, packed, used, room, results);
+                used = 0;
+            }
+            frames.add(new DatagramFrame(data));
+            packed.add(i);
+            used += size;
+        }
+        flushDatagramPacket(conn, frames, packed, used, room, results);
+        return results;
+    }
+
+    private void flushDatagramPacket(PeerConnection conn, List<Frame> frames, List<Integer> packed,
+                                     int used, int room, DatagramResult[] results) {
+        if (frames.isEmpty()) return;
+        List<Frame> packet = new ArrayList<>(frames.size() + 1);
+        packet.addAll(frames);
+        // Piggyback a pending ACK only when it fits: the datagrams come first.
+        AckManager ackManager = conn.getAckManager();
+        if (ackManager.hasPendingAcks()) {
+            AckFrame ack = ackManager.generateAckFrame();
+            if (ack != null) {
+                if (used + ack.getSize() <= room) {
+                    packet.add(0, ack);
+                } else {
+                    try {
+                        sendFrame(conn, ack);
+                    } catch (IOException e) {
+                        log.debug("[Protocol] ACK send failed on connection {}: {}",
+                                conn.getConnectionId(), e.getMessage());
+                    }
+                }
+            }
+        }
+        DatagramResult outcome;
+        try {
+            // bufferWaitMs = 0: send or drop, never wait for the socket.
+            outcome = sendPacket(conn, packet, 0, 0) ? DatagramResult.SENT : DatagramResult.BUFFER_FULL;
+        } catch (IOException e) {
+            outcome = DatagramResult.BUFFER_FULL;
+        }
+        for (int i : packed) {
+            results[i] = outcome == DatagramResult.SENT ? DatagramResult.SENT : drop(outcome);
+        }
+        if (outcome == DatagramResult.SENT) datagramsSent.addAndGet(packed.size());
+        frames.clear();
+        packed.clear();
+    }
+
+    private DatagramResult drop(DatagramResult reason) {
+        datagramDrops[reason.ordinal()].incrementAndGet();
+        return reason;
+    }
+
+    private DatagramResult[] fill(DatagramResult[] results, int from, DatagramResult reason) {
+        for (int i = from; i < results.length; i++) results[i] = drop(reason);
+        return results;
+    }
+
+    /** DATAGRAM frames handed to the socket. */
+    public long getDatagramsSent() {
+        return datagramsSent.get();
+    }
+
+    /** DATAGRAM frames received and parsed. */
+    public long getDatagramsReceived() {
+        return datagramsReceived.get();
+    }
+
+    /** DATAGRAM frames dropped at this sender for the given reason. */
+    public long getDatagramsDropped(DatagramResult reason) {
+        return datagramDrops[reason.ordinal()].get();
+    }
+
+    /** Packets that authenticated but whose frames could not be parsed. */
+    public long getFrameParseFailCount() {
+        return frameParseFailCount.get();
+    }
+
+    /**
+     * Test hook: send arbitrary frames in one packet, bypassing every check.
+     * Used to put frames an older peer cannot parse on the wire.
+     */
+    boolean sendFramesForTest(PeerConnection conn, List<Frame> frames) throws IOException {
+        return sendPacket(conn, frames, 0, DEFAULT_SEND_BUFFER_WAIT_MS);
+    }
+
     /**
      * Close a specific connection by connectionId.
      */
@@ -861,8 +1035,9 @@ public class Protocol {
             packet.addFrame(frame);
         }
 
-        // E1: Skip timestamp for ACK-only packets (saves 8 bytes)
-        boolean includeTimestamp = packet.isAckEliciting();
+        // E1: Skip timestamp for ACK-only packets (saves 8 bytes). DATAGRAM
+        // packets carry application data, so they keep it (replay protection).
+        boolean includeTimestamp = packet.isAckEliciting() || packet.hasDatagram();
         // E2: Skip epoch once peer has confirmed receipt (saves 8 bytes)
         boolean includeEpoch = !conn.isEpochConfirmed();
 
@@ -912,6 +1087,11 @@ public class Protocol {
                     buffer.rewind();
                     sent = channel.send(buffer, conn.getPeerAddress());
                 }
+                if (sent == 0 && bufferWaitMs == 0) {
+                    // Send-or-drop caller (DATAGRAM): the drop is the contract.
+                    sendTotalCount.incrementAndGet();
+                    return false;
+                }
                 if (sent == 0) {
                     long fails = sendFailCount.incrementAndGet();
                     if (fails <= 5 || fails % 100 == 0) {
@@ -946,6 +1126,7 @@ public class Protocol {
     private final AtomicLong packetsFullyProcessed = new AtomicLong();
     private final AtomicLong decryptDropCount = new AtomicLong();
     private final AtomicLong unsupportedVersionCount = new AtomicLong();
+    private final AtomicLong frameParseFailCount = new AtomicLong();
 
     /**
      * Versions we accept on the data path. Currently only the single
@@ -959,6 +1140,20 @@ public class Protocol {
     private void receiveLoop() {
         ByteBuffer buffer = ByteBuffer.allocate(65536);
 
+        // An empty socket is waited on with a selector, which wakes the moment
+        // a packet lands. This used to Thread.sleep(1), which on macOS sleeps
+        // 1-10 ms: every packet arriving on a quiet connection sat in the
+        // kernel for up to one sleep, per hop — fatal for DATAGRAM audio.
+        Selector selector = null;
+        try {
+            selector = Selector.open();
+            channel.register(selector, SelectionKey.OP_READ);
+        } catch (IOException e) {
+            log.warn("[Protocol] Selector unavailable, falling back to polling: {}", e.getMessage());
+            selector = null;
+        }
+        receiveSelector = selector;
+
         while (running) {
             try {
                 buffer.clear();
@@ -970,6 +1165,10 @@ public class Protocol {
                     buffer.get(data);
                     receivedPacketCount.incrementAndGet();
                     handleIncomingPacket(data, sender);
+                } else if (selector != null) {
+                    // Timeout is only a backstop for noticing !running.
+                    selector.select(100);
+                    selector.selectedKeys().clear();
                 } else {
                     Thread.sleep(1);
                 }
@@ -977,6 +1176,13 @@ public class Protocol {
                 if (running) {
                     log.warn("[Protocol] Error in receive loop: {}", e.getMessage(), e);
                 }
+            }
+        }
+        if (selector != null) {
+            try {
+                selector.close();
+            } catch (IOException ignored) {
+                // Best effort
             }
         }
     }
@@ -1043,6 +1249,19 @@ public class Protocol {
             String senderId;
             try {
                 senderId = packetCrypto.decryptPacket(packet);
+            } catch (FrameParseException e) {
+                // Authentic packet, unreadable frames (e.g. a frame type newer
+                // than ours). Lose this packet only: its sender is genuine, so
+                // it must not feed the decrypt-failure limiter, which after a
+                // few in a row would drop EVERY packet from that address.
+                long n = frameParseFailCount.incrementAndGet();
+                if (n <= 5 || n % 1000 == 0) {
+                    log.warn("[Protocol] Dropping packet {} from {} ({}): {} (count={})",
+                            packet.getPacketNumber(), e.getSenderId(), from,
+                            e.getCause() != null ? e.getCause().getMessage() : e.getMessage(), n);
+                }
+                decryptRateLimiter.recordSuccess(from);
+                return;
             } catch (Exception e) {
                 long dfCount = decryptFailCount.incrementAndGet();
                 if (dfCount <= 5 || dfCount % 100 == 0) {
@@ -1194,6 +1413,9 @@ public class Protocol {
                 if (conn.tryMarkPeerRestartHandled()) {
                     log.info("[Protocol] Peer restart detected for {}", senderId);
                     conn.resetForPeerRestart();
+                    // The restarted peer may run different software; datagram
+                    // capability must be re-established by the application.
+                    conn.setDatagramsEnabled(false);
                 }
             }
 
@@ -1227,6 +1449,9 @@ public class Protocol {
 
             if (ackEliciting) {
                 conn.getAckManager().onPacketReceived(packet.getPacketNumber());
+            } else if (packet.hasDatagram()) {
+                // Listed in later ACKs to keep ranges contiguous; elicits none.
+                conn.getAckManager().onNonElicitingPacketReceived(packet.getPacketNumber());
             }
 
             // Process frames
@@ -1465,6 +1690,12 @@ public class Protocol {
                 conn.getStreamManager().setMaxLocalStreams(maxStreams.getMaxStreams());
             }
 
+            case DATAGRAM -> {
+                // Delivered to the application by the packet listener
+                // (FudpNode.onPacketReceived); no transport state to update.
+                datagramsReceived.incrementAndGet();
+            }
+
             default -> {
                 // Ignore unknown frames
             }
@@ -1512,7 +1743,11 @@ public class Protocol {
             // line-rate burst that shallow bottleneck buffers clip, turning one
             // loss into a self-sustaining loss storm.
             int maxRetransmitPerCycle = 50;
-            long byteBudget = Math.max(8 * 1024, conn.pacingBudgetBytes(50));
+            // A stream rate cap (set during a call) is honoured exactly; the 8KB
+            // floor would otherwise let retransmits alone exceed a low cap.
+            long byteBudget = conn.getStreamRateCapBps() > 0
+                    ? Math.max(1, conn.pacingBudgetBytes(50))
+                    : Math.max(8 * 1024, conn.pacingBudgetBytes(50));
             long retransmittedBytes = 0;
             int retransmitted = 0;
             int abandoned = 0;

@@ -33,13 +33,26 @@ public class PeerConnection {
 
     // Packet number management
     private long nextPacketNumber = 0;
-    private long largestAckedPacketNumber = -1;
+
+    // Gap-based loss detection counts TRACKED packets only. Packet numbers are
+    // also spent on packets that are never tracked (ACK-only, DATAGRAM-only),
+    // and the peer may list those in its ACKs; measuring the gap in packet
+    // numbers let a burst of untracked ones make an in-flight packet look
+    // lost, and an ACK for an untracked number count as evidence against it.
+    private final java.util.concurrent.atomic.AtomicLong nextTrackedSeq =
+            new java.util.concurrent.atomic.AtomicLong();
+    private volatile long largestAckedTrackedSeq = -1;
 
     // Sent packets tracking
     private final Map<Long, SentPacket> sentPackets;
 
     // Stream management
     private final StreamManager streamManager;
+
+    // DATAGRAM frames (FUDP7): off until the application learns the peer
+    // supports them, since an older peer loses every packet carrying one.
+    private volatile boolean datagramsEnabled = false;
+    private final DatagramBudget datagramBudget = new DatagramBudget(DatagramBudget.DEFAULT_RATE_BPS);
 
     // Transport layer
     private final AckManager ackManager;
@@ -126,6 +139,7 @@ public class PeerConnection {
         // Only track ACK-eliciting packets for loss detection
         // ACK-only packets don't need acknowledgment and shouldn't be counted as lost
         if (ackEliciting) {
+            sent.setTrackedSeq(nextTrackedSeq.getAndIncrement());
             sentPackets.put(packetNumber, sent);
         }
         packetsSent++;
@@ -142,14 +156,22 @@ public class PeerConnection {
 
         int found = 0;
         int notFound = 0;
+        // RTT is sampled when this ACK newly covers a tracked packet sent after
+        // every tracked packet acked so far (QUIC's "largest acknowledged is
+        // newly acked", restated over tracked packets). largestAcked itself
+        // may be a packet we never tracked (DATAGRAM-only), and requiring
+        // pn == largestAcked starved the estimator whenever datagrams flowed.
+        long previousLargestSeq = largestAckedTrackedSeq;
+        SentPacket rttPacket = null;
         for (long pn : ackedPackets) {
             SentPacket sent = sentPackets.remove(pn);
             if (sent != null) {
                 found++;
-                // Update RTT estimation
-                if (pn == largestAcked) {
-                    long rttSample = System.currentTimeMillis() - sent.sentTime;
-                    rttEstimator.updateRtt(Math.max(1, rttSample - ackDelay / 1000));
+                if (rttPacket == null || sent.getTrackedSeq() > rttPacket.getTrackedSeq()) {
+                    rttPacket = sent;
+                }
+                if (sent.getTrackedSeq() > largestAckedTrackedSeq) {
+                    largestAckedTrackedSeq = sent.getTrackedSeq();
                 }
 
                 // Update congestion control
@@ -160,7 +182,8 @@ public class PeerConnection {
 
             // Check if this packet was previously marked as suspected lost
             // If so, it was a false positive (late ACK, not real loss)
-            if (suspectedLostPacketNumbers.remove(pn)) {
+            Long suspectedSeq = suspectedLostPacketNumbers.remove(pn);
+            if (suspectedSeq != null) {
                 ackedAfterSuspectedLost++;
                 // Spurious loss = the path reorders deeper than our current
                 // gap threshold assumed. Widen it to the OBSERVED reordering
@@ -171,7 +194,7 @@ public class PeerConnection {
                 // the field). The extent includes some retransmit delay, so
                 // it over-estimates slightly; the cap bounds the damage and
                 // the capped 4s timeout remains the real-loss backstop.
-                long extent = largestAckedPacketNumber - pn + 2;
+                long extent = largestAckedTrackedSeq - suspectedSeq + 2;
                 long widened = Math.min(MAX_PACKET_THRESHOLD,
                         Math.max(packetReorderThreshold + 4, extent));
                 if (widened > packetReorderThreshold) {
@@ -180,14 +203,16 @@ public class PeerConnection {
             }
         }
 
-        if (largestAcked > largestAckedPacketNumber) {
-            largestAckedPacketNumber = largestAcked;
+        if (rttPacket != null && rttPacket.getTrackedSeq() > previousLargestSeq) {
+            long rttSample = System.currentTimeMillis() - rttPacket.sentTime;
+            rttEstimator.updateRtt(Math.max(1, rttSample - ackDelay / 1000));
         }
 
     }
 
-    // Track packets that were marked as suspected lost (for accurate loss tracking)
-    private final Set<Long> suspectedLostPacketNumbers = ConcurrentHashMap.newKeySet();
+    // Packets marked as suspected lost (for accurate loss tracking):
+    // packet number -> its tracked seq, for measuring reordering extent.
+    private final Map<Long, Long> suspectedLostPacketNumbers = new ConcurrentHashMap<>();
 
     // Loss detection configuration
     // Time-based threshold multiplier (RFC 9002 recommends 9/8 = 1.125, but we use more conservative value)
@@ -262,7 +287,7 @@ public class PeerConnection {
             // Gap-based (SACK-style): a packet sent well after this one has
             // been ACKed — this one was really dropped. Detects loss within
             // ~1 RTT instead of waiting for the timeout.
-            boolean lostByGap = largestAckedPacketNumber - pn >= packetReorderThreshold
+            boolean lostByGap = largestAckedTrackedSeq - packet.getTrackedSeq() >= packetReorderThreshold
                     && age > gapMinAge;
 
             // Time-based (timeout): backstop for tail loss and dead links.
@@ -316,7 +341,7 @@ public class PeerConnection {
             congestionControl.onRetransmitRemove(removed.size);
             
             suspectedLostCount++;
-            suspectedLostPacketNumbers.add(packetNumber);
+            suspectedLostPacketNumbers.put(packetNumber, removed.getTrackedSeq());
             if (removed.getRetransmitCount() >= 3) {
                 confirmedLostCount++;
             }
@@ -482,9 +507,25 @@ public class PeerConnection {
         sentPackets.clear();
         streamManager.resetForRestart();
         ackManager.resetForRestart();
-        largestAckedPacketNumber = -1;
+        largestAckedTrackedSeq = -1;
         peerRestartHandled = false; // Reset flag for next restart detection
         epochConfirmed = false;     // E2: Must re-send epoch after peer restart
+    }
+
+    public boolean isDatagramsEnabled() {
+        return datagramsEnabled;
+    }
+
+    /**
+     * Allow DATAGRAM frames on this connection. Call only once the peer has
+     * shown it supports them (FUDP7 capability rules).
+     */
+    public void setDatagramsEnabled(boolean enabled) {
+        this.datagramsEnabled = enabled;
+    }
+
+    public DatagramBudget getDatagramBudget() {
+        return datagramBudget;
     }
 
     public long getPacketReorderThreshold() {
@@ -547,15 +588,46 @@ public class PeerConnection {
 
     private long pacerNextNanos = 0;
 
+    // Optional ceiling on the pacing rate of stream data, in bits per second
+    // (0 = none). A call layer sets it while a call is live: loss-based
+    // congestion control fills whatever queue sits downstream (the receiver's
+    // socket buffer, a bottleneck router), and DATAGRAM audio waits in that
+    // queue behind the upload. Capping streams below the path rate keeps it
+    // empty. Datagrams are not paced, so the cap never applies to them.
+    private volatile long streamRateCapBps = 0;
+
+    /** Pacing rate in bytes per second: PACING_GAIN * cwnd / sRTT, floored, then capped. */
+    private double pacingRateBytesPerSec() {
+        long srttMs = Math.max(1, rttEstimator.getSmoothedRtt());
+        double rate = PACING_GAIN * congestionControl.getCongestionWindow() * 1000.0 / srttMs;
+        if (rate < MIN_PACING_RATE_BPS) rate = MIN_PACING_RATE_BPS;
+        long cap = streamRateCapBps;
+        if (cap > 0) rate = Math.min(rate, cap / 8.0);
+        return rate;
+    }
+
+    public long getStreamRateCapBps() {
+        return streamRateCapBps;
+    }
+
+    /**
+     * Cap the rate stream data is sent at on this connection, in bits per
+     * second; 0 removes the cap. Retransmissions are budgeted to it too.
+     */
+    public void setStreamRateCapBps(long bitsPerSecond) {
+        if (bitsPerSecond < 0) {
+            throw new IllegalArgumentException("Stream rate cap must not be negative: " + bitsPerSecond);
+        }
+        this.streamRateCapBps = bitsPerSecond;
+    }
+
     /**
      * Reserve a pacing slot for {@code bytes} about to be sent.
      *
      * @return nanoseconds the caller should sleep before sending (0 = send now)
      */
     public synchronized long reservePacingDelayNanos(int bytes) {
-        long srttMs = Math.max(1, rttEstimator.getSmoothedRtt());
-        double rateBps = PACING_GAIN * congestionControl.getCongestionWindow() * 1000.0 / srttMs;
-        if (rateBps < MIN_PACING_RATE_BPS) rateBps = MIN_PACING_RATE_BPS;
+        double rateBps = pacingRateBytesPerSec();
         long nanosForBytes = (long) (bytes * 1_000_000_000.0 / rateBps);
 
         long now = System.nanoTime();
@@ -573,10 +645,7 @@ public class PeerConnection {
      * sleeping per packet).
      */
     public long pacingBudgetBytes(long intervalMs) {
-        long srttMs = Math.max(1, rttEstimator.getSmoothedRtt());
-        double rateBps = PACING_GAIN * congestionControl.getCongestionWindow() * 1000.0 / srttMs;
-        if (rateBps < MIN_PACING_RATE_BPS) rateBps = MIN_PACING_RATE_BPS;
-        return (long) (rateBps * intervalMs / 1000.0);
+        return (long) (pacingRateBytesPerSec() * intervalMs / 1000.0);
     }
 
     public long getSessionEpoch() {

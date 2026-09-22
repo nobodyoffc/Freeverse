@@ -3,6 +3,7 @@ package fudp.crypto;
 import core.crypto.CryptoDataByte;
 import core.crypto.EncryptType;
 import core.crypto.KeyTools;
+import fudp.packet.FrameParseException;
 import fudp.packet.Packet;
 
 /**
@@ -97,8 +98,14 @@ public class PacketCrypto {
         // Store sender's public key in packet for connection management
         packet.setPeerPublicKey(senderPubkey);
 
-        // Parse the decrypted frames
-        packet.parseFrames(plaintext);
+        // Parse the decrypted frames. The AEAD tag has already verified the
+        // sender, so a failure here is an authenticated peer sending a frame
+        // we cannot read (e.g. a type newer than ours), not a forgery.
+        try {
+            packet.parseFrames(plaintext);
+        } catch (RuntimeException e) {
+            throw new FrameParseException(senderId, e);
+        }
 
         return senderId;
     }

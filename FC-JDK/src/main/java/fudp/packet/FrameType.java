@@ -15,7 +15,10 @@ public enum FrameType {
     MAX_STREAMS(0x05),
     // Note: 0x06 and 0x07 were previously SYMKEY_PROPOSAL and SYMKEY_ACK (now removed)
     // STREAM uses 0x08-0x0F (base 0x08 + flags in lower 3 bits)
-    STREAM(0x08);
+    STREAM(0x08),
+    // Unreliable application datagram (FUDP7): never retransmitted, not
+    // ACK-eliciting, not counted in bytes in flight.
+    DATAGRAM(0x10);
 
     private final int value;
 

@@ -40,6 +40,10 @@ public class NodeConfig {
     // to it and remain bounded only by maxAssembledMessageBytes.
     private long maxMaterializedMessageBytes = 64L * 1024 * 1024; // 64MB
 
+    // DATAGRAM send budget applied to a connection when datagrams are enabled
+    // on it (FUDP7). A relay may raise it for its own sending side.
+    private long datagramRateBps = fudp.transport.DatagramBudget.DEFAULT_RATE_BPS; // 256 kbps
+
     // Timeouts
     private long requestTimeoutMs = 30000;   // 30 seconds
     private long transferTimeoutMs = 300000; // 5 minutes
@@ -231,6 +235,23 @@ public class NodeConfig {
      */
     public NodeConfig setMaxMaterializedMessageBytes(long maxMaterializedMessageBytes) {
         this.maxMaterializedMessageBytes = maxMaterializedMessageBytes;
+        return this;
+    }
+
+    public long getDatagramRateBps() {
+        return datagramRateBps;
+    }
+
+    /**
+     * Per-connection DATAGRAM send budget, in bits per second of datagram
+     * payload, applied by {@link FudpNode#enableDatagrams}. Over-budget
+     * datagrams are dropped at the sender. Default 256 kbps.
+     */
+    public NodeConfig setDatagramRateBps(long datagramRateBps) {
+        if (datagramRateBps <= 0) {
+            throw new IllegalArgumentException("datagramRateBps must be positive");
+        }
+        this.datagramRateBps = datagramRateBps;
         return this;
     }
 

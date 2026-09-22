@@ -14,6 +14,10 @@ public class SentPacket {
     public final boolean ackEliciting;
     public final long sentTime;
     private int retransmitCount;
+    // Position among TRACKED packets on this connection (see
+    // PeerConnection.recordSentPacket). Gap-based loss detection counts in
+    // this space, not in packet numbers, which untracked packets also use.
+    private long trackedSeq;
 
     public SentPacket(long packetNumber, List<Frame> frames, int size, boolean ackEliciting) {
         this.packetNumber = packetNumber;
@@ -27,4 +31,6 @@ public class SentPacket {
     public int getRetransmitCount() { return retransmitCount; }
     public void setRetransmitCount(int retransmitCount) { this.retransmitCount = retransmitCount; }
     public void incrementRetransmitCount() { retransmitCount++; }
+    public long getTrackedSeq() { return trackedSeq; }
+    public void setTrackedSeq(long trackedSeq) { this.trackedSeq = trackedSeq; }
 }
