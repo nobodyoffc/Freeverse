@@ -154,7 +154,7 @@ The plaintext that is encrypted into the payload has the following structure:
 | 8 or 0 | 8 bytes | Session Epoch | If `HAS_EPOCH=1` | 64-bit random value generated once at node startup; used for replay/restart detection |
 | variable | variable | Frames | Always | One or more concatenated frames as defined in [Frame Types](#frame-types) |
 
-In the current implementation, `HAS_TIMESTAMP` MAY be 0 for ACK-only packets and `HAS_EPOCH` MAY be 0 after epoch confirmation to reduce overhead.
+In the current implementation, `HAS_TIMESTAMP` MAY be 0 for ACK-only packets and `HAS_EPOCH` MAY be 0 after epoch confirmation to reduce overhead. A packet carrying a DATAGRAM frame MUST set `HAS_TIMESTAMP`: it carries application data, so it gets the same replay protection as any ack-eliciting packet, although it is not ack-eliciting itself.
 
 ### Encrypted Encoding
 
@@ -318,6 +318,9 @@ Frames are the fundamental unit of data within an encrypted payload. After any o
 | 0x04 | MAX_STREAM_DATA | Update stream-level flow control limit |
 | 0x05 | MAX_STREAMS | Update maximum number of concurrent streams |
 | 0x08-0x0F | STREAM | Application data with flags encoded in type (LEN is mandatory in v1 wire behavior) |
+| 0x10 | DATAGRAM | Unreliable application data: never retransmitted, not ack-eliciting. Defined in FUDP7 (being drafted; VOICE_SPEC §2 until then). MUST NOT be sent until the peer is known to support it (see [Versioning](#versioning)). |
+
+The values `0x06` and `0x07` belonged to the removed SYMKEY_PROPOSAL and SYMKEY_ACK frames and MUST NOT be reused.
 
 ### PADDING Frame (0x00)
 
@@ -667,16 +670,30 @@ Implementations that require long-lived connections SHOULD use application-level
 
 | Parameter | Value | Description |
 |---|---|---|
-| Max Packet Size | 1,350 bytes | Default maximum UDP datagram size; safe for most network MTUs |
+| Max Packet Size | 1,350 bytes | Default maximum UDP datagram size; safe for most network MTUs. A hard limit — see [Packet Size Budget](#packet-size-budget) |
 | Header Size | 21 bytes | Fixed-size plaintext packet header |
-| Crypto Overhead | ~52 bytes | CryptoDataByte bundle overhead (IV, compressed public key, algorithm ID) |
-| Max Payload per Packet | ~1,277 bytes | Max Packet Size minus Header Size minus Crypto Overhead |
+| Crypto Overhead | 68 bytes | CryptoDataByte bundle around the plaintext: algorithm prefix (6), type (1), sender public key (33), IV (12), GCM tag (16) |
+| Plaintext Prefix | 16 bytes | Timestamp (8) and session epoch (8), budgeted as if both are present |
+| Max Frame Bytes per Packet | 1,245 bytes | Max Packet Size − Header Size − Crypto Overhead − Plaintext Prefix |
 | Protocol Version | 1 | Current version of FUDP Core Transport |
 | Stale Idle Threshold | 30,000 ms | Duration of inactivity before a connection may be evicted |
 | Handshake Timeout | 10,000 ms | Maximum time to complete the handshake before aborting |
 | Drain Period | max(3 * RTT, 3,000 ms) | Time to wait in CLOSING state before releasing resources |
 | Max Connections per Peer | 5 | Recommended limit on concurrent connections from a single peer |
 | Control Packet Max Payload | 256 bytes | Maximum payload size for plaintext control packets |
+
+### Packet Size Budget
+
+No packet may exceed Max Packet Size. A UDP packet over the path MTU is split into IP fragments, and losing either fragment loses the whole packet, so an overshoot turns into extra loss exactly on the paths that can least afford it. Loopback (MTU 16 KB or more) hides it completely.
+
+Every sender MUST budget its frames to Max Frame Bytes per Packet:
+
+- **STREAM chunks** are sized for the worst-case STREAM header: type (1) + stream ID (8) + offset (8) + length (4) = 21 bytes, leaving 1,224 data bytes at the default size.
+- **A pending ACK frame is added to a packet only if it fits** beside the frames already there. Otherwise it is sent first, in a packet of its own. It MUST NOT be shortened to fit: every ACK frame's full ranges are what protect against earlier ACK packets being lost (FUDP3 §2.1).
+- **An ACK frame is itself limited** to Max Frame Bytes, dropping its oldest ranges first.
+- DATAGRAM frames are limited to what fits alone (FUDP7).
+
+Two mistakes produced oversize packets before 2026-09-22. The crypto overhead was budgeted as ~52 bytes rather than 68. More seriously, the pending ACK was piggybacked without any check, and with data flowing both ways ACK frames reached 264 bytes (FUDP3 §2.1 explains why), producing 1,664-byte packets on a 1,400-byte setting. The Java reference now counts any packet over the limit (`getOversizePacketCount`) as a budget bug, and `PacketSizeBudgetTest` asserts it stays zero.
 
 ---
 
@@ -706,11 +723,15 @@ This document defines FUDP Core Transport version 1. Future versions MAY introdu
 
 The Version field in the packet header identifies the wire format. The Java reference implementation accepts version `1` on encrypted DATA and ACK packets and silently drops encrypted packets with unsupported versions. CONTROL packets are plaintext and version-agnostic in v1.
 
-Backward-compatible extensions (e.g., new frame types with type values not defined in this specification) MAY be introduced without incrementing the version number. The Java reference implementation currently treats an unknown frame type as a packet parse error and drops the packet.
+New frame types MAY be introduced without incrementing the version number, but they are **not** transparently backward-compatible. A frame carries no length that a receiver could use to skip a type it does not know, so a receiver that meets an unknown frame type cannot parse the rest of the packet: it MUST drop the whole packet, including any known frames in it. A sender MUST therefore not send a new frame type on a connection until it knows the peer supports it — learned from the application or a negotiation, never assumed.
+
+A packet dropped this way decrypted and authenticated correctly; only its frames could not be read. Receivers MUST NOT count it as a decrypt failure. Decrypt failures feed the per-source limiter (FUDP4 §7), and the Java reference used to count parse failures there: five such packets in a row — an older peer receiving a 25 packet/s DATAGRAM flow reaches that in a fifth of a second — dropped every packet from that address, reliable traffic included, for a second at a time. Nodes already deployed with that behaviour are one more reason the capability rule above is a MUST. The lost packet's reliable frames are recovered by ordinary retransmission; nothing else is lost.
 
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-03-28|Initial specification.|
+|1 (rev)|2026-09-22|[Packet Size Budget](#packet-size-budget): Max Packet Size is a hard limit. Crypto overhead corrected from ~52 to 68 bytes. STREAM chunks are budgeted for the worst-case header, and a piggybacked ACK must fit or be sent alone. Previously, traffic in both directions produced packets up to 264 bytes over the limit.|
+|1 (rev)|2026-09-22|Added DATAGRAM (`0x10`, FUDP7) to the Frame Type Summary and reserved `0x06`/`0x07`. A packet with a DATAGRAM frame MUST carry a timestamp. [Versioning](#versioning): corrected the claim that new frame types are backward-compatible — an unknown type loses the whole packet, so new types need known peer support first — and required that such a parse failure not be counted as a decrypt failure.|
 |1 (rev)|2026-07-14|Added [Path Migration](#path-migration): Connection ID (not source address) MUST be the primary key for resolving inbound packets to a connection, and an address change on an already-known Connection ID MUST migrate the existing connection rather than create a phantom new one. Discovered via a field failure where a NAT rebind mid-upload caused colliding stream IDs between a phantom connection and the real one, silently swallowing responses via stream-retirement tombstones.
 
 ---

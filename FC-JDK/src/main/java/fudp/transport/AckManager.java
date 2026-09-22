@@ -87,13 +87,19 @@ public class AckManager {
     }
 
     /**
-     * Record a received packet number that does not elicit an ACK (a packet
-     * carrying DATAGRAM frames but nothing ack-eliciting).
+     * Record a received packet number that does not elicit an ACK (ACK-only,
+     * DATAGRAM-only, or a mix of the two).
      * <p>
      * It is listed in the next ACK frame sent for other reasons, so the ranges
-     * stay contiguous instead of gaining a hole for every datagram, but it never
-     * triggers an ACK on its own. The sender ignores the number (it does not
-     * track such packets).
+     * have holes only where packets were really lost, but it never triggers an
+     * ACK on its own. The sender ignores the number (it does not track such
+     * packets).
+     * <p>
+     * Leaving these out put a hole in the ranges for every packet the peer
+     * sent without eliciting an ACK. With data flowing both ways that is
+     * every other packet: ACK frames hit MAX_RANGES_PER_FRAME (264 bytes)
+     * while covering only the last ~250 packet numbers, so the retention
+     * window that protects against lost ACKs shrank to a fraction of a second.
      */
     public synchronized void onNonElicitingPacketReceived(long packetNumber) {
         receivedPackets.putIfAbsent(packetNumber, System.currentTimeMillis());
@@ -113,11 +119,18 @@ public class AckManager {
     }
 
     /**
-     * Generate an ACK frame covering all retained packet numbers.
-     * Returns null when nothing new arrived since the last generated frame
-     * (retained-but-already-acked numbers alone don't warrant a new frame).
+     * Generate an ACK frame covering the retained packet numbers, newest
+     * first, encoded in at most {@code maxBytes}. Ranges that do not fit are
+     * left out, oldest first; they are still retained and re-advertised by
+     * later frames.
+     *
+     * @return null when nothing new arrived since the last generated frame
+     *         (retained-but-already-acked numbers alone don't warrant a new
+     *         frame), or when not even the newest range fits in
+     *         {@code maxBytes} — the ACK then stays pending for a caller with
+     *         more room
      */
-    public synchronized AckFrame generateAckFrame() {
+    public synchronized AckFrame generateAckFrame(int maxBytes) {
         if (newSinceLastAck == 0 || receivedPackets.isEmpty()) return null;
 
         long now = System.currentTimeMillis();
@@ -158,9 +171,16 @@ public class AckManager {
             ranges.add(new AckFrame.AckRange(gap, length));
         }
 
+        AckFrame frame = new AckFrame(sorted.get(0), ackDelayUs, ranges);
+        while (frame.getSize() > maxBytes && ranges.size() > 1) {
+            ranges.remove(ranges.size() - 1);
+            frame = new AckFrame(sorted.get(0), ackDelayUs, ranges);
+        }
+        if (frame.getSize() > maxBytes) return null;
+
         newSinceLastAck = 0;
         firstPendingAckTime = 0;
-        return new AckFrame(sorted.get(0), ackDelayUs, ranges);
+        return frame;
     }
 
     /** Prune entries past the retention window / memory cap (oldest first). */

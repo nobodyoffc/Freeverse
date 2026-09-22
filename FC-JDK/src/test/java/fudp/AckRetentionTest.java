@@ -39,7 +39,7 @@ class AckRetentionTest {
         for (long pn = 0; pn < 50; pn++) {
             acks.onPacketReceived(pn);
         }
-        assertNotNull(acks.generateAckFrame(), "a first frame covers the batch");
+        assertNotNull(acks.generateAckFrame(Integer.MAX_VALUE), "a first frame covers the batch");
 
         Thread.sleep(PAST_RETENTION_MS);
 
@@ -50,7 +50,7 @@ class AckRetentionTest {
             acks.onPacketReceived(pn);
         }
 
-        AckFrame frame = acks.generateAckFrame();
+        AckFrame frame = acks.generateAckFrame(Integer.MAX_VALUE);
         assertNotNull(frame, "current traffic is still acknowledged");
 
         boolean coversAgedOut = false;
@@ -69,9 +69,9 @@ class AckRetentionTest {
     void aDuplicateDoesNotCountAsNewlyArrived() {
         AckManager acks = freshManager();
         acks.onPacketReceived(7);
-        assertNotNull(acks.generateAckFrame());
+        assertNotNull(acks.generateAckFrame(Integer.MAX_VALUE));
         acks.onPacketReceived(7);
-        assertNull(acks.generateAckFrame(),
+        assertNull(acks.generateAckFrame(Integer.MAX_VALUE),
                 "nothing new arrived, so there is nothing to say");
     }
 }

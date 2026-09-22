@@ -38,6 +38,7 @@
     - [5.4.1. Congestion-Window Gate](#541-congestion-window-gate)
     - [5.4.2. Rate-Based Pacing](#542-rate-based-pacing)
     - [Send-Buffer Backpressure](#send-buffer-backpressure)
+    - [5.4.3. Stream Rate Cap](#543-stream-rate-cap)
   - [5.5. Bytes-in-Flight Tracking](#55-bytes-in-flight-tracking)
 - [Versioning](#versioning)
 - [6. References](#6-references)
@@ -73,10 +74,12 @@ The following frames are classified by their ack-eliciting property:
 
 | Classification | Frame Types |
 |---|---|
-| NOT ack-eliciting | ACK, PADDING |
-| Ack-eliciting | STREAM, CONNECTION_CLOSE, MAX_DATA, MAX_STREAM_DATA, MAX_STREAMS, and all other non-ACK/non-PADDING frame types |
+| NOT ack-eliciting | ACK, PADDING, DATAGRAM |
+| Ack-eliciting | STREAM, CONNECTION_CLOSE, MAX_DATA, MAX_STREAM_DATA, MAX_STREAMS, and all other frame types not listed above |
 
-A packet is ack-eliciting if it contains at least one ack-eliciting frame. A packet containing only ACK and/or PADDING frames is NOT ack-eliciting.
+A packet is ack-eliciting if it contains at least one ack-eliciting frame. A packet containing only ACK, PADDING and/or DATAGRAM frames is NOT ack-eliciting.
+
+DATAGRAM (type `0x10`) is the unreliable frame of FUDP7 (being drafted; until it is published, VOICE_SPEC §2 is the source). It is never retransmitted, so nothing is gained by acknowledging it, and it is never tracked by its sender (§5.5).
 
 Implementations SHOULD send an ACK frame immediately upon receiving an ack-eliciting packet. The ACK threshold is defined as:
 
@@ -94,14 +97,26 @@ ACK frames are themselves carried in non-ack-eliciting packets (§2.1) and are t
 Implementations MUST instead generate each ACK frame from the set of ALL packet numbers received within a trailing retention window, not only those received since the previous ACK:
 
 ```
-PROCEDURE onPacketReceived(packetNumber):
-    receivedPackets[packetNumber] = now()   -- overwrite is fine; idempotent
+PROCEDURE onPacketReceived(packetNumber):              -- ack-eliciting packets
+    IF packetNumber NOT IN receivedPackets:
+        receivedPackets[packetNumber] = now()   -- keep the FIRST receive time
+        newSinceLastAck += 1
 
-PROCEDURE generateAckFrame():
+PROCEDURE onNonElicitingPacketReceived(packetNumber):  -- ACK-only, DATAGRAM-only
+    IF packetNumber NOT IN receivedPackets:
+        receivedPackets[packetNumber] = now()   -- listed in later ACKs, triggers none
     prune receivedPackets entries older than ACK_RETAIN_MS
-    IF no packet number is newer than the last generated frame:
+
+PROCEDURE generateAckFrame(maxBytes):
+    prune receivedPackets entries older than ACK_RETAIN_MS
+    IF newSinceLastAck == 0:
         RETURN null   -- nothing new to report; avoid redundant frames on quiet links
     encode ranges (per §2.2) from ALL currently retained packet numbers, newest first
+    WHILE frame is larger than maxBytes AND it has more than one range:
+        drop the oldest range          -- still retained; later frames re-advertise it
+    IF frame is larger than maxBytes:
+        RETURN null   -- stays pending for a caller with more room
+    newSinceLastAck = 0
     RETURN frame
 ```
 
@@ -110,6 +125,14 @@ PROCEDURE generateAckFrame():
 | ACK_RETAIN_MS | 4,000 ms | How long a received packet number keeps being re-advertised. MUST comfortably exceed the loss-detection timeout threshold (§4.2) plus one RTT, so a later ACK still reaches the sender before it would falsely expire the packets the lost ACK covered. |
 | MAX_RETAINED_PACKET_NUMBERS | 16,384 | Memory bound on the retained set; oldest entries are pruned first. |
 | MAX_RANGES_PER_FRAME | 128 | Bound on encoded ranges per frame; a healthy link produces 1-2. |
+
+A second copy of a packet number MUST NOT refresh its receive time. Pruning walks the retained set in packet-number order and stops at the first entry still inside the window, which is correct only while receive times ascend with packet numbers; refreshing an old number would stop the prune there permanently, and the memory bound with it.
+
+**Every packet that is not ack-eliciting — ACK-only, DATAGRAM-only, or both — MUST be recorded too, but MUST NOT trigger an ACK.** Recording them means the ranges have holes only where packets were really lost. Before 2026-09-22 only ack-eliciting packets were recorded, so each of the peer's ACK-only packets left a hole. With data flowing both ways that is roughly every other packet number: ACK frames hit MAX_RANGES_PER_FRAME (264 bytes) while covering only the last ~250 packet numbers, so the 4 s retention window that protects against lost ACKs shrank to a fraction of a second. Loss-free traffic in both directions now needs 1–2 ranges. Because a non-eliciting packet may never be followed by an ack-eliciting one (a connection that only receives datagrams), the receiver MUST prune when it records one, not only when it generates an ACK frame.
+
+Every ACK frame is limited to the bytes one packet can carry (FUDP1 [Packet Size Budget](FUDP1V1_CoreTransport.md#packet-size-budget)). A frame is piggybacked on another packet only if it fits there whole; otherwise it goes in a packet of its own. Under heavy loss the ranges are real holes, and the frame can still reach MAX_RANGES_PER_FRAME; the oldest ranges are then left out, as before.
+
+A sender therefore receives ACK ranges covering packet numbers it never tracked. It MUST ignore them, and they MUST NOT count as evidence of loss (§4.1.1) or as an RTT sample (§3.2).
 
 Re-advertising already-acknowledged packet numbers is intentionally redundant: the sender's `removeSentPacket` is a no-op for packet numbers it has already removed (§4.3), so duplicate acknowledgment is harmless and idempotent. The cost is a few extra bytes per ACK frame on a healthy link (still typically 1-2 ranges); the benefit is that ACK loss stops being a silent, compounding failure.
 
@@ -178,7 +201,9 @@ function updateRtt(latestRtt):
 
 The smoothing factor for `smoothedRtt` is 1/8. The smoothing factor for `rttVariance` is 1/4. These values are consistent with established practice in TCP (RFC 6298).
 
-RTT samples SHOULD NOT be generated from packets that were retransmitted, as the implementation cannot determine whether the ACK corresponds to the original or retransmitted packet (retransmission ambiguity). The current Java implementation does not persist an explicit retransmitted flag in `SentPacket`; RTT is sampled when the largest acknowledged packet is removed from the sent-packet table.
+RTT samples SHOULD NOT be generated from packets that were retransmitted, as the implementation cannot determine whether the ACK corresponds to the original or retransmitted packet (retransmission ambiguity). FUDP gives every retransmission a fresh packet number, so an acknowledged packet number always identifies one transmission.
+
+An ACK frame yields an RTT sample when it newly acknowledges a **tracked** packet sent after every tracked packet acknowledged before it (QUIC's "largest acknowledged is newly acknowledged", restated over tracked packets). The sample is taken from that packet. Implementations MUST NOT require the frame's Largest Acknowledged field itself to be a tracked packet: it is often the number of a DATAGRAM-only packet (§2.1), and requiring it starved the estimator of samples whenever datagrams were flowing. Nor may a sample be taken from a tracked packet that the ACK covers only now but that was sent before one already acknowledged — its delay includes reordering, not just the path.
 
 ### 3.3. Retransmission Timeout
 
@@ -204,14 +229,18 @@ FUDP uses two complementary loss-detection mechanisms, mirroring QUIC (RFC 9002)
 
 #### 4.1.1. Gap-Based Detection
 
-A sent packet is declared lost if a later packet, sent from the same connection, has already been acknowledged while this one has not — i.e. the peer's ACK stream has passed it by. This requires that ACK frames reliably convey "everything received so far," which is why §2.1 mandates redundant (not fire-once) ACK generation: without it, gap-based detection cannot distinguish real loss from an ACK that simply has not arrived yet for an in-order packet.
+A sent packet is declared lost if later packets, sent from the same connection, have already been acknowledged while this one has not — i.e. the peer's ACK stream has passed it by. This requires that ACK frames reliably convey "everything received so far," which is why §2.1 mandates redundant (not fire-once) ACK generation: without it, gap-based detection cannot distinguish real loss from an ACK that simply has not arrived yet for an in-order packet.
 
 ```
-function isLostByGap(packet, largestAcknowledged, packetReorderThreshold, now):
+-- trackedSeq: 0, 1, 2, ... assigned to each TRACKED (ack-eliciting) packet as it is sent.
+-- largestAckedSeq: the highest trackedSeq among tracked packets acknowledged so far.
+function isLostByGap(packet, largestAckedSeq, packetReorderThreshold, now):
     age = now - packet.sentTime
-    return (largestAcknowledged - packet.packetNumber >= packetReorderThreshold)
+    return (largestAckedSeq - packet.trackedSeq >= packetReorderThreshold)
        and (age > max(20ms, smoothedRtt))
 ```
+
+**The gap MUST be counted in tracked packets, not in packet numbers.** Packet numbers are also spent on packets the sender never tracks — ACK-only packets, and DATAGRAM-only packets (§2.1) — and the peer may list those numbers in its ACKs. Measured in packet numbers, ten audio datagrams sent after a stream packet put it ten numbers behind the next acknowledgment, and it was declared lost with only one tracked packet after it. Likewise, only acknowledgments of tracked packets may advance `largestAckedSeq`.
 
 The age guard (`age > max(20ms, smoothedRtt)`) exists because reordered packets typically arrive within about one RTT of their in-order peers; requiring the gap to persist for at least one RTT keeps ordinary reordering from being misread as loss before the reordered packet has had a fair chance to arrive.
 
@@ -220,7 +249,7 @@ The age guard (`age > max(20ms, smoothedRtt)`) exists because reordered packets 
 ```
 ON ackReceived(packetNumber) WHERE packetNumber WAS PREVIOUSLY marked suspected-lost:
     -- Spurious loss detected: widen to the observed reordering extent.
-    observedExtent = largestAcknowledgedPacketNumber - packetNumber + 2
+    observedExtent = largestAckedSeq - trackedSeqOf(packetNumber) + 2
     packetReorderThreshold = min(MAX_PACKET_THRESHOLD,
                                   max(packetReorderThreshold + 4, observedExtent))
 ```
@@ -457,6 +486,18 @@ Therefore, on the application bulk-send path, when the OS send buffer is full an
 
 A useful side effect: when the send loop is paced by backpressure, a byte-read-driven upload progress indicator reflects the true delivery rate, because the loop reads its source only as fast as the buffer drains. The Java reference implementation applies backpressure in the streaming send helpers (`sendAndCloseFromInputStream` / `sendFromInputStream`) via `sendFrameBackpressured`, with a 1 s per-datagram budget and a 30 s no-progress abort.
 
+#### 5.4.3. Stream Rate Cap
+
+An implementation SHOULD let the application cap the pacing rate of a connection's stream data:
+
+```
+rate = min(rate, streamRateCap / 8)   -- streamRateCap in bits/sec; 0 = no cap
+```
+
+The cap also bounds the retransmission byte budget. The fixed per-cycle floor on that budget MUST NOT apply while a cap is set, or retransmissions alone could exceed it. DATAGRAM frames are not paced and are not subject to the cap.
+
+The cap exists for live audio sharing a connection with bulk transfers. DATAGRAM frames go out ahead of stream data at the sender, but CUBIC grows the window until a queue further along the path overflows — the receiver's socket buffer, or a bottleneck router — and audio waits in that queue behind the upload. On loopback a 32 MB upload raised audio delay to p99 ≈ 0.5 s while the upload's own smoothed RTT climbed from ~10 ms to ~700 ms. A call layer SHOULD cap bulk transfers below the path rate (or pause them) for the duration of a call; with an 8 Mbit/s cap on the same test, audio delay stayed at its idle level. A delay-based limit on streams inside the transport is future work.
+
 ### 5.5. Bytes-in-Flight Tracking
 
 The `bytesInFlight` variable tracks the total size (in bytes) of all sent packets that have not yet been acknowledged or removed for retransmission. Accurate maintenance of this counter is essential for correct congestion control behavior.
@@ -473,11 +514,14 @@ The distinction between ACK-driven decrements and retransmit-removal decrements 
 
 **`onSend` MUST only be invoked for ack-eliciting packets.** ACK-only packets (§2.1, "NOT ack-eliciting") are never recorded in the sent-packet tracking table and therefore can never be matched and decremented by `onAck`. If `bytesInFlight` is incremented for every packet sent — including ACK-only packets — the counter accumulates an unrecoverable upward leak: on a connection carrying substantial ACK-only traffic (e.g. the receiving side of a large download, whose only outbound packets are ACKs), the leaked bytes eventually consume the entire congestion window and any sender gated on this connection's window (§5.4.1) via `canSend` stalls permanently, even though every packet the connection is actually accountable for has long since been acknowledged.
 
+The same holds for packets carrying only DATAGRAM frames (with or without ACK frames): they are not ack-eliciting, not tracked, and not counted. DATAGRAM traffic is bounded by its own per-connection budget (FUDP7) instead of the congestion window. A packet that mixes DATAGRAM with an ack-eliciting frame is tracked whole, but only its other frames are retransmitted.
+
 ## Versioning
 
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-03-28|Initial specification.|
+|1 (rev)|2026-09-22|For the DATAGRAM frame (FUDP7): (1) §2.1 — DATAGRAM is not ack-eliciting. Every non-eliciting packet (ACK-only as well as DATAGRAM-only) is recorded in the retained set without triggering an ACK, and pruned on insert. Previously the peer's ACK-only packets were holes, and traffic in both directions saturated MAX_RANGES_PER_FRAME without any loss. ACK frames are limited to one packet, and piggybacked only when they fit whole; senders ignore untracked numbers in ACK ranges; a duplicate packet number keeps its first receive time. (2) §3.2 — RTT is sampled from the largest newly acknowledged tracked packet, not only when Largest Acknowledged is tracked. (3) §4.1.1 — the reordering gap is counted in tracked packets, not packet numbers, which untracked ACK-only and DATAGRAM-only packets also consume. (4) §5.4.3 — optional stream rate cap for calls. (5) §5.5 — DATAGRAM-only packets are not counted in bytes in flight.|
 |1 (rev)|2026-07-14|Major revision covering a field investigation into a real WAN path (independently measured near 1 MB/s, e.g. via scp) sustaining only tens of KB/s over FUDP: (1) §2.1 — ACK generation MUST be redundant over a retention window, not fire-once, since a single lost ACK packet previously orphaned its covered packet numbers permanently; (2) §4.1 — re-enabled gap-based loss detection with an adaptive, evidence-driven reordering threshold (previously fixed and too tight for deeply-reordering routes), added an RTT age guard, and made the timeout threshold adaptive-but-capped with per-packet exponential backoff; (3) §4.3 — congestion-window reduction MUST be gated on gap-detected loss only, since timeout-only "loss" is routinely spurious on jittery paths and was previously pinning the window at its floor on every RTT spike; raised Max Retransmit Count 30→60 to match the backoff; (4) §5.3 — fixed the CUBIC growth function to operate in MSS (packet) units per RFC 8312 rather than bytes, correcting a unit error that made the window's growth phase roughly two orders of magnitude slower than its Beta-multiplicative shrink phase; (5) §5.4 — added a mandatory congestion-window gate on bulk-send loops and replaced fixed-size-burst pacing with rate-based (leaky-bucket) pacing derived from cwnd/RTT, since burst pacing was clipped by shallow bottleneck buffers and ingress policers even at low average rates; (6) §5.5 — fixed `onSend` to count only ack-eliciting packets, closing a `bytesInFlight` leak from ACK-only traffic that could permanently stall a congestion-window-gated sender.|
 
 ## 6. References

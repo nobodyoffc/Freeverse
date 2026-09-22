@@ -115,7 +115,7 @@ Bytes N+:    Frames (concatenated frame data)
 
 1. Parse the 21-byte header to obtain the packet type and connection ID.
 2. Decrypt the payload using FTSP11 with the receiver's private key and the sender's public key (extracted from the CryptoDataByte bundle).
-3. Extract timestamp/session-epoch only when corresponding header flags are set, then parse frames from the remaining plaintext.
+3. Extract timestamp/session-epoch only when corresponding header flags are set, then parse frames from the remaining plaintext. If the frames cannot be parsed (for example an unknown frame type, FUDP1 [Versioning](FUDP1V1_CoreTransport.md#versioning)), drop the packet. It authenticated, so this MUST NOT be treated as a decrypt failure (§7).
 4. Validate the timestamp and session epoch (see Replay Protection).
 5. Process frames.
 
@@ -335,7 +335,7 @@ The PUBLIC_KEY response rate limit (3 responses per 2-second window per source a
 ### 7. Denial of Service
 
 An attacker can send a high volume of packets with invalid encryption to force a node to perform ECDH computations. Shared secret caching mitigates this for known peers. For unknown peers, the HELLO/PUBLIC_KEY exchange occurs before any ECDH computation, and the rate limiting on PUBLIC_KEY responses bounds the resource expenditure. Additional DDoS defense mechanisms are specified in FUDP5.
-The reference implementation further applies a per-source decrypt-failure rate limiter, temporarily dropping packets from abusive sources before decryption to cap CPU burn during attack bursts.
+The reference implementation further applies a per-source decrypt-failure rate limiter, temporarily dropping packets from abusive sources before decryption to cap CPU burn during attack bursts. Only packets that fail authentication count. A packet that decrypts correctly but whose frames cannot be parsed comes from a genuine peer, typically one using a frame type the receiver does not know; counting it let a legitimate peer shut its own connection off, since after five in a row the limiter dropped everything from that address. Such a packet MUST instead be dropped alone, and it resets the source's failure count like any other successful decrypt.
 
 ## Related Protocols
 
@@ -353,6 +353,7 @@ The reference implementation further applies a per-source decrypt-failure rate l
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-03-28|Initial draft.|
+|1 (rev)|2026-09-22|[Encryption Procedure](#encryption-procedure) receiver step 3 and [Denial of Service](#7-denial-of-service): a packet that authenticates but cannot be parsed is dropped alone and MUST NOT count toward the decrypt-failure limiter, which previously let an unknown frame type from a genuine peer black-hole that peer's address.|
 |1 (rev)|2026-09-18|Corrections from a cross-implementation audit (Swift/FC-Mac against FC-JDK and FC-AJDK), in each case resolved against the reference implementations rather than in their favour: (1) [Replay Protection](#handling-of-results) — INVALID_TIMESTAMP MUST NOT close the connection. Both references sent a CONNECTION_CLOSE, which turns a single captured packet into an unlimited remote connection-reset primitive, since the attacker chooses when to replay it and the tolerance elapses on its own. The previous text framed the choice as timestamp-policy disclosure, which it is not. (2) [Replay Protection](#handling-of-results) — DUPLICATE MUST NOT be answered, upgraded from SHOULD NOT, with the reason recorded: packet numbers are never reused (FUDP3 §4.3), so a repeated number is never a retransmission needing an ACK, and answering one lets a peer replaying a single old packet stall the ACK generator's retention pruning indefinitely. Both references answered duplicates. (3) [Replay Check Algorithm](#replay-check-algorithm) — documented the epoch fallback the pseudocode omitted: a packet whose HAS_EPOCH flag is clear means the established epoch, not zero, and implementing the pseudocode literally resets the replay window on every packet once the peer stops sending its epoch, silently disabling replay protection. Both references have this fallback; no revision of this document had described it. (4) [Session Epoch](#session-epoch) — stated that the epoch is random and MUST NOT be ordered or overwritten, and that a handled restart clears both the stored peer epoch and `epochConfirmed`.|
 
 ## Reference Implementation

@@ -20,7 +20,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Shared helpers for the DATAGRAM (FUDP7) tests. */
+/** Shared helpers for the DATAGRAM (FUDP7) and packet-size tests. */
 final class DatagramTestSupport {
 
     private DatagramTestSupport() {}
@@ -137,6 +137,9 @@ final class DatagramTestSupport {
         volatile double dropRate;
         final AtomicInteger forwarded = new AtomicInteger();
         final AtomicInteger dropped = new AtomicInteger();
+        /** Largest UDP payload seen in each direction. */
+        final AtomicInteger maxToServer = new AtomicInteger();
+        final AtomicInteger maxToClient = new AtomicInteger();
         private volatile boolean running = true;
 
         LossyProxy(int listenPort, int serverPort) throws Exception {
@@ -169,6 +172,7 @@ final class DatagramTestSupport {
                         clientAddr = p.getSocketAddress();
                         to = serverAddr;
                     }
+                    (fromServer ? maxToClient : maxToServer).accumulateAndGet(p.getLength(), Math::max);
                     if (ThreadLocalRandom.current().nextDouble() < dropRate) {
                         dropped.incrementAndGet();
                         continue;
