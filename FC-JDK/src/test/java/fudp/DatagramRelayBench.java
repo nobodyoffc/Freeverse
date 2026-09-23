@@ -192,7 +192,12 @@ public class DatagramRelayBench {
                             delivered.set(Long.parseLong(new String(data, StandardCharsets.UTF_8)));
                             reply = new byte[]{(byte) (finished ? 1 : 0)};
                         }
-                        case "finish" -> finished = true;
+                        case "finish" -> {
+                            // Forget the receivers too, or the next sender sees
+                            // these 60 and starts before its own have joined.
+                            finished = true;
+                            receiverConns.clear();
+                        }
                         case "stats" -> reply = stats(new String(data, StandardCharsets.UTF_8))
                                 .getBytes(StandardCharsets.UTF_8);
                         default -> { }
