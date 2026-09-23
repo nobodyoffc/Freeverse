@@ -13,7 +13,8 @@ import java.util.List;
  *
  * <pre>
  * kind(1)=0x02 routeId(4) ssrc(4) firstSeq(8) count(1) digests(8 × count) sig(64)
- * digest = first 8 bytes of SHA-256(the complete MediaFrame bytes)
+ * digest = first 8 bytes of SHA-256(the complete MediaFrame bytes), or 8 zero
+ *          bytes for a seq the sender did not send (DTX)
  * sig    = Schnorr(tPriv, "FreerCall-attest-v1" ‖ str(callOrMeetingId) ‖ every byte before sig)
  * </pre>
  *
@@ -32,8 +33,9 @@ public record Attestation(int routeId, int ssrc, long firstSeq, byte[][] digests
     }
 
     /**
-     * @param frames the sealed frames sent, in order, starting at {@code firstSeq};
-     *               1 to {@value #MAX_COUNT} of them
+     * @param frames the sealed frames, one per seq from {@code firstSeq}, 1 to
+     *               {@value #MAX_COUNT} of them; null for a seq that was not sent
+     *               (DTX), which gets an all-zero digest no frame can match
      */
     public static Attestation sign(byte[] tPriv, String callOrMeetingId, int routeId, int ssrc, long firstSeq,
                                    List<byte[]> frames) {
@@ -41,7 +43,9 @@ public record Attestation(int routeId, int ssrc, long firstSeq, byte[][] digests
             throw new IllegalArgumentException("an attestation covers 1.." + MAX_COUNT + " frames");
         }
         byte[][] digests = new byte[frames.size()][];
-        for (int i = 0; i < digests.length; i++) digests[i] = digest(frames.get(i));
+        for (int i = 0; i < digests.length; i++) {
+            digests[i] = frames.get(i) == null ? new byte[DIGEST_LEN] : digest(frames.get(i));
+        }
         byte[] body = body(routeId, ssrc, firstSeq, digests);
         return new Attestation(routeId, ssrc, firstSeq, digests,
                 CallSig.sign(tPriv, CallBytes.of(TAG).str(callOrMeetingId).bytes(body).toBytes()));
