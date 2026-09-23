@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
+import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -51,24 +52,32 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>{@code relay}: only the relay, on UDP {@value #RELAY_PORT}, which must be
  *   reachable. It serves client runs until killed, or for
  *   {@code -Dbench.relayMinutes} (default 60), and prints each step it sees.</li>
- *   <li>{@code clients}: the sender and receivers, against the relay at
- *   {@code -Dbench.relayHost}. The gate is asserted here, from counters the
- *   relay reports for each step.</li>
+ *   <li>{@code clients}: against the relay at {@code -Dbench.relayHost}, one of
+ *   ({@code -Dbench.part}): {@code all} (default), the sender and the 60
+ *   receivers; {@code sender}, which drives the steps and asserts the gate once
+ *   60 receivers have joined; or {@code receivers}, which joins, reports what
+ *   it received to the relay, and leaves when the sender finishes.</li>
  * </ul>
  * The relay's key is fixed (derived from a constant), so clients know it
  * without an exchange. A bench key, not for anything else.
+ *
+ * <h2>Measuring the gate across hosts</h2>
+ * Run the relay and {@code part=sender} on one host, {@code part=receivers} on
+ * another. The sender's datagrams then reach the relay over loopback, so
+ * inbound delay is on one clock and holds no internet path — only the wait
+ * before the relay's listener runs, which is what the gate means — while the
+ * relay's 60 copies of each go out through its real network interface. With
+ * the sender remote as well ({@code part=all}), inbound is reported above the
+ * step's floor, which cancels the clock offset and base latency but not the
+ * path's jitter: Europe to Singapore alone varied by ~6 ms one way at p99.
  * <p>
- * Across two hosts the clocks differ, so inbound delay is reported above its
- * floor: each datagram's (relay clock − sender stamp) minus the step's
- * minimum. The clock offset and the network's base latency cancel; queueing
- * before the relay's listener, and network jitter, remain. On one host the
- * clock is shared and inbound is absolute (sender stamp to relay listener).
- * <p>
- * Each step drains before the next: the clients poll the relay's counters
+ * Each step drains before the next: the driver polls the relay's counters
  * until they stop moving, so no step starts behind a backlog left by the one
- * before. A step the relay cannot keep up with shows as fwd/s below offer/s;
- * with relay CPU well under 100% as well, the relay thread was starved of CPU
- * rather than saturated.
+ * before. Rates are over the span from the step's first to last datagram at
+ * the relay, on its clock, so a slow poll does not stretch them. A step the
+ * relay cannot keep up with shows as fwd/s below offer/s; with relay CPU well
+ * under 100% as well, the relay thread was starved of CPU rather than
+ * saturated.
  */
 public class DatagramRelayBench {
 
@@ -85,12 +94,24 @@ public class DatagramRelayBench {
             case "clients" -> {
                 String host = System.getProperty("bench.relayHost");
                 assertNotNull(host, "bench.role=clients needs -Dbench.relayHost=<relay address>");
-                runClients(host, false);
+                InetAddress addr;
+                try {
+                    addr = InetAddress.getByName(host);
+                } catch (Exception e) {
+                    throw new AssertionError("bench.relayHost '" + host + "' does not resolve", e);
+                }
+                String part = System.getProperty("bench.part", "all");
+                switch (part) {
+                    case "all" -> runDriver(host, addr.isLoopbackAddress(), true);
+                    case "sender" -> runDriver(host, addr.isLoopbackAddress(), false);
+                    case "receivers" -> runReceivers(host);
+                    default -> fail("bench.part must be all, sender or receivers, not " + part);
+                }
             }
             case "local" -> {
                 Relay relay = new Relay();
                 try {
-                    runClients("127.0.0.1", true);
+                    runDriver("127.0.0.1", true, true);
                 } finally {
                     relay.stop();
                 }
@@ -121,8 +142,10 @@ public class DatagramRelayBench {
     /**
      * The forwarding relay, plus a few requests the clients drive it with:
      * {@code begin} forgets receivers from an earlier run, {@code listen} and
-     * {@code speak} join, {@code reset} starts a step's samples, and
-     * {@code stats} reports counters and the step's percentiles.
+     * {@code speak} join, {@code reset} starts a step's samples, {@code stats}
+     * reports counters and the step's percentiles, {@code delivered} carries a
+     * remote receivers' total (and answers whether the run has finished), and
+     * {@code finish} ends the run.
      */
     static final class Relay {
         final NodeBundle bundle;
@@ -132,6 +155,10 @@ public class DatagramRelayBench {
         final AtomicLong received = new AtomicLong();
         final AtomicLong forwarded = new AtomicLong();
         final AtomicLong forwardDrops = new AtomicLong();
+        final AtomicLong delivered = new AtomicLong();
+        /** Relay clock at the step's first and latest datagram; 0 before the first. */
+        final AtomicLong firstNs = new AtomicLong(), lastNs = new AtomicLong();
+        volatile boolean finished;
         final Thread thread;
         final ThreadMXBean mx = ManagementFactory.getThreadMXBean();
 
@@ -146,7 +173,11 @@ public class DatagramRelayBench {
                                               String serviceName, byte[] data) {
                     byte[] reply = new byte[1];
                     switch (serviceName) {
-                        case "begin" -> receiverConns.clear();
+                        case "begin" -> {
+                            receiverConns.clear();
+                            delivered.set(0);
+                            finished = false;
+                        }
                         case "listen" -> {
                             node.enableDatagrams(connectionId);
                             receiverConns.add(connectionId);
@@ -155,7 +186,13 @@ public class DatagramRelayBench {
                         case "reset" -> {
                             inboundUs.clear();
                             holdUs.clear();
+                            firstNs.set(0);
                         }
+                        case "delivered" -> {
+                            delivered.set(Long.parseLong(new String(data, StandardCharsets.UTF_8)));
+                            reply = new byte[]{(byte) (finished ? 1 : 0)};
+                        }
+                        case "finish" -> finished = true;
                         case "stats" -> reply = stats(new String(data, StandardCharsets.UTF_8))
                                 .getBytes(StandardCharsets.UTF_8);
                         default -> { }
@@ -171,6 +208,8 @@ public class DatagramRelayBench {
                 public void onDatagram(String peerId, long connectionId, byte[] data) {
                     long entry = System.nanoTime();
                     received.incrementAndGet();
+                    firstNs.compareAndSet(0, entry);
+                    lastNs.set(entry);
                     // Relay clock minus the sender's stamp: absolute on one
                     // host, offset by the clock difference across two.
                     inboundUs.add(ageMicros(data));
@@ -198,6 +237,8 @@ public class DatagramRelayBench {
             m.put("drops", forwardDrops.get());
             m.put("cpuNs", mx.getThreadCpuTime(thread.getId()));
             m.put("receivers", (long) receiverConns.size());
+            m.put("delivered", delivered.get());
+            m.put("spanNs", firstNs.get() == 0 ? 0 : lastNs.get() - firstNs.get());
             m.put("inMin", in.length == 0 ? -1 : in[0]);
             m.put("inP50", percentile(in, 50));
             m.put("inP99", percentile(in, 99));
@@ -222,37 +263,89 @@ public class DatagramRelayBench {
                   long sent, long lostToRelay, long drops, long fwd, long delivered,
                   long inboundP50, long inboundP99, long holdP50, long holdP99) {}
 
-    private static void runClients(String relayHost, boolean sameHost) throws Exception {
-        byte[] relayPub = KeyTools.prikeyToPubkey(relayPrivKey());
-        String relayFid = KeyTools.pubkeyToFchAddr(relayPub);
+    private static String relayFid() throws Exception {
+        return KeyTools.pubkeyToFchAddr(KeyTools.prikeyToPubkey(relayPrivKey()));
+    }
 
-        NodeBundle sender = createNode(RELAY_PORT + 1);
+    private static List<NodeBundle> joinAsReceivers(String relayHost, AtomicLong delivered,
+                                                    ConcurrentLinkedQueue<Long> endToEndUs) throws Exception {
+        byte[] relayPub = KeyTools.prikeyToPubkey(relayPrivKey());
+        String relayFid = relayFid();
         List<NodeBundle> receivers = new ArrayList<>();
         for (int i = 0; i < RECEIVERS; i++) receivers.add(createNode(RELAY_PORT + 2 + i));
-
-        // Sender stamp -> receiver listener: one host's clock in both modes.
-        ConcurrentLinkedQueue<Long> endToEndUs = new ConcurrentLinkedQueue<>();
-        AtomicLong delivered = new AtomicLong();
         for (NodeBundle r : receivers) {
             r.node().setEventListener(new NodeEventListener() {
                 @Override
                 public void onDatagram(String peerId, long connectionId, byte[] data) {
-                    endToEndUs.add(ageMicros(data));
+                    if (endToEndUs != null) endToEndUs.add(ageMicros(data));
                     delivered.incrementAndGet();
                 }
             });
         }
+        for (NodeBundle r : receivers) r.node().start();
+        for (NodeBundle r : receivers) {
+            r.node().addPeer(relayFid, relayPub, relayHost, RELAY_PORT);
+            call(r.node(), relayFid, "listen", "");
+        }
+        return receivers;
+    }
 
-        List<NodeBundle> all = new ArrayList<>(receivers);
+    /** {@code part=receivers}: join, report deliveries to the relay, leave when the sender finishes. */
+    private static void runReceivers(String relayHost) throws Exception {
+        String relayFid = relayFid();
+        AtomicLong delivered = new AtomicLong();
+        NodeBundle reporter = createNode(RELAY_PORT + 1);
+        List<NodeBundle> receivers = new ArrayList<>();
+        try {
+            reporter.node().start();
+            reporter.node().addPeer(relayFid, KeyTools.prikeyToPubkey(relayPrivKey()), relayHost, RELAY_PORT);
+            call(reporter.node(), relayFid, "begin", "");
+            receivers = joinAsReceivers(relayHost, delivered, null);
+            System.out.println("[DatagramRelayBench] " + RECEIVERS + " receivers joined the relay at " + relayHost
+                    + "; start the sender (bench.part=sender) on the relay host");
+            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(30);
+            while (System.nanoTime() < deadline) {
+                Thread.sleep(200);
+                byte[] finished = call(reporter.node(), relayFid, "delivered", String.valueOf(delivered.get()));
+                if (finished.length > 0 && finished[0] == 1) break;
+            }
+            System.out.println("[DatagramRelayBench] sender finished; " + delivered.get() + " datagrams received");
+        } finally {
+            reporter.node().stop();
+            for (NodeBundle n : receivers) n.node().stop();
+        }
+    }
+
+    /**
+     * Drive the steps and assert the gate. With {@code withReceivers} the 60
+     * receivers are in this JVM; without, it waits for a {@code part=receivers}
+     * run to join and takes deliveries from what that run reports to the relay.
+     */
+    private static void runDriver(String relayHost, boolean sameHost, boolean withReceivers) throws Exception {
+        byte[] relayPub = KeyTools.prikeyToPubkey(relayPrivKey());
+        String relayFid = relayFid();
+
+        NodeBundle sender = createNode(withReceivers ? RELAY_PORT + 1 : RELAY_PORT + 2 + RECEIVERS);
+        // Sender stamp -> receiver listener: one clock, when the receivers are here.
+        ConcurrentLinkedQueue<Long> endToEndUs = new ConcurrentLinkedQueue<>();
+        AtomicLong localDelivered = new AtomicLong();
+        List<NodeBundle> all = new ArrayList<>();
         all.add(sender);
         try {
-            for (NodeBundle n : all) n.node().start();
             FudpNode s = sender.node();
+            s.start();
             s.addPeer(relayFid, relayPub, relayHost, RELAY_PORT);
-            call(s, relayFid, "begin", "");
-            for (NodeBundle r : receivers) {
-                r.node().addPeer(relayFid, relayPub, relayHost, RELAY_PORT);
-                call(r.node(), relayFid, "listen", "");
+            if (withReceivers) {
+                call(s, relayFid, "begin", "");
+                all.addAll(joinAsReceivers(relayHost, localDelivered, endToEndUs));
+            } else {
+                System.out.println("[DatagramRelayBench] waiting for " + RECEIVERS
+                        + " receivers (bench.part=receivers) to join the relay...");
+                long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(10);
+                while (stats(s, relayFid, "").get("receivers") < RECEIVERS) {
+                    assertTrue(System.nanoTime() < deadline, "receivers did not join within 10 min");
+                    Thread.sleep(500);
+                }
             }
             call(s, relayFid, "speak", "");
             long senderConn = s.getProtocol().getConnectionManager().getAnyConnection(relayFid).getConnectionId();
@@ -264,7 +357,8 @@ public class DatagramRelayBench {
             long seq = run(s, senderConn, 0, 100, 3000);
             drain(s, relayFid);
 
-            System.out.println("[DatagramRelayBench] " + (sameHost ? "one host" : "relay at " + relayHost)
+            System.out.println("[DatagramRelayBench] " + (sameHost ? "sender on the relay's host" : "sender remote")
+                    + ", receivers " + (withReceivers ? "with the sender" : "remote")
                     + "; inbound " + (sameHost ? "absolute" : "above its floor (clocks differ)"));
             System.out.println("[DatagramRelayBench] pps-in offer/s  fwd/s  fwd/cpu-s  relayCPU  lost  drops"
                     + "   inbound p50/p99     hold p50/p99    e2e p50/p99/max       relay gc");
@@ -273,23 +367,25 @@ public class DatagramRelayBench {
                 call(s, relayFid, "reset", "");
                 endToEndUs.clear();
                 Map<String, Long> s0 = stats(s, relayFid, "");
-                long del0 = delivered.get();
-                long wall0 = System.nanoTime();
+                long del0 = withReceivers ? localDelivered.get() : s0.get("delivered");
 
                 int durationMs = pps == 25 ? 10_000 : 5_000;
                 long seq0 = seq;
                 seq = run(s, senderConn, seq, pps, durationMs);
-                long lastMove = drain(s, relayFid);
+                drain(s, relayFid);
 
                 Map<String, Long> s1 = stats(s, relayFid, "pps=" + pps);
-                double wallS = (lastMove - wall0) / 1e9;
+                // First to last datagram at the relay, plus one interval for the last.
+                double spanS = s1.get("spanNs") / 1e9 + 1.0 / pps;
                 double cpuS = (s1.get("cpuNs") - s0.get("cpuNs")) / 1e9;
                 long fwd = s1.get("fwd") - s0.get("fwd");
                 long sent = seq - seq0;
                 long inFloor = sameHost ? 0 : s1.get("inMin");
-                Result res = new Result(pps, (double) pps * RECEIVERS, fwd / wallS, fwd / cpuS, 100 * cpuS / wallS,
+                long del = (withReceivers ? localDelivered.get() : s1.get("delivered")) - del0;
+                Result res = new Result(pps, (double) pps * RECEIVERS, fwd / spanS, fwd / cpuS,
+                        Math.min(100, 100 * cpuS / spanS),
                         sent, sent - (s1.get("received") - s0.get("received")),
-                        s1.get("drops") - s0.get("drops"), fwd, delivered.get() - del0,
+                        s1.get("drops") - s0.get("drops"), fwd, del,
                         s1.get("inP50") - inFloor, s1.get("inP99") - inFloor,
                         s1.get("holdP50"), s1.get("holdP99"));
                 long[] e2e = sortedCopy(endToEndUs);
@@ -308,13 +404,15 @@ public class DatagramRelayBench {
             }
             System.out.println("[DatagramRelayBench] lost = sent but never reached the relay's listener; drops = refused"
                     + " by the relay's send; inbound = sender stamp -> relay listener; hold = relay listener -> last"
-                    + " copy handed to the socket; e2e = sender stamp -> each receiver's listener.");
+                    + " copy handed to the socket; e2e = sender stamp -> each receiver's listener (-1: receivers"
+                    + " remote).");
 
             // Realistic call: 25 pps to 60 receivers.
             assertEquals(0, realistic.drops, "relay must not drop at 1500 fwd/s");
             assertTrue(realistic.lostToRelay <= realistic.sent / 100,
                     "sender -> relay lost " + realistic.lostToRelay + " of " + realistic.sent + " at 25 pps");
-            assertTrue(realistic.delivered >= realistic.fwd * 0.99, "receivers must get what the relay sent");
+            assertTrue(realistic.delivered >= realistic.fwd * 0.99,
+                    "receivers got " + realistic.delivered + " of the " + realistic.fwd + " the relay sent");
             // Gate, throughput: >= 20k forwards per CPU-second of the relay thread at ~21k fwd/s offered.
             assertTrue(capacity.fwdPerCpuSec >= 20_000,
                     "relay forwards " + (long) capacity.fwdPerCpuSec + " datagrams per CPU-second (gate 20 000)");
@@ -330,7 +428,8 @@ public class DatagramRelayBench {
             }
         } finally {
             try {
-                call(sender.node(), relayFid, "begin", ""); // leave a remote relay idle
+                call(sender.node(), relayFid, "finish", ""); // remote receivers leave
+                if (withReceivers) call(sender.node(), relayFid, "begin", ""); // leave the relay idle
             } catch (Exception ignored) {
             }
             for (NodeBundle n : all) n.node().stop();
@@ -355,29 +454,25 @@ public class DatagramRelayBench {
     }
 
     /**
-     * Wait until the relay has taken in and forwarded everything queued for it:
-     * its counters unchanged over two polls 100 ms apart, at most 60 s.
-     *
-     * @return when the counters last moved (System.nanoTime)
+     * Wait until the relay has taken in and forwarded everything queued for it,
+     * and remote receivers have reported what they got: its counters unchanged
+     * over two polls 250 ms apart, at most 60 s.
      */
-    private static long drain(FudpNode node, String relayFid) throws Exception {
-        long lastMove = System.nanoTime();
-        long prev = -1;
+    private static void drain(FudpNode node, String relayFid) throws Exception {
+        List<Long> prev = List.of();
         int still = 0;
-        long deadline = lastMove + TimeUnit.SECONDS.toNanos(60);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
         while (still < 2 && System.nanoTime() < deadline) {
-            Thread.sleep(100);
+            Thread.sleep(250);
             Map<String, Long> m = stats(node, relayFid, "");
-            long now = m.get("received") * 1_000_003L + m.get("fwd");
-            if (now != prev) {
-                prev = now;
-                lastMove = System.nanoTime();
-                still = 0;
-            } else {
+            List<Long> now = List.of(m.get("received"), m.get("fwd"), m.get("delivered"));
+            if (now.equals(prev)) {
                 still++;
+            } else {
+                prev = now;
+                still = 0;
             }
         }
-        return lastMove;
     }
 
     /** Send {@code pps} stamped frames per second for {@code durationMs}. @return next seq */
