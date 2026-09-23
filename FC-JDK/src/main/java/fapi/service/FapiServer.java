@@ -1223,6 +1223,28 @@ public class FapiServer implements NodeEventListener {
         }
     }
 
+    /** DATAGRAM frames go to the components that take them (CALL), inline on the receive thread. */
+    @Override
+    public void onDatagram(String peerId, long connectionId, byte[] data) {
+        for (FapiComponent c : components.values()) {
+            if (c instanceof fapi.FudpEventAware a) a.onDatagram(peerId, connectionId, data);
+        }
+    }
+
+    @Override
+    public void onNotifyReceived(String peerId, long messageId, int dataType, byte[] data) {
+        for (FapiComponent c : components.values()) {
+            if (c instanceof fapi.FudpEventAware a) a.onNotifyReceived(peerId, messageId, dataType, data);
+        }
+    }
+
+    @Override
+    public void onPeerDisconnected(String peerId, long connectionId) {
+        for (FapiComponent c : components.values()) {
+            if (c instanceof fapi.FudpEventAware a) a.onPeerDisconnected(peerId, connectionId);
+        }
+    }
+
     /**
      * 当收到 PONG 时，可以从 advertise data 中解析服务信息
      */

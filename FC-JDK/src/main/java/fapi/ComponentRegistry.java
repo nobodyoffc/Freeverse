@@ -2,6 +2,7 @@ package fapi;
 
 import data.feipData.ApiGroupType;
 import fapi.components.BaseComponent;
+import fapi.components.CallComponent;
 import fapi.components.DiskComponent;
 import fapi.components.DockComponent;
 import fapi.components.MapComponent;
@@ -37,6 +38,7 @@ public class ComponentRegistry {
         registerComponent(ApiGroupType.DOCK_NO1_NRC7, DockComponent.class);
         registerComponent(ApiGroupType.MAP_NO1_NRC7, MapComponent.class);
         registerComponent(ApiGroupType.ROAD_NO1_NRC7, RoadComponent.class);
+        registerComponent(ApiGroupType.CALL_NO1_NRC7, CallComponent.class);
     }
     
     /**
