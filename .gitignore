@@ -21,6 +21,8 @@ Thumbs.db
 
 # config json
 *.json
+# Cross-client test vectors are source, not output (FreerForMac tools/vector-gen)
+!FC-JDK/src/test/resources/*Vectors.json
 # ...but the ES index mappings are source, not config: the parser creates
 # every index from these, so an unversioned change to one silently
 # changes how a field is indexed on the next deployment.
