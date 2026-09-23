@@ -19,6 +19,7 @@
 - [2. ACK Processing](#2-ack-processing)
   - [2.1. ACK Generation Rules](#21-ack-generation-rules)
   - [ACK Frames MUST Be Redundant, Not Fire-Once](#ack-frames-must-be-redundant-not-fire-once)
+  - [Reading an ACK Frame: Cost](#reading-an-ack-frame-cost)
   - [2.2. ACK Frame Encoding](#22-ack-frame-encoding)
 - [3. RTT Estimation](#3-rtt-estimation)
   - [3.1. Parameters](#31-parameters)
@@ -135,6 +136,38 @@ Every ACK frame is limited to the bytes one packet can carry (FUDP1 [Packet Size
 A sender therefore receives ACK ranges covering packet numbers it never tracked. It MUST ignore them, and they MUST NOT count as evidence of loss (§4.1.1) or as an RTT sample (§3.2).
 
 Re-advertising already-acknowledged packet numbers is intentionally redundant: the sender's `removeSentPacket` is a no-op for packet numbers it has already removed (§4.3), so duplicate acknowledgment is harmless and idempotent. The cost is a few extra bytes per ACK frame on a healthy link (still typically 1-2 ranges); the benefit is that ACK loss stops being a silent, compounding failure.
+
+#### Reading an ACK Frame: Cost
+
+Because every ACK frame re-advertises the whole retention window, the number of
+packet numbers it carries is set by the **receiver's packet rate**, not by what
+the sender still has outstanding. At 4,000 packets/s the window holds about
+16,000 numbers, and a frame that size arrives for every packet sent. Any work
+that is linear in the numbers a frame covers is therefore quadratic in the
+transfer rate, and it is charged to a receive loop that must also process the
+data.
+
+- A sender **MUST NOT** process an ACK frame by expanding its ranges into
+  individual packet numbers and looking each one up. It **SHOULD** instead walk
+  the packets it still has outstanding — bounded by the congestion window
+  (§5.4.1) — and test each against the frame's ranges, which are already
+  sorted and disjoint.
+- A receiver **SHOULD** build the ranges without walking every retained number.
+  The reference implementations binary-search the start of each run, since
+  within a run of consecutive numbers `packetNumber - index` is constant and
+  that difference never decreases across the retained set.
+- The retained set **SHOULD** support pruning from the front in amortized
+  constant time (the references keep an index of the oldest live entry rather
+  than moving the remainder on every prune).
+
+Measured on the Java reference at 16,000 retained numbers, per ACK: 159 µs to
+build a frame and 330 µs to process one, against 1 µs and 8 µs after this
+change. On a client without a JIT the same code cost 279 µs and 4,086 µs, which
+exceeded the ACK arrival rate outright: the sender fell permanently behind the
+ACK stream, its smoothed RTT climbed past the loss-detection timeout (§4.2),
+and it retransmitted packets that had already arrived — a self-sustaining loop
+that held a loopback transfer at 12 Mbit/s with 40% of packets retransmitted.
+With the change the same transfer ran at 177 Mbit/s with no retransmission.
 
 ### 2.2. ACK Frame Encoding
 
@@ -260,6 +293,13 @@ ON ackReceived(packetNumber) WHERE packetNumber WAS PREVIOUSLY marked suspected-
 | Maximum Packet Reorder Threshold | 64 | Ceiling; beyond this, treat as genuine loss regardless of prior spurious events |
 
 This converges within one or two spurious-loss events on a given path and requires no path characterization or configuration — it is purely reactive to observed evidence.
+
+The set of packet numbers awaiting this evidence (those declared lost and not
+yet acknowledged) **MUST** be bounded; an entry is useful only until its ACK
+arrives or the packet is truly gone, and an unbounded set grows for the life of
+a connection that loses packets steadily. The references retain the newest
+4,096 and drop the oldest in batches. Dropping one costs at most a single
+threshold widening.
 
 #### 4.1.2. Time-Based Detection (Timeout)
 
@@ -521,6 +561,7 @@ The same holds for packets carrying only DATAGRAM frames (with or without ACK fr
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-03-28|Initial specification.|
+|1 (rev)|2026-09-23|§2.1 [Reading an ACK Frame: Cost](#reading-an-ack-frame-cost): a sender MUST NOT expand an ACK frame's ranges into individual packet numbers; it walks its outstanding packets instead, and a receiver builds the ranges without walking the retained set. Both were linear in the retention window, hence quadratic in the transfer rate: the sender fell behind the ACK stream, its RTT estimate passed the loss timeout, and it retransmitted packets that had already arrived. §4.1.1: the suspected-lost set MUST be bounded.|
 |1 (rev)|2026-09-22|For the DATAGRAM frame (FUDP7): (1) §2.1 — DATAGRAM is not ack-eliciting. Every non-eliciting packet (ACK-only as well as DATAGRAM-only) is recorded in the retained set without triggering an ACK, and pruned on insert. Previously the peer's ACK-only packets were holes, and traffic in both directions saturated MAX_RANGES_PER_FRAME without any loss. ACK frames are limited to one packet, and piggybacked only when they fit whole; senders ignore untracked numbers in ACK ranges; a duplicate packet number keeps its first receive time. (2) §3.2 — RTT is sampled from the largest newly acknowledged tracked packet, not only when Largest Acknowledged is tracked. (3) §4.1.1 — the reordering gap is counted in tracked packets, not packet numbers, which untracked ACK-only and DATAGRAM-only packets also consume. (4) §5.4.3 — optional stream rate cap for calls. (5) §5.5 — DATAGRAM-only packets are not counted in bytes in flight.|
 |1 (rev)|2026-07-14|Major revision covering a field investigation into a real WAN path (independently measured near 1 MB/s, e.g. via scp) sustaining only tens of KB/s over FUDP: (1) §2.1 — ACK generation MUST be redundant over a retention window, not fire-once, since a single lost ACK packet previously orphaned its covered packet numbers permanently; (2) §4.1 — re-enabled gap-based loss detection with an adaptive, evidence-driven reordering threshold (previously fixed and too tight for deeply-reordering routes), added an RTT age guard, and made the timeout threshold adaptive-but-capped with per-packet exponential backoff; (3) §4.3 — congestion-window reduction MUST be gated on gap-detected loss only, since timeout-only "loss" is routinely spurious on jittery paths and was previously pinning the window at its floor on every RTT spike; raised Max Retransmit Count 30→60 to match the backoff; (4) §5.3 — fixed the CUBIC growth function to operate in MSS (packet) units per RFC 8312 rather than bytes, correcting a unit error that made the window's growth phase roughly two orders of magnitude slower than its Beta-multiplicative shrink phase; (5) §5.4 — added a mandatory congestion-window gate on bulk-send loops and replaced fixed-size-burst pacing with rate-based (leaky-bucket) pacing derived from cwnd/RTT, since burst pacing was clipped by shallow bottleneck buffers and ingress policers even at low average rates; (6) §5.5 — fixed `onSend` to count only ack-eliciting packets, closing a `bytesInFlight` leak from ACK-only traffic that could permanently stall a congestion-window-gated sender.|
 

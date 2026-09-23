@@ -2,6 +2,7 @@ package fudp;
 
 import fudp.connection.PeerConnection;
 import fudp.message.ResponseMessage;
+import fudp.packet.frames.AckFrame;
 import fudp.packet.frames.DatagramFrame;
 import fudp.packet.frames.StreamFrame;
 import fudp.transport.DatagramResult;
@@ -126,9 +127,8 @@ public class DatagramLossTest {
         conn.recordSentPacket(pn11, List.of(new StreamFrame(0, 100, new byte[100], false)), 150, true);
 
         Thread.sleep(100); // RTT sample ~100 ms, clearly distinct from the 50 ms initial estimate
-        List<Long> acked = new ArrayList<>();
-        for (long pn = 1; pn <= 11; pn++) acked.add(pn); // datagram numbers listed too
-        conn.onAckReceived(11, 0, acked);
+        // The peer lists the datagram numbers too: one interval, 1..11.
+        conn.onAckReceived(11, 0, List.of(new AckFrame.AckInterval(1, 11)));
         long minRtt = conn.getRttEstimator().getMinRtt();
         assertTrue(minRtt >= 90 && minRtt < 1000,
                 "an ACK whose largest number is untracked must still yield an RTT sample (minRtt=" + minRtt + ")");
@@ -147,7 +147,8 @@ public class DatagramLossTest {
             later.add(pn);
         }
         Thread.sleep(300);
-        conn.onAckReceived(later.get(later.size() - 1), 0, later);
+        conn.onAckReceived(later.get(later.size() - 1), 0,
+                List.of(new AckFrame.AckInterval(later.get(0), later.get(later.size() - 1))));
         var detection = conn.detectLostPackets();
         assertTrue(detection.packets().stream().anyMatch(p -> p.packetNumber == lostPn),
                 "a tracked packet with 7 tracked successors ACKed must be detected as lost");

@@ -1649,8 +1649,8 @@ public class Protocol {
 
             case ACK -> {
                 AckFrame ackFrame = (AckFrame) frame;
-                List<Long> ackedPackets = ackFrame.getAcknowledgedPackets();
-                conn.onAckReceived(ackFrame.getLargestAcknowledged(), ackFrame.getAckDelay(), ackedPackets);
+                conn.onAckReceived(ackFrame.getLargestAcknowledged(), ackFrame.getAckDelay(),
+                        ackFrame.getAcknowledgedIntervals());
                 if (conn.getState() == ConnectionState.ESTABLISHING) {
                     conn.setState(ConnectionState.ESTABLISHED);
                 }

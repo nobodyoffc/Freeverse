@@ -1,6 +1,7 @@
 package fudp.connection;
 
 import fudp.packet.Frame;
+import fudp.packet.frames.AckFrame;
 import fudp.packet.frames.StreamFrame;
 import fudp.stream.Stream;
 import fudp.stream.StreamManager;
@@ -150,12 +151,23 @@ public class PeerConnection {
     /**
      * Process received ACK.
      */
-    public void onAckReceived(long largestAcked, long ackDelay, List<Long> ackedPackets) {
+    /**
+     * Process one ACK frame, given its acknowledged ranges as intervals.
+     * <p>
+     * <b>It walks the outstanding packets, not the acknowledged numbers.</b>
+     * An ACK frame re-advertises every packet number the peer has retained —
+     * about 4 seconds of them (FUDP3 §2.1) — while what is outstanding here is
+     * bounded by the congestion window. Expanding the frame into a list and
+     * looking up each number cost O(retained) per ACK, on every one of the
+     * thousands of ACKs a transfer receives each second: the sender fell
+     * behind the ACK stream, its RTT estimate climbed past the loss timeout,
+     * and it retransmitted packets that had already arrived.
+     */
+    public void onAckReceived(long largestAcked, long ackDelay, List<AckFrame.AckInterval> intervals) {
         // E2: Peer has responded, so it has seen our epoch — no need to keep sending it
         epochConfirmed = true;
+        if (intervals == null || intervals.isEmpty()) return;
 
-        int found = 0;
-        int notFound = 0;
         // RTT is sampled when this ACK newly covers a tracked packet sent after
         // every tracked packet acked so far (QUIC's "largest acknowledged is
         // newly acked", restated over tracked packets). largestAcked itself
@@ -163,43 +175,48 @@ public class PeerConnection {
         // pn == largestAcked starved the estimator whenever datagrams flowed.
         long previousLargestSeq = largestAckedTrackedSeq;
         SentPacket rttPacket = null;
-        for (long pn : ackedPackets) {
-            SentPacket sent = sentPackets.remove(pn);
-            if (sent != null) {
-                found++;
-                if (rttPacket == null || sent.getTrackedSeq() > rttPacket.getTrackedSeq()) {
-                    rttPacket = sent;
-                }
-                if (sent.getTrackedSeq() > largestAckedTrackedSeq) {
-                    largestAckedTrackedSeq = sent.getTrackedSeq();
-                }
 
-                // Update congestion control
-                congestionControl.onAck(sent.size);
-            } else {
-                notFound++;
+        List<SentPacket> acked = new ArrayList<>();
+        for (Map.Entry<Long, SentPacket> entry : sentPackets.entrySet()) {
+            if (covers(intervals, entry.getKey())) {
+                acked.add(entry.getValue());
+            }
+        }
+        for (SentPacket sent : acked) {
+            sentPackets.remove(sent.packetNumber);
+            if (rttPacket == null || sent.getTrackedSeq() > rttPacket.getTrackedSeq()) {
+                rttPacket = sent;
+            }
+            if (sent.getTrackedSeq() > largestAckedTrackedSeq) {
+                largestAckedTrackedSeq = sent.getTrackedSeq();
             }
 
-            // Check if this packet was previously marked as suspected lost
-            // If so, it was a false positive (late ACK, not real loss)
-            Long suspectedSeq = suspectedLostPacketNumbers.remove(pn);
-            if (suspectedSeq != null) {
-                ackedAfterSuspectedLost++;
-                // Spurious loss = the path reorders deeper than our current
-                // gap threshold assumed. Widen it to the OBSERVED reordering
-                // extent (RACK-style adaptation) so it converges in one or two
-                // events — heavily load-balanced routes can reorder by dozens
-                // of packets, and every misfire needlessly multiplies the
-                // congestion window down (~50KB window on a 900KB/s path in
-                // the field). The extent includes some retransmit delay, so
-                // it over-estimates slightly; the cap bounds the damage and
-                // the capped 4s timeout remains the real-loss backstop.
-                long extent = largestAckedTrackedSeq - suspectedSeq + 2;
-                long widened = Math.min(MAX_PACKET_THRESHOLD,
-                        Math.max(packetReorderThreshold + 4, extent));
-                if (widened > packetReorderThreshold) {
-                    packetReorderThreshold = widened;
-                }
+            // Update congestion control
+            congestionControl.onAck(sent.size);
+        }
+
+        // Packets previously marked as suspected lost but now ACKed were false
+        // positives (late ACK, not real loss).
+        for (Iterator<Map.Entry<Long, Long>> it = suspectedLostPacketNumbers.entrySet().iterator();
+             it.hasNext(); ) {
+            Map.Entry<Long, Long> entry = it.next();
+            if (!covers(intervals, entry.getKey())) continue;
+            it.remove();
+            ackedAfterSuspectedLost++;
+            // Spurious loss = the path reorders deeper than our current
+            // gap threshold assumed. Widen it to the OBSERVED reordering
+            // extent (RACK-style adaptation) so it converges in one or two
+            // events — heavily load-balanced routes can reorder by dozens
+            // of packets, and every misfire needlessly multiplies the
+            // congestion window down (~50KB window on a 900KB/s path in
+            // the field). The extent includes some retransmit delay, so
+            // it over-estimates slightly; the cap bounds the damage and
+            // the capped 4s timeout remains the real-loss backstop.
+            long extent = largestAckedTrackedSeq - entry.getValue() + 2;
+            long widened = Math.min(MAX_PACKET_THRESHOLD,
+                    Math.max(packetReorderThreshold + 4, extent));
+            if (widened > packetReorderThreshold) {
+                packetReorderThreshold = widened;
             }
         }
 
@@ -207,7 +224,23 @@ public class PeerConnection {
             long rttSample = System.currentTimeMillis() - rttPacket.sentTime;
             rttEstimator.updateRtt(Math.max(1, rttSample - ackDelay / 1000));
         }
+    }
 
+    /** Is {@code packetNumber} in one of the (descending, disjoint) intervals? */
+    private static boolean covers(List<AckFrame.AckInterval> intervals, long packetNumber) {
+        int lo = 0, hi = intervals.size() - 1;
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            AckFrame.AckInterval interval = intervals.get(mid);
+            if (packetNumber > interval.high) {
+                hi = mid - 1;          // intervals descend, so look newer
+            } else if (packetNumber < interval.low) {
+                lo = mid + 1;
+            } else {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Packets marked as suspected lost (for accurate loss tracking):
@@ -230,6 +263,9 @@ public class PeerConnection {
     // widens the threshold, RACK-style, up to MAX_PACKET_THRESHOLD — paths
     // that reorder deeply stop triggering false congestion signals.
     private static final long INITIAL_PACKET_THRESHOLD = 6;
+    /** Cap on remembered suspected-lost packet numbers. */
+    private static final int MAX_SUSPECTED_LOST = 4096;
+
     private static final long MAX_PACKET_THRESHOLD = 64;
     private volatile long packetReorderThreshold = INITIAL_PACKET_THRESHOLD;
     // Ceiling for the timeout-based loss threshold (QUIC caps its PTO
@@ -342,11 +378,30 @@ public class PeerConnection {
             
             suspectedLostCount++;
             suspectedLostPacketNumbers.put(packetNumber, removed.getTrackedSeq());
+            trimSuspectedLost();
             if (removed.getRetransmitCount() >= 3) {
                 confirmedLostCount++;
             }
         }
         return removed;
+    }
+
+
+    /**
+     * Keep the suspected-lost map bounded: an entry is only useful until its
+     * ACK arrives, so a long-lived connection losing packets steadily would
+     * otherwise remember every packet number it ever suspected. Trimming in
+     * batches keeps the cost amortized; dropping the oldest costs at most one
+     * threshold widening.
+     */
+    private void trimSuspectedLost() {
+        if (suspectedLostPacketNumbers.size() <= MAX_SUSPECTED_LOST) return;
+        List<Long> oldest = new ArrayList<>(suspectedLostPacketNumbers.keySet());
+        Collections.sort(oldest);
+        int drop = oldest.size() - MAX_SUSPECTED_LOST * 3 / 4;
+        for (int i = 0; i < drop && i < oldest.size(); i++) {
+            suspectedLostPacketNumbers.remove(oldest.get(i));
+        }
     }
 
     /**

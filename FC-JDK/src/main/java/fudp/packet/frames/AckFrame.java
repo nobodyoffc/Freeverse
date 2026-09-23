@@ -115,6 +115,62 @@ public class AckFrame extends Frame {
     /**
      * Get the set of acknowledged packet numbers
      */
+    /** One contiguous run of acknowledged packet numbers, inclusive. */
+    public static class AckInterval {
+        public final long low;
+        public final long high;
+
+        public AckInterval(long low, long high) {
+            this.low = low;
+            this.high = high;
+        }
+
+        @Override
+        public String toString() {
+            return "[" + low + ".." + high + "]";
+        }
+    }
+
+    /**
+     * The acknowledged packet numbers as intervals, newest first — what the
+     * ranges already are, without expanding them.
+     * <p>
+     * A sender wants this rather than {@link #getAcknowledgedPackets()}: an
+     * ACK frame re-advertises every packet number the peer has retained
+     * (about 4 seconds of them, FUDP3 §2.1), while what the sender has
+     * outstanding is bounded by its congestion window. {@code maxIntervals}
+     * bounds the work a hostile frame can ask for.
+     */
+    public List<AckInterval> getAcknowledgedIntervals(int maxIntervals) {
+        List<AckInterval> intervals = new ArrayList<>();
+        if (ackRanges.isEmpty()) return intervals;
+
+        long pn = largestAcknowledged;
+        for (int i = 0; i < ackRanges.size(); i++) {
+            AckRange range = ackRanges.get(i);
+            if (i > 0) {
+                // The fields are unsigned on the wire and a peer may name
+                // anything; running off the bottom ends the frame's content.
+                pn = pn - range.gap - 1;
+                if (pn < 0) break;
+            }
+            long low = pn - range.length;
+            if (low < 0) {
+                intervals.add(new AckInterval(0, pn));
+                break;
+            }
+            intervals.add(new AckInterval(low, pn));
+            if (intervals.size() >= maxIntervals) break;
+            pn = low - 1;
+            if (pn < 0) break;
+        }
+        return intervals;
+    }
+
+    public List<AckInterval> getAcknowledgedIntervals() {
+        return getAcknowledgedIntervals(1024);
+    }
+
     public List<Long> getAcknowledgedPackets() {
         List<Long> packets = new ArrayList<>();
         if (ackRanges.isEmpty()) return packets;

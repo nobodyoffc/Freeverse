@@ -2,6 +2,7 @@ package fudp.transport;
 
 import fudp.connection.PeerConnection;
 import fudp.packet.frames.AckFrame;
+import fudp.util.Varint;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -47,8 +48,22 @@ public class AckManager {
     private static final int MAX_RANGES_PER_FRAME = 128;
 
     private final PeerConnection connection;
-    /** Received packet number -> receive timestamp (ms), for retention pruning. */
-    private final TreeMap<Long, Long> receivedPackets = new TreeMap<>();
+    /**
+     * Received packet numbers, ascending, with their receive times in
+     * lockstep; live entries are {@code [head, tail)}.
+     * <p>
+     * Plain arrays rather than a TreeMap because an ACK frame is generated
+     * for every packet received, and each one used to copy the whole
+     * retained set ({@code new ArrayList<>(descendingKeySet())}, boxed) and
+     * then walk it. Random access makes both the retention prune and the run
+     * detection in {@link #generateAckFrame(int)} cheap.
+     */
+    private long[] packetNumbers = new long[1024];
+    private long[] receiveTimes = new long[1024];
+    /** Index of the oldest retained entry; everything before it is pruned. */
+    private int head = 0;
+    /** One past the newest retained entry. */
+    private int tail = 0;
     /** Count of packets received since the last generated ACK frame. */
     private int newSinceLastAck = 0;
     private long largestReceived = -1;
@@ -65,24 +80,8 @@ public class AckManager {
         if (newSinceLastAck == 0) {
             firstPendingAckTime = System.currentTimeMillis();
         }
-        // A number already here keeps its ORIGINAL receive time.
-        //
-        // putIfAbsent, not put: the retention prune in
-        // generateAckFrame() walks entries in key order and breaks at
-        // the first one newer than the cutoff, which is correct only
-        // while receive times ascend with packet numbers. Refreshing an
-        // existing entry parked a recent time at a low key and stopped
-        // the prune there — permanently, and taking the MAX_RETAINED
-        // check with it, since that test is inside the same loop.
-        //
-        // The retention window asks how long ago we first saw a number,
-        // which a second copy of it does not change.
-        if (receivedPackets.putIfAbsent(packetNumber, System.currentTimeMillis()) == null) {
+        if (record(packetNumber, System.currentTimeMillis())) {
             newSinceLastAck++;
-        }
-
-        if (packetNumber > largestReceived) {
-            largestReceived = packetNumber;
         }
     }
 
@@ -102,13 +101,72 @@ public class AckManager {
      * window that protects against lost ACKs shrank to a fraction of a second.
      */
     public synchronized void onNonElicitingPacketReceived(long packetNumber) {
-        receivedPackets.putIfAbsent(packetNumber, System.currentTimeMillis());
+        long now = System.currentTimeMillis();
+        record(packetNumber, now);
+        // No ACK frame may follow for a long time (a receive-only datagram
+        // flow), and pruning otherwise happens only when one is generated.
+        pruneRetained(now);
+    }
+
+    /**
+     * Insert a packet number in ascending order.
+     * <p>
+     * A number already retained keeps its ORIGINAL receive time. The
+     * retention prune below drops from the front and stops at the first
+     * entry newer than the cutoff, which is correct only while receive times
+     * ascend with packet numbers. Refreshing an existing entry parked a
+     * recent time at a low index and stopped the prune there — permanently,
+     * and taking the MAX_RETAINED check with it. The retention window asks
+     * how long ago we first saw a number, which a second copy does not change.
+     *
+     * @return true if it was not already retained
+     */
+    private boolean record(long packetNumber, long now) {
         if (packetNumber > largestReceived) {
             largestReceived = packetNumber;
         }
-        // No ACK frame may follow for a long time (a receive-only datagram
-        // flow), and pruning otherwise happens only when one is generated.
-        pruneRetained(System.currentTimeMillis());
+        if (tail == head || packetNumber > packetNumbers[tail - 1]) {
+            ensureRoom();
+            packetNumbers[tail] = packetNumber;
+            receiveTimes[tail] = now;
+            tail++;
+            return true;
+        }
+        // Out of order or duplicate: binary search for its place.
+        int lo = head, hi = tail;
+        while (lo < hi) {
+            int mid = (lo + hi) >>> 1;
+            if (packetNumbers[mid] < packetNumber) lo = mid + 1; else hi = mid;
+        }
+        if (lo < tail && packetNumbers[lo] == packetNumber) {
+            return false;
+        }
+        ensureRoom();
+        System.arraycopy(packetNumbers, lo, packetNumbers, lo + 1, tail - lo);
+        System.arraycopy(receiveTimes, lo, receiveTimes, lo + 1, tail - lo);
+        packetNumbers[lo] = packetNumber;
+        receiveTimes[lo] = now;
+        tail++;
+        return true;
+    }
+
+    private void ensureRoom() {
+        if (tail < packetNumbers.length) return;
+        if (head > 0) {
+            compact();
+            if (tail < packetNumbers.length) return;
+        }
+        packetNumbers = Arrays.copyOf(packetNumbers, packetNumbers.length * 2);
+        receiveTimes = Arrays.copyOf(receiveTimes, receiveTimes.length * 2);
+    }
+
+    /** Move the live entries to the front, dropping the pruned prefix. */
+    private void compact() {
+        int live = tail - head;
+        System.arraycopy(packetNumbers, head, packetNumbers, 0, live);
+        System.arraycopy(receiveTimes, head, receiveTimes, 0, live);
+        head = 0;
+        tail = live;
     }
 
     /**
@@ -131,7 +189,7 @@ public class AckManager {
      *         more room
      */
     public synchronized AckFrame generateAckFrame(int maxBytes) {
-        if (newSinceLastAck == 0 || receivedPackets.isEmpty()) return null;
+        if (newSinceLastAck == 0 || tail == head) return null;
 
         long now = System.currentTimeMillis();
         pruneRetained(now);
@@ -141,59 +199,58 @@ public class AckManager {
             ? (now - firstPendingAckTime) * 1000
             : 0;
 
-        List<Long> sorted = new ArrayList<>(receivedPackets.descendingKeySet());
-
+        // Fold the (ascending) numbers into descending (gap, length) ranges.
+        // Each run of consecutive numbers is found by binary search rather
+        // than walked: within a run {@code packetNumbers[j] - j} is constant,
+        // and it never decreases across the ascending array, so a run's first
+        // index is the first one with that difference. Walking cost
+        // O(retained) per ACK — and an ACK is generated for every packet.
         List<AckFrame.AckRange> ranges = new ArrayList<>();
-        long currentHigh = sorted.get(0);
-        long currentLow = currentHigh;
+        int i = tail - 1;
         long prevLow = -1;
-
-        for (int i = 1; i < sorted.size(); i++) {
-            long pn = sorted.get(i);
-            if (currentLow - pn == 1) {
-                // Consecutive packet, extend current range
-                currentLow = pn;
-            } else {
-                // Gap found — finalize current range and start new one
-                if (ranges.size() >= MAX_RANGES_PER_FRAME) break;
-                long length = currentHigh - currentLow;
-                long gap = ranges.isEmpty() ? 0 : prevLow - currentHigh - 2;
-                ranges.add(new AckFrame.AckRange(gap, length));
-                prevLow = currentLow;
-                currentHigh = pn;
-                currentLow = pn;
+        while (i >= head && ranges.size() < MAX_RANGES_PER_FRAME) {
+            long high = packetNumbers[i];
+            long key = high - i;
+            int lo = head, hi = i;
+            while (lo < hi) {
+                int mid = (lo + hi) >>> 1;
+                if (packetNumbers[mid] - mid < key) lo = mid + 1; else hi = mid;
             }
-        }
-        // Add final range
-        if (ranges.size() < MAX_RANGES_PER_FRAME) {
-            long length = currentHigh - currentLow;
-            long gap = ranges.isEmpty() ? 0 : prevLow - currentHigh - 2;
-            ranges.add(new AckFrame.AckRange(gap, length));
+            long low = packetNumbers[lo];
+            long gap = ranges.isEmpty() ? 0 : prevLow - high - 2;
+            ranges.add(new AckFrame.AckRange(gap, high - low));
+            prevLow = low;
+            i = lo - 1;
         }
 
-        AckFrame frame = new AckFrame(sorted.get(0), ackDelayUs, ranges);
-        while (frame.getSize() > maxBytes && ranges.size() > 1) {
-            ranges.remove(ranges.size() - 1);
-            frame = new AckFrame(sorted.get(0), ackDelayUs, ranges);
+        long largest = packetNumbers[tail - 1];
+        // Trim the oldest ranges against a running total: this runs for every
+        // ACK, so the frame is measured once, not rebuilt per range dropped.
+        int size = new AckFrame(largest, ackDelayUs, ranges).getSize();
+        while (size > maxBytes && ranges.size() > 1) {
+            AckFrame.AckRange dropped = ranges.remove(ranges.size() - 1);
+            size -= Varint.encodedLength(dropped.gap) + Varint.encodedLength(dropped.length);
+            size += Varint.encodedLength(ranges.size()) - Varint.encodedLength(ranges.size() + 1);
         }
-        if (frame.getSize() > maxBytes) return null;
+        if (size > maxBytes) return null;
 
         newSinceLastAck = 0;
         firstPendingAckTime = 0;
-        return frame;
+        return new AckFrame(largest, ackDelayUs, ranges);
     }
 
     /** Prune entries past the retention window / memory cap (oldest first). */
     private void pruneRetained(long now) {
         long cutoff = now - ACK_RETAIN_MS;
-        Iterator<Map.Entry<Long, Long>> it = receivedPackets.entrySet().iterator();
-        while (it.hasNext() && receivedPackets.size() > 1) {
-            Map.Entry<Long, Long> e = it.next();
-            if (e.getValue() < cutoff || receivedPackets.size() > MAX_RETAINED) {
-                it.remove();
-            } else {
-                break; // TreeMap keys ascend with time in practice; stop at first keeper
-            }
+        while (tail - head > 1
+                && (receiveTimes[head] < cutoff || tail - head > MAX_RETAINED)) {
+            head++;
+        }
+        // Reclaim once the pruned prefix outgrows the live part. Dropping
+        // entry by entry (the old TreeMap iterator) moved every retained
+        // number on each ACK-only packet received.
+        if (head > 1024 && head * 2 > tail) {
+            compact();
         }
     }
 
@@ -222,7 +279,8 @@ public class AckManager {
      * Reset ACK tracking after peer restart.
      */
     public synchronized void resetForRestart() {
-        receivedPackets.clear();
+        head = 0;
+        tail = 0;
         newSinceLastAck = 0;
         largestReceived = -1;
         firstPendingAckTime = 0;
