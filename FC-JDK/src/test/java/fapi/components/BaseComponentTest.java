@@ -113,9 +113,12 @@ class BaseComponentTest {
         void testInitializeWithoutEsClient() {
             when(mockSettings.getClient(ServiceType.ES)).thenReturn(null);
             
-            assertThrows(IllegalStateException.class, () -> {
+            // initialize() wraps every doInitialize failure in a RuntimeException.
+            RuntimeException e = assertThrows(RuntimeException.class, () -> {
                 component.initialize(mockServer);
             });
+            assertInstanceOf(IllegalStateException.class, e.getCause());
+            assertTrue(e.getCause().getMessage().contains("ElasticsearchClient is required"));
         }
     }
     

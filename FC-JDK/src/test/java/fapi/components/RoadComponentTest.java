@@ -239,7 +239,7 @@ class RoadComponentTest {
             UnifiedResponse response = component.handleUnifiedRequest(request, data, TEST_PEER_ID);
             
             assertEquals(FapiCode.BAD_REQUEST, response.response().getCode());
-            assertTrue(response.response().getMessage().contains("targetFid is required"));
+            assertTrue(response.response().getMessage().contains("targetFid or targetFids is required"));
         }
         
         @Test
@@ -260,10 +260,14 @@ class RoadComponentTest {
             
             UnifiedResponse response = component.handleUnifiedRequest(request, data, TEST_PEER_ID);
             
-            assertEquals(FapiCode.NOT_FOUND, response.response().getCode());
+            // ROAD relays to several targets at once: the top-level code says
+            // whether any target got the data, and each target's own outcome
+            // is in relayResults.
+            assertEquals(FapiCode.BAD_GATEWAY, response.response().getCode());
+            assertEquals(FapiCode.NOT_FOUND, targetResult(response, TARGET_PEER_ID).get("code"));
             
-            // Verify ingress was charged
-            verify(mockBalanceManager, atLeastOnce()).charge(anyString(), eq(TEST_PEER_ID), anyLong(), contains("in"));
+            // FAPI15: failed deliveries are not charged.
+            verify(mockBalanceManager, never()).charge(anyString(), anyString(), anyLong(), anyString());
         }
         
         @Test
@@ -339,8 +343,10 @@ class RoadComponentTest {
             
             UnifiedResponse response = component.handleUnifiedRequest(request, data, TEST_PEER_ID);
             
-            assertEquals(FapiCode.NOT_FOUND, response.response().getCode());
-            assertTrue(response.response().getMessage().contains("max hops reached"));
+            assertEquals(FapiCode.BAD_GATEWAY, response.response().getCode());
+            Map<String, Object> result = targetResult(response, TARGET_PEER_ID);
+            assertEquals(FapiCode.NOT_FOUND, result.get("code"));
+            assertTrue(((String) result.get("message")).contains("max hops reached"));
         }
     }
     
@@ -406,5 +412,17 @@ class RoadComponentTest {
             assertEquals(10, component.getPricePerKBIn());
             assertEquals(10, component.getPricePerKBOut());
         }
+    }
+
+    /** One target's outcome from a (multi-target) relay response. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> targetResult(UnifiedResponse response, String targetFid) {
+        Map<String, Object> data = (Map<String, Object>) response.response().getData();
+        assertNotNull(data, "relay response carries per-target results");
+        Map<String, Object> results = (Map<String, Object>) data.get(RELAY_RESULTS);
+        assertNotNull(results, "relayResults");
+        Map<String, Object> result = (Map<String, Object>) results.get(targetFid);
+        assertNotNull(result, "result for " + targetFid);
+        return result;
     }
 }
