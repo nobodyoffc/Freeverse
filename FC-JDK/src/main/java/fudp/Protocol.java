@@ -772,7 +772,15 @@ public class Protocol {
      * so the limit stays the same for the life of a connection.
      */
     public int getMaxDatagramSize() {
-        int room = maxFrameBytes;
+        return maxDatagramSize(maxPacketSize);
+    }
+
+    /**
+     * {@link #getMaxDatagramSize()} for a given packet size: 1242 at the
+     * default 1350, 1292 at 1400 (checked against {@code fudpVectors.json}).
+     */
+    public static int maxDatagramSize(int maxPacketSize) {
+        int room = maxPacketSize - PacketHeader.HEADER_SIZE - PACKET_CRYPTO_OVERHEAD - PACKET_PREFIX;
         int size = room - 2; // type and a 1-byte length; shrink as the length varint grows
         while (size > 0 && DatagramFrame.encodedSize(size) > room) size--;
         return Math.max(0, size);

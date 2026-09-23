@@ -318,7 +318,7 @@ Frames are the fundamental unit of data within an encrypted payload. After any o
 | 0x04 | MAX_STREAM_DATA | Update stream-level flow control limit |
 | 0x05 | MAX_STREAMS | Update maximum number of concurrent streams |
 | 0x08-0x0F | STREAM | Application data with flags encoded in type (LEN is mandatory in v1 wire behavior) |
-| 0x10 | DATAGRAM | Unreliable application data: never retransmitted, not ack-eliciting. Defined in FUDP7 (being drafted; VOICE_SPEC §2 until then). MUST NOT be sent until the peer is known to support it (see [Versioning](#versioning)). |
+| 0x10 | DATAGRAM | Unreliable application data: never retransmitted, not ack-eliciting. Defined in [FUDP7](FUDP7V1_Datagram.md). MUST NOT be sent until the peer is known to support it (see [Versioning](#versioning)). |
 
 The values `0x06` and `0x07` belonged to the removed SYMKEY_PROPOSAL and SYMKEY_ACK frames and MUST NOT be reused.
 
