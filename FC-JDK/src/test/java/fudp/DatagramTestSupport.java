@@ -32,7 +32,10 @@ final class DatagramTestSupport {
     }
 
     static NodeBundle createNode(int port, NodeConfig config) throws Exception {
-        byte[] privKey = ByteUtils.randomBytes(32);
+        return createNode(port, config, ByteUtils.randomBytes(32));
+    }
+
+    static NodeBundle createNode(int port, NodeConfig config, byte[] privKey) throws Exception {
         byte[] pubKey = KeyTools.prikeyToPubkey(privKey);
         config.setPort(port);
         config.setMaxPacketSize(1400);
