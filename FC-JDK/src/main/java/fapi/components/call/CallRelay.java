@@ -36,6 +36,7 @@ public final class CallRelay {
     public static final int P2P_DEFAULT_PARTICIPANTS = 2;
     public static final int MEETINGS_PER_HOST = 4;
     public static final int JOINS_PER_KEY_PER_MINUTE = 10;
+    public static final int MAX_CANDIDATES = 8;
     public static final long CLOCK_SKEW_MS = 60_000;
     public static final long EMPTY_CLOSE_MS = 60_000;
     public static final long MINUTE_MS = 60_000;
@@ -58,6 +59,11 @@ public final class CallRelay {
 
         /** A reliable push: attestations use dataType 0, relay notices dataType 1 (JSON). */
         void notify(String peerId, int dataType, byte[] data);
+
+        /** The ip:port this connection's packets come from, as the relay sees it; null if unknown. */
+        default String peerAddress(long connectionId) {
+            return null;
+        }
     }
 
     /** What the relay needs from FAPI4 billing. */
@@ -107,6 +113,8 @@ public final class CallRelay {
         final AtomicLong framesDropped = new AtomicLong();
         long minuteIndex;
         long unpaidSinceMs = -1;
+        /** Shared only if the participant asked (§6.1). */
+        List<Map<String, String>> candidates;
         // inbound token bucket, touched only on the receive thread
         double tokens = INBOUND_BPS / 8.0 / 4;
         long lastRefillNs = System.nanoTime();
@@ -139,6 +147,7 @@ public final class CallRelay {
             e.put("ssrc", Integer.toUnsignedLong(ssrc));
             e.put("routeId", Integer.toUnsignedLong(routeId));
             e.put("delegation", delegationJson);
+            if (candidates != null) e.put("candidates", candidates);
             return e;
         }
     }
@@ -261,9 +270,12 @@ public final class CallRelay {
             throw new Refused(PAYMENT_REQUIRED, "balance below one minute of this call");
         }
 
+        List<Map<String, String>> candidates = candidates(p, connectionId);
+
         seenJoins.put(replayKey, now);
         Participant joined = new Participant(d.fid, peerId, connectionId, ssrc, newRouteId(m), now, d.toJson(),
                 maxCost);
+        joined.candidates = candidates;
         m.order.add(joined);
         m.byConnection.put(connectionId, joined);
         participants.put(connectionId, joined);
@@ -495,6 +507,48 @@ public final class CallRelay {
         for (Participant p : m.order) {
             if (p.fid.equals(m.hostFid)) transport.notify(p.peerId, 1, body);
         }
+    }
+
+    /**
+     * Direct-path candidates a joiner shares with the others (VOICE_SPEC §6.1):
+     * its own {@code lan} addresses, and with {@code reflexive = true} the
+     * address the relay sees it at, as {@code map}. Sharing is the joiner's
+     * choice, since it shows its IP to the others; a joiner that sends
+     * neither shares nothing.
+     */
+    private List<Map<String, String>> candidates(Map<String, Object> p, long connectionId) throws Refused {
+        List<Map<String, String>> out = new ArrayList<>();
+        if (p.get("candidates") instanceof List<?> list) {
+            if (list.size() > MAX_CANDIDATES) throw new Refused(BAD_REQUEST, "too many candidates");
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> c) || !"lan".equals(c.get("t")) || !(c.get("a") instanceof String a)
+                        || !isEndpoint(a)) {
+                    throw new Refused(BAD_REQUEST, "a candidate is {t: lan, a: ip:port}");
+                }
+                out.add(Map.of("t", "lan", "a", a));
+            }
+        }
+        if (Boolean.TRUE.equals(p.get("reflexive"))) {
+            String seen = transport.peerAddress(connectionId);
+            if (seen != null && isEndpoint(seen)) out.add(Map.of("t", "map", "a", seen));
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    /** ip:port, or [ipv6]:port, with a port in range; no host names. */
+    static boolean isEndpoint(String a) {
+        if (a.length() > 64) return false;
+        int colon = a.lastIndexOf(':');
+        if (colon <= 0) return false;
+        String host = a.substring(0, colon);
+        try {
+            int port = Integer.parseInt(a.substring(colon + 1));
+            if (port < 1 || port > 65535) return false;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        if (host.startsWith("[") && host.endsWith("]")) return host.length() > 2 && host.matches("\\[[0-9a-fA-F:.]+]");
+        return host.matches("\\d{1,3}(\\.\\d{1,3}){3}");
     }
 
     private static byte[] json(Object o) {

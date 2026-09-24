@@ -74,6 +74,16 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                     log.debug("CALL notify to {} failed: {}", peerId, e.getMessage());
                 }
             }
+
+            @Override
+            public String peerAddress(long connectionId) {
+                PeerConnection c = node.getProtocol().getConnectionManager().getByConnectionId(connectionId);
+                if (c == null || !(c.getPeerAddress() instanceof java.net.InetSocketAddress a) || a.getAddress() == null) {
+                    return null;
+                }
+                String ip = a.getAddress().getHostAddress();
+                return (a.getAddress() instanceof java.net.Inet6Address ? "[" + ip + "]" : ip) + ":" + a.getPort();
+            }
         }, new CallRelay.Billing() {
             @Override
             public boolean canAfford(String fid, long amount) {

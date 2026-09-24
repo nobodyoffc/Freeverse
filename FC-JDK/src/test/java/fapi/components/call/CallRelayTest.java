@@ -65,6 +65,11 @@ public class CallRelayTest {
             public void notify(String peerId, int dataType, byte[] data) {
                 notices.add(new Notice(peerId, dataType, data));
             }
+
+            @Override
+            public String peerAddress(long connectionId) {
+                return "203.0.113.7:" + (40000 + (connectionId & 0xfff));
+            }
         }, new CallRelay.Billing() {
             @Override
             public boolean canAfford(String fid, long amount) {
@@ -119,8 +124,14 @@ public class CallRelayTest {
     }
 
     Map<String, Object> join(Side s, String callId, byte[] authPriv, long now) throws CallRelay.Refused {
+        return join(s, callId, authPriv, now, Map.of());
+    }
+
+    Map<String, Object> join(Side s, String callId, byte[] authPriv, long now, Map<String, Object> extra)
+            throws CallRelay.Refused {
         Map<String, Object> p = params("meetingId", callId, "ssrc", Integer.toUnsignedLong(s.ssrc), "ts", now,
                 "delegation", s.delegation(callId, now));
+        p.putAll(extra);
         if (authPriv != null) p.put("admitSig", Hex.toHex(CallKeys.admitSig(authPriv, callId, s.tPub, s.ssrc, now)));
         Map<String, Object> r = relay.join(s.peerId, s.connectionId, p, now);
         s.routeId = ((Number) r.get("routeId")).longValue();
@@ -216,6 +227,50 @@ public class CallRelayTest {
         join(caller, callId, null, T0);
         CallRelay.Refused r = assertThrows(CallRelay.Refused.class, () -> join(callee, callId, null, T0));
         assertEquals(409, r.code, "409 until registered: the callee retries (§6.2)");
+    }
+
+    // ===== Direct-path candidates (§6.1) =====
+
+    @SuppressWarnings("unchecked")
+    static List<Map<String, Object>> candidatesOf(Map<String, Object> joinResult, String fid) {
+        for (Map<String, Object> e : (List<Map<String, Object>>) joinResult.get("roster")) {
+            if (fid.equals(e.get("fid"))) return (List<Map<String, Object>>) e.get("candidates");
+        }
+        throw new AssertionError("not in the roster: " + fid);
+    }
+
+    @Test
+    public void candidatesAreSharedOnlyWhenTheJoinerAsks() throws Exception {
+        Side caller = new Side(), callee = new Side();
+        String callId = callId();
+        create(caller, callId, T0);
+        Map<String, Object> r = join(caller, callId, null, T0, Map.of("reflexive", true,
+                "candidates", List.of(Map.of("t", "lan", "a", "192.168.1.20:50000"))));
+        List<Map<String, Object>> c = candidatesOf(r, caller.fid);
+        assertEquals(2, c.size());
+        assertEquals(Map.of("t", "lan", "a", "192.168.1.20:50000"), c.get(0));
+        assertEquals("map", c.get(1).get("t"), "the address the relay sees, as a MAP server would");
+        assertTrue(((String) c.get(1).get("a")).startsWith("203.0.113.7:"));
+
+        byte[] secret = key();
+        relay.register(caller.peerId, params("meetingId", callId, "delegation", caller.delegation(callId, T0),
+                "authPub", Hex.toHex(CallKeys.authPub(CallKeys.authPriv(secret)))), T0);
+        Map<String, Object> r2 = join(callee, callId, CallKeys.authPriv(secret), T0);
+        assertNull(candidatesOf(r2, callee.fid), "shared nothing: shows nothing");
+        assertEquals(2, candidatesOf(r2, caller.fid).size(), "the callee learns the caller's");
+    }
+
+    @Test
+    public void aCandidateMustBeAnAddress() throws Exception {
+        Side caller = new Side();
+        String callId = callId();
+        create(caller, callId, T0);
+        for (Object bad : List.of(Map.of("t", "lan", "a", "evil.example:80"), Map.of("t", "map", "a", "1.2.3.4:5"),
+                Map.of("t", "lan", "a", "1.2.3.4:0"), "1.2.3.4:5")) {
+            CallRelay.Refused e = assertThrows(CallRelay.Refused.class,
+                    () -> join(caller, callId, null, T0, Map.of("candidates", List.of(bad))));
+            assertEquals(400, e.code, String.valueOf(bad));
+        }
     }
 
     @Test
