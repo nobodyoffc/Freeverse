@@ -155,6 +155,8 @@ public final class CallRelay {
     final class Meeting {
         final String id;
         final String kind;
+        /** Fixed at create, unlike the host role, which can pass on. */
+        final String creatorFid;
         String hostFid;
         byte[] authPub;
         final int keyEpoch = 0;
@@ -165,8 +167,18 @@ public final class CallRelay {
         final Map<Long, Participant> byConnection = new ConcurrentHashMap<>();
         final List<Participant> order = new ArrayList<>();
 
+        /**
+         * Who pays for a participant's traffic (§7.5): in a 1:1 call the caller,
+         * who created it, for both sides, so a callee never needs an account
+         * at the relay; otherwise each participant for itself.
+         */
+        String payerFor(String participantFid) {
+            return "p2p".equals(kind) ? creatorFid : participantFid;
+        }
+
         Meeting(String id, String kind, String hostFid, int maxParticipants, long now) {
             this.id = id;
+            this.creatorFid = hostFid;
             this.kind = kind;
             this.hostFid = hostFid;
             this.maxParticipants = maxParticipants;
@@ -213,6 +225,11 @@ public final class CallRelay {
         long hosted = meetings.values().stream().filter(m -> m.hostFid.equals(d.fid)).count();
         if (hosted >= MEETINGS_PER_HOST) throw new Refused(TOO_MANY_REQUESTS, "too many meetings for this host");
         int max = (int) Math.min(MAX_PARTICIPANTS, Math.max(2, num(p, "maxParticipants", P2P_DEFAULT_PARTICIPANTS)));
+        // The caller pays for the whole 1:1 call (§7.5): it must afford a minute of both sides.
+        long oneMinute = oneMinuteCost(null) * P2P_DEFAULT_PARTICIPANTS;
+        if (oneMinute > 0 && !billing.canAfford(d.fid, oneMinute)) {
+            throw new Refused(PAYMENT_REQUIRED, "balance below one minute of this call");
+        }
         Meeting m = new Meeting(meetingId, kind, d.fid, max, now);
         if (p.get("authPub") != null) m.authPub = pubKey(str(p, "authPub"));
         meetings.put(meetingId, m);
@@ -266,7 +283,7 @@ public final class CallRelay {
         long maxCost = num(p, "maxCostPerMinute", 0);
         long oneMinute = oneMinuteCost(m);
         if (maxCost > 0) oneMinute = Math.min(oneMinute, maxCost);
-        if (oneMinute > 0 && !billing.canAfford(d.fid, oneMinute)) {
+        if (oneMinute > 0 && !billing.canAfford(m.payerFor(d.fid), oneMinute)) {
             throw new Refused(PAYMENT_REQUIRED, "balance below one minute of this call");
         }
 
@@ -422,13 +439,19 @@ public final class CallRelay {
         if (p.maxCostPerMinute > 0) cost = Math.min(cost, p.maxCostPerMinute);
         if (cost <= 0) return;
         String key = "call:" + m.id + ":" + p.fid + ":" + Integer.toUnsignedString(p.ssrc) + ":" + minute;
+        String payer = m.payerFor(p.fid);
         minutesCharged.incrementAndGet();
-        if (billing.charge(key, p.fid, cost, partial ? "part-minute" : null)) {
+        if (billing.charge(key, payer, cost, partial ? "part-minute" : null)) {
             p.unpaidSinceMs = -1;
         } else if (!partial && p.unpaidSinceMs < 0) {
             p.unpaidSinceMs = now;
-            transport.notify(p.peerId, 1, json(Map.of("type", "balance", "meetingId", m.id,
-                    "graceSeconds", UNPAID_GRACE_MS / 1000)));
+            // Told to whoever pays: in a 1:1 call, the caller.
+            for (Participant o : m.order) {
+                if (o.fid.equals(payer)) {
+                    transport.notify(o.peerId, 1, json(Map.of("type", "balance", "meetingId", m.id,
+                            "graceSeconds", UNPAID_GRACE_MS / 1000)));
+                }
+            }
         }
     }
 

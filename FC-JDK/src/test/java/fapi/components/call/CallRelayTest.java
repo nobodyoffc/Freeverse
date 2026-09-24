@@ -42,6 +42,7 @@ public class CallRelayTest {
     final List<Long> enabled = new ArrayList<>();
     final List<Notice> notices = new ArrayList<>();
     final Map<String, Long> charges = new LinkedHashMap<>();
+    final Map<String, String> payers = new LinkedHashMap<>();
     boolean affordable = true;
     final java.util.Set<String> unableToPay = new java.util.HashSet<>();
 
@@ -80,6 +81,7 @@ public class CallRelayTest {
             public boolean charge(String key, String fid, long amount, String meta) {
                 if (unableToPay.contains(fid)) return false;
                 charges.putIfAbsent(key, amount);
+                payers.putIfAbsent(key, fid);
                 return true;
             }
         }, new CallRelay.Pricing(10, 20));
@@ -373,6 +375,8 @@ public class CallRelayTest {
         affordable = false;
         CallRelay.Refused broke = assertThrows(CallRelay.Refused.class, () -> join(caller, callId, null, T0));
         assertEquals(402, broke.code);
+        CallRelay.Refused cannotCreate = assertThrows(CallRelay.Refused.class, () -> create(new Side(), callId(), T0));
+        assertEquals(402, cannotCreate.code, "the caller must afford a minute of both sides before it rings");
     }
 
     // ===== Billing (§7.5) =====
@@ -393,13 +397,15 @@ public class CallRelayTest {
         long kb = (bytes + 1023) / 1024;
         String callerKey = "call:" + c.callId + ":" + c.caller.fid + ":" + Integer.toUnsignedString(c.caller.ssrc) + ":0";
         String calleeKey = "call:" + c.callId + ":" + c.callee.fid + ":" + Integer.toUnsignedString(c.callee.ssrc) + ":0";
-        assertEquals(kb * 10, charges.get(callerKey), "the caller pays for what it sent in");
-        assertEquals(kb * 20, charges.get(calleeKey), "the callee pays for what it was sent");
+        assertEquals(kb * 10, charges.get(callerKey), "the caller's traffic in");
+        assertEquals(kb * 20, charges.get(calleeKey), "the callee's traffic out");
         assertEquals(2, charges.size());
+        assertEquals(c.caller.fid, payers.get(callerKey));
+        assertEquals(c.caller.fid, payers.get(calleeKey), "the caller pays for the callee too (§7.5)");
     }
 
     @Test
-    public void anUnpaidParticipantIsWarnedThenRemoved() throws Exception {
+    public void aCallerWhoCannotPayIsWarnedThenTheCallEnds() throws Exception {
         Call c = establish(T0);
         byte[] key = CallKeys.senderKey(c.secret, c.caller.fid, c.caller.ssrc, 0);
         relay.onDatagram(c.caller.connectionId, frame(c.caller, key, 1));
@@ -413,7 +419,9 @@ public class CallRelayTest {
         relay.tick(T0 + CallRelay.MINUTE_MS + CallRelay.UNPAID_GRACE_MS);
         assertTrue(notices.stream().anyMatch(n -> n.peerId.equals(c.caller.peerId)
                 && "kicked".equals(n.json().get("type"))));
-        assertEquals(1, relay.info(c.callId).get("participants"));
+        assertTrue(notices.stream().anyMatch(n -> n.peerId.equals(c.callee.peerId)
+                && "kicked".equals(n.json().get("type"))));
+        assertEquals(0, relay.info(c.callId).get("participants"), "the caller pays for both: the call ends");
     }
 
     // ===== Lifecycle and limits (§7.2, §7.6) =====
