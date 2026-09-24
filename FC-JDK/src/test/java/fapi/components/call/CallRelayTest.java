@@ -219,6 +219,26 @@ public class CallRelayTest {
     }
 
     @Test
+    public void anEarlyJoinKnocksOnTheHost() throws Exception {
+        Side caller = new Side(), callee = new Side();
+        String callId = callId();
+        create(caller, callId, T0);
+        join(caller, callId, null, T0);
+        notices.clear();
+        assertThrows(CallRelay.Refused.class, () -> join(callee, callId, null, T0));
+        assertEquals(1, notices.size(), "the host hears who is waiting (§6.2 step 3)");
+        Notice knock = notices.get(0);
+        assertEquals(caller.peerId, knock.peerId);
+        assertEquals(1, knock.dataType);
+        Map<String, Object> body = knock.json();
+        assertEquals("knock", body.get("type"));
+        assertEquals(callId, body.get("meetingId"));
+        assertEquals(callee.fid, body.get("fid"));
+        Delegation d = Delegation.fromJson((String) body.get("delegation"));
+        assertEquals(Delegation.Check.OK, d.verify(callId, T0 / 1000), "the callee's own signed delegation");
+    }
+
+    @Test
     public void afterRegistrationEveryJoinNeedsTheAdmissionKey() throws Exception {
         Call c = establish(T0);
         Side intruder = new Side();

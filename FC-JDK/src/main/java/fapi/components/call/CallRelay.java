@@ -244,6 +244,7 @@ public final class CallRelay {
                 throw new Refused(UNAUTHORIZED, "admitSig does not verify");
             }
         } else if (!d.fid.equals(m.hostFid)) {
+            knock(m, d);
             throw new Refused(CONFLICT, "not open yet: the host has not registered authPub");
         }
         String replayKey = m.id + "|" + d.tPub + "|" + ts;
@@ -480,6 +481,19 @@ public final class CallRelay {
         byte[] body = json(Map.of("type", "roster", "meetingId", m.id, "host", m.hostFid, "roster", roster(m)));
         for (Participant p : m.order) {
             if (p != except) transport.notify(p.peerId, 1, body);
+        }
+    }
+
+    /**
+     * Someone with a delegation for this call is waiting to join: pass it to
+     * the host, which may take it as the callee's answer (§6.2 step 3). The
+     * delegation is the joiner's own signed statement, so the relay can
+     * forward it but not make one up; the join rate limit bounds how often.
+     */
+    private void knock(Meeting m, Delegation d) {
+        byte[] body = json(Map.of("type", "knock", "meetingId", m.id, "fid", d.fid, "delegation", d.toJson()));
+        for (Participant p : m.order) {
+            if (p.fid.equals(m.hostFid)) transport.notify(p.peerId, 1, body);
         }
     }
 
