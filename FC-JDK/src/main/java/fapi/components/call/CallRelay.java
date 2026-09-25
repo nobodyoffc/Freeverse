@@ -275,7 +275,14 @@ public final class CallRelay {
         }
         String replayKey = m.id + "|" + d.tPub + "|" + ts;
         if (seenJoins.containsKey(replayKey)) throw new Refused(CONFLICT, "join replayed");
-        if (participants.containsKey(connectionId)) throw new Refused(CONFLICT, "this connection is already in a call");
+        Participant already = participants.get(connectionId);
+        if (already != null && meetingOf.get(connectionId) == m && already.ssrc == ssrc) {
+            // A retry whose first reply was lost on the way back (VOICE_SPEC §6.2
+            // step 10): it took, so answer it the same way again.
+            seenJoins.put(replayKey, now);
+            return joinResult(m, already);
+        }
+        if (already != null) throw new Refused(CONFLICT, "this connection is already in a call");
         for (Participant o : m.order) {
             if (o.ssrc == ssrc) throw new Refused(CONFLICT, "ssrc in use: pick a new one");
         }
@@ -299,7 +306,10 @@ public final class CallRelay {
         meetingOf.put(connectionId, m);
         transport.enableDatagrams(connectionId);
         pushRoster(m, joined);
+        return joinResult(m, joined);
+    }
 
+    private Map<String, Object> joinResult(Meeting m, Participant joined) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("routeId", Integer.toUnsignedLong(joined.routeId));
         r.put("datagram", true); // the §2.3 capability signal

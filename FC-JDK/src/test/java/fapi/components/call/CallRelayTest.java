@@ -276,6 +276,17 @@ public class CallRelayTest {
     }
 
     @Test
+    public void aJoinRetriedAfterALostReplyGetsTheSameAnswer() throws Exception {
+        Call c = establish(T0);
+        long routeId = c.callee.routeId;
+        notices.clear();
+        Map<String, Object> again = join(c.callee, c.callId, c.authPriv, T0 + 5_000);
+        assertEquals(routeId, ((Number) again.get("routeId")).longValue(), "the same routeId as the join that took");
+        assertEquals(2, relay.info(c.callId).get("participants"), "not joined twice");
+        assertTrue(notices.isEmpty(), "nobody is told of a join that changed nothing");
+    }
+
+    @Test
     public void anEarlyJoinKnocksOnTheHost() throws Exception {
         Side caller = new Side(), callee = new Side();
         String callId = callId();
