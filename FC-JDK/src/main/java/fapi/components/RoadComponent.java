@@ -603,12 +603,19 @@ public class RoadComponent extends AbstractFapiComponent {
      * Deliver data locally via FUDP direct send.
      */
     private boolean deliverLocally(String targetFid, byte[] data, MapEntry entry) {
+        FudpNode node = server.getFudpNode();
+        if (node == null) {
+            log.error("FudpNode is not available");
+            return false;
+        }
+        // Every device of the FID: several may share its key, and so its peer id.
+        int delivered = deliverToEachDevice(node, targetFid, data);
+        if (delivered > 0) {
+            log.debug("Delivered {} bytes to {} device(s) of {}", data.length, delivered, targetFid);
+            return true;
+        }
         try {
-            FudpNode fudpNode = server.getFudpNode();
-            if (fudpNode == null) {
-                log.error("FudpNode is not available");
-                return false;
-            }
+            FudpNode fudpNode = node;
             
             byte[] pubkey = utils.Hex.fromHex(entry.getPubkey());
             fudpNode.addPeer(targetFid, pubkey, entry.getObservedIp(), entry.getObservedPort());
@@ -625,6 +632,36 @@ public class RoadComponent extends AbstractFapiComponent {
         }
     }
     
+    /**
+     * Send to each device the MAP knows is alive for {@code fid}, on the
+     * device's own FUDP connection: its keepalive registrations keep one open.
+     * A notify addressed by peer id reaches only one connection of that peer,
+     * so several devices sharing a FID would otherwise get it on one alone.
+     *
+     * @return how many devices it went to
+     */
+    private int deliverToEachDevice(FudpNode node, String fid, byte[] data) {
+        java.util.List<MapEntry> devices = mapComponent.getEntries(fid);
+        if (devices.isEmpty()) return 0;
+        java.util.Set<String> alive = new java.util.HashSet<>();
+        for (MapEntry e : devices) alive.add(e.getObservedIp() + ":" + e.getObservedPort());
+        int sent = 0;
+        for (fudp.connection.PeerConnection c : node.getProtocol().getConnectionManager().getConnectionsByPeerId(fid)) {
+            if (c.getState() != fudp.connection.ConnectionState.ESTABLISHED
+                    || !(c.getPeerAddress() instanceof java.net.InetSocketAddress a)
+                    || !alive.remove(a.getHostString() + ":" + a.getPort())) {
+                continue;
+            }
+            try {
+                node.sendNotifyOnConnection(c.getConnectionId(), data, 0);
+                sent++;
+            } catch (Exception ex) {
+                log.debug("Delivery to {} at {} failed: {}", fid, a, ex.getMessage());
+            }
+        }
+        return sent;
+    }
+
     // ==================== Stats Handler ====================
     
     private FapiResponse handleStats(FapiRequest request) {
