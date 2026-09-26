@@ -24,7 +24,8 @@ import static org.mockito.Mockito.when;
  * <p>
  * Run on the relay host, UDP {@code -Dcall.port} (default 19950) open:
  * {@code mvn -f FC-JDK/pom.xml test -Dtest=CallRelayServer -Dsurefire.failIfNoSpecifiedTests=false}.
- * Serves for {@code -Dcall.minutes} (default 240). On the phones, set the
+ * Serves for {@code -Dcall.minutes} (default 240); {@code -Dcall.maxPacket} caps the UDP payload
+ * (default 1350). On the phones, set the
  * Voice test screen's "Call relay for real calls" to {@code fudp://<host>:<port>}.
  */
 public class CallRelayServer {
@@ -54,6 +55,8 @@ public class CallRelayServer {
         FapiServer server = new FapiServer(settings);
         NodeConfig config = new NodeConfig();
         config.setPort(port);
+        // Mobile paths through IPv6 translation may carry only ~1280 bytes; QUIC keeps to 1200.
+        config.setMaxPacketSize(Integer.getInteger("call.maxPacket", 1350));
         config.setDataDir(Files.createTempDirectory("call-relay-fudp").toString());
         config.setPongDataProvider(server::buildAdvertiseData); // what ServiceBootstrap does
         FudpNode node = new FudpNode(priv, config);
