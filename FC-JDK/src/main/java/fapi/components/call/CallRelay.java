@@ -76,8 +76,10 @@ public final class CallRelay {
     public static final long PACK_WAIT_MS = 10;
     /** Forwarded seqs remembered per receiver and speaker, for passing on attestations (§7.3 step 6). */
     static final int FORWARD_LOG = 512;
-    /** Bytes per participant per minute at 24 kbps with FUDP overhead (§7.5), for the join balance check. */
-    static final long EST_BYTES_IN_PER_MINUTE = 400 * 1024;
+    /** In per participant per minute while speaking, with FUDP overhead, as measured (§7.5: ~0.46 MB). For the join balance check. */
+    static final long EST_BYTES_IN_PER_MINUTE = 470 * 1024;
+    /** Out per participant per minute for each speaker it hears, packed, as measured (§7.5: ~1.1 MB at N = 3). */
+    static final long EST_BYTES_OUT_PER_SPEAKER_MINUTE = 375 * 1024;
 
     // ===== Collaborators =====
 
@@ -1013,8 +1015,10 @@ public final class CallRelay {
         }
     }
 
+    /** One participant's minute at the full speaker count (§7.5); a 1:1 call when {@code m} is null. */
     private long oneMinuteCost(Meeting m) {
-        return pricing.cost(EST_BYTES_IN_PER_MINUTE, EST_BYTES_IN_PER_MINUTE * P2P_SPEAKERS);
+        int speakers = m == null ? P2P_SPEAKERS : m.speakers;
+        return pricing.cost(EST_BYTES_IN_PER_MINUTE, EST_BYTES_OUT_PER_SPEAKER_MINUTE * speakers);
     }
 
     // ===== Helpers =====
