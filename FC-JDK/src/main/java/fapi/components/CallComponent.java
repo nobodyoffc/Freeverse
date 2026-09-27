@@ -39,7 +39,7 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
 
     private CallRelay relay;
     private FudpNode node;
-    private ScheduledExecutorService ticker;
+    private ScheduledExecutorService ticker, packer;
 
     @Override
     public String getName() {
@@ -48,7 +48,8 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
 
     @Override
     public List<String> getApiList() {
-        return List.of("call.create", "call.join", "call.register", "call.leave", "call.info", "call.stats");
+        return List.of("call.create", "call.join", "call.register", "call.leave", "call.info", "call.stats",
+                "call.control", "call.hand", "call.rekey", "call.prove", "call.report");
     }
 
     @Override
@@ -59,6 +60,13 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
             @Override
             public boolean sendDatagram(long connectionId, byte[] data) {
                 return node.sendDatagram(connectionId, data) == DatagramResult.SENT;
+            }
+
+            @Override
+            public int sendDatagrams(long connectionId, List<byte[]> data) {
+                int sent = 0;
+                for (DatagramResult r : node.sendDatagrams(connectionId, data)) if (r == DatagramResult.SENT) sent++;
+                return sent;
             }
 
             @Override
@@ -83,6 +91,12 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 }
                 String ip = a.getAddress().getHostAddress();
                 return (a.getAddress() instanceof java.net.Inet6Address ? "[" + ip + "]" : ip) + ":" + a.getPort();
+            }
+
+            @Override
+            public long lastHeardMs(long connectionId) {
+                PeerConnection c = node.getProtocol().getConnectionManager().getByConnectionId(connectionId);
+                return c == null ? 0 : c.getLastReceivedMs();
             }
         }, new CallRelay.Billing() {
             @Override
@@ -111,6 +125,25 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 log.warn("CALL tick failed", e);
             }
         }, 1, 1, TimeUnit.SECONDS);
+        packer = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "call-relay-pack");
+            t.setDaemon(true);
+            return t;
+        });
+        packer.scheduleAtFixedRate(() -> {
+            try {
+                relay.flushPacked(System.currentTimeMillis());
+            } catch (RuntimeException e) {
+                log.warn("CALL packing flush failed", e);
+            }
+        }, 2, 2, TimeUnit.MILLISECONDS);
+        ticker.scheduleWithFixedDelay(() -> {
+            try {
+                relay.selectSpeakers(System.currentTimeMillis());
+            } catch (RuntimeException e) {
+                log.warn("CALL speaker selection failed", e);
+            }
+        }, CallRelay.SELECT_EVERY_MS, CallRelay.SELECT_EVERY_MS, TimeUnit.MILLISECONDS);
         log.info("CALL component initialized");
     }
 
@@ -153,6 +186,11 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                     yield successResponse(id, Map.of());
                 }
                 case "info" -> successResponse(id, relay.info(String.valueOf(params.get("meetingId"))));
+                case "control" -> successResponse(id, relay.control(peerId, params, now));
+                case "hand" -> successResponse(id, relay.hand(peerId, params, now));
+                case "rekey" -> successResponse(id, relay.rekey(peerId, params, now));
+                case "prove" -> successResponse(id, relay.prove(peerId, params, now));
+                case "report" -> successResponse(id, relay.report(peerId, params, now));
                 case "stats" -> successResponse(id, relay.stats());
                 default -> errorResponse(id, FapiCode.NOT_FOUND, "Unknown method: " + method);
             };
@@ -181,5 +219,6 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
     @Override
     protected void doClose(long timeoutMs) throws InterruptedException {
         if (ticker != null) ticker.shutdownNow();
+        if (packer != null) packer.shutdownNow();
     }
 }

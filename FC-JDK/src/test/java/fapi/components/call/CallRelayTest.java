@@ -282,6 +282,9 @@ public class CallRelayTest {
         notices.clear();
         Map<String, Object> again = join(c.callee, c.callId, c.authPriv, T0 + 5_000);
         assertEquals(routeId, ((Number) again.get("routeId")).longValue(), "the same routeId as the join that took");
+        // A FAPI client resends the very request, ts and all.
+        Map<String, Object> resent = join(c.callee, c.callId, c.authPriv, T0);
+        assertEquals(routeId, ((Number) resent.get("routeId")).longValue(), "a resent join is not a replay");
         assertEquals(2, relay.info(c.callId).get("participants"), "not joined twice");
         assertTrue(notices.isEmpty(), "nobody is told of a join that changed nothing");
     }

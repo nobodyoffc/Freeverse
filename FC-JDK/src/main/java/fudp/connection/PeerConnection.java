@@ -62,7 +62,14 @@ public class PeerConnection {
 
     // Timestamps
     private final Instant createdAt;
+    /**
+     * When the idle timer last restarted: a packet from the peer, or the first
+     * ack-eliciting packet sent after it. Later sends do not count.
+     */
     private volatile Instant lastActivity;
+    private volatile boolean sentSinceReceived;
+    /** Only what came from the peer; lastActivity also restarts on the first send after it. */
+    private volatile long lastReceivedMs;
 
     // Statistics
     private long packetsSent = 0;
@@ -113,6 +120,7 @@ public class PeerConnection {
 
         this.createdAt = Instant.now();
         this.lastActivity = this.createdAt;
+        this.lastReceivedMs = this.createdAt.toEpochMilli();
     }
 
     /**
@@ -145,7 +153,14 @@ public class PeerConnection {
         }
         packetsSent++;
         bytesOut += size;
-        lastActivity = Instant.now();
+        // QUIC's idle rule (RFC 9000 §10.1): only the first ack-eliciting packet
+        // after one from the peer restarts the idle timer. Were every send to
+        // count, a node that keeps sending to a peer that is gone (notices,
+        // retransmissions) would never time the connection out.
+        if (ackEliciting && !sentSinceReceived) {
+            sentSinceReceived = true;
+            lastActivity = Instant.now();
+        }
     }
 
     /**
@@ -535,6 +550,8 @@ public class PeerConnection {
         packetsReceived++;
         bytesIn += size;
         lastActivity = Instant.now();
+        sentSinceReceived = false;
+        lastReceivedMs = System.currentTimeMillis();
 
         if (state == ConnectionState.IDLE) {
             state = ConnectionState.ESTABLISHING;
@@ -772,8 +789,14 @@ public class PeerConnection {
         return createdAt;
     }
 
+    /** When the idle timer last restarted (see the field): what idle timeouts and eviction go by. */
     public Instant getLastActivity() {
         return lastActivity;
+    }
+
+    /** When a packet last came from the peer (epoch ms), ACK-only ones included. */
+    public long getLastReceivedMs() {
+        return lastReceivedMs;
     }
 
     public long getPacketsSent() {
