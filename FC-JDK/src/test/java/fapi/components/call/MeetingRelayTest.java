@@ -41,6 +41,8 @@ public class MeetingRelayTest {
     final List<Notice> notices = new ArrayList<>();
     final Map<String, Long> charges = new LinkedHashMap<>();
     final Map<String, String> payers = new LinkedHashMap<>();
+    /** When each connection last heard from its peer; absent means unknown. */
+    final Map<Long, Long> heard = new HashMap<>();
     CallRelay relay;
 
     /** One member: a FID, its throwaway transport key, its connection. */
@@ -104,6 +106,11 @@ public class MeetingRelayTest {
             @Override
             public void notify(String peerId, int dataType, byte[] data) {
                 notices.add(new Notice(peerId, dataType, data));
+            }
+
+            @Override
+            public long lastHeardMs(long connectionId) {
+                return heard.getOrDefault(connectionId, -1L);
             }
         }, new CallRelay.Billing() {
             @Override
@@ -301,6 +308,24 @@ public class MeetingRelayTest {
         assertEquals(true, relay.info(k.meetingId).get("open"));
         relay.tick(T0 + 1_000 + CallRelay.EMPTY_CLOSE_MS);
         assertEquals(false, relay.info(k.meetingId).get("open"));
+    }
+
+    @Test
+    public void aParticipantHeardFromNoMoreIsDroppedWithoutANotice() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 4);
+        for (Member m : ms) heard.put(m.connectionId, T0);
+        long quiet = T0 + CallRelay.GONE_AFTER_MS;
+        heard.put(ms.get(0).connectionId, quiet - 1_000); // the host still ACKs
+        relay.tick(quiet - 1);
+        assertEquals(4, relay.info(k.meetingId).get("participants"), "not yet");
+        notices.clear();
+
+        relay.tick(quiet);
+        assertEquals(1, relay.info(k.meetingId).get("participants"), "the three gone ones are out");
+        assertTrue(notices.stream().allMatch(n -> n.peerId().equals(ms.get(0).peerId)),
+                "nothing more is sent to the gone");
+        assertEquals(1, notices.stream().filter(n -> "roster".equals(n.json().get("type"))).count(), "one roster for all three");
     }
 
     // ===== Speaker selection (§7.4) =====

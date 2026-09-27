@@ -59,6 +59,15 @@ public final class CallRelay {
     /** §7.2: each sender hears its own uplink's loss and jitter this often. */
     public static final long UPLINK_EVERY_MS = 2_000;
     /**
+     * §7.1: a participant the relay has heard nothing from for this long, not
+     * even an ACK, is gone and is removed without a notice. A live one is never
+     * quiet that long: even muted, it sends a DTX update every 400 ms (§9.1),
+     * and it ACKs the relay's notices. Without this a client that crashed stays
+     * in the meeting, and its FUDP connection never idles out, because the
+     * relay's own notices to it count as activity there.
+     */
+    public static final long GONE_AFTER_MS = 30_000;
+    /**
      * Packing (§7.5): a meeting's frames for one receiver wait at most this
      * long to share a packet with the other speakers' frames of the same
      * moment. Each 20 ms frame alone in a packet costs more in headers than
@@ -95,6 +104,11 @@ public final class CallRelay {
         /** The ip:port this connection's packets come from, as the relay sees it; null if unknown. */
         default String peerAddress(long connectionId) {
             return null;
+        }
+
+        /** When a packet last came in on this connection (epoch ms), ACKs included; -1 if unknown. */
+        default long lastHeardMs(long connectionId) {
+            return -1;
         }
     }
 
@@ -469,14 +483,16 @@ public final class CallRelay {
             throw new Refused(CONFLICT, "not open yet: the host has not registered authPub");
         }
         String replayKey = m.id + "|" + d.tPub + "|" + ts;
-        if (seenJoins.containsKey(replayKey)) throw new Refused(CONFLICT, "join replayed");
         Participant already = participants.get(connectionId);
         if (already != null && meetingOf.get(connectionId) == m && already.ssrc == ssrc) {
             // A retry whose first reply was lost on the way back (VOICE_SPEC §6.2
-            // step 10): it took, so answer it the same way again.
+            // step 10): it took, so answer it the same way again. This comes
+            // before the replay check because a client resends the same request,
+            // ts and all; a replay by anyone else arrives on another connection.
             seenJoins.put(replayKey, now);
             return joinResult(m, already);
         }
+        if (seenJoins.containsKey(replayKey)) throw new Refused(CONFLICT, "join replayed");
         if (already != null) throw new Refused(CONFLICT, "this connection is already in a call");
         for (Participant o : m.order) {
             if (o.ssrc == ssrc) throw new Refused(CONFLICT, "ssrc in use: pick a new one");
@@ -706,9 +722,15 @@ public final class CallRelay {
 
     /** {@code call.leave}, or the connection went away. Bills the part-minute. */
     public synchronized void leave(long connectionId, long now) {
+        Meeting m = drop(connectionId, now);
+        if (m != null) pushRoster(m, null);
+    }
+
+    /** Removes a participant and bills its part-minute. @return its meeting, or null if it was in none */
+    private Meeting drop(long connectionId, long now) {
         Participant p = participants.remove(connectionId);
         Meeting m = meetingOf.remove(connectionId);
-        if (p == null || m == null) return;
+        if (p == null || m == null) return null;
         chargeMinute(m, p, now, true);
         m.byConnection.remove(connectionId);
         m.order.remove(p);
@@ -717,7 +739,7 @@ public final class CallRelay {
         } else if (p.fid.equals(m.hostFid) && m.order.stream().noneMatch(o -> o.fid.equals(m.hostFid))) {
             m.hostFid = m.order.get(0).fid; // the host role passes to whoever has been present longest
         }
-        pushRoster(m, null);
+        return m;
     }
 
     /** {@code call.info}: public, for the meeting card and to confirm an end. */
@@ -917,6 +939,15 @@ public final class CallRelay {
             }
             boolean uplinkDue = m.isMeeting() && now - m.lastUplinkMs >= UPLINK_EVERY_MS;
             if (uplinkDue) m.lastUplinkMs = now;
+            boolean dropped = false;
+            for (Participant p : new ArrayList<>(m.order)) {
+                long heard = transport.lastHeardMs(p.connectionId);
+                if (heard >= 0 && now - Math.max(heard, p.joinedAtMs) >= GONE_AFTER_MS) {
+                    drop(p.connectionId, now); // all of them before the one roster, which the gone would not get
+                    dropped = true;
+                }
+            }
+            if (dropped && !m.order.isEmpty()) pushRoster(m, null);
             for (Participant p : new ArrayList<>(m.order)) {
                 // §7.4: one speaker back after 10 s without loss.
                 if (p.downlinkN < m.speakers && p.lastLossyMs >= 0 && now - p.lastLossyMs >= RECOVER_AFTER_MS) {

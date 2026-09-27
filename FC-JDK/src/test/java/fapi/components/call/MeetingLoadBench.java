@@ -30,8 +30,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * The Phase 4 load test (VOICE_SPEC §14): a meeting of {@code bench.participants}
  * (40) on a live CALL relay, {@code bench.speakers} (3) of them talking, over
- * real FUDP. Speakers send 50 sealed frames a second of Opus-sized payload and
- * an attestation every second; everyone listens. It reports what arrived; the
+ * real FUDP. Speakers send a sealed frame of Opus-sized payload every
+ * {@code bench.frameMs} (20) and an attestation every second; everyone
+ * listens. It reports what arrived; the
  * relay's CPU and bandwidth are read on the relay host over the same window.
  * <p>
  * Run it on a host other than the relay's: {@code mvn -f FC-JDK/pom.xml test
@@ -41,7 +42,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class MeetingLoadBench {
 
     private static final SecureRandom RNG = new SecureRandom();
-    private static final int FRAME_MS = 20, OPUS_BYTES = 60; // 24 kbps
+    /** Frame length ({@code bench.frameMs}, 20 or 40); Opus at 24 kbps fills 3 bytes a millisecond. */
+    private static final int FRAME_MS = Integer.getInteger("bench.frameMs", 20), OPUS_BYTES = 3 * FRAME_MS;
 
     static byte[] key() {
         byte[] k = new byte[32];
@@ -142,9 +144,10 @@ public class MeetingLoadBench {
                 p.node.enableDatagrams(p.connection);
                 p.senderKey = CallKeys.senderKey(secret, p.fid, p.ssrc, 0);
             }
-            System.out.printf("[bench] %d joined %s on %s; %d speaking%n", n, meetingId, relay, speakers);
+            System.out.printf("[bench] %d joined %s on %s; %d speaking, %d ms frames%n", n, meetingId, relay, speakers,
+                    FRAME_MS);
 
-            // Speakers: a frame every 20 ms, an attestation every second.
+            // Speakers: a frame every FRAME_MS, an attestation every second.
             for (int s = 0; s < speakers; s++) {
                 Participant p = all.get(1 + s);
                 int level = 30 + 4 * s;
@@ -153,7 +156,7 @@ public class MeetingLoadBench {
                     RNG.nextBytes(opus);
                     long seq = p.seq++;
                     byte[] frame = MediaFrame.seal(p.senderKey, new MediaFrame.Header(MediaFrame.FLAG_VAD,
-                            (int) p.routeId, p.ssrc, seq, seq * 960, level, 0), opus);
+                            (int) p.routeId, p.ssrc, seq, seq * 48 * FRAME_MS, level, 0), opus);
                     p.node.sendDatagram(p.connection, frame);
                     synchronized (p.pending) {
                         if (p.pendingFirst < 0) p.pendingFirst = seq;

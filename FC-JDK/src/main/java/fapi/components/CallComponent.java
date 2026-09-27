@@ -92,6 +92,12 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 String ip = a.getAddress().getHostAddress();
                 return (a.getAddress() instanceof java.net.Inet6Address ? "[" + ip + "]" : ip) + ":" + a.getPort();
             }
+
+            @Override
+            public long lastHeardMs(long connectionId) {
+                PeerConnection c = node.getProtocol().getConnectionManager().getByConnectionId(connectionId);
+                return c == null ? 0 : c.getLastReceivedMs();
+            }
         }, new CallRelay.Billing() {
             @Override
             public boolean canAfford(String fid, long amount) {

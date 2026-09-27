@@ -63,6 +63,8 @@ public class PeerConnection {
     // Timestamps
     private final Instant createdAt;
     private volatile Instant lastActivity;
+    /** Sends touch lastActivity too; this is only what came from the peer. */
+    private volatile long lastReceivedMs;
 
     // Statistics
     private long packetsSent = 0;
@@ -113,6 +115,7 @@ public class PeerConnection {
 
         this.createdAt = Instant.now();
         this.lastActivity = this.createdAt;
+        this.lastReceivedMs = this.createdAt.toEpochMilli();
     }
 
     /**
@@ -535,6 +538,7 @@ public class PeerConnection {
         packetsReceived++;
         bytesIn += size;
         lastActivity = Instant.now();
+        lastReceivedMs = System.currentTimeMillis();
 
         if (state == ConnectionState.IDLE) {
             state = ConnectionState.ESTABLISHING;
@@ -774,6 +778,11 @@ public class PeerConnection {
 
     public Instant getLastActivity() {
         return lastActivity;
+    }
+
+    /** When a packet last came from the peer (epoch ms), ACK-only ones included. */
+    public long getLastReceivedMs() {
+        return lastReceivedMs;
     }
 
     public long getPacketsSent() {
