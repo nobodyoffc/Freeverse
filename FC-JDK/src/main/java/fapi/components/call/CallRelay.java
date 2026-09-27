@@ -128,6 +128,8 @@ public final class CallRelay {
         /** Muted by the host: frames dropped (§7.3 step 3). Locked: only the host lifts it. */
         volatile boolean mutedByHost, muteLocked;
         volatile boolean handRaised;
+        /** The key epoch this participant has proved it holds (§4.5). */
+        int provenEpoch;
         // inbound token bucket, touched only on the receive thread
         double tokens = INBOUND_BPS / 8.0 / 4;
         long lastRefillMs = -1;
@@ -238,7 +240,9 @@ public final class CallRelay {
         long capWindow = -1, capSpent;
         String hostFid;
         byte[] authPub;
-        final int keyEpoch = 0;
+        int keyEpoch = 0;
+        /** A rekey in progress (§4.5): everyone must prove the new key by then; -1 if none. */
+        long proveByMs = -1;
         final int maxParticipants;
         final long createdMs;
         long emptySinceMs;
@@ -398,6 +402,7 @@ public final class CallRelay {
         Participant joined = new Participant(d.fid, peerId, connectionId, ssrc, newRouteId(m), now, d.toJson(),
                 maxCost);
         joined.candidates = candidates;
+        joined.provenEpoch = m.keyEpoch; // its admitSig was under the current authPub
         m.order.add(joined);
         m.byConnection.put(connectionId, joined);
         participants.put(connectionId, joined);
@@ -483,6 +488,60 @@ public final class CallRelay {
         }
         pushRoster(m, null);
         return Map.of();
+    }
+
+    /** How long participants have to prove a new key (§4.5 step 4). */
+    public static final long PROVE_WITHIN_MS = 30_000;
+
+    /**
+     * {@code call.rekey} (§4.5): the host follows the owner's symkey rotation
+     * with a new {@code authPub}. A new key epoch starts; everyone is told and
+     * has 30 s to prove it holds the new key with {@code call.prove}. New
+     * joiners are admitted only under the new key.
+     *
+     * @param p meetingId, delegation, symkeyVersion, nonce (32 bytes hex), authPub
+     * @return keyEpoch
+     */
+    public synchronized Map<String, Object> rekey(String peerId, Map<String, Object> p, long now) throws Refused {
+        Meeting m = meeting(str(p, "meetingId"));
+        if (!m.isMeeting()) throw new Refused(BAD_REQUEST, "a 1:1 call is not rekeyed");
+        Delegation d = delegation(p, peerId, m.id, now);
+        if (!d.fid.equals(m.hostFid)) throw new Refused(FORBIDDEN, "only the host rekeys");
+        byte[] authPub = pubKey(str(p, "authPub"));
+        String nonce = Hex.toHex(hex(str(p, "nonce"), 32));
+        long version = num(p, "symkeyVersion", -1);
+        if (version < 0) throw new Refused(BAD_REQUEST, "symkeyVersion missing");
+        if (java.util.Arrays.equals(authPub, m.authPub)) throw new Refused(CONFLICT, "that is the current key");
+        m.authPub = authPub;
+        m.keyEpoch++;
+        m.proveByMs = now + PROVE_WITHIN_MS;
+        byte[] notice = json(Map.of("type", "rekey", "meetingId", m.id, "symkeyVersion", version, "nonce", nonce,
+                "authPub", Hex.toHex(authPub), "keyEpoch", m.keyEpoch, "proveWithinSeconds", PROVE_WITHIN_MS / 1000));
+        for (Participant x : m.order) transport.notify(x.peerId, 1, notice);
+        return Map.of("keyEpoch", m.keyEpoch);
+    }
+
+    /**
+     * {@code call.prove} (§4.5 step 4): an {@code admitSig} under the new
+     * {@code authPriv}, for this participant's own tPub and ssrc.
+     *
+     * @param p meetingId, delegation, keyEpoch, ts, admitSig
+     */
+    public synchronized Map<String, Object> prove(String peerId, Map<String, Object> p, long now) throws Refused {
+        Meeting m = meeting(str(p, "meetingId"));
+        Delegation d = delegation(p, peerId, m.id, now);
+        Participant me = null;
+        for (Participant x : m.order) if (x.peerId.equals(peerId)) me = x;
+        if (me == null) throw new Refused(NOT_FOUND, "not in this meeting");
+        if (num(p, "keyEpoch", -1) != m.keyEpoch) throw new Refused(CONFLICT, "not the current key epoch");
+        long ts = num(p, "ts", 0);
+        if (Math.abs(now - ts) > CLOCK_SKEW_MS) throw new Refused(BAD_REQUEST, "ts outside ±60 s of the relay's clock");
+        byte[] sig = hex(str(p, "admitSig"), 64);
+        if (!CallKeys.verifyAdmit(m.authPub, m.id, d.tPubBytes(), me.ssrc, ts, sig)) {
+            throw new Refused(UNAUTHORIZED, "admitSig does not verify under the new key");
+        }
+        me.provenEpoch = m.keyEpoch;
+        return Map.of("keyEpoch", m.keyEpoch);
     }
 
     /** {@code call.hand}: raise or lower one's own hand; everyone sees it in the roster (§7.2). */
@@ -691,6 +750,17 @@ public final class CallRelay {
      */
     public synchronized void tick(long now) {
         for (Meeting m : new ArrayList<>(meetings.values())) {
+            if (m.proveByMs >= 0 && now >= m.proveByMs) {
+                // §4.5 step 4: whoever has not proved the new key by now is dropped.
+                for (Participant p : new ArrayList<>(m.order)) {
+                    if (p.provenEpoch < m.keyEpoch) {
+                        transport.notify(p.peerId, 1, json(Map.of("type", "kicked", "meetingId", m.id,
+                                "reason", "rekey")));
+                        leave(p.connectionId, now);
+                    }
+                }
+                m.proveByMs = -1;
+            }
             for (Participant p : new ArrayList<>(m.order)) {
                 while (now - p.joinedAtMs >= (p.minuteIndex + 1) * MINUTE_MS) chargeMinute(m, p, now, false);
                 if (p.unpaidSinceMs >= 0 && now - p.unpaidSinceMs >= UNPAID_GRACE_MS) {

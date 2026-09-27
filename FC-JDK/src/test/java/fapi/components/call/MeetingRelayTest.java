@@ -500,4 +500,61 @@ public class MeetingRelayTest {
         List<Map<String, Object>> entries = (List<Map<String, Object>>) roster.json().get("roster");
         assertTrue(entries.stream().anyMatch(e -> b.fid.equals(e.get("fid")) && Boolean.TRUE.equals(e.get("hand"))));
     }
+
+    // ===== Rekeying (§4.5) =====
+
+    Map<String, Object> prove(Member m, Keys k, byte[] authPriv, int epoch, long now) throws CallRelay.Refused {
+        return relay.prove(m.peerId, params("meetingId", k.meetingId, "delegation", m.delegation(k.meetingId, now),
+                "keyEpoch", epoch, "ts", now,
+                "admitSig", Hex.toHex(CallKeys.admitSig(authPriv, k.meetingId, m.tPub, m.ssrc, now))), now);
+    }
+
+    @Test
+    public void aRekeyDropsOnlyThoseWhoCannotProveTheNewKey() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 4);
+        Member host = ms.get(0), keeps = ms.get(1), removed = ms.get(2), slow = ms.get(3);
+        // The owner rotated the symkey (removed is out); the host follows with the new admission key.
+        byte[] newSecret = CallKeys.meetingSecret(key(), key(), "FTeamEntity", 4, k.meetingId);
+        byte[] newAuthPriv = CallKeys.authPriv(newSecret);
+        notices.clear();
+        Map<String, Object> r = relay.rekey(host.peerId, params("meetingId", k.meetingId,
+                "delegation", host.delegation(k.meetingId, T0), "symkeyVersion", 4, "nonce", Hex.toHex(key()),
+                "authPub", Hex.toHex(CallKeys.authPub(newAuthPriv))), T0);
+        int epoch = ((Number) r.get("keyEpoch")).intValue();
+        assertEquals(1, epoch);
+        assertEquals(4, notices.stream().filter(n -> n.dataType() == 1 && "rekey".equals(n.json().get("type"))).count(),
+                "everyone is told");
+
+        prove(host, k, newAuthPriv, epoch, T0 + 1_000);
+        prove(keeps, k, newAuthPriv, epoch, T0 + 2_000);
+        CallRelay.Refused old = assertThrows(CallRelay.Refused.class,
+                () -> prove(removed, k, k.authPriv, epoch, T0 + 3_000));
+        assertEquals(401, old.code, "the old key proves nothing");
+        prove(slow, k, newAuthPriv, epoch, T0 + 29_000); // it had to ask for the new symkey first
+
+        // A newcomer is admitted under the new key only.
+        Member late = new Member();
+        CallRelay.Refused oldJoin = assertThrows(CallRelay.Refused.class, () -> join(late, k, k.authPriv, T0 + 5_000));
+        assertEquals(401, oldJoin.code);
+        join(late, k, newAuthPriv, T0 + 5_000);
+
+        notices.clear();
+        relay.tick(T0 + CallRelay.PROVE_WITHIN_MS - 1);
+        assertEquals(5, relay.info(k.meetingId).get("participants"), "30 s to prove");
+        relay.tick(T0 + CallRelay.PROVE_WITHIN_MS);
+        assertEquals(4, relay.info(k.meetingId).get("participants"), "only the one without the new key is gone");
+        assertTrue(notices.stream().anyMatch(n -> n.peerId().equals(removed.peerId)
+                && "kicked".equals(n.json().get("type")) && "rekey".equals(n.json().get("reason"))));
+    }
+
+    @Test
+    public void onlyTheHostRekeys() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 2);
+        CallRelay.Refused notHost = assertThrows(CallRelay.Refused.class, () -> relay.rekey(ms.get(1).peerId,
+                params("meetingId", k.meetingId, "delegation", ms.get(1).delegation(k.meetingId, T0),
+                        "symkeyVersion", 4, "nonce", Hex.toHex(key()), "authPub", Hex.toHex(CallKeys.authPub(key()))), T0));
+        assertEquals(403, notHost.code);
+    }
 }
