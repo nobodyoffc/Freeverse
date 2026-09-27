@@ -111,6 +111,13 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 log.warn("CALL tick failed", e);
             }
         }, 1, 1, TimeUnit.SECONDS);
+        ticker.scheduleWithFixedDelay(() -> {
+            try {
+                relay.selectSpeakers(System.currentTimeMillis());
+            } catch (RuntimeException e) {
+                log.warn("CALL speaker selection failed", e);
+            }
+        }, CallRelay.SELECT_EVERY_MS, CallRelay.SELECT_EVERY_MS, TimeUnit.MILLISECONDS);
         log.info("CALL component initialized");
     }
 

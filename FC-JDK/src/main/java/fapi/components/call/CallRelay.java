@@ -49,6 +49,12 @@ public final class CallRelay {
     public static final int P2P_SPEAKERS = 1;
     /** A meeting forwards the top N speakers to each participant (§7.4). */
     public static final int DEFAULT_SPEAKERS = 3, MAX_SPEAKERS = 5;
+    /** Speaker selection (§7.4): ranked every 100 ms on the level of the last 300 ms of voice. */
+    public static final long SELECT_EVERY_MS = 100, SCORE_WINDOW_MS = 300;
+    /** A newcomer displaces a selected speaker once it has been this much louder for {@link #SCORE_WINDOW_MS}. */
+    public static final double DISPLACE_DB = 6;
+    /** Forwarded seqs remembered per receiver and speaker, for passing on attestations (§7.3 step 6). */
+    static final int FORWARD_LOG = 512;
     /** Bytes per participant per minute at 24 kbps with FUDP overhead (§7.5), for the join balance check. */
     static final long EST_BYTES_IN_PER_MINUTE = 400 * 1024;
 
@@ -121,7 +127,35 @@ public final class CallRelay {
         List<Map<String, String>> candidates;
         // inbound token bucket, touched only on the receive thread
         double tokens = INBOUND_BPS / 8.0 / 4;
-        long lastRefillNs = System.nanoTime();
+        long lastRefillMs = -1;
+        // loudness of recent voice frames, for speaker selection (§7.4)
+        private final long[] voiceAtMs = new long[32];
+        private final int[] voiceDb = new int[32];
+        private int voicePos;
+        /** Selection thread only: since when this unselected speaker has been louder enough to displace. */
+        long louderSinceMs = -1;
+        /** What was forwarded to this receiver, per speaker ssrc: which attestations it needs (§5.1). */
+        final Map<Integer, ForwardLog> forwarded = new ConcurrentHashMap<>();
+
+        /** A voice frame's level, -dBov as the header carries it (127 is silence). */
+        synchronized void noteVoice(long nowMs, int level) {
+            voiceAtMs[voicePos] = nowMs;
+            voiceDb[voicePos] = -level;
+            voicePos = (voicePos + 1) % voiceAtMs.length;
+        }
+
+        /** Mean level in dB of the voice frames of the last 300 ms; NEGATIVE_INFINITY if there were none. */
+        synchronized double score(long nowMs) {
+            long sum = 0;
+            int n = 0;
+            for (int i = 0; i < voiceAtMs.length; i++) {
+                if (voiceAtMs[i] > 0 && nowMs - voiceAtMs[i] <= SCORE_WINDOW_MS) {
+                    sum += voiceDb[i];
+                    n++;
+                }
+            }
+            return n == 0 ? Double.NEGATIVE_INFINITY : (double) sum / n;
+        }
 
         Participant(String fid, String peerId, long connectionId, int ssrc, int routeId, long now,
                     String delegationJson, long maxCostPerMinute) {
@@ -135,11 +169,12 @@ public final class CallRelay {
             this.maxCostPerMinute = maxCostPerMinute;
         }
 
-        boolean withinInboundBudget(int bytes) {
-            long now = System.nanoTime();
+        boolean withinInboundBudget(int bytes, long nowMs) {
             double capacity = INBOUND_BPS / 8.0 / 4;
-            tokens = Math.min(capacity, tokens + (now - lastRefillNs) / 1e9 * INBOUND_BPS / 8.0);
-            lastRefillNs = now;
+            if (lastRefillMs >= 0) {
+                tokens = Math.min(capacity, tokens + Math.max(0, nowMs - lastRefillMs) / 1e3 * INBOUND_BPS / 8.0);
+            }
+            lastRefillMs = nowMs;
             if (tokens < bytes) return false;
             tokens -= bytes;
             return true;
@@ -156,6 +191,25 @@ public final class CallRelay {
         }
     }
 
+    /** The seqs of one speaker's frames forwarded to one receiver, most recent {@link #FORWARD_LOG}. */
+    static final class ForwardLog {
+        private final long[] seqs = new long[FORWARD_LOG];
+        private int count, pos;
+
+        synchronized void add(long seq) {
+            seqs[pos] = seq;
+            pos = (pos + 1) % seqs.length;
+            if (count < seqs.length) count++;
+        }
+
+        synchronized boolean anyIn(long first, long last) {
+            for (int i = 0; i < count; i++) {
+                if (seqs[i] >= first && seqs[i] <= last) return true;
+            }
+            return false;
+        }
+    }
+
     final class Meeting {
         final String id;
         final String kind;
@@ -165,6 +219,15 @@ public final class CallRelay {
         final int speakers;
         /** A meeting's cap on its whole charge per minute (§7.5); 0 for none. */
         long maxCostPerMinute;
+        /** The speakers forwarded now (§7.4): replaced whole, read on the receive thread. */
+        volatile java.util.Set<Integer> selected = java.util.Set.of();
+        /** Forwarded whatever their level: the host's pins (§7.2). */
+        final java.util.Set<Integer> pinned = ConcurrentHashMap.newKeySet();
+
+        /** Whether a speaker's frames go out now. A 1:1 call forwards everything. */
+        boolean forwards(int ssrc) {
+            return !isMeeting() || selected.contains(ssrc) || pinned.contains(ssrc);
+        }
         long capWindow = -1, capSpent;
         String hostFid;
         byte[] authPub;
@@ -216,6 +279,8 @@ public final class CallRelay {
 
     final AtomicLong framesIn = new AtomicLong(), framesOut = new AtomicLong(), framesDropped = new AtomicLong();
     final AtomicLong attestationsForwarded = new AtomicLong(), minutesCharged = new AtomicLong();
+    /** Frames received from a speaker not among the selected (§7.4): billed, not forwarded. */
+    final AtomicLong framesNotSelected = new AtomicLong();
 
     public CallRelay(Transport transport, Billing billing, Pricing pricing) {
         this.transport = transport;
@@ -372,6 +437,7 @@ public final class CallRelay {
         s.put("framesIn", framesIn.get());
         s.put("framesOut", framesOut.get());
         s.put("framesDropped", framesDropped.get());
+        s.put("framesNotSelected", framesNotSelected.get());
         s.put("attestationsForwarded", attestationsForwarded.get());
         s.put("minutesCharged", minutesCharged.get());
         return s;
@@ -384,6 +450,11 @@ public final class CallRelay {
      * everyone else in the call, if it really is this connection's stream.
      */
     public void onDatagram(long connectionId, byte[] data) {
+        onDatagram(connectionId, data, System.currentTimeMillis());
+    }
+
+    /** As {@link #onDatagram(long, byte[])}, at a given time: for tests, which run their own clock. */
+    public void onDatagram(long connectionId, byte[] data, long nowMs) {
         Participant from = participants.get(connectionId);
         Meeting m = meetingOf.get(connectionId);
         if (from == null || m == null) {
@@ -394,18 +465,24 @@ public final class CallRelay {
         // The key alone cannot stop a member sending as another: every member holds
         // it. Binding routeId and ssrc to the authenticated connection does.
         if (h == null || h.routeId() != from.routeId || h.ssrc() != from.ssrc
-                || !from.withinInboundBudget(data.length)) {
+                || !from.withinInboundBudget(data.length, nowMs)) {
             from.framesDropped.incrementAndGet();
             framesDropped.incrementAndGet();
             return;
         }
         framesIn.incrementAndGet();
         from.bytesIn.addAndGet(data.length);
+        if ((h.flags() & MediaFrame.FLAG_VAD) != 0) from.noteVoice(nowMs, h.level());
+        if (!m.forwards(from.ssrc)) {
+            framesNotSelected.incrementAndGet(); // received and billed, not one of the loudest
+            return;
+        }
         for (Participant to : m.byConnection.values()) {
             if (to == from) continue; // nobody hears themselves
             if (transport.sendDatagram(to.connectionId, data)) {
                 framesOut.incrementAndGet();
                 to.bytesOut.addAndGet(data.length);
+                if (m.isMeeting()) to.forwarded.computeIfAbsent(from.ssrc, k -> new ForwardLog()).add(h.seq());
             }
         }
     }
@@ -429,8 +506,62 @@ public final class CallRelay {
         if (m == null) return;
         for (Participant to : m.byConnection.values()) {
             if (to == from) continue;
+            if (m.isMeeting()) {
+                // Only to those who got frames in its range (§5.1): the others played none of them.
+                ForwardLog log = to.forwarded.get(from.ssrc);
+                if (log == null || !log.anyIn(a.firstSeq(), a.lastSeq())) continue;
+            }
             transport.notify(to.peerId, 0, data);
             attestationsForwarded.incrementAndGet();
+        }
+    }
+
+    // ===== Speaker selection (§7.4) =====
+
+    /**
+     * Call every {@link #SELECT_EVERY_MS}: rank each meeting's speakers on the
+     * level of their last 300 ms of voice and keep the loudest N. A free slot
+     * goes to the loudest active speaker at once; a full set changes only when
+     * a newcomer has been {@link #DISPLACE_DB} louder than the weakest for
+     * 300 ms, so the set does not flap between two similar voices. A selected
+     * speaker who falls silent is displaced by anyone active in the same way.
+     */
+    public synchronized void selectSpeakers(long now) {
+        for (Meeting m : meetings.values()) {
+            if (!m.isMeeting()) continue;
+            Map<Integer, Participant> bySsrc = new HashMap<>();
+            Map<Integer, Double> score = new HashMap<>();
+            for (Participant p : m.order) {
+                bySsrc.put(p.ssrc, p);
+                score.put(p.ssrc, p.score(now));
+            }
+            java.util.LinkedHashSet<Integer> next = new java.util.LinkedHashSet<>();
+            for (Integer s : m.selected) if (bySsrc.containsKey(s)) next.add(s);
+            List<Participant> ranked = new ArrayList<>(m.order);
+            ranked.removeIf(p -> score.get(p.ssrc) == Double.NEGATIVE_INFINITY);
+            ranked.sort((x, y) -> Double.compare(score.get(y.ssrc), score.get(x.ssrc)));
+            for (Participant p : ranked) {
+                if (next.size() >= m.speakers || next.contains(p.ssrc)) continue;
+                next.add(p.ssrc);
+                p.louderSinceMs = -1;
+            }
+            for (Participant p : ranked) {
+                if (next.contains(p.ssrc)) continue;
+                Integer weakest = null;
+                for (Integer s : next) {
+                    if (weakest == null || score.get(s) < score.get(weakest)) weakest = s;
+                }
+                if (weakest == null || score.get(p.ssrc) < score.get(weakest) + DISPLACE_DB) {
+                    p.louderSinceMs = -1;
+                } else if (p.louderSinceMs < 0) {
+                    p.louderSinceMs = now;
+                } else if (now - p.louderSinceMs >= SCORE_WINDOW_MS) {
+                    next.remove(weakest);
+                    next.add(p.ssrc);
+                    p.louderSinceMs = -1;
+                }
+            }
+            m.selected = java.util.Set.copyOf(next);
         }
     }
 

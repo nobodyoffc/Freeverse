@@ -128,9 +128,41 @@ public class MeetingRelayTest {
     }
 
     byte[] frame(Member m, Keys k, long seq) {
+        return frame(m, k, seq, 40);
+    }
+
+    /** A voice frame at {@code level} -dBov (smaller is louder; 127 is silence). */
+    byte[] frame(Member m, Keys k, long seq, int level) {
         byte[] senderKey = CallKeys.senderKey(k.secret, m.fid, m.ssrc, 0);
         return MediaFrame.seal(senderKey, new MediaFrame.Header(MediaFrame.FLAG_VAD, (int) m.routeId, m.ssrc, seq,
-                seq * 960, 40, 0), new byte[]{1, 2, 3, 4});
+                seq * 960, level, 0), new byte[]{1, 2, 3, 4});
+    }
+
+    /**
+     * {@code speakers} each send a 20 ms frame, at their level, from {@code from}
+     * for {@code ms}, with selection every 100 ms. @return the time after
+     */
+    long talk(Keys k, Map<Member, Integer> speakers, long from, long ms) {
+        for (long t = from; t < from + ms; t += 20) {
+            for (Map.Entry<Member, Integer> e : speakers.entrySet()) {
+                Member m = e.getKey();
+                relay.onDatagram(m.connectionId, frame(m, k, seqOf.merge(m, 1L, Long::sum), e.getValue()), t);
+            }
+            if ((t - from) % CallRelay.SELECT_EVERY_MS == 0) relay.selectSpeakers(t);
+        }
+        return from + ms;
+    }
+
+    final Map<Member, Long> seqOf = new HashMap<>();
+
+    /** Who the relay forwarded {@code speaker}'s frames to, in what was sent since the last clear. */
+    java.util.Set<Long> receiversOf(Member speaker) {
+        java.util.Set<Long> to = new java.util.HashSet<>();
+        for (Sent x : sent) {
+            MediaFrame.Header h = MediaFrame.Header.parse(x.data());
+            if (h != null && h.ssrc() == speaker.ssrc) to.add(x.connectionId());
+        }
+        return to;
     }
 
     // ===== Creating (§7.2, §8) =====
@@ -195,10 +227,10 @@ public class MeetingRelayTest {
         Keys k = keys();
         create(host, k);
         for (Member m : List.of(host, b, c)) join(m, k, k.authPriv, T0);
+        long t = talk(k, Map.of(b, 40), T0, 100); // b is heard, so selected
         sent.clear();
-        relay.onDatagram(b.connectionId, frame(b, k, 1));
-        List<Long> to = sent.stream().map(Sent::connectionId).sorted().toList();
-        assertEquals(List.of(host.connectionId, c.connectionId).stream().sorted().toList(), to);
+        talk(k, Map.of(b, 40), t, 20);
+        assertEquals(java.util.Set.of(host.connectionId, c.connectionId), receiversOf(b));
     }
 
     // ===== Charging (§7.5, Decision 14) =====
@@ -259,5 +291,103 @@ public class MeetingRelayTest {
         assertEquals(true, relay.info(k.meetingId).get("open"));
         relay.tick(T0 + 1_000 + CallRelay.EMPTY_CLOSE_MS);
         assertEquals(false, relay.info(k.meetingId).get("open"));
+    }
+
+    // ===== Speaker selection (§7.4) =====
+
+    /** A meeting with {@code n} members, all joined; the first is the host. */
+    List<Member> meetingOf(Keys k, int n) throws Exception {
+        List<Member> ms = new ArrayList<>();
+        for (int i = 0; i < n; i++) ms.add(new Member());
+        create(ms.get(0), k);
+        for (Member m : ms) join(m, k, k.authPriv, T0);
+        return ms;
+    }
+
+    @Test
+    public void onlyTheLoudestThreeAreForwarded() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 6);
+        Map<Member, Integer> voices = new LinkedHashMap<>();
+        voices.put(ms.get(1), 30);
+        voices.put(ms.get(2), 34);
+        voices.put(ms.get(3), 38);
+        voices.put(ms.get(4), 42); // the quietest of four speakers
+        long t = talk(k, voices, T0, 400);
+        sent.clear();
+        talk(k, voices, t, 200);
+        for (int i = 1; i <= 3; i++) assertFalse(receiversOf(ms.get(i)).isEmpty(), "speaker " + i + " is heard");
+        assertTrue(receiversOf(ms.get(4)).isEmpty(), "a fourth, quieter voice is not forwarded");
+        assertTrue(receiversOf(ms.get(5)).isEmpty(), "nor is silence");
+        assertEquals(java.util.Set.of(ms.get(0).connectionId, ms.get(2).connectionId, ms.get(3).connectionId,
+                ms.get(4).connectionId, ms.get(5).connectionId), receiversOf(ms.get(1)), "everyone but the speaker");
+        assertTrue(((Number) relay.stats().get("framesNotSelected")).longValue() > 0);
+    }
+
+    @Test
+    public void aNewVoiceTakesASlotOnlyWhenClearlyLouderForLongEnough() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 5);
+        Member a = ms.get(1), b = ms.get(2), c = ms.get(3), d = ms.get(4);
+        Map<Member, Integer> voices = new LinkedHashMap<>(Map.of(a, 40, b, 40, c, 40));
+        long t = talk(k, voices, T0, 400);
+
+        voices.put(d, 36); // 4 dB louder than the weakest: not enough
+        t = talk(k, voices, t, 1_000);
+        sent.clear();
+        t = talk(k, voices, t, 100);
+        assertTrue(receiversOf(d).isEmpty(), "under 6 dB louder: no switch, however long");
+
+        voices.put(d, 30); // 10 dB louder: after 300 ms, and not before
+        t = talk(k, voices, t, 200);
+        sent.clear();
+        t = talk(k, voices, t, 40);
+        assertTrue(receiversOf(d).isEmpty(), "not yet 300 ms louder");
+        t = talk(k, voices, t, 300);
+        sent.clear();
+        talk(k, voices, t, 100);
+        assertFalse(receiversOf(d).isEmpty(), "now it has a slot");
+        long heard = List.of(a, b, c).stream().filter(x -> !receiversOf(x).isEmpty()).count();
+        assertEquals(2, heard, "and one of the three it outshouted lost its slot");
+    }
+
+    @Test
+    public void aSilentSpeakerYieldsItsSlot() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 5);
+        Member a = ms.get(1), b = ms.get(2), c = ms.get(3), d = ms.get(4);
+        long t = talk(k, new LinkedHashMap<>(Map.of(a, 40, b, 40, c, 40)), T0, 400);
+        // a stops; a quiet d starts, louder than silence by any margin.
+        t = talk(k, new LinkedHashMap<>(Map.of(b, 40, c, 40, d, 60)), t, 800);
+        sent.clear();
+        talk(k, new LinkedHashMap<>(Map.of(b, 40, c, 40, d, 60)), t, 100);
+        assertFalse(receiversOf(d).isEmpty(), "the silent speaker's slot went to one who talks");
+    }
+
+    @Test
+    public void anAttestationGoesOnlyToThoseWhoGotItsFrames() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 6);
+        Member loud = ms.get(1), unheard = ms.get(5);
+        Map<Member, Integer> voices = new LinkedHashMap<>();
+        voices.put(loud, 30);
+        voices.put(ms.get(2), 32);
+        voices.put(ms.get(3), 34);
+        voices.put(unheard, 50);
+        talk(k, voices, T0, 600);
+        notices.clear();
+        for (Member m : List.of(loud, unheard)) {
+            long last = seqOf.get(m);
+            byte[] att = Attestation.sign(m.tPriv, k.meetingId, (int) m.routeId, m.ssrc, last - 9,
+                    java.util.Collections.nCopies(10, new byte[8])).toBytes();
+            relay.onNotify(m.peerId, 0, att);
+        }
+        long toLoud = notices.stream().filter(n -> n.dataType() == 0 && !n.peerId().equals(loud.peerId)).count();
+        assertEquals(5, toLoud, "the loud speaker's attestation reaches everyone who heard it");
+        assertTrue(notices.stream().noneMatch(n -> n.dataType() == 0 && java.util.Arrays.equals(n.data(),
+                        Attestation.sign(unheard.tPriv, k.meetingId, (int) unheard.routeId, unheard.ssrc,
+                                seqOf.get(unheard) - 9, java.util.Collections.nCopies(10, new byte[8])).toBytes())),
+                "nobody got the unheard speaker's frames, so nobody needs its attestation");
+        assertEquals(5, notices.stream().filter(n -> n.dataType() == 0).count(), "and no more went out");
     }
 }
