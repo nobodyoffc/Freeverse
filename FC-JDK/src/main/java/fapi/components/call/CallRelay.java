@@ -36,6 +36,7 @@ public final class CallRelay {
     public static final int P2P_DEFAULT_PARTICIPANTS = 2;
     public static final int MEETINGS_PER_HOST = 4;
     public static final int JOINS_PER_KEY_PER_MINUTE = 10;
+    public static final int MAX_CANDIDATES = 8;
     public static final long CLOCK_SKEW_MS = 60_000;
     public static final long EMPTY_CLOSE_MS = 60_000;
     public static final long MINUTE_MS = 60_000;
@@ -58,6 +59,11 @@ public final class CallRelay {
 
         /** A reliable push: attestations use dataType 0, relay notices dataType 1 (JSON). */
         void notify(String peerId, int dataType, byte[] data);
+
+        /** The ip:port this connection's packets come from, as the relay sees it; null if unknown. */
+        default String peerAddress(long connectionId) {
+            return null;
+        }
     }
 
     /** What the relay needs from FAPI4 billing. */
@@ -107,6 +113,8 @@ public final class CallRelay {
         final AtomicLong framesDropped = new AtomicLong();
         long minuteIndex;
         long unpaidSinceMs = -1;
+        /** Shared only if the participant asked (§6.1). */
+        List<Map<String, String>> candidates;
         // inbound token bucket, touched only on the receive thread
         double tokens = INBOUND_BPS / 8.0 / 4;
         long lastRefillNs = System.nanoTime();
@@ -139,6 +147,7 @@ public final class CallRelay {
             e.put("ssrc", Integer.toUnsignedLong(ssrc));
             e.put("routeId", Integer.toUnsignedLong(routeId));
             e.put("delegation", delegationJson);
+            if (candidates != null) e.put("candidates", candidates);
             return e;
         }
     }
@@ -146,6 +155,8 @@ public final class CallRelay {
     final class Meeting {
         final String id;
         final String kind;
+        /** Fixed at create, unlike the host role, which can pass on. */
+        final String creatorFid;
         String hostFid;
         byte[] authPub;
         final int keyEpoch = 0;
@@ -156,8 +167,18 @@ public final class CallRelay {
         final Map<Long, Participant> byConnection = new ConcurrentHashMap<>();
         final List<Participant> order = new ArrayList<>();
 
+        /**
+         * Who pays for a participant's traffic (§7.5): in a 1:1 call the caller,
+         * who created it, for both sides, so a callee never needs an account
+         * at the relay; otherwise each participant for itself.
+         */
+        String payerFor(String participantFid) {
+            return "p2p".equals(kind) ? creatorFid : participantFid;
+        }
+
         Meeting(String id, String kind, String hostFid, int maxParticipants, long now) {
             this.id = id;
+            this.creatorFid = hostFid;
             this.kind = kind;
             this.hostFid = hostFid;
             this.maxParticipants = maxParticipants;
@@ -204,6 +225,11 @@ public final class CallRelay {
         long hosted = meetings.values().stream().filter(m -> m.hostFid.equals(d.fid)).count();
         if (hosted >= MEETINGS_PER_HOST) throw new Refused(TOO_MANY_REQUESTS, "too many meetings for this host");
         int max = (int) Math.min(MAX_PARTICIPANTS, Math.max(2, num(p, "maxParticipants", P2P_DEFAULT_PARTICIPANTS)));
+        // The caller pays for the whole 1:1 call (§7.5): it must afford a minute of both sides.
+        long oneMinute = oneMinuteCost(null) * P2P_DEFAULT_PARTICIPANTS;
+        if (oneMinute > 0 && !billing.canAfford(d.fid, oneMinute)) {
+            throw new Refused(PAYMENT_REQUIRED, "balance below one minute of this call");
+        }
         Meeting m = new Meeting(meetingId, kind, d.fid, max, now);
         if (p.get("authPub") != null) m.authPub = pubKey(str(p, "authPub"));
         meetings.put(meetingId, m);
@@ -244,11 +270,19 @@ public final class CallRelay {
                 throw new Refused(UNAUTHORIZED, "admitSig does not verify");
             }
         } else if (!d.fid.equals(m.hostFid)) {
+            knock(m, d);
             throw new Refused(CONFLICT, "not open yet: the host has not registered authPub");
         }
         String replayKey = m.id + "|" + d.tPub + "|" + ts;
         if (seenJoins.containsKey(replayKey)) throw new Refused(CONFLICT, "join replayed");
-        if (participants.containsKey(connectionId)) throw new Refused(CONFLICT, "this connection is already in a call");
+        Participant already = participants.get(connectionId);
+        if (already != null && meetingOf.get(connectionId) == m && already.ssrc == ssrc) {
+            // A retry whose first reply was lost on the way back (VOICE_SPEC §6.2
+            // step 10): it took, so answer it the same way again.
+            seenJoins.put(replayKey, now);
+            return joinResult(m, already);
+        }
+        if (already != null) throw new Refused(CONFLICT, "this connection is already in a call");
         for (Participant o : m.order) {
             if (o.ssrc == ssrc) throw new Refused(CONFLICT, "ssrc in use: pick a new one");
         }
@@ -256,20 +290,26 @@ public final class CallRelay {
         long maxCost = num(p, "maxCostPerMinute", 0);
         long oneMinute = oneMinuteCost(m);
         if (maxCost > 0) oneMinute = Math.min(oneMinute, maxCost);
-        if (oneMinute > 0 && !billing.canAfford(d.fid, oneMinute)) {
+        if (oneMinute > 0 && !billing.canAfford(m.payerFor(d.fid), oneMinute)) {
             throw new Refused(PAYMENT_REQUIRED, "balance below one minute of this call");
         }
+
+        List<Map<String, String>> candidates = candidates(p, connectionId);
 
         seenJoins.put(replayKey, now);
         Participant joined = new Participant(d.fid, peerId, connectionId, ssrc, newRouteId(m), now, d.toJson(),
                 maxCost);
+        joined.candidates = candidates;
         m.order.add(joined);
         m.byConnection.put(connectionId, joined);
         participants.put(connectionId, joined);
         meetingOf.put(connectionId, m);
         transport.enableDatagrams(connectionId);
         pushRoster(m, joined);
+        return joinResult(m, joined);
+    }
 
+    private Map<String, Object> joinResult(Meeting m, Participant joined) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("routeId", Integer.toUnsignedLong(joined.routeId));
         r.put("datagram", true); // the §2.3 capability signal
@@ -409,13 +449,19 @@ public final class CallRelay {
         if (p.maxCostPerMinute > 0) cost = Math.min(cost, p.maxCostPerMinute);
         if (cost <= 0) return;
         String key = "call:" + m.id + ":" + p.fid + ":" + Integer.toUnsignedString(p.ssrc) + ":" + minute;
+        String payer = m.payerFor(p.fid);
         minutesCharged.incrementAndGet();
-        if (billing.charge(key, p.fid, cost, partial ? "part-minute" : null)) {
+        if (billing.charge(key, payer, cost, partial ? "part-minute" : null)) {
             p.unpaidSinceMs = -1;
         } else if (!partial && p.unpaidSinceMs < 0) {
             p.unpaidSinceMs = now;
-            transport.notify(p.peerId, 1, json(Map.of("type", "balance", "meetingId", m.id,
-                    "graceSeconds", UNPAID_GRACE_MS / 1000)));
+            // Told to whoever pays: in a 1:1 call, the caller.
+            for (Participant o : m.order) {
+                if (o.fid.equals(payer)) {
+                    transport.notify(o.peerId, 1, json(Map.of("type", "balance", "meetingId", m.id,
+                            "graceSeconds", UNPAID_GRACE_MS / 1000)));
+                }
+            }
         }
     }
 
@@ -481,6 +527,61 @@ public final class CallRelay {
         for (Participant p : m.order) {
             if (p != except) transport.notify(p.peerId, 1, body);
         }
+    }
+
+    /**
+     * Someone with a delegation for this call is waiting to join: pass it to
+     * the host, which may take it as the callee's answer (§6.2 step 3). The
+     * delegation is the joiner's own signed statement, so the relay can
+     * forward it but not make one up; the join rate limit bounds how often.
+     */
+    private void knock(Meeting m, Delegation d) {
+        byte[] body = json(Map.of("type", "knock", "meetingId", m.id, "fid", d.fid, "delegation", d.toJson()));
+        for (Participant p : m.order) {
+            if (p.fid.equals(m.hostFid)) transport.notify(p.peerId, 1, body);
+        }
+    }
+
+    /**
+     * Direct-path candidates a joiner shares with the others (VOICE_SPEC §6.1):
+     * its own {@code lan} addresses, and with {@code reflexive = true} the
+     * address the relay sees it at, as {@code map}. Sharing is the joiner's
+     * choice, since it shows its IP to the others; a joiner that sends
+     * neither shares nothing.
+     */
+    private List<Map<String, String>> candidates(Map<String, Object> p, long connectionId) throws Refused {
+        List<Map<String, String>> out = new ArrayList<>();
+        if (p.get("candidates") instanceof List<?> list) {
+            if (list.size() > MAX_CANDIDATES) throw new Refused(BAD_REQUEST, "too many candidates");
+            for (Object o : list) {
+                if (!(o instanceof Map<?, ?> c) || !"lan".equals(c.get("t")) || !(c.get("a") instanceof String a)
+                        || !isEndpoint(a)) {
+                    throw new Refused(BAD_REQUEST, "a candidate is {t: lan, a: ip:port}");
+                }
+                out.add(Map.of("t", "lan", "a", a));
+            }
+        }
+        if (Boolean.TRUE.equals(p.get("reflexive"))) {
+            String seen = transport.peerAddress(connectionId);
+            if (seen != null && isEndpoint(seen)) out.add(Map.of("t", "map", "a", seen));
+        }
+        return out.isEmpty() ? null : out;
+    }
+
+    /** ip:port, or [ipv6]:port, with a port in range; no host names. */
+    static boolean isEndpoint(String a) {
+        if (a.length() > 64) return false;
+        int colon = a.lastIndexOf(':');
+        if (colon <= 0) return false;
+        String host = a.substring(0, colon);
+        try {
+            int port = Integer.parseInt(a.substring(colon + 1));
+            if (port < 1 || port > 65535) return false;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        if (host.startsWith("[") && host.endsWith("]")) return host.length() > 2 && host.matches("\\[[0-9a-fA-F:.]+]");
+        return host.matches("\\d{1,3}(\\.\\d{1,3}){3}");
     }
 
     private static byte[] json(Object o) {

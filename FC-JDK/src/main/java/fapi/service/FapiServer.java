@@ -789,7 +789,30 @@ public class FapiServer implements NodeEventListener {
         requestExecutor.submit(() -> handleRequest(peerId, connectionId, requestId, serviceName, data));
     }
 
+    /** The FUDP connection of the request being handled on this thread; see {@link #currentConnectionId()}. */
+    private static final ThreadLocal<Long> REQUEST_CONNECTION = new ThreadLocal<>();
+
+    /**
+     * The FUDP connection the request now being handled on this thread came
+     * in on, or null outside a request. A component needs it when one peer id
+     * has several connections, as when several devices share a FID's key:
+     * {@code getAnyConnection(peerId)} may then name another device.
+     */
+    public static Long currentConnectionId() {
+        return REQUEST_CONNECTION.get();
+    }
+
     private void handleRequest(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {
+        REQUEST_CONNECTION.set(connectionId);
+        try {
+            handleRequestOnConnection(peerId, connectionId, requestId, serviceName, data);
+        } finally {
+            REQUEST_CONNECTION.remove();
+        }
+    }
+
+    private void handleRequestOnConnection(String peerId, long connectionId, long requestId, String serviceName,
+                                           byte[] data) {
         long startMs = System.currentTimeMillis();
         try {
             FapiRequest fapiRequest;

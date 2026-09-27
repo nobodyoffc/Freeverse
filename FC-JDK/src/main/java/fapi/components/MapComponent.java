@@ -62,8 +62,17 @@ public class MapComponent extends AbstractFapiComponent {
     /** 清理间隔：10分钟 */
     private static final long CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
     
-    /** 内存存储 */
-    private final ConcurrentHashMap<String, MapEntry> entries = new ConcurrentHashMap<>();
+    /** 一个设备在此时间内重新注册即视为在线：客户端每25秒注册一次 */
+    static final long DEVICE_ALIVE_MS = 90_000;
+
+    /** 每个FID最多保留的设备条目 */
+    static final int MAX_DEVICES_PER_FID = 8;
+
+    /**
+     * 内存存储：FID -> 设备 -> 条目。同一FID可以有多个设备（它们共用FID的密钥，
+     * 因此也共用peerId），每个设备以服务器看到的 ip:port 区分，各自注册、各自过期。
+     */
+    private final ConcurrentHashMap<String, ConcurrentHashMap<String, MapEntry>> entries = new ConcurrentHashMap<>();
     
     /** JSON序列化 */
     private final Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -125,7 +134,7 @@ public class MapComponent extends AbstractFapiComponent {
             TimeUnit.MILLISECONDS
         );
         
-        log.info("MapComponent initialized with {} entries from {}", entries.size(), persistencePath);
+        log.info("MapComponent initialized with {} FIDs from {}", entries.size(), persistencePath);
     }
     
     @Override
@@ -139,7 +148,7 @@ public class MapComponent extends AbstractFapiComponent {
         
         // 关闭前保存
         saveEntries();
-        log.info("MapComponent closed, saved {} entries", entries.size());
+        log.info("MapComponent closed, saved {} FIDs", entries.size());
     }
     
     @Override
@@ -176,8 +185,11 @@ public class MapComponent extends AbstractFapiComponent {
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "FUDP node not available");
         }
         
-        // 获取连接信息
-        PeerConnection conn = node.getProtocol().getConnectionManager().getAnyConnection(peerId);
+        // 获取连接信息：本请求所在的连接。同一FID的多个设备共用peerId，getAnyConnection可能指向另一台设备
+        Long requestConnection = fapi.service.FapiServer.currentConnectionId();
+        PeerConnection conn = requestConnection != null
+                ? node.getProtocol().getConnectionManager().getByConnectionId(requestConnection)
+                : node.getProtocol().getConnectionManager().getAnyConnection(peerId);
         if (conn == null) {
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Connection not found for peer");
         }
@@ -199,9 +211,11 @@ public class MapComponent extends AbstractFapiComponent {
         }
         String pubkeyHex = Hex.toHex(pubkeyBytes);
         
-        // 创建或更新条目
+        // 创建或更新条目（本设备的）
         long now = System.currentTimeMillis();
-        MapEntry existingEntry = entries.get(peerId);
+        String device = observedIp + ":" + observedPort;
+        ConcurrentHashMap<String, MapEntry> devices = entries.computeIfAbsent(peerId, k -> new ConcurrentHashMap<>());
+        MapEntry existingEntry = devices.get(device);
         
         MapEntry entry = new MapEntry();
         entry.setFid(peerId);
@@ -217,7 +231,8 @@ public class MapComponent extends AbstractFapiComponent {
             entry.setRegisteredAt(now);
         }
         
-        entries.put(peerId, entry);
+        devices.put(device, entry);
+        trimDevices(devices);
         dirty = true;
         
         log.debug("Registered: {} -> {}:{}", peerId, observedIp, observedPort);
@@ -253,10 +268,17 @@ public class MapComponent extends AbstractFapiComponent {
             return errorResponse(requestId, FapiCode.BAD_REQUEST, "Target FID is required (fcdsl.ids or params.fid)");
         }
         
-        // 查找条目
-        MapEntry entry = entries.get(targetFid);
+        // 查找条目：默认返回最新注册的设备；params.all=true 返回所有在线设备
+        MapEntry entry = getEntry(targetFid);
         if (entry == null) {
             return errorResponse(requestId, FapiCode.NOT_FOUND, "FID not registered: " + targetFid);
+        }
+        Map<String, Object> findParams = parseParams(request.getParams(), Map.class);
+        if (findParams != null && Boolean.TRUE.equals(findParams.get("all"))) {
+            List<MapEntry> all = getEntries(targetFid);
+            FapiResponse response = successResponse(requestId, all.isEmpty() ? List.of(entry) : all);
+            response.setGot((long) Math.max(1, all.size()));
+            return response;
         }
         
         // 检查是否需要验证可达性
@@ -285,7 +307,14 @@ public class MapComponent extends AbstractFapiComponent {
     private FapiResponse handleUnregister(FapiRequest request, String peerId) {
         String requestId = request.getId();
         
-        MapEntry removed = entries.remove(peerId);
+        // 只注销本设备（本请求所在连接的地址）
+        ConcurrentHashMap<String, MapEntry> devices = entries.get(peerId);
+        MapEntry removed = null;
+        if (devices != null) {
+            String device = requestDevice(peerId);
+            removed = device != null ? devices.remove(device) : null;
+            if (devices.isEmpty()) entries.remove(peerId, devices);
+        }
         if (removed == null) {
             return errorResponse(requestId, FapiCode.NOT_FOUND, "FID not registered");
         }
@@ -307,7 +336,8 @@ public class MapComponent extends AbstractFapiComponent {
     private FapiResponse handleList(FapiRequest request) {
         String requestId = request.getId();
         
-        List<MapEntry> entryList = new ArrayList<>(entries.values());
+        List<MapEntry> entryList = new ArrayList<>();
+        for (ConcurrentHashMap<String, MapEntry> devices : entries.values()) entryList.addAll(devices.values());
         
         FapiResponse response = successResponse(requestId, entryList);
         response.setGot((long) entryList.size());
@@ -323,11 +353,12 @@ public class MapComponent extends AbstractFapiComponent {
         String requestId = request.getId();
         
         long now = System.currentTimeMillis();
-        int total = entries.size();
+        int total = 0;
         int fresh = 0;
         int stale = 0;
         
-        for (MapEntry entry : entries.values()) {
+        for (MapEntry entry : allEntries()) {
+            total++;
             if (entry.isStale(FRESH_THRESHOLD_MS)) {
                 stale++;
             } else {
@@ -337,6 +368,7 @@ public class MapComponent extends AbstractFapiComponent {
         
         Map<String, Object> stats = new HashMap<>();
         stats.put("totalEntries", total);
+        stats.put("fids", entries.size());
         stats.put("freshEntries", fresh);
         stats.put("staleEntries", stale);
         stats.put("freshThresholdMs", FRESH_THRESHOLD_MS);
@@ -383,16 +415,20 @@ public class MapComponent extends AbstractFapiComponent {
      */
     private void cleanupExpiredEntries() {
         int removed = 0;
-        for (Map.Entry<String, MapEntry> e : entries.entrySet()) {
-            if (e.getValue().shouldCleanup(CLEANUP_THRESHOLD_MS)) {
-                entries.remove(e.getKey());
-                removed++;
+        for (Map.Entry<String, ConcurrentHashMap<String, MapEntry>> e : entries.entrySet()) {
+            ConcurrentHashMap<String, MapEntry> devices = e.getValue();
+            for (Map.Entry<String, MapEntry> d : devices.entrySet()) {
+                if (d.getValue().shouldCleanup(CLEANUP_THRESHOLD_MS)) {
+                    devices.remove(d.getKey());
+                    removed++;
+                }
             }
+            if (devices.isEmpty()) entries.remove(e.getKey(), devices);
         }
         
         if (removed > 0) {
             dirty = true;
-            log.info("Cleaned up {} expired entries, {} remaining", removed, entries.size());
+            log.info("Cleaned up {} expired device entries, {} FIDs remaining", removed, entries.size());
         }
     }
     
@@ -406,12 +442,26 @@ public class MapComponent extends AbstractFapiComponent {
         
         try {
             String json = Files.readString(persistencePath, StandardCharsets.UTF_8);
-            Type type = new TypeToken<Map<String, MapEntry>>(){}.getType();
-            Map<String, MapEntry> loaded = gson.fromJson(json, type);
-            
+            Type type = new TypeToken<Map<String, Map<String, MapEntry>>>(){}.getType();
+            Map<String, Map<String, MapEntry>> loaded;
+            try {
+                loaded = gson.fromJson(json, type);
+            } catch (RuntimeException oneEntryPerFid) {
+                // An older file: one entry per FID
+                Map<String, MapEntry> old = gson.fromJson(json, new TypeToken<Map<String, MapEntry>>(){}.getType());
+                loaded = new HashMap<>();
+                if (old != null) {
+                    for (Map.Entry<String, MapEntry> e : old.entrySet()) {
+                        MapEntry v = e.getValue();
+                        loaded.put(e.getKey(), Map.of(v.getObservedIp() + ":" + v.getObservedPort(), v));
+                    }
+                }
+            }
             if (loaded != null) {
-                entries.putAll(loaded);
-                log.info("Loaded {} entries from {}", entries.size(), persistencePath);
+                for (Map.Entry<String, Map<String, MapEntry>> e : loaded.entrySet()) {
+                    if (e.getValue() != null) entries.put(e.getKey(), new ConcurrentHashMap<>(e.getValue()));
+                }
+                log.info("Loaded {} FIDs from {}", entries.size(), persistencePath);
             }
         } catch (Exception e) {
             log.warn("Failed to load entries from {}: {}", persistencePath, e.getMessage());
@@ -446,7 +496,7 @@ public class MapComponent extends AbstractFapiComponent {
             Files.writeString(persistencePath, json, StandardCharsets.UTF_8);
             dirty = false;
             
-            log.debug("Saved {} entries to {}", entries.size(), persistencePath);
+            log.debug("Saved {} FIDs to {}", entries.size(), persistencePath);
         } catch (IOException e) {
             log.error("Failed to save entries to {}: {}", persistencePath, e.getMessage());
         }
@@ -455,10 +505,64 @@ public class MapComponent extends AbstractFapiComponent {
     // ==================== Public Access Methods ====================
     
     /**
-     * 获取指定FID的条目
+     * 获取指定FID最新注册的设备条目
      */
     public MapEntry getEntry(String fid) {
-        return entries.get(fid);
+        ConcurrentHashMap<String, MapEntry> devices = entries.get(fid);
+        if (devices == null) return null;
+        MapEntry newest = null;
+        for (MapEntry e : devices.values()) {
+            if (newest == null || e.getLastSeen() > newest.getLastSeen()) newest = e;
+        }
+        return newest;
+    }
+
+    /**
+     * 指定FID所有在线设备的条目（DEVICE_ALIVE_MS内注册过），最新的在前。
+     * ROAD 用它把消息送到该FID的每一台设备。
+     */
+    public List<MapEntry> getEntries(String fid) {
+        ConcurrentHashMap<String, MapEntry> devices = entries.get(fid);
+        if (devices == null) return List.of();
+        long now = System.currentTimeMillis();
+        List<MapEntry> out = new ArrayList<>();
+        for (MapEntry e : devices.values()) {
+            if (now - e.getLastSeen() <= DEVICE_ALIVE_MS) out.add(e);
+        }
+        out.sort((a, b) -> Long.compare(b.getLastSeen(), a.getLastSeen()));
+        return out;
+    }
+
+    private List<MapEntry> allEntries() {
+        List<MapEntry> all = new ArrayList<>();
+        for (ConcurrentHashMap<String, MapEntry> devices : entries.values()) all.addAll(devices.values());
+        return all;
+    }
+
+    /** 超出上限时丢弃最久未注册的设备 */
+    private static void trimDevices(ConcurrentHashMap<String, MapEntry> devices) {
+        while (devices.size() > MAX_DEVICES_PER_FID) {
+            String oldest = null;
+            long oldestSeen = Long.MAX_VALUE;
+            for (Map.Entry<String, MapEntry> e : devices.entrySet()) {
+                if (e.getValue().getLastSeen() < oldestSeen) {
+                    oldestSeen = e.getValue().getLastSeen();
+                    oldest = e.getKey();
+                }
+            }
+            if (oldest == null) return;
+            devices.remove(oldest);
+        }
+    }
+
+    /** 本请求所在连接的 ip:port，即本设备在 entries 中的键 */
+    private String requestDevice(String peerId) {
+        FudpNode node = server.getFudpNode();
+        Long id = fapi.service.FapiServer.currentConnectionId();
+        if (node == null || id == null) return null;
+        PeerConnection conn = node.getProtocol().getConnectionManager().getByConnectionId(id);
+        if (conn == null || !(conn.getPeerAddress() instanceof InetSocketAddress a)) return null;
+        return a.getHostString() + ":" + a.getPort();
     }
     
     /**

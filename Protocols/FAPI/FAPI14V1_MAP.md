@@ -85,6 +85,14 @@ Clients behind NAT SHOULD periodically call `map.register` at least every **25 s
 
 MAP entries are persisted to a JSON file named `map_entries.json` on disk. The file is located inside the configured data directory; if no data directory is configured, the server falls back to `~/.fapi/map_entries.json`. The server writes the current state of all entries to disk every **60 seconds** if there have been changes since the last write, and performs an additional unconditional write on graceful shutdown. On startup, the server reloads persisted entries from the file, allowing registrations to survive server restarts.
 
+### 2.7. Several Devices per FID
+
+A FID may run on several devices at once, a phone and a second phone or a desktop, all under the FID's key and so all with the same FUDP peer id. MAP keeps **one entry per device**, not one per FID: a device is identified by the external `ip:port` the server observes for the connection its `map.register` arrives on. Each device registers, refreshes and expires on its own. A device counts as **alive** while it has registered within the last **90 seconds**, several missed 25-second heartbeats. At most **8** devices are kept per FID; the one registered longest ago is dropped first.
+
+The server MUST take the observed address from the connection the request itself came in on. Looking the connection up by peer id could return another device of the same FID.
+
+(Before 2026-09-26 a new registration replaced the FID's single entry, so only the device that registered last could be reached; a relay to the FID reached that device alone.)
+
 ## 3. Data Model
 
 ### 3.1. MapEntry
@@ -140,7 +148,7 @@ Register the calling peer's network address. This method takes no explicit param
 - **Request**: No `params` or `fcdsl` required.
 - **Response**: `data` contains the registered MapEntry object.
 
-Subsequent calls to `map.register` from the same peer update the existing entry, refreshing `lastSeen` and updating the observed address if it has changed. The `registeredAt` timestamp is preserved from the initial registration.
+Subsequent calls to `map.register` from the same device (the same observed `ip:port`) update that device's entry, refreshing `lastSeen`. The `registeredAt` timestamp is preserved from the device's first registration. A registration from a new address, another device of the FID or the same device after its NAT mapping changed, adds an entry beside the others (§2.7).
 
 **Request example:**
 
@@ -175,7 +183,7 @@ Look up a peer's registered network address by FID.
 
 - **Category**: Operation
 - **Request**: The target FID is supplied either through `fcdsl.ids` (preferred; the first element of the array is used) or through `params.fid` (fallback). If both are present, `fcdsl.ids[0]` takes priority.
-- **Response**: `data` contains the MapEntry for the target FID, with an additional `stale` boolean field indicating whether the entry may be outdated.
+- **Response**: `data` contains the MapEntry of the target FID's most recently registered device, with an additional `stale` boolean field indicating whether the entry may be outdated. With `params.all = true`, `data` is instead an array of the entries of all the FID's alive devices (§2.7), newest first.
 - **Freshness verification**: If the entry's `lastSeen` is older than 30 seconds, the server attempts a FUDP ping to the registered address. If the ping succeeds, `lastSeen` is updated and `stale` is set to `false`. If the ping fails, `stale` is set to `true` but the entry is not removed.
 - **Errors**:
   - Code `400` if neither `fcdsl.ids` nor `params.fid` provides a target FID.
@@ -269,7 +277,7 @@ Look up a peer's registered network address by FID.
 
 ### 5.3. map.unregister
 
-Remove the calling peer's own registration. A peer can only unregister itself; it cannot remove another peer's entry.
+Remove the calling device's own registration: the entry for the observed address of the connection the request came in on. The FID's other devices stay registered. A peer can only unregister itself; it cannot remove another peer's entry.
 
 - **Category**: Simple operation
 - **Request**: No `params` or `fcdsl` required.

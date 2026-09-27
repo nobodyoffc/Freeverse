@@ -781,6 +781,26 @@ public class FudpNode implements Protocol.PacketListener {
     }
 
     /**
+     * Send a notification on one particular connection (fire-and-forget).
+     * Unlike {@link #sendNotify(String, byte[], int)}, which picks any
+     * connection of the peer, this reaches one device when several devices
+     * share a key, and so a peer id: each has its own connection.
+     * @return the message ID
+     */
+    public long sendNotifyOnConnection(long connectionId, byte[] data, int dataType) throws IOException {
+        PeerConnection conn = protocol.getConnectionManager().getByConnectionId(connectionId);
+        if (conn == null || conn.getState() != ConnectionState.ESTABLISHED) {
+            throw new IOException("No established connection " + connectionId);
+        }
+        Stream stream = conn.openStream();
+        long messageId = nextMessageId();
+        NotifyMessage msg = new NotifyMessage(data, dataType);
+        msg.setMessageId(messageId);
+        protocol.sendAndClose(stream, MessageCodec.encode(msg));
+        return messageId;
+    }
+
+    /**
      * Send a notification to a peer with delivery confirmation.
      * @param peerId the peer ID or alias
      * @param data the byte array to send
