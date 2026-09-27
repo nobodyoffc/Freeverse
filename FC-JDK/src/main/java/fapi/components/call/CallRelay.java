@@ -58,6 +58,13 @@ public final class CallRelay {
     public static final long RECOVER_AFTER_MS = 10_000;
     /** §7.2: each sender hears its own uplink's loss and jitter this often. */
     public static final long UPLINK_EVERY_MS = 2_000;
+    /**
+     * Packing (§7.5): a meeting's frames for one receiver wait at most this
+     * long to share a packet with the other speakers' frames of the same
+     * moment. Each 20 ms frame alone in a packet costs more in headers than
+     * it carries in audio.
+     */
+    public static final long PACK_WAIT_MS = 10;
     /** Forwarded seqs remembered per receiver and speaker, for passing on attestations (§7.3 step 6). */
     static final int FORWARD_LOG = 512;
     /** Bytes per participant per minute at 24 kbps with FUDP overhead (§7.5), for the join balance check. */
@@ -74,6 +81,16 @@ public final class CallRelay {
 
         /** A reliable push: attestations use dataType 0, relay notices dataType 1 (JSON). */
         void notify(String peerId, int dataType, byte[] data);
+
+        /**
+         * Several datagrams for one connection, packed into as few packets as
+         * they fit (FUDP7). @return how many were handed to the socket
+         */
+        default int sendDatagrams(long connectionId, List<byte[]> data) {
+            int sent = 0;
+            for (byte[] d : data) if (sendDatagram(connectionId, d)) sent++;
+            return sent;
+        }
 
         /** The ip:port this connection's packets come from, as the relay sees it; null if unknown. */
         default String peerAddress(long connectionId) {
@@ -137,6 +154,27 @@ public final class CallRelay {
         int provenEpoch;
         /** Speakers this receiver gets (§7.4): the meeting's N, less while its downlink is lossy. */
         volatile int downlinkN;
+        /** Frames waiting to go to this receiver in one packet (§7.5), and since when. */
+        private final List<byte[]> outbox = new ArrayList<>();
+        private long outboxSinceMs;
+
+        /** @return the frames to send now, all speakers' for this moment being in; else null */
+        synchronized List<byte[]> enqueue(byte[] frame, long nowMs, int expected) {
+            if (outbox.isEmpty()) outboxSinceMs = nowMs;
+            outbox.add(frame);
+            return outbox.size() >= expected ? drain() : null;
+        }
+
+        /** @return the frames that have waited {@link #PACK_WAIT_MS}, or null */
+        synchronized List<byte[]> due(long nowMs) {
+            return !outbox.isEmpty() && nowMs - outboxSinceMs >= PACK_WAIT_MS ? drain() : null;
+        }
+
+        private List<byte[]> drain() {
+            List<byte[]> out = new ArrayList<>(outbox);
+            outbox.clear();
+            return out;
+        }
         long lastLossyMs = -1;
         // this sender's uplink as the relay sees it (§7.2 uplink), on the receive thread
         private long lastSeq = -1, lastArrivalMs, lastTimestamp;
@@ -276,6 +314,15 @@ public final class CallRelay {
             return !isMeeting() || selected.contains(ssrc) || pinned.contains(ssrc);
         }
 
+        /** How many streams {@code to} gets at each moment: when all are in, its packet goes at once. */
+        int streamsFor(Participant to) {
+            int n = 0;
+            List<Integer> sel = selected;
+            for (int i = 0; i < sel.size() && i < to.downlinkN; i++) if (sel.get(i) != to.ssrc) n++;
+            for (Integer s : pinned) if (s != to.ssrc && !sel.subList(0, Math.min(sel.size(), to.downlinkN)).contains(s)) n++;
+            return Math.max(1, n);
+        }
+
         /** Whether {@code to} gets this speaker: pinned, or among the loudest it has room for (§7.4). */
         boolean forwardsTo(Participant to, int ssrc) {
             if (!isMeeting() || pinned.contains(ssrc)) return true;
@@ -339,6 +386,8 @@ public final class CallRelay {
     final AtomicLong framesNotSelected = new AtomicLong();
     /** Frames from a speaker the host muted (§7.3 step 3). */
     final AtomicLong framesMuted = new AtomicLong();
+    /** Sends to a meeting receiver, each one packet or a few (§7.5). */
+    final AtomicLong packetsPacked = new AtomicLong();
 
     public CallRelay(Transport transport, Billing billing, Pricing pricing) {
         this.transport = transport;
@@ -687,6 +736,7 @@ public final class CallRelay {
         s.put("framesDropped", framesDropped.get());
         s.put("framesNotSelected", framesNotSelected.get());
         s.put("framesMuted", framesMuted.get());
+        s.put("packedSends", packetsPacked.get());
         s.put("attestationsForwarded", attestationsForwarded.get());
         s.put("minutesCharged", minutesCharged.get());
         return s;
@@ -733,11 +783,18 @@ public final class CallRelay {
         }
         for (Participant to : m.byConnection.values()) {
             if (to == from || !m.forwardsTo(to, from.ssrc)) continue; // nobody hears themselves
-            if (transport.sendDatagram(to.connectionId, data)) {
-                framesOut.incrementAndGet();
-                to.bytesOut.addAndGet(data.length);
-                if (m.isMeeting()) to.forwarded.computeIfAbsent(from.ssrc, k -> new ForwardLog()).add(h.seq());
+            if (!m.isMeeting()) {
+                if (transport.sendDatagram(to.connectionId, data)) {
+                    framesOut.incrementAndGet();
+                    to.bytesOut.addAndGet(data.length);
+                }
+                continue;
             }
+            // A meeting packs each receiver's frames of one moment into one packet (§7.5).
+            to.bytesOut.addAndGet(data.length);
+            to.forwarded.computeIfAbsent(from.ssrc, k -> new ForwardLog()).add(h.seq());
+            List<byte[]> ready = to.enqueue(data, nowMs, m.streamsFor(to));
+            if (ready != null) send(to, ready);
         }
     }
 
@@ -768,6 +825,23 @@ public final class CallRelay {
             transport.notify(to.peerId, 0, data);
             attestationsForwarded.incrementAndGet();
         }
+    }
+
+    /**
+     * Call every few ms: send each receiver's frames that have waited
+     * {@link #PACK_WAIT_MS} for the rest of their moment's speakers.
+     */
+    public void flushPacked(long nowMs) {
+        for (Participant to : participants.values()) {
+            List<byte[]> ready = to.due(nowMs);
+            if (ready != null) send(to, ready);
+        }
+    }
+
+    private void send(Participant to, List<byte[]> frames) {
+        int n = transport.sendDatagrams(to.connectionId, frames);
+        framesOut.addAndGet(n);
+        packetsPacked.incrementAndGet();
     }
 
     // ===== Speaker selection (§7.4) =====

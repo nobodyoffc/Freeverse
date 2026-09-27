@@ -39,7 +39,7 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
 
     private CallRelay relay;
     private FudpNode node;
-    private ScheduledExecutorService ticker;
+    private ScheduledExecutorService ticker, packer;
 
     @Override
     public String getName() {
@@ -60,6 +60,13 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
             @Override
             public boolean sendDatagram(long connectionId, byte[] data) {
                 return node.sendDatagram(connectionId, data) == DatagramResult.SENT;
+            }
+
+            @Override
+            public int sendDatagrams(long connectionId, List<byte[]> data) {
+                int sent = 0;
+                for (DatagramResult r : node.sendDatagrams(connectionId, data)) if (r == DatagramResult.SENT) sent++;
+                return sent;
             }
 
             @Override
@@ -112,6 +119,18 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 log.warn("CALL tick failed", e);
             }
         }, 1, 1, TimeUnit.SECONDS);
+        packer = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "call-relay-pack");
+            t.setDaemon(true);
+            return t;
+        });
+        packer.scheduleAtFixedRate(() -> {
+            try {
+                relay.flushPacked(System.currentTimeMillis());
+            } catch (RuntimeException e) {
+                log.warn("CALL packing flush failed", e);
+            }
+        }, 2, 2, TimeUnit.MILLISECONDS);
         ticker.scheduleWithFixedDelay(() -> {
             try {
                 relay.selectSpeakers(System.currentTimeMillis());
@@ -194,5 +213,6 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
     @Override
     protected void doClose(long timeoutMs) throws InterruptedException {
         if (ticker != null) ticker.shutdownNow();
+        if (packer != null) packer.shutdownNow();
     }
 }

@@ -36,6 +36,8 @@ public class MeetingRelayTest {
     }
 
     final List<Sent> sent = new ArrayList<>();
+    /** Frames per packed send to one receiver (§7.5). */
+    final List<Integer> batches = new ArrayList<>();
     final List<Notice> notices = new ArrayList<>();
     final Map<String, Long> charges = new LinkedHashMap<>();
     final Map<String, String> payers = new LinkedHashMap<>();
@@ -87,6 +89,13 @@ public class MeetingRelayTest {
             public boolean sendDatagram(long connectionId, byte[] data) {
                 sent.add(new Sent(connectionId, data));
                 return true;
+            }
+
+            @Override
+            public int sendDatagrams(long connectionId, List<byte[]> data) {
+                batches.add(data.size());
+                for (byte[] d : data) sent.add(new Sent(connectionId, d));
+                return data.size();
             }
 
             @Override
@@ -148,6 +157,7 @@ public class MeetingRelayTest {
                 Member m = e.getKey();
                 relay.onDatagram(m.connectionId, frame(m, k, seqOf.merge(m, 1L, Long::sum), e.getValue()), t);
             }
+            relay.flushPacked(t + CallRelay.PACK_WAIT_MS);
             if ((t - from) % CallRelay.SELECT_EVERY_MS == 0) relay.selectSpeakers(t);
         }
         return from + ms;
@@ -612,5 +622,22 @@ public class MeetingRelayTest {
                 && "uplink".equals(n.json().get("type"))).findFirst().orElseThrow().json();
         double loss = ((Number) up.get("loss")).doubleValue();
         assertEquals(2.0 / 31, loss, 0.002, "2 lost of the 31 sent; the DTX pause is no loss");
+    }
+
+    // ===== Packing (§7.5) =====
+
+    @Test
+    public void aReceiverGetsItsSpeakersOfOneMomentInOnePacket() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 6);
+        Map<Member, Integer> voices = new LinkedHashMap<>(Map.of(ms.get(1), 30, ms.get(2), 34, ms.get(3), 38));
+        long t = talk(k, voices, T0, 400);
+        batches.clear();
+        talk(k, voices, t, 200);
+        // Three listeners who get all three speakers, 10 moments: one send each, three frames in it.
+        long threes = batches.stream().filter(b -> b == 3).count();
+        assertTrue(threes >= 25, "the silent listeners get one packed send per moment: " + batches);
+        // A speaker gets the other two speakers, packed together too.
+        assertTrue(batches.stream().allMatch(b -> b >= 2), "nothing goes out alone when its moment is complete");
     }
 }
