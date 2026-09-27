@@ -557,4 +557,60 @@ public class MeetingRelayTest {
                         "symkeyVersion", 4, "nonce", Hex.toHex(key()), "authPub", Hex.toHex(CallKeys.authPub(key()))), T0));
         assertEquals(403, notHost.code);
     }
+
+    // ===== Adapting to each receiver, and uplink reports (§7.2, §7.4) =====
+
+    Map<String, Object> report(Member m, Keys k, double loss, long now) throws CallRelay.Refused {
+        return relay.report(m.peerId, params("meetingId", k.meetingId, "delegation", m.delegation(k.meetingId, now),
+                "streams", Map.of("1", Map.of("loss", loss, "lateLoss", 0.0, "jitterMs", 30))), now);
+    }
+
+    @Test
+    public void aLossyReceiverGetsFewerSpeakersThenRecovers() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 5);
+        Member listener = ms.get(4);
+        Member loudest = ms.get(1), second = ms.get(2), third = ms.get(3);
+        Map<Member, Integer> voices = new LinkedHashMap<>(Map.of(loudest, 30, second, 36, third, 42));
+        long t = talk(k, voices, T0, 400);
+
+        assertEquals(2, report(listener, k, 0.2, t).get("speakers"));
+        sent.clear();
+        t = talk(k, voices, t, 100);
+        assertTrue(receiversOf(third).stream().noneMatch(c -> c == listener.connectionId),
+                "the quietest of the three no longer reaches the lossy receiver");
+        assertTrue(receiversOf(loudest).contains(listener.connectionId));
+        assertTrue(receiversOf(third).contains(ms.get(0).connectionId), "others still get all three");
+
+        assertEquals(1, report(listener, k, 0.2, t).get("speakers"));
+        assertEquals(1, report(listener, k, 0.5, t).get("speakers"), "never below one");
+        assertEquals(1, report(listener, k, 0.01, t + 1).get("speakers"), "a clean report alone restores nothing");
+        relay.tick(t + CallRelay.RECOVER_AFTER_MS);
+        relay.tick(t + 2 * CallRelay.RECOVER_AFTER_MS);
+        sent.clear();
+        talk(k, voices, t + 2 * CallRelay.RECOVER_AFTER_MS, 100);
+        assertTrue(receiversOf(third).contains(listener.connectionId), "10 s at a time, back to three");
+    }
+
+    @Test
+    public void eachSenderHearsItsUplinkLossButDtxPausesAreNotLoss() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 2);
+        Member speaker = ms.get(1);
+        byte[] senderKey = CallKeys.senderKey(k.secret, speaker.fid, speaker.ssrc, 0);
+        long t = T0;
+        for (long seq = 1; seq <= 40; seq++, t += 20) {
+            if (seq == 11 || seq == 12) continue;             // lost on the way: 2 of 40
+            if (seq >= 21 && seq <= 29) continue;             // not sent: DTX
+            int flags = MediaFrame.FLAG_VAD | (seq == 30 ? MediaFrame.FLAG_DTX : 0); // the first after the pause
+            relay.onDatagram(speaker.connectionId, MediaFrame.seal(senderKey, new MediaFrame.Header(flags,
+                    (int) speaker.routeId, speaker.ssrc, seq, seq * 960, 40, 0), new byte[]{1}), t);
+        }
+        notices.clear();
+        relay.tick(t + CallRelay.UPLINK_EVERY_MS);
+        Map<String, Object> up = notices.stream().filter(n -> n.peerId().equals(speaker.peerId)
+                && "uplink".equals(n.json().get("type"))).findFirst().orElseThrow().json();
+        double loss = ((Number) up.get("loss")).doubleValue();
+        assertEquals(2.0 / 31, loss, 0.002, "2 lost of the 31 sent; the DTX pause is no loss");
+    }
 }

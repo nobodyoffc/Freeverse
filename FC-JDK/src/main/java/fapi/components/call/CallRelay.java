@@ -53,6 +53,11 @@ public final class CallRelay {
     public static final long SELECT_EVERY_MS = 100, SCORE_WINDOW_MS = 300;
     /** A newcomer displaces a selected speaker once it has been this much louder for {@link #SCORE_WINDOW_MS}. */
     public static final double DISPLACE_DB = 6;
+    /** §7.4: a receiver losing more than this gets one speaker fewer, and one back after 10 s without. */
+    public static final double LOSSY = 0.10;
+    public static final long RECOVER_AFTER_MS = 10_000;
+    /** §7.2: each sender hears its own uplink's loss and jitter this often. */
+    public static final long UPLINK_EVERY_MS = 2_000;
     /** Forwarded seqs remembered per receiver and speaker, for passing on attestations (§7.3 step 6). */
     static final int FORWARD_LOG = 512;
     /** Bytes per participant per minute at 24 kbps with FUDP overhead (§7.5), for the join balance check. */
@@ -130,6 +135,38 @@ public final class CallRelay {
         volatile boolean handRaised;
         /** The key epoch this participant has proved it holds (§4.5). */
         int provenEpoch;
+        /** Speakers this receiver gets (§7.4): the meeting's N, less while its downlink is lossy. */
+        volatile int downlinkN;
+        long lastLossyMs = -1;
+        // this sender's uplink as the relay sees it (§7.2 uplink), on the receive thread
+        private long lastSeq = -1, lastArrivalMs, lastTimestamp;
+        private long upReceived, upLost;
+        private double jitterMs;
+
+        /** A frame arrived from this sender: count gaps that are not DTX pauses, and interarrival jitter. */
+        synchronized void noteUplink(long seq, long timestamp, boolean afterDtx, long nowMs) {
+            if (lastSeq >= 0 && seq > lastSeq) {
+                if (!afterDtx) upLost += seq - lastSeq - 1;
+                // RFC 3550 jitter, in ms: the timestamp runs at 48 kHz, and wraps at 32 bits.
+                double d = (nowMs - lastArrivalMs) - (int) (timestamp - lastTimestamp) / 48.0;
+                jitterMs += (Math.abs(d) - jitterMs) / 16;
+            }
+            if (seq > lastSeq) {
+                lastSeq = seq;
+                lastArrivalMs = nowMs;
+                lastTimestamp = timestamp;
+            }
+            upReceived++;
+        }
+
+        /** The last window's loss fraction and the jitter; the window starts again. */
+        synchronized double[] takeUplink() {
+            long expected = upReceived + upLost;
+            double loss = expected == 0 ? 0 : (double) upLost / expected;
+            upReceived = 0;
+            upLost = 0;
+            return new double[]{loss, jitterMs};
+        }
         // inbound token bucket, touched only on the receive thread
         double tokens = INBOUND_BPS / 8.0 / 4;
         long lastRefillMs = -1;
@@ -226,16 +263,24 @@ public final class CallRelay {
         final int speakers;
         /** A meeting's cap on its whole charge per minute (§7.5); 0 for none. */
         long maxCostPerMinute;
-        /** The speakers forwarded now (§7.4): replaced whole, read on the receive thread. */
-        volatile java.util.Set<Integer> selected = java.util.Set.of();
+        /** The speakers forwarded now, loudest first (§7.4): replaced whole, read on the receive thread. */
+        volatile List<Integer> selected = List.of();
+        long lastUplinkMs;
         /** Forwarded whatever their level: the host's pins (§7.2). */
         final java.util.Set<Integer> pinned = ConcurrentHashMap.newKeySet();
         /** FIDs the host removed: they may not join this meeting again. */
         final java.util.Set<String> banned = ConcurrentHashMap.newKeySet();
 
-        /** Whether a speaker's frames go out now. A 1:1 call forwards everything. */
+        /** Whether a speaker's frames go out now, to anyone. A 1:1 call forwards everything. */
         boolean forwards(int ssrc) {
             return !isMeeting() || selected.contains(ssrc) || pinned.contains(ssrc);
+        }
+
+        /** Whether {@code to} gets this speaker: pinned, or among the loudest it has room for (§7.4). */
+        boolean forwardsTo(Participant to, int ssrc) {
+            if (!isMeeting() || pinned.contains(ssrc)) return true;
+            int rank = selected.indexOf(ssrc);
+            return rank >= 0 && rank < to.downlinkN;
         }
         long capWindow = -1, capSpent;
         String hostFid;
@@ -403,6 +448,7 @@ public final class CallRelay {
                 maxCost);
         joined.candidates = candidates;
         joined.provenEpoch = m.keyEpoch; // its admitSig was under the current authPub
+        joined.downlinkN = m.speakers;
         m.order.add(joined);
         m.byConnection.put(connectionId, joined);
         participants.put(connectionId, joined);
@@ -544,6 +590,37 @@ public final class CallRelay {
         return Map.of("keyEpoch", m.keyEpoch);
     }
 
+    /**
+     * {@code call.report} (§7.2): a receiver's loss per stream over the last
+     * 2 s. Above {@link #LOSSY} on any stream it gets one speaker fewer (§7.4),
+     * down to one; {@link #tick} gives one back after 10 s without.
+     *
+     * @param p meetingId, delegation, streams: {ssrc: {loss, lateLoss, jitterMs}}
+     * @return the speakers it now gets
+     */
+    public synchronized Map<String, Object> report(String peerId, Map<String, Object> p, long now) throws Refused {
+        Meeting m = meeting(str(p, "meetingId"));
+        delegation(p, peerId, m.id, now);
+        Participant me = null;
+        for (Participant x : m.order) if (x.peerId.equals(peerId)) me = x;
+        if (me == null) throw new Refused(NOT_FOUND, "not in this meeting");
+        boolean lossy = false;
+        if (p.get("streams") instanceof Map<?, ?> streams) {
+            for (Object v : streams.values()) {
+                if (v instanceof Map<?, ?> st) {
+                    double loss = st.get("loss") instanceof Number n ? n.doubleValue() : 0;
+                    double late = st.get("lateLoss") instanceof Number n ? n.doubleValue() : 0;
+                    if (loss + late > LOSSY) lossy = true;
+                }
+            }
+        }
+        if (lossy) {
+            me.downlinkN = Math.max(1, me.downlinkN - 1);
+            me.lastLossyMs = now;
+        }
+        return Map.of("speakers", me.downlinkN);
+    }
+
     /** {@code call.hand}: raise or lower one's own hand; everyone sees it in the roster (§7.2). */
     public synchronized Map<String, Object> hand(String peerId, Map<String, Object> p, long now) throws Refused {
         Meeting m = meeting(str(p, "meetingId"));
@@ -645,6 +722,7 @@ public final class CallRelay {
         framesIn.incrementAndGet();
         from.bytesIn.addAndGet(data.length);
         if ((h.flags() & MediaFrame.FLAG_VAD) != 0) from.noteVoice(nowMs, h.level());
+        if (m.isMeeting()) from.noteUplink(h.seq(), h.timestamp(), (h.flags() & MediaFrame.FLAG_DTX) != 0, nowMs);
         if (from.mutedByHost) {
             framesMuted.incrementAndGet(); // §7.3 step 3
             return;
@@ -654,7 +732,7 @@ public final class CallRelay {
             return;
         }
         for (Participant to : m.byConnection.values()) {
-            if (to == from) continue; // nobody hears themselves
+            if (to == from || !m.forwardsTo(to, from.ssrc)) continue; // nobody hears themselves
             if (transport.sendDatagram(to.connectionId, data)) {
                 framesOut.incrementAndGet();
                 to.bytesOut.addAndGet(data.length);
@@ -711,7 +789,7 @@ public final class CallRelay {
                 bySsrc.put(p.ssrc, p);
                 score.put(p.ssrc, p.score(now));
             }
-            java.util.LinkedHashSet<Integer> next = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<Integer> next = new java.util.LinkedHashSet<>(); // kept in slot order here
             for (Integer s : m.selected) if (bySsrc.containsKey(s)) next.add(s);
             List<Participant> ranked = new ArrayList<>(m.order);
             ranked.removeIf(p -> score.get(p.ssrc) == Double.NEGATIVE_INFINITY);
@@ -737,7 +815,9 @@ public final class CallRelay {
                     p.louderSinceMs = -1;
                 }
             }
-            m.selected = java.util.Set.copyOf(next);
+            List<Integer> loudestFirst = new ArrayList<>(next);
+            loudestFirst.sort((x, y) -> Double.compare(score.get(y), score.get(x)));
+            m.selected = List.copyOf(loudestFirst);
         }
     }
 
@@ -761,7 +841,19 @@ public final class CallRelay {
                 }
                 m.proveByMs = -1;
             }
+            boolean uplinkDue = m.isMeeting() && now - m.lastUplinkMs >= UPLINK_EVERY_MS;
+            if (uplinkDue) m.lastUplinkMs = now;
             for (Participant p : new ArrayList<>(m.order)) {
+                // §7.4: one speaker back after 10 s without loss.
+                if (p.downlinkN < m.speakers && p.lastLossyMs >= 0 && now - p.lastLossyMs >= RECOVER_AFTER_MS) {
+                    p.downlinkN++;
+                    p.lastLossyMs = p.downlinkN < m.speakers ? now : -1;
+                }
+                if (uplinkDue) {
+                    double[] up = p.takeUplink();
+                    transport.notify(p.peerId, 1, json(Map.of("type", "uplink", "meetingId", m.id,
+                            "loss", Math.round(up[0] * 1000) / 1000.0, "jitterMs", Math.round(up[1]))));
+                }
                 while (now - p.joinedAtMs >= (p.minuteIndex + 1) * MINUTE_MS) chargeMinute(m, p, now, false);
                 if (p.unpaidSinceMs >= 0 && now - p.unpaidSinceMs >= UNPAID_GRACE_MS) {
                     transport.notify(p.peerId, 1, json(Map.of("type", "kicked", "meetingId", m.id,

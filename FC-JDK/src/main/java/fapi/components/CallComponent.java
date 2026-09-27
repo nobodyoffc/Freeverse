@@ -49,7 +49,7 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
     @Override
     public List<String> getApiList() {
         return List.of("call.create", "call.join", "call.register", "call.leave", "call.info", "call.stats",
-                "call.control", "call.hand", "call.rekey", "call.prove");
+                "call.control", "call.hand", "call.rekey", "call.prove", "call.report");
     }
 
     @Override
@@ -165,6 +165,7 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 case "hand" -> successResponse(id, relay.hand(peerId, params, now));
                 case "rekey" -> successResponse(id, relay.rekey(peerId, params, now));
                 case "prove" -> successResponse(id, relay.prove(peerId, params, now));
+                case "report" -> successResponse(id, relay.report(peerId, params, now));
                 case "stats" -> successResponse(id, relay.stats());
                 default -> errorResponse(id, FapiCode.NOT_FOUND, "Unknown method: " + method);
             };
