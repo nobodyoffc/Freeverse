@@ -180,10 +180,17 @@ public class MeetingLoadBench {
                 bytesBefore[i] = all.get(i).bytesIn.get();
                 attBefore[i] = all.get(i).attestationsIn.get();
             }
+            Map<String, Object> statsBefore = chair.call("call.stats", new HashMap<>());
             long windowStart = System.currentTimeMillis();
             System.out.printf("[bench] window starts %d (epoch ms), %d s%n", windowStart, seconds);
             Thread.sleep(seconds * 1000L);
             long windowMs = System.currentTimeMillis() - windowStart;
+            Map<String, Object> statsAfter = chair.call("call.stats", new HashMap<>());
+            for (String key : List.of("framesIn", "framesOut", "attestationsForwarded", "packedSends", "framesDropped")) {
+                if (statsAfter.get(key) instanceof Number a && statsBefore.get(key) instanceof Number b) {
+                    System.out.printf("[bench] relay %s: %.1f per s%n", key, (a.longValue() - b.longValue()) * 1000.0 / windowMs);
+                }
+            }
 
             double expectedPerListener = speakers * windowMs / (double) FRAME_MS;
             double worst = 1, sum = 0;
