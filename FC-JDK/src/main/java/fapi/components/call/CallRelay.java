@@ -530,6 +530,7 @@ public final class CallRelay {
         r.put("routeId", Integer.toUnsignedLong(joined.routeId));
         r.put("datagram", true); // the §2.3 capability signal
         r.put("roster", roster(m));
+        r.put("host", m.hostFid); // the joiner gets no roster notice of its own join
         r.put("keyEpoch", m.keyEpoch);
         r.put("speakers", m.speakers);
         return r;

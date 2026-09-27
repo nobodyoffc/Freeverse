@@ -298,6 +298,16 @@ public class MeetingRelayTest {
     }
 
     @Test
+    public void aJoinerLearnsTheHostFromItsJoin() throws Exception {
+        Keys k = keys();
+        Member host = new Member(), late = new Member();
+        create(host, k);
+        join(host, k, k.authPriv, T0);
+        // No roster notice goes to the joiner of its own join, so the result names the host.
+        assertEquals(host.fid, join(late, k, k.authPriv, T0 + 1).get("host"));
+    }
+
+    @Test
     public void anEmptyMeetingClosesAfterAMinute() throws Exception {
         Member host = new Member();
         Keys k = keys();
