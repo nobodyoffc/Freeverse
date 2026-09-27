@@ -390,4 +390,114 @@ public class MeetingRelayTest {
                 "nobody got the unheard speaker's frames, so nobody needs its attestation");
         assertEquals(5, notices.stream().filter(n -> n.dataType() == 0).count(), "and no more went out");
     }
+
+    // ===== Host controls (§7.2) =====
+
+    Map<String, Object> control(Member by, Keys k, String action, Object target) throws CallRelay.Refused {
+        Map<String, Object> p = params("meetingId", k.meetingId, "delegation", by.delegation(k.meetingId, T0),
+                "action", action);
+        if (target != null) p.put("target", target);
+        return relay.control(by.peerId, p, T0);
+    }
+
+    @Test
+    public void onlyTheHostModeratesButAnyoneMayLiftTheirOwnSoftMute() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 3);
+        Member host = ms.get(0), b = ms.get(1), c = ms.get(2);
+        CallRelay.Refused notHost = assertThrows(CallRelay.Refused.class, () -> control(b, k, "mute", c.fid));
+        assertEquals(403, notHost.code);
+
+        control(host, k, "mute", b.fid);
+        long t = talk(k, Map.of(b, 30), T0, 400);
+        sent.clear();
+        talk(k, Map.of(b, 30), t, 100);
+        assertTrue(receiversOf(b).isEmpty(), "the relay drops a muted speaker's frames");
+        assertTrue(notices.stream().anyMatch(n -> n.peerId().equals(b.peerId) && "muted".equals(n.json().get("type"))));
+
+        control(b, k, "unmute", b.fid); // a soft mute: b may lift it
+        t = talk(k, Map.of(b, 30), t + 100, 200);
+        sent.clear();
+        talk(k, Map.of(b, 30), t, 100);
+        assertFalse(receiversOf(b).isEmpty());
+
+        control(host, k, "lockMute", Integer.toUnsignedLong(b.ssrc)); // by ssrc this time
+        CallRelay.Refused locked = assertThrows(CallRelay.Refused.class, () -> control(b, k, "unmute", b.fid));
+        assertEquals(403, locked.code, "only the host lifts a locked mute");
+        CallRelay.Refused others = assertThrows(CallRelay.Refused.class, () -> control(b, k, "unmute", c.fid));
+        assertEquals(403, others.code, "nor may anyone unmute someone else");
+        control(host, k, "unmute", b.fid);
+    }
+
+    @Test
+    public void aKickedMemberIsOutAndMayNotComeBack() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 3);
+        Member host = ms.get(0), b = ms.get(1);
+        control(host, k, "kick", b.fid);
+        assertEquals(2, relay.info(k.meetingId).get("participants"));
+        assertTrue(notices.stream().anyMatch(n -> n.peerId().equals(b.peerId) && "kicked".equals(n.json().get("type"))));
+        // Same FID from a new transport key: still barred (the owner must rotate the symkey to stop decryption).
+        Member sameFid = new Member();
+        byte[] bPriv = b.fidPriv;
+        CallRelay.Refused barred = assertThrows(CallRelay.Refused.class, () -> {
+            Map<String, Object> p = params("meetingId", k.meetingId, "ssrc", Integer.toUnsignedLong(sameFid.ssrc),
+                    "ts", T0 + 5, "delegation", Delegation.sign(bPriv, k.meetingId, sameFid.tPub, T0 / 1000 + 3600).toJson(),
+                    "admitSig", Hex.toHex(CallKeys.admitSig(k.authPriv, k.meetingId, sameFid.tPub, sameFid.ssrc, T0 + 5)));
+            relay.join(sameFid.peerId, sameFid.connectionId, p, T0 + 5);
+        });
+        assertEquals(403, barred.code);
+    }
+
+    @Test
+    public void aPinIsHeardHoweverQuietAndPinsAreFew() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 7);
+        Member host = ms.get(0), quiet = ms.get(6);
+        Map<Member, Integer> voices = new LinkedHashMap<>();
+        voices.put(ms.get(1), 30);
+        voices.put(ms.get(2), 32);
+        voices.put(ms.get(3), 34);
+        voices.put(quiet, 60);
+        control(host, k, "pin", quiet.fid);
+        long t = talk(k, voices, T0, 400);
+        sent.clear();
+        talk(k, voices, t, 100);
+        assertFalse(receiversOf(quiet).isEmpty(), "pinned: forwarded though far from the loudest three");
+        control(host, k, "pin", ms.get(4).fid);
+        CallRelay.Refused third = assertThrows(CallRelay.Refused.class, () -> control(host, k, "pin", ms.get(5).fid));
+        assertEquals(429, third.code);
+        control(host, k, "unpin", quiet.fid);
+        control(host, k, "pin", ms.get(5).fid);
+    }
+
+    @Test
+    public void theHostHandsOverAndEnds() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 3);
+        Member host = ms.get(0), b = ms.get(1);
+        control(host, k, "handoverHost", b.fid);
+        CallRelay.Refused former = assertThrows(CallRelay.Refused.class, () -> control(host, k, "mute", b.fid));
+        assertEquals(403, former.code, "the former host is a member now");
+        notices.clear();
+        control(b, k, "end", null);
+        assertEquals(false, relay.info(k.meetingId).get("open"));
+        assertEquals(3, notices.stream().filter(n -> n.dataType() == 1 && "ended".equals(n.json().get("type"))).count(),
+                "everyone is told");
+    }
+
+    @Test
+    public void aRaisedHandShowsInTheRoster() throws Exception {
+        Keys k = keys();
+        List<Member> ms = meetingOf(k, 3);
+        Member b = ms.get(1);
+        notices.clear();
+        relay.hand(b.peerId, params("meetingId", k.meetingId, "delegation", b.delegation(k.meetingId, T0),
+                "raised", true), T0);
+        Notice roster = notices.stream().filter(n -> n.dataType() == 1 && "roster".equals(n.json().get("type")))
+                .reduce((x, y) -> y).orElseThrow();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> entries = (List<Map<String, Object>>) roster.json().get("roster");
+        assertTrue(entries.stream().anyMatch(e -> b.fid.equals(e.get("fid")) && Boolean.TRUE.equals(e.get("hand"))));
+    }
 }

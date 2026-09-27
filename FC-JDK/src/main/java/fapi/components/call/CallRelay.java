@@ -125,6 +125,9 @@ public final class CallRelay {
         long unpaidSinceMs = -1;
         /** Shared only if the participant asked (§6.1). */
         List<Map<String, String>> candidates;
+        /** Muted by the host: frames dropped (§7.3 step 3). Locked: only the host lifts it. */
+        volatile boolean mutedByHost, muteLocked;
+        volatile boolean handRaised;
         // inbound token bucket, touched only on the receive thread
         double tokens = INBOUND_BPS / 8.0 / 4;
         long lastRefillMs = -1;
@@ -187,6 +190,8 @@ public final class CallRelay {
             e.put("routeId", Integer.toUnsignedLong(routeId));
             e.put("delegation", delegationJson);
             if (candidates != null) e.put("candidates", candidates);
+            if (mutedByHost) e.put("muted", muteLocked ? "locked" : "host");
+            if (handRaised) e.put("hand", true);
             return e;
         }
     }
@@ -223,6 +228,8 @@ public final class CallRelay {
         volatile java.util.Set<Integer> selected = java.util.Set.of();
         /** Forwarded whatever their level: the host's pins (§7.2). */
         final java.util.Set<Integer> pinned = ConcurrentHashMap.newKeySet();
+        /** FIDs the host removed: they may not join this meeting again. */
+        final java.util.Set<String> banned = ConcurrentHashMap.newKeySet();
 
         /** Whether a speaker's frames go out now. A 1:1 call forwards everything. */
         boolean forwards(int ssrc) {
@@ -281,6 +288,8 @@ public final class CallRelay {
     final AtomicLong attestationsForwarded = new AtomicLong(), minutesCharged = new AtomicLong();
     /** Frames received from a speaker not among the selected (§7.4): billed, not forwarded. */
     final AtomicLong framesNotSelected = new AtomicLong();
+    /** Frames from a speaker the host muted (§7.3 step 3). */
+    final AtomicLong framesMuted = new AtomicLong();
 
     public CallRelay(Transport transport, Billing billing, Pricing pricing) {
         this.transport = transport;
@@ -375,6 +384,7 @@ public final class CallRelay {
             if (o.ssrc == ssrc) throw new Refused(CONFLICT, "ssrc in use: pick a new one");
         }
         if (m.order.size() >= m.maxParticipants) throw new Refused(FORBIDDEN, "meeting full");
+        if (m.banned.contains(d.fid)) throw new Refused(FORBIDDEN, "removed from this meeting by the host");
         long maxCost = num(p, "maxCostPerMinute", 0);
         long oneMinute = oneMinuteCost(m);
         if (maxCost > 0) oneMinute = Math.min(oneMinute, maxCost);
@@ -405,6 +415,108 @@ public final class CallRelay {
         r.put("keyEpoch", m.keyEpoch);
         r.put("speakers", m.speakers);
         return r;
+    }
+
+    /** Pins at once (§7.2): each is forwarded to everyone on top of the N loudest. */
+    public static final int MAX_PINS = 2;
+
+    /**
+     * {@code call.control} (§7.2): the host moderates. {@code target} is a FID
+     * (every device of it) or an ssrc. One exception to host-only: a
+     * participant may {@code unmute} itself, unless the host locked the mute.
+     *
+     * @param p meetingId, delegation, action, target (not for end)
+     */
+    public synchronized Map<String, Object> control(String peerId, Map<String, Object> p, long now) throws Refused {
+        Meeting m = meeting(str(p, "meetingId"));
+        if (!m.isMeeting()) throw new Refused(BAD_REQUEST, "a 1:1 call has no host controls");
+        Delegation d = delegation(p, peerId, m.id, now);
+        String action = str(p, "action");
+        boolean isHost = d.fid.equals(m.hostFid);
+        if ("end".equals(action)) {
+            if (!isHost) throw new Refused(FORBIDDEN, "only the host ends the meeting");
+            endMeeting(m, now);
+            return Map.of();
+        }
+        List<Participant> targets = targets(m, p.get("target"));
+        if (targets.isEmpty()) throw new Refused(NOT_FOUND, "no such participant");
+        boolean self = targets.stream().allMatch(t -> t.peerId.equals(peerId));
+        if (!isHost && !("unmute".equals(action) && self)) throw new Refused(FORBIDDEN, "only the host moderates");
+        switch (action) {
+            case "mute", "lockMute" -> {
+                for (Participant t : targets) {
+                    t.mutedByHost = true;
+                    t.muteLocked = "lockMute".equals(action);
+                    transport.notify(t.peerId, 1, json(Map.of("type", "muted", "meetingId", m.id,
+                            "locked", t.muteLocked)));
+                }
+            }
+            case "unmute" -> {
+                for (Participant t : targets) {
+                    if (!isHost && t.muteLocked) throw new Refused(FORBIDDEN, "the host locked this mute");
+                    t.mutedByHost = false;
+                    t.muteLocked = false;
+                }
+            }
+            case "kick" -> {
+                for (Participant t : targets) {
+                    if (t.fid.equals(m.hostFid)) throw new Refused(BAD_REQUEST, "the host does not kick itself");
+                    m.banned.add(t.fid);
+                    transport.notify(t.peerId, 1, json(Map.of("type", "kicked", "meetingId", m.id, "reason", "host")));
+                    leave(t.connectionId, now);
+                }
+                return Map.of();
+            }
+            case "pin" -> {
+                for (Participant t : targets) {
+                    if (!m.pinned.contains(t.ssrc) && m.pinned.size() >= MAX_PINS) {
+                        throw new Refused(TOO_MANY_REQUESTS, "at most " + MAX_PINS + " pins");
+                    }
+                    m.pinned.add(t.ssrc);
+                }
+            }
+            case "unpin" -> {
+                for (Participant t : targets) m.pinned.remove(t.ssrc);
+            }
+            case "handoverHost" -> m.hostFid = targets.get(0).fid;
+            default -> throw new Refused(BAD_REQUEST, "unknown action: " + action);
+        }
+        pushRoster(m, null);
+        return Map.of();
+    }
+
+    /** {@code call.hand}: raise or lower one's own hand; everyone sees it in the roster (§7.2). */
+    public synchronized Map<String, Object> hand(String peerId, Map<String, Object> p, long now) throws Refused {
+        Meeting m = meeting(str(p, "meetingId"));
+        delegation(p, peerId, m.id, now);
+        Participant me = null;
+        for (Participant x : m.order) if (x.peerId.equals(peerId)) me = x;
+        if (me == null) throw new Refused(NOT_FOUND, "not in this meeting");
+        me.handRaised = Boolean.TRUE.equals(p.get("raised"));
+        pushRoster(m, null);
+        return Map.of();
+    }
+
+    /** A target: a FID (all its devices here) or an ssrc. */
+    private static List<Participant> targets(Meeting m, Object target) {
+        List<Participant> out = new ArrayList<>();
+        if (target instanceof String fid) {
+            for (Participant x : m.order) if (x.fid.equals(fid)) out.add(x);
+        } else if (target instanceof Number n) {
+            int ssrc = (int) n.longValue();
+            for (Participant x : m.order) if (x.ssrc == ssrc) out.add(x);
+        }
+        return out;
+    }
+
+    /** Tell everyone, bill everyone's part-minute, and close at once. */
+    private void endMeeting(Meeting m, long now) {
+        byte[] ended = json(Map.of("type", "ended", "meetingId", m.id));
+        for (Participant x : new ArrayList<>(m.order)) {
+            transport.notify(x.peerId, 1, ended);
+            leave(x.connectionId, now);
+        }
+        meetings.remove(m.id);
     }
 
     /** {@code call.leave}, or the connection went away. Bills the part-minute. */
@@ -438,6 +550,7 @@ public final class CallRelay {
         s.put("framesOut", framesOut.get());
         s.put("framesDropped", framesDropped.get());
         s.put("framesNotSelected", framesNotSelected.get());
+        s.put("framesMuted", framesMuted.get());
         s.put("attestationsForwarded", attestationsForwarded.get());
         s.put("minutesCharged", minutesCharged.get());
         return s;
@@ -473,6 +586,10 @@ public final class CallRelay {
         framesIn.incrementAndGet();
         from.bytesIn.addAndGet(data.length);
         if ((h.flags() & MediaFrame.FLAG_VAD) != 0) from.noteVoice(nowMs, h.level());
+        if (from.mutedByHost) {
+            framesMuted.incrementAndGet(); // §7.3 step 3
+            return;
+        }
         if (!m.forwards(from.ssrc)) {
             framesNotSelected.incrementAndGet(); // received and billed, not one of the loudest
             return;
