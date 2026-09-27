@@ -17,8 +17,10 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * The CALL relay's state and rules (VOICE_SPEC §7), with no FAPI or FUDP in
  * it: {@link CallComponent} maps requests and node events onto it, and tests
- * drive it directly. This version serves {@code kind = p2p}; meetings, speaker
- * selection and host controls are Phase 4.
+ * drive it directly. It serves 1:1 calls ({@code kind = p2p}) and meetings
+ * ({@code kind = meeting}, VOICE_SPEC §8), whose creator pays for everyone
+ * (Decision 14). Speaker selection, host controls and rekeying are Phase 4
+ * milestones still to come.
  * <p>
  * Identity: every connection authenticates as a throwaway transport key
  * ({@code tPub}), and every request carries a {@link Delegation} from a FID
@@ -45,6 +47,8 @@ public final class CallRelay {
     public static final long INBOUND_BPS = 64_000;
     /** A 1:1 call forwards one speaker to each side. */
     public static final int P2P_SPEAKERS = 1;
+    /** A meeting forwards the top N speakers to each participant (§7.4). */
+    public static final int DEFAULT_SPEAKERS = 3, MAX_SPEAKERS = 5;
     /** Bytes per participant per minute at 24 kbps with FUDP overhead (§7.5), for the join balance check. */
     static final long EST_BYTES_IN_PER_MINUTE = 400 * 1024;
 
@@ -157,6 +161,11 @@ public final class CallRelay {
         final String kind;
         /** Fixed at create, unlike the host role, which can pass on. */
         final String creatorFid;
+        /** Speakers forwarded to each participant (§7.4). */
+        final int speakers;
+        /** A meeting's cap on its whole charge per minute (§7.5); 0 for none. */
+        long maxCostPerMinute;
+        long capWindow = -1, capSpent;
         String hostFid;
         byte[] authPub;
         final int keyEpoch = 0;
@@ -168,18 +177,24 @@ public final class CallRelay {
         final List<Participant> order = new ArrayList<>();
 
         /**
-         * Who pays for a participant's traffic (§7.5): in a 1:1 call the caller,
-         * who created it, for both sides, so a callee never needs an account
-         * at the relay; otherwise each participant for itself.
+         * Who pays for a participant's traffic (§7.5): whoever created the call,
+         * for everyone. In a 1:1 call that is the caller (Decision 12), in a
+         * meeting its first host (Decision 14), even after the role passes on.
+         * Nobody needs an account at the relay just to take part.
          */
         String payerFor(String participantFid) {
-            return "p2p".equals(kind) ? creatorFid : participantFid;
+            return creatorFid;
+        }
+
+        boolean isMeeting() {
+            return "meeting".equals(kind);
         }
 
         Meeting(String id, String kind, String hostFid, int maxParticipants, long now) {
             this.id = id;
             this.creatorFid = hostFid;
             this.kind = kind;
+            this.speakers = "meeting".equals(kind) ? DEFAULT_SPEAKERS : P2P_SPEAKERS;
             this.hostFid = hostFid;
             this.maxParticipants = maxParticipants;
             this.createdMs = now;
@@ -218,23 +233,31 @@ public final class CallRelay {
     public synchronized Map<String, Object> create(String peerId, Map<String, Object> p, long now) throws Refused {
         String meetingId = str(p, "meetingId");
         String kind = str(p, "kind");
-        if (!"p2p".equals(kind)) throw new Refused(BAD_REQUEST, "only kind p2p is served (meetings are Phase 4)");
-        checkCallId(meetingId);
+        boolean isMeeting = "meeting".equals(kind);
+        if (!isMeeting && !"p2p".equals(kind)) throw new Refused(BAD_REQUEST, "kind is p2p or meeting");
+        if (isMeeting) checkMeetingId(meetingId);
+        else checkCallId(meetingId);
+        // A meeting's joiners prove the key from the start (§4.4); only a 1:1 call registers it later.
+        if (isMeeting && p.get("authPub") == null) {
+            throw new Refused(BAD_REQUEST, "a meeting gives its authPub at create");
+        }
         Delegation d = delegation(p, peerId, meetingId, now);
         if (meetings.containsKey(meetingId)) throw new Refused(CONFLICT, "meeting exists");
         long hosted = meetings.values().stream().filter(m -> m.hostFid.equals(d.fid)).count();
         if (hosted >= MEETINGS_PER_HOST) throw new Refused(TOO_MANY_REQUESTS, "too many meetings for this host");
-        int max = (int) Math.min(MAX_PARTICIPANTS, Math.max(2, num(p, "maxParticipants", P2P_DEFAULT_PARTICIPANTS)));
-        // The caller pays for the whole 1:1 call (§7.5): it must afford a minute of both sides.
+        int max = (int) Math.min(MAX_PARTICIPANTS, Math.max(2, num(p, "maxParticipants",
+                isMeeting ? MAX_PARTICIPANTS : P2P_DEFAULT_PARTICIPANTS)));
+        // The creator pays for everyone (§7.5): it must afford a minute of at least two.
         long oneMinute = oneMinuteCost(null) * P2P_DEFAULT_PARTICIPANTS;
         if (oneMinute > 0 && !billing.canAfford(d.fid, oneMinute)) {
             throw new Refused(PAYMENT_REQUIRED, "balance below one minute of this call");
         }
         Meeting m = new Meeting(meetingId, kind, d.fid, max, now);
         if (p.get("authPub") != null) m.authPub = pubKey(str(p, "authPub"));
+        if (isMeeting) m.maxCostPerMinute = Math.max(0, num(p, "maxCostPerMinute", 0));
         meetings.put(meetingId, m);
         return Map.of("price", Map.of("perKBIn", pricing.perKBIn(), "perKBOut", pricing.perKBOut()),
-                "maxParticipants", max);
+                "maxParticipants", max, "speakers", m.speakers);
     }
 
     /** {@code call.register}: the host sets {@code authPub} once the callee has accepted (§4.4). */
@@ -315,7 +338,7 @@ public final class CallRelay {
         r.put("datagram", true); // the §2.3 capability signal
         r.put("roster", roster(m));
         r.put("keyEpoch", m.keyEpoch);
-        r.put("speakers", P2P_SPEAKERS);
+        r.put("speakers", m.speakers);
         return r;
     }
 
@@ -339,7 +362,7 @@ public final class CallRelay {
     public synchronized Map<String, Object> info(String meetingId) {
         Meeting m = meetings.get(meetingId);
         if (m == null) return Map.of("open", false, "participants", 0);
-        return Map.of("open", true, "participants", m.order.size(), "started", m.createdMs);
+        return Map.of("open", true, "kind", m.kind, "participants", m.order.size(), "started", m.createdMs);
     }
 
     public synchronized Map<String, Object> stats() {
@@ -447,6 +470,16 @@ public final class CallRelay {
         long minute = p.minuteIndex++;
         long cost = pricing.cost(in, out);
         if (p.maxCostPerMinute > 0) cost = Math.min(cost, p.maxCostPerMinute);
+        if (m.maxCostPerMinute > 0) {
+            // The host's cap on the whole meeting, per wall-clock minute (§7.5).
+            long window = now / MINUTE_MS;
+            if (window != m.capWindow) {
+                m.capWindow = window;
+                m.capSpent = 0;
+            }
+            cost = Math.min(cost, m.maxCostPerMinute - m.capSpent);
+            if (cost > 0) m.capSpent += cost;
+        }
         if (cost <= 0) return;
         String key = "call:" + m.id + ":" + p.fid + ":" + Integer.toUnsignedString(p.ssrc) + ":" + minute;
         String payer = m.payerFor(p.fid);
@@ -586,6 +619,13 @@ public final class CallRelay {
 
     private static byte[] json(Object o) {
         return new com.google.gson.Gson().toJson(o).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** A meeting's id: {@code "mtg_" + 24 hex} (§8). */
+    private static void checkMeetingId(String id) throws Refused {
+        if (id == null || id.length() != 28 || !id.startsWith("mtg_") || !id.substring(4).matches("[0-9a-f]{24}")) {
+            throw new Refused(BAD_REQUEST, "a meeting's id is mtg_ and 24 lowercase hex");
+        }
     }
 
     private static void checkCallId(String id) throws Refused {
