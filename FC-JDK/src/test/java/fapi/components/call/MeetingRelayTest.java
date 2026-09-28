@@ -571,7 +571,12 @@ public class MeetingRelayTest {
         assertEquals(4, notices.stream().filter(n -> n.dataType() == 1 && "rekey".equals(n.json().get("type"))).count(),
                 "everyone is told");
 
+        notices.clear();
         prove(host, k, newAuthPriv, epoch, T0 + 1_000);
+        // Senders wait on who has proved (§4.5): a prove reaches everyone's roster.
+        assertTrue(notices.stream().filter(n -> n.peerId().equals(keeps.peerId) && "roster".equals(n.json().get("type")))
+                .anyMatch(n -> ((List<?>) n.json().get("roster")).stream().anyMatch(e -> e instanceof Map<?, ?> m
+                        && host.fid.equals(m.get("fid")) && ((Number) m.get("keyEpoch")).intValue() == 1)));
         prove(keeps, k, newAuthPriv, epoch, T0 + 2_000);
         CallRelay.Refused old = assertThrows(CallRelay.Refused.class,
                 () -> prove(removed, k, k.authPriv, epoch, T0 + 3_000));
