@@ -298,6 +298,16 @@ public class MeetingRelayTest {
     }
 
     @Test
+    public void aJoinerLearnsTheHostFromItsJoin() throws Exception {
+        Keys k = keys();
+        Member host = new Member(), late = new Member();
+        create(host, k);
+        join(host, k, k.authPriv, T0);
+        // No roster notice goes to the joiner of its own join, so the result names the host.
+        assertEquals(host.fid, join(late, k, k.authPriv, T0 + 1).get("host"));
+    }
+
+    @Test
     public void anEmptyMeetingClosesAfterAMinute() throws Exception {
         Member host = new Member();
         Keys k = keys();
@@ -561,7 +571,12 @@ public class MeetingRelayTest {
         assertEquals(4, notices.stream().filter(n -> n.dataType() == 1 && "rekey".equals(n.json().get("type"))).count(),
                 "everyone is told");
 
+        notices.clear();
         prove(host, k, newAuthPriv, epoch, T0 + 1_000);
+        // Senders wait on who has proved (§4.5): a prove reaches everyone's roster.
+        assertTrue(notices.stream().filter(n -> n.peerId().equals(keeps.peerId) && "roster".equals(n.json().get("type")))
+                .anyMatch(n -> ((List<?>) n.json().get("roster")).stream().anyMatch(e -> e instanceof Map<?, ?> m
+                        && host.fid.equals(m.get("fid")) && ((Number) m.get("keyEpoch")).intValue() == 1)));
         prove(keeps, k, newAuthPriv, epoch, T0 + 2_000);
         CallRelay.Refused old = assertThrows(CallRelay.Refused.class,
                 () -> prove(removed, k, k.authPriv, epoch, T0 + 3_000));

@@ -285,6 +285,9 @@ public final class CallRelay {
             if (candidates != null) e.put("candidates", candidates);
             if (mutedByHost) e.put("muted", muteLocked ? "locked" : "host");
             if (handRaised) e.put("hand", true);
+            // The key epoch this participant has proved (§4.5): senders keep the previous
+            // key until everyone has the new one, so nobody who is staying goes unheard.
+            e.put("keyEpoch", provenEpoch);
             return e;
         }
     }
@@ -530,6 +533,7 @@ public final class CallRelay {
         r.put("routeId", Integer.toUnsignedLong(joined.routeId));
         r.put("datagram", true); // the §2.3 capability signal
         r.put("roster", roster(m));
+        r.put("host", m.hostFid); // the joiner gets no roster notice of its own join
         r.put("keyEpoch", m.keyEpoch);
         r.put("speakers", m.speakers);
         return r;
@@ -653,7 +657,9 @@ public final class CallRelay {
         if (!CallKeys.verifyAdmit(m.authPub, m.id, d.tPubBytes(), me.ssrc, ts, sig)) {
             throw new Refused(UNAUTHORIZED, "admitSig does not verify under the new key");
         }
+        boolean changed = me.provenEpoch != m.keyEpoch;
         me.provenEpoch = m.keyEpoch;
+        if (changed) pushRoster(m, null); // who has proved is what senders wait on (§4.5)
         return Map.of("keyEpoch", m.keyEpoch);
     }
 
