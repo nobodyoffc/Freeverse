@@ -11,7 +11,7 @@ import java.util.Arrays;
 
 /**
  * Key material for calls and meetings (VOICE_SPEC §4.2–§4.4). All HKDF is
- * HKDF-SHA256 (FTSP13); an empty salt means RFC 5869's all-zero salt.
+ * HKDF-SHA512, the HKDF class's (FTSP13); an empty salt means RFC 5869's all-zero salt.
  */
 public final class CallKeys {
 
