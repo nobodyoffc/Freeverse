@@ -46,7 +46,7 @@ FAPI1 (Core Protocol) defines the wire format, request/response structures, and 
 
 A FAPI server is not a monolithic service. It is composed of one or more components, each responsible for a distinct domain. A minimal server might host only the BASE component to serve blockchain queries. A full-featured server might host all five built-in components. The set of hosted components is declared on-chain through the service's `types` array, enabling clients to discover which capabilities a given server provides before connecting.
 
-The API specifications for each individual built-in component are defined in separate documents: FAPI11 (BASE), FAPI12 (DISK), FAPI13 (DOCK), FAPI14 (MAP), and FAPI15 (ROAD).
+The API specifications for each individual built-in component are defined in separate documents: FAPI11 (BASE), FAPI12 (DISK), FAPI13 (DOCK), FAPI14 (MAP), FAPI15 (ROAD), and FAPI16 (CALL).
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.
 
@@ -107,6 +107,7 @@ Each built-in component is identified by a type string that combines the compone
 | DOCK | `DOCK@No1_NrC7` | Store-and-forward messaging |
 | MAP | `MAP@No1_NrC7` | FID-to-network-address mapping |
 | ROAD | `ROAD@No1_NrC7` | Data relay service |
+| CALL | `CALL@No1_NrC7` | Relay for end-to-end encrypted voice calls and meetings |
 
 The format is `{NAME}@{AUTHOR_FID_SUFFIX}`. Third-party components MAY define their own type IDs using the same format with a different author suffix.
 
@@ -168,6 +169,7 @@ The built-in components are specified in separate FAPI documents:
 | 13 | DOCK | DOCK@No1_NrC7 | [FAPI13V1_DOCK](FAPI13V1_DOCK.md) |
 | 14 | MAP | MAP@No1_NrC7 | [FAPI14V1_MAP](FAPI14V1_MAP.md) |
 | 15 | ROAD | ROAD@No1_NrC7 | [FAPI15V1_ROAD](FAPI15V1_ROAD.md) |
+| 16 | CALL | CALL@No1_NrC7 | [FAPI16V1_CALL](FAPI16V1_CALL.md) |
 
 New components MAY be defined in future FAPI documents with serial numbers 16 and above. Third-party components MAY be specified outside this series, using the `{NAME}@{AUTHOR}` type ID convention defined in Section 2.3.
 
@@ -184,6 +186,7 @@ New components MAY be defined in future FAPI documents with serial numbers 16 an
 | Version | Date | Changes |
 |---|---|---|
 | 1 | 2026-03-28 | Initial specification. Defines the component model, lifecycle, registration mechanism, and type ID system. Individual component APIs specified in FAPI11-FAPI15. |
+| 1 | 2026-09-29 | Added CALL (FAPI16) to the component type IDs and the built-in component list. |
 
 ## 7. References
 

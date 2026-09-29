@@ -36,7 +36,7 @@
 
 ## Abstract
 
-FIMP (Freeverse Instant Messaging Protocol) defines a decentralized instant messaging framework for the Freeverse ecosystem. FIMP runs over FUDP encrypted transport and FAPI application services (DOCK for store-and-forward, DISK for large attachments, BASE for on-chain entity lookup). It defines a single message envelope -- `ImMessage` -- that is shared by four messaging modes: **P2P** (direct one-to-one), **Room** (locally-defined group), **Square** (open on-chain group), and **Team** (closed on-chain owner-managed group). Each mode has its own membership semantics, encryption rules, and DOCK addressing conventions, all specified in companion documents (FIMP1-4).
+FIMP (Freeverse Instant Messaging Protocol) defines a decentralized instant messaging framework for the Freeverse ecosystem. FIMP runs over FUDP encrypted transport and FAPI application services (DOCK for store-and-forward, DISK for large attachments, BASE for on-chain entity lookup). It defines a single message envelope -- `ImMessage` -- that is shared by four messaging modes: **P2P** (direct one-to-one), **Room** (locally-defined group), **Square** (open on-chain group), and **Team** (closed on-chain owner-managed group). Each mode has its own membership semantics, encryption rules, and DOCK addressing conventions, all specified in companion documents (FIMP1-4). Voice calls and meetings over these modes are specified in FIMP5.
 
 This document (FIMP0) defines the foundational rules shared by all FIMP modes: the wire envelope, content-type registry, request-type registry, encryption layering, delivery channels, and identifier conventions.
 
@@ -398,8 +398,9 @@ Descriptions below refer to the `content` and `data` sections of `body` (§[The 
 |18|`ROOM_ACCEPT`|Room invitation acceptance (Room mode only). `content` is the `roomId`; sent by an invitee to the owner to confirm joining. See FIMP2.|
 |19|`ROOM_DISBAND`|Room disband notification (Room mode only). `content` is the `roomId`. Sent by the room owner. See FIMP2.|
 |20|`ROOM_REMOVED`|Room member-removal notification (Room mode only). `content` is the `roomId`; sent by the room owner to a removed member. See FIMP2.|
+|21|`CALL`|Voice call and meeting signalling. `content` is JSON with an `op` (`INVITE`, `ACCEPT`, `REJECT`, `CANCEL`, `HANGUP` in P2P; `MEETING_START`, `MEETING_END` in Room and Team; `MEETING_INVITE` and its `MEETING_END` in P2P). Not a chat row, except a meeting's card and a client's local call records. See FIMP5.|
 
-> **Note:** ordinals 18-20 were appended after the initial Draft. They are Room-mode control signals; other modes MUST NOT emit them.
+> **Note:** ordinals 18-20 were appended after the initial Draft. They are Room-mode control signals; other modes MUST NOT emit them. Ordinal 21 was appended on 2026-09-23 for FIMP5; a client that does not know it SHOULD drop such a message quietly rather than show its content.
 
 ### RequestType
 
