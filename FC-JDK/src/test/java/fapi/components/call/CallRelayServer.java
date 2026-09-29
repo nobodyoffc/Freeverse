@@ -25,7 +25,8 @@ import static org.mockito.Mockito.when;
  * Run on the relay host, UDP {@code -Dcall.port} (default 19950) open:
  * {@code mvn -f FC-JDK/pom.xml test -Dtest=CallRelayServer -Dsurefire.failIfNoSpecifiedTests=false}.
  * Serves for {@code -Dcall.minutes} (default 240); {@code -Dcall.maxPacket} caps the UDP payload
- * (default 1350). On the phones, set the
+ * (default 1350). It also takes FUDP over TCP (FUDP8) on {@code -Dcall.tcpPort}, by default the
+ * same number as the UDP port; 0 turns it off. On the phones, set the
  * Voice test screen's "Call relay for real calls" to {@code fudp://<host>:<port>}.
  */
 public class CallRelayServer {
@@ -65,7 +66,11 @@ public class CallRelayServer {
         server.registerComponent(new CallComponent());
         node.setEventListener(server);
         node.start();
-        System.out.println("[CallRelayServer] CALL relay on UDP " + port + " as " + fid + " for " + minutes + " min");
+        // For networks that drop UDP replies from abroad (VOICE_SPEC §11.1): the same relay over TCP.
+        int tcpPort = Integer.getInteger("call.tcpPort", port);
+        if (tcpPort > 0) node.getProtocol().tcp().listen(tcpPort);
+        System.out.println("[CallRelayServer] CALL relay on UDP " + port + (tcpPort > 0 ? " and TCP " + tcpPort : "")
+                + " as " + fid + " for " + minutes + " min");
         try {
             Thread.sleep(TimeUnit.MINUTES.toMillis(minutes));
         } finally {

@@ -44,6 +44,11 @@ public class Protocol {
     private final DatagramChannel channel;
     private Thread receiveThread;
     private volatile Selector receiveSelector;
+    /** FUDP over TCP (FUDP8), beside the UDP channel: see {@link TcpBridge}. */
+    private final TcpBridge tcp;
+    /** Packets that came over TCP, for the one receive thread to handle in turn. */
+    private final java.util.concurrent.ConcurrentLinkedQueue<Object[]> tcpInbox =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> ackTask;
     private ScheduledFuture<?> retransmitTask;
@@ -125,6 +130,11 @@ public class Protocol {
         this.channel = DatagramChannel.open();
         this.channel.bind(new InetSocketAddress(port));
         this.channel.configureBlocking(false);
+        this.tcp = new TcpBridge((data, from) -> {
+            tcpInbox.add(new Object[]{data, from});
+            Selector sel = receiveSelector;
+            if (sel != null) sel.wakeup();
+        }, msg -> log.info("[Protocol] {}", msg));
 
         // Set UDP socket buffers. Larger buffers prevent packet loss at high throughput.
         try {
@@ -179,7 +189,7 @@ public class Protocol {
 
             byte[] data = packet.toBytes();
             ByteBuffer buffer = ByteBuffer.wrap(data);
-            channel.send(buffer, to);
+            sendRaw(buffer, to);
         } catch (Exception e) {
             // Ignore send errors for challenges
         }
@@ -200,7 +210,7 @@ public class Protocol {
 
             byte[] data = packet.toBytes();
             ByteBuffer buffer = ByteBuffer.wrap(data);
-            channel.send(buffer, to);
+            sendRaw(buffer, to);
             
             // After sending challenge response, re-send HELLO if we have a pending public key request.
             // This is necessary because the original HELLO was dropped by the peer's IpVerifier.
@@ -270,7 +280,7 @@ public class Protocol {
                 
                 byte[] helloData = helloPacket.toBytes();
                 ByteBuffer helloBuffer = ByteBuffer.wrap(helloData);
-                channel.send(helloBuffer, to);
+                sendRaw(helloBuffer, to);
             } else {
                 log.debug("[Protocol] Pending request for {} already completed, skip HELLO re-send", key);
             }
@@ -349,6 +359,7 @@ public class Protocol {
             selector.wakeup();
         }
         try {
+            tcp.close();
             channel.close();
         } catch (IOException e) {
             // Ignore
@@ -1081,7 +1092,7 @@ public class Protocol {
     private boolean writeDatagram(PeerConnection conn, byte[] data, long bufferWaitMs) throws IOException {
         ByteBuffer buffer = ByteBuffer.wrap(data);
         try {
-            int sent = channel.send(buffer, conn.getPeerAddress());
+            int sent = sendRaw(buffer, conn.getPeerAddress());
             if (sent == 0) {
                 sendDropCount.incrementAndGet();
                 // OS send buffer full: the uplink is draining slower than we are
@@ -1093,7 +1104,7 @@ public class Protocol {
                     java.util.concurrent.locks.LockSupport.parkNanos(backoffNanos);
                     if (backoffNanos < 4_000_000L) backoffNanos *= 2;
                     buffer.rewind();
-                    sent = channel.send(buffer, conn.getPeerAddress());
+                    sent = sendRaw(buffer, conn.getPeerAddress());
                 }
                 if (sent == 0 && bufferWaitMs == 0) {
                     // Send-or-drop caller (DATAGRAM): the drop is the contract.
@@ -1146,6 +1157,24 @@ public class Protocol {
         return v == PacketHeader.CURRENT_VERSION;
     }
 
+    /** Where FUDP over TCP connects and listens (FUDP8). */
+    public TcpBridge tcp() {
+        return tcp;
+    }
+
+    /**
+     * Every packet leaves here: over TCP to a peer the bridge carries, over
+     * UDP to anyone else. @return bytes handed on; 0 if TCP's queue is full.
+     */
+    private int sendRaw(ByteBuffer buffer, SocketAddress to) throws IOException {
+        if (tcp.owns(to)) {
+            byte[] packet = new byte[buffer.remaining()];
+            buffer.get(packet);
+            return tcp.send(to, packet) ? packet.length : 0;
+        }
+        return channel.send(buffer, to);
+    }
+
     private void receiveLoop() {
         ByteBuffer buffer = ByteBuffer.allocate(65536);
 
@@ -1165,6 +1194,11 @@ public class Protocol {
 
         while (running) {
             try {
+                Object[] fromTcp;
+                while ((fromTcp = tcpInbox.poll()) != null) {
+                    receivedPacketCount.incrementAndGet();
+                    handleIncomingPacket((byte[]) fromTcp[0], (SocketAddress) fromTcp[1]);
+                }
                 buffer.clear();
                 SocketAddress sender = channel.receive(buffer);
 
@@ -1583,7 +1617,7 @@ public class Protocol {
 
             byte[] data = packet.toBytes();
             ByteBuffer buffer = ByteBuffer.wrap(data);
-            channel.send(buffer, to);
+            sendRaw(buffer, to);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -1998,7 +2032,7 @@ public class Protocol {
 
         byte[] data = packet.toBytes();
         ByteBuffer buffer = ByteBuffer.wrap(data);
-        channel.send(buffer, to);
+        sendRaw(buffer, to);
 
         scheduler.schedule(() -> {
             CopyOnWriteArrayList<CompletableFuture<byte[]>> list = pendingPublicKeyRequests.get(key);

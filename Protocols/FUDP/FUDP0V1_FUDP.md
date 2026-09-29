@@ -163,6 +163,7 @@ Security (FUDP4) is **REQUIRED** for all connections. Plaintext data packets are
 - **FUDP5 (DDoS Defense)** is OPTIONAL but RECOMMENDED for internet-facing nodes.
 - **FUDP6 (Messages)** is OPTIONAL. Implementations MAY define their own application-layer message formats on top of FUDP streams.
 - **FUDP7 (Datagram)** is OPTIONAL. It adds an unreliable, never-retransmitted DATAGRAM frame for real-time traffic. An implementation without it MUST still not count a DATAGRAM packet it cannot parse as a decrypt failure (FUDP1 §Versioning).
+- **FUDP8 (TCP Binding)** is OPTIONAL. It carries FUDP packets, length-prefixed, over TCP, for networks that drop UDP replies; nothing above the socket changes.
 
 ### 6. RFC 2119 Keywords
 
@@ -227,3 +228,4 @@ Each FUDP protocol document SHOULD follow this structure:
 |5|DDoS Defense|Proof-of-work challenges, IP verification, rate limiting.|
 |6|Messages|Application-layer message envelope and reference message types (request/response, notify, ping/pong, error).|
 |7|Datagram|Unreliable DATAGRAM frame for real-time traffic: never retransmitted, send-or-drop, per-connection rate budget, capability gating.|
+|8|TCP Binding|FUDP packets over TCP, each prefixed with a 2-byte length, for networks that drop UDP replies; servers listen beside UDP, clients fall back to TCP 443.|
