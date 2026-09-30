@@ -37,6 +37,34 @@ public interface NodeEventListener {
     default void onRequestReceived(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {}
 
     /**
+     * Whether this listener implements {@link #onRequestStream} and should receive
+     * requests whose data spilled to disk through it instead of
+     * {@link #onRequestReceived}. A request small enough to be held in memory
+     * always arrives through {@link #onRequestReceived}.
+     */
+    default boolean handlesRequestStream() {
+        return false;
+    }
+
+    /**
+     * Called instead of {@link #onRequestReceived} when {@link #handlesRequestStream()}
+     * returns true and the request's data was spilled to disk while it arrived: a
+     * large upload, which then never has to become a single array.
+     *
+     * <p>The listener owns the backing file and must call
+     * {@link RequestPayload#release()} once done with it, on whatever thread it
+     * answers the request from.
+     *
+     * @param peerId       The sender's FID
+     * @param connectionId The connection ID the request arrived on (use for response routing)
+     * @param requestId    The request ID (use this when responding)
+     * @param serviceName  The service being requested
+     * @param payload      read access to the data on disk
+     */
+    default void onRequestStream(String peerId, long connectionId, long requestId, String serviceName,
+                                 RequestPayload payload) {}
+
+    /**
      * Called when a notify message is received.
      *
      * <p>The payload arrives as one array, so a notify larger than the node's

@@ -23,6 +23,7 @@ import fapi.query.QueryResult;
 import config.Settings;
 import utils.JsonUtils;
 
+import java.io.InputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -344,23 +345,46 @@ public class DiskComponent extends AbstractFapiComponent {
         };
     }
     
+    @Override
+    public boolean streamsUpload(String method) {
+        return "put".equals(method) || "carve".equals(method);
+    }
+
+    /** A put or carve whose content spilled to disk on arrival: stored straight from the stream. */
+    @Override
+    public UnifiedResponse handleUnifiedUpload(FapiRequest request, InputStream binaryData, long length,
+                                               String peerId) {
+        boolean permanent = "carve".equals(request.getMethodName());
+        return handleUnifiedPut(request, binaryData, length, permanent);
+    }
+
     /**
      * 处理统一格式的 PUT/CARVE 请求
-     * Uses streaming store to avoid loading file content into additional buffers.
      */
     private UnifiedResponse handleUnifiedPut(FapiRequest request, byte[] binaryData, boolean permanent) {
+        return handleUnifiedPut(request,
+                binaryData != null ? new java.io.ByteArrayInputStream(binaryData) : null,
+                binaryData != null ? binaryData.length : 0, permanent);
+    }
+
+    /**
+     * Store a put or carve's content in one pass, hashing as it is written, from
+     * memory or from the spill file of a large upload alike.
+     */
+    private UnifiedResponse handleUnifiedPut(FapiRequest request, InputStream content, long length,
+                                             boolean permanent) {
         String requestId = request.getId();
         
-        if (binaryData == null || binaryData.length == 0) {
+        if (content == null || length <= 0) {
             return new UnifiedResponse(
                 errorResponse(requestId, FapiCode.BAD_REQUEST, "File content is required"), 
                 null);
         }
 
-        if (binaryData.length > maxDataSize) {
+        if (length > maxDataSize) {
             return new UnifiedResponse(
                 errorResponse(requestId, FapiCode.BAD_REQUEST,
-                    "File size " + binaryData.length + " exceeds maxDataSize " + maxDataSize),
+                    "File size " + length + " exceeds maxDataSize " + maxDataSize),
                 null);
         }
         
@@ -378,13 +402,11 @@ public class DiskComponent extends AbstractFapiComponent {
                 }
             }
 
-            // Store using streaming path (wraps byte[] in ByteArrayInputStream,
-            // computes hash incrementally and writes to disk in single pass)
             long storeStartMs = System.currentTimeMillis();
-            log.info("disk.{}: storing {} bytes...", permanent ? "carve" : "put", binaryData.length);
-            DiskItem diskItem = diskHandler.storeFromBytes(binaryData, permanent, dataLifeDays);
+            log.info("disk.{}: storing {} bytes...", permanent ? "carve" : "put", length);
+            DiskItem diskItem = diskHandler.storeFromStream(content, length, permanent, dataLifeDays);
             log.info("disk.{}: stored did={} ({} bytes) in {}ms", permanent ? "carve" : "put",
-                    diskItem != null ? diskItem.getId() : null, binaryData.length,
+                    diskItem != null ? diskItem.getId() : null, length,
                     System.currentTimeMillis() - storeStartMs);
 
             // Return success response with metadata
