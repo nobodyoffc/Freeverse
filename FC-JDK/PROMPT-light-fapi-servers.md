@@ -279,7 +279,25 @@ Numbers are big-endian, so keys sort in number order.
    - `EsChainSource` has not been run against a live ES. `UpstreamChainSourceTest` checks
      the upstream against a fake BASE built on `db.fcdsl`.
    - Pending top-ups (`base.unconfirmedCashes`, D2) are not wired yet.
-3. **DOCK on the engine:**
+3. **Done** on the same branch. `fapi.components.dock.DockStore` (LevelDB at
+   `<dbDir>/<mainFid>_<sid>_fapi_dock`), `EsDockPages` (scroll-API migration).
+   `DockComponent` no longer needs ES. Tests: `DockStoreTest`, `DockComponentTest`.
+   - **Cursor shape:** DOCK always appended `id asc` to the sort, even after
+     DockFetchScheduler's `[createTime asc, id asc]`. So ES cursors had **three** values,
+     and the apps saved those. The engine now keeps the declared sort for cursors and
+     orders only up to the first id key; the old cursors resume in place.
+   - **Fixed:** `dock.put` ids were `sha256(sender:recipients:millis)`, so two puts in one
+     millisecond collided and the second overwrote the first (53 of 200 lost in a tight
+     loop). Random bytes are now part of the input; the id format is unchanged.
+   - **Migration:** runs at startup until it completes, then is marked done. A server
+     without ES marks it done at once. The old ES index is left in place for the runner to
+     drop.
+   - `total` is now null for `dock.fetch` / `dock.list` pages (no client reads it).
+   - The Base64 data stays inside the item, as in ES, so a scan decodes the data too.
+     Split it out if big DOCK items become common.
+
+   The original plan for this step:
+   **DOCK on the engine:**
    - the ES → LevelDB migration;
    - the NewcomerBoard range;
    - the cursor format unchanged; test that a cursor saved before the migration resumes

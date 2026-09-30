@@ -42,6 +42,10 @@ import java.util.regex.Pattern;
  * </ul>
  * The sort always ends with the id ascending, so the order is total and a cursor is unique.
  * Missing values sort last in both directions, as in ES.
+ * <p>
+ * Keys after the first id key can never change the order, but they stay in the declared sort:
+ * a cursor has one value per declared key, as ES gave. DOCK appended an id to a sort that
+ * already ended in id, and apps saved those three-value cursors; they must still be accepted.
  */
 public final class FcdslQuery<T> {
 
@@ -225,18 +229,22 @@ public final class FcdslQuery<T> {
     final List<Cond<T>> mustNot = new ArrayList<>();
     /** Only these ids, when not null. */
     final Set<String> ids;
+    /** The sort that orders: the declared sort up to and including its first id key. */
     final List<SortKey<T>> sort;
-    /** Parsed cursor, one value per sort key, or null. */
+    /** The sort as declared, for the shape of cursors. */
+    final List<SortKey<T>> declaredSort;
+    /** Parsed cursor, one value per key of {@link #sort}, or null. */
     final List<Object> after;
     final int size;
     final List<String> fields;
     final List<String> noFields;
 
-    private FcdslQuery(FieldSchema<T> schema, Set<String> ids, List<SortKey<T>> sort, List<Object> after,
-                       int size, List<String> fields, List<String> noFields) {
+    private FcdslQuery(FieldSchema<T> schema, Set<String> ids, List<SortKey<T>> sort, List<SortKey<T>> declaredSort,
+                       List<Object> after, int size, List<String> fields, List<String> noFields) {
         this.schema = schema;
         this.ids = ids;
         this.sort = sort;
+        this.declaredSort = declaredSort;
         this.after = after;
         this.size = size;
         this.fields = fields;
@@ -266,8 +274,8 @@ public final class FcdslQuery<T> {
         }
 
         List<Sort> sortList = f.getSort() != null && !f.getSort().isEmpty() ? f.getSort() : defaultSort;
-        List<SortKey<T>> sort = new ArrayList<>();
-        boolean hasId = false;
+        List<SortKey<T>> declared = new ArrayList<>();
+        int firstId = -1;
         if (sortList != null) {
             for (Sort s : sortList) {
                 if (s == null) continue;
@@ -278,28 +286,32 @@ public final class FcdslQuery<T> {
                 if (order == null || order.equalsIgnoreCase("desc")) desc = true;
                 else if (order.equalsIgnoreCase("asc")) desc = false;
                 else throw FcdslException.bad("Sort order must be asc or desc: " + order);
-                sort.add(new SortKey<>(field, desc));
-                if (field.name().equals(schema.idField())) {
-                    hasId = true;
-                    break; // ids are unique: later keys can never decide
-                }
+                declared.add(new SortKey<>(field, desc));
+                if (firstId < 0 && field.name().equals(schema.idField())) firstId = declared.size() - 1;
             }
         }
-        if (!hasId) sort.add(new SortKey<>(schema.require(schema.idField()), false));
+        if (firstId < 0) {
+            declared.add(new SortKey<>(schema.require(schema.idField()), false));
+            firstId = declared.size() - 1;
+        }
+        // ids are unique: keys after the first id key can never decide the order
+        List<SortKey<T>> sort = new ArrayList<>(declared.subList(0, firstId + 1));
 
         List<Object> after = null;
         if (f.getAfter() != null && !f.getAfter().isEmpty()) {
-            if (f.getAfter().size() != sort.size()) {
+            if (f.getAfter().size() != declared.size()) {
                 throw FcdslException.bad("Cursor has " + f.getAfter().size() + " values but the sort has "
-                        + sort.size() + " keys");
+                        + declared.size() + " keys");
             }
             after = new ArrayList<>();
-            for (int i = 0; i < sort.size(); i++) {
-                after.add(FieldSchema.parseQueryValue(sort.get(i).field, f.getAfter().get(i)));
+            for (int i = 0; i < declared.size(); i++) {
+                Object v = FieldSchema.parseQueryValue(declared.get(i).field, f.getAfter().get(i));
+                if (i < sort.size()) after.add(v);
             }
         }
 
-        FcdslQuery<T> q = new FcdslQuery<>(schema, ids, Collections.unmodifiableList(sort), after,
+        FcdslQuery<T> q = new FcdslQuery<>(schema, ids, Collections.unmodifiableList(sort),
+                Collections.unmodifiableList(declared), after,
                 parseSize(f.getSize(), defaultSize, maxSize), f.getFields(), f.getNoFields());
 
         if (f.getQuery() != null) q.addAll(f.getQuery(), q.must);
@@ -528,8 +540,8 @@ public final class FcdslQuery<T> {
 
     /** The cursor to return for the last item of a page, as strings like ES's sort values. */
     public List<String> cursorOf(T item) {
-        List<String> out = new ArrayList<>(sort.size());
-        for (Object v : sortValues(item)) out.add(FieldSchema.formatCursorValue(v));
+        List<String> out = new ArrayList<>(declaredSort.size());
+        for (SortKey<T> k : declaredSort) out.add(FieldSchema.formatCursorValue(schema.value(k.field, item)));
         return out;
     }
 

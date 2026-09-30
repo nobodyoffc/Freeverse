@@ -406,6 +406,12 @@ public final class IndexedCollection<T> {
         return FcdslQuery.compile(schema, fcdsl, extra, defaultSort, options.defaultSize, options.maxSize);
     }
 
+    /** As {@link #compile(Fcdsl, List, List)}, with this call's own page sizes. */
+    public FcdslQuery<T> compile(Fcdsl fcdsl, List<? extends FcQuery> extra, List<Sort> defaultSort,
+                                 int defaultSize, int maxSize) {
+        return FcdslQuery.compile(schema, fcdsl, extra, defaultSort, defaultSize, Math.min(maxSize, options.maxSize));
+    }
+
     /** Compile and run. See {@link FcdslQuery#compile} for the parameters. */
     public FcdslResult<T> query(Fcdsl fcdsl, List<? extends FcQuery> extra, List<Sort> defaultSort) {
         return query(compile(fcdsl, extra, defaultSort));
