@@ -347,8 +347,41 @@ Numbers are big-endian, so keys sort in number order.
      upstream branch). Publishing a new Service from a light server is step 6.
    - `fudp.LossyRequestResponseTest` failed once in three full runs (1 of 25 carves under
      simulated loss) and passed alone and on the rerun: flaky, not touched here.
-6. **Publishing:** a light server's Service lists only its components; `[ROAD, MAP]` go
-   together; `services` may list the upstream.
+6. **Done** on the same branch. **Publishing:** a light server's Service lists only its
+   components; `[ROAD, MAP]` go together; `services` may list the upstream.
+   - Publishing never needed APIP or ES: `FapiServer.publishService` / `updateService`
+     print the FEIP OpReturn JSON for the owner to send in a TX. Step 5 made the "enter
+     the SID you published" loop look it up through the upstream.
+   - `fapi.LightService` holds the rule. `FapiServer.applyLightServiceRules` applies it on
+     a light server, after input, on both publish and update:
+     - drop BASE;
+     - write bare names in full (`dock` → `DOCK@No1_NrC7`, the form the apps and
+       `ComponentRegistry` match);
+     - add MAP to ROAD;
+     - warn when nothing runnable is left;
+     - offer (not force) to add the upstream's SID to `services`.
+
+     A full server's declaration is left alone.
+   - The upstream's FEIP parser has to index a newly sent Service before the lookup
+     finds it; until then the loop keeps asking.
+   - Tests: `fapi.service.LightServicePublishTest`.
+
+## Status after steps 1–6 (2026-09-30)
+
+All six steps are on branch `light-fapi-fcdsl-engine`, not merged. The full regression set
+above plus the new tests is 148 tests, all passing.
+
+Still open:
+- **Pending top-ups** (`base.unconfirmedCashes`, D2) are not shown or credited early.
+- **Not run for real:** the one-time ES → LevelDB migrations of DISK and DOCK, and
+  `EsChainSource`'s paging against a live ES.
+- **Not tested:** the interactive paths (`--light` first-time setup, the upstream branch
+  of `loadMyService`, the publish prompts).
+- **Checked with the Android app?** No. The code keeps the wire contracts (cursor shapes,
+  responses); only the listed changes are visible.
+- **No FC-AJDK port** of `db.fcdsl`. Its engine avoids Android-missing APIs, but Android
+  has no iq80 LevelDB binding here.
+- `fudp.LossyRequestResponseTest` is flaky under load (one failure in several full runs).
 
 ## Constraints
 

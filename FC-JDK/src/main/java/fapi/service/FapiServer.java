@@ -539,6 +539,7 @@ public class FapiServer implements NodeEventListener {
         data.setOp(OpNames.PUBLISH);
 
         data.inputService(br);
+        applyLightServiceRules(data);
 
         dataOnChain.setData(data);
 
@@ -573,6 +574,7 @@ public class FapiServer implements NodeEventListener {
 
         System.out.println("Update the pricing fields...");
         data.updatePricingFields(br);
+        applyLightServiceRules(data);
 
         dataOnChain.setData(data);
 
@@ -630,6 +632,32 @@ public class FapiServer implements NodeEventListener {
         Menu.anyKeyToContinue(br);
     }
     
+    /** A light server: no local chain (no ES); it reads the chain from an upstream FAPI. */
+    private boolean isLight() {
+        return settings != null && settings.getClient(data.feipData.ServiceType.ES) == null;
+    }
+
+    /**
+     * On a light server, fix the declared components (see {@link fapi.LightService}), and offer to
+     * list the upstream's SID in the Service's services. Listing it is optional.
+     */
+    void applyLightServiceRules(ServiceOpData data) {
+        if (!isLight()) return;
+        List<String> notes = new ArrayList<>();
+        data.setComponents(fapi.LightService.components(data.getComponents(), notes));
+        if (!notes.isEmpty()) {
+            System.out.println("\nThis is a light server:");
+            for (String n : notes) System.out.println("  " + n);
+        }
+        FapiClient upstream = settings.getUpstreamFapiClient();
+        String upstreamSid = upstream != null ? upstream.getServiceSid() : null;
+        if (upstreamSid != null && (data.getServices() == null || !data.getServices().contains(upstreamSid))
+                && br != null && ui.Inputer.askIfYes(br, "List the upstream " + upstreamSid
+                        + " in this service's services? (optional)")) {
+            data.setServices(fapi.LightService.withUpstream(data.getServices(), upstreamSid));
+        }
+    }
+
     private static Feip setFcInfoForService() {
         Feip dataOnChain = new Feip();
         dataOnChain.setType("FEIP");
