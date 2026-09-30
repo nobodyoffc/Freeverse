@@ -24,8 +24,8 @@ class FapiDiskHandlerTest {
     
     @BeforeEach
     void setUp() {
-        // Create handler without Elasticsearch (null client)
-        handler = new FapiDiskHandler(tempDir, null, "test_data");
+        // Create handler without a metadata store (files only)
+        handler = new FapiDiskHandler(tempDir, null);
     }
     
     @Test
@@ -223,8 +223,10 @@ class FapiDiskHandlerTest {
     }
     
     @Test
-    @DisplayName("getIndexName should return correct name")
-    void testGetIndexName() {
-        assertEquals("test_data", handler.getIndexName());
+    @DisplayName("without a metadata store, nothing is kept and usage is zero")
+    void testNoMetaStore() throws IOException {
+        handler.store("x".getBytes(StandardCharsets.UTF_8), false, 1);
+        assertNull(handler.getMetaStore());
+        assertEquals(0, handler.getTotalStorageSize());
     }
 }

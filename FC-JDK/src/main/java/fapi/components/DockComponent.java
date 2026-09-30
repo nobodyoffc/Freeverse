@@ -7,7 +7,7 @@ import data.fcData.DockItem;
 import db.fcdsl.FcdslException;
 import db.fcdsl.FcdslResult;
 import fapi.components.dock.DockStore;
-import fapi.components.dock.EsDockPages;
+import fapi.migrate.EsIndexPages;
 import data.feipData.Service;
 import data.feipData.ServiceType;
 import fapi.AbstractFapiComponent;
@@ -226,7 +226,7 @@ public class DockComponent extends AbstractFapiComponent {
         }
         String indexName = Settings.addSidBriefToName(sid, "dock");
         try {
-            long n = store.migrateFrom(new EsDockPages(esClient, indexName));
+            long n = store.migrateFrom(new EsIndexPages<>(esClient, indexName, DockItem.class));
             log.info("DOCK: migrated {} items from Elasticsearch index {} to {}", n, indexName, dir);
         } catch (Exception e) {
             // Not marked: the next start tries again. New items are stored meanwhile.

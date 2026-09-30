@@ -1,7 +1,5 @@
 package fapi.components.disk;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch.core.GetResponse;
 import core.crypto.Hash;
 import data.fcData.DiskItem;
 import org.slf4j.Logger;
@@ -28,7 +26,7 @@ import java.util.regex.Pattern;
  * - Content-addressable: File name = SHA256x2(content)
  * - Hierarchical storage: {root}/{d[0:2]}/{d[2:4]}/{d[4:6]}/{d[6:8]}/{did}
  * - Atomic writes: Write to temp file, then rename
- * - Elasticsearch metadata storage
+ * - Metadata in a {@link DiskMetaStore}
  * 
  * Note: This is a clean implementation, not reusing managers/DiskManager.
  */
@@ -40,25 +38,23 @@ public class FapiDiskHandler {
     private static final Pattern DID_PATTERN = Pattern.compile("^[a-fA-F0-9]{64}$");
     
     private final Path storageRoot;
-    private final ElasticsearchClient esClient;
-    private final String indexName;
+    private final DiskMetaStore metaStore;
     
     /**
      * Create a new FapiDiskHandler.
      * 
      * @param storageRoot Root directory for file storage
-     * @param esClient Elasticsearch client for metadata
-     * @param indexName Elasticsearch index name for DiskItem documents
+     * @param metaStore where file metadata is kept; null keeps none (files only)
      */
-    public FapiDiskHandler(Path storageRoot, ElasticsearchClient esClient, String indexName) {
+    public FapiDiskHandler(Path storageRoot, DiskMetaStore metaStore) {
         this.storageRoot = storageRoot;
-        this.esClient = esClient;
-        this.indexName = indexName;
+        this.metaStore = metaStore;
         
         // Ensure storage root exists
         try {
             Files.createDirectories(storageRoot);
-            log.info("FapiDiskHandler initialized: storageRoot={}, index={}", storageRoot, indexName);
+            log.info("FapiDiskHandler initialized: storageRoot={}, metadata={}", storageRoot,
+                    metaStore != null ? metaStore.count() + " items" : "none");
         } catch (IOException e) {
             throw new RuntimeException("Failed to create storage root: " + storageRoot, e);
         }
@@ -159,34 +155,17 @@ public class FapiDiskHandler {
     }
     
     /**
-     * Check if file exists and return metadata from Elasticsearch.
+     * Return the file's metadata.
      * 
      * @param did SHA256x2 hash
-     * @return DiskItem from ES, or null if not found
+     * @return the DiskItem, or null if none is kept
      */
     public DiskItem getMetadata(String did) {
         if (!isValidDid(did)) {
             return null;
         }
         
-        if (esClient == null) {
-            log.warn("Elasticsearch client not available");
-            return null;
-        }
-        
-        try {
-            GetResponse<DiskItem> response = esClient.get(g -> g
-                    .index(indexName)
-                    .id(did), DiskItem.class);
-            
-            if (response.found() && response.source() != null) {
-                return response.source();
-            }
-            return null;
-        } catch (IOException e) {
-            log.error("Failed to get metadata from ES: did={}, error={}", did, e.getMessage());
-            return null;
-        }
+        return metaStore == null ? null : metaStore.get(did);
     }
     
     /**
@@ -298,7 +277,7 @@ public class FapiDiskHandler {
             if (existing != null) {
                 return extendExpire(existing, permanent, dataLifeDays);
             }
-            // Metadata unavailable (no ES), construct from known values
+            // No metadata kept for it: construct from known values
             long now = System.currentTimeMillis();
             Long expire = permanent ? null : now + DateUtils.dayToLong(dataLifeDays);
             DiskItem fallback = new DiskItem(did, now, expire, actualSize);
@@ -444,23 +423,12 @@ public class FapiDiskHandler {
     }
     
     /**
-     * Index DiskItem metadata to Elasticsearch.
+     * Record DiskItem metadata.
      */
     private void indexMetadata(DiskItem diskItem) {
-        if (esClient == null) {
-            log.warn("Elasticsearch client not available, skipping index");
-            return;
-        }
-        
-        try {
-            esClient.index(i -> i
-                    .index(indexName)
-                    .id(diskItem.getId())
-                    .document(diskItem));
-            log.debug("Indexed metadata: did={}", diskItem.getId());
-        } catch (IOException e) {
-            log.error("Failed to index metadata: did={}, error={}", diskItem.getId(), e.getMessage(), e);
-        }
+        if (metaStore == null) return;
+        metaStore.put(diskItem);
+        log.debug("Recorded metadata: did={}", diskItem.getId());
     }
     
     // ==================== Getters ====================
@@ -469,8 +437,8 @@ public class FapiDiskHandler {
         return storageRoot;
     }
     
-    public String getIndexName() {
-        return indexName;
+    public DiskMetaStore getMetaStore() {
+        return metaStore;
     }
 
     /**
@@ -499,26 +467,12 @@ public class FapiDiskHandler {
     // ==================== Aggregation ====================
 
     /**
-     * Query Elasticsearch for the total size (in bytes) of all stored DiskItems.
+     * The total size (in bytes) of all stored DiskItems.
      *
-     * @return total bytes stored, or 0 if unavailable
+     * @return total bytes stored, or 0 if no metadata is kept
      */
     public long getTotalStorageSize() {
-        if (esClient == null) return 0;
-        try {
-            var response = esClient.search(s -> s
-                    .index(indexName)
-                    .size(0)
-                    .aggregations("totalSize", a -> a.sum(su -> su.field("size"))),
-                    DiskItem.class);
-            var agg = response.aggregations().get("totalSize");
-            if (agg != null && agg.isSum()) {
-                return (long) agg.sum().value();
-            }
-        } catch (Exception e) {
-            log.error("Failed to query total storage size: {}", e.getMessage());
-        }
-        return 0;
+        return metaStore == null ? 0 : metaStore.totalSize();
     }
 
     // ==================== Result Classes ====================

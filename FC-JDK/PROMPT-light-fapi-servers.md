@@ -302,8 +302,24 @@ Numbers are big-endian, so keys sort in number order.
    - the NewcomerBoard range;
    - the cursor format unchanged; test that a cursor saved before the migration resumes
      correctly.
-4. **DISK on the engine,** with its migration. `DiskSyncManager`'s sync must keep
-   working.
+4. **Done** on the same branch. **DISK on the engine,** with its migration.
+   `DiskSyncManager`'s sync must keep working.
+   - `fapi.components.disk.DiskMetaStore` (LevelDB at
+     `<dbDir>/<mainFid>_<sid>_fapi_disk_meta`); indexes on since (both directions), expire
+     and size. The files stay where they were.
+   - `FapiDiskHandler(storageRoot, DiskMetaStore)` replaces `(storageRoot, esClient,
+     indexName)`. A null store keeps no metadata, as a null ES client did.
+   - The ES sum aggregation for disk usage (sync limit, server menu) is now a running total:
+     summed once at open, then kept on every write.
+   - `disk.list` goes through the engine and applies `fields` / `noFields`. With no sort it
+     is `since desc` as before, but the cursor now also carries the id (`[since, id]`). ES
+     gave a one-value cursor for that default, which could skip files sharing a `since`.
+   - The migration pager is now generic: `fapi.migrate.EsIndexPages<T>`, used by both DISK
+     and DOCK.
+   - Tests: `DiskMetaStoreTest`, and `DiskSyncOverStoreTest`, which syncs 230 files between
+     two real servers over FUDP on localhost (three `disk.list` pages, `disk.get`
+     downloads, then a second cycle that resumes from the saved cursor and finds nothing).
+   - Unchanged, and still true: no DISK code deletes expired files.
 5. **Config and startup without ES** for light servers.
 6. **Publishing:** a light server's Service lists only its components; `[ROAD, MAP]` go
    together; `services` may list the upstream.
