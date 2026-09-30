@@ -118,6 +118,27 @@ public interface FapiComponent {
     }
     
     /**
+     * Whether {@code method} takes a large upload as a stream, through
+     * {@link #handleUnifiedUpload}, rather than as one array. The server asks
+     * this only for a request whose data spilled to disk while it arrived.
+     *
+     * @param method the method name without the component prefix, e.g. "put"
+     */
+    default boolean streamsUpload(String method) {
+        return false;
+    }
+
+    /**
+     * As {@link #handleUnifiedRequest}, with the request's binary data as a
+     * stream of {@code length} bytes, for a method where
+     * {@link #streamsUpload} is true. The stream is closed by the caller.
+     */
+    default UnifiedResponse handleUnifiedUpload(FapiRequest request, java.io.InputStream binaryData, long length,
+                                                String peerId) throws java.io.IOException {
+        throw new UnsupportedOperationException(request.getApi() + " does not take a streamed upload");
+    }
+
+    /**
      * 检查指定方法是否在响应中返回二进制数据
      * 
      * @param method 方法名（不含组件前缀，如 "get"）

@@ -2,6 +2,7 @@ package fudp.handler;
 
 import fudp.message.*;
 import fudp.node.NodeEventListener;
+import fudp.node.RequestPayload;
 import fudp.metrics.MeterDirection;
 import fudp.metrics.MeterRecord;
 import org.slf4j.Logger;
@@ -143,15 +144,26 @@ public class MessageHandler {
      * Handle incoming request (as provider).
      */
     private void handleRequest(String peerId, long connectionId, RequestMessage request) {
-        if (eventListener != null) {
-            eventListener.onRequestReceived(
-                    peerId,
-                    connectionId,
-                    request.getMessageId(),
-                    request.getSid(),
-                    request.getData()
-            );
+        NodeEventListener listener = eventListener;
+        if (listener == null) {
+            request.deleteBackingFile();
+            return;
         }
+        if (request.isFileBacked() && listener.handlesRequestStream()) {
+            // The listener owns the spill file from here and releases it when done.
+            listener.onRequestStream(peerId, connectionId, request.getMessageId(), request.getSid(),
+                    RequestPayload.of(request));
+            return;
+        }
+        byte[] data;
+        try {
+            data = request.getData();
+        } finally {
+            // Once in memory the spill file has served its purpose: delete it now
+            // rather than leave it for the sweeper.
+            request.deleteBackingFile();
+        }
+        listener.onRequestReceived(peerId, connectionId, request.getMessageId(), request.getSid(), data);
     }
 
     /**

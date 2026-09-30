@@ -41,6 +41,7 @@ import fapi.components.DockComponent;
 import fapi.service.tasks.DockCleanupTask;
 import fapi.service.tasks.RechargeTask;
 import fapi.service.tasks.SettleTask;
+import fudp.node.RequestPayload;
 import fudp.node.FudpNode;
 import fudp.node.NodeEventListener;
 import org.slf4j.Logger;
@@ -805,22 +806,148 @@ public class FapiServer implements NodeEventListener {
     private void handleRequest(String peerId, long connectionId, long requestId, String serviceName, byte[] data) {
         REQUEST_CONNECTION.set(connectionId);
         try {
-            handleRequestOnConnection(peerId, connectionId, requestId, serviceName, data);
+            handleRequestOnConnection(peerId, connectionId, requestId, serviceName, data, null);
         } finally {
             REQUEST_CONNECTION.remove();
         }
     }
 
+    /**
+     * A request whose data spilled to disk while it arrived, a large upload: its
+     * header is read from the file and its binary data stays there, so a
+     * component that stores uploads (disk.put) takes it as a stream and it never
+     * becomes one array. Other requests read it into memory as before.
+     */
+    @Override
+    public boolean handlesRequestStream() {
+        return true;
+    }
+
+    @Override
+    public void onRequestStream(String peerId, long connectionId, long requestId, String serviceName,
+                                RequestPayload payload) {
+        try {
+            requestExecutor.submit(() -> {
+                REQUEST_CONNECTION.set(connectionId);
+                try {
+                    handleSpilledRequest(peerId, connectionId, requestId, serviceName, payload);
+                } finally {
+                    REQUEST_CONNECTION.remove();
+                    payload.release();
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            payload.release();
+            throw e;
+        }
+    }
+
+    /** The most header a spilled request may carry: the JSON of a FapiRequest, never large. */
+    private static final int MAX_SPILLED_HEADER = 1024 * 1024;
+
+    private void handleSpilledRequest(String peerId, long connectionId, long requestId, String serviceName,
+                                      RequestPayload payload) {
+        long length = payload.length();
+        FapiRequest fapiRequest = null;
+        int headerLength = -1;
+        try (java.io.DataInputStream in = new java.io.DataInputStream(payload.open())) {
+            if (length >= 5) {
+                headerLength = in.readInt();
+                if (headerLength > 0 && headerLength <= Math.min(MAX_SPILLED_HEADER, length - 4)) {
+                    byte[] header = new byte[headerLength];
+                    in.readFully(header);
+                    if (header[0] == '{') {
+                        fapiRequest = JsonUtils.fromJson(new String(header, StandardCharsets.UTF_8), FapiRequest.class);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not read the header of a {}-byte spilled request from {}: {}", length, peerId,
+                    e.getMessage());
+        }
+        if (fapiRequest == null) {
+            // Not the unified format (the legacy DISK binary protocol, or plain JSON):
+            // the ordinary path, in memory.
+            handleRequestOnConnection(peerId, connectionId, requestId, serviceName, payload.readAll(), null);
+            return;
+        }
+        long offset = 4L + headerLength;
+        handleRequestOnConnection(peerId, connectionId, requestId, serviceName, null,
+                new Spilled(fapiRequest, Upload.spilled(payload, offset, length - offset), length));
+    }
+
+    /** A spilled request, its header decoded: see {@link #onRequestStream}. */
+    private record Spilled(FapiRequest request, Upload upload, long size) {}
+
+    /** A request's binary data: in memory, or a region of a spill file. */
+    private static final class Upload {
+        private final byte[] bytes;
+        private final RequestPayload payload;
+        private final long offset;
+        private final long length;
+
+        private Upload(byte[] bytes, RequestPayload payload, long offset, long length) {
+            this.bytes = bytes;
+            this.payload = payload;
+            this.offset = offset;
+            this.length = length;
+        }
+
+        static Upload of(byte[] bytes) {
+            return new Upload(bytes, null, 0, bytes.length);
+        }
+
+        static Upload spilled(RequestPayload payload, long offset, long length) {
+            return new Upload(null, payload, offset, length);
+        }
+
+        long length() {
+            return length;
+        }
+
+        boolean onDisk() {
+            return payload != null;
+        }
+
+        java.io.InputStream open() throws java.io.IOException {
+            if (bytes != null) return new java.io.ByteArrayInputStream(bytes);
+            java.io.InputStream in = payload.open();
+            try {
+                in.skipNBytes(offset);
+            } catch (java.io.IOException e) {
+                in.close();
+                throw e;
+            }
+            return in;
+        }
+
+        /** The data as one array, for a component that does not take a stream. */
+        byte[] bytes() throws java.io.IOException {
+            if (bytes != null) return bytes;
+            if (length > Integer.MAX_VALUE - 8) {
+                throw new java.io.IOException("Upload too large to hold in memory: " + length);
+            }
+            try (java.io.InputStream in = open()) {
+                return in.readNBytes((int) length);
+            }
+        }
+    }
+
     private void handleRequestOnConnection(String peerId, long connectionId, long requestId, String serviceName,
-                                           byte[] data) {
+                                           byte[] data, Spilled spilled) {
         long startMs = System.currentTimeMillis();
         try {
             FapiRequest fapiRequest;
             byte[] binaryData = null;
-            int requestSize = data.length;
+            Upload upload = null;
+            long requestSize = spilled != null ? spilled.size() : data.length;
             
+            if (spilled != null) {
+                fapiRequest = spilled.request();
+                upload = spilled.upload();
+            }
             // 尝试使用统一协议解码
-            if (UnifiedCodec.isUnifiedProtocol(data)) {
+            else if (UnifiedCodec.isUnifiedProtocol(data)) {
                 UnifiedRequest unified = UnifiedCodec.decodeRequest(data);
                 fapiRequest = unified.request();
                 binaryData = unified.binaryData();
@@ -836,6 +963,8 @@ public class FapiServer implements NodeEventListener {
                 fapiRequest = JsonUtils.fromJson(json, FapiRequest.class);
             }
             
+            if (upload == null && binaryData != null) upload = Upload.of(binaryData);
+
             if (fapiRequest == null) {
                 sendErrorResponse(peerId, connectionId, requestId, FapiCode.BAD_REQUEST, "Invalid request format");
                 return;
@@ -854,11 +983,11 @@ public class FapiServer implements NodeEventListener {
             }
             
             // 验证 dataSize 与实际二进制数据大小是否匹配
-            if (fapiRequest.hasBinaryData() && binaryData != null) {
-                if (fapiRequest.getDataSize() != binaryData.length) {
+            if (fapiRequest.hasBinaryData() && upload != null) {
+                if (fapiRequest.getDataSize() != upload.length()) {
                     sendErrorResponse(peerId, connectionId, requestId, FapiCode.BAD_REQUEST, 
                         "dataSize mismatch: declared=" + fapiRequest.getDataSize() + 
-                        ", actual=" + binaryData.length);
+                        ", actual=" + upload.length());
                     return;
                 }
             }
@@ -866,9 +995,9 @@ public class FapiServer implements NodeEventListener {
             // Binary uploads (disk.put/carve etc.) are logged at INFO so their
             // arrival — after the FUDP stream fully reassembled — is visible
             // server-side; ordinary small requests stay at DEBUG.
-            if (binaryData != null && binaryData.length > 0) {
+            if (upload != null && upload.length() > 0) {
                 log.info("Received {} from {}: {} bytes binary payload (requestId={})",
-                        fapiRequest.getApi(), peerId, binaryData.length, requestId);
+                        fapiRequest.getApi(), peerId, upload.length(), requestId);
             } else {
                 log.debug("Received {} from {} ({} bytes, requestId={})",
                         fapiRequest.getApi(), peerId, requestSize, requestId);
@@ -888,7 +1017,7 @@ public class FapiServer implements NodeEventListener {
             // 预校验费用
             if (balanceManager != null) {
                 // 估算响应大小：如果有二进制数据用实际大小，否则假设最小响应 1KB
-                long estimatedResponseSize = (binaryData != null && binaryData.length > 0) ? binaryData.length : 1024;
+                long estimatedResponseSize = (upload != null && upload.length() > 0) ? upload.length() : 1024;
                 long estimatedFee = balanceManager.estimateFee(requestSize, estimatedResponseSize);
                 
                 // 检查 maxCost 限制
@@ -919,7 +1048,7 @@ public class FapiServer implements NodeEventListener {
             }
             
             // 路由到组件处理（使用统一请求格式）
-            UnifiedResponse unifiedResponse = routeUnifiedRequest(fapiRequest, binaryData, peerId);
+            UnifiedResponse unifiedResponse = routeUnifiedRequest(fapiRequest, upload, peerId);
             
             // 填充余额信息
             fillBalanceInfo(unifiedResponse.response(), peerId);
@@ -1015,7 +1144,7 @@ public class FapiServer implements NodeEventListener {
                     log.debug("Sending response to {}: requestId={}, statusCode={}, size={}",
                         peerId, requestId, statusCode, responseData.length);
                     fudpNode.respond(peerId, connectionId, requestId, statusCode, responseData);
-                    if (binaryData != null && binaryData.length > 0) {
+                    if (upload != null && upload.length() > 0) {
                         log.info("Handled {} from {} in {}ms: code={}, responseSize={} (requestId={})",
                             fapiRequest.getApi(), peerId, System.currentTimeMillis() - startMs,
                             fapiResponse.getCode(), responseData.length, requestId);
@@ -1034,11 +1163,11 @@ public class FapiServer implements NodeEventListener {
     /**
      * 路由统一请求到组件
      * @param request FAPI请求
-     * @param binaryData 可选的二进制数据
+     * @param upload 可选的二进制数据，在内存或磁盘上
      * @param peerId 请求方FID
      * @return 统一响应（包含 FapiResponse 和可选的二进制数据）
      */
-    private UnifiedResponse routeUnifiedRequest(FapiRequest request, byte[] binaryData, String peerId) {
+    private UnifiedResponse routeUnifiedRequest(FapiRequest request, Upload upload, String peerId) {
         String requestId = request.getId();
         String api = request.getApi();
         String componentName = request.getComponentName();
@@ -1063,7 +1192,15 @@ public class FapiServer implements NodeEventListener {
             }
             
             // 执行请求（使用统一接口）
-            UnifiedResponse response = component.handleUnifiedRequest(request, binaryData, peerId);
+            UnifiedResponse response;
+            if (upload != null && upload.onDisk() && component.streamsUpload(request.getMethodName())) {
+                // A large upload goes from the spill file to the component in one pass.
+                try (java.io.InputStream in = upload.open()) {
+                    response = component.handleUnifiedUpload(request, in, upload.length(), peerId);
+                }
+            } else {
+                response = component.handleUnifiedRequest(request, upload != null ? upload.bytes() : null, peerId);
+            }
             
             return response;
             

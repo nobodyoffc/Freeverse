@@ -1304,9 +1304,9 @@ public class FudpNode implements Protocol.PacketListener {
                 }
                 log.debug("[FudpNode] Routing file-backed REQUEST from {} (messageId={}, sid={}, dataLen={}, spill={})",
                         peerId, msgId, sid, dataLength, message.file().getName());
-                // The handler owns the temp file; it is reaped by the spill sweeper if the
-                // handler never materialises/deletes it (byte[]-based handlers self-clean
-                // once they call getData(); streaming handlers should delete when done).
+                // The message handler deletes the temp file once it has read it into
+                // memory; a listener taking it as a stream (onRequestStream) owns it and
+                // releases it when done. The spill sweeper reclaims any it never releases.
                 handedOff = true;
                 messageHandler.handleDecodedMessage(peerId, ctx.connectionId(), request,
                         (int) Math.min(Integer.MAX_VALUE, total));
