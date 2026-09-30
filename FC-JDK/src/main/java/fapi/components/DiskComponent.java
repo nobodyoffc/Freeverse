@@ -202,16 +202,16 @@ public class DiskComponent extends AbstractFapiComponent {
     }
 
     /**
-     * Resolve a service declared on chain from the local service index.
+     * Resolve a service declared on chain, through the server's chain source.
      */
     public Service resolveServiceOnChain(String sid) {
-        if (sid == null || sid.isEmpty() || queryExecutor == null) return null;
+        if (sid == null || sid.isEmpty() || server == null) return null;
+        fapi.chain.ChainSource chain = server.getChainSource();
+        if (chain == null) return null;
         try {
-            Map<String, Service> map = queryExecutor.executeIdsQuery(
-                    constants.IndicesNames.SERVICE, Service.class, List.of(sid));
-            return map != null ? map.get(sid) : null;
-        } catch (Exception e) {
-            log.warn("Failed to resolve service {} from local index: {}", sid, e.getMessage());
+            return chain.services(List.of(sid)).get(sid);
+        } catch (fapi.chain.ChainUnavailableException e) {
+            log.warn("Failed to resolve service {} on chain: {}", sid, e.getMessage());
             return null;
         }
     }

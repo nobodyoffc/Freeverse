@@ -261,8 +261,24 @@ Numbers are big-endian, so keys sort in number order.
    - Recipients as an array field, and several recipients with ids removed if repeated.
    - The examined-row limit returns 501, never a short page.
    - 400 for unknown fields.
-2. **`ChainSource`:** move the ES code behind it and add the upstream implementation.
-   `RechargeScanner` and `FapiServer` stop holding `esClient` directly.
+2. **Done** on the same branch. **`ChainSource`:** move the ES code behind it and add the
+   upstream implementation. `FapiServer` stops holding `esClient` directly.
+   - `fapi.chain`: `ChainSource`, `EsChainSource`, `UpstreamChainSource`, `ChainSources`
+     (ES if configured, else a `FAPI` / `FAPI_No1_NrC7` client), `Via`,
+     `ChainUnavailableException`.
+   - Wired into `FapiServer`: best height, recharge cashes and via, valid cashes for the
+     payment-required helper; and into `DiskComponent.resolveServiceOnChain`.
+   - Fixed on the way: the cash scan read one page of 1000 and moved on, so cashes cut off
+     at the page's last height were never credited. Both sources now read every page. A
+     failed read throws instead of looking like "no cashes", so the scan height can't
+     advance past cashes nobody saw.
+   - `RechargeScanner` is dead code: nothing constructs it. Only its nested `CashInfo` is
+     used. Left in place.
+   - Settlement (`SettleTask`) only records distributions; it broadcasts nothing, so the
+     chain source needs no broadcast.
+   - `EsChainSource` has not been run against a live ES. `UpstreamChainSourceTest` checks
+     the upstream against a fake BASE built on `db.fcdsl`.
+   - Pending top-ups (`base.unconfirmedCashes`, D2) are not wired yet.
 3. **DOCK on the engine:**
    - the ES → LevelDB migration;
    - the NewcomerBoard range;
