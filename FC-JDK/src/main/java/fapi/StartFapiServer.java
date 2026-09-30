@@ -47,14 +47,21 @@ public class StartFapiServer {
     private static FapiServer fapiServer;
     private static Appender<ILoggingEvent> detachedConsoleAppender;
 
+    /**
+     * @param args {@code --light}: when this server's settings are first created, make it a light
+     *             server, which reads the chain from an upstream FAPI instead of a local ES
+     */
     public static void main(String[] args) {
-        Menu.welcome(SERVER_NAME);
+        boolean light = java.util.Arrays.asList(args).contains("--light");
+        Menu.welcome(SERVER_NAME + (light ? " (light)" : ""));
         br = new BufferedReader(new InputStreamReader(System.in));
         
         try {
             while (true) {
                 try {
-                    ServiceBootstrapStarter starter = ServiceBootstrapStarter.forFapiServer()
+                    ServiceBootstrapStarter starter = (light
+                            ? ServiceBootstrapStarter.forLightFapiServer()
+                            : ServiceBootstrapStarter.forFapiServer())
                         .setBr(br);
                     
                     fapiServer = ServiceBootstrap.bootstrapServer(starter);

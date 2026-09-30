@@ -562,11 +562,14 @@ public class Settings {
     @Nullable
     public Service loadMyService(String sid, byte[] symkey, Configure config) {
         ApipClient apipClient = (ApipClient) getClient(APIP);
+        ElasticsearchClient esClient = (ElasticsearchClient) getClient(ES);
         if(apipClient!=null) {
             service = getMyService(sid, symkey, config, br, apipClient, this.serverType);
-        }else {
-            ElasticsearchClient esClient = (ElasticsearchClient) getClient(ES);
+        }else if(esClient!=null) {
             service = getMyService(sid, symkey, config, br, esClient, this.serverType);
+        }else {
+            // A light server: no local chain, so its service is read from the upstream FAPI
+            service = getMyService(sid, symkey, config, br, null, null, getUpstreamFapiClient(), this.serverType);
         }
 
         if(service==null){
@@ -784,18 +787,29 @@ public class Settings {
         return getMyService(sid, symkey, config, br, null,esClient, serviceType);
     }
     public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ApipClient apipClient, ElasticsearchClient esClient, ServiceType serviceType) {
+        return getMyService(sid, symkey, config, br, apipClient, esClient, null, serviceType);
+    }
+
+    /**
+     * @param upstream used when there is neither APIP nor ES: a light server reads the chain
+     *                 from an upstream FAPI server
+     */
+    public Service getMyService(String sid, byte[] symkey, Configure config, BufferedReader br, ApipClient apipClient,
+                                ElasticsearchClient esClient, FapiClient upstream, ServiceType serviceType) {
         System.out.println("Get my service...");
         Service service = null;
         if(sid ==null) {
-            if(mainFid!=null)
+            if(mainFid==null) System.out.println("Dealer is not set. Please set mainFid first.");
+            else if(apipClient==null && esClient==null && upstream!=null)
+                service = chooseDealerServiceFromUpstream(mainFid, serviceType, upstream);
+            else
                 service = config.chooseDealerService(mainFid, symkey, serviceType, esClient, apipClient);
-            else System.out.println("Dealer is not set. Please set mainFid first.");
         }else {
-            service = getServiceBySid(sid, apipClient, esClient, service);
+            service = getServiceBySid(sid, apipClient, esClient, upstream, service);
         }
 
         if(service==null){
-            service = askIfPublishNewService(sid, symkey, br, serviceType, apipClient, esClient, this);
+            service = askIfPublishNewService(sid, symkey, br, serviceType, apipClient, esClient, upstream, this);
             if(service==null)return null;
         }
 
@@ -811,7 +825,7 @@ public class Settings {
         return service;
     }
 
-    private static Service askIfPublishNewService(String sid, byte[] symkey, BufferedReader br, ServiceType serviceType, ApipClient apipClient, ElasticsearchClient esClient, Settings settings) {
+    private static Service askIfPublishNewService(String sid, byte[] symkey, BufferedReader br, ServiceType serviceType, ApipClient apipClient, ElasticsearchClient esClient, FapiClient upstream, Settings settings) {
         Service service = null;
         if(askIfYes(br,"Publish a new service?")) {
             switch (serviceType) {
@@ -827,7 +841,7 @@ public class Settings {
             while (true){
                 sid = Inputer.inputString(br,"Input the SID of the service you published:");
                 if(!Hex.isHex32(sid))continue;
-                service = getServiceBySid(sid, apipClient, esClient, service);
+                service = getServiceBySid(sid, apipClient, esClient, upstream, service);
                 if(service!=null)return service;
                 else System.out.println("Failed to get the service with SID: "+sid);
             }
@@ -836,12 +850,44 @@ public class Settings {
     }
 
     @Nullable
-    private static Service getServiceBySid(String sid, ApipClient apipClient, ElasticsearchClient esClient, Service service) {
+    /** The upstream FAPI client of a light server, if one is configured. */
+    public FapiClient getUpstreamFapiClient() {
+        if (getClient(FAPI) instanceof FapiClient c) return c;
+        if (getClient(FAPI_No1_NrC7) instanceof FapiClient c) return c;
+        return null;
+    }
+
+    /** The dealer's services of this type, found through the upstream; the user picks one if several. */
+    private Service chooseDealerServiceFromUpstream(String dealer, ServiceType type, FapiClient upstream) {
+        data.apipData.Fcdsl fcdsl = new data.apipData.Fcdsl();
+        fcdsl.addNewQuery().addNewTerms().addNewFields(constants.FieldNames.DEALER).addNewValues(dealer);
+        fcdsl.addSize(100);
+        List<Service> all = upstream.entitySearch(IndicesNames.SERVICE, fcdsl, Service.class);
+        List<Service> mine = new ArrayList<>();
+        if (all != null) {
+            for (Service s : all) {
+                ServiceType t = s.fetchServiceType();
+                if (t == type || (ServiceType.isFapi(type) && ServiceType.isFapi(t))) mine.add(s);
+            }
+        }
+        if (mine.isEmpty()) {
+            System.out.println("No " + type + " service of " + dealer + " found through the upstream.");
+            return null;
+        }
+        if (mine.size() == 1) return mine.get(0);
+        return Configure.selectService(mine);
+    }
+
+    private static Service getServiceBySid(String sid, ApipClient apipClient, ElasticsearchClient esClient, FapiClient upstream, Service service) {
         try {
             if(apipClient !=null){
                 service = apipClient.serviceById(sid);
-            } else if(esClient !=null)
-                service = EsUtils.getById(esClient, IndicesNames.SERVICE, sid,Service.class);
+            } else if(esClient !=null) {
+                service = EsUtils.getById(esClient, IndicesNames.SERVICE, sid, Service.class);
+            } else if(upstream !=null) {
+                Map<String, Service> found = upstream.entityByIds(IndicesNames.SERVICE, Service.class, sid);
+                service = found == null ? null : found.get(sid);
+            }
         } catch (IOException e) {
             System.out.println("Failed to get service from ES.");
                     return null;

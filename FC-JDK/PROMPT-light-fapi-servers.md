@@ -320,7 +320,33 @@ Numbers are big-endian, so keys sort in number order.
      two real servers over FUDP on localhost (three `disk.list` pages, `disk.get`
      downloads, then a second cycle that resumes from the saved cursor and finds nothing).
    - Unchanged, and still true: no DISK code deletes expired files.
-5. **Config and startup without ES** for light servers.
+5. **Done** on the same branch. **Config and startup without ES** for light servers.
+   - **Start:** `StartFapiServer --light`. When the server's settings are first created,
+     its one module is an upstream FAPI (`FAPI_No1_NrC7`) instead of NASA_RPC + ES. The
+     existing FAPI account flow asks for the upstream and connects a `FapiClient` on its
+     own ephemeral-port node. After that, the saved settings decide; the flag does nothing
+     for a SID that already has settings.
+   - **Light = no ES client.** `ServiceBootstrap.resolveComponentTypes` then:
+     - drops BASE;
+     - adds MAP when ROAD is there;
+     - refuses to start when nothing runnable is left.
+
+     A full server merges its components as before.
+   - **Own Service:** `Settings.loadMyService` / `getMyService` read it through the
+     upstream when there's neither APIP nor ES (by SID, or the dealer's services).
+     `Settings.getUpstreamFapiClient()` gives that client.
+   - **Paying the upstream:** the upstream bills the light server. `ChainSources` wraps the
+     module client with `FapiClient.withSettings(settings)`, so it gets an
+     `AutoRechargeManager` (on by default) paying from the dealer key.
+   - **Tests:** `fapi.LightServerTest`.
+     - The component rules.
+     - A real upstream FAPI server whose stand-in BASE answers from `db.fcdsl`. A light
+       server with no ES starts against it over FUDP and credits a top-up it only knows
+       from the upstream, with the via share from the OpReturn.
+   - **Not tested:** the interactive setup (the `--light` prompts, and `loadMyService`'s
+     upstream branch). Publishing a new Service from a light server is step 6.
+   - `fudp.LossyRequestResponseTest` failed once in three full runs (1 of 25 carves under
+     simulated loss) and passed alone and on the rerun: flaky, not touched here.
 6. **Publishing:** a light server's Service lists only its components; `[ROAD, MAP]` go
    together; `services` may list the upstream.
 

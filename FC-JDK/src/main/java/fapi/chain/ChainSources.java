@@ -5,6 +5,8 @@ import config.Settings;
 import data.feipData.ServiceType;
 import fapi.client.FapiClient;
 
+import java.util.function.Supplier;
+
 /** Picks the chain source a server's settings provide. */
 public final class ChainSources {
 
@@ -17,11 +19,34 @@ public final class ChainSources {
     public static ChainSource fromSettings(Settings settings) {
         if (settings == null) return null;
         if (settings.getClient(ServiceType.ES) instanceof ElasticsearchClient es) return new EsChainSource(es);
-        for (ServiceType type : new ServiceType[]{ServiceType.FAPI, ServiceType.FAPI_No1_NrC7}) {
-            if (settings.getClient(type) instanceof FapiClient) {
-                return new UpstreamChainSource(() -> (FapiClient) settings.getClient(type), type.name());
-            }
+        FapiClient upstream = settings.getUpstreamFapiClient();
+        if (upstream == null) return null;
+        String name = upstream.getServerUrl() != null ? upstream.getServerUrl() : upstream.getServiceSid();
+        return new UpstreamChainSource(new PayingClient(settings), name);
+    }
+
+    /**
+     * The settings' upstream client, made able to pay: the upstream bills this server, so the
+     * client must top up its balance there on its own. Rebuilt when the module reconnects.
+     */
+    static final class PayingClient implements Supplier<FapiClient> {
+        private final Settings settings;
+        private FapiClient base;
+        private FapiClient paying;
+
+        PayingClient(Settings settings) {
+            this.settings = settings;
         }
-        return null;
+
+        @Override
+        public synchronized FapiClient get() {
+            FapiClient current = settings.getUpstreamFapiClient();
+            if (current == null) return null;
+            if (current != base) {
+                base = current;
+                paying = current.getAutoRechargeManager() != null ? current : current.withSettings(settings);
+            }
+            return paying;
+        }
     }
 }

@@ -73,6 +73,23 @@ public class ServiceBootstrapStarter {
     }
     
     /**
+     * A light FAPI server: no local chain (no ES, no NASA_RPC). It runs only CALL, DISK, DOCK,
+     * ROAD or MAP, and reads what it needs from the chain through an upstream FAPI server, which
+     * is configured as its one module. The components come from its on-chain Service.
+     * <p>
+     * The modules matter only when a server's settings are first created; after that, the saved
+     * settings decide.
+     */
+    public static ServiceBootstrapStarter forLightFapiServer() {
+        ServiceBootstrapStarter config = new ServiceBootstrapStarter();
+        config.serviceType = ServiceType.FAPI_No1_NrC7;
+        config.serviceName = "Light FAPI Server";
+        config.componentTypes = new String[0];
+        config.modules.add(new Module(Service.class.getSimpleName(), ServiceType.FAPI_No1_NrC7.name()));
+        return config;
+    }
+    
+    /**
      * 创建FAPI客户端配置
      */
     public static ServiceBootstrapStarter forFapiClient() {
