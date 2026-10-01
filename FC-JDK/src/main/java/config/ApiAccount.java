@@ -115,7 +115,10 @@ public class ApiAccount {
                 case ES -> connectEs(symkey);
                 case REDIS -> connectRedis();
                 case DISK -> connectDisk(apiProvider, symkey, apipClient, br, null);
-                case FAPI, FAPI_No1_NrC7 -> connectFapi(apiProvider, fudpNode, br);
+                // Without a node (e.g. reconnecting a saved account), make one from the account's key
+                case FAPI, FAPI_No1_NrC7 -> fudpNode != null
+                        ? connectFapi(apiProvider, fudpNode, br)
+                        : connectFapi(apiProvider, symkey, br);
                 default -> connectOtherApi(apiProvider, symkey);
             };
         }catch (Exception e){

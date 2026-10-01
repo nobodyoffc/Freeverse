@@ -8,7 +8,6 @@ import constants.OpNames;
 import data.feipData.Feip;
 import data.feipData.Service;
 import data.feipData.ServiceOpData;
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.feipData.ServiceType;
 import fapi.ComponentRegistry;
 import fapi.FapiBalanceManager;
@@ -29,17 +28,16 @@ import fapi.monitor.MetricsReport;
 import fapi.recharge.RechargeScanner.CashInfo;
 import fapi.security.RequestValidator;
 import fapi.security.ValidationResult;
-import co.elastic.clients.elasticsearch.core.SearchRequest;
-import co.elastic.clients.elasticsearch.core.SearchResponse;
-import co.elastic.clients.elasticsearch.core.search.Hit;
-import co.elastic.clients.elasticsearch._types.SortOrder;
-import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import data.fchData.Cash;
 import core.fch.TxCreator;
 import utils.FchUtils;
 import fapi.components.DockComponent;
 import fapi.service.tasks.DockCleanupTask;
 import fapi.service.tasks.RechargeTask;
+import fapi.chain.ChainSource;
+import fapi.chain.ChainSources;
+import fapi.chain.ChainUnavailableException;
+import fapi.chain.Via;
 import fapi.service.tasks.SettleTask;
 import fudp.node.RequestPayload;
 import fudp.node.FudpNode;
@@ -98,6 +96,7 @@ public class FapiServer implements NodeEventListener {
     /** 充值扫描器（保留兼容性） */
     @Deprecated
     private fapi.recharge.RechargeScanner rechargeScanner;
+    private ChainSource chainSource;
     
     // ==================== 区块事件调度 ====================
     /** 区块事件调度器 */
@@ -248,15 +247,15 @@ public class FapiServer implements NodeEventListener {
             return;
         }
         
-        // 获取 ES 客户端
-        ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-        if (esClient == null) {
-            log.warn("Cannot initialize BlockEventDispatcher: ElasticsearchClient is not available");
+        ChainSource chain = getChainSource();
+        if (chain == null) {
+            log.warn("Cannot initialize BlockEventDispatcher: no chain source (neither Elasticsearch nor an upstream FAPI)");
             return;
         }
+        log.info("Reading the chain from {}", chain.describe());
         
         // 创建区块高度获取函数
-        java.util.function.Supplier<Long> heightSupplier = () -> queryBestBlockHeight(esClient);
+        java.util.function.Supplier<Long> heightSupplier = this::queryBestBlockHeight;
         
         // 创建区块事件调度器
         this.blockEventDispatcher = new BlockEventDispatcher(heightSupplier);
@@ -265,9 +264,9 @@ public class FapiServer implements NodeEventListener {
         
         // 1. 注册充值扫描任务
         java.util.function.Function<Long, List<CashInfo>> cashQueryFunction = 
-                (fromHeight) -> queryNewCashesForDealer(esClient, dealer, fromHeight);
+                (fromHeight) -> queryNewCashesForDealer(chain, dealer, fromHeight);
         java.util.function.Function<List<CashInfo>, Map<String, String>> viaQueryFunction = 
-                (cashes) -> queryViaFromOpReturns(esClient, cashes);
+                (cashes) -> queryViaFromOpReturns(chain, cashes);
         
         RechargeTask rechargeTask = new RechargeTask(
                 balanceManager, dealer, 1, cashQueryFunction, viaQueryFunction);
@@ -341,7 +340,7 @@ public class FapiServer implements NodeEventListener {
         // 如果是首次启动（lastOrderScanHeight 为 null），立即执行一次充值扫描
         if (balanceManager.getLastOrderScanHeight() == null) {
             log.info("First time startup detected (lastOrderScanHeight is null), triggering initial order scan...");
-            Long currentHeight = queryBestBlockHeight(esClient);
+            Long currentHeight = queryBestBlockHeight();
             if (currentHeight != null && currentHeight > 0) {
                 rechargeTask.execute(currentHeight, 0);
                 log.info("Initial order scan completed at height {}", currentHeight);
@@ -356,124 +355,44 @@ public class FapiServer implements NodeEventListener {
     }
     
     /**
-     * 查询当前最佳区块高度
+     * The chain source: the local Elasticsearch on a full server, the upstream BASE on a light one.
+     * Null when the settings provide neither.
      */
-    private Long queryBestBlockHeight(ElasticsearchClient esClient) {
+    public synchronized ChainSource getChainSource() {
+        if (chainSource == null) chainSource = ChainSources.fromSettings(settings);
+        return chainSource;
+    }
+
+    /** 查询当前最佳区块高度; null when the chain source can't tell. */
+    private Long queryBestBlockHeight() {
+        ChainSource chain = getChainSource();
+        if (chain == null) return null;
         try {
-            co.elastic.clients.elasticsearch.core.SearchRequest.Builder searchBuilder = 
-                    new co.elastic.clients.elasticsearch.core.SearchRequest.Builder();
-            searchBuilder.index("block");
-            searchBuilder.size(1);
-            searchBuilder.sort(s -> s.field(f -> f.field("height").order(
-                    co.elastic.clients.elasticsearch._types.SortOrder.Desc)));
-            
-            co.elastic.clients.elasticsearch.core.SearchResponse<data.fchData.Block> searchResponse = 
-                    esClient.search(searchBuilder.build(), data.fchData.Block.class);
-            
-            if (searchResponse.hits() != null && searchResponse.hits().hits() != null 
-                    && !searchResponse.hits().hits().isEmpty()) {
-                data.fchData.Block block = searchResponse.hits().hits().get(0).source();
-                if (block != null && block.getHeight() != null) {
-                    return block.getHeight();
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error querying best block height", e);
+            return chain.bestBlock().getHeight();
+        } catch (ChainUnavailableException e) {
+            log.warn("Best block unavailable: {}", e.getMessage());
+            return null;
         }
-        return null;
     }
     
     /**
-     * 批量查询 OpReturn 获取渠道信息
+     * 批量查询 OpReturn 获取渠道信息: cashId → via FID.
      */
-    private Map<String, String> queryViaFromOpReturns(ElasticsearchClient esClient, List<CashInfo> cashList) {
+    private Map<String, String> queryViaFromOpReturns(ChainSource chain, List<CashInfo> cashList) {
         Map<String, String> viaMap = new HashMap<>();
-        
-        if (esClient == null || cashList == null || cashList.isEmpty()) {
-            return viaMap;
-        }
-        
-        // 收集所有 birthTxId
+        if (cashList == null || cashList.isEmpty()) return viaMap;
         List<String> txIds = cashList.stream()
                 .map(CashInfo::getBirthTxId)
                 .filter(java.util.Objects::nonNull)
                 .distinct()
                 .toList();
-        
-        if (txIds.isEmpty()) {
-            return viaMap;
+        if (txIds.isEmpty()) return viaMap;
+        Map<String, String> opReturns = chain.opReturns(txIds);
+        for (CashInfo cash : cashList) {
+            String via = Via.parse(opReturns.get(cash.getBirthTxId()));
+            if (via != null) viaMap.put(cash.getCashId(), via);
         }
-        
-        try {
-            // 批量查询 OpReturn
-            int batchSize = 100;
-            for (int i = 0; i < txIds.size(); i += batchSize) {
-                List<String> batch = txIds.subList(i, Math.min(i + batchSize, txIds.size()));
-                
-                co.elastic.clients.elasticsearch.core.SearchRequest.Builder searchBuilder = 
-                        new co.elastic.clients.elasticsearch.core.SearchRequest.Builder();
-                searchBuilder.index(constants.IndicesNames.OPRETURN);
-                searchBuilder.size(batch.size());
-                searchBuilder.query(q -> q.ids(ids -> ids.values(batch)));
-                
-                co.elastic.clients.elasticsearch.core.SearchResponse<data.fchData.OpReturn> searchResponse = 
-                        esClient.search(searchBuilder.build(), data.fchData.OpReturn.class);
-                
-                if (searchResponse.hits() != null && searchResponse.hits().hits() != null) {
-                    for (co.elastic.clients.elasticsearch.core.search.Hit<data.fchData.OpReturn> hit : 
-                            searchResponse.hits().hits()) {
-                        data.fchData.OpReturn opReturn = hit.source();
-                        if (opReturn != null && opReturn.getOpReturn() != null) {
-                            String via = parseViaFromOpReturn(opReturn.getOpReturn());
-                            if (via != null) {
-                                // 找到对应的 cashId
-                                for (CashInfo cash : cashList) {
-                                    if (hit.id() != null && hit.id().equals(cash.getBirthTxId())) {
-                                        viaMap.put(cash.getCashId(), via);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error querying OpReturns for via", e);
-        }
-        
         return viaMap;
-    }
-    
-    /**
-     * 从 OpReturn 内容解析 via 字段
-     */
-    private String parseViaFromOpReturn(String opReturnContent) {
-        if (opReturnContent == null || opReturnContent.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> json = new Gson().fromJson(opReturnContent, Map.class);
-            if (json != null && json.containsKey("via")) {
-                Object via = json.get("via");
-                if (via instanceof String && isValidFid((String) via)) {
-                    return (String) via;
-                }
-            }
-        } catch (Exception e) {
-            // 不是 JSON 格式，忽略
-        }
-        
-        return null;
-    }
-    
-    /**
-     * 简单验证 FID 格式
-     */
-    private boolean isValidFid(String fid) {
-        return fid != null && fid.length() >= 26 && fid.length() <= 35 
-                && (fid.startsWith("F") || fid.startsWith("1") || fid.startsWith("3"));
     }
     
     /**
@@ -499,93 +418,36 @@ public class FapiServer implements NodeEventListener {
     }
     
     /**
-     * 查询指定高度之后发送到 dealer 地址的新 Cash
+     * 查询指定高度之后发送到 dealer 地址的新 Cash.
+     * Throws {@link ChainUnavailableException} when the chain can't answer, so the scan height
+     * is not advanced past cashes that were never seen.
      */
-    private List<fapi.recharge.RechargeScanner.CashInfo> queryNewCashesForDealer(
-            ElasticsearchClient esClient, String dealer, Long fromHeight) {
-        List<fapi.recharge.RechargeScanner.CashInfo> result = new ArrayList<>();
-        
-        try {
-            co.elastic.clients.elasticsearch.core.SearchRequest.Builder searchBuilder = 
-                    new co.elastic.clients.elasticsearch.core.SearchRequest.Builder();
-            searchBuilder.index("cash");
-            searchBuilder.size(1000);  // 限制每次查询数量
-            searchBuilder.trackTotalHits(t -> t.enabled(true));
-            
-            // 按高度和ID排序
-            searchBuilder.sort(s -> s.field(f -> f.field("birthHeight").order(
-                    co.elastic.clients.elasticsearch._types.SortOrder.Asc)));
-            searchBuilder.sort(s -> s.field(f -> f.field("id").order(
-                    co.elastic.clients.elasticsearch._types.SortOrder.Asc)));
-            
-            // 构建查询条件
-            co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery.Builder boolBuilder = 
-                    new co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery.Builder();
-            
-            // owner = dealer
-            co.elastic.clients.elasticsearch._types.query_dsl.TermQuery ownerQuery = 
-                    co.elastic.clients.elasticsearch._types.query_dsl.TermQuery.of(
-                            t -> t.field("owner").value(dealer));
-            boolBuilder.must(new co.elastic.clients.elasticsearch._types.query_dsl.Query.Builder()
-                    .term(ownerQuery).build());
-            
-            // valid = true
-            co.elastic.clients.elasticsearch._types.query_dsl.TermQuery validQuery = 
-                    co.elastic.clients.elasticsearch._types.query_dsl.TermQuery.of(
-                            t -> t.field("valid").value(true));
-            boolBuilder.must(new co.elastic.clients.elasticsearch._types.query_dsl.Query.Builder()
-                    .term(validQuery).build());
-            
-            // birthHeight > fromHeight（查询大于 lastOrderScanHeight 的订单）
-            if (fromHeight != null && fromHeight >= 0) {
-                co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery heightQuery = 
-                        co.elastic.clients.elasticsearch._types.query_dsl.RangeQuery.of(
-                                r -> r.field("birthHeight").gt(co.elastic.clients.json.JsonData.of(fromHeight)));
-                boolBuilder.must(new co.elastic.clients.elasticsearch._types.query_dsl.Query.Builder()
-                        .range(heightQuery).build());
-            }
-            
-            searchBuilder.query(q -> q.bool(boolBuilder.build()));
-            
-            co.elastic.clients.elasticsearch.core.SearchResponse<data.fchData.Cash> searchResponse = 
-                    esClient.search(searchBuilder.build(), data.fchData.Cash.class);
-            
-            if (searchResponse.hits() != null && searchResponse.hits().hits() != null) {
-                for (co.elastic.clients.elasticsearch.core.search.Hit<data.fchData.Cash> hit : 
-                        searchResponse.hits().hits()) {
-                    data.fchData.Cash cash = hit.source();
-                    if (cash != null && cash.getOwner() != null && cash.getOwner().equals(dealer)) {
-                        // 获取 issuer（发送者）- Cash 对象已经有 issuer 字段
-                        String issuer = cash.getIssuer();
-                        if (issuer != null && !issuer.isEmpty() && !issuer.equals("coinbase")) {
-                            String cashId = cash.getId() != null ? cash.getId() : 
-                                    (cash.getBirthTxId() != null && cash.getBirthIndex() != null ?
-                                            cash.getBirthTxId() + ":" + cash.getBirthIndex() : null);
-                            if (cashId != null) {
-                                result.add(new fapi.recharge.RechargeScanner.CashInfo(
-                                        cashId,
-                                        issuer,
-                                        cash.getOwner(),
-                                        cash.getValue() != null ? cash.getValue() : 0L,
-                                        cash.getBirthHeight() != null ? cash.getBirthHeight() : 0L,
-                                        cash.getBirthBlockId() != null ? cash.getBirthBlockId() : "",
-                                        cash.getBirthTxId()  // 添加 birthTxId 用于 OpReturn 查询
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if(result.size()>0)
-                log.debug("queryNewCashesForDealer: found {} new cashes for dealer {} from height {}",
-                    result.size(), dealer, fromHeight);
-            
-        } catch (Exception e) {
-            log.error("Error querying new cashes for dealer {} from height {}: {}", 
-                    dealer, fromHeight, e.getMessage(), e);
+    private List<CashInfo> queryNewCashesForDealer(ChainSource chain, String dealer, Long fromHeight) {
+        List<CashInfo> result = new ArrayList<>();
+        long from = fromHeight != null && fromHeight >= 0 ? fromHeight : 0;
+        for (Cash cash : chain.cashesOwnedSince(dealer, from)) {
+            if (cash == null || !dealer.equals(cash.getOwner())) continue;
+            // 获取 issuer（发送者）
+            String issuer = cash.getIssuer();
+            if (issuer == null || issuer.isEmpty() || issuer.equals("coinbase")) continue;
+            String cashId = cash.getId() != null ? cash.getId() :
+                    (cash.getBirthTxId() != null && cash.getBirthIndex() != null ?
+                            cash.getBirthTxId() + ":" + cash.getBirthIndex() : null);
+            if (cashId == null) continue;
+            result.add(new CashInfo(
+                    cashId,
+                    issuer,
+                    cash.getOwner(),
+                    cash.getValue() != null ? cash.getValue() : 0L,
+                    cash.getBirthHeight() != null ? cash.getBirthHeight() : 0L,
+                    cash.getBirthBlockId() != null ? cash.getBirthBlockId() : "",
+                    cash.getBirthTxId()  // 用于 OpReturn 查询
+            ));
         }
-        
+        if (!result.isEmpty()) {
+            log.debug("queryNewCashesForDealer: found {} new cashes for dealer {} from height {}",
+                    result.size(), dealer, fromHeight);
+        }
         return result;
     }
     
@@ -677,6 +539,7 @@ public class FapiServer implements NodeEventListener {
         data.setOp(OpNames.PUBLISH);
 
         data.inputService(br);
+        applyLightServiceRules(data);
 
         dataOnChain.setData(data);
 
@@ -711,6 +574,7 @@ public class FapiServer implements NodeEventListener {
 
         System.out.println("Update the pricing fields...");
         data.updatePricingFields(br);
+        applyLightServiceRules(data);
 
         dataOnChain.setData(data);
 
@@ -768,6 +632,32 @@ public class FapiServer implements NodeEventListener {
         Menu.anyKeyToContinue(br);
     }
     
+    /** A light server: no local chain (no ES); it reads the chain from an upstream FAPI. */
+    private boolean isLight() {
+        return settings != null && settings.getClient(data.feipData.ServiceType.ES) == null;
+    }
+
+    /**
+     * On a light server, fix the declared components (see {@link fapi.LightService}), and offer to
+     * list the upstream's SID in the Service's services. Listing it is optional.
+     */
+    void applyLightServiceRules(ServiceOpData data) {
+        if (!isLight()) return;
+        List<String> notes = new ArrayList<>();
+        data.setComponents(fapi.LightService.components(data.getComponents(), notes));
+        if (!notes.isEmpty()) {
+            System.out.println("\nThis is a light server:");
+            for (String n : notes) System.out.println("  " + n);
+        }
+        FapiClient upstream = settings.getUpstreamFapiClient();
+        String upstreamSid = upstream != null ? upstream.getServiceSid() : null;
+        if (upstreamSid != null && (data.getServices() == null || !data.getServices().contains(upstreamSid))
+                && br != null && ui.Inputer.askIfYes(br, "List the upstream " + upstreamSid
+                        + " in this service's services? (optional)")) {
+            data.setServices(fapi.LightService.withUpstream(data.getServices(), upstreamSid));
+        }
+    }
+
     private static Feip setFcInfoForService() {
         Feip dataOnChain = new Feip();
         dataOnChain.setType("FEIP");
@@ -1324,37 +1214,18 @@ public class FapiServer implements NodeEventListener {
     }
 
     /**
-     * Query Elasticsearch for valid cashes owned by the given FID,
+     * Query the chain for valid cashes owned by the given FID,
      * sufficient to cover the specified payment amount (in satoshi).
      */
     private List<Cash> queryValidCashesForRecharge(String fid, long amountSatoshi) {
         try {
-            ElasticsearchClient esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-            if (esClient == null) {
-                log.warn("ElasticsearchClient not available for cash query");
+            ChainSource chain = getChainSource();
+            if (chain == null) {
+                log.warn("No chain source for cash query");
                 return null;
             }
-
-            SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-            searchBuilder.index("cash");
-            searchBuilder.size(200);
-            searchBuilder.sort(s -> s.field(f -> f.field("cd").order(SortOrder.Asc)));
-            searchBuilder.sort(s -> s.field(f -> f.field("id").order(SortOrder.Asc)));
-
-            BoolQuery.Builder boolBuilder = new BoolQuery.Builder();
-            boolBuilder.must(new Query.Builder().term(TermQuery.of(t -> t.field("owner").value(fid))).build());
-            boolBuilder.must(new Query.Builder().term(TermQuery.of(t -> t.field("valid").value(true))).build());
-            searchBuilder.query(q -> q.bool(boolBuilder.build()));
-
-            SearchResponse<Cash> result = esClient.search(searchBuilder.build(), Cash.class);
-            if (result.hits() == null || result.hits().hits() == null || result.hits().hits().isEmpty()) {
-                return null;
-            }
-
-            List<Cash> allCashes = new ArrayList<>();
-            for (Hit<Cash> hit : result.hits().hits()) {
-                if (hit.source() != null) allCashes.add(hit.source());
-            }
+            List<Cash> allCashes = chain.validCashes(fid, 200);
+            if (allCashes.isEmpty()) return null;
 
             Long bestHeight = settings.getBestHeight();
             long fchSum = 0;

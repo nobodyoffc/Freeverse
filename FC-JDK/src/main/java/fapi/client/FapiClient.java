@@ -1924,6 +1924,17 @@ public class FapiClient {
         return serviceSid;
     }
     
+    /**
+     * A client to the same server over the same node, but with these settings: it gets their
+     * via and, above all, an {@link AutoRechargeManager} that tops the balance up from the
+     * settings' key. A module client is built without settings, so it has neither.
+     */
+    public FapiClient withSettings(Settings settings) {
+        FapiClient c = new FapiClient(fudpNode, servicePeerId, serviceSid, requestTimeoutSeconds, settings);
+        c.setServerUrl(serverUrl);
+        return c;
+    }
+
     public String getServerUrl() {
         return serverUrl;
     }

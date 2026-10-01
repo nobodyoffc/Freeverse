@@ -1,15 +1,13 @@
 package fapi.components;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.elasticsearch._types.SortOrder;
-import co.elastic.clients.elasticsearch.core.*;
-import co.elastic.clients.elasticsearch.core.search.Hit;
-import co.elastic.clients.elasticsearch.indices.CreateIndexRequest;
-import co.elastic.clients.elasticsearch.indices.ExistsRequest;
 import core.crypto.Hash;
 import data.apipData.Fcdsl;
-import data.apipData.Sort;
 import data.fcData.DockItem;
+import db.fcdsl.FcdslException;
+import db.fcdsl.FcdslResult;
+import fapi.components.dock.DockStore;
+import fapi.migrate.EsIndexPages;
 import data.feipData.Service;
 import data.feipData.ServiceType;
 import fapi.AbstractFapiComponent;
@@ -25,7 +23,7 @@ import utils.FchUtils;
 import utils.Hex;
 
 import java.io.IOException;
-import java.io.StringReader;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.Base64;
@@ -34,7 +32,8 @@ import java.util.Base64;
  * DOCK Component - Store-and-forward messaging service via FAPI.
  * <p>
  * DOCK temporarily stores short data for recipients who may not be online.
- * Data is stored directly in Elasticsearch (metadata + Base64 payload).
+ * Data is stored in a LevelDB {@link DockStore} (metadata + Base64 payload), migrated once
+ * from the Elasticsearch index that held it before.
  * Large data should use the DISK service instead.
  * <p>
  * Features:
@@ -63,10 +62,14 @@ public class DockComponent extends AbstractFapiComponent {
     private static final int BLOCKS_PER_DAY = 1440; // ~1 block per minute for FCH
 
     public static final String KEY_DOCK_FORWARD_ENABLED = "dockForwardEnabled";
+    /** Setting: stored items one list/fetch may read before it fails as too broad. */
+    public static final String KEY_DOCK_MAX_EXAMINED = "dockMaxExamined";
+    private static final long DEFAULT_MAX_EXAMINED = 100_000;
 
-    private ElasticsearchClient esClient;
+    private static final java.security.SecureRandom NONCE_RANDOM = new java.security.SecureRandom();
+
+    private DockStore store;
     private FapiBalanceManager balanceManager;
-    private String indexName;
     private long maxDataSize = DEFAULT_MAX_DATA_SIZE;
     private boolean forwardEnabled = true; // allow forwarding by default
     
@@ -96,21 +99,13 @@ public class DockComponent extends AbstractFapiComponent {
     
     @Override
     protected void doInitialize() {
-        this.esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-        if (esClient == null) {
-            throw new IllegalStateException("ElasticsearchClient is required for DOCK component");
-        }
-        
         this.balanceManager = server.getBalanceManager();
         
-        String sid = settings.getSid();
-        this.indexName = Settings.addSidBriefToName(sid, "dock");
-        
         loadServiceConfig();
-        ensureIndexExists();
+        openStore();
         
-        log.info("DOCK component initialized: index={}, maxDataSize={}, pricePerKBIn={}, pricePerKBOut={}, pricePerKBDay={}, defaultMaxDays={}, forwardEnabled={}",
-                indexName, maxDataSize, pricePerKBIn, pricePerKBOut, pricePerKBDay, defaultMaxDays, forwardEnabled);
+        log.info("DOCK component initialized: items={}, maxDataSize={}, pricePerKBIn={}, pricePerKBOut={}, pricePerKBDay={}, defaultMaxDays={}, forwardEnabled={}",
+                store.count(), maxDataSize, pricePerKBIn, pricePerKBOut, pricePerKBDay, defaultMaxDays, forwardEnabled);
     }
     
     /**
@@ -208,20 +203,47 @@ public class DockComponent extends AbstractFapiComponent {
     }
     
     /**
-     * Ensure the Elasticsearch index exists.
+     * Open the LevelDB store, and on first start copy in the items of the Elasticsearch index
+     * that held DOCK before. A server without ES has nothing to copy.
      */
-    private void ensureIndexExists() {
+    private void openStore() {
+        String sid = settings.getSid();
+        long maxExamined = DEFAULT_MAX_EXAMINED;
+        Map<String, Object> settingMap = settings.getSettingMap();
+        if (settingMap != null && settingMap.get(KEY_DOCK_MAX_EXAMINED) instanceof Number n) maxExamined = n.longValue();
+        Path dir = settings.getDbDir() == null
+                ? Path.of("fapi_dock")
+                : Path.of(settings.getDbDir(), settings.getMainFid() + "_" + sid + "_fapi_dock");
         try {
-            boolean exists = esClient.indices().exists(ExistsRequest.of(e -> e.index(indexName))).value();
-            if (!exists) {
-                esClient.indices().create(CreateIndexRequest.of(c -> c
-                        .index(indexName)
-                        .withJson(new StringReader(DockItem.MAPPINGS))));
-                log.info("Created DOCK index: {}", indexName);
-            }
+            this.store = DockStore.open(dir, maxExamined);
         } catch (IOException e) {
-            log.error("Failed to check/create DOCK index: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to initialize DOCK index", e);
+            throw new IllegalStateException("Cannot open DOCK store at " + dir + ": " + e.getMessage(), e);
+        }
+        if (store.isMigrated()) return;
+        if (!(settings.getClient(ServiceType.ES) instanceof ElasticsearchClient esClient)) {
+            store.markMigrated();
+            return;
+        }
+        String indexName = Settings.addSidBriefToName(sid, "dock");
+        try {
+            long n = store.migrateFrom(new EsIndexPages<>(esClient, indexName, DockItem.class));
+            log.info("DOCK: migrated {} items from Elasticsearch index {} to {}", n, indexName, dir);
+        } catch (Exception e) {
+            // Not marked: the next start tries again. New items are stored meanwhile.
+            log.error("DOCK: migration from Elasticsearch index {} failed; will retry at next start: {}",
+                    indexName, e.getMessage(), e);
+        }
+    }
+    
+    @Override
+    protected void doClose(long timeoutMs) throws InterruptedException {
+        super.doClose(timeoutMs);
+        if (store != null) {
+            try {
+                store.close();
+            } catch (IOException e) {
+                log.warn("DOCK: closing the store failed: {}", e.getMessage());
+            }
         }
     }
     
@@ -364,8 +386,13 @@ public class DockComponent extends AbstractFapiComponent {
                     null);
             }
             
-            // Generate dockId from sender + recipients + timestamp
-            String dockIdInput = peerId + ":" + String.join(",", recipients) + ":" + System.currentTimeMillis();
+            // Generate dockId from sender + recipients + timestamp + random bytes: without the
+            // random part, two puts to the same recipients in one millisecond got one id, and
+            // the second overwrote the first
+            byte[] nonce = new byte[8];
+            NONCE_RANDOM.nextBytes(nonce);
+            String dockIdInput = peerId + ":" + String.join(",", recipients) + ":" + System.currentTimeMillis()
+                    + ":" + Hex.toHex(nonce);
             String dockId = Hex.toHex(Hash.sha256(dockIdInput.getBytes(StandardCharsets.UTF_8)));
             
             long currentHeight = balanceManager != null ? balanceManager.getBestHeight() : 0;
@@ -385,11 +412,8 @@ public class DockComponent extends AbstractFapiComponent {
                 item.setDataType(dataType);
             }
             
-            // Store to ES (metadata + data in one document)
-            esClient.index(IndexRequest.of(i -> i
-                    .index(indexName)
-                    .id(dockId)
-                    .document(item)));
+            // Store metadata + data as one item
+            store.put(item);
             
             if (balanceManager != null && totalFee > 0) {
                 String chargeKey = "dock.put:" + dockId;
@@ -533,11 +557,7 @@ public class DockComponent extends AbstractFapiComponent {
         }
         
         try {
-            GetResponse<DockItem> getResponse = esClient.get(GetRequest.of(g -> g
-                    .index(indexName)
-                    .id(dockId)), DockItem.class);
-            
-            DockItem item = getResponse.found() ? getResponse.source() : null;
+            DockItem item = store.get(dockId);
             if (item == null) {
                 return new UnifiedResponse(
                     errorResponse(requestId, FapiCode.NOT_FOUND, "Item not found: " + dockId),
@@ -612,105 +632,54 @@ public class DockComponent extends AbstractFapiComponent {
      */
     private FapiResponse handleList(FapiRequest request, String peerId) {
         String requestId = request.getId();
-        Fcdsl fcdsl = request.getFcdsl();
         
         String recipientId = peerId;
-        
         @SuppressWarnings("unchecked")
         Map<String, Object> params = parseParams(request.getParams(), Map.class);
         if (params != null && params.containsKey("recipientId")) {
             recipientId = params.get("recipientId").toString();
         }
         
-        final String queryRecipientId = recipientId;
-        
         try {
             long currentHeight = balanceManager != null ? balanceManager.getBestHeight() : 0;
-            
-            SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-            searchBuilder.index(indexName);
-            
-            // Exclude dataBase64 from search results to keep list responses lightweight
-            searchBuilder.source(s -> s.filter(f -> f.excludes("dataBase64")));
-            
-            searchBuilder.query(q -> q.bool(b -> b
-                    .must(m -> m.term(t -> t.field(FieldNames.RECIPIENTS).value(queryRecipientId)))
-                    .must(m -> m.range(r -> r.field(FieldNames.EXPIRE_HEIGHT)
-                            .gt(co.elastic.clients.json.JsonData.of(currentHeight))))
-            ));
-            
-            int size = 20;
-            if (fcdsl != null && fcdsl.getSize() != null) {
-                try {
-                    size = Math.min(100, Integer.parseInt(fcdsl.getSize()));
-                } catch (NumberFormatException e) {
-                    // Use default size
-                }
-            }
-            searchBuilder.size(size);
-            
-            if (fcdsl != null && fcdsl.getSort() != null && !fcdsl.getSort().isEmpty()) {
-                for (Sort sort : fcdsl.getSort()) {
-                    searchBuilder.sort(s -> s.field(f -> f
-                            .field(sort.getField())
-                            .order(sort.getOrder() != null && sort.getOrder().equalsIgnoreCase("asc") 
-                                    ? SortOrder.Asc : SortOrder.Desc)));
-                }
-            } else {
-                searchBuilder.sort(s -> s.field(f -> f.field(FieldNames.CREATE_TIME).order(SortOrder.Asc)));
-            }
-            searchBuilder.sort(s -> s.field(f -> f.field(FieldNames.ID).order(SortOrder.Asc)));
-            
-            if (fcdsl != null && fcdsl.getAfter() != null && !fcdsl.getAfter().isEmpty()) {
-                List<co.elastic.clients.elasticsearch._types.FieldValue> afterValues = fcdsl.getAfter().stream()
-                        .map(DockComponent::parseSearchAfterValue)
-                        .toList();
-                searchBuilder.searchAfter(afterValues);
-            }
-            
-            searchBuilder.trackTotalHits(t -> t.enabled(true));
-            
-            SearchResponse<DockItem> searchResponse = esClient.search(searchBuilder.build(), DockItem.class);
+            FcdslResult<DockItem> page = store.find(request.getFcdsl(), List.of(recipientId), currentHeight, 20, 100);
             
             List<Map<String, Object>> results = new ArrayList<>();
-            List<String> lastSortValues = null;
-            for (Hit<DockItem> hit : searchResponse.hits().hits()) {
-                DockItem item = hit.source();
-                if (item != null) {
-                    Map<String, Object> itemInfo = new LinkedHashMap<>();
-                    itemInfo.put(FieldNames.ID, item.getId());
-                    itemInfo.put(FieldNames.SENDER, item.getSender());
-                    itemInfo.put(FieldNames.SIZE, item.getSize());
-                    itemInfo.put(FieldNames.CREATE_TIME, item.getCreateTime());
-                    itemInfo.put(FieldNames.EXPIRE_HEIGHT, item.getExpireHeight());
-                    itemInfo.put(FieldNames.REMAINING_DAYS, item.getRemainingDays(currentHeight, BLOCKS_PER_DAY));
-                    if (item.getDataType() != null) {
-                        itemInfo.put(FieldNames.DATA_TYPE, item.getDataType());
-                    }
-                    long sizeKB = (item.getSize() + 1023) / 1024;
-                    itemInfo.put(FieldNames.EGRESS_FEE, sizeKB * pricePerKBOut);
-                    results.add(itemInfo);
+            for (DockItem item : page.getItems()) {
+                // Metadata only: no data content in a list
+                Map<String, Object> itemInfo = new LinkedHashMap<>();
+                itemInfo.put(FieldNames.ID, item.getId());
+                itemInfo.put(FieldNames.SENDER, item.getSender());
+                itemInfo.put(FieldNames.SIZE, item.getSize());
+                itemInfo.put(FieldNames.CREATE_TIME, item.getCreateTime());
+                itemInfo.put(FieldNames.EXPIRE_HEIGHT, item.getExpireHeight());
+                itemInfo.put(FieldNames.REMAINING_DAYS, item.getRemainingDays(currentHeight, BLOCKS_PER_DAY));
+                if (item.getDataType() != null) {
+                    itemInfo.put(FieldNames.DATA_TYPE, item.getDataType());
                 }
-                if (hit.sort() != null && !hit.sort().isEmpty()) {
-                    lastSortValues = hit.sort().stream()
-                            .map(fv -> String.valueOf(fv._get()))
-                            .toList();
-                }
+                long sizeKB = (item.getSize() + 1023) / 1024;
+                itemInfo.put(FieldNames.EGRESS_FEE, sizeKB * pricePerKBOut);
+                results.add(itemInfo);
             }
             
-            var totalHits = searchResponse.hits().total();
-            long total = totalHits != null ? totalHits.value() : results.size();
-            
-            FapiResponse resp = successResponse(requestId, results, (long) results.size(), total);
-            if (lastSortValues != null) {
-                resp.setLast(lastSortValues);
+            FapiResponse resp = successResponse(requestId, results, (long) results.size(), page.getTotal());
+            if (page.getLast() != null) {
+                resp.setLast(page.getLast());
             }
             return resp;
             
+        } catch (FcdslException e) {
+            return queryRejected(requestId, e);
         } catch (Exception e) {
             log.error("Failed to handle LIST request: {}", e.getMessage(), e);
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Query failed: " + e.getMessage());
         }
+    }
+    
+    /** A query the store won't run: 400 when it is wrong, 501 when it is unsupported or too broad. */
+    private FapiResponse queryRejected(String requestId, FcdslException e) {
+        int code = e.getReason() == FcdslException.Reason.BAD_QUERY ? FapiCode.BAD_REQUEST : FapiCode.NOT_IMPLEMENTED;
+        return errorResponse(requestId, code, e.getMessage());
     }
     
     // ==================== FETCH Handler ====================
@@ -723,7 +692,6 @@ public class DockComponent extends AbstractFapiComponent {
      */
     private FapiResponse handleFetch(FapiRequest request, String peerId) {
         String requestId = request.getId();
-        Fcdsl fcdsl = request.getFcdsl();
         
         @SuppressWarnings("unchecked")
         Map<String, Object> params = parseParams(request.getParams(), Map.class);
@@ -738,76 +706,19 @@ public class DockComponent extends AbstractFapiComponent {
         } else if (params != null && params.containsKey("recipientId")) {
             recipientIds.add(params.get("recipientId").toString());
         }
+        
         if (recipientIds.isEmpty()) {
             recipientIds.add(peerId);
         }
         
         try {
             long currentHeight = balanceManager != null ? balanceManager.getBestHeight() : 0;
-            
-            SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-            searchBuilder.index(indexName);
-            
-            if (recipientIds.size() == 1) {
-                String rid = recipientIds.get(0);
-                searchBuilder.query(q -> q.bool(b -> b
-                        .must(m -> m.term(t -> t.field(FieldNames.RECIPIENTS).value(rid)))
-                        .must(m -> m.range(r -> r.field(FieldNames.EXPIRE_HEIGHT)
-                                .gt(co.elastic.clients.json.JsonData.of(currentHeight))))
-                ));
-            } else {
-                searchBuilder.query(q -> q.bool(b -> b
-                        .must(m -> m.terms(t -> t
-                                .field(FieldNames.RECIPIENTS)
-                                .terms(tv -> tv.value(recipientIds.stream()
-                                        .map(co.elastic.clients.elasticsearch._types.FieldValue::of)
-                                        .toList()))))
-                        .must(m -> m.range(r -> r.field(FieldNames.EXPIRE_HEIGHT)
-                                .gt(co.elastic.clients.json.JsonData.of(currentHeight))))
-                ));
-            }
-            
-            int size = 20;
-            if (fcdsl != null && fcdsl.getSize() != null) {
-                try {
-                    size = Math.min(50, Integer.parseInt(fcdsl.getSize()));
-                } catch (NumberFormatException e) {
-                    // default
-                }
-            }
-            searchBuilder.size(size);
-            
-            if (fcdsl != null && fcdsl.getSort() != null && !fcdsl.getSort().isEmpty()) {
-                for (Sort sort : fcdsl.getSort()) {
-                    searchBuilder.sort(s -> s.field(f -> f
-                            .field(sort.getField())
-                            .order(sort.getOrder() != null && sort.getOrder().equalsIgnoreCase("asc")
-                                    ? SortOrder.Asc : SortOrder.Desc)));
-                }
-            } else {
-                searchBuilder.sort(s -> s.field(f -> f.field(FieldNames.CREATE_TIME).order(SortOrder.Asc)));
-            }
-            searchBuilder.sort(s -> s.field(f -> f.field(FieldNames.ID).order(SortOrder.Asc)));
-            
-            if (fcdsl != null && fcdsl.getAfter() != null && !fcdsl.getAfter().isEmpty()) {
-                List<co.elastic.clients.elasticsearch._types.FieldValue> afterValues = fcdsl.getAfter().stream()
-                        .map(DockComponent::parseSearchAfterValue)
-                        .toList();
-                searchBuilder.searchAfter(afterValues);
-            }
-            
-            searchBuilder.trackTotalHits(t -> t.enabled(true));
-            
-            SearchResponse<DockItem> searchResponse = esClient.search(searchBuilder.build(), DockItem.class);
+            FcdslResult<DockItem> page = store.find(request.getFcdsl(), recipientIds, currentHeight, 20, 50);
             
             List<Map<String, Object>> results = new ArrayList<>();
-            List<String> lastSortValues = null;
             long totalEgressBytes = 0;
             
-            for (Hit<DockItem> hit : searchResponse.hits().hits()) {
-                DockItem item = hit.source();
-                if (item == null) continue;
-                
+            for (DockItem item : page.getItems()) {
                 Map<String, Object> itemInfo = new LinkedHashMap<>();
                 itemInfo.put(FieldNames.ID, item.getId());
                 itemInfo.put(FieldNames.SENDER, item.getSender());
@@ -819,19 +730,13 @@ public class DockComponent extends AbstractFapiComponent {
                     itemInfo.put(FieldNames.DATA_TYPE, item.getDataType());
                 }
                 
-                // Data is already Base64 in ES, just pass it through
+                // Data is stored as Base64, just pass it through
                 if (item.getDataBase64() != null) {
                     itemInfo.put(FieldNames.DATA_BASE64, item.getDataBase64());
                     totalEgressBytes += item.getSize() != null ? item.getSize() : 0;
                 }
                 
                 results.add(itemInfo);
-                
-                if (hit.sort() != null && !hit.sort().isEmpty()) {
-                    lastSortValues = hit.sort().stream()
-                            .map(fv -> String.valueOf(fv._get()))
-                            .toList();
-                }
             }
             
             // Charge egress fee for all data returned
@@ -848,18 +753,17 @@ public class DockComponent extends AbstractFapiComponent {
                 }
             }
             
-            var totalHits = searchResponse.hits().total();
-            long total = totalHits != null ? totalHits.value() : results.size();
-            
             log.debug("DOCK FETCH: peerId={}, recipientIds={}, got={}, total={}, egressBytes={}",
-                    peerId, recipientIds, results.size(), total, totalEgressBytes);
+                    peerId, recipientIds, results.size(), page.getTotal(), totalEgressBytes);
             
-            FapiResponse resp = successResponse(requestId, results, (long) results.size(), total);
-            if (lastSortValues != null) {
-                resp.setLast(lastSortValues);
+            FapiResponse resp = successResponse(requestId, results, (long) results.size(), page.getTotal());
+            if (page.getLast() != null) {
+                resp.setLast(page.getLast());
             }
             return resp;
             
+        } catch (FcdslException e) {
+            return queryRejected(requestId, e);
         } catch (Exception e) {
             log.error("Failed to handle FETCH request: {}", e.getMessage(), e);
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Fetch failed: " + e.getMessage());
@@ -884,11 +788,7 @@ public class DockComponent extends AbstractFapiComponent {
         String dockId = params.get(FieldNames.ID).toString();
         
         try {
-            GetResponse<DockItem> getResponse = esClient.get(GetRequest.of(g -> g
-                    .index(indexName)
-                    .id(dockId)), DockItem.class);
-            
-            DockItem item = getResponse.found() ? getResponse.source() : null;
+            DockItem item = store.get(dockId);
             if (item == null) {
                 return errorResponse(requestId, FapiCode.NOT_FOUND, "Item not found: " + dockId);
             }
@@ -952,11 +852,7 @@ public class DockComponent extends AbstractFapiComponent {
         String dockId = params.get(FieldNames.ID).toString();
         
         try {
-            GetResponse<DockItem> getResponse = esClient.get(GetRequest.of(g -> g
-                    .index(indexName)
-                    .id(dockId)), DockItem.class);
-            
-            DockItem item = getResponse.found() ? getResponse.source() : null;
+            DockItem item = store.get(dockId);
             if (item == null) {
                 return errorResponse(requestId, FapiCode.NOT_FOUND, "Item not found: " + dockId);
             }
@@ -975,10 +871,7 @@ public class DockComponent extends AbstractFapiComponent {
                 }
             }
             
-            // Delete from ES
-            esClient.delete(DeleteRequest.of(d -> d
-                    .index(indexName)
-                    .id(dockId)));
+            store.delete(dockId);
             
             if (refund > 0 && balanceManager != null) {
                 String refundKey = "dock.delete:refund:" + dockId;
@@ -1031,11 +924,7 @@ public class DockComponent extends AbstractFapiComponent {
         }
         
         try {
-            GetResponse<DockItem> getResponse = esClient.get(GetRequest.of(g -> g
-                    .index(indexName)
-                    .id(dockId)), DockItem.class);
-            
-            DockItem item = getResponse.found() ? getResponse.source() : null;
+            DockItem item = store.get(dockId);
             if (item == null) {
                 return errorResponse(requestId, FapiCode.NOT_FOUND, "Item not found: " + dockId);
             }
@@ -1057,10 +946,7 @@ public class DockComponent extends AbstractFapiComponent {
             item.setMaxDays((item.getMaxDays() != null ? item.getMaxDays() : 0) + extraDays);
             item.setStorageFee((item.getStorageFee() != null ? item.getStorageFee() : 0) + additionalFee);
             
-            esClient.update(UpdateRequest.of(u -> u
-                    .index(indexName)
-                    .id(dockId)
-                    .doc(item)), DockItem.class);
+            store.put(item);
             
             if (balanceManager != null && additionalFee > 0) {
                 String chargeKey = "dock.extend:storage:" + dockId + ":" + System.currentTimeMillis();
@@ -1089,19 +975,13 @@ public class DockComponent extends AbstractFapiComponent {
     
     /**
      * Cleanup expired items (called periodically by DockCleanupTask).
-     * Uses deleteByQuery for efficient bulk removal.
      *
      * @param currentHeight current blockchain height
      * @return number of deleted items
      */
     public long cleanupExpiredItems(long currentHeight) {
         try {
-            DeleteByQueryResponse response = esClient.deleteByQuery(d -> d
-                    .index(indexName)
-                    .query(q -> q.range(r -> r
-                            .field(FieldNames.EXPIRE_HEIGHT)
-                            .lte(co.elastic.clients.json.JsonData.of(currentHeight)))));
-            long deleted = response.deleted() != null ? response.deleted() : 0;
+            long deleted = store.deleteExpired(currentHeight);
             if (deleted > 0) {
                 log.info("Cleaned up {} expired dock items at height {}", deleted, currentHeight);
             }
@@ -1112,24 +992,10 @@ public class DockComponent extends AbstractFapiComponent {
         }
     }
     
-    // ==================== Helpers ====================
-    
-    /**
-     * Parse a search_after cursor value into the appropriate FieldValue type.
-     * Numeric strings become long FieldValues; others stay as string FieldValues.
-     */
-    private static co.elastic.clients.elasticsearch._types.FieldValue parseSearchAfterValue(String v) {
-        try {
-            return co.elastic.clients.elasticsearch._types.FieldValue.of(Long.parseLong(v));
-        } catch (NumberFormatException e) {
-            return co.elastic.clients.elasticsearch._types.FieldValue.of(v);
-        }
-    }
-    
     // ==================== Getters ====================
     
-    public String getIndexName() {
-        return indexName;
+    public DockStore getStore() {
+        return store;
     }
     
     public long getMaxDataSize() {

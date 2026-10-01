@@ -2,7 +2,6 @@ package fapi.components;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import data.apipData.Fcdsl;
-import data.apipData.Sort;
 import data.fcData.DiskItem;
 import data.feipData.Service;
 import data.feipData.ServiceType;
@@ -18,8 +17,12 @@ import fapi.components.disk.FapiDiskHandler;
 import fapi.message.FapiRequest;
 import fapi.message.FapiResponse;
 import fapi.message.UnifiedCodec.UnifiedResponse;
-import fapi.query.FcdslQueryExecutor;
-import fapi.query.QueryResult;
+import db.fcdsl.FcdslException;
+import db.fcdsl.FcdslProjection;
+import db.fcdsl.FcdslQuery;
+import db.fcdsl.FcdslResult;
+import fapi.components.disk.DiskMetaStore;
+import fapi.migrate.EsIndexPages;
 import config.Settings;
 import utils.JsonUtils;
 
@@ -31,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 
 import static constants.FieldNames.DISK_DIR;
-import static constants.FieldNames.SINCE;
 import static constants.FieldNames.ID;
 import static constants.Strings.DATA;
 import static constants.Values.DISK;
@@ -56,9 +58,11 @@ public class DiskComponent extends AbstractFapiComponent {
     public static final int MAX_CHECK_IDS = 200;
     
     private FapiDiskHandler diskHandler;
-    private FcdslQueryExecutor queryExecutor;
-    private ElasticsearchClient esClient;
-    private String indexName;
+    /** Setting: stored items one disk.list may read before it fails as too broad. */
+    public static final String KEY_DISK_MAX_EXAMINED = "diskMaxExamined";
+    private static final long DEFAULT_MAX_EXAMINED = 100_000;
+
+    private DiskMetaStore metaStore;
     private long defaultDataLifeDays = 30;
     private long maxDataSize = DiskSyncManager.DEFAULT_MAX_DATA_SIZE;
     private long maxTotalDiskUsage = DiskSyncManager.DEFAULT_MAX_TOTAL_DISK_USAGE;
@@ -82,24 +86,14 @@ public class DiskComponent extends AbstractFapiComponent {
     
     @Override
     protected void doInitialize() {
-        // Get Elasticsearch client
-        this.esClient = (ElasticsearchClient) settings.getClient(ServiceType.ES);
-        if (esClient == null) {
-            throw new IllegalStateException("ElasticsearchClient is required for DISK component");
-        }
-        
-        // Build index name: {sid}_data
-        String sid = settings.getSid();
-        this.indexName = Settings.addSidBriefToName(sid, DISK);
-        
-        // Initialize query executor for list operations
-        this.queryExecutor = new FcdslQueryExecutor(esClient);
+        // Metadata store, filled once from the ES index that held it before
+        openMetaStore();
         
         // Get storage directory from settings
         Path storageRoot = getStorageRoot();
         
         // Create disk handler
-        this.diskHandler = new FapiDiskHandler(storageRoot, esClient, indexName);
+        this.diskHandler = new FapiDiskHandler(storageRoot, metaStore);
         
         // Read default data life days from service params
         if (settings.getService() != null && settings.getService().getParams() != null) {
@@ -134,14 +128,11 @@ public class DiskComponent extends AbstractFapiComponent {
             if (v instanceof Number) maxTotalDiskUsage = ((Number) v).longValue();
         }
 
-        // Check if index exists
-        checkOrCreateIndex();
-
         // Initialize DISK sync manager if sources are configured
         initSyncManager(settingMap);
         
-        log.info("DISK component initialized: storageRoot={}, index={}, dataLifeDays={}, maxDataSize={}", 
-                storageRoot, indexName, defaultDataLifeDays, maxDataSize);
+        log.info("DISK component initialized: storageRoot={}, items={}, dataLifeDays={}, maxDataSize={}", 
+                storageRoot, metaStore.count(), defaultDataLifeDays, maxDataSize);
     }
 
     /**
@@ -202,16 +193,16 @@ public class DiskComponent extends AbstractFapiComponent {
     }
 
     /**
-     * Resolve a service declared on chain from the local service index.
+     * Resolve a service declared on chain, through the server's chain source.
      */
     public Service resolveServiceOnChain(String sid) {
-        if (sid == null || sid.isEmpty() || queryExecutor == null) return null;
+        if (sid == null || sid.isEmpty() || server == null) return null;
+        fapi.chain.ChainSource chain = server.getChainSource();
+        if (chain == null) return null;
         try {
-            Map<String, Service> map = queryExecutor.executeIdsQuery(
-                    constants.IndicesNames.SERVICE, Service.class, List.of(sid));
-            return map != null ? map.get(sid) : null;
-        } catch (Exception e) {
-            log.warn("Failed to resolve service {} from local index: {}", sid, e.getMessage());
+            return chain.services(List.of(sid)).get(sid);
+        } catch (fapi.chain.ChainUnavailableException e) {
+            log.warn("Failed to resolve service {} on chain: {}", sid, e.getMessage());
             return null;
         }
     }
@@ -250,19 +241,35 @@ public class DiskComponent extends AbstractFapiComponent {
     }
     
     /**
-     * Check if the Elasticsearch index exists, create if not.
+     * Open the metadata store, and on first start copy in the Elasticsearch index ({sid}_data)
+     * that held the metadata before. A server without ES has nothing to copy.
      */
-    private void checkOrCreateIndex() {
+    private void openMetaStore() {
+        String sid = settings.getSid();
+        long maxExamined = DEFAULT_MAX_EXAMINED;
+        Map<String, Object> settingMap = settings.getSettingMap();
+        if (settingMap != null && settingMap.get(KEY_DISK_MAX_EXAMINED) instanceof Number n) maxExamined = n.longValue();
+        Path dir = settings.getDbDir() == null
+                ? Path.of("fapi_disk_meta")
+                : Path.of(settings.getDbDir(), settings.getMainFid() + "_" + sid + "_fapi_disk_meta");
         try {
-            boolean exists = esClient.indices().exists(e -> e.index(indexName)).value();
-            if (!exists) {
-                esClient.indices().create(c -> c
-                        .index(indexName)
-                        .withJson(new java.io.StringReader(DiskItem.MAPPINGS)));
-                log.info("Created DISK index: {}", indexName);
-            }
+            this.metaStore = DiskMetaStore.open(dir, maxExamined);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Cannot open DISK metadata store at " + dir + ": " + e.getMessage(), e);
+        }
+        if (metaStore.isMigrated()) return;
+        if (!(settings.getClient(ServiceType.ES) instanceof ElasticsearchClient esClient)) {
+            metaStore.markMigrated();
+            return;
+        }
+        String indexName = Settings.addSidBriefToName(sid, DISK);
+        try {
+            long n = metaStore.migrateFrom(new EsIndexPages<>(esClient, indexName, DiskItem.class));
+            log.info("DISK: migrated {} metadata items from Elasticsearch index {} to {}", n, indexName, dir);
         } catch (Exception e) {
-            log.error("Failed to check/create index {}: {}", indexName, e.getMessage(), e);
+            // Not marked: the next start tries again. New files are recorded meanwhile.
+            log.error("DISK: migration from Elasticsearch index {} failed; will retry at next start: {}",
+                    indexName, e.getMessage(), e);
         }
     }
     
@@ -737,59 +744,21 @@ public class DiskComponent extends AbstractFapiComponent {
      */
     private FapiResponse handleList(FapiRequest request) {
         String requestId = request.getId();
-        Fcdsl fcdsl = request.getFcdsl();
-        
-        if (fcdsl == null) {
-            fcdsl = new Fcdsl();
-        }
-        
-        // Set default sort if not specified. Sort only by "since" (numeric) to avoid
-        // "all shards failed" when index was auto-created with dynamic mapping (did -> text).
-        if (fcdsl.getSort() == null || fcdsl.getSort().isEmpty()) {
-            ArrayList<Sort> defaultSort = Sort.makeSortList(SINCE, false, null, null, null, null);
-            fcdsl.setSort(defaultSort);
-        }
-        
         try {
-            if (!indexExists()) {
-                checkOrCreateIndex();
-                return successResponse(requestId, List.of(), 0L, 0L);
-            }
-            
-            QueryResult<DiskItem> result = queryExecutor.executeQuery(indexName, DiskItem.class, fcdsl, null);
-            
-            if (result == null || result.isEmpty()) {
-                return successResponse(requestId, List.of(), 0L, 0L);
-            }
-            
-            FapiResponse response = successResponse(requestId, result.getData());
-            response.setGot(result.getGot());
+            FcdslQuery<DiskItem> q = metaStore.compile(request.getFcdsl());
+            FcdslResult<DiskItem> result = metaStore.query(q);
+            Object data = FcdslProjection.isNone(q) ? result.getItems() : FcdslProjection.project(q, result.getItems());
+            FapiResponse response = successResponse(requestId, data);
+            response.setGot((long) result.getItems().size());
             response.setTotal(result.getTotal());
             response.setLast(result.getLast());
             return response;
-            
-        } catch (co.elastic.clients.elasticsearch._types.ElasticsearchException e) {
-            String cause = e.getMessage();
-            if (e.response() != null && e.response().error() != null) {
-                cause = e.response().error().reason();
-            }
-            log.error("disk.list failed (index={}): {}", indexName, cause, e);
-            return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Query failed: " + cause);
+        } catch (FcdslException e) {
+            int code = e.getReason() == FcdslException.Reason.BAD_QUERY ? FapiCode.BAD_REQUEST : FapiCode.NOT_IMPLEMENTED;
+            return errorResponse(requestId, code, e.getMessage());
         } catch (Exception e) {
             log.error("disk.list failed: {}", e.getMessage(), e);
             return errorResponse(requestId, FapiCode.INTERNAL_ERROR, "Query failed: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Check if the DISK Elasticsearch index exists.
-     */
-    private boolean indexExists() {
-        try {
-            return esClient.indices().exists(e -> e.index(indexName)).value();
-        } catch (Exception e) {
-            log.warn("Failed to check index existence: {}", e.getMessage());
-            return false;
         }
     }
     
@@ -804,6 +773,13 @@ public class DiskComponent extends AbstractFapiComponent {
     protected void doClose(long timeoutMs) throws InterruptedException {
         if (diskSyncManager != null) {
             diskSyncManager.stop();
+        }
+        if (metaStore != null) {
+            try {
+                metaStore.close();
+            } catch (java.io.IOException e) {
+                log.warn("DISK: closing the metadata store failed: {}", e.getMessage());
+            }
         }
     }
 

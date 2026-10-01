@@ -41,7 +41,7 @@ class StreamingDiskTest {
 
     @BeforeEach
     void setUp() {
-        handler = new FapiDiskHandler(tempDir, null, "test_data");
+        handler = new FapiDiskHandler(tempDir, null);
     }
 
     // ==================== Phase 1: Hash Streaming ====================
@@ -137,7 +137,7 @@ class StreamingDiskTest {
         // Create a new handler with a different temp dir to avoid "already exists" path
         Path tempDir2 = tempDir.resolve("alt");
         Files.createDirectories(tempDir2);
-        FapiDiskHandler handler2 = new FapiDiskHandler(tempDir2, null, "test_data");
+        FapiDiskHandler handler2 = new FapiDiskHandler(tempDir2, null);
         
         DiskItem streamResult = handler2.storeFromStream(
                 new ByteArrayInputStream(data), data.length, false, 30);
@@ -158,7 +158,7 @@ class StreamingDiskTest {
         // Use different dir
         Path tempDir2 = tempDir.resolve("alt2");
         Files.createDirectories(tempDir2);
-        FapiDiskHandler handler2 = new FapiDiskHandler(tempDir2, null, "test_data");
+        FapiDiskHandler handler2 = new FapiDiskHandler(tempDir2, null);
 
         DiskItem streamResult = handler2.storeFromBytes(data, false, 30);
 

@@ -65,6 +65,10 @@ public class ServiceOpData {
 		data.setServices(service.getServices());
 		data.setCodes(service.getCodes());
 		data.setParams(service.getParams());
+		// An update replaces every field, so these must be carried over or they are erased
+		data.setComponents(service.getComponents());
+		data.setVer(service.getVer());
+		data.setDealerPubkey(service.getDealerPubkey());
 		// Pricing fields
 		data.setPricePerKB(service.getPricePerKB());
 		data.setPricePerKBIn(service.getPricePerKBIn());

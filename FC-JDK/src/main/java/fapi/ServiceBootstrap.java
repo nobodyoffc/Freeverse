@@ -76,10 +76,19 @@ public class ServiceBootstrap {
                 return null;
             }
             
-            String[] componentTypes = mergeComponentTypes(
-                config.getComponentTypes(), 
-                service.getComponents()
-            );
+            boolean light = settings.getClient(data.feipData.ServiceType.ES) == null;
+            String[] componentTypes;
+            try {
+                componentTypes = resolveComponentTypes(config.getComponentTypes(), service.getComponents(), light);
+            } catch (IllegalStateException e) {
+                System.out.println(e.getMessage());
+                log.error(e.getMessage());
+                return null;
+            }
+            if (light) {
+                System.out.println("Light server: no local chain; the chain is read from "
+                        + (settings.getUpstreamFapiClient() != null ? "the upstream FAPI" : "nowhere (no upstream configured)"));
+            }
             
             // 7. 创建 FapiServer（会自动初始化 FapiBalanceManager）
             FapiServer server = new FapiServer(service, br, symkey, settings);
@@ -362,7 +371,46 @@ public class ServiceBootstrap {
     /**
      * 合并组件类型（配置指定 + 链上声明的 components）
      */
+    /** Components that need the local chain (Elasticsearch, NASA_RPC); a light server can't run them. */
+    static final Set<String> CHAIN_COMPONENTS = Set.of(ApiGroupType.BASE_NO1_NRC7.toUpperCase());
+
+    /**
+     * The components to load. A full server merges the configured and declared ones, as before.
+     * A light server (no ES) drops BASE, adds MAP when ROAD is there (ROAD delivers only to its
+     * own MAP), and refuses to start with nothing left.
+     *
+     * @throws IllegalStateException when a light server has no component it can run
+     */
+    static String[] resolveComponentTypes(String[] configured, java.util.List<String> declared, boolean light) {
+        String[] merged = mergeComponentTypes(configured, declared, !light);
+        if (!light) return merged;
+        Set<String> types = new LinkedHashSet<>();
+        for (String t : merged) {
+            if (CHAIN_COMPONENTS.contains(t)) {
+                log.warn("Light server: skipping {}, which needs the local chain", t);
+                continue;
+            }
+            types.add(t);
+        }
+        String road = ApiGroupType.ROAD_NO1_NRC7.toUpperCase();
+        String map = ApiGroupType.MAP_NO1_NRC7.toUpperCase();
+        if (types.contains(road) && !types.contains(map)) {
+            log.warn("Light server: ROAD needs MAP on the same server; loading MAP too. Declare MAP in the Service.");
+            types.add(map);
+        }
+        if (types.isEmpty()) {
+            throw new IllegalStateException("A light server runs CALL, DISK, DOCK, ROAD or MAP, "
+                    + "but its Service declares none of them.");
+        }
+        return types.toArray(new String[0]);
+    }
+
     private static String[] mergeComponentTypes(String[] configured, java.util.List<String> components) {
+        return mergeComponentTypes(configured, components, true);
+    }
+
+    private static String[] mergeComponentTypes(String[] configured, java.util.List<String> components,
+                                                boolean baseWhenEmpty) {
         Set<String> types = new LinkedHashSet<>();
         if (configured != null) {
             for (String t : configured) {
@@ -377,7 +425,7 @@ public class ServiceBootstrap {
             }
         }
         // 确保至少包含 BASE
-        if (types.isEmpty()) {
+        if (types.isEmpty() && baseWhenEmpty) {
             types.add(ApiGroupType.BASE_NO1_NRC7);
         }
         return types.toArray(new String[0]);
