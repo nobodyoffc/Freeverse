@@ -852,6 +852,32 @@ public class ConstructParser {
 		return false;
 	}
 
+	/**
+	 * Set a service's dealer from a publish or update op. The dealer follows the dealerPubkey:
+	 * <ul>
+	 *   <li>an op with a dealerPubkey sets it, and the dealer is derived from it;</li>
+	 *   <li>an op with only a dealer sets it, and drops a stored dealerPubkey that no longer matches;</li>
+	 *   <li>an op with neither keeps both as they were.</li>
+	 * </ul>
+	 * Updates used to set the dealer from the op even when the op had none, erasing it while
+	 * keeping the stored dealerPubkey: a service with a pubkey but no dealer. A record left that
+	 * way gets its dealer back from the pubkey here.
+	 */
+	static void applyDealer(Service service, ServiceHistory hist) {
+		if (hist.getDealerPubkey() != null) {
+			service.setDealerPubkey(hist.getDealerPubkey());
+			service.setDealer(KeyTools.pubkeyToFchAddr(hist.getDealerPubkey()));
+		} else if (hist.getDealer() != null) {
+			if (service.getDealerPubkey() != null
+					&& !hist.getDealer().equals(KeyTools.pubkeyToFchAddr(service.getDealerPubkey()))) {
+				service.setDealerPubkey(null);
+			}
+			service.setDealer(hist.getDealer());
+		} else if (service.getDealer() == null && service.getDealerPubkey() != null) {
+			service.setDealer(KeyTools.pubkeyToFchAddr(service.getDealerPubkey()));
+		}
+	}
+
 	public boolean parseService(ElasticsearchClient esClient, ServiceHistory serviceHist) throws Exception {
 
 		if(serviceHist==null){
@@ -870,13 +896,7 @@ public class ConstructParser {
 					service.setDesc(serviceHist.getDesc());
 					service.setType(serviceHist.getType());
 					service.setVer(serviceHist.getVer());
-					service.setDealer(serviceHist.getDealer());
-
-					if(serviceHist.getDealerPubkey()!=null){
-						service.setDealerPubkey(serviceHist.getDealerPubkey());
-						String dealer = KeyTools.pubkeyToFchAddr(serviceHist.getDealerPubkey());
-						service.setDealer(dealer);
-					}
+					applyDealer(service, serviceHist);
 
 					service.setHome(serviceHist.getHome());
 					service.setComponents(serviceHist.getComponents());
@@ -1023,13 +1043,7 @@ public class ConstructParser {
 				service.setDesc(serviceHist.getDesc());
 				service.setType(serviceHist.getType());
 				service.setVer(serviceHist.getVer());
-				service.setDealer(serviceHist.getDealer());
-
-				if(serviceHist.getDealerPubkey()!=null){
-					service.setDealerPubkey(serviceHist.getDealerPubkey());
-					String dealer = KeyTools.pubkeyToFchAddr(serviceHist.getDealerPubkey());
-					service.setDealer(dealer);
-				}
+				applyDealer(service, serviceHist);
 
 				service.setHome(serviceHist.getHome());
 				service.setComponents(serviceHist.getComponents());
