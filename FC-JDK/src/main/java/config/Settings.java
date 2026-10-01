@@ -867,7 +867,8 @@ public class Settings {
         if (all != null) {
             for (Service s : all) {
                 ServiceType t = s.fetchServiceType();
-                if (t == type || (ServiceType.isFapi(type) && ServiceType.isFapi(t))) mine.add(s);
+                // a service published without a type is offered too: the user knows which is which
+                if (t == null || t == type || (ServiceType.isFapi(type) && ServiceType.isFapi(t))) mine.add(s);
             }
         }
         if (mine.isEmpty()) {

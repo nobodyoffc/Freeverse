@@ -184,6 +184,11 @@ public class ApiProvider extends Service {
                 }
                 case FAPI, FAPI_No1_NrC7 -> {
                     List<Service> serviceList = fetchServicesByType(serviceType, fapiClient, apipClient);
+                    if (serviceList == null || serviceList.isEmpty()) {
+                        // No client yet to list FAPI services with, e.g. a light server's first
+                        // module, which is its upstream: take the service's address and SID.
+                        return inputFapiDirectly(br);
+                    }
                     Service service = Configure.selectService(serviceList);
                     if(service==null){
                         System.out.println("No FAPI service available.");
@@ -230,6 +235,33 @@ public class ApiProvider extends Service {
         if(components!=null && !components.isEmpty())
             return components.get(0) + "@" + getApiUrl();
         return "NasaRPC" + "@" + getApiUrl();
+    }
+
+    /**
+     * Name a FAPI service by its FUDP URL and SID, when no client can list services on chain.
+     * Connecting fills in the rest from what the service announces.
+     */
+    boolean inputFapiDirectly(BufferedReader br) throws IOException {
+        String defaultUrl = "fudp://127.0.0.1:" + fapi.FapiDefaults.DEFAULT_FAPI_PORT;
+        System.out.println("No FAPI service can be listed yet (there is no FAPI or APIP client). Name it directly.");
+        while (true) {
+            String url = Inputer.promptAndSet(br, "the FUDP URL of the FAPI service. The default is " + defaultUrl, getApiUrl());
+            if (url == null) url = defaultUrl;
+            if (FapiClient.parseEndpoint(url) != null) {
+                setApiUrl(url);
+                break;
+            }
+            System.out.println("Not a FUDP URL. Try again.");
+        }
+        while (true) {
+            String sid = Inputer.promptAndSet(br, "the SID of the FAPI service", this.id);
+            if (sid != null && utils.Hex.isHex32(sid.trim())) {
+                this.id = sid.trim();
+                this.stdName = this.id;
+                return true;
+            }
+            System.out.println("A SID is 64 hex characters. Try again.");
+        }
     }
 
     private void inputSid(BufferedReader br) throws IOException {
