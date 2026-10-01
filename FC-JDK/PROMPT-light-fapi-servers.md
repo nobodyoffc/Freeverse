@@ -373,8 +373,18 @@ above plus the new tests is 148 tests, all passing.
 
 Still open:
 - **Pending top-ups** (`base.unconfirmedCashes`, D2) are not shown or credited early.
-- **Not run for real:** the one-time ES → LevelDB migrations of DISK and DOCK, and
-  `EsChainSource`'s paging against a live ES.
+- **Checked on the local ES (2026-10-01), read-only,** with `fapi.chain.LiveEsCheckTest`
+  (skipped when no ES answers at 127.0.0.1:9200):
+  - **DOCK:** `3b701e_dock` migrates whole, data included. For every recipient, at two
+    heights, the old ES `dock.fetch` query and the store return the same items in the
+    same order with the same three-value cursor.
+  - **DISK:** `3b701e_disk` and `66dba5_disk` migrate whole. The running total equals ES's
+    sum, and DiskSyncManager's first page matches.
+  - **`EsChainSource`:** best height matches. Cash paging over ~2,500 cashes of the owner
+    with the most (1.4M valid) matches ES's count, in order, with none twice. Valid
+    cashes, OpReturns and services match too.
+  - **Not migrated:** the older `{sid}_data` indices (documents keyed `did`, not `id`).
+    The code read `{sid}_disk` before this branch too, so nothing changes for them.
 - **Not tested:** the interactive paths (`--light` first-time setup, the upstream branch
   of `loadMyService`, the publish prompts).
 - **Checked with the Android app?** No. The code keeps the wire contracts (cursor shapes,
