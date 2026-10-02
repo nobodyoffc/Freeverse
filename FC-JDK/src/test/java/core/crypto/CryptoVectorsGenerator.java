@@ -63,6 +63,7 @@ public final class CryptoVectorsGenerator {
         write(dir.resolve("bundle.json"), gson, doc("Binary CryptoDataByte bundles (FTSP30). expect=decrypt: parse, check alg/type/kdfRecorded, decrypt with secret. expect=reject: a conforming parser must refuse the bytes. canonical=true: current writers produce exactly these bytes.", bundles));
         write(dir.resolve("algorithms.json"), gson, algorithmVectors());
         write(dir.resolve("vault.json"), gson, vaultVectors());
+        write(dir.resolve("backup.json"), gson, backupVectors(gson));
         System.out.println("Wrote vectors to " + dir.toAbsolutePath().normalize());
     }
 
@@ -262,6 +263,202 @@ public final class CryptoVectorsGenerator {
         o.addProperty("dekHex", HF.formatHex(dek));
         o.addProperty("dekCipher", dekCipher);
         return o;
+    }
+
+    // ==================== FTSP31 entity backups ====================
+
+    static final String FID_A = "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK";
+    static final String FID_B = "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW";
+    /** What Safe writes for 8 random bytes: unpadded Base32 of 0001020304050607. */
+    static final String RANDOM_PASSWORD = "AAAQEAYEAUDAO";
+    static final String BACKUP_TIME = "2026-10-02 12:00:00";
+    static final String APP_PASSWORD_HINT = "App password can not be shown. Please keep it carefully.";
+
+    /**
+     * Entity backup lists (FTSP31), written object for object as Safe's ExportKeysActivity and
+     * ExportSecretActivity write them. Every password cipher gets its own fixed IV so the file is
+     * stable across runs; real writers draw a random IV per cipher.
+     */
+    static JsonObject backupVectors(Gson gson) {
+        JsonArray v = new JsonArray();
+        int[] iv = {0};
+
+        v.add(backupEntry("BACKUP-KEYS-PLAIN", "KeyInfo", "plain", "import", null,
+                keyLines(gson, null, iv), keyItems()));
+        String keysApp = keyLines(gson, PASSWORD, iv);
+        v.add(backupEntry("BACKUP-KEYS-APP-PASSWORD", "KeyInfo", "appPassword", "import", PASSWORD,
+                keysApp, keyItems()));
+        v.add(backupEntry("BACKUP-KEYS-RANDOM-PASSWORD", "KeyInfo", "randomPassword", "import", null,
+                keyLines(gson, RANDOM_PASSWORD, iv), keyItems()));
+
+        v.add(backupEntry("BACKUP-SECRETS-PLAIN", "Secret", "plain", "import", null,
+                secretLines(gson, null, iv), secretItems()));
+        String secretsApp = secretLines(gson, PASSWORD, iv);
+        v.add(backupEntry("BACKUP-SECRETS-APP-PASSWORD", "Secret", "appPassword", "import", PASSWORD,
+                secretsApp, secretItems()));
+        v.add(backupEntry("BACKUP-SECRETS-RANDOM-PASSWORD", "Secret", "randomPassword", "import", null,
+                secretLines(gson, RANDOM_PASSWORD, iv), secretItems()));
+
+        JsonObject wrongKeys = backupEntry("BACKUP-KEYS-WRONG-PASSWORD", "KeyInfo", "appPassword", "reject",
+                "NotMyPassword", keysApp, null);
+        wrongKeys.addProperty("reason", "The password opens no prikeyCipher; nothing may be saved.");
+        v.add(wrongKeys);
+        JsonObject wrongSecrets = backupEntry("BACKUP-SECRETS-WRONG-PASSWORD", "Secret", "appPassword", "reject",
+                "NotMyPassword", secretsApp, null);
+        wrongSecrets.addProperty("reason", "The password opens no item cipher; nothing may be saved.");
+        v.add(wrongSecrets);
+
+        JsonObject mismatch = new JsonObject();
+        mismatch.addProperty("label", "not mine");
+        mismatch.addProperty("saveTime", BACKUP_TIME);
+        mismatch.addProperty("prikey", HF.formatHex(PRI_FID_A));
+        mismatch.addProperty("id", FID_B);
+        JsonObject fidMismatch = backupEntry("BACKUP-KEYS-FID-MISMATCH", "KeyInfo", "plain", "reject", null,
+                gson.toJson(mismatch), null);
+        fidMismatch.addProperty("reason", "The prikey belongs to " + FID_A + ", not to the item's id.");
+        v.add(fidMismatch);
+
+        JsonObject[] lines = backupKeyAndHeader("KeyInfo", 1, RANDOM_PASSWORD);
+        lines[0].addProperty("keyName", "000000000000");
+        JsonObject keyNameMismatch = backupEntry("BACKUP-KEYNAME-MISMATCH", "KeyInfo", "randomPassword", "reject", null,
+                gson.toJson(lines[0]) + "\n\n" + gson.toJson(lines[1]) + "\n\n"
+                        + gson.toJson(keyItem("A", PRI_FID_A, FID_A, RANDOM_PASSWORD, iv)), null);
+        keyNameMismatch.addProperty("reason", "BackupKey.keyName differs from BackupHeader.keyName.");
+        v.add(keyNameMismatch);
+
+        return doc("Entity backup lists (FTSP31): JSON objects separated by a blank line - an optional BackupKey, "
+                + "an optional BackupHeader, then the items. mode=plain: items in the clear. mode=appPassword: the "
+                + "reader asks for password. mode=randomPassword: the password is in the BackupKey. expect=import: "
+                + "reading backupText gives exactly items. expect=reject: the reader must refuse the list and save "
+                + "nothing. Key items carry prikeyCipher as a Base64 FTSP30 bundle and no pubkey; other items are "
+                + "encrypted whole as a FVEP8 Password cipher JSON.", v);
+    }
+
+    static JsonObject backupEntry(String id, String tClass, String mode, String expect, String password,
+                                  String backupText, JsonArray items) {
+        JsonObject o = new JsonObject();
+        o.addProperty("id", id);
+        o.addProperty("tClass", tClass);
+        o.addProperty("mode", mode);
+        o.addProperty("expect", expect);
+        if (password != null) o.addProperty("password", password);
+        o.addProperty("backupText", backupText);
+        if (items != null) o.add("items", items);
+        return o;
+    }
+
+    /** [BackupKey, BackupHeader] as Safe writes them for an encrypted export. */
+    static JsonObject[] backupKeyAndHeader(String tClass, int items, String randomPassword) {
+        String password = randomPassword != null ? randomPassword : PASSWORD;
+        String keyName = HF.formatHex(Hash.sha256(password.getBytes(StandardCharsets.UTF_8))).substring(0, 12);
+        JsonObject key = new JsonObject();
+        if (randomPassword != null) key.addProperty("password", randomPassword);
+        key.addProperty("time", BACKUP_TIME);
+        key.addProperty("keyName", keyName);
+        if (randomPassword == null) key.addProperty("hint", APP_PASSWORD_HINT);
+        return new JsonObject[]{key, header(tClass, items, keyName)};
+    }
+
+    static JsonObject header(String tClass, int items, String keyName) {
+        JsonObject header = new JsonObject();
+        header.addProperty("time", BACKUP_TIME);
+        header.addProperty("items", items);
+        if (keyName != null) {
+            header.addProperty("keyName", keyName);
+            header.addProperty("alg", FC_AesGcm256_No1_NrC7.getDisplayName());
+        }
+        header.addProperty("tClass", tClass);
+        return header;
+    }
+
+    /** Safe's BackupKeysActivity.addKeyInfoJson: no header when plain, and never a pubkey. */
+    static String keyLines(Gson gson, String password, int[] iv) {
+        StringBuilder sb = new StringBuilder();
+        if (password != null) {
+            JsonObject[] kh = backupKeyAndHeader("KeyInfo", 2, RANDOM_PASSWORD.equals(password) ? password : null);
+            sb.append(gson.toJson(kh[0])).append("\n\n").append(gson.toJson(kh[1])).append("\n\n");
+        }
+        sb.append(gson.toJson(keyItem("A", PRI_FID_A, FID_A, password, iv))).append("\n\n");
+        sb.append(gson.toJson(keyItem("B", PRI_FID_B, FID_B, password, iv)));
+        return sb.toString();
+    }
+
+    static JsonObject keyItem(String name, byte[] prikey, String fid, String password, int[] iv) {
+        JsonObject k = new JsonObject();
+        if (password != null) k.addProperty("prikeyCipher", passwordCipher(prikey, password, iv).toBase64());
+        k.addProperty("label", "key " + name);
+        k.addProperty("saveTime", BACKUP_TIME);
+        if (password == null) k.addProperty("prikey", HF.formatHex(prikey));
+        k.addProperty("id", fid);
+        return k;
+    }
+
+    static JsonArray keyItems() {
+        JsonArray a = new JsonArray();
+        a.add(expectedKey("key A", FID_A, PRI_FID_A, PUB_FID_A));
+        a.add(expectedKey("key B", FID_B, PRI_FID_B, PUB_FID_B));
+        return a;
+    }
+
+    static JsonObject expectedKey(String label, String fid, byte[] prikey, byte[] pubkey) {
+        JsonObject o = new JsonObject();
+        o.addProperty("fid", fid);
+        o.addProperty("label", label);
+        o.addProperty("prikeyHex", HF.formatHex(prikey));
+        o.addProperty("pubkeyHex", HF.formatHex(pubkey));
+        return o;
+    }
+
+    /** Safe's ExportSecretActivity: the header is always written, the BackupKey only when encrypted. */
+    static String secretLines(Gson gson, String password, int[] iv) {
+        StringBuilder sb = new StringBuilder();
+        if (password != null) {
+            JsonObject[] kh = backupKeyAndHeader("Secret", 2, RANDOM_PASSWORD.equals(password) ? password : null);
+            sb.append(gson.toJson(kh[0])).append("\n\n").append(gson.toJson(kh[1])).append("\n\n");
+        } else {
+            sb.append(gson.toJson(header("Secret", 2, null))).append("\n\n");
+        }
+        JsonArray items = secretItems();
+        for (int i = 0; i < items.size(); i++) {
+            JsonObject secret = items.get(i).getAsJsonObject();
+            String line = password == null ? gson.toJson(secret)
+                    : passwordCipher(gson.toJson(secret).getBytes(StandardCharsets.UTF_8), password, iv).toNiceJson();
+            sb.append(line);
+            if (i < items.size() - 1) sb.append("\n\n");
+        }
+        return sb.toString();
+    }
+
+    static JsonArray secretItems() {
+        JsonArray a = new JsonArray();
+        a.add(secret("Password", "Bank", "PIN 2468", "the card ending 1234"));
+        a.add(secret("Note", "Wifi", "Hello world!", null));
+        return a;
+    }
+
+    static JsonObject secret(String type, String title, String content, String memo) {
+        JsonObject o = new JsonObject();
+        o.addProperty("type", type);
+        o.addProperty("title", title);
+        o.addProperty("content", content);
+        if (memo != null) o.addProperty("memo", memo);
+        return o;
+    }
+
+    /** A Password cipher (AesGcm256, Argon2id) with the next fixed IV: 000102...0a then the counter. */
+    static CryptoDataByte passwordCipher(byte[] plaintext, String password, int[] iv) {
+        byte[] ivBytes = IV12.clone();
+        ivBytes[11] = (byte) (0x80 + iv[0]++);
+        byte[] key = Kdf.Argon2id_No1_NrC7.deriveSymkey(password.toCharArray(), ivBytes);
+        CryptoDataByte c = new Encryptor(FC_AesGcm256_No1_NrC7).encryptBySymkey(plaintext.clone(), key, ivBytes);
+        c.setAlg(FC_AesGcm256_No1_NrC7);
+        c.setType(EncryptType.Password);
+        c.setKdf(Kdf.Argon2id_No1_NrC7);
+        requireOk(c);
+        c.setData(null);
+        c.setSymkey(null);
+        c.setPassword(null);
+        return c;
     }
 
     static CryptoDataByte asyOneWay(AlgorithmId alg, byte[] pubB) {

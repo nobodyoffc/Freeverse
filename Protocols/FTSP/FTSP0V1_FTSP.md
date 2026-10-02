@@ -252,3 +252,4 @@ More categories can be added as needed.
 |28|[PhraseToPriKey](FTSP28V1_PhraseToPriKey.md)|Hashing / KeyDerivation|Brainwallet: passphrase → secp256k1 private key via Argon2id (`Argon2id@No1_NrC7` parameters, empty salt).|
 |29|[Argon2idPasswordToSymkey](FTSP29V1_Argon2idPasswordToSymkey.md)|Hashing / KeyDerivation|Default `EncryptType.Password` KDF: Argon2id (t=3, 64 MiB, p=1), salt = IV; KDF id `Argon2id@No1_NrC7`, bundle KDF byte `0x02`.|
 |30|[CryptoBundle](FTSP30V1_CryptoBundle.md)|Encoding|Binary `CryptoDataByte` bundle: algorithm PID prefix, type byte (incl. type 4 = Password + KDF id), keys, IV, cipher, `sum`; KDF registry; which profiles new writes may use.|
+|31|[EntityBackup](FTSP31V1_EntityBackup.md)|Encoding|Key and entity backup lists: optional `BackupKey` and `BackupHeader`, then items; plain, app-password and random-password modes; how readers classify objects, re-seal keys and refuse a wrong password.|

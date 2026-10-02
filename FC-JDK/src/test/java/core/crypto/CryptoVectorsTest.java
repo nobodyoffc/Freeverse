@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonStreamParser;
 import core.crypto.Algorithm.Bitcore;
 import data.fcData.AlgorithmId;
 import org.bouncycastle.crypto.generators.Argon2BytesGenerator;
@@ -17,8 +18,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -190,6 +193,77 @@ public class CryptoVectorsTest {
                 assertNull(VaultKey.unwrap(str(v, "dekCipher"), "not the password".toCharArray()), id + ": a wrong password must not unwrap");
             }
         }
+    }
+
+    @Test
+    void backup() throws Exception {
+        for (JsonElement e : vectors("backup.json")) {
+            JsonObject v = e.getAsJsonObject();
+            String id = str(v, "id");
+            JsonArray items;
+            try {
+                items = readBackup(str(v, "backupText"), str(v, "tClass"), str(v, "password"));
+            } catch (IllegalStateException refused) {
+                assertEquals("reject", str(v, "expect"), id + " was refused: " + refused.getMessage());
+                continue;
+            }
+            assertEquals("import", str(v, "expect"), id + " must be refused");
+            assertEquals(v.getAsJsonArray("items"), items, id);
+        }
+    }
+
+    /**
+     * The FTSP31 reading rules, as a reader that returns what it would save: for keys
+     * {fid, label, prikeyHex, pubkeyHex}, for other items the opened JSON. Throws
+     * IllegalStateException where the list must be refused.
+     */
+    static JsonArray readBackup(String text, String tClass, String typedPassword) {
+        JsonObject backupKey = null, header = null;
+        List<JsonObject> lines = new ArrayList<>();
+        JsonStreamParser parser = new JsonStreamParser(text);
+        while (parser.hasNext()) {
+            JsonObject o = parser.next().getAsJsonObject();
+            if (o.has("cipher") && o.has("iv")) lines.add(o);
+            else if (o.has("password") || o.has("symkey") || (o.has("hint") && o.has("keyName"))) backupKey = o;
+            else if (o.has("items") && o.has("time")) header = o;
+            else lines.add(o);
+        }
+        if (backupKey != null && header != null && header.has("keyName")
+                && !str(backupKey, "keyName").equals(str(header, "keyName")))
+            throw new IllegalStateException("keyName differs between BackupKey and BackupHeader");
+        String password = backupKey != null && backupKey.has("password") ? str(backupKey, "password") : typedPassword;
+
+        JsonArray out = new JsonArray();
+        for (JsonObject line : lines) {
+            JsonObject item = line;
+            if (line.has("cipher") && line.has("iv")) {
+                item = JsonParser.parseString(new String(open(line.toString(), true, password), StandardCharsets.UTF_8)).getAsJsonObject();
+            }
+            if (!"KeyInfo".equals(tClass)) {
+                out.add(item);
+                continue;
+            }
+            byte[] prikey = item.has("prikey") ? KeyTools.getPrikey32(str(item, "prikey"))
+                    : open(str(item, "prikeyCipher"), false, password);
+            if (prikey == null || prikey.length != 32) throw new IllegalStateException("not a prikey");
+            String fid = KeyTools.prikeyToFid(prikey);
+            if (!fid.equals(str(item, "id"))) throw new IllegalStateException("prikey is not " + str(item, "id") + "'s");
+            JsonObject key = new JsonObject();
+            key.addProperty("fid", fid);
+            key.addProperty("label", str(item, "label"));
+            key.addProperty("prikeyHex", HF.formatHex(prikey));
+            key.addProperty("pubkeyHex", HF.formatHex(KeyTools.prikeyToPubkey(prikey)));
+            out.add(key);
+        }
+        return out;
+    }
+
+    private static byte[] open(String cipher, boolean json, String password) {
+        if (password == null) throw new IllegalStateException("a password is needed");
+        CryptoDataByte c = json ? CryptoDataByte.fromJson(cipher) : CryptoDataByte.fromBase64(cipher);
+        Decryptor.decryptByPassword(c, password.toCharArray());
+        if (!Integer.valueOf(0).equals(c.getCode())) throw new IllegalStateException("the password does not open it");
+        return c.getData();
     }
 
     private static CryptoDataByte decryptAlgorithmVector(JsonObject v) throws Exception {

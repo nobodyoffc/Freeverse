@@ -219,7 +219,7 @@ The following table lists the major entity types currently defined in the Freeve
 
 5. The key algorithm for Subject in this version is ECC secp256k1. Future versions of this protocol MAY introduce additional key algorithms.
 
-6. The private key of a Subject MUST NOT be included in any serialized, transmitted, or stored entity representation (except in encrypted form for the subject's own backup purposes).
+6. The private key of a Subject MUST NOT be included in any serialized, transmitted, or stored entity representation (except in encrypted form for the subject's own backup purposes). The one unencrypted exception is a plain entity backup, which readers accept and re-encrypt at once; see [FTSP31](../FTSP/FTSP31V1_EntityBackup.md).
 
 7. Objects MUST be representable as a byte array. The serialization method is determined by the concrete entity type or the protocol that defines it.
 
