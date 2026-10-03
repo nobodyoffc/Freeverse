@@ -132,7 +132,10 @@ public class AckManager {
             tail++;
             return true;
         }
-        // Out of order or duplicate: binary search for its place.
+        // Out of order or duplicate: binary search for its place. Room is made
+        // first, since compacting moves the entries and would leave a found
+        // index pointing past the end.
+        ensureRoom();
         int lo = head, hi = tail;
         while (lo < hi) {
             int mid = (lo + hi) >>> 1;
@@ -141,7 +144,6 @@ public class AckManager {
         if (lo < tail && packetNumbers[lo] == packetNumber) {
             return false;
         }
-        ensureRoom();
         System.arraycopy(packetNumbers, lo, packetNumbers, lo + 1, tail - lo);
         System.arraycopy(receiveTimes, lo, receiveTimes, lo + 1, tail - lo);
         packetNumbers[lo] = packetNumber;

@@ -32,6 +32,40 @@ class AckRetentionTest {
         return conn.getAckManager();
     }
 
+    /**
+     * A late packet number arriving when the buffer is full and its front has
+     * been pruned: making room compacts the entries, and the insert position,
+     * once found before that, pointed past the end ("arraycopy: length -917 is
+     * negative" on a CALL relay).
+     */
+    @Test
+    void aLatePacketIntoAFullPrunedBufferIsRecorded() throws Exception {
+        AckManager acks = freshManager();
+
+        // Half the buffer's 1024 slots, then let them age out of the retention window.
+        for (long pn = 0; pn < 1024; pn += 2) {
+            acks.onPacketReceived(pn);
+        }
+        Thread.sleep(PAST_RETENTION_MS);
+        // The other half fills the buffer, all but 1500; the prune then drops the aged half from the front.
+        for (long pn = 1024; pn <= 1536; pn++) {
+            if (pn != 1500) acks.onPacketReceived(pn);
+        }
+        assertNotNull(acks.generateAckFrame(Integer.MAX_VALUE));
+
+        // A late number: it goes between retained ones while the buffer is full.
+        assertDoesNotThrow(() -> acks.onNonElicitingPacketReceived(1500));
+        acks.onPacketReceived(1537);
+
+        AckFrame frame = acks.generateAckFrame(Integer.MAX_VALUE);
+        assertNotNull(frame);
+        boolean late = false;
+        for (long pn : frame.getAcknowledgedPackets()) {
+            if (pn == 1500) late = true;
+        }
+        assertTrue(late, "the late packet is acknowledged");
+    }
+
     @Test
     void aReplayedPacketNumberDoesNotPinTheRetentionPruneOpen() throws Exception {
         AckManager acks = freshManager();
