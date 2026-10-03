@@ -12,6 +12,9 @@ import data.apipData.Fcdsl;
 import data.fcData.ReplyBody;
 import clients.ApipClient;
 import fapi.client.FapiClient;
+import fudp.node.FudpNode;
+import fudp.node.NodeConfig;
+import org.bitcoinj.core.ECKey;
 import data.feipData.Service;
 import ui.Inputer;
 import utils.JsonUtils;
@@ -24,6 +27,8 @@ import server.FreeApi;
 
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -239,6 +244,7 @@ public class ApiProvider extends Service {
 
     /**
      * Name a FAPI service by its FUDP URL and SID, when no client can list services on chain.
+     * The SID is asked for only when the service at that URL does not announce one.
      * Connecting fills in the rest from what the service announces.
      */
     boolean inputFapiDirectly(BufferedReader br) throws IOException {
@@ -253,6 +259,12 @@ public class ApiProvider extends Service {
             }
             System.out.println("Not a FUDP URL. Try again.");
         }
+        String found = discoverFapiSid(getApiUrl());
+        if (found != null) {
+            this.id = found;
+            this.stdName = this.id;
+            return true;
+        }
         while (true) {
             String sid = Inputer.promptAndSet(br, "the SID of the FAPI service", this.id);
             if (sid != null && utils.Hex.isHex32(sid.trim())) {
@@ -261,6 +273,52 @@ public class ApiProvider extends Service {
                 return true;
             }
             System.out.println("A SID is 64 hex characters. Try again.");
+        }
+    }
+
+    /**
+     * Ask the service at a FUDP URL for its SID: HELLO for its key, then a ping for its
+     * services. Uses a throwaway node, since no node exists yet when this provider is named.
+     *
+     * @return the SID of the FAPI service there, or null if it could not be learned
+     */
+    @Nullable
+    private static String discoverFapiSid(String url) {
+        FapiClient.Endpoint endpoint = FapiClient.parseEndpoint(url);
+        if (endpoint == null) return null;
+        System.out.println("Asking " + url + " for its SID...");
+        FudpNode node = null;
+        Path dataDir = null;
+        try {
+            dataDir = Files.createTempDirectory("fapi-sid");
+            NodeConfig nodeConfig = new NodeConfig();
+            nodeConfig.setPort(0);
+            nodeConfig.setDataDir(dataDir.toString());
+            node = new FudpNode(new ECKey().getPrivKeyBytes(), nodeConfig);
+            node.start();
+            List<Service> services = FapiClient.discoverViaHelloAndPing(node, endpoint.host(), endpoint.port(),
+                    FapiClient.DEFAULT_HELLO_TIMEOUT_MS, FapiClient.DEFAULT_PING_TIMEOUT_MS).getServices();
+            if (services == null || services.isEmpty()) {
+                System.out.println("The service did not announce a SID.");
+                return null;
+            }
+            Service service = services.size() == 1 ? services.get(0) : Configure.selectService(services);
+            if (service == null || !utils.Hex.isHex32(service.getId())) return null;
+            System.out.println("Found the SID: " + service.getId());
+            return service.getId();
+        } catch (Throwable e) {
+            log.debug("discoverFapiSid: {} failed", url, e);
+            System.out.println("Could not reach " + url + ": " + e.getMessage());
+            return null;
+        } finally {
+            if (node != null) node.stop();
+            if (dataDir != null) {
+                try (java.util.stream.Stream<Path> paths = Files.walk(dataDir)) {
+                    paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+                } catch (IOException ignored) {
+                    // A leftover temp directory is harmless
+                }
+            }
         }
     }
 
