@@ -38,8 +38,22 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
     private static final String COMPONENT_NAME = "CALL";
 
     private CallRelay relay;
-    private FudpNode node;
+    private volatile FudpNode node;
     private ScheduledExecutorService ticker, packer;
+
+    /**
+     * The server's FUDP node. Components are initialized before the bootstrap
+     * sets the node, so it is looked up again until it is there.
+     */
+    private FudpNode node() {
+        FudpNode n = node;
+        if (n == null) {
+            n = server.getFudpNode();
+            if (n == null) throw new IllegalStateException("FUDP node not set yet");
+            node = n;
+        }
+        return n;
+    }
 
     @Override
     public String getName() {
@@ -59,25 +73,25 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
         relay = new CallRelay(new CallRelay.Transport() {
             @Override
             public boolean sendDatagram(long connectionId, byte[] data) {
-                return node.sendDatagram(connectionId, data) == DatagramResult.SENT;
+                return node().sendDatagram(connectionId, data) == DatagramResult.SENT;
             }
 
             @Override
             public int sendDatagrams(long connectionId, List<byte[]> data) {
                 int sent = 0;
-                for (DatagramResult r : node.sendDatagrams(connectionId, data)) if (r == DatagramResult.SENT) sent++;
+                for (DatagramResult r : node().sendDatagrams(connectionId, data)) if (r == DatagramResult.SENT) sent++;
                 return sent;
             }
 
             @Override
             public void enableDatagrams(long connectionId) {
-                node.enableDatagrams(connectionId);
+                node().enableDatagrams(connectionId);
             }
 
             @Override
             public void notify(String peerId, int dataType, byte[] data) {
                 try {
-                    node.sendNotify(peerId, data, dataType);
+                    node().sendNotify(peerId, data, dataType);
                 } catch (Exception e) {
                     log.debug("CALL notify to {} failed: {}", peerId, e.getMessage());
                 }
@@ -85,7 +99,7 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
 
             @Override
             public String peerAddress(long connectionId) {
-                PeerConnection c = node.getProtocol().getConnectionManager().getByConnectionId(connectionId);
+                PeerConnection c = node().getProtocol().getConnectionManager().getByConnectionId(connectionId);
                 if (c == null || !(c.getPeerAddress() instanceof java.net.InetSocketAddress a) || a.getAddress() == null) {
                     return null;
                 }
@@ -95,7 +109,7 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
 
             @Override
             public long lastHeardMs(long connectionId) {
-                PeerConnection c = node.getProtocol().getConnectionManager().getByConnectionId(connectionId);
+                PeerConnection c = node().getProtocol().getConnectionManager().getByConnectionId(connectionId);
                 return c == null ? 0 : c.getLastReceivedMs();
             }
         }, new CallRelay.Billing() {
@@ -176,12 +190,12 @@ public class CallComponent extends AbstractFapiComponent implements FudpEventAwa
                 case "create" -> successResponse(id, relay.create(peerId, params, now));
                 case "register" -> successResponse(id, relay.register(peerId, params, now));
                 case "join" -> {
-                    PeerConnection conn = node.getProtocol().getConnectionManager().getAnyConnection(peerId);
+                    PeerConnection conn = node().getProtocol().getConnectionManager().getAnyConnection(peerId);
                     if (conn == null) yield errorResponse(id, FapiCode.BAD_REQUEST, "no FUDP connection");
                     yield successResponse(id, relay.join(peerId, conn.getConnectionId(), params, now));
                 }
                 case "leave" -> {
-                    PeerConnection conn = node.getProtocol().getConnectionManager().getAnyConnection(peerId);
+                    PeerConnection conn = node().getProtocol().getConnectionManager().getAnyConnection(peerId);
                     if (conn != null) relay.leave(conn.getConnectionId(), now);
                     yield successResponse(id, Map.of());
                 }
