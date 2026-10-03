@@ -328,7 +328,22 @@ public class ServiceBootstrap {
             log.error("Port {} is already in use", port);
             throw e;
         }
-        
+
+        // A CALL relay also takes FUDP over TCP (FUDP8), for networks that drop UDP
+        // replies from abroad (VOICE_SPEC §11.1); clients fall back to it on their own.
+        // -Dfapi.tcpPort picks the port, the UDP one by default; 0 turns it off.
+        if (server.getComponent("CALL") != null) {
+            int tcpPort = Integer.getInteger("fapi.tcpPort", port);
+            if (tcpPort > 0) {
+                try {
+                    fudpNode.getProtocol().tcp().listen(tcpPort);
+                    log.info("FUDP over TCP on port {}", tcpPort);
+                } catch (IOException e) {
+                    log.warn("Could not listen for FUDP over TCP on port {}: {}", tcpPort, e.getMessage());
+                }
+            }
+        }
+
         return fudpNode;
     }
     
