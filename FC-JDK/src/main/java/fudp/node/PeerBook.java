@@ -2,6 +2,7 @@ package fudp.node;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import fudp.connection.ConnectionState;
 
@@ -12,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -248,15 +250,21 @@ public class PeerBook {
 
     /**
      * Save peers to disk.
+     * <p>
+     * Synchronized and written via a temp file + rename: callers run on several
+     * threads, and two interleaved FileWriters once left a short list followed by
+     * the tail of a longer one, which then failed to parse on every start.
      */
-    public void save() {
+    public synchronized void save() {
         try {
             Files.createDirectories(storageFile.getParent());
-            try (Writer writer = new FileWriter(storageFile.toFile())) {
+            Path tmp = storageFile.resolveSibling(storageFile.getFileName() + ".tmp");
+            try (Writer writer = new FileWriter(tmp.toFile())) {
                 // Convert to list for JSON
                 List<Peer> peerList = new ArrayList<>(peers.values());
                 gson.toJson(peerList, writer);
             }
+            Files.move(tmp, storageFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (IOException e) {
             // Log error but don't throw
             System.err.println("Failed to save peers: " + e.getMessage());
@@ -297,6 +305,17 @@ public class PeerBook {
             }
         } catch (IOException e) {
             System.err.println("Failed to load peers: " + e.getMessage());
+        } catch (JsonParseException e) {
+            // The peer book is only a cache; a corrupt one must not stop the node.
+            System.err.println("Corrupt peer book, starting empty: " + e.getMessage());
+            peers.clear();
+            peersByAlias.clear();
+            try {
+                Files.move(storageFile, storageFile.resolveSibling(storageFile.getFileName() + ".corrupt"),
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException moveError) {
+                System.err.println("Failed to set corrupt peer book aside: " + moveError.getMessage());
+            }
         }
     }
 

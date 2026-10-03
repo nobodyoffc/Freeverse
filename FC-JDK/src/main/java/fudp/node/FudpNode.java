@@ -124,24 +124,31 @@ public class FudpNode implements Protocol.PacketListener {
         this.protocol = new Protocol(privateKey, config.getPort(), config.getResolvedDataDir(),
                 config.getMaxPacketSize(), config.getPacingBurstOverride(),
                 config.getPacingIntervalNanos(), config.getSocketBufferSize());
-        // Share the NodeConfig's DDoSConfig with Protocol so runtime toggling takes effect immediately
-        this.protocol.initDDoSDefense(config.getDdosConfig());
-        this.protocol.addPacketListener(this);
+        // Protocol has already bound the UDP port; if anything below throws (e.g. a
+        // corrupt peer book), release it, or every retry finds the port in use.
+        try {
+            // Share the NodeConfig's DDoSConfig with Protocol so runtime toggling takes effect immediately
+            this.protocol.initDDoSDefense(config.getDdosConfig());
+            this.protocol.addPacketListener(this);
 
-        String dataDir = config.getResolvedDataDir();
-        String localFid = protocol.getLocalFid();
-        this.peerBook = new PeerBook(dataDir, config.getAddressCacheTtlMs(), localFid);
+            String dataDir = config.getResolvedDataDir();
+            String localFid = protocol.getLocalFid();
+            this.peerBook = new PeerBook(dataDir, config.getAddressCacheTtlMs(), localFid);
 
-        // Create message handler
-        this.messageHandler = createMessageHandler(null);
+            // Create message handler
+            this.messageHandler = createMessageHandler(null);
 
-        // Use a random 16-bit instance ID instead of fidHash to prevent messageId
-        // collisions when multiple JVM instances run with the same FID (same private key)
-        // on different ports. fidHash was deterministic and caused identical IDs.
-        this.instanceId = new java.security.SecureRandom().nextInt() & 0xFFFF;
-        this.messageIdGenerator = new AtomicLong(0);
-        this.scheduler = Executors.newScheduledThreadPool(1);
-        this.lastPongInfoSent = new ConcurrentHashMap<>();
+            // Use a random 16-bit instance ID instead of fidHash to prevent messageId
+            // collisions when multiple JVM instances run with the same FID (same private key)
+            // on different ports. fidHash was deterministic and caused identical IDs.
+            this.instanceId = new java.security.SecureRandom().nextInt() & 0xFFFF;
+            this.messageIdGenerator = new AtomicLong(0);
+            this.scheduler = Executors.newScheduledThreadPool(1);
+            this.lastPongInfoSent = new ConcurrentHashMap<>();
+        } catch (RuntimeException | Error e) {
+            protocol.stop();
+            throw e;
+        }
     }
     
     /**
