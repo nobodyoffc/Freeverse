@@ -171,7 +171,9 @@ public class ServiceBootstrap {
             
             // 5. 创建 NodeConfig
             NodeConfig nodeConfig = new NodeConfig();
-            nodeConfig.setMaxPacketSize(8000);
+            // Keep NodeConfig's MTU-safe packet size: a datagram over ~1500 bytes is
+            // IP-fragmented, and paths that drop fragments then lose every reply
+            // bigger than one MTU, retransmitting it until the stream is abandoned.
             nodeConfig.setSocketBufferSize(4 * 1024 * 1024);
             Map<String, Object> settingMap = config.getSettingMap();
             Object clientPortObj = settingMap.get("fapiClientPort");
@@ -314,7 +316,7 @@ public class ServiceBootstrap {
         NodeConfig nodeConfig = new NodeConfig();
         nodeConfig.setPort(port);
         nodeConfig.setDataDir("fudp_data/" + settings.getMainFid());
-        nodeConfig.setMaxPacketSize(8000);
+        // MTU-safe packet size from NodeConfig; see bootstrapClient.
         nodeConfig.setSocketBufferSize(4 * 1024 * 1024);
         nodeConfig.setPongDataProvider(server::buildAdvertiseData);
         

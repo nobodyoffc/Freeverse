@@ -205,7 +205,6 @@ public class SmokeTest {
             NodeConfig cfg = new NodeConfig()
                     .setPort(port)
                     .setDataDir(tmp.toString())
-                    .setMaxPacketSize(8000)
                     .setSocketBufferSize(4 * 1024 * 1024)
                     .setRequestTimeoutMs(120_000);
             node = new FudpNode(prikey, cfg);

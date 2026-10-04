@@ -112,10 +112,11 @@ public class FreeIM implements NodeEventListener {
             node.stop();
         }
         System.out.printf("  Starting FUDP on port %d...%n", port);
+        // NodeConfig's default packet size stays under one MTU; bigger datagrams
+        // are IP-fragmented and lost on paths that drop fragments.
         NodeConfig config = new NodeConfig()
                 .setPort(port)
                 .setDataDir(dataDir.toString())
-                .setMaxPacketSize(8000)                     // 8KB MTU for faster file transfer (vs 1350 default)
                 .setSocketBufferSize(4 * 1024 * 1024)       // 4MB socket buffers to reduce packet loss
                 .setRequestTimeoutMs(120_000);               // 2 min (file offers need user interaction)
         node = new FudpNode(prikey, config);
