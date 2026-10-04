@@ -126,8 +126,7 @@ public class FapiClient {
             // FUDP uses STATUS_SUCCESS = 0 for success, not HTTP 200
             if (response.getStatusCode() != ResponseMessage.STATUS_SUCCESS) {
                 this.lastError = new IOException("Request failed with status: " + response.getStatusCode());
-                this.lastResponse = buildErrorResponse(response.getStatusCode(),
-                    response.getData() != null ? new String(response.getData()) : "Unknown error");
+                this.lastResponse = decodeErrorReply(response).response();
                 return lastResponse;
             }
             
@@ -288,10 +287,9 @@ public class FapiClient {
 
             if (response.getStatusCode() != ResponseMessage.STATUS_SUCCESS) {
                 this.lastError = new IOException("Request failed with status: " + response.getStatusCode());
-                FapiResponse errorResp = buildErrorResponse(response.getStatusCode(),
-                    response.getData() != null ? new String(response.getData()) : "Unknown error");
-                this.lastResponse = errorResp;
-                return new UnifiedResponse(errorResp, null);
+                UnifiedResponse errorReply = decodeErrorReply(response);
+                this.lastResponse = errorReply.response();
+                return errorReply;
             }
 
             // 使用统一编码格式解析响应（包含可能的二进制数据）
@@ -1210,9 +1208,7 @@ public class FapiClient {
             
             if (response.getStatusCode() != fudp.message.ResponseMessage.STATUS_SUCCESS) {
                 this.lastError = new IOException("Request failed with status: " + response.getStatusCode());
-                FapiResponse errorResp = buildErrorResponse(response.getStatusCode(),
-                    response.getData() != null ? new String(response.getData()) : "Unknown error");
-                this.lastResponse = errorResp;
+                this.lastResponse = decodeErrorReply(response).response();
                 return null;
             }
             
@@ -1835,6 +1831,31 @@ public class FapiClient {
         return ObjectUtils.objectToMap(response.getData(), keyClass, valueClass);
     }
     
+    /**
+     * The reply to a request that failed. A FAPI server sends its error replies
+     * encoded like any other (code, message, data, balance), so decode that and
+     * keep its data — road.relay's per-target results, the balance on a 402.
+     * Only a body that is not a FAPI reply is taken as plain text.
+     */
+    private UnifiedResponse decodeErrorReply(ResponseMessage response) {
+        int status = response.getStatusCode();
+        byte[] body = response.getData();
+        if (UnifiedCodec.isUnifiedProtocol(body)) {
+            try {
+                UnifiedResponse reply = UnifiedCodec.decodeResponse(body);
+                if (reply != null && reply.response() != null) {
+                    if (reply.response().getCode() == null) reply.response().setCode(status);
+                    updateBalanceFromResponse(reply.response());
+                    return reply;
+                }
+            } catch (Exception e) {
+                log.debug("Error reply with status {} is not a FAPI reply: {}", status, e.getMessage());
+            }
+        }
+        String text = body != null && body.length > 0 ? new String(body, StandardCharsets.UTF_8) : "Unknown error";
+        return new UnifiedResponse(buildErrorResponse(status, text), null);
+    }
+
     private FapiResponse buildErrorResponse(int code, String message) {
         FapiResponse response = new FapiResponse();
         response.setCode(code);

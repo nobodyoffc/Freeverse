@@ -20,7 +20,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * A failed relay target is counted once in road.stats (FAPI15 §6): a target
- * the server has never heard of is NOT_FOUND, not also DELIVERY_FAILED.
+ * the server has never heard of is NOT_FOUND, not also DELIVERY_FAILED. And the
+ * client decodes the server's error replies, keeping their data.
  */
 public class RoadStatsCountTest {
 
@@ -75,6 +76,17 @@ public class RoadStatsCountTest {
             assertNotNull(r, "relay answered");
             assertFalse(r.success());
             assertEquals(502, r.code(), "every target failed");
+            // The 502 reply still carries the per-target results.
+            FapiClient.TargetRelayResult t = r.getResult(nobody);
+            assertNotNull(t, "a result for the target");
+            assertFalse(t.success());
+            assertEquals(404, t.code());
+            assertEquals("Relayed to 0/1 targets", r.message(), "the server's message, decoded");
+
+            // Any error reply is decoded, not kept as raw bytes.
+            assertNull(sender.mapFind(nobody));
+            assertEquals(404, sender.getLastResponse().getCode());
+            assertEquals("FID not registered: " + nobody, sender.getLastResponse().getMessage());
 
             Map<String, Object> stats = sender.roadStats();
             assertNotNull(stats, "road.stats answered");
