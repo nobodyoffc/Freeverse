@@ -145,6 +145,12 @@ public class BalanceVerifier {
         }
 
         long diff = serverBalance - expectedBalance;
+        if (diff > 0) {
+            // A rise is a credit: a top-up, an auto-recharge landing, a refund.
+            // Overcharging only ever lowers the balance, so a rise is not drift.
+            expectedBalance = serverBalance;
+            return Result.noop();
+        }
         long absDiff = Math.abs(diff);
         long warnThreshold = Math.max(toleranceSatMin, pctThreshold(expectedBalance, tolerancePct));
         long accumThreshold = Math.max(accumWarnSat, pctThreshold(expectedBalance, accumWarnPct));
@@ -158,7 +164,13 @@ public class BalanceVerifier {
                 stopped = action == Action.stop;
                 log.warn("Balance drift STOP: drift={}, threshold={}, expected={}, server={}", absDiff, stopThreshold, expectedBalance, serverBalance);
                 recordDriftEvent(absDiff, stopThreshold, "STOP");
-                return action == Action.stop ? Result.stop(absDiff, stopThreshold) : Result.warn(absDiff, stopThreshold);
+                if (action == Action.stop) return Result.stop(absDiff, stopThreshold);
+                // Only warning: start over from what the server says, or every
+                // later reply is measured against the same stale value and warns again.
+                expectedBalance = serverBalance;
+                consecutiveDrift = 0;
+                accumulatedDrift = 0;
+                return Result.warn(absDiff, stopThreshold);
             }
 
             if (accumulatedDrift >= accumThreshold || consecutiveDrift >= maxConsecutiveDrift) {

@@ -884,6 +884,8 @@ public class StartFapiClient {
                             System.out.println("Target DOCK: " + respData.get("targetDockUrl"));
                             System.out.println("Local Fee: " + respData.get("localFee") + " satoshi");
                             System.out.println("Remote Fee: " + respData.get("remoteFee") + " satoshi");
+                        }
+                        if (respData.get("totalFee") != null) {
                             System.out.println("Total Fee: " + respData.get("totalFee") + " satoshi");
                         }
                     }
