@@ -114,7 +114,10 @@ public class ComponentRegistry {
                 log.warn("Component type {} is registered but has no implementation yet", upperType);
             }
         }
-        
+
+        // Components initialize in this order, and ROAD looks MAP up in its
+        // initialize: MAP goes first, whatever order the Service declares them in.
+        components.sort(java.util.Comparator.comparingInt(c -> c instanceof MapComponent ? 0 : 1));
         return components;
     }
     
