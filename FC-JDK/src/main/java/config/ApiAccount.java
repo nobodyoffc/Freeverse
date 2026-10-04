@@ -205,7 +205,7 @@ public class ApiAccount {
         NaSaRpcClient.BlockchainInfo blockchainInfo = naSaRpcClient.getBlockchainInfo();
 
         if(blockchainInfo==null){
-            System.out.println("Failed to connect NaSa RPC.");
+            System.out.println("Failed to connect NaSa RPC on "+apiUrl+". Make sure the FCH node is running and the URL, username and password are right.");
             return null;
         }
 
@@ -228,15 +228,18 @@ public class ApiAccount {
             return null;
         }
         esClientMaker = new EsClientMaker();
-        esClientMaker.getEsClientSilent(this,symkey);
+        if(esClientMaker.getEsClientSilent(this,symkey)==null){
+            System.out.println("Failed to connect ES on "+apiUrl+". Make sure Elasticsearch is running and the URL, username and password are right.");
+            return null;
+        }
 
         try {
             IndicesResponse result = esClientMaker.esClient.cat().indices();
             log.info("Got ES client. There are "+result.valueBody().size()+" indices in ES.");
             System.out.println("ES client on "+apiUrl +" is created.\n");
-        } catch (IOException e) {
-            log.debug("Failed to create ES client. Check ES.");
-            System.exit(0);
+        } catch (IOException | RuntimeException e) {
+            System.out.println("ES on "+apiUrl+" is connected but failed to list its indices: "+e.getMessage());
+            return null;
         }
         this.client = esClientMaker.esClient;
         return esClientMaker.esClient;

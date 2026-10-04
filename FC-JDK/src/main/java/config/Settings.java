@@ -1587,11 +1587,16 @@ public class Settings {
         int total = modules.size();
         System.out.println("\nThere are "+ total +" modules to be loaded.");
         int count = 1;
+        List<String> failed = new ArrayList<>();
         for (Module module : modules) {
             System.out.println("Load module "+(count++) + "/"+ total +"...");
 
             switch (module.getType()) {
-                case SERVICE -> initClientGroup(ServiceType.valueOf(module.getName()));
+                case SERVICE -> {
+                    ServiceType type = ServiceType.valueOf(module.getName());
+                    initClientGroup(type);
+                    if (!isClientGroupConnected(type)) failed.add(module.getName());
+                }
                 case MANAGER -> {
                     // Managers such as ACCOUNT dereference the service (settings.getService().getId()).
                     // An APIP/FAPI server can't run without a service, and it is loaded lazily while the
@@ -1611,7 +1616,17 @@ public class Settings {
             }
 
         }
-        System.out.println("All the "+ total +" modules are loaded.\n");
+        if (failed.isEmpty()) System.out.println("All the "+ total +" modules are loaded.\n");
+        else System.out.println((total - failed.size()) + " of the " + total + " modules are loaded. Not connected: "
+                + String.join(", ", failed) + ". Features depending on them will not work until they are available.\n");
+    }
+
+    /** False when the group has accounts but none of them got a client. FAPI groups may legitimately be empty here. */
+    private boolean isClientGroupConnected(ServiceType type) {
+        ClientGroup group = clientGroups == null ? null : clientGroups.get(type);
+        if (group == null) return ServiceType.isFapi(type);
+        if (group.getAccountIds().isEmpty()) return true;
+        return group.getClientMap() != null && group.getClientMap().values().stream().anyMatch(Objects::nonNull);
     }
 
 

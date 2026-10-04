@@ -191,12 +191,14 @@ public class EsClientMaker {
             }
 
             if (esClient == null) {
-                log.debug("Create SSL ES client failed. Check ES and Config.json.");
+                log.debug("Create ES client failed. Check ES and Config.json.");
                 return null;
             }
         } catch (Exception e) {
-            log.debug("Create SSL ES client failed. ");
-            e.printStackTrace();
+            System.out.println("Failed to connect ES server on " + ipAndPort.ip + ":" + ipAndPort.port + " with authentication: " + reasonOf(e));
+            log.debug("Create SSL ES client failed.", e);
+            closeQuietly();
+            esClient = null;
             return null;
         }
 
@@ -225,7 +227,9 @@ public class EsClientMaker {
                 String clusterName = esClient.info().clusterName();
                 log.debug("Client has been created. Cluster name:" + clusterName);
             }catch (Exception e){
-                System.out.println("Failed to connect ES server.");
+                System.out.println("Failed to connect ES server on " + ip + ":" + port + ": " + reasonOf(e));
+                closeQuietly();
+                esClient = null;
                 return null;
             }
             return esClient;
@@ -275,6 +279,22 @@ public class EsClientMaker {
         log.debug("Client has been created. Cluster name:" + esClient.info().clusterName());
 
         return esClient;
+    }
+
+    /** The innermost message, e.g. "Connection refused" rather than the wrapper's. */
+    private static String reasonOf(Throwable e) {
+        Throwable t = e;
+        while (t.getCause() != null && t.getCause() != t) t = t.getCause();
+        return t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
+    }
+
+    private void closeQuietly() {
+        try {
+            if (this.restClient != null) this.restClient.close();
+        } catch (IOException ignored) {
+        }
+        this.restClient = null;
+        this.transport = null;
     }
 
     public void shutdownClient() throws IOException {

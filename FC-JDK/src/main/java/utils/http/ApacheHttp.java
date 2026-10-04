@@ -44,10 +44,19 @@ public class ApacheHttp {
 
             Response response1 = makeResponseFromApache(response);
             if (response1 != null) return response1;
+        } catch (IOException e) {
+            reportTransportFailure(requestUrl, e);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Request to {} failed.", requestUrl, e);
         }
         return null;
+    }
+
+    /** A server that is down or unreachable is an expected condition: one line, no stack trace. */
+    private static void reportTransportFailure(String requestUrl, IOException e) {
+        Throwable cause = e.getCause() != null ? e.getCause() : e;
+        String reason = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
+        log.warn("Cannot reach {}: {}", requestUrl, reason);
     }
 
     private static Response apachePostRequest(String requestUrl, Map<String, String> headerMap, String requestBody) {
@@ -65,8 +74,10 @@ public class ApacheHttp {
             HttpResponse response = httpClient.execute(httpPost);
             Response response1 = makeResponseFromApache(response);
             if (response1 != null) return response1;
+        } catch (IOException e) {
+            reportTransportFailure(requestUrl, e);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Request to {} failed.", requestUrl, e);
         }
         return null;
     }
