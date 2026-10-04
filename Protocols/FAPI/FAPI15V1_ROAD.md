@@ -372,12 +372,12 @@ Top-level `code` values returned by `road.relay` and `road.forward`:
 | 405 | METHOD_NOT_ALLOWED | Unknown method name on the ROAD endpoint. |
 | 502 | BAD_GATEWAY | Every target failed to deliver. |
 
-The `errorCounts` map returned by `road.stats` uses symbolic names (not numeric codes) and is initialized with the following keys:
+The `errorCounts` map returned by `road.stats` uses symbolic names (not numeric codes) and is initialized with the following keys. A failed target increments exactly one counter.
 
 | Counter | Incremented when |
 |---|---|
-| `NOT_FOUND` | All delivery paths for a target were exhausted. |
-| `DELIVERY_FAILED` | Local MAP delivery raised an exception, or an ACK-confirmed direct send failed/timed out. |
+| `NOT_FOUND` | The target is not in the local MAP and the server has no address or connection for it, so no send was attempted. |
+| `DELIVERY_FAILED` | A send was attempted and failed: local MAP delivery raised an exception, or an ACK-confirmed direct send failed/timed out. |
 | `MAX_HOPS_REACHED` | A `road.forward` request had no local MAP entry for the target. |
 | `INSUFFICIENT_BALANCE` | The sender's balance could not cover the per-target cost. |
 | `MAX_COST_EXCEEDED` | The estimated total cost exceeded the sender's `maxCost`. |

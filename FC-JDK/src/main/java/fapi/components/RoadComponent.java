@@ -400,9 +400,8 @@ public class RoadComponent extends AbstractFapiComponent {
             return directResult;
         }
         
-        // 7. All methods exhausted
+        // 7. All methods exhausted (tryDirectFudpSend already counted the failure)
         log.info("ROAD step7: direct FUDP also failed for {}, returning NOT_FOUND", targetFid);
-        errorCounts.get("NOT_FOUND").incrementAndGet();
         return directResult;
     }
     
@@ -445,6 +444,14 @@ public class RoadComponent extends AbstractFapiComponent {
         
         try {
             ensurePeerInBook(fudpNode, targetFid);
+            if (fudpNode.getPeer(targetFid) == null) {
+                // Neither in the PeerBook nor connected: nothing to send to.
+                // NOT_FOUND, not DELIVERY_FAILED (FAPI15 §6): no send was tried.
+                errorCounts.get("NOT_FOUND").incrementAndGet();
+                return new RelayResult(false, FapiCode.NOT_FOUND,
+                        "Target home.ROAD is this server but target is not reachable: Unknown peer: " + targetFid,
+                        0, 0, false, null);
+            }
             log.info("ROAD tryDirectFudpSend: calling sendNotifyWaitAck to {} ({} bytes)", targetFid, data.length);
             boolean acked = fudpNode.sendNotifyWaitAck(targetFid, data, RELAY_ACK_TIMEOUT_MS);
             if (!acked) {
