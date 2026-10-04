@@ -20,7 +20,8 @@ Thumbs.db
 /build/
 
 # config json
-*.json
+config.json
+*settings.json
 # Cross-client test vectors are source, not output (FreerForMac tools/vector-gen)
 !FC-JDK/src/test/resources/*Vectors.json
 # ...but the ES index mappings are source, not config: the parser creates
