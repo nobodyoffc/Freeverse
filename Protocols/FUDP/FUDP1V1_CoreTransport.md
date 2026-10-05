@@ -670,7 +670,8 @@ Implementations that require long-lived connections SHOULD use application-level
 
 | Parameter | Value | Description |
 |---|---|---|
-| Max Packet Size | 1,350 bytes | Default maximum UDP datagram size; safe for most network MTUs. A hard limit — see [Packet Size Budget](#packet-size-budget) |
+| Max Packet Size | 1,350 bytes | Default maximum UDP datagram size; safe for most network MTUs. A hard limit, and not to be raised for internet peers — see [Packet Size Budget](#packet-size-budget) |
+| Max Receive Datagram | 65,507 bytes | Largest UDP datagram a receiver MUST accept, whatever its own Max Packet Size |
 | Header Size | 21 bytes | Fixed-size plaintext packet header |
 | Crypto Overhead | 68 bytes | CryptoDataByte bundle around the plaintext: algorithm prefix (6), type (1), sender public key (33), IV (12), GCM tag (16) |
 | Plaintext Prefix | 16 bytes | Timestamp (8) and session epoch (8), budgeted as if both are present |
@@ -685,6 +686,10 @@ Implementations that require long-lived connections SHOULD use application-level
 ### Packet Size Budget
 
 No packet may exceed Max Packet Size. A UDP packet over the path MTU is split into IP fragments, and losing either fragment loses the whole packet, so an overshoot turns into extra loss exactly on the paths that can least afford it. Loopback (MTU 16 KB or more) hides it completely.
+
+Max Packet Size itself MUST NOT be set above 1,350 bytes for a peer reached over the internet. A larger value MAY be used only where every link on the path is known to carry it, such as loopback or a LAN. A larger packet size does not make transfers faster: once a packet passes the path MTU, the larger size only adds loss, and on a path that drops IP fragments (many NATs, firewalls and mobile networks do) every packet over the MTU is lost. The sender retransmits it at the same size, so the loss repeats until the stream is abandoned. Small packets still get through, so the connection looks healthy while every reply larger than one MTU fails.
+
+Receivers MUST accept any datagram up to Max Receive Datagram (65,507 bytes), whatever their own Max Packet Size. Max Packet Size limits what a node sends, not what it accepts, so nodes with different settings interoperate and a fleet can lower its setting one node at a time.
 
 Every sender MUST budget its frames to Max Frame Bytes per Packet:
 
@@ -730,6 +735,7 @@ A packet dropped this way decrypted and authenticated correctly; only its frames
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-03-28|Initial specification.|
+|1 (rev)|2026-10-05|[Packet Size Budget](#packet-size-budget): Max Packet Size MUST NOT exceed 1,350 bytes for internet peers, and receivers MUST accept datagrams up to 65,507 bytes whatever their own setting. FAPI servers, FreeIM and the Android app had set 8000 bytes, which the spec allowed. On the HK↔SG path, which drops IP fragments, every FAPI reply larger than one packet was retransmitted 60 times, abandoned, and timed out at the client with 408, while small replies kept working. Fixed by returning to the 1,350-byte default.|
 |1 (rev)|2026-09-22|[Packet Size Budget](#packet-size-budget): Max Packet Size is a hard limit. Crypto overhead corrected from ~52 to 68 bytes. STREAM chunks are budgeted for the worst-case header, and a piggybacked ACK must fit or be sent alone. Previously, traffic in both directions produced packets up to 264 bytes over the limit.|
 |1 (rev)|2026-09-22|Added DATAGRAM (`0x10`, FUDP7) to the Frame Type Summary and reserved `0x06`/`0x07`. A packet with a DATAGRAM frame MUST carry a timestamp. [Versioning](#versioning): corrected the claim that new frame types are backward-compatible — an unknown type loses the whole packet, so new types need known peer support first — and required that such a parse failure not be counted as a decrypt failure.|
 |1 (rev)|2026-07-14|Added [Path Migration](#path-migration): Connection ID (not source address) MUST be the primary key for resolving inbound packets to a connection, and an address change on an already-known Connection ID MUST migrate the existing connection rather than create a phantom new one. Discovered via a field failure where a NAT rebind mid-upload caused colliding stream IDs between a phantom connection and the real one, silently swallowing responses via stream-retirement tombstones.

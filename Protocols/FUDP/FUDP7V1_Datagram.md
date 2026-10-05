@@ -87,6 +87,8 @@ maxDatagramSize = largest n such that 1 + varintLength(n) + n ≤ room
 |1400|1292|
 |1500|1392|
 
+The 1400 and 1500 rows show how the formula scales and are covered by the test vectors (§9). They are not recommended settings. A 1,500-byte packet is 1,528 bytes on a standard 1,500-byte link once the 28 bytes of IP and UDP headers are added, so it is fragmented, and FUDP1 limits Max Packet Size to 1,350 bytes for internet peers (§Packet Size Budget). Fragmenting harms DATAGRAM traffic most: a lost fragment is never retransmitted, and the whole datagram is gone.
+
 The session epoch is budgeted even once it is confirmed and no longer sent, so the limit does not change during a connection. An application can size its payloads once, at connection setup.
 
 ### 2.3. Packing
@@ -194,6 +196,7 @@ DATAGRAM does not change the packet header version. It is a new frame type under
 |Ver|Date|Changes|
 |---|---|---|
 |1|2026-09-23|Initial specification. Wire format frozen with the voice call Phase 1 gate.|
+|1 (rev)|2026-10-05|§2.2: the 1400 and 1500 rows are formula and test-vector examples, not recommended packet sizes (FUDP1 limits internet peers to 1,350).|
 
 ## 10. References
 
