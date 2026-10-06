@@ -1,0 +1,8 @@
+# JitPack publishes FC-JDK (the FC-SDK library) at each tag:
+#   repositories { maven("https://jitpack.io") }
+#   implementation("com.github.nobodyoffc.Freeverse:FC-JDK:<tag>")
+# Only FC-JDK and its parent pom are built; the apps are released as jars.
+jdk:
+  - openjdk17
+install:
+  - mvn install -DskipTests -pl FC-JDK -am
