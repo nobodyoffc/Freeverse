@@ -36,10 +36,9 @@ public class Inputer {
     @SuppressWarnings("unused")
     public static char[] inputPassword(String ask) {
         Console console = System.console();
-        if (console == null) {
-            System.out.println("Couldn't get Console instance. Maybe you're running this from within an IDE, which doesn't support Console.");
-            return null;
-        }
+        // Without a console no password can ever be read; callers that retry on null would spin.
+        if (console == null)
+            throw new IllegalStateException("No console to read a password from. Run this in an interactive terminal.");
         return console.readPassword(ask);
     }
     public static char[] inputPassword(BufferedReader br, String ask) {

@@ -919,16 +919,17 @@ public ApiProvider chooseApiProviderOrAdd(Map<String, ApiProvider> apiProviderMa
 
     public boolean verifyPassword(String passwordHash,BufferedReader br) {
         byte[] passwordBytes;
-        char[] password = Inputer.inputPassword(br, "Input your password:");
         while (true) {
-            if(password==null)continue;
-            passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
-            byte[] newHash = Hash.sha256x2(passwordBytes);
-            String newHashHex = Hex.toHex(newHash);
-            if(passwordHash.equals(newHashHex))return true;
+            char[] password = Inputer.inputPassword(br, "Input your password:");
+            if(password!=null) {
+                passwordBytes = BytesUtils.utf8CharArrayToByteArray(password);
+                byte[] newHash = Hash.sha256x2(passwordBytes);
+                String newHashHex = Hex.toHex(newHash);
+                if(passwordHash.equals(newHashHex))return true;
+            }
 
             String input = Inputer.inputString(br, "Password wrong. Try again. 'q' to quit:");
-            if (input.equals("q")) {
+            if (input == null || input.equals("q")) {
                 System.exit(0);
                 return false;
             }

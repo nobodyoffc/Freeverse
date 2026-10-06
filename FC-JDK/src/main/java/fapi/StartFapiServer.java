@@ -69,7 +69,7 @@ public class StartFapiServer {
                         log.error("Failed to start FAPI server");
                         System.out.println("\nFAPI server bootstrap failed. Press 'q' to quit, or any other key to retry...");
                         String input = br.readLine();
-                        if ("q".equalsIgnoreCase(input != null ? input.trim() : "")) {
+                        if (input == null || "q".equalsIgnoreCase(input.trim())) {
                             System.out.println("Exiting.");
                             return;
                         }
@@ -81,7 +81,7 @@ public class StartFapiServer {
                     System.out.println("\nBootstrap error: " + e.getMessage());
                     System.out.println("Press 'q' to quit, or any other key to retry...");
                     String input = br.readLine();
-                    if ("q".equalsIgnoreCase(input != null ? input.trim() : "")) {
+                    if (input == null || "q".equalsIgnoreCase(input.trim())) {
                         System.out.println("Exiting.");
                         return;
                     }
