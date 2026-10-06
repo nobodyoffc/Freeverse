@@ -2,11 +2,16 @@ package Disk;
 
 import config.Settings;
 import constants.ApipApiNames;
-import data.apipData.Sort;
+import constants.CodeMessage;
+import data.apipData.Fcdsl;
 import data.fcData.DiskItem;
 import data.fcData.ReplyBody;
+import db.fcdsl.FcdslException;
+import db.fcdsl.FcdslProjection;
+import db.fcdsl.FcdslQuery;
+import db.fcdsl.FcdslResult;
+import fapi.components.disk.DiskMetaStore;
 import initial.Initiator;
-import server.FcHttpRequestHandler;
 import server.HttpRequestChecker;
 import utils.http.AuthType;
 
@@ -14,15 +19,13 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.ArrayList;
-
-import static constants.FieldNames.SINCE;
 
 /**
  * DISK LIST: query stored {@link DiskItem} metadata with an FCDSL.
  *
  * <p>GET uses {@code FC_SIGN_URL}, POST uses {@code ENCRYPTED}. Defaults to sorting
- * by "since" (descending) when the request supplies no sort.
+ * by "since" (descending) when the request supplies no sort; the id is always the last
+ * sort key, so {@code last} pages without skipping items that share a since.
  */
 @WebServlet(name = ApipApiNames.DISK_LIST + "_DISK",
         value = "/" + ApipApiNames.DISK_SN + "/" + ApipApiNames.DISK_LIST + "/" + ApipApiNames.VER_1)
@@ -45,23 +48,21 @@ public class List extends HttpServlet {
         if (!httpRequestChecker.checkRequestHttp(request, response, authType))
             return;
 
-        FcHttpRequestHandler fcHttpRequestHandler = new FcHttpRequestHandler(replier, settings);
-
-        ArrayList<Sort> defaultSortList = null;
-        if (httpRequestChecker.getRequestBody() == null
-                || httpRequestChecker.getRequestBody().getFcdsl() == null
-                || httpRequestChecker.getRequestBody().getFcdsl().getSort() == null) {
-            // Sort only by "since" (numeric) to avoid shard failures on a dynamically-mapped index.
-            defaultSortList = Sort.makeSortList(SINCE, false, null, null, null, null);
+        Fcdsl fcdsl = httpRequestChecker.getRequestBody() == null
+                ? null : httpRequestChecker.getRequestBody().getFcdsl();
+        DiskMetaStore metaStore = DiskStore.metaStore();
+        try {
+            FcdslQuery<DiskItem> q = metaStore.compile(fcdsl);
+            FcdslResult<DiskItem> result = metaStore.query(q);
+            Object data = FcdslProjection.isNone(q) ? result.getItems() : FcdslProjection.project(q, result.getItems());
+            replier.setGot((long) result.getItems().size());
+            replier.setTotal(result.getTotal());
+            replier.setLast(result.getLast());
+            replier.reply0SuccessHttp(data, response);
+        } catch (FcdslException e) {
+            int code = e.getReason() == FcdslException.Reason.BAD_QUERY
+                    ? CodeMessage.Code1012BadQuery : CodeMessage.Code1017MethodNotAvailable;
+            replier.replyHttp(code, e.getMessage(), response);
         }
-
-        java.util.List<DiskItem> meetList =
-                fcHttpRequestHandler.doRequest(DiskStore.indexName(), defaultSortList, DiskItem.class);
-
-        if (meetList == null) {
-            replier.replyHttp(fcHttpRequestHandler.getFinalReplyJson(), response);
-            return;
-        }
-        replier.reply0SuccessHttp(meetList, response);
     }
 }

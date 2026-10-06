@@ -21,6 +21,7 @@ public class ApipLifecycleListener implements ServletContextListener {
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
         log.info("APIP webapp context destroying — closing settings and stopping background tasks.");
+        Disk.DiskStore.close();
         Settings settings = FcWebServerInitiator.settings;
         if (settings != null) {
             try {
