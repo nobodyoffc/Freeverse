@@ -262,7 +262,7 @@ public class FileParser {
 	/** Protocols whose parse step indexes its own documents and keeps no *_HISTORY record. */
 	static boolean writesOwnDocuments(Feip.FeipProtocol protocol) {
 		return switch (protocol) {
-			case NID, CONTACT, MAIL, SECRET, STATEMENT -> true;
+			case NID, STATEMENT -> true;
 			default -> false;
 		};
 	}
@@ -285,6 +285,9 @@ public class FileParser {
 			case SQUARE -> HistRef.of(IndicesNames.SQUARE_HISTORY, organizationParser.makeSquare(opre, feip));
 			case TEAM -> HistRef.of(IndicesNames.TEAM_HISTORY, organizationParser.makeTeam(opre, feip));
 			case BOX -> HistRef.of(IndicesNames.BOX_HISTORY, personalParser.makeBox(opre, feip));
+			case CONTACT -> HistRef.of(IndicesNames.CONTACT_HISTORY, personalParser.makeContact(opre, feip));
+			case MAIL -> HistRef.of(IndicesNames.MAIL_HISTORY, personalParser.makeMail(opre, feip));
+			case SECRET -> HistRef.of(IndicesNames.SECRET_HISTORY, personalParser.makeSecret(opre, feip));
 			case PROOF -> HistRef.of(IndicesNames.PROOF_HISTORY, financeParser.makeProof(opre, feip));
 			case TOKEN -> HistRef.of(IndicesNames.TOKEN_HISTORY, financeParser.makeToken(opre, feip));
 			case SOUND -> HistRef.of(IndicesNames.SOUND_HISTORY, publishParser.makeSound(opre, feip));
@@ -307,6 +310,9 @@ public class FileParser {
 			case SQUARE -> organizationParser.parseSquare(esClient, (SquareHistory) hist);
 			case TEAM -> organizationParser.parseTeam(esClient, (TeamHistory) hist);
 			case BOX -> personalParser.parseBox(esClient, (BoxHistory) hist);
+			case CONTACT -> personalParser.parseContact(esClient, (ContactHistory) hist);
+			case MAIL -> personalParser.parseMail(esClient, (MailHistory) hist);
+			case SECRET -> personalParser.parseSecret(esClient, (SecretHistory) hist);
 			case PROOF -> financeParser.parseProof(esClient, (ProofHistory) hist);
 			case TOKEN -> {
 				try {
@@ -326,9 +332,6 @@ public class FileParser {
 	private boolean applyInline(ElasticsearchClient esClient, Feip.FeipProtocol protocol, OpReturn opre, Feip feip) throws Exception {
 		return switch (protocol) {
 			case NID -> identityParser.parseNid(esClient, opre, feip);
-			case CONTACT -> personalParser.parseContact(esClient, opre, feip);
-			case MAIL -> personalParser.parseMail(esClient, opre, feip);
-			case SECRET -> personalParser.parseSecret(esClient, opre, feip);
 			case STATEMENT -> publishParser.parseStatement(esClient, opre, feip);
 			default -> false;
 		};
@@ -620,6 +623,34 @@ public class FileParser {
 
 				for(TeamHistory idHist: reparseTeamList) {
 					new OrganizationParser().parseTeam(esClient, idHist);
+				}
+				break;
+			case IndicesNames.BOX:
+				EsUtils.bulkDeleteList(esClient, IndicesNames.BOX, (ArrayList<String>) idList);
+				TimeUnit.SECONDS.sleep(2);
+				for(BoxHistory idHist: EsUtils.getHistsForReparse(esClient, IndicesNames.BOX_HISTORY, FieldNames.BID, FieldNames.BIDS, new ArrayList<>(idList), BoxHistory.class)) {
+					new PersonalParser().parseBox(esClient, idHist);
+				}
+				break;
+			case IndicesNames.CONTACT:
+				EsUtils.bulkDeleteList(esClient, IndicesNames.CONTACT, (ArrayList<String>) idList);
+				TimeUnit.SECONDS.sleep(2);
+				for(ContactHistory idHist: EsUtils.getHistsForReparse(esClient, IndicesNames.CONTACT_HISTORY, FieldNames.CONTACT_ID, FieldNames.CONTACT_IDS, new ArrayList<>(idList), ContactHistory.class)) {
+					new PersonalParser().parseContact(esClient, idHist);
+				}
+				break;
+			case IndicesNames.MAIL:
+				EsUtils.bulkDeleteList(esClient, IndicesNames.MAIL, (ArrayList<String>) idList);
+				TimeUnit.SECONDS.sleep(2);
+				for(MailHistory idHist: EsUtils.getHistsForReparse(esClient, IndicesNames.MAIL_HISTORY, FieldNames.MAIL_ID, FieldNames.MAIL_IDS, new ArrayList<>(idList), MailHistory.class)) {
+					new PersonalParser().parseMail(esClient, idHist);
+				}
+				break;
+			case IndicesNames.SECRET:
+				EsUtils.bulkDeleteList(esClient, IndicesNames.SECRET, (ArrayList<String>) idList);
+				TimeUnit.SECONDS.sleep(2);
+				for(SecretHistory idHist: EsUtils.getHistsForReparse(esClient, IndicesNames.SECRET_HISTORY, FieldNames.SECRET_ID, FieldNames.SECRET_IDS, new ArrayList<>(idList), SecretHistory.class)) {
+					new PersonalParser().parseSecret(esClient, idHist);
 				}
 				break;
 			default:

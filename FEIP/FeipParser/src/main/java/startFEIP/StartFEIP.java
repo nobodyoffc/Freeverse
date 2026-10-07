@@ -159,6 +159,7 @@ public class StartFEIP {
 
 	private static void restartFromFile(ElasticsearchClient esClient, String path)  {
 		try {
+			if (IndicesFEIP.lacksPersonalHistory(esClient)) return;
 			FileParser.recoverInterruptedOp(esClient, path);
 			ParseMark parseMark = FileParser.findLatestMark(esClient, null);
 
@@ -194,6 +195,7 @@ public class StartFEIP {
 
 	private static void manualRestartFromFile(ElasticsearchClient esClient, String path, long height) throws Exception {
 
+		if (IndicesFEIP.lacksPersonalHistory(esClient)) return;
 		FileParser.recoverInterruptedOp(esClient, path);
 		ParseMark parseMark = FileParser.findLatestMark(esClient, height);
 

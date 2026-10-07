@@ -87,7 +87,7 @@ Creates a new secret.
 |`cipher`|Y*|String|Encrypted secret payload (FVEP8).|
 |`alg`|N|String|Optional algorithm hint.|
 
-\*Exactly one of **`cipher`** MUST be non-null; the parser sets `secret.cipher` from `cipher`. If both are missing, the operation fails.
+\*`cipher` MUST be non-empty. For early secrets a non-empty legacy `msg` field is accepted in its place; the parser stores it as `cipher`. If neither is present, the operation fails.
 
 **Consensus rules**
 
@@ -112,7 +112,7 @@ Replaces the stored ciphertext.
 5. `secretId` MUST reference an existing secret.
 6. `owner` MUST equal the signer.
 7. Secret MUST be **active**.
-8. `cipher` MUST NOT be null.
+8. `cipher` MUST NOT be null or empty.
 9. `lastHeight` MUST be updated.
 
 #### 3. delete
@@ -159,9 +159,10 @@ Re-activates deleted secrets.
 
 - On-chain `cipher` SHOULD conform to [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md), same patterns as Contact: `CryptoDataStr` JSON, Base64 bundle, or Bitcore fallback (`Secret.parseDetail` / `Decryptor`).
 
-### Parsing order
+### Parsing order and reorg
 
 - Parsing order follows [FEIP0](FEIP0V1_FEIP.md) (block height, then tx index).
+- After a reorg the index MUST equal what parsing the new chain from genesis would give ([FEIP0](FEIP0V1_FEIP.md)). An orphaned **update** MUST restore the previous `cipher`, `alg` and `lastHeight`; an orphaned **delete** or **recover** MUST restore the previous `active` and `lastHeight`.
 
 ## Examples
 
@@ -216,6 +217,7 @@ Same shape as [FEIP12V3_Contact](FEIP12V3_Contact.md) but field name **`secretId
 
 |Version|Date|Summary|
 |---|---|---|
+|3|2026-10-07|Revised (draft): `cipher` MUST be non-empty for **add** and **update**; reorg rule for update/delete/recover stated. `ver` stays `3`.|
 |3|2026-03-22|Documented to match `Feip.FeipProtocol.SECRET` (`17`/`3`) and `PersonalParser.parseSecret`.|
 |2|—|Prior usage (not documented in this repo).|
 |1|—|Prior usage (not documented in this repo).|
@@ -236,6 +238,11 @@ Same shape as [FEIP12V3_Contact](FEIP12V3_Contact.md) but field name **`secretId
 |---|---|
 |`Secret`| [FC-JDK/src/main/java/data/feipData/Secret.java](../../FC-JDK/src/main/java/data/feipData/Secret.java) |
 |`SecretOpData`| [FC-JDK/src/main/java/data/feipData/SecretOpData.java](../../FC-JDK/src/main/java/data/feipData/SecretOpData.java) |
-|`PersonalParser.parseSecret`| [FEIP/FeipParser/src/main/java/personal/PersonalParser.java](../../FEIP/FeipParser/src/main/java/personal/PersonalParser.java) |
+|`PersonalParser.makeSecret` / `parseSecret`| [FEIP/FeipParser/src/main/java/personal/PersonalParser.java](../../FEIP/FeipParser/src/main/java/personal/PersonalParser.java) |
+|`SecretHistory`| [FC-JDK/src/main/java/data/feipData/SecretHistory.java](../../FC-JDK/src/main/java/data/feipData/SecretHistory.java) |
 |`FeipProtocol.SECRET`| [FC-JDK/src/main/java/data/feipData/Feip.java](../../FC-JDK/src/main/java/data/feipData/Feip.java) |
 
+### Implementation notes (non-normative)
+
+- **History and rollback.** The reference parser stores a `SecretHistory` record for every accepted op in the `secret_history` index. `secretId` is the secret an **add** created or an **update** changed; `secretIds` lists the secrets a **delete** or **recover** named. A rollback rebuilds the affected secrets from the remaining records, the same way as Contact; see [FEIP12](FEIP12V3_Contact.md#implementation-notes-non-normative).
+- **Upgrading an index.** Secrets indexed before `secret_history` existed cannot be rebuilt by a rollback. Rebuild the index with a new parse from the first OP_RETURN file.

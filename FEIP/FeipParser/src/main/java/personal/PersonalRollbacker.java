@@ -7,18 +7,19 @@ import org.slf4j.LoggerFactory;
 import utils.EsUtils;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
-import co.elastic.clients.elasticsearch.core.DeleteByQueryResponse;
-import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch.core.search.Hit;
-import co.elastic.clients.json.JsonData;
 import constants.IndicesNames;
+import data.fcData.FcEntity;
 import data.feipData.BoxHistory;
+import data.feipData.ContactHistory;
+import data.feipData.MailHistory;
+import data.feipData.SecretHistory;
 import utils.JsonUtils;
 
 import java.util.*;
+import java.util.function.Function;
 
-import static constants.FieldNames.BID;
-import static constants.FieldNames.BIDS;
+import static constants.FieldNames.*;
 
 public class PersonalRollbacker {
 
@@ -26,25 +27,61 @@ public class PersonalRollbacker {
 
 	public boolean rollback(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = rollbackBox(esClient, lastHeight);
-
-		// NOTE: contact, mail and secret have no *_HISTORY index, so the only thing that can be
-		// undone here is the creation of documents born after lastHeight. Post-creation state
-		// changes (delete / recover) made at a rolled-back height cannot be reverted, because the
-		// information needed to replay them was never persisted. See the audit triage report.
-		List<String> indexList = new ArrayList<String>();
-		indexList.add(IndicesNames.CONTACT);
-		indexList.add(IndicesNames.MAIL);
-		indexList.add(IndicesNames.SECRET);
-		DeleteByQueryResponse response = esClient.deleteByQuery(d->d.index(indexList)
-				.conflicts(co.elastic.clients.elasticsearch._types.Conflicts.Proceed)
-				.query(q->q.range(r->r.field("birthHeight").gt(JsonData.of(lastHeight)))));
-		if (response != null && response.failures() != null && !response.failures().isEmpty()) {
-			log.error("Rollback: deleteByQuery reported {} failures on contact/mail/secret", response.failures().size());
-			error = true;
-		}
+		PersonalParser parser = new PersonalParser();
+		error |= rollbackByHistory(esClient, lastHeight, "contact", IndicesNames.CONTACT, IndicesNames.CONTACT_HISTORY,
+				CONTACT_ID, CONTACT_IDS, ContactHistory.class, h -> touched(h.getContactId(), h.getContactIds()),
+				h -> parser.parseContact(esClient, h));
+		error |= rollbackByHistory(esClient, lastHeight, "mail", IndicesNames.MAIL, IndicesNames.MAIL_HISTORY,
+				MAIL_ID, MAIL_IDS, MailHistory.class, h -> touched(h.getMailId(), h.getMailIds()),
+				h -> parser.parseMail(esClient, h));
+		error |= rollbackByHistory(esClient, lastHeight, "secret", IndicesNames.SECRET, IndicesNames.SECRET_HISTORY,
+				SECRET_ID, SECRET_IDS, SecretHistory.class, h -> touched(h.getSecretId(), h.getSecretIds()),
+				h -> parser.parseSecret(esClient, h));
 		return error;
 	}
 
+	/**
+	 * Undo every op above lastHeight on one of the history-backed personal protocols: delete each
+	 * item those ops touched, delete their histories, then rebuild the items from the histories at
+	 * or below lastHeight. An item born above lastHeight has no surviving history and stays deleted.
+	 *
+	 * @param idField  the history field naming the item an add/send/update touched
+	 * @param idsField the history field listing the items a delete/recover touched
+	 */
+	<H extends FcEntity> boolean rollbackByHistory(ElasticsearchClient esClient, long lastHeight, String what,
+			String itemIndex, String histIndex, String idField, String idsField, Class<H> histClass,
+			Function<H, List<String>> touchedIds, Reparser.Step<H> replay) throws Exception {
+		List<Hit<H>> rolledHits = EsUtils.scanHitsAboveHeight(esClient, histIndex, "height", lastHeight, histClass);
+		if (rolledHits.isEmpty()) return false;
+
+		Set<String> itemSet = new LinkedHashSet<>();
+		ArrayList<String> histIdList = new ArrayList<>();
+		for (Hit<H> hit : rolledHits) {
+			histIdList.add(hit.id());
+			if (hit.source() != null) itemSet.addAll(touchedIds.apply(hit.source()));
+		}
+		ArrayList<String> itemIdList = new ArrayList<>(itemSet);
+		log.warn("If rolling back is interrupted, reparse all effected ids of index '{}': ", itemIndex);
+		JsonUtils.printJson(itemIdList);
+
+		// Read the surviving histories before deleting anything: the deletes destroy the input.
+		List<H> reparseHistList = EsUtils.getHistsForReparse(esClient, histIndex, idField, idsField, itemIdList, lastHeight, histClass);
+
+		boolean error = false;
+		if (!itemIdList.isEmpty()) error |= deleteEffectedItems(esClient, itemIndex, itemIdList);
+		error |= deleteRolledHists(esClient, histIndex, histIdList);
+		error |= Reparser.replay(what, reparseHistList, replay);
+		return error;
+	}
+
+	static List<String> touched(String id, List<String> ids) {
+		List<String> list = new ArrayList<>();
+		if (id != null) list.add(id);
+		if (ids != null) {
+			for (String one : ids) if (one != null) list.add(one);
+		}
+		return list;
+	}
 
 	private boolean rollbackBox(ElasticsearchClient esClient, long lastHeight) throws Exception {
 		boolean error = false;

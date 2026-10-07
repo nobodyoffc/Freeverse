@@ -20,6 +20,7 @@ import utils.Hex;
 import utils.JsonUtils;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -48,6 +49,7 @@ public class SecretManager extends Manager<Secret> {
         menu.add("Clear Locally Removed Records", () -> clearAllLocallyRemoved(br));
         menu.add("Check Secrets on Chain", () -> freshOnChainSecrets(br));
         menu.add("Add Secrets on Chain", () -> addSecrets(br));
+        menu.add("Update Secrets on Chain", () -> updateSecrets(br));
         menu.add("Delete Secrets on Chain", () -> deleteSecrets(br));
         menu.add("List deleted Secrets on Chain", () -> recoverSecrets(br));
         menu.add("Clear on Chain Deleted Records", () -> clearDeletedRecord(br));
@@ -278,6 +280,55 @@ public class SecretManager extends Manager<Secret> {
         return opSecret(secretIds, null, SecretOpData.Op.DELETE, br);
     }
 
+    public void updateSecrets(BufferedReader br) {
+        if (dbEmpty()) return;
+        List<Secret> chosenList = chooseItemList(br);
+        if (chosenList != null && !chosenList.isEmpty())
+            updateSecrets(chosenList, br);
+    }
+
+    /**
+     * Re-encrypt edited details of carved secrets and carve them as 'update' ops, which keep each
+     * secret's id. Only the owner's active secrets can be updated.
+     */
+    public void updateSecrets(List<Secret> chosenSecrets, BufferedReader br) {
+        if (chosenSecrets == null || chosenSecrets.isEmpty()) return;
+        for (Secret secret : chosenSecrets) {
+            if (secret.getId() == null) continue;
+            System.out.println("\nUpdating " + secret.getTitle() + "...");
+            Secret detail = new Secret();
+            try {
+                detail.setType(Inputer.promptAndUpdate(br, "type", secret.getType()));
+                detail.setTitle(Inputer.promptAndUpdate(br, "title", secret.getTitle()));
+                String content = Inputer.inputString(br, "Input the new content. Enter to keep the current one:");
+                detail.setContent(content == null || content.isEmpty() ? secret.getContent() : content);
+                detail.setMemo(Inputer.promptAndUpdate(br, "memo", secret.getMemo()));
+            } catch (IOException e) {
+                System.out.println("Failed to read input: " + e.getMessage());
+                return;
+            }
+
+            SecretOpData secretOpData = encryptSecret(detail);
+            if (secretOpData == null) {
+                System.out.println("Failed to encrypt the secret.");
+                continue;
+            }
+            secretOpData.setOp(SecretOpData.Op.UPDATE.toLowerCase());
+            secretOpData.setSecretId(secret.getId());
+
+            String result = carveSecretData(secretOpData, br);
+            if (Hex.isHex32(result)) {
+                System.out.println("Updated secret " + secret.getId() + " in TX " + result + ".");
+                detail.setId(secret.getId());
+                detail.setLastHeight(secret.getLastHeight());
+                localDB.put(secret.getId(), detail);
+            } else if (result != null) {
+                System.out.println("Failed to update secret " + secret.getId() + ": " + result);
+            }
+            if (!Inputer.askIfYes(br, "Update next?")) break;
+        }
+    }
+
     public void deleteSecrets(BufferedReader br) {
         if (dbEmpty()) return;
         List<Secret> chosenSecrets = chooseItems(br);
@@ -439,6 +490,7 @@ public class SecretManager extends Manager<Secret> {
         Menu menu = new Menu("Secret Operations", () -> {});
         menu.add("Show details", () -> showItemDetails(items, br));
         menu.add("Remove from local", () -> removeItems(items.stream().map(Secret::getId).collect(Collectors.toList()),br));
+        menu.add("Update on chain", () -> updateSecrets(items, br));
         menu.add("Delete on chain", () -> deleteSecrets(items, br));
         menu.add("Recover on chain", () -> recoverSecrets(null, items, br));
         menu.add("Add to chain", () -> addSecrets(items, br));

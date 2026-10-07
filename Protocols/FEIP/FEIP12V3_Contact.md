@@ -136,10 +136,8 @@ Soft-deactivates one or more contacts.
 **Consensus rules**
 
 11. `contactIds` MUST be non-null and non-empty.
-12. All listed ids MUST exist in the index; otherwise the operation fails (reference parser rejects empty result).
-13. For each matched entity, `active` MUST be set `false` and `lastHeight` updated.
-
-**Security note:** The reference parser does **not** verify that each contact’s `owner` equals the signer before deactivating. Implementations **SHOULD** enforce **owner == signer** for every id in `contactIds` (recommended fix for production indexers).
+12. Listed ids whose contact does not exist, or whose `owner` is not the transaction signer, MUST be skipped. If no id remains, the operation fails.
+13. For each remaining contact, `active` MUST be set `false` and `lastHeight` updated.
 
 #### 4. recover
 
@@ -152,9 +150,7 @@ Re-activates previously deleted contacts.
 
 **Consensus rules**
 
-14. Same shape as **delete**, but `active` MUST be set `true`.
-
-Same **owner** verification **SHOULD** apply as for **delete**.
+14. Same rules as **delete**, including the **owner** check, but `active` MUST be set `true`.
 
 ### OP_RETURN envelope
 
@@ -175,9 +171,10 @@ Same **owner** verification **SHOULD** apply as for **delete**.
 - The string in `cipher` SHOULD conform to [FVEP8V1_Encryption](../FVEP/FVEP8V1_Encryption.md): JSON with `type`, `alg`, `iv`, `cipher` (Base64 inner ciphertext), etc., or a recognized legacy form (Base64 bundle starting with algorithm-specific prefix, or Bitcore-compatible ciphertext) as implemented in `Contact.parseDetail` / `Decryptor`.
 - Only the **owner** (or holder of the decryption key chosen at encryption time) can recover plaintext.
 
-### Parsing order
+### Parsing order and reorg
 
 - Parsing order follows [FEIP0](FEIP0V1_FEIP.md) (block height, then tx index).
+- After a reorg the index MUST equal what parsing the new chain from genesis would give ([FEIP0](FEIP0V1_FEIP.md)). For Contact this means an orphaned **update** MUST restore the previous `cipher`, `alg` and `lastHeight`, and an orphaned **delete** or **recover** MUST restore the previous `active` and `lastHeight`. Deleting the contacts born above the reorg height is not enough.
 
 ## Examples
 
@@ -268,6 +265,7 @@ Only fields that belong **inside** `cipher` (no `cid`, no `noticeFee`):
 
 |Version|Date|Summary|
 |---|---|---|
+|3|2026-10-07|Revised (draft): **delete** / **recover** MUST skip contacts the signer does not own (was SHOULD); `cipher` MUST be non-empty for **add** and **update**; reorg rule for update/delete/recover stated. `ver` stays `3`.|
 |3|2026-03-22|Documented specification aligned with `Feip.FeipProtocol.CONTACT` (`12`/`3`) and `PersonalParser.parseContact`.|
 |2|—|Prior on-chain usage (not documented in this repo).|
 |1|—|Prior on-chain usage (not documented in this repo).|
@@ -289,12 +287,13 @@ Only fields that belong **inside** `cipher` (no `cid`, no `noticeFee`):
 |---|---|
 |`Contact`| [FC-JDK/src/main/java/data/feipData/Contact.java](../../FC-JDK/src/main/java/data/feipData/Contact.java) |
 |`ContactOpData`| [FC-JDK/src/main/java/data/feipData/ContactOpData.java](../../FC-JDK/src/main/java/data/feipData/ContactOpData.java) |
-|`PersonalParser.parseContact`| [FEIP/FeipParser/src/main/java/personal/PersonalParser.java](../../FEIP/FeipParser/src/main/java/personal/PersonalParser.java) |
+|`PersonalParser.makeContact` / `parseContact`| [FEIP/FeipParser/src/main/java/personal/PersonalParser.java](../../FEIP/FeipParser/src/main/java/personal/PersonalParser.java) |
+|`ContactHistory`| [FC-JDK/src/main/java/data/feipData/ContactHistory.java](../../FC-JDK/src/main/java/data/feipData/ContactHistory.java) |
 |`PersonalRollbacker.rollback`| [FEIP/FeipParser/src/main/java/personal/PersonalRollbacker.java](../../FEIP/FeipParser/src/main/java/personal/PersonalRollbacker.java) |
 |`FeipProtocol.CONTACT`| [FC-JDK/src/main/java/data/feipData/Feip.java](../../FC-JDK/src/main/java/data/feipData/Feip.java) |
 
 ### Implementation notes (non-normative)
 
-- **`ContactOpData.OP_FIELDS`**: The static initializer registers `ADD` twice; the second entry (with `contactId`) overwrites the first. Prefer a single row per op key.
-- **`PersonalParser` — delete/recover**: Consider adding `owner == signer` checks for each id (recommended for security).
+- **History and rollback.** The reference parser builds a `ContactHistory` record for each op (`makeContact`, with no index access) and applies it (`parseContact`). Every accepted op's record is stored in the `contact_history` index. Its id is the op's txid. `contactId` is the contact an **add** created (equal to the id) or an **update** changed. `contactIds` lists the contacts a **delete** or **recover** named. `cipher` is kept in full, so an update can be undone. On a rollback to height *H*, `PersonalRollbacker` collects every contact named by a record above *H*. It deletes those contacts and the records above *H*, then replays the remaining records of those contacts in (height, index) order. A contact born above *H* has no remaining record, so it stays deleted. Mail ([FEIP7](FEIP7V4_Mail.md)) and Secret ([FEIP17](FEIP17V3_Secret.md)) work the same way.
+- **Upgrading an index.** Contacts indexed before `contact_history` existed have no records, so a rollback could delete them and not rebuild them. Such an index must be rebuilt with a new parse from the first OP_RETURN file. The reference parser refuses to resume while `contact_history`, `mail_history` or `secret_history` is missing.
 - **`Contact.getInputFieldDefaultValueMap`**: `new ArrayList<>().add("")` does not put an empty list in the map; use `List.of("")` or `Collections.singletonList("")` if fixing the map.

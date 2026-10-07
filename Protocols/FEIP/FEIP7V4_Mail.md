@@ -162,6 +162,7 @@ Lowercase `op` strings: `send`, `delete`, `recover`.
 ### Parsing order and reorg
 
 - Strict block order per FEIP0.
+- After a reorg the index MUST equal what parsing the new chain from genesis would give ([FEIP0](FEIP0V1_FEIP.md)). An orphaned **delete** or **recover** MUST restore the previous `active` and `lastHeight`.
 
 ## Examples
 
@@ -227,10 +228,13 @@ Same as delete with `"op": "recover"`.
 |---|---|
 |`Mail`| [FC-JDK/src/main/java/data/feipData/Mail.java](../../FC-JDK/src/main/java/data/feipData/Mail.java) |
 |`MailOpData`| [FC-JDK/src/main/java/data/feipData/MailOpData.java](../../FC-JDK/src/main/java/data/feipData/MailOpData.java) |
-|`PersonalParser.parseMail`| [FEIP/FeipParser/src/main/java/personal/PersonalParser.java](../../FEIP/FeipParser/src/main/java/personal/PersonalParser.java) |
+|`PersonalParser.makeMail` / `parseMail`| [FEIP/FeipParser/src/main/java/personal/PersonalParser.java](../../FEIP/FeipParser/src/main/java/personal/PersonalParser.java) |
+|`MailHistory`| [FC-JDK/src/main/java/data/feipData/MailHistory.java](../../FC-JDK/src/main/java/data/feipData/MailHistory.java) |
 |`FeipProtocol.MAIL`| [FC-JDK/src/main/java/data/feipData/Feip.java](../../FC-JDK/src/main/java/data/feipData/Feip.java) |
 
 ### Implementation notes (non-normative)
+
+- **History and rollback.** The reference parser stores a `MailHistory` record for every accepted op in the `mail_history` index. A **send** record keeps the `recipient` and `paid` amount of its transaction, which become the mail's `to` and `noticeFee`. `mailIds` lists the mails a **delete** or **recover** named. A rollback rebuilds the affected mails from the remaining records, the same way as Contact; see [FEIP12](FEIP12V3_Contact.md#implementation-notes-non-normative). Mails indexed before `mail_history` existed need a new parse from the first OP_RETURN file.
 
 - **`Mail.decryptMail`** still branches on legacy `cipher` shapes (JSON vs `A`… Base64, Bitcore, etc.). **FEIP7V4** conformance for new mail is **AsyTwoWay JSON only**; tightening the parser to reject other forms is recommended.
 - **`MailOpData.OP_FIELDS`** references `cipherSend` / `cipherReci`; **`makeSend`** does not set them — likely legacy.

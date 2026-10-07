@@ -103,6 +103,16 @@ public class SecretOpData {
         return data;
     }
 
+    // Factory method for UPDATE operation
+    public static SecretOpData makeUpdate(String secretId, String alg, String cipher) {
+        SecretOpData data = new SecretOpData();
+        data.setOp(Op.UPDATE.toLowerCase());
+        data.setSecretId(secretId);
+        data.setAlg(alg);
+        data.setCipher(cipher);
+        return data;
+    }
+
     // Factory method for DELETE operation
     public static SecretOpData makeDelete(List<String> secretIds) {
         SecretOpData data = new SecretOpData();

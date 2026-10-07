@@ -29,6 +29,7 @@ import utils.MapQueue;
 import utils.StringUtils;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -72,6 +73,7 @@ public class ContactManager extends Manager<Contact> {
         menu.add("Search Local "+ StringUtils.capitalize(itemName), () -> searchItems(br, true,true));
         menu.add("Fresh Contacts on Chain", () -> freshOnChainContacts(br));
         menu.add("Add Contacts on Chain", () -> addContacts(br));
+        menu.add("Update Contacts on Chain", () -> updateContacts(br));
         menu.add("Delete Contacts on Chain", () -> deleteContacts(br));
         menu.add("List on Chain deleted Contacts", () -> recoverContacts(br));
         menu.add("List Locally Removed Contacts", () -> reloadRemovedItems(br));
@@ -266,6 +268,7 @@ public class ContactManager extends Manager<Contact> {
 
         switch (op) {
             case ADD -> addContacts(chosenContacts, br);
+            case UPDATE -> updateContacts(chosenContacts, br);
             case DELETE -> deleteContacts(chosenContacts, br);
             case RECOVER -> recoverContacts(null, chosenContacts, br);
         }
@@ -297,6 +300,54 @@ public class ContactManager extends Manager<Contact> {
         }
     }
 
+
+    public void updateContacts(BufferedReader br) {
+        if (dbEmpty()) return;
+        List<Contact> chosenList = chooseItemList(br);
+        if (chosenList != null && !chosenList.isEmpty())
+            updateContacts(chosenList, br);
+    }
+
+    /**
+     * Re-encrypt edited details of carved contacts and carve them as 'update' ops, which keep each
+     * contact's id. Only the owner's active contacts can be updated.
+     */
+    public void updateContacts(List<Contact> chosenContacts, BufferedReader br) {
+        if (chosenContacts == null || chosenContacts.isEmpty()) return;
+        for (Contact contact : chosenContacts) {
+            if (contact.getId() == null) continue;
+            System.out.println("\nUpdating " + (contact.getCid() != null ? contact.getCid() : contact.getFid()) + "...");
+            Contact detail = new Contact();
+            detail.setFid(contact.getFid());
+            try {
+                detail.setTitles(Inputer.promptAndUpdate(br, "titles", contact.getTitles()));
+                detail.setMemo(Inputer.promptAndUpdate(br, "memo", contact.getMemo()));
+                detail.setSeeStatement(Inputer.promptAndUpdate(br, "seeStatement", contact.getSeeStatement()));
+                detail.setSeeWritings(Inputer.promptAndUpdate(br, "seeWritings", contact.getSeeWritings()));
+            } catch (IOException e) {
+                System.out.println("Failed to read input: " + e.getMessage());
+                return;
+            }
+
+            ContactOpData contactOpData = ContactOpData.makeUpdate(contact.getId(), null, null);
+            if (!encryptContactDetail(contactOpData, detail)) {
+                System.out.println("Failed to encrypt the contact.");
+                continue;
+            }
+            String result = carveContactData(contactOpData, br);
+            if (Hex.isHex32(result)) {
+                System.out.println("Updated contact " + contact.getId() + " in TX " + result + ".");
+                contact.setTitles(detail.getTitles());
+                contact.setMemo(detail.getMemo());
+                contact.setSeeStatement(detail.getSeeStatement());
+                contact.setSeeWritings(detail.getSeeWritings());
+                putContact(contact.getId(), contact);
+            } else if (result != null) {
+                System.out.println("Failed to update contact " + contact.getId() + ": " + result);
+            }
+            if (!Inputer.askIfYes(br, "Update next?")) break;
+        }
+    }
 
     public String deleteContact(List<String> contactIds, BufferedReader br) {
         return opContact(null, contactIds, ContactOpData.Op.DELETE, br);
@@ -683,6 +734,7 @@ public class ContactManager extends Manager<Contact> {
         Menu menu = new Menu("Contact Operations", () -> {});
         menu.add("Show details", () -> showItemDetails(items, br));
         menu.add("Remove from local", () -> removeItems(items.stream().map(Contact::getId).collect(Collectors.toList()), br));
+        menu.add("Update on chain", () -> updateContacts(items, br));
         menu.add("Delete on chain", () -> deleteContacts(items, br));
         menu.add("Recover on chain", () -> recoverContacts(null, items, br));
         menu.add("Add to chain", () -> addContacts(items, br));

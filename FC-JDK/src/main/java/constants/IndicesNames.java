@@ -26,6 +26,9 @@ public class IndicesNames {
     public static final String SECRET = "secret";
     public static final String BOX = "box";
     public static final String BOX_HISTORY = "box_history";
+    public static final String CONTACT_HISTORY = "contact_history";
+    public static final String MAIL_HISTORY = "mail_history";
+    public static final String SECRET_HISTORY = "secret_history";
     public static final String SQUARE = "square";
     public static final String TEAM = "team";
     public static final String SQUARE_HISTORY = "square_history";
@@ -121,7 +124,10 @@ public class IndicesNames {
         IMAGE_HISTORY(IndicesNames.IMAGE_HISTORY,42),
         VIDEO(IndicesNames.VIDEO,43),
         VIDEO_HISTORY(IndicesNames.VIDEO_HISTORY,44),
-        NEWS(IndicesNames.NEWS,45);
+        NEWS(IndicesNames.NEWS,45),
+        CONTACT_HISTORY(IndicesNames.CONTACT_HISTORY,46),
+        MAIL_HISTORY(IndicesNames.MAIL_HISTORY,47),
+        SECRET_HISTORY(IndicesNames.SECRET_HISTORY,48);
 
         private int sn;
 

@@ -16,8 +16,10 @@ import data.fchData.OpReturn;
 import startFEIP.StartFEIP;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 
+import data.fcData.FcEntity;
+
 import java.io.IOException;
-import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
 
 import static constants.Values.CREATED;
@@ -27,437 +29,381 @@ public class PersonalParser {
 
 	private static final Logger log = LoggerFactory.getLogger(PersonalParser.class);
 
-	public boolean parseContact(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
+	/*
+	 * Contact, Mail and Secret are parsed in two steps, like Box: make* turns the op into a history
+	 * record without touching Elasticsearch, and parse* applies that record. FileParser stores the
+	 * record of every accepted op in *_HISTORY, which is what lets PersonalRollbacker undo an update,
+	 * delete or recover by replaying the records that survive a rollback.
+	 */
 
-
-		Gson gson = new Gson();
-
-		ContactOpData contactRaw = new ContactOpData();
-
+	public ContactHistory makeContact(OpReturn opre, Feip feip) {
+		ContactOpData contactRaw;
 		try {
+			Gson gson = new Gson();
 			contactRaw = gson.fromJson(gson.toJsonTree(feip.getData()), ContactOpData.class);
-			if(contactRaw==null){
-				log.info("Bad contact data");
-				return false;
-			}
-		}catch(Exception e) {
+		} catch (Exception e) {
 			log.info("Bad contact data");
-			return false;
+			return null;
+		}
+		if (contactRaw == null || contactRaw.getOp() == null) {
+			log.info("Bad contact data");
+			return null;
 		}
 
-		Contact contact = new Contact();
+		ContactHistory hist = new ContactHistory();
+		hist.setOp(contactRaw.getOp());
 
-		long height;
-		if(contactRaw.getOp()==null){
-			log.info("OP is null");
-			return false;
-		}
-
-		switch(contactRaw.getOp()) {
-
-			case "add":
-				contact.setId(opre.getId());
-
-				if (contactRaw.getAlg() != null)contact.setAlg(contactRaw.getAlg());
-				if (contactRaw.getCipher()==null){
-					log.info("Cipher is null");
-					return false;
+		switch (contactRaw.getOp()) {
+			case "add" -> {
+				if (isBlank(contactRaw.getCipher())) {
+					log.info("Cipher is empty");
+					return null;
 				}
-				contact.setCipher(contactRaw.getCipher());
-
-				contact.setOwner(opre.getSigner());
-				contact.setBirthTime(opre.getTime());
-				contact.setBirthHeight(opre.getHeight());
-				contact.setLastHeight(opre.getHeight());
-				contact.setActive(true);
-
-				Contact contact1 = contact;
-				IndexResponse result1 = esClient.index(i->i.index(IndicesNames.CONTACT).id(contact1.getId()).document(contact1));
-				log.info("{}", result1.result());
-				return CREATED.equals(result1.result().jsonValue()) || UPDATED.equals(result1.result().jsonValue());
-			case "delete","recover":
-				if(contactRaw.getContactIds() ==null){
-					log.info("Contact IDs are null");
-					return false;
-				}
-
-				height = opre.getHeight();
-
-				MgetResult<Contact> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CONTACT, contactRaw.getContactIds(), Contact.class);
-
-				if(result.getResultList() == null || result.getResultList().isEmpty()){
-					log.info("Contact list is empty");
-					return false;
-				}
-				List<Contact> contactList = result.getResultList();
-
-				for (Contact contact4 : contactList) {
-					if (result.getResultList() == null || result.getResultList().isEmpty()){
-						log.info("Contact list is empty");
-						return false;
-					}
-
-					if ("delete".equals(contactRaw.getOp())) contact4.setActive(false);
-					else contact4.setActive(true);
-
-					contact4.setLastHeight(height);
-				}
-				if(contactList.isEmpty()){
-					log.info("Contact list is empty");
-					return false;
-				}
-
-				BulkRequest.Builder br = new BulkRequest.Builder();
-				for(Contact contact5 : contactList) {
-					br.operations(op -> op
-							.index(idx -> idx
-									.index(IndicesNames.CONTACT)
-									.id(contact5.getId())
-									.document(contact5)
-							)
-					);
-				}
-				BulkResponse result2 = esClient.bulk(br.build());
-				if(result2.errors()){
-					log.info("Failed to bulk update contact");
-					return false;
-				}
-				log.info("Done");
-				return true;
-
-			case "update":
-				if(contactRaw.getContactId() ==null){
+				hist.setContactId(opre.getId());
+				hist.setAlg(contactRaw.getAlg());
+				hist.setCipher(contactRaw.getCipher());
+			}
+			case "update" -> {
+				if (contactRaw.getContactId() == null) {
 					log.info("Contact ID is null");
-					return false;
+					return null;
 				}
-				height = opre.getHeight();
+				if (isBlank(contactRaw.getCipher())) {
+					log.info("Cipher is empty");
+					return null;
+				}
+				hist.setContactId(contactRaw.getContactId());
+				hist.setAlg(contactRaw.getAlg());
+				hist.setCipher(contactRaw.getCipher());
+			}
+			case "delete", "recover" -> {
+				if (contactRaw.getContactIds() == null || contactRaw.getContactIds().isEmpty()) {
+					log.info("Contact IDs are empty");
+					return null;
+				}
+				hist.setContactIds(contactRaw.getContactIds());
+			}
+			default -> {
+				log.info("Invalid operation");
+				return null;
+			}
+		}
 
-				contact = EsUtils.getById(esClient, IndicesNames.CONTACT, contactRaw.getContactId(), Contact.class);
+		hist.setId(opre.getId());
+		hist.setHeight(opre.getHeight());
+		hist.setIndex(opre.getTxIndex());
+		hist.setTime(opre.getTime());
+		hist.setSigner(opre.getSigner());
+		return hist;
+	}
 
-				if(contact == null){
+	public boolean parseContact(ElasticsearchClient esClient, ContactHistory hist) throws Exception {
+		if (hist == null || hist.getOp() == null) return false;
+
+		switch (hist.getOp()) {
+			case "add" -> {
+				Contact contact = new Contact();
+				contact.setId(hist.getContactId());
+				contact.setAlg(hist.getAlg());
+				contact.setCipher(hist.getCipher());
+				contact.setOwner(hist.getSigner());
+				contact.setBirthTime(hist.getTime());
+				contact.setBirthHeight(hist.getHeight());
+				contact.setLastHeight(hist.getHeight());
+				contact.setActive(true);
+				return indexOne(esClient, IndicesNames.CONTACT, contact.getId(), contact);
+			}
+			case "update" -> {
+				Contact contact = EsUtils.getById(esClient, IndicesNames.CONTACT, hist.getContactId(), Contact.class);
+				if (contact == null) {
 					log.info("Contact is null");
 					return false;
 				}
-
-				if(!contact.getOwner().equals(opre.getSigner())){
+				if (!hist.getSigner().equals(contact.getOwner())) {
 					log.info("Contact owner is not the signer");
 					return false;
 				}
-				if(!contact.getActive()){
+				if (!Boolean.TRUE.equals(contact.getActive())) {
 					log.info("Contact is not active");
 					return false;
 				}
-
-				if (contactRaw.getCipher()==null){
-					log.info("Cipher is null");
+				if (hist.getAlg() != null) contact.setAlg(hist.getAlg());
+				contact.setCipher(hist.getCipher());
+				contact.setLastHeight(hist.getHeight());
+				return indexOne(esClient, IndicesNames.CONTACT, contact.getId(), contact);
+			}
+			case "delete", "recover" -> {
+				MgetResult<Contact> result = EsUtils.getMultiByIdList(esClient, IndicesNames.CONTACT, hist.getContactIds(), Contact.class);
+				List<Contact> contactList = result == null ? null : result.getResultList();
+				if (contactList == null) {
+					log.info("Contact list is empty");
 					return false;
 				}
-				if (contactRaw.getAlg() != null)contact.setAlg(contactRaw.getAlg());
-				contact.setCipher(contactRaw.getCipher());
-
-				contact.setLastHeight(opre.getHeight());
-
-				Contact contact5 = contact;
-				IndexResponse result3 = esClient.index(i->i.index(IndicesNames.CONTACT).id(contact5.getId()).document(contact5));
-				log.info("{}", result3.result());
-				return CREATED.equals(result3.result().jsonValue()) || UPDATED.equals(result3.result().jsonValue());
-			default:
+				boolean active = "recover".equals(hist.getOp());
+				List<Contact> changed = new ArrayList<>();
+				for (Contact contact : contactList) {
+					// Only the owner may delete or recover a contact.
+					if (!hist.getSigner().equals(contact.getOwner())) continue;
+					contact.setActive(active);
+					contact.setLastHeight(hist.getHeight());
+					changed.add(contact);
+				}
+				if (changed.isEmpty()) {
+					log.info("No contact of the signer in the list");
+					return false;
+				}
+				return indexAll(esClient, IndicesNames.CONTACT, changed);
+			}
+			default -> {
+				log.info("Invalid operation");
 				return false;
+			}
 		}
 	}
 
-	public boolean parseMail(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
-
-
-		Gson gson = new Gson();
-
-		MailOpData mailRaw = new MailOpData();
-
+	public MailHistory makeMail(OpReturn opre, Feip feip) {
+		MailOpData mailRaw;
 		try {
+			Gson gson = new Gson();
 			mailRaw = gson.fromJson(gson.toJsonTree(feip.getData()), MailOpData.class);
-			if(mailRaw==null){
-				log.info("Bad mail data");
-				return false;
-			}
-		}catch(com.google.gson.JsonSyntaxException e) {
+		} catch (Exception e) {
 			log.info("Bad mail data");
-			return false;
+			return null;
+		}
+		if (mailRaw == null || mailRaw.getOp() == null) {
+			log.info("Bad mail data");
+			return null;
 		}
 
-		Mail mail = new Mail();
+		MailHistory hist = new MailHistory();
+		hist.setOp(mailRaw.getOp());
 
-		long height;
-		if(mailRaw.getOp()==null ){
-			log.info("OP is null");
-			return false;
-		}
-		//Version 4
-		if(mailRaw.getOp()!=null) {
-			switch (mailRaw.getOp()) {
-				case "send" -> {
-					mail.setId(opre.getId());
-					if (mailRaw.getCipher() == null)
-						log.info("Cipher is null");
-					if (mailRaw.getAlg() != null) {
-						mail.setAlg(mailRaw.getAlg());
-					}
-					if (mailRaw.getCipher() != null) {
-						mail.setCipher(mailRaw.getCipher());
-					}
-					mail.setFrom(opre.getSigner());
-					mail.setTo(opre.getRecipient());
-					mail.setBirthTime(opre.getTime());
-					mail.setBirthHeight(opre.getHeight());
-					mail.setLastHeight(opre.getHeight());
-					mail.setNoticeFee(opre.getPaid());
-					mail.setActive(true);
-					IndexResponse result4 = esClient.index(i -> i.index(IndicesNames.MAIL).id(mail.getId()).document(mail));
-					log.info("{}", result4.result());
-					return CREATED.equals(result4.result().jsonValue()) || UPDATED.equals(result4.result().jsonValue());
-
-
+		switch (mailRaw.getOp()) {
+			case "send" -> {
+				if (mailRaw.getCipher() == null) log.info("Cipher is null");
+				hist.setMailId(opre.getId());
+				hist.setAlg(mailRaw.getAlg());
+				hist.setCipher(mailRaw.getCipher());
+				hist.setRecipient(opre.getRecipient());
+				hist.setPaid(opre.getPaid());
+			}
+			case "delete", "recover" -> {
+				if (mailRaw.getMailIds() == null || mailRaw.getMailIds().isEmpty()) {
+					log.info("Mail IDs are empty");
+					return null;
 				}
-				case "delete", "recover" -> {
-					if (mailRaw.getMailIds() == null){
-						log.info("Mail IDs are null");
-						return false;
-					}
-					height = opre.getHeight();
-					MgetResult<Mail> result = EsUtils.getMultiByIdList(esClient, IndicesNames.MAIL, mailRaw.getMailIds(), Mail.class);
-					if (result.getResultList() == null || result.getResultList().isEmpty()){
-						log.info("Mail list is empty");
-						return false;
-					}
-					List<Mail> mailList = result.getResultList();
-					Iterator<Mail> iterator = mailList.iterator();
-					while (iterator.hasNext()) {
-						Mail mail1 = iterator.next();
-						if (mail1.getTo() != null && !mail1.getTo().equals(opre.getSigner())) {
-							iterator.remove();
-							continue;
-						}
-						if (mail1.getTo() == null && !mail1.getFrom().equals(opre.getSigner())) {
-							iterator.remove();
-							continue;
-						}
-						if ("delete".equals(mailRaw.getOp())) mail1.setActive(false);
-						else mail1.setActive(true);
-						mail1.setLastHeight(height);
-					}
-					if (mailList.isEmpty()){
-						log.info("Mail list is empty");
-						return false;
-					}
-					BulkRequest.Builder br = new BulkRequest.Builder();
-					for (Mail mail1 : mailList) {
-						br.operations(op -> op
-								.index(idx -> idx
-										.index(IndicesNames.MAIL)
-										.id(mail1.getId())
-										.document(mail1)
-								)
-						);
-					}
-					BulkResponse result5 = esClient.bulk(br.build());
-					if(result5.errors()){
-						log.info("Failed");
-						return false;
-					}else{
-						log.info("Done");
-						return true;
-					}
-				}
-				default -> {
-					log.info("Invalid operation");
-					return false;
-				}
+				hist.setMailIds(mailRaw.getMailIds());
+			}
+			default -> {
+				log.info("Invalid operation");
+				return null;
 			}
 		}
-		return false;
+
+		hist.setId(opre.getId());
+		hist.setHeight(opre.getHeight());
+		hist.setIndex(opre.getTxIndex());
+		hist.setTime(opre.getTime());
+		hist.setSigner(opre.getSigner());
+		return hist;
 	}
 
-	public boolean parseSecret(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws Exception {
+	public boolean parseMail(ElasticsearchClient esClient, MailHistory hist) throws Exception {
+		if (hist == null || hist.getOp() == null) return false;
 
-		Gson gson = new Gson();
-
-		SecretOpData secretRaw = new SecretOpData();
-
-		try {
-			secretRaw = gson.fromJson(gson.toJsonTree(feip.getData()), SecretOpData.class);
-			if(secretRaw==null || secretRaw.getOp()==null){
-				log.info("Bad secret data");
-				return false;
+		switch (hist.getOp()) {
+			case "send" -> {
+				Mail mail = new Mail();
+				mail.setId(hist.getMailId());
+				mail.setAlg(hist.getAlg());
+				mail.setCipher(hist.getCipher());
+				mail.setFrom(hist.getSigner());
+				mail.setTo(hist.getRecipient());
+				mail.setBirthTime(hist.getTime());
+				mail.setBirthHeight(hist.getHeight());
+				mail.setLastHeight(hist.getHeight());
+				mail.setNoticeFee(hist.getPaid());
+				mail.setActive(true);
+				return indexOne(esClient, IndicesNames.MAIL, mail.getId(), mail);
 			}
-		}catch(com.google.gson.JsonSyntaxException e) {
-			log.info("Bad secret data");
-			return false;
-		}
-
-		Secret secret = new Secret();
-
-		long height;
-		switch(secretRaw.getOp()) {
-
-			case "add":
-				secret.setId(opre.getId());
-
-            if (secretRaw.getAlg() != null) {
-                secret.setAlg(secretRaw.getAlg());
-			}
-
-				if(secretRaw.getCipher()!=null) {
-					secret.setCipher(secretRaw.getCipher());
-				}else if(secretRaw.getMsg()!=null) {
-					secret.setCipher(secretRaw.getMsg());
-				}else return false;
-
-				secret.setOwner(opre.getSigner());
-				secret.setBirthTime(opre.getTime());
-				secret.setBirthHeight(opre.getHeight());
-				secret.setLastHeight(opre.getHeight());
-				secret.setActive(true);
-
-				Secret safe0 = secret;
-
-				IndexResponse result6 = esClient.index(i->i.index(IndicesNames.SECRET).id(safe0.getId()).document(safe0));
-				log.info("{}", result6.result());
-				return CREATED.equals(result6.result().jsonValue()) || UPDATED.equals(result6.result().jsonValue());
-
-			case "update":
-				if(secretRaw.getSecretId() ==null){
-					log.info("Secret ID is null");
+			case "delete", "recover" -> {
+				MgetResult<Mail> result = EsUtils.getMultiByIdList(esClient, IndicesNames.MAIL, hist.getMailIds(), Mail.class);
+				List<Mail> mailList = result == null ? null : result.getResultList();
+				if (mailList == null) {
+					log.info("Mail list is empty");
 					return false;
 				}
-				height = opre.getHeight();
+				boolean active = "recover".equals(hist.getOp());
+				List<Mail> changed = new ArrayList<>();
+				for (Mail mail : mailList) {
+					// The recipient manages a mail; a mail without one is managed by its sender.
+					String manager = mail.getTo() != null ? mail.getTo() : mail.getFrom();
+					if (!hist.getSigner().equals(manager)) continue;
+					mail.setActive(active);
+					mail.setLastHeight(hist.getHeight());
+					changed.add(mail);
+				}
+				if (changed.isEmpty()) {
+					log.info("No mail of the signer in the list");
+					return false;
+				}
+				return indexAll(esClient, IndicesNames.MAIL, changed);
+			}
+			default -> {
+				log.info("Invalid operation");
+				return false;
+			}
+		}
+	}
 
-				secret = EsUtils.getById(esClient, IndicesNames.SECRET, secretRaw.getSecretId(), Secret.class);
+	public SecretHistory makeSecret(OpReturn opre, Feip feip) {
+		SecretOpData secretRaw;
+		try {
+			Gson gson = new Gson();
+			secretRaw = gson.fromJson(gson.toJsonTree(feip.getData()), SecretOpData.class);
+		} catch (Exception e) {
+			log.info("Bad secret data");
+			return null;
+		}
+		if (secretRaw == null || secretRaw.getOp() == null) {
+			log.info("Bad secret data");
+			return null;
+		}
 
-				if(secret == null){
+		SecretHistory hist = new SecretHistory();
+		hist.setOp(secretRaw.getOp());
+
+		switch (secretRaw.getOp()) {
+			case "add" -> {
+				// Early secrets carried the ciphertext in 'msg'.
+				String cipher = !isBlank(secretRaw.getCipher()) ? secretRaw.getCipher() : secretRaw.getMsg();
+				if (isBlank(cipher)) {
+					log.info("Cipher is empty");
+					return null;
+				}
+				hist.setSecretId(opre.getId());
+				hist.setAlg(secretRaw.getAlg());
+				hist.setCipher(cipher);
+			}
+			case "update" -> {
+				if (secretRaw.getSecretId() == null) {
+					log.info("Secret ID is null");
+					return null;
+				}
+				if (isBlank(secretRaw.getCipher())) {
+					log.info("Cipher is empty");
+					return null;
+				}
+				hist.setSecretId(secretRaw.getSecretId());
+				hist.setAlg(secretRaw.getAlg());
+				hist.setCipher(secretRaw.getCipher());
+			}
+			case "delete", "recover" -> {
+				if (secretRaw.getSecretIds() == null || secretRaw.getSecretIds().isEmpty()) {
+					log.info("Secret IDs are empty");
+					return null;
+				}
+				hist.setSecretIds(secretRaw.getSecretIds());
+			}
+			default -> {
+				log.info("Invalid operation");
+				return null;
+			}
+		}
+
+		hist.setId(opre.getId());
+		hist.setHeight(opre.getHeight());
+		hist.setIndex(opre.getTxIndex());
+		hist.setTime(opre.getTime());
+		hist.setSigner(opre.getSigner());
+		return hist;
+	}
+
+	public boolean parseSecret(ElasticsearchClient esClient, SecretHistory hist) throws Exception {
+		if (hist == null || hist.getOp() == null) return false;
+
+		switch (hist.getOp()) {
+			case "add" -> {
+				Secret secret = new Secret();
+				secret.setId(hist.getSecretId());
+				secret.setAlg(hist.getAlg());
+				secret.setCipher(hist.getCipher());
+				secret.setOwner(hist.getSigner());
+				secret.setBirthTime(hist.getTime());
+				secret.setBirthHeight(hist.getHeight());
+				secret.setLastHeight(hist.getHeight());
+				secret.setActive(true);
+				return indexOne(esClient, IndicesNames.SECRET, secret.getId(), secret);
+			}
+			case "update" -> {
+				Secret secret = EsUtils.getById(esClient, IndicesNames.SECRET, hist.getSecretId(), Secret.class);
+				if (secret == null) {
 					log.info("Secret is null");
 					return false;
 				}
-
-				if(!secret.getOwner().equals(opre.getSigner())){
+				if (!hist.getSigner().equals(secret.getOwner())) {
 					log.info("Secret owner is not the signer");
 					return false;
 				}
-				if(!secret.getActive()){
+				if (!Boolean.TRUE.equals(secret.getActive())) {
 					log.info("Secret is not active");
 					return false;
 				}
-
-				if (secretRaw.getCipher()==null){
-					log.info("Cipher is null");
-					return false;
-				}
-				if (secretRaw.getAlg() != null)secret.setAlg(secretRaw.getAlg());
-				secret.setCipher(secretRaw.getCipher());
-
-				secret.setLastHeight(opre.getHeight());
-				Secret safe1 = secret;
-
-				IndexResponse result7 = esClient.index(i->i.index(IndicesNames.SECRET).id(safe1.getId()).document(safe1));
-				log.info("{}", result7.result());
-				return CREATED.equals(result7.result().jsonValue()) || UPDATED.equals(result7.result().jsonValue());
-
-			case "delete":
-				if(secretRaw.getSecretIds() ==null){
-					log.info("Secret IDs are null");
-					return false;
-				}
-				height = opre.getHeight();
-				SecretOpData secretRaw1 = secretRaw;
-
-				MgetResult<Secret> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw1.getSecretIds(), Secret.class);
-				if(result==null || result.getResultList()==null || result.getResultList().isEmpty()){
+				if (hist.getAlg() != null) secret.setAlg(hist.getAlg());
+				secret.setCipher(hist.getCipher());
+				secret.setLastHeight(hist.getHeight());
+				return indexOne(esClient, IndicesNames.SECRET, secret.getId(), secret);
+			}
+			case "delete", "recover" -> {
+				MgetResult<Secret> result = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, hist.getSecretIds(), Secret.class);
+				List<Secret> secretList = result == null ? null : result.getResultList();
+				if (secretList == null) {
 					log.info("Secret list is empty");
 					return false;
 				}
-				List<Secret> secretList = result.getResultList();
-
-				Iterator<Secret> iterator = secretList.iterator();
-				while(iterator.hasNext()) {
-					Secret secret1 = iterator.next();
-					if(!secret1.getOwner().equals(opre.getSigner())){
-						iterator.remove();
-						continue;
-					}
-					secret1.setActive(false);
-					secret1.setLastHeight(height);
+				boolean active = "recover".equals(hist.getOp());
+				List<Secret> changed = new ArrayList<>();
+				for (Secret secret : secretList) {
+					if (!hist.getSigner().equals(secret.getOwner())) continue;
+					secret.setActive(active);
+					secret.setLastHeight(hist.getHeight());
+					changed.add(secret);
 				}
-				if(secretList.isEmpty()){
-					log.info("Secret list is empty");
+				if (changed.isEmpty()) {
+					log.info("No secret of the signer in the list");
 					return false;
 				}
-
-				BulkRequest.Builder br = new BulkRequest.Builder();
-				for(Secret secret1 : secretList) {
-					br.operations(op -> op
-							.index(idx -> idx
-									.index(IndicesNames.SECRET)
-									.id(secret1.getId())
-									.document(secret1)
-							)
-					);
-				}
-				BulkResponse result8 = esClient.bulk(br.build());
-				if(result8.errors()){
-					log.info("Failed to bulk update secret");
-					return false;
-				}
-				log.info("Done");
-				return true;
-			case "recover":
-				if(secretRaw.getSecretIds() ==null){
-					log.info("Secret IDs are null");
-					return false;
-				}
-				height = opre.getHeight();
-				SecretOpData secretRaw2 = secretRaw;
-
-				MgetResult<Secret> result1 = EsUtils.getMultiByIdList(esClient, IndicesNames.SECRET, secretRaw2.getSecretIds(), Secret.class);
-				if(result1.getResultList() == null || result1.getResultList().isEmpty()){
-					log.info("Secret list is empty");
-					return false;
-				}
-				List<Secret> secretList1 = result1.getResultList();
-
-				Iterator<Secret> iterator1 = secretList1.iterator();
-				while(iterator1.hasNext()) {
-					Secret secret1 = iterator1.next();
-					if(!secret1.getOwner().equals(opre.getSigner())){
-						iterator1.remove();
-						continue;
-					}
-					secret1.setActive(true);
-					secret1.setLastHeight(height);
-				}
-				if(secretList1.isEmpty()){
-					log.info("Secret list is empty");
-					return false;
-				}
-
-				BulkRequest.Builder br1 = new BulkRequest.Builder();
-				for(Secret secret1 : secretList1) {
-					br1.operations(op -> op
-							.index(idx -> idx
-									.index(IndicesNames.SECRET)
-									.id(secret1.getId())
-									.document(secret1)
-							)
-					);
-				}
-				BulkResponse result9 = esClient.bulk(br1.build());
-				if(result9.errors()){
-					log.info("Failed to bulk recover secret");
-					return false;
-				}
-				log.info("Done");
-				return true;
-			default:
+				return indexAll(esClient, IndicesNames.SECRET, changed);
+			}
+			default -> {
 				log.info("Invalid operation");
 				return false;
+			}
 		}
+	}
+
+	private static boolean isBlank(String s) {
+		return s == null || s.isEmpty();
+	}
+
+	private static boolean indexOne(ElasticsearchClient esClient, String index, String id, Object doc) throws IOException {
+		IndexResponse response = esClient.index(i -> i.index(index).id(id).document(doc));
+		log.info("{}", response.result());
+		return CREATED.equals(response.result().jsonValue()) || UPDATED.equals(response.result().jsonValue());
+	}
+
+	private static <T extends FcEntity> boolean indexAll(ElasticsearchClient esClient, String index, List<T> docs) throws IOException {
+		BulkRequest.Builder br = new BulkRequest.Builder();
+		for (T doc : docs) {
+			br.operations(op -> op.index(idx -> idx.index(index).id(doc.getId()).document(doc)));
+		}
+		BulkResponse response = esClient.bulk(br.build());
+		if (response.errors()) {
+			log.info("Failed to bulk write {}", index);
+			return false;
+		}
+		log.info("Done");
+		return true;
 	}
 
 	public BoxHistory makeBox(OpReturn opre, Feip feip) {

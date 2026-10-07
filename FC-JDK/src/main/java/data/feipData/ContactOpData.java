@@ -48,7 +48,7 @@ public class ContactOpData {
 	
 	static {
 		OP_FIELDS.put(Op.ADD.toLowerCase(), new String[]{FieldNames.ALG, FieldNames.CIPHER});
-		OP_FIELDS.put(Op.ADD.toLowerCase(), new String[]{FieldNames.CONTACT_ID,FieldNames.ALG, FieldNames.CIPHER});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.CONTACT_ID,FieldNames.ALG, FieldNames.CIPHER});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.CONTACT_IDS});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.CONTACT_IDS});
 	}
@@ -91,6 +91,16 @@ public class ContactOpData {
 	public static ContactOpData makeAdd(String alg, String cipher) {
 		ContactOpData data = new ContactOpData();
 		data.setOp(Op.ADD.toLowerCase());
+		data.setAlg(alg);
+		data.setCipher(cipher);
+		return data;
+	}
+
+	// Factory method for UPDATE operation
+	public static ContactOpData makeUpdate(String contactId, String alg, String cipher) {
+		ContactOpData data = new ContactOpData();
+		data.setOp(Op.UPDATE.toLowerCase());
+		data.setContactId(contactId);
 		data.setAlg(alg);
 		data.setCipher(cipher);
 		return data;

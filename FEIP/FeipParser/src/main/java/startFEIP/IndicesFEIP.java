@@ -38,6 +38,30 @@ public class IndicesFEIP {
 		}
 	}
 
+	/**
+	 * Contact, mail and secret ops are rolled back from contact_history, mail_history and
+	 * secret_history. Indices built before those existed hold contacts, mails and secrets with no
+	 * history, which a rollback would delete and could not rebuild, so they must be rebuilt by a
+	 * new parse before parsing resumes.
+	 *
+	 * @return true, after logging what to do, if any of the three history indices is missing
+	 */
+	public static boolean lacksPersonalHistory(ElasticsearchClient esClient) {
+		boolean lacks = false;
+		for (String index : new String[]{IndicesNames.CONTACT_HISTORY, IndicesNames.MAIL_HISTORY, IndicesNames.SECRET_HISTORY}) {
+			if (EsUtils.noSuchIndex(esClient, index)) {
+				log.error("Index {} does not exist.", index);
+				lacks = true;
+			}
+		}
+		if (lacks) {
+			log.error("These FEIP indices were built before contact, mail and secret kept histories. "
+					+ "Run 'Start New Parse from file' to rebuild them; resuming would leave those three "
+					+ "protocols unable to roll back.");
+		}
+		return lacks;
+	}
+
 	public static void createAllIndices(ElasticsearchClient esClient) throws ElasticsearchException {
 
 		if (esClient == null) {
@@ -71,6 +95,9 @@ public class IndicesFEIP {
 		createIndex(esClient, IndicesNames.CONTACT, "contact.json");
 		createIndex(esClient, IndicesNames.MAIL, "mail.json");
 		createIndex(esClient, IndicesNames.SECRET, "secret.json");
+		createIndex(esClient, IndicesNames.CONTACT_HISTORY, "contact_history.json");
+		createIndex(esClient, IndicesNames.MAIL_HISTORY, "mail_history.json");
+		createIndex(esClient, IndicesNames.SECRET_HISTORY, "secret_history.json");
 		createIndex(esClient, IndicesNames.BOX, "box.json");
 		createIndex(esClient, IndicesNames.BOX_HISTORY, "box_history.json");
 
@@ -127,6 +154,9 @@ public class IndicesFEIP {
 		EsUtils.deleteIndex(esClient, IndicesNames.CONTACT);
 		EsUtils.deleteIndex(esClient, IndicesNames.MAIL);
 		EsUtils.deleteIndex(esClient, IndicesNames.SECRET);
+		EsUtils.deleteIndex(esClient, IndicesNames.CONTACT_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.MAIL_HISTORY);
+		EsUtils.deleteIndex(esClient, IndicesNames.SECRET_HISTORY);
 		EsUtils.deleteIndex(esClient, IndicesNames.BOX);
 		EsUtils.deleteIndex(esClient, IndicesNames.BOX_HISTORY);
 

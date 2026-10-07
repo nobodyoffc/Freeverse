@@ -1,0 +1,1 @@
+{"mappings":{"properties":{"id":{"type":"keyword"},"height":{"type":"long"},"index":{"type":"short"},"time":{"type":"long"},"signer":{"type":"wildcard"},"op":{"type":"keyword"},"alg":{"type":"wildcard"},"cipher":{"type":"keyword","index":false,"doc_values":false},"mailId":{"type":"keyword"},"mailIds":{"type":"keyword"},"recipient":{"type":"wildcard"},"paid":{"type":"long"}}}}
