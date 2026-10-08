@@ -32,8 +32,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 public class FudpSpeedTest {
 
-    private static final String FILE_A = "/Users/liuchangyong/Desktop/Freeverse/a.tar";   // 22 MB
-    private static final String FILE_B = "/Users/liuchangyong/Desktop/Freeverse/b.jar";   // 49 MB
+    private static final String FILE_A = "/Users/liuchangyong/Freeverse/a.tar";   // 22 MB
+    private static final String FILE_B = "/Users/liuchangyong/Freeverse/b.jar";   // 49 MB
 
     private static int portCounter = 19101;
 

@@ -8,7 +8,7 @@
 
 set -e
 
-PROJECT_DIR="/Users/liuchangyong/Desktop/Freeverse"
+PROJECT_DIR="/Users/liuchangyong/Freeverse"
 cd "$PROJECT_DIR"
 
 # 颜色输出
