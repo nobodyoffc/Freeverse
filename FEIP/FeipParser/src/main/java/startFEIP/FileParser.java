@@ -382,8 +382,15 @@ public class FileParser {
 		BulkRequest bulkRequest = br.build();
 		co.elastic.clients.elasticsearch.core.BulkResponse bulkResponse = EsRetry.bulkWithRetry(esClient, bulkRequest);
 		if (bulkResponse.errors()) {
-			List<String> reasons = bulkResponse.items().stream()
-					.filter(item -> item.error() != null)
+			var failed = bulkResponse.items().stream().filter(item -> item.error() != null).toList();
+			// The mark went in; only the history was refused, for a field's content. Store it
+			// without that field rather than stop every parser at this block.
+			if (hist != null && failed.size() == 1 && hist.id().equals(failed.get(0).id())
+					&& RejectedFields.rejectedField(failed.get(0).status(), failed.get(0).error().reason()) != null) {
+				RejectedFields.index(esClient, hist.index(), hist.id(), hist.doc(), false);
+				return;
+			}
+			List<String> reasons = failed.stream()
 					.map(item -> item.error().reason())
 					.toList();
 			log.error("Bulk write failed for history+mark at height {}. Errors: {}", lastHeight, reasons);
@@ -416,10 +423,11 @@ public class FileParser {
 	 * @return that mark, from which parsing must resume; null if there is none, in which case
 	 * parsing must restart from the first file
 	 */
-	private static ParseMark rollBackPartialOp(ElasticsearchClient esClient, long opHeight, HistRef hist) throws Exception {
+	static ParseMark rollBackPartialOp(ElasticsearchClient esClient, long opHeight, HistRef hist) throws Exception {
 		if (hist != null) {
-			esClient.index(i -> i.index(hist.index()).id(hist.id()).document(hist.doc())
-					.refresh(co.elastic.clients.elasticsearch._types.Refresh.True));
+			// The op being rolled back may be one the index refused; its history must still go
+			// in, or the recovery throws the same error and the parser stops after all.
+			RejectedFields.index(esClient, hist.index(), hist.id(), hist.doc(), true);
 		}
 		ParseMark resume = findLatestMark(esClient, opHeight - 1);
 		long rollbackHeight = resume != null ? resume.getLastHeight() : opHeight - 1;
