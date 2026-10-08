@@ -88,7 +88,7 @@ Each element of `downloads` is a JSON object:
 |---|---|---|---|
 |os|N|String|OS or platform label.|
 |link|N|String|Download URL or locator.|
-|did|N|String|Document or release id for that artifact.|
+|did|N|String|DID of that artifact: sha256x2 of the downloadable file ([FVEP11](../FVEP/FVEP11V1_Release.md)).|
 
 **OP_RETURN example:**
 

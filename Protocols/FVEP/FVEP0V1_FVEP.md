@@ -277,3 +277,5 @@ More categories can be added as the ecosystem evolves.
 |7|Signature|Foundation|Define the structure and rules of digital signatures and verification|
 |8|Encryption|Foundation|Define the structure and rules of encryption and decryption|
 |9|Guide|Foundation|Define the on-chain introduction attribution (Guide) of every FID|
+|10|HAT|Foundation|Define the Hash Attribute Table describing data identified by a DID|
+|11|Release|Data|Define how a release's protocols, code and apps are registered and verified|

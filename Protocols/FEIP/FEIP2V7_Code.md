@@ -75,10 +75,10 @@ Create a new on-chain code entry. The new **`codeId`** is the **txid** of this t
 |op|Y|String|Fixed: `publish`|
 |name|Y|String|Name of the code artifact. MUST NOT be null or empty.|
 |ver|N|String|Version string of the code.|
-|did|N|String|Document id (e.g. a commit hash, release tag, or on-chain reference).|
+|did|N|String|DID of the code: sha256x2 of its source archive as defined in [FVEP11](../FVEP/FVEP11V1_Release.md) (byte-exact ZIP of the module at the release tag), so anyone can rebuild and check it.|
 |desc|N|String|Human-readable description.|
 |langs|N|List\<String\>|Programming languages used (e.g. `["Java", "Go"]`).|
-|home|N|List\<String\>|URLs or locators for source code or project homepage.|
+|home|N|Object|Map of string keys to URLs or locators for the source code or project homepage (e.g. `src`, `org`).|
 |protocols|N|List\<String\>|List of protocol ids (`pid`) that this code implements.|
 |waiters|N|List\<String\>|Optional list of FIDs to notify.|
 
@@ -96,7 +96,7 @@ Create a new on-chain code entry. The new **`codeId`** is the **txid** of this t
     "ver": "1.0.0",
     "desc": "Java development kit for the Freeverse ecosystem.",
     "langs": ["Java"],
-    "home": ["https://github.com/example/fc-jdk"],
+    "home": { "src": "https://github.com/example/fc-jdk" },
     "protocols": ["abc123...protocolPid..."]
   }
 }
@@ -114,10 +114,10 @@ Replace mutable metadata of an existing code entry. Only the **owner** may updat
 |codeId|Y|String|Existing code id (publish txid).|
 |name|Y|String|Updated name. MUST NOT be null or empty.|
 |ver|N|String|Updated version string.|
-|did|N|String|Updated document id.|
+|did|N|String|Updated archive DID, as for `publish` ([FVEP11](../FVEP/FVEP11V1_Release.md)).|
 |desc|N|String|Updated description.|
 |langs|N|List\<String\>|Updated programming languages.|
-|home|N|List\<String\>|Updated home links.|
+|home|N|Object|Updated home map.|
 |protocols|N|List\<String\>|Updated protocol references.|
 |waiters|N|List\<String\>|Optional; recorded in history.|
 
@@ -136,7 +136,7 @@ Replace mutable metadata of an existing code entry. Only the **owner** may updat
     "ver": "2.0.0",
     "desc": "Major refactor with new crypto module.",
     "langs": ["Java", "Kotlin"],
-    "home": ["https://github.com/example/fc-jdk"]
+    "home": { "src": "https://github.com/example/fc-jdk" }
   }
 }
 ```
@@ -236,10 +236,10 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
 |id|String|Same as `codeId` (publish txid).|
 |name|String|Name of the code artifact.|
 |ver|String|Version string.|
-|did|String|Document id.|
+|did|String|DID of the code archive ([FVEP11](../FVEP/FVEP11V1_Release.md)).|
 |desc|String|Description.|
 |langs|List\<String\>|Programming languages.|
-|home|List\<String\>|Home links.|
+|home|Map\<String, String\>|URLs / locators by key.|
 |protocols|List\<String\>|Protocol ids this code implements.|
 |waiters|List\<String\>|Present on the model; the v7 reference parser does not persist `waiters` onto the entity (only on history when supplied).|
 |owner|String|Signer of the `publish` tx (FID).|
@@ -292,7 +292,7 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
     "ver": "1.0.0",
     "desc": "Java development kit for the Freeverse ecosystem.",
     "langs": ["Java"],
-    "home": ["https://github.com/example/fc-jdk"],
+    "home": { "src": "https://github.com/example/fc-jdk" },
     "protocols": ["txProtocol1"]
   }
 }
@@ -314,7 +314,7 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
   "ver": "1.0.0",
   "desc": "Java development kit for the Freeverse ecosystem.",
   "langs": ["Java"],
-  "home": ["https://github.com/example/fc-jdk"],
+  "home": { "src": "https://github.com/example/fc-jdk" },
   "protocols": ["txProtocol1"],
   "owner": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV",
   "birthTime": 1672531200,
@@ -346,7 +346,7 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
     "ver": "2.0.0",
     "desc": "Major refactor with new crypto module.",
     "langs": ["Java", "Kotlin"],
-    "home": ["https://github.com/example/fc-jdk"]
+    "home": { "src": "https://github.com/example/fc-jdk" }
   }
 }
 ```
@@ -365,7 +365,7 @@ Submit a numeric rating for someone else's code entry, weighted by the transacti
   "ver": "2.0.0",
   "desc": "Major refactor with new crypto module.",
   "langs": ["Java", "Kotlin"],
-  "home": ["https://github.com/example/fc-jdk"],
+  "home": { "src": "https://github.com/example/fc-jdk" },
   "protocols": ["txProtocol1"],
   "owner": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV",
   "birthTime": 1672531200,

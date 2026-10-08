@@ -76,10 +76,10 @@ Create a new on-chain protocol definition. The new **`pid`** is the **txid** of 
 |name|Y|String|Short name of the protocol. MUST NOT be null or empty.|
 |type|N|String|Protocol family label (e.g. `FEIP`). Used when forming the display `title`.|
 |ver|N|String|Version string of the defined protocol.|
-|did|N|String|Document id for the defined protocol (off-chain or on-chain reference, protocol-specific).|
+|did|N|String|DID of the protocol document: sha256x2 of the document file, with its Summary `PID` row empty on `publish` and holding the pid on `update` ([FVEP11](../FVEP/FVEP11V1_Release.md)).|
 |desc|N|String|Human-readable description.|
 |lang|N|String|Primary language code or label for the document.|
-|home|N|List\<String\>|URLs or locators for the full specification.|
+|home|N|Object|Map of string keys to URLs or locators for the full specification (e.g. `doc`, `org`).|
 |preDid|N|String|Previous document id in a replacement chain; stored as **`prePid`** on the entity and history (same string value).|
 |waiters|N|List\<String\>|Optional list carried in history (see [Output](#output)).|
 
@@ -100,7 +100,7 @@ Create a new on-chain protocol definition. The new **`pid`** is the **txid** of 
     "did": "doc-cid-v4",
     "desc": "Crypto Identity naming on Freecash.",
     "lang": "en",
-    "home": ["https://example.com/feip3-cid"],
+    "home": { "doc": "https://example.com/feip3-cid" },
     "preDid": "doc-cid-v3"
   }
 }
@@ -120,10 +120,10 @@ Replace mutable metadata of an existing protocol. Only the **owner** may update.
 |name|Y|String|Updated name. MUST NOT be null or empty.|
 |type|N|String|Updated type label.|
 |ver|N|String|Updated version string.|
-|did|N|String|Updated document id.|
+|did|N|String|Updated document DID, as for `publish` ([FVEP11](../FVEP/FVEP11V1_Release.md)).|
 |desc|N|String|Updated description.|
 |lang|N|String|Updated language.|
-|home|N|List\<String\>|Updated home links.|
+|home|N|Object|Updated home map.|
 |preDid|N|String|Updated previous-document id (stored as `prePid`).|
 |waiters|N|List\<String\>|Optional; recorded in history.|
 
@@ -246,12 +246,12 @@ Submit a numeric rating for someone else’s protocol, weighted by the transacti
 |type|String|Protocol family label.|
 |sn|String|Defined protocol serial number.|
 |ver|String|Defined protocol version string.|
-|did|String|Document id.|
+|did|String|DID of the protocol document ([FVEP11](../FVEP/FVEP11V1_Release.md)).|
 |name|String|Short name.|
 |lang|String|Language.|
 |desc|String|Description.|
 |prePid|String|Carried from `preDid` in `data`.|
-|home|List\<String\>|Home links.|
+|home|Map\<String, String\>|URLs / locators by key.|
 |title|String|Derived display title (reference formula).|
 |owner|String|Signer of the `publish` tx (FID).|
 |birthTime|Long|Block time of `publish`.|

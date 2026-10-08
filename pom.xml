@@ -15,7 +15,6 @@
         <module>APIP</module>
         <module>FEIP</module>
         <module>FchParser</module>
-        <module>PublishProtocols</module>
         <module>FreeIM</module>
     </modules>
 
