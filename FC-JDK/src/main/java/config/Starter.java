@@ -1,5 +1,6 @@
 package config;
 
+import exception.LocalDbUnavailableException;
 import static clients.FeipClient.*;
 
 import java.io.BufferedReader;
@@ -40,7 +41,8 @@ public class Starter {
             settings = new Settings(configure,clientName, modules, settingMap, autoTaskList);
 
         // Initialize clients and handlers
-        settings.initiateClient(fid, clientName, symkey, configure, br);
+        Settings clientSettings = settings;
+        initiateOrExit(settings, () -> clientSettings.initiateClient(fid, clientName, symkey, configure, br));
         ElasticsearchClient esClient ;
         NaSaRpcClient naSaRpcClient;
         ApipClient apipClient = (ApipClient) settings.getClient(ServiceType.APIP);
@@ -98,7 +100,8 @@ public class Starter {
         if(settings == null)
             settings = new Settings(configure,toolName, modules, settingMap, autoTaskList);
 
-        settings.initiateTool(toolName, symkey, configure, br);
+        Settings toolSettings = settings;
+        initiateOrExit(settings, () -> toolSettings.initiateTool(toolName, symkey, configure, br));
         return settings;
     }
 
@@ -118,7 +121,8 @@ public class Starter {
                 settings = new Settings(configure, serverType, settingMap, modules, autoTaskList);
             }
 
-            settings.initiateServer(sid, symkey, configure,apiList);
+            Settings serverSettings = settings;
+            initiateOrExit(settings, () -> serverSettings.initiateServer(sid, symkey, configure, apiList));
             if(settings.getService()!=null){
                 return settings;
             }
@@ -136,8 +140,29 @@ public class Starter {
 
         if (settings == null) settings = new Settings(configure, null, settingMap, modules, autoTaskList);
         //Check necessary APIs and set them if anyone can't be connected.
-        settings.initiateMuteServer(serverName, symkey, configure);
+        Settings muteSettings = settings;
+        initiateOrExit(settings, () -> muteSettings.initiateMuteServer(serverName, symkey, configure));
         return settings;
+    }
+
+    /**
+     * Run a command-line app's module initiation. A local database another process holds ends
+     * the program with one line saying which, rather than a stack trace, and with exit status 1:
+     * clients, pools and tasks already started could otherwise keep a half-started JVM alive.
+     * Only for standalone apps; web apps handle the exception in FcWebServerInitiator.
+     */
+    public static void initiateOrExit(Settings settings, Runnable initiation) {
+        try {
+            initiation.run();
+        } catch (LocalDbUnavailableException e) {
+            log.error(e.getMessage());
+            try {
+                settings.close();
+            } catch (Exception closeError) {
+                log.warn("Error closing settings: {}", closeError.getMessage());
+            }
+            System.exit(1);
+        }
     }
 
 }

@@ -4,7 +4,9 @@ import config.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import exception.LocalDbUnavailableException;
 import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import java.io.Serial;
 
@@ -31,7 +33,7 @@ public abstract class FcWebServerInitiator extends HttpServlet {
         log.debug("The {} server is destroyed.",serverName);
     }
     @Override
-    public void init(ServletConfig config) {
+    public void init(ServletConfig config) throws ServletException {
         setServiceName();
 
         System.out.println("Initiate " + serverName + " web server...");
@@ -58,7 +60,16 @@ public abstract class FcWebServerInitiator extends HttpServlet {
             log.info("Cleanup completed during shutdown");
         }));
 
-        settings.initModulesMute();
+        try {
+            settings.initModulesMute();
+        } catch (LocalDbUnavailableException e) {
+            // Fail this webapp, not the JVM: System.exit here deadlocks with Tomcat's shutdown
+            // hook. Close what did open, so its database locks are released.
+            log.error("The {} server cannot start: {}", serverName, e.getMessage());
+            settings.close();
+            settings = null;
+            throw new ServletException(e.getMessage(), e);
+        }
 
         settings.runAutoTasks();
 

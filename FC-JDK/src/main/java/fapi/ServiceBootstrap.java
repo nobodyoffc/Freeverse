@@ -2,6 +2,7 @@ package fapi;
 
 import config.Configure;
 import config.Settings;
+import config.Starter;
 import data.feipData.ApiGroupType;
 import data.feipData.Service;
 import fapi.service.FapiServer;
@@ -298,7 +299,7 @@ public class ServiceBootstrap {
     private static void initializeExternalServices(Settings settings,
                                                    byte[] symkey, Configure configure) {
         // 初始化模块
-        settings.initiateServer(settings.getSid(), symkey, configure, null);
+        Starter.initiateOrExit(settings, () -> settings.initiateServer(settings.getSid(), symkey, configure, null));
     }
     
     private static FudpNode createAndStartFudpNode(Settings settings, Service service, FapiServer server) 

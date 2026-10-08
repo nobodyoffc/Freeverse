@@ -1,5 +1,6 @@
 package managers;
 
+import exception.LocalDbUnavailableException;
 import data.feipData.ServiceType;
 import ui.Inputer;
 import ui.Menu;
@@ -670,19 +671,30 @@ public abstract class Manager<T extends FcEntity>{
                 log.warn("Failed to initialize database (attempt {}/{}): {}", retryCount, maxRetries, e.getMessage());
                 
                 if (retryCount == maxRetries) {
-                    log.error("Failed to initialize database after {} attempts. Please ensure no other instance is running.", maxRetries);
-                    System.exit(1);
+                    String message = "Cannot open the " + dbName + " database in " + dbPath + " after " + maxRetries
+                            + " attempts: " + rootMessage(e) + ". Make sure no other instance is running.";
+                    log.error(message);
+                    throw new LocalDbUnavailableException(message, e);
                 }
                 
                 try {
                     Thread.sleep(retryDelay);
                     retryDelay *= 2; // Exponential backoff
                 } catch (InterruptedException e1) {
-                    log.error("Failed to sleep during retry", e1);
-                    System.exit(1);
+                    Thread.currentThread().interrupt();
+                    throw new LocalDbUnavailableException("Interrupted while opening the " + dbName + " database in " + dbPath, e1);
                 }
             }
         }
+    }
+
+    /** The innermost message in a chain of causes, e.g. "Database appears to be in use by another process". */
+    private static String rootMessage(Throwable e) {
+        String message = e.getMessage();
+        for (Throwable t = e.getCause(); t != null; t = t.getCause()) {
+            if (t.getMessage() != null) message = t.getMessage();
+        }
+        return message;
     }
 
     /**
