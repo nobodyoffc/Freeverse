@@ -64,7 +64,7 @@ A Room is characterized by:
 - All chat messages encrypted under the current symkey; only members holding the corresponding key version can decrypt.
 - All chat messages addressed to the room as a whole through DOCK; stored once under the `roomId` and returned to anyone who fetches that id. The DOCK does not check membership; the symkey keeps the content private and the receiver enforces who may speak (§8.4).
 
-Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 §3.5). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
+Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 Message Signing §4). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
 
 A Room differs from a Team (FIMP4) in that Room state is **purely local**: there is no on-chain record. Membership lists and metadata are propagated entirely through FIMP messages.
 
@@ -264,7 +264,7 @@ A receiver MUST store the delivered key only when one of these holds:
 2. the verified sender is the receiver's **own FID**; or
 3. the message carries a `requestId` matching a request **this device** has outstanding -- a `SYMKEY` request (§5.2) or a `ROOM_INFO` request (§5.1), since a member's `ROOM_INFO` response legitimately carries the key -- and the version delivered is one that request could be answered with.
 
-The second case is not a weakening. One FID may be signed in on several devices, and the envelope signature (FIMP0V3 §3) proves the sender holds this identity's prikey -- so the key comes from this identity, whatever device sent it. For a room, whose keys exist nowhere but on its members' devices, a sibling device is often the only copy left.
+The second case is not a weakening. One FID may be signed in on several devices, and the envelope signature (FIMP0V3 §Message Signing) proves the sender holds this identity's prikey -- so the key comes from this identity, whatever device sent it. For a room, whose keys exist nowhere but on its members' devices, a sibling device is often the only copy left.
 
 Anything else is discarded. A key from a member who was not asked is an unsolicited write into the store that decides what this device can read, and since §7.1 forbids overwriting, accepting it would let any member add rows to any other member's key store indefinitely. A receiver MUST NOT infer solicitation from the mere presence of a `requestId`: the id must match a request the receiver still holds a record of (§7.4).
 
@@ -401,7 +401,7 @@ Receivers fetch room messages with `dock.fetch` using `recipientIds = [<roomId>]
 
 The owner of a room SHOULD configure the room's `home` map to advertise a DOCK URL the owner controls, so that all members read one stored copy of each message from the same DOCK. If `home` is absent, senders fall back to their own DOCK with `targetDockUrl` set per recipient -- which, for chat messages, requires a separate post per member and is not equivalent to a true broadcast.
 
-A receiver MUST de-duplicate incoming messages by `(senderId, id)` and discard any whose `targetId` is not the room it fetched for (FIMP0V3 §3.5). De-duplicating by dock id alone is not enough: a replay is stored under a new one.
+A receiver MUST de-duplicate incoming messages by `(senderId, id)` and discard any whose `targetId` is not the room it fetched for (FIMP0V3 Message Signing §4). De-duplicating by dock id alone is not enough: a replay is stored under a new one.
 
 ## 7. Encryption
 
@@ -472,7 +472,7 @@ A member who is removed without symkey rotation can still decrypt subsequent mes
 
 ### 8.4. Sender impersonation
 
-Within a room, any member who holds the symkey can produce a message whose `body` seals validly under that key, so decryption proves only that the author held the key. The author is the FID whose key signed the envelope (FIMP0V3 §3). Receivers MUST verify the signature before opening the body, MUST discard a message whose signature does not verify or was not made by `senderId`'s key, and MUST NOT use the FUDP peer or `DockItem.sender` as the author. A receiver SHOULD also discard a room chat message whose verified sender is not in its member list for the room.
+Within a room, any member who holds the symkey can produce a message whose `body` seals validly under that key, so decryption proves only that the author held the key. The author is the FID whose key signed the envelope (FIMP0V3 §Message Signing). Receivers MUST verify the signature before opening the body, MUST discard a message whose signature does not verify or was not made by `senderId`'s key, and MUST NOT use the FUDP peer or `DockItem.sender` as the author. A receiver SHOULD also discard a room chat message whose verified sender is not in its member list for the room.
 
 ### 8.5. Replay
 
@@ -550,7 +550,7 @@ Amendments made within version 3, during development:
 
 Changes from FIMP2V2:
 
-1. Every message is signed by its author (FIMP0V3 §3). Sender checks -- owner-only control messages, member-only `ROOM_ACCEPT`/`ROOM_LEAVE`/`SYMKEY` -- are made against the verified sender instead of the FUDP peer or `DockItem.sender` (§8.4, §8.6).
+1. Every message is signed by its author (FIMP0V3 §Message Signing). Sender checks -- owner-only control messages, member-only `ROOM_ACCEPT`/`ROOM_LEAVE`/`SYMKEY` -- are made against the verified sender instead of the FUDP peer or `DockItem.sender` (§8.4, §8.6).
 2. Receivers de-duplicate on `(senderId, id)` rather than dock id, and discard messages not addressed to the room they fetched for (§6, §8.5).
 3. The DOCK is stated not to check membership; the receiver enforces it (§6).
 
@@ -559,7 +559,7 @@ Changes from FIMP2V1, retained from version 2:
 1. The sealed unit is the whole body, so a room `STREAM`/`VOICE` payload is now encrypted along with its metadata (§4.1, §7.3). Version 1 sealed `content` only and left `dataBase64` readable by the DOCK.
 2. `content` and `dataBase64` are no longer envelope fields; they are the two sections of the single `body` field, and binary data is raw rather than Base64.
 3. The sealed body is a binary FTSP bundle rather than a `CryptoDataByte` JSON string in `cipher`.
-4. Inline payload size is governed by the destination's resolved budget (FIMP0V2 §Payload Sizing) rather than a fixed constant.
+4. Inline payload size is governed by the destination's resolved budget (FIMP0V3 §Payload Sizing) rather than a fixed constant.
 
 From version 1, retained: the control messages `ROOM_ACCEPT`, `ROOM_DISBAND`, and `ROOM_REMOVED` (§4.6-4.8) were added while this document was in Draft status; they are appended ContentType values and are wire-compatible with earlier implementations, which simply do not emit or act on them (see §3.3 on tolerating members that never send `ROOM_ACCEPT`).
 
@@ -573,7 +573,7 @@ Wire-incompatible changes require a new version number.
 
 ## 10. Related Protocols
 
-- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks (`FIMP0V3_Signing_Proposal`).
+- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks ([FIMP0V3_FIMP](FIMP0V3_FIMP.md)).
 - **FIMP1V3** -- P2P mode (used as the carrier for ROOM_INFO, ROOM_LEAVE, SYMKEY, MEMBERS, REQUEST/RESPONSE, and the source of their sealing rules).
 - **FIMP4V3** -- Team mode (analogous closed-group semantics, but with on-chain membership).
 - **FAPI13V1** -- DOCK store-and-forward; in particular storing one item under `recipients = [<roomId>]` for every member to fetch.

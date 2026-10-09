@@ -57,7 +57,7 @@ FIMP1V3 defines the **P2P** mode of FIMP -- direct one-to-one messaging between 
 
 ## 1. Overview
 
-Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 §3.5). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
+Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 Message Signing §4). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
 
 P2P messages are characterized by:
 
@@ -370,7 +370,7 @@ Receivers MUST NOT rely on `ImMessage.timestamp` for freshness. It is signed, so
 
 ### 9.2. Sender forgery
 
-The author of a message is the FID whose key signed it (FIMP0V3 §3). Receivers MUST verify the signature trailer and discard a message whose trailer pubkey does not hash to `senderId`. The FUDP peer and `DockItem.sender` identify connections, not authors: a DOCK that forwards an item re-puts it under its own identity, and a client that holds several identities may connect with one key while writing as another. Receivers MUST NOT use either to establish who wrote a message.
+The author of a message is the FID whose key signed it (FIMP0V3 §Message Signing). Receivers MUST verify the signature trailer and discard a message whose trailer pubkey does not hash to `senderId`. The FUDP peer and `DockItem.sender` identify connections, not authors: a DOCK that forwards an item re-puts it under its own identity, and a client that holds several identities may connect with one key while writing as another. Receivers MUST NOT use either to establish who wrote a message.
 
 ### 9.3. Receipt forgery
 
@@ -386,7 +386,7 @@ This document defines version 3 of the P2P mode (FIMP1V3), which accompanies the
 
 Changes from FIMP1V2:
 
-1. Every message is signed by its author (FIMP0V3 §3), and authorship is taken from the signature instead of the FUDP peer or `DockItem.sender` (§9.2).
+1. Every message is signed by its author (FIMP0V3 §Message Signing), and authorship is taken from the signature instead of the FUDP peer or `DockItem.sender` (§9.2).
 2. Receivers de-duplicate on `(senderId, id)` rather than `DockItem.id`, and discard messages not addressed to them (§9.1).
 3. Every P2P message with a payload is sealed on the DOCK and ROAD channels, control messages included; receivers SHOULD check the seal's pubkey against the sender (§7.5).
 4. Imported HISTORY files carry no signatures; their messages MUST be presented as unverified (§6.4).
@@ -401,7 +401,7 @@ Future versions MAY add ContentTypes and RequestTypes (appended to their enums).
 
 ## 11. Related Protocols
 
-- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks (`FIMP0V3_Signing_Proposal`).
+- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks ([FIMP0V3_FIMP](FIMP0V3_FIMP.md)).
 - **FIMP2V3** -- Room mode (uses P2P as the transport for SYMKEY pushes and ROOM_INFO invites).
 - **FIMP4V3** -- Team mode (uses P2P as the transport for SYMKEY pushes).
 - **FAPI13V1** -- DOCK store-and-forward service, including the per-item `maxDataSize` ceiling.

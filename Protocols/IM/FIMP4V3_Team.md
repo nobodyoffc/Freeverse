@@ -59,7 +59,7 @@ A Team is characterized by:
 - All chat messages encrypted under the current symkey; only members holding the corresponding key version can decrypt.
 - All chat messages addressed to the team as a whole through DOCK, with `recipients = [teamId]`.
 
-Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 §3.5). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
+Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 Message Signing §4). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
 
 Team is the IM-layer counterpart of Square (FIMP3) for closed groups, and the on-chain counterpart of Room (FIMP2). It combines on-chain authoritative membership with end-to-end IM-layer encryption.
 
@@ -172,7 +172,7 @@ A member receiving a `SYMKEY` MUST verify that the verified sender is a current 
 2. the verified sender is the receiver's **own FID**; or
 3. the message carries a `requestId` matching a request **this device** has outstanding (§7.4), and the version it carries is one that request named.
 
-The second case is not a weakening. One FID may be signed in on several devices, and the envelope signature (FIMP0V3 §3) proves the sender holds this identity's prikey — so the key comes from this identity, whatever device sent it. It is also the only route a reinstalled owner has, since their other device may hold the only copy of the key in existence.
+The second case is not a weakening. One FID may be signed in on several devices, and the envelope signature (FIMP0V3 §Message Signing) proves the sender holds this identity's prikey — so the key comes from this identity, whatever device sent it. It is also the only route a reinstalled owner has, since their other device may hold the only copy of the key in existence.
 
 Anything else is discarded. A `SYMKEY` from a member who was not asked is not a gift, it is an unsolicited write into the one store that decides what this device can read; and since §7.1 forbids overwriting, accepting it would let any member add rows to any other member's key store indefinitely. Together with §7.1 this is also why no overwrite rule is needed: what cannot be stored cannot displace anything.
 
@@ -278,7 +278,7 @@ A member requests the current member list. The response is a `MEMBERS` message (
 
 Receivers fetch team chat with `dock.fetch` and `recipientIds = [<teamId>]`. Receivers separately fetch their own P2P inbox with `recipientIds = [<own FID>]` to receive control messages.
 
-The DOCK stores an item under the ids it is addressed to and returns it to whoever asks; it does not check membership, so the rules of §8 are enforced by the receiver. Receivers MUST de-duplicate by `(senderId, id)` and discard any message whose `targetId` is not the team or FID they fetched for (FIMP0V3 §3.5).
+The DOCK stores an item under the ids it is addressed to and returns it to whoever asks; it does not check membership, so the rules of §8 are enforced by the receiver. Receivers MUST de-duplicate by `(senderId, id)` and discard any message whose `targetId` is not the team or FID they fetched for (FIMP0V3 Message Signing §4).
 
 ## 7. Encryption
 
@@ -369,7 +369,7 @@ FIMP version 1 does NOT provide forward secrecy. A future compromise of a member
 
 ### 9.4. Sender impersonation
 
-Within a team, any member who holds the symkey can produce a chat message whose `body` seals validly under that key, so decryption proves only that the author held the key. The author is the FID whose key signed the envelope (FIMP0V3 §3). Receivers MUST verify the signature before opening the body, MUST discard a message not signed by `senderId`'s key, and MUST NOT use the FUDP peer or `DockItem.sender` as the author. Owner-only and manager-only messages are authorized against the verified sender.
+Within a team, any member who holds the symkey can produce a chat message whose `body` seals validly under that key, so decryption proves only that the author held the key. The author is the FID whose key signed the envelope (FIMP0V3 §Message Signing). Receivers MUST verify the signature before opening the body, MUST discard a message not signed by `senderId`'s key, and MUST NOT use the FUDP peer or `DockItem.sender` as the author. Owner-only and manager-only messages are authorized against the verified sender.
 
 ### 9.5. Replay
 
@@ -440,7 +440,7 @@ Amendments made within version 3, during development:
 
 Changes from FIMP4V2:
 
-1. Every message is signed by its author (FIMP0V3 §3). Membership, owner and manager checks are made against the verified sender instead of FUDP authentication or `DockItem.sender` (§4.2, §8.2, §9.4).
+1. Every message is signed by its author (FIMP0V3 §Message Signing). Membership, owner and manager checks are made against the verified sender instead of FUDP authentication or `DockItem.sender` (§4.2, §8.2, §9.4).
 2. The DOCK is stated not to check membership; receivers MUST discard chat from non-members (§8.2), previously a SHOULD.
 3. Receivers de-duplicate on `(senderId, id)` rather than dock id, and discard messages not addressed to them (§6, §9.5).
 
@@ -449,7 +449,7 @@ Changes from FIMP4V1, retained from version 2:
 1. The sealed unit is the whole body, so a team `STREAM`/`VOICE` payload is now encrypted along with its metadata (§4.1, §7.3). Version 1 sealed `content` only and left `dataBase64` readable by the DOCK.
 2. `content` and `dataBase64` are no longer envelope fields; they are the two sections of the single `body` field, and binary data is raw rather than Base64.
 3. The sealed body is a binary FTSP bundle rather than a `CryptoDataByte` JSON string in `cipher`.
-4. Inline payload size is governed by the destination's resolved budget (FIMP0V2 §Payload Sizing) rather than a fixed constant.
+4. Inline payload size is governed by the destination's resolved budget (FIMP0V3 §Payload Sizing) rather than a fixed constant.
 
 Future versions MAY:
 
@@ -462,7 +462,7 @@ Wire-incompatible changes require a new version number.
 
 ## 11. Related Protocols
 
-- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks (`FIMP0V3_Signing_Proposal`).
+- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks ([FIMP0V3_FIMP](FIMP0V3_FIMP.md)).
 - **FIMP1V3** -- P2P mode (used as the carrier for SYMKEY, MEMBERS, HISTORY responses, REQUESTs, and the source of their sealing rules).
 - **FIMP2V3** -- Room mode (analogous closed-group semantics, but with local non-on-chain membership).
 - **FIMP3V3** -- Square mode (open on-chain membership, no IM-layer sealing).

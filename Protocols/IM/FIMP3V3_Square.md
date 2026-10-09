@@ -51,7 +51,7 @@ A Square is characterized by:
 - Plaintext IM-layer messages: the body is never sealed. `FLAG_BODY_SEALED` and `symkeyVersion` MUST NOT be set.
 - All messages addressed to the square as a whole through DOCK, stored once under the `squareId` and returned to anyone who fetches that id. The DOCK does not check membership.
 
-Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 §3.5). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
+Every message in this mode, including every control message, carries the FIMP0V3 signature trailer: the author's pubkey and a Schnorr signature over the whole envelope. Before acting on a message a receiver verifies the signature, checks that the message is addressed to it, and drops a `(senderId, id)` it has taken in before (FIMP0V3 Message Signing §4). Throughout this document, **the verified sender** means the `senderId` of a message that has passed those checks.
 
 Square differs from Room (FIMP2) and Team (FIMP4) in three crucial ways: (a) the membership list is on chain and is the authoritative source; (b) anyone may join without invitation; (c) messages are not encrypted at the IM layer.
 
@@ -155,7 +155,7 @@ A sender MAY use any `REQUEST`/`RESPONSE` `RequestType` defined in FIMP0 (e.g., 
 
 When the sender's FAPI client has a direct connection to the square's DOCK (cached during sync, FAPI13 ServiceDiscovery applies), the sender posts there directly. Otherwise, the sender MAY post to its own DOCK with `targetDockUrl` set to the square's DOCK to use FAPI13 forwarding.
 
-Receivers fetch with `dock.fetch` and `recipientIds = [<squareId>]` (or include `<ownFid>` to also receive direct P2P traffic in the same call). Receivers MUST de-duplicate by `(senderId, id)` and discard any message whose `targetId` is not the square they fetched for (FIMP0V3 §3.5).
+Receivers fetch with `dock.fetch` and `recipientIds = [<squareId>]` (or include `<ownFid>` to also receive direct P2P traffic in the same call). Receivers MUST de-duplicate by `(senderId, id)` and discard any message whose `targetId` is not the square they fetched for (FIMP0V3 Message Signing §4).
 
 `maxDays` for Square messages is configurable per sender, subject to FAPI13 limits and the sender's balance. FAPI13 default is 7 days.
 
@@ -184,7 +184,7 @@ A sender MUST NOT post to a square whose on-chain `members` list does not name i
 
 A receiver fetches square messages by querying the square's DOCK with `recipientIds = [<squareId>]`. The DOCK does not check membership, for fetching or for posting, so membership is enforced here.
 
-A receiver MUST discard a square message whose verified sender (the signer, FIMP0V3 §3) is not a member of the square. A receiver's copy of the member list may lag the chain, so when the sender is not in the local copy the receiver SHOULD read the square from BASE once before discarding: a member may have joined since the last sync. To bound the lookups a stream of non-member posts can cause, a receiver MAY skip the re-read for an item stored before its last read of that square. If BASE cannot be reached, a receiver MAY keep the message rather than lose a member's post to a network failure. A receiver's own messages are always kept.
+A receiver MUST discard a square message whose verified sender (the signer, FIMP0V3 §Message Signing) is not a member of the square. A receiver's copy of the member list may lag the chain, so when the sender is not in the local copy the receiver SHOULD read the square from BASE once before discarding: a member may have joined since the last sync. To bound the lookups a stream of non-member posts can cause, a receiver MAY skip the re-read for an item stored before its last read of that square. If BASE cannot be reached, a receiver MAY keep the message rather than lose a member's post to a network failure. A receiver's own messages are always kept.
 
 `DockItem.sender` MUST NOT be used for this check: after a DOCK forward it names the forwarding server, not the author.
 
@@ -196,7 +196,7 @@ Square messages are exposed to the operator of the square's DOCK server, to any 
 
 ### 9.2. Sender impersonation
 
-Square bodies are plaintext, so without a signature anyone could post in any member's name. The author is the FID whose key signed the envelope (FIMP0V3 §3); receivers MUST verify the signature and discard a message not signed by `senderId`'s key. The FUDP peer and `DockItem.sender` MUST NOT be used as the author.
+Square bodies are plaintext, so without a signature anyone could post in any member's name. The author is the FID whose key signed the envelope (FIMP0V3 §Message Signing); receivers MUST verify the signature and discard a message not signed by `senderId`'s key. The FUDP peer and `DockItem.sender` MUST NOT be used as the author.
 
 ### 9.3. Spam and flooding
 
@@ -222,12 +222,12 @@ This document defines version 3 of the Square mode (FIMP3V3), which accompanies 
 
 Changes from FIMP3V2:
 
-1. Every message is signed by its author (FIMP0V3 §3); authorship is no longer taken from the FUDP peer or `DockItem.sender` (§9.2).
+1. Every message is signed by its author (FIMP0V3 §Message Signing); authorship is no longer taken from the FUDP peer or `DockItem.sender` (§9.2).
 2. The DOCK is stated not to check membership. Receivers MUST discard messages from non-members, re-reading the square once before doing so (§8.2); previously a SHOULD against `DockItem.sender`.
 3. A client may read a square as soon as its join is broadcast, and MUST NOT post until the join is confirmed (§3.2, §8.1).
 4. Receivers de-duplicate on `(senderId, id)` and discard messages not addressed to the square (§6, §9.5).
 
-Changes from FIMP3V1, retained from version 2, are confined to the envelope: `content` and `dataBase64` are no longer envelope fields but the two sections of the single `body` field, with binary data raw rather than Base64; and inline payload size is governed by the destination's resolved budget (FIMP0V2 §Payload Sizing) rather than a fixed constant. Square's IM layer remains plaintext, so the sealing changes of FIMP1V2 / FIMP2V2 / FIMP4V2 did not apply here.
+Changes from FIMP3V1, retained from version 2, are confined to the envelope: `content` and `dataBase64` are no longer envelope fields but the two sections of the single `body` field, with binary data raw rather than Base64; and inline payload size is governed by the destination's resolved budget (FIMP0V3 §Payload Sizing) rather than a fixed constant. Square's IM layer remains plaintext, so the sealing changes of FIMP1V2 / FIMP2V2 / FIMP4V2 did not apply here.
 
 Future versions MAY:
 
@@ -239,7 +239,7 @@ Wire-incompatible changes require a new version number.
 
 ## 11. Related Protocols
 
-- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks (`FIMP0V3_Signing_Proposal`).
+- **FIMP0V3** -- Foundational rules, the `ImMessage` envelope, body framing, payload sizing, and the envelope signature and receive checks ([FIMP0V3_FIMP](FIMP0V3_FIMP.md)).
 - **FIMP1V3** -- P2P mode (used for any direct member-to-member request/response).
 - **FIMP2V3** -- Room mode (closed local-managed group).
 - **FIMP4V3** -- Team mode (closed on-chain owner-managed group with encryption).
