@@ -36,7 +36,7 @@
 |Status|Deprecated|
 |Author|C_armX, No1_NrC7|
 |Created|2026-04-14|
-|PID||
+|PID|f118892d7cb5b9f266f370e48854e101fbdcb5cbdd0accba0c109b670cb4b627|
 
 Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
