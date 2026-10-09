@@ -21,6 +21,7 @@ public class TextOpData {
 	private String lang;
 	private String format;
 	private String summary;
+	private List<String> locas;
 
 	private Integer rate;
 	private String cause;
@@ -59,8 +60,8 @@ public class TextOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.TITLE, FieldNames.TYPE, FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.TEXT_ID, FieldNames.TITLE, FieldNames.TYPE, FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.TITLE, FieldNames.TYPE, FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY, FieldNames.LOCAS});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{FieldNames.TEXT_ID, FieldNames.TITLE, FieldNames.TYPE, FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY, FieldNames.LOCAS});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{FieldNames.TEXT_IDS});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{FieldNames.TEXT_IDS});
 		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{FieldNames.TEXT_ID, FieldNames.RATE, FieldNames.CAUSE});
@@ -212,5 +213,13 @@ public class TextOpData {
 
 	public void setType(String type) {
 		this.type = type;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

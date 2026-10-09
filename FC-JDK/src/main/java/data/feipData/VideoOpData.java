@@ -20,6 +20,7 @@ public class VideoOpData {
 	private String lang;
 	private String format;
 	private String summary;
+	private List<String> locas;
 
 	private Integer rate;
 	private String cause;
@@ -58,8 +59,8 @@ public class VideoOpData {
 	public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
 
 	static {
-		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
-		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{"videoId", FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY});
+		OP_FIELDS.put(Op.PUBLISH.toLowerCase(), new String[]{FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY, FieldNames.LOCAS});
+		OP_FIELDS.put(Op.UPDATE.toLowerCase(), new String[]{"videoId", FieldNames.TITLE,  FieldNames.DID, FieldNames.LANG, FieldNames.AUTHORS, FieldNames.SUMMARY, FieldNames.LOCAS});
 		OP_FIELDS.put(Op.DELETE.toLowerCase(), new String[]{"videoIds"});
 		OP_FIELDS.put(Op.RECOVER.toLowerCase(), new String[]{"videoIds"});
 		OP_FIELDS.put(Op.RATE.toLowerCase(), new String[]{"videoId", FieldNames.RATE, FieldNames.CAUSE});
@@ -203,5 +204,13 @@ public class VideoOpData {
 
 	public void setSummary(String summary) {
 		this.summary = summary;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

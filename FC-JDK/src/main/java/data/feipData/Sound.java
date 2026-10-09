@@ -12,6 +12,7 @@ public class Sound extends FcObject {
 	private String lang;
 	private String format;
 	private String summary;
+	private List<String> locas;
 
 	private String publisher;
 	private Long birthTime;
@@ -132,5 +133,13 @@ public class Sound extends FcObject {
 
 	public void setSummary(String summary) {
 		this.summary = summary;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

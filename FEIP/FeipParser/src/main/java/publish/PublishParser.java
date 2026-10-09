@@ -150,6 +150,7 @@ public class PublishParser {
 				if(textRaw.getAuthors()!=null)textHist.setAuthors(textRaw.getAuthors());
 				if(textRaw.getFormat()!=null)textHist.setFormat(textRaw.getFormat());
 				if(textRaw.getSummary()!=null)textHist.setSummary(textRaw.getSummary());
+				if(textRaw.getLocas()!=null)textHist.setLocas(textRaw.getLocas());
 				break;
 
 			case UPDATE:
@@ -172,6 +173,7 @@ public class PublishParser {
 				if(textRaw.getAuthors()!=null)textHist.setAuthors(textRaw.getAuthors());
 				if(textRaw.getFormat()!=null)textHist.setFormat(textRaw.getFormat());
 				if(textRaw.getSummary()!=null)textHist.setSummary(textRaw.getSummary());
+				if(textRaw.getLocas()!=null)textHist.setLocas(textRaw.getLocas());
 				break;
 			case RECOVER:
 			case DELETE:
@@ -257,6 +259,7 @@ public class PublishParser {
 					text.setAuthors(textHist.getAuthors());
 					text.setFormat(textHist.getFormat());
 					text.setSummary(textHist.getSummary());
+					text.setLocas(textHist.getLocas());
 					text.setPublisher(textHist.getSigner());
 
 					text.setBirthTime(textHist.getTime());
@@ -311,6 +314,7 @@ public class PublishParser {
 				text.setAuthors(textHist.getAuthors());
 				text.setFormat(textHist.getFormat());
 				text.setSummary(textHist.getSummary());
+				text.setLocas(textHist.getLocas());
 				text.setLastTxId(textHist.getId());
 				text.setLastTime(textHist.getTime());
 				text.setLastHeight(textHist.getHeight());
@@ -484,6 +488,7 @@ public class PublishParser {
 				if(remarkRaw.getAuthors()!=null)remarkHist.setAuthors(remarkRaw.getAuthors());
 				if(remarkRaw.getFormat()!=null)remarkHist.setFormat(remarkRaw.getFormat());
 				if(remarkRaw.getSummary()!=null)remarkHist.setSummary(remarkRaw.getSummary());
+				if(remarkRaw.getLocas()!=null)remarkHist.setLocas(remarkRaw.getLocas());
 				if(remarkRaw.getOnDid()!=null)remarkHist.setOnDid(remarkRaw.getOnDid());
 
 				break;
@@ -507,6 +512,7 @@ public class PublishParser {
 				if(remarkRaw.getAuthors()!=null)remarkHist.setAuthors(remarkRaw.getAuthors());
 				if(remarkRaw.getFormat()!=null)remarkHist.setFormat(remarkRaw.getFormat());
 				if(remarkRaw.getSummary()!=null)remarkHist.setSummary(remarkRaw.getSummary());
+				if(remarkRaw.getLocas()!=null)remarkHist.setLocas(remarkRaw.getLocas());
 				if(remarkRaw.getOnDid()!=null)remarkHist.setOnDid(remarkRaw.getOnDid());
 
 				break;
@@ -587,6 +593,7 @@ public class PublishParser {
 					remark.setAuthors(remarkHist.getAuthors());
 					remark.setFormat(remarkHist.getFormat());
 					remark.setSummary(remarkHist.getSummary());
+					remark.setLocas(remarkHist.getLocas());
 					remark.setOnDid(remarkHist.getOnDid());
 
 					remark.setPublisher(remarkHist.getSigner());
@@ -637,6 +644,7 @@ public class PublishParser {
 				remark.setAuthors(remarkHist.getAuthors());
 				remark.setFormat(remarkHist.getFormat());
 				remark.setSummary(remarkHist.getSummary());
+				remark.setLocas(remarkHist.getLocas());
 				remark.setOnDid(remarkHist.getOnDid());
 
 				remark.setLastTxId(remarkHist.getId());
@@ -927,6 +935,7 @@ public class PublishParser {
 				if(soundRaw.getAuthors()!=null)soundHist.setAuthors(soundRaw.getAuthors());
 				if(soundRaw.getFormat()!=null)soundHist.setFormat(soundRaw.getFormat());
 				if(soundRaw.getSummary()!=null)soundHist.setSummary(soundRaw.getSummary());
+				if(soundRaw.getLocas()!=null)soundHist.setLocas(soundRaw.getLocas());
 
 				break;
 
@@ -949,6 +958,7 @@ public class PublishParser {
 				if(soundRaw.getAuthors()!=null)soundHist.setAuthors(soundRaw.getAuthors());
 				if(soundRaw.getFormat()!=null)soundHist.setFormat(soundRaw.getFormat());
 				if(soundRaw.getSummary()!=null)soundHist.setSummary(soundRaw.getSummary());
+				if(soundRaw.getLocas()!=null)soundHist.setLocas(soundRaw.getLocas());
 
 				break;
 			case RECOVER:
@@ -1028,6 +1038,7 @@ public class PublishParser {
 					sound.setAuthors(soundHist.getAuthors());
 					sound.setFormat(soundHist.getFormat());
 					sound.setSummary(soundHist.getSummary());
+					sound.setLocas(soundHist.getLocas());
 
 					sound.setPublisher(soundHist.getSigner());
 
@@ -1083,6 +1094,7 @@ public class PublishParser {
 				sound.setAuthors(soundHist.getAuthors());
 				sound.setFormat(soundHist.getFormat());
 				sound.setSummary(soundHist.getSummary());
+				sound.setLocas(soundHist.getLocas());
 				sound.setLastTxId(soundHist.getId());
 				sound.setLastTime(soundHist.getTime());
 				sound.setLastHeight(soundHist.getHeight());
@@ -1255,6 +1267,7 @@ public class PublishParser {
 				if(imageRaw.getAuthors()!=null)imageHist.setAuthors(imageRaw.getAuthors());
 				if(imageRaw.getFormat()!=null)imageHist.setFormat(imageRaw.getFormat());
 				if(imageRaw.getSummary()!=null)imageHist.setSummary(imageRaw.getSummary());
+				if(imageRaw.getLocas()!=null)imageHist.setLocas(imageRaw.getLocas());
 
 				break;
 
@@ -1277,6 +1290,7 @@ public class PublishParser {
 				if(imageRaw.getAuthors()!=null)imageHist.setAuthors(imageRaw.getAuthors());
 				if(imageRaw.getFormat()!=null)imageHist.setFormat(imageRaw.getFormat());
 				if(imageRaw.getSummary()!=null)imageHist.setSummary(imageRaw.getSummary());
+				if(imageRaw.getLocas()!=null)imageHist.setLocas(imageRaw.getLocas());
 
 				break;
 			case RECOVER:
@@ -1356,6 +1370,7 @@ public class PublishParser {
 					image.setAuthors(imageHist.getAuthors());
 					image.setFormat(imageHist.getFormat());
 					image.setSummary(imageHist.getSummary());
+					image.setLocas(imageHist.getLocas());
 
 					image.setPublisher(imageHist.getSigner());
 
@@ -1411,6 +1426,7 @@ public class PublishParser {
 				image.setAuthors(imageHist.getAuthors());
 				image.setFormat(imageHist.getFormat());
 				image.setSummary(imageHist.getSummary());
+				image.setLocas(imageHist.getLocas());
 				image.setLastTxId(imageHist.getId());
 				image.setLastTime(imageHist.getTime());
 				image.setLastHeight(imageHist.getHeight());
@@ -1581,6 +1597,7 @@ public class PublishParser {
 				if(videoRaw.getAuthors()!=null)videoHist.setAuthors(videoRaw.getAuthors());
 				if(videoRaw.getFormat()!=null)videoHist.setFormat(videoRaw.getFormat());
 				if(videoRaw.getSummary()!=null)videoHist.setSummary(videoRaw.getSummary());
+				if(videoRaw.getLocas()!=null)videoHist.setLocas(videoRaw.getLocas());
 
 				break;
 
@@ -1603,6 +1620,7 @@ public class PublishParser {
 				if(videoRaw.getAuthors()!=null)videoHist.setAuthors(videoRaw.getAuthors());
 				if(videoRaw.getFormat()!=null)videoHist.setFormat(videoRaw.getFormat());
 				if(videoRaw.getSummary()!=null)videoHist.setSummary(videoRaw.getSummary());
+				if(videoRaw.getLocas()!=null)videoHist.setLocas(videoRaw.getLocas());
 
 				break;
 			case RECOVER:
@@ -1682,6 +1700,7 @@ public class PublishParser {
 					video.setAuthors(videoHist.getAuthors());
 					video.setFormat(videoHist.getFormat());
 					video.setSummary(videoHist.getSummary());
+					video.setLocas(videoHist.getLocas());
 
 					video.setPublisher(videoHist.getSigner());
 
@@ -1737,6 +1756,7 @@ public class PublishParser {
 				video.setAuthors(videoHist.getAuthors());
 				video.setFormat(videoHist.getFormat());
 				video.setSummary(videoHist.getSummary());
+				video.setLocas(videoHist.getLocas());
 				video.setLastTxId(videoHist.getId());
 				video.setLastTime(videoHist.getTime());
 				video.setLastHeight(videoHist.getHeight());

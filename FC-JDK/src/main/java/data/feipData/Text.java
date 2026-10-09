@@ -13,6 +13,7 @@ public class Text extends FcObject {
 	private String type;
 	private String format;
 	private String summary;
+	private List<String> locas;
 	private String publisher;
 	private Long birthTime;
 	private Long birthHeight;
@@ -140,5 +141,13 @@ public class Text extends FcObject {
 
 	public void setType(String type) {
 		this.type = type;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

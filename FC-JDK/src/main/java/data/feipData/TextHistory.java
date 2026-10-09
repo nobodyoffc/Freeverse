@@ -27,6 +27,7 @@ public class TextHistory extends FcObject {
 	private String lang;
 	private String format;
 	private String summary;
+	private List<String> locas;
 
 	private Integer rate;
 	/** Free text the rater attached to a {@code rate} op. Optional. */
@@ -177,5 +178,13 @@ public class TextHistory extends FcObject {
 
 	public void setTextIds(List<String> textIds) {
 		this.textIds = textIds;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

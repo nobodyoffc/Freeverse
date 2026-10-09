@@ -26,6 +26,7 @@ public class VideoHistory extends FcObject {
 	private String lang;
 	private String format;
 	private String summary;
+	private List<String> locas;
 
 	private Integer rate;
 	/** Free text the rater attached to a {@code rate} op. Optional. */
@@ -168,5 +169,13 @@ public class VideoHistory extends FcObject {
 
 	public void setSummary(String summary) {
 		this.summary = summary;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

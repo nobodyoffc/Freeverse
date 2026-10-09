@@ -25,6 +25,7 @@ public class ImageHistory extends FcObject {
 	private List<String> authors;
 	private String lang;
 	private String summary;
+	private List<String> locas;
 	private String format;
 	private Integer rate;
 	/** Free text the rater attached to a {@code rate} op. Optional. */
@@ -168,5 +169,13 @@ public class ImageHistory extends FcObject {
 
 	public void setFormat(String format) {
 		this.format = format;
+	}
+
+	public List<String> getLocas() {
+		return locas;
+	}
+
+	public void setLocas(List<String> locas) {
+		this.locas = locas;
 	}
 }

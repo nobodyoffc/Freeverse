@@ -82,6 +82,7 @@ public class FieldNames {
     public static final String ORDER = "order";
     public static final String LAST = "last";
     public static final String DID = "did";
+    public static final String LOCAS = "locas";
     public static final String ON_DID = "onDid";
     public static final String RESULT = "result";
     public static final String HAT = "hat";
