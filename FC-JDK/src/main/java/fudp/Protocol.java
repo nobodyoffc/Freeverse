@@ -1462,6 +1462,20 @@ public class Protocol {
                 }
             }
 
+            // Track the epoch the peer stamps, not just the first one this
+            // connection ever saw. Packets that omit it (the peer stops sending
+            // it once we confirm) are checked against conn.getSessionEpoch()
+            // above. When a reconnecting peer reuses an old connection object
+            // (same address, new remote connId), a stale stored epoch made every
+            // epoch-less packet look like another restart: the reset sent the
+            // stream allocator back to 0, and the next reply reused a stream ID
+            // the peer had already retired, so the peer dropped it and the
+            // request timed out.
+            if (result != ReplayProtection.CheckResult.DUPLICATE
+                    && packet.getHeader().hasEpoch() && incomingEpoch != 0) {
+                conn.setSessionEpoch(incomingEpoch);
+            }
+
             boolean ackEliciting = packet.isAckEliciting();
             if (result == ReplayProtection.CheckResult.DUPLICATE) {
                 replayDuplicateCount.incrementAndGet();
