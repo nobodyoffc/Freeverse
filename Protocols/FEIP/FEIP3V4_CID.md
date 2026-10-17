@@ -42,7 +42,7 @@ The CID (Crypto Identity) protocol enables a Freecash address (FID) to register 
 
 ## Motivation
 
-Freecash addresses (FIDs) are 34-character strings like `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV`, which are difficult for humans to read and remember. The CID protocol provides a human-friendly naming layer on top of FIDs, allowing users to identify each other by names like `Alice_VkUV` instead of raw addresses.
+Freecash addresses (FIDs) are 34-character strings like `FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV`, which are difficult for humans to read and remember. The CID protocol provides a human-friendly naming layer on top of FIDs, allowing users to identify each other by names like `Alice_VkUV` instead of raw addresses.
 
 Unlike centralized naming systems, CID names are:
 - **Decentralized**: Registered on-chain without any registration authority.
@@ -162,7 +162,7 @@ The CID protocol writes the following fields to the **Freer** entity and **Freer
 
 ### Example 1: First-time Registration
 
-**Signer:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV`
+**Signer:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV`
 
 **OP_RETURN:**
 
@@ -188,7 +188,7 @@ The CID protocol writes the following fields to the **Freer** entity and **Freer
 
 ```json
 {
-  "id": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV",
+  "id": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV",
   "cid": "Alice_VkUV",
   "usedCids": ["Alice_VkUV"],
   "nameTime": 1672531200
@@ -220,7 +220,7 @@ The FID ends with the same 4 characters `VkUV`. Another user tries to register "
 
 ### Example 3: Re-registration of Same Name
 
-The signer `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV` has previously unregistered, and now registers "Alice" again.
+The signer `FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV` has previously unregistered, and now registers "Alice" again.
 
 **Processing:**
 1. CID candidate = `Alice_VkUV`
@@ -230,7 +230,7 @@ The signer `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV` has previously unregistered, and
 
 ```json
 {
-  "id": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV",
+  "id": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV",
   "cid": "Alice_VkUV",
   "usedCids": ["Alice_VkUV"],
   "nameTime": 1672531200
@@ -241,7 +241,7 @@ The `nameTime` remains unchanged (preserves the original first registration time
 
 ### Example 4: Unregister
 
-**Signer:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV`
+**Signer:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV`
 
 **OP_RETURN:**
 
@@ -261,7 +261,7 @@ The `nameTime` remains unchanged (preserves the original first registration time
 
 ```json
 {
-  "id": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV",
+  "id": "FPL44YJRwPdd2ipziFvqq6y2tw4VnVVkUV",
   "cid": "",
   "usedCids": ["Alice_VkUV"],
   "nameTime": 1672531200
