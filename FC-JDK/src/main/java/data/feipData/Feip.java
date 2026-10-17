@@ -30,7 +30,7 @@ public class Feip {
 		NOBODY("4","1", "Nobody"),
 		SERVICE("5","3", "Service"),
 		MASTER("6","1", "Master"),
-		MAIL("7","4", "Mail"),
+		MAIL("7","4", "Cmail"),  // Crypto Mail; carved as "Mail" before 2026-10-17, still accepted by fromName
 		STATEMENT("8","1", "Statement"),
 		HOME("9","1", "Home"),
 		NOTICE_FEE("10","1", "NoticeFee"),
@@ -79,6 +79,9 @@ public class Feip {
 		public static FeipProtocol fromName(String name) {
 			if (name == null) {
 				throw new IllegalArgumentException("Protocol name cannot be null");
+			}
+			if (name.equalsIgnoreCase("Mail")) {
+				return MAIL;
 			}
 			for (FeipProtocol protocol : FeipProtocol.values()) {
 				if (protocol.getName().equalsIgnoreCase(name)) {

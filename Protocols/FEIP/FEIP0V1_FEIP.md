@@ -181,7 +181,7 @@ Each FEIP protocol document SHOULD follow this structure:
 |Category| Description                                                                                      |
 |---|--------------------------------------------------------------------------------------------------|
 |Identity| Protocols related to identity management (CID, Nobody, Master, Home, NoticeFee, NID, Reputation) |
-|Personal| Protocols for personal data (Contact, Mail, Secret, Box)                                         |
+|Personal| Protocols for personal data (Contact, Cmail, Secret, Box)                                         |
 |Organize| Protocols for organizational structures (Square, Team)                                           |
 |Publish| Protocols for content publishing (Statement, Text, Remark, Sound, Image, Video)                  |
 |Finance| Protocols for financial operations (Token, Proof, Service, App)                                  |
@@ -200,7 +200,7 @@ More categories can be added.
 |4| Nobody     |Identity| Declare an address as abandoned by revealing its private key |
 |5| Service    |Finance| Register and manage decentralized services                   |
 |6| Master     |Identity| Assign a master address that owns all rights                 |
-|7| Mail       |Personal| Send encrypted messages between FIDs ([FEIP7V4_Mail](FEIP7V4_Mail.md)) |
+|7| Cmail      |Personal| Send encrypted messages between FIDs ([FEIP7V4_Cmail](FEIP7V4_Cmail.md)) |
 |8| Statement  |Publish| Publish signed statements                                    |
 |9| Home       |Identity| Set homepage links for an address                            |
 |10| NoticeFee  |Identity| Set a fee required to send notices                           |

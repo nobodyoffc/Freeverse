@@ -196,7 +196,7 @@ The following table lists the major entity types currently defined in the Freeve
 |Service|Object|Finance|A registered service (FEIP5)|
 |App|Object|Finance|A registered application (FEIP15)|
 |Contact|Object|Personal|Encrypted contact information (FEIP12)|
-|Mail|Object|Personal|An encrypted message (FEIP7)|
+|Mail|Object|Personal|An encrypted message (FEIP7 Cmail)|
 |Secret|Object|Personal|A shared secret (FEIP17)|
 |Box|Object|Personal|An encrypted data box (FEIP13)|
 |Square|Object|Organize|A community square (FEIP19)|

@@ -1,4 +1,4 @@
-# FEIP7V4_Mail
+# FEIP7V4_Cmail
 
 ## Contents
 
@@ -24,7 +24,7 @@
 
 |Field|Content|
 |---|---|
-|Title|Mail|
+|Title|Cmail|
 |Type|FEIP|
 |SN|7|
 |Version|4|
@@ -38,7 +38,7 @@ General consensus of FEIP: [FEIP0V1_FEIP](FEIP0V1_FEIP.md)
 
 ## Abstract
 
-The Mail protocol carries **encrypted messages** from a sender FID to a recipient FID on-chain. For **version 4**, the `cipher` field MUST use **FVEP8 `AsyTwoWay`** encryption only. **Sender** and **recipient** FIDs are derived from the enclosing transaction as specified below; for **send**, they MUST be **distinct** (no self-mail). Operations **send**, **delete**, and **recover** manage indexed mail entities. Legacy cipher handling in clients is out of scope for conforming parsers.
+The Cmail (Crypto Mail) protocol carries **encrypted messages** from a sender FID to a recipient FID on-chain. For **version 4**, the `cipher` field MUST use **FVEP8 `AsyTwoWay`** encryption only. **Sender** and **recipient** FIDs are derived from the enclosing transaction as specified below; for **send**, they MUST be **distinct** (no self-mail). Operations **send**, **delete**, and **recover** manage indexed mail entities. Legacy cipher handling in clients is out of scope for conforming parsers.
 
 ## Motivation
 
@@ -58,7 +58,7 @@ Concrete symmetric/ECDH algorithms inside the AsyTwoWay object are defined in **
 
 ### Sender and recipient (normative)
 
-For any Mail transaction (send, delete, or recover):
+For any Cmail transaction (send, delete, or recover):
 
 1. **`from` (sender FID)** — the **address** of the **first input** (`vin[0]`) of the transaction (the FID that owns that input’s prevout).
 2. **`to` (recipient FID)** — the **address** of the **first output** that is **not** an OP_RETURN output: scan transaction outputs in **ascending index order**, skip any output whose script is OP_RETURN (or equivalent “data-only” burn), and take the **first** remaining output’s **payment address** as FID.
@@ -149,14 +149,16 @@ Lowercase `op` strings: `send`, `delete`, `recover`.
   "type": "FEIP",
   "sn": "7",
   "ver": "4",
-  "name": "Mail",
+  "name": "Cmail",
   "data": { }
 }
 ```
 
+`name` MUST be `"Cmail"` in new transactions. Parsers select the protocol by `sn`, so envelopes carved with the earlier name `"Mail"` remain valid FEIP7V4 operations and MUST be parsed the same way.
+
 ### Transaction requirements
 
-- **Send:** MUST have a resolvable **`from`** (first input) and **`to`** (first non-OP_RETURN output) per [Sender and recipient](#sender-and-recipient-normative), with **`from` ≠ `to`**. The Mail OP_RETURN is normally among the outputs of the same tx.
+- **Send:** MUST have a resolvable **`from`** (first input) and **`to`** (first non-OP_RETURN output) per [Sender and recipient](#sender-and-recipient-normative), with **`from` ≠ `to`**. The Cmail OP_RETURN is normally among the outputs of the same tx.
 - General FEIP rules ([FEIP0](FEIP0V1_FEIP.md)): SIGHASH, OP_RETURN size, CDD, etc.
 
 ### Parsing order and reorg
@@ -173,7 +175,7 @@ Lowercase `op` strings: `send`, `delete`, `recover`.
   "type": "FEIP",
   "sn": "7",
   "ver": "4",
-  "name": "Mail",
+  "name": "Cmail",
   "data": {
     "op": "send",
     "alg": "EccK1AesGcm256@No1_NrC7",
@@ -191,7 +193,7 @@ The `cipher` value is a **string containing JSON** (escaped in OP_RETURN); imple
   "type": "FEIP",
   "sn": "7",
   "ver": "4",
-  "name": "Mail",
+  "name": "Cmail",
   "data": {
     "op": "delete",
     "mailIds": [
@@ -209,6 +211,7 @@ Same as delete with `"op": "recover"`.
 
 |Version|Date|Summary|
 |---|---|---|
+|4|2026-10-17|Renamed **Mail → Cmail** (Crypto Mail): envelope `name` is now `Cmail`. Consensus rules, `data` fields and index names (`mail`, `mailIds`) are unchanged; `"Mail"` envelopes stay valid.|
 |4|2026-03-22|**AsyTwoWay-only** ciphertext normative; aligned with `Feip.MAIL` (`7`/`4`) and parser “Version 4” branch.|
 |3|—|Earlier behaviour (broader cipher acceptance in clients).|
 |…|—|Earlier versions not documented here.|
