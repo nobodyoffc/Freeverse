@@ -13,7 +13,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Handles block file I/O: reading raw block data from blk*.dat files,
@@ -316,6 +321,66 @@ public class BlockFileReader {
 
 	public int getFileOrder() {
 		return BlockFileUtils.getFileOrder(state.getCurrentFile());
+	}
+
+	/** Where a block sits in a blk file, as found by {@link #walkBlockFile}. */
+	public record BlockPosition(long offset, long size, String id) {}
+
+	/**
+	 * Returns true when the block described by {@code bm} is still on disk at its recorded
+	 * {@code _pointer}: magic, size and header hash all match.
+	 * <p>
+	 * After an unclean shutdown the fullnode rolls back to its last flushed position and
+	 * writes the following blocks again, possibly at different offsets. Blocks the parser had
+	 * already indexed then sit somewhere else, and the parser's pointer lands mid-block. This
+	 * check is how that is noticed.
+	 */
+	public boolean isBlockAtItsPointer(BlockMask bm) throws IOException {
+		File file = new File(state.getPath(), BlockFileUtils.getFileNameWithOrder(bm.get_fileOrder()));
+		try (FileInputStream fis = new FileInputStream(file)) {
+			seek(fis, bm.get_pointer());
+			byte[] head = new byte[88];
+			if (readFully(fis, head, 88) < 88) return false;
+			if (!Arrays.equals(Arrays.copyOfRange(head, 0, 4), Constants.MAGIC_BYTES)) return false;
+			if (BytesUtils.bytes4ToLongLE(Arrays.copyOfRange(head, 4, 8)) != bm.getSize()) return false;
+			String id = BytesUtils.bytesToHexStringLE(Hash.sha256x2(Arrays.copyOfRange(head, 8, 88)));
+			return id.equals(bm.getId());
+		}
+	}
+
+	/**
+	 * Lists every block in {@code fileName} by following the magic+size chain from offset 0,
+	 * skipping zero padding the same way {@link #checkBlock} does. The walk stops at the first
+	 * non-zero bytes that are not a magic, or at a block that runs past the end of the file
+	 * (the fullnode is still writing it).
+	 */
+	public List<BlockPosition> walkBlockFile(String fileName) throws IOException {
+		List<BlockPosition> blocks = new ArrayList<>();
+		try (FileChannel ch = FileChannel.open(new File(state.getPath(), fileName).toPath(), StandardOpenOption.READ)) {
+			MappedByteBuffer buf = ch.map(FileChannel.MapMode.READ_ONLY, 0, ch.size());
+			int len = buf.limit();
+			byte[] b8 = new byte[8];
+			byte[] header = new byte[80];
+			int off = 0;
+			while (off + 8 <= len) {
+				buf.get(off, b8);
+				if (b8[0] == 0) {
+					off += 8;
+					continue;
+				}
+				if (!Arrays.equals(Arrays.copyOfRange(b8, 0, 4), Constants.MAGIC_BYTES)) {
+					log.warn("Walk of {} stopped at offset {}: no magic (read {}).",
+							fileName, off, BytesUtils.bytesToHexStringBE(b8));
+					break;
+				}
+				long size = BytesUtils.bytes4ToLongLE(Arrays.copyOfRange(b8, 4, 8));
+				if (size < 80 || size > MAX_BLOCK_SIZE || off + 8 + size > len) break;
+				buf.get(off + 8, header);
+				blocks.add(new BlockPosition(off, size, BytesUtils.bytesToHexStringLE(Hash.sha256x2(header))));
+				off += (int) (8 + size);
+			}
+		}
+		return blocks;
 	}
 
 	/** Result of a checkBlock operation. */

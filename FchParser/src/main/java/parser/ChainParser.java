@@ -2,7 +2,13 @@ package parser;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.Refresh;
+import co.elastic.clients.elasticsearch._types.SortOrder;
 import co.elastic.clients.elasticsearch.core.BulkRequest;
+import co.elastic.clients.elasticsearch.core.BulkResponse;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 
 import core.fch.BlockFileUtils;
 import core.fch.OpReFileUtils;
@@ -117,6 +123,16 @@ public class ChainParser {
 					// where the fullnode may be part-way through writing it (a buffered write
 					// can be observed half-copied into the page cache). Do NOT advance the
 					// pointer: wait for the file to change and re-read the same header.
+					// Unless the fullnode rewrote the file under us — then no amount of waiting helps.
+					RewriteCheck rewrite = resyncIfFileRewritten(esClient);
+					if (rewrite == RewriteCheck.UNRECOVERABLE) return WRONG;
+					if (rewrite == RewriteCheck.RESYNCED) {
+						incompleteHeaderRetries = 0;
+						fis.close();
+						fis = new FileInputStream(file);
+						BlockFileReader.seek(fis, state.getPointer());
+						continue;
+					}
 					if (++incompleteHeaderRetries > MAX_INCOMPLETE_HEADER_RETRIES) {
 						System.out.println("Read Magic wrong. pointer: " + state.getPointer());
 						log.error("Block header at pointer {} of file {} still unusable after {} retries. Stopping.",
@@ -139,6 +155,16 @@ public class ChainParser {
 					BlockFileReader.seek(fis, state.getPointer());
 
 				} else if (blockLength == BlockFileReader.WAIT_MORE) {
+					// A rewrite that moved blocks to lower offsets can leave the pointer in the
+					// zero-filled tail, where it would wait forever for a block written elsewhere.
+					RewriteCheck rewrite = resyncIfFileRewritten(esClient);
+					if (rewrite == RewriteCheck.UNRECOVERABLE) return WRONG;
+					if (rewrite == RewriteCheck.RESYNCED) {
+						fis.close();
+						fis = new FileInputStream(file);
+						BlockFileReader.seek(fis, state.getPointer());
+						continue;
+					}
 					System.out.print(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
 					System.out.println(" Waiting for new block...");
 					AtomicBoolean running = new AtomicBoolean(true);
@@ -181,6 +207,170 @@ public class ChainParser {
 			}
 		} finally {
 			fis.close();
+		}
+	}
+
+	// ─── Fullnode rewrite recovery ───────────────────────────────────────
+
+	enum RewriteCheck { NONE, RESYNCED, UNRECOVERABLE }
+
+	/** Consecutive ES marks found at their recorded offset after which the rewritten region is taken to have ended. */
+	private static final int REWRITE_MATCH_RUN = 200;
+
+	/**
+	 * Detects that the fullnode rewrote the current blk file under the parser and, if so,
+	 * re-anchors the parse there.
+	 * <p>
+	 * After an unclean shutdown the fullnode rolls back to its last flushed position and writes
+	 * the following blocks again — possibly at other offsets, minus blocks it dropped
+	 * (2026-10-22: blk00014.dat lost a 223-byte block and everything after moved 231 bytes
+	 * down; the parser's pointer then sat 231 bytes inside a block and it stopped on
+	 * "Read Magic wrong"). The block data itself is unchanged, only where it sits, so:
+	 * <ol>
+	 *   <li>walk the file to learn where each block is now;</li>
+	 *   <li>correct {@code _pointer} on every stale mark, in ES and in memory, and drop
+	 *       fork/orphan marks whose block is no longer in the file;</li>
+	 *   <li>link any block in the rewritten region the parser has never seen;</li>
+	 *   <li>resume right after the best block's new position.</li>
+	 * </ol>
+	 */
+	private RewriteCheck resyncIfFileRewritten(ElasticsearchClient esClient) throws Exception {
+		BlockMask best = state.getMainById(state.getBestHash());
+		if (best == null || best.get_pointer() == null || best.get_fileOrder() == null) return RewriteCheck.NONE;
+		if (best.get_fileOrder() != fileReader.getFileOrder()) return RewriteCheck.NONE;
+		if (fileReader.isBlockAtItsPointer(best)) return RewriteCheck.NONE;
+
+		String fileName = state.getCurrentFile();
+		log.warn("Best block {} (height {}) is no longer at pointer {} of {}. The fullnode rewrote the file; resyncing.",
+				best.getId(), best.getHeight(), best.get_pointer(), fileName);
+		System.out.println("The fullnode rewrote " + fileName + ". Resyncing block positions...");
+
+		Map<String, BlockFileReader.BlockPosition> byId = new HashMap<>();
+		List<BlockFileReader.BlockPosition> walk = fileReader.walkBlockFile(fileName);
+		for (BlockFileReader.BlockPosition p : walk) byId.put(p.id(), p);
+
+		BlockFileReader.BlockPosition bestNow = byId.get(best.getId());
+		if (bestNow == null) {
+			log.error("Best block {} (height {}) is not in {} any more. Use \"Manually start from a height\" "
+					+ "with a height whose block is still in the file.", best.getId(), best.getHeight(), fileName);
+			return RewriteCheck.UNRECOVERABLE;
+		}
+
+		long rewriteStart = relocateMarks(esClient, byId, bestNow.offset());
+		long resumePointer = bestNow.offset() + bestNow.size() + 8;
+		linkUnseenBlocks(esClient, walk, rewriteStart, resumePointer);
+
+		state.setPointer(resumePointer);
+		log.info("Resynced {}: rewritten region starts at {}; resuming after best block {} at pointer {}.",
+				fileName, rewriteStart, best.getId(), resumePointer);
+		return RewriteCheck.RESYNCED;
+	}
+
+	/**
+	 * Compares the ES marks of the current file, highest offset first, with where the blocks
+	 * are now, and fixes the stale ones. Stops after {@link #REWRITE_MATCH_RUN} marks in a row
+	 * are where they were recorded: below that the fullnode did not rewrite anything.
+	 *
+	 * @return the lowest new offset of a moved block, i.e. where the rewritten region starts
+	 */
+	private long relocateMarks(ElasticsearchClient esClient, Map<String, BlockFileReader.BlockPosition> byId,
+							   long bestOffset) throws Exception {
+		int fileOrder = fileReader.getFileOrder();
+		Map<String, Long> moved = new LinkedHashMap<>();
+		List<BlockMask> gone = new ArrayList<>();
+		int matchRun = 0;
+		List<FieldValue> after = null;
+
+		scan:
+		while (true) {
+			List<FieldValue> searchAfter = after;
+			SearchResponse<BlockMask> response = esClient.search(s -> {
+				s.index(BLOCK_MARK)
+						.query(q -> q.term(t -> t.field("_fileOrder").value(fileOrder)))
+						.sort(so -> so.field(f -> f.field("_pointer").order(SortOrder.Desc)))
+						.size(1000);
+				if (searchAfter != null) s.searchAfter(searchAfter);
+				return s;
+			}, BlockMask.class);
+			List<Hit<BlockMask>> hits = response.hits().hits();
+			if (hits.isEmpty()) break;
+			for (Hit<BlockMask> hit : hits) {
+				BlockMask mark = hit.source();
+				if (mark == null) continue;
+				BlockFileReader.BlockPosition now = byId.get(mark.getId());
+				if (now != null && now.offset() == mark.get_pointer()) {
+					if (++matchRun >= REWRITE_MATCH_RUN) break scan;
+					continue;
+				}
+				matchRun = 0;
+				if (now != null) moved.put(mark.getId(), now.offset());
+				else gone.add(mark);
+			}
+			after = hits.get(hits.size() - 1).sort();
+		}
+
+		long rewriteStart = bestOffset;
+		BulkRequest.Builder br = new BulkRequest.Builder();
+		int ops = 0;
+		for (Map.Entry<String, Long> e : moved.entrySet()) {
+			long newPointer = e.getValue();
+			rewriteStart = Math.min(rewriteStart, newPointer);
+			BlockMask inMemory = state.findMark(e.getKey());
+			if (inMemory != null) inMemory.set_pointer(newPointer);
+			Map<String, Object> doc = Map.of("_pointer", newPointer);
+			br.operations(op -> op.update(u -> u.index(BLOCK_MARK).id(e.getKey()).action(a -> a.doc(doc))));
+			ops++;
+		}
+		for (BlockMask mark : gone) {
+			if (Preparer.MAIN.equals(mark.getStatus())) {
+				// The main chain still links through it (its successors name it as preBlockId),
+				// so the fullnode has it somewhere; only its position is unknown.
+				log.error("Main block {} (height {}) was at pointer {} of {} but is not in that file any more.",
+						mark.getId(), mark.getHeight(), mark.get_pointer(), state.getCurrentFile());
+				continue;
+			}
+			log.warn("{} block {} was at pointer {} but the fullnode dropped it. Removing its mark.",
+					mark.getStatus(), mark.getId(), mark.get_pointer());
+			state.dropNonMain(mark.getId());
+			state.evictBlockBytes(mark.getId());
+			br.operations(op -> op.delete(d -> d.index(BLOCK_MARK).id(mark.getId())));
+			ops++;
+		}
+		if (ops > 0) {
+			BulkResponse response = esClient.bulk(br.refresh(Refresh.True).build());
+			if (response.errors())
+				throw new IOException("Failed to correct block marks after the fullnode rewrote " + state.getCurrentFile());
+		}
+		log.info("Rewrite of {}: {} marks moved, {} gone.", state.getCurrentFile(), moved.size(), gone.size());
+		return rewriteStart;
+	}
+
+	/**
+	 * Links blocks in the rewritten region before the resume point that the parser has never
+	 * seen. The fullnode may have received a block during the rewrite that is not part of the
+	 * old layout; resuming after the best block would skip it.
+	 */
+	private void linkUnseenBlocks(ElasticsearchClient esClient, List<BlockFileReader.BlockPosition> walk,
+								  long from, long to) throws Exception {
+		File file = new File(state.getPath(), state.getCurrentFile());
+		for (BlockFileReader.BlockPosition p : walk) {
+			if (p.offset() < from || p.offset() >= to) continue;
+			if (state.findMark(p.id()) != null) continue;
+			if (esClient.exists(e -> e.index(BLOCK_MARK).id(p.id())).value()) continue;
+
+			state.setPointer(p.offset());
+			try (FileInputStream fis = new FileInputStream(file)) {
+				BlockFileReader.seek(fis, p.offset());
+				BlockFileReader.CheckResult result = fileReader.checkBlock(fis);
+				if (result.getBlockMark() == null) {
+					log.warn("Unseen block {} at pointer {} could not be read (status {}); skipping it.",
+							p.id(), p.offset(), result.getBlockLength());
+					continue;
+				}
+				log.info("Linking block {} at pointer {}, written during the rewrite and not seen before.", p.id(), p.offset());
+				linkToChain(esClient, result.getBlockMark(), result.getBlockBytes());
+				recheckOrphans(esClient);
+			}
 		}
 	}
 

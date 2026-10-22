@@ -226,6 +226,24 @@ public class ChainState {
 		}
 	}
 
+	/** The main, fork or orphan mark with this ID, or null when the parser holds none. */
+	public BlockMask findMark(String id) {
+		synchronized (chainLock) {
+			BlockMask bm = mainById.get(id);
+			if (bm == null) bm = forkById.get(id);
+			if (bm == null) bm = orphanById.get(id);
+			return bm;
+		}
+	}
+
+	/** Forgets a fork or orphan block whose bytes are gone from the blk files. */
+	public void dropNonMain(String id) {
+		synchronized (chainLock) {
+			forkById.remove(id);
+			orphanById.remove(id);
+		}
+	}
+
 	public int orphanSize() {
 		synchronized (chainLock) {
 			return orphanById.size();
