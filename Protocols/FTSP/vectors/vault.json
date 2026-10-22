@@ -7,21 +7,21 @@
       "expect": "unwrap",
       "password": "MyPassword",
       "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Argon2id@No1_NrC7\",\"cipher\":\"KaQk85vYBZbYtuTSh/+L/u+bXlxPOZvNaGKbxYysPjRvgP0JrSr+NHwW1cow2L5/\",\"keyName\":\"f700db5983ea\",\"iv\":\"000102030405060708090a0b\"}"
+      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Argon2id@No1_NrC7\",\"cipher\":\"KaQk85vYBZbYtuTSh/+L/u+bXlxPOZvNaGKbxYysPjRvgP0JrSr+NHwW1cow2L5/\",\"iv\":\"000102030405060708090a0b\"}"
     },
     {
       "id": "VAULT-DEK-SHA256IV",
       "expect": "reject",
       "password": "MyPassword",
       "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Sha256Iv@No1_NrC7\",\"cipher\":\"1Pn0AQvcsE5aQ+wSBm6ilddXuaLgg2MJVFwpIVDUS7qYihHbNWh9qxABNvF5IsRL\",\"keyName\":\"bbeddbe89c74\",\"iv\":\"000102030405060708090a0b\"}"
+      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Sha256Iv@No1_NrC7\",\"cipher\":\"1Pn0AQvcsE5aQ+wSBm6ilddXuaLgg2MJVFwpIVDUS7qYihHbNWh9qxABNvF5IsRL\",\"iv\":\"000102030405060708090a0b\"}"
     },
     {
       "id": "VAULT-DEK-KDF-STRIPPED",
       "expect": "reject",
       "password": "MyPassword",
       "dekHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"KaQk85vYBZbYtuTSh/+L/u+bXlxPOZvNaGKbxYysPjRvgP0JrSr+NHwW1cow2L5/\",\"keyName\":\"f700db5983ea\",\"iv\":\"000102030405060708090a0b\"}"
+      "dekCipher": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"KaQk85vYBZbYtuTSh/+L/u+bXlxPOZvNaGKbxYysPjRvgP0JrSr+NHwW1cow2L5/\",\"iv\":\"000102030405060708090a0b\"}"
     }
   ]
 }

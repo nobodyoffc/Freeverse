@@ -224,13 +224,10 @@ public class CryptoVectorsTest {
         while (parser.hasNext()) {
             JsonObject o = parser.next().getAsJsonObject();
             if (o.has("cipher") && o.has("iv")) lines.add(o);
-            else if (o.has("password") || o.has("symkey") || (o.has("hint") && o.has("keyName"))) backupKey = o;
+            else if (o.has("password") || o.has("symkey") || o.has("hint")) backupKey = o;
             else if (o.has("items") && o.has("time")) header = o;
             else lines.add(o);
         }
-        if (backupKey != null && header != null && header.has("keyName")
-                && !str(backupKey, "keyName").equals(str(header, "keyName")))
-            throw new IllegalStateException("keyName differs between BackupKey and BackupHeader");
         String password = backupKey != null && backupKey.has("password") ? str(backupKey, "password") : typedPassword;
 
         JsonArray out = new JsonArray();

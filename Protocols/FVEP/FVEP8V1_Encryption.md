@@ -60,7 +60,7 @@ Applications need one consistent model for “encrypted payloads”: whether the
 |**sum**|Four-byte integrity tag for algorithms **without** built-in AEAD authentication in the reference stack (e.g. AES-CBC, ChaCha20 in FC-JDK). **Omit** from JSON when using AES-GCM profiles that rely on the cipher's auth tag only (see rules).|
 |**did**|**Data ID**: `SHA-256( SHA-256( plaintext ) )` — identifies the decrypted content (FVEP2 DID-style double hash on raw plaintext bytes).|
 |**cipherId**|Optional identifier of ciphertext stream/hash context in streaming APIs (implementation-dependent; used in some streaming helpers).|
-|**keyName**|First **6 bytes** of `SHA-256(symkey)` — identifies which symkey was used without revealing it. Required in bundle form for **Symkey** type in the reference implementation.|
+|**keyName**|First **6 bytes** of `SHA-256(symkey)` — identifies which symkey was used without revealing it. Carried by **Symkey** ciphers only, and required in their bundle form. Password ciphers omit it.|
 
 ### Encryption type byte values
 
@@ -93,7 +93,7 @@ Fields commonly present in **public** JSON (sensitive material MUST be transient
 |`pubkeyA`|Asy|Hex ephemeral or sender pubkey (33-byte secp256k1 compressed, or 32-byte X25519 per algorithm).|
 |`pubkeyB`|Asy (optional in output)|Recipient pubkey when needed for two-way.|
 |`sum`|If required|Hex, 8 hex chars = 4 bytes, when algorithm profile uses `sum`.|
-|`keyName`|Symkey bundles / some flows|Hex, 12 hex chars = 6 bytes.|
+|`keyName`|Symkey|Hex, 12 hex chars = 6 bytes. Password ciphers omit it: their key is derived with a fresh salt each time, so a name for it identifies nothing. Readers MUST ignore it on a Password cipher.|
 
 **MUST NOT** appear in serialized JSON: `symkey`, `password`, `prikeyA`, `prikeyB`, raw `data` (plaintext). These exist only in memory or secure channels.
 

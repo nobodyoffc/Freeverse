@@ -251,6 +251,7 @@ public final class CryptoVectorsGenerator {
         c.setAlg(FC_AesGcm256_No1_NrC7);
         c.setType(EncryptType.Password);
         c.setKdf(kdf);
+        c.setKeyName(null);
         requireOk(c);
         return cipherJson(c, recordKdf);
     }
@@ -269,10 +270,13 @@ public final class CryptoVectorsGenerator {
 
     static final String FID_A = "FEk41Kqjar45fLDriztUDTUkdki7mmcjWK";
     static final String FID_B = "F86zoAvNaQxEuYyvQssV5WxEzapNaiDtTW";
-    /** What Safe writes for 8 random bytes: unpadded Base32 of 0001020304050607. */
-    static final String RANDOM_PASSWORD = "AAAQEAYEAUDAO";
+    /** What writers make from 16 random bytes: unpadded Base32 of 000102...0f. */
+    static final String RANDOM_PASSWORD = "AAAQEAYEAUDAOCAJBIFQYDIOB4";
+    /** What version-1 writers made from 8 random bytes and put in the BackupKey. */
+    static final String LEGACY_RANDOM_PASSWORD = "AAAQEAYEAUDAO";
     static final String BACKUP_TIME = "2026-10-02 12:00:00";
     static final String APP_PASSWORD_HINT = "App password can not be shown. Please keep it carefully.";
+    static final String RANDOM_PASSWORD_HINT = "The password was shown once at export and is kept apart from this data.";
 
     /**
      * Entity backup lists (FTSP31), written object for object as Safe's ExportKeysActivity and
@@ -288,7 +292,7 @@ public final class CryptoVectorsGenerator {
         String keysApp = keyLines(gson, PASSWORD, iv);
         v.add(backupEntry("BACKUP-KEYS-APP-PASSWORD", "KeyInfo", "appPassword", "import", PASSWORD,
                 keysApp, keyItems()));
-        v.add(backupEntry("BACKUP-KEYS-RANDOM-PASSWORD", "KeyInfo", "randomPassword", "import", null,
+        v.add(backupEntry("BACKUP-KEYS-RANDOM-PASSWORD", "KeyInfo", "randomPassword", "import", RANDOM_PASSWORD,
                 keyLines(gson, RANDOM_PASSWORD, iv), keyItems()));
 
         v.add(backupEntry("BACKUP-SECRETS-PLAIN", "Secret", "plain", "import", null,
@@ -296,7 +300,7 @@ public final class CryptoVectorsGenerator {
         String secretsApp = secretLines(gson, PASSWORD, iv);
         v.add(backupEntry("BACKUP-SECRETS-APP-PASSWORD", "Secret", "appPassword", "import", PASSWORD,
                 secretsApp, secretItems()));
-        v.add(backupEntry("BACKUP-SECRETS-RANDOM-PASSWORD", "Secret", "randomPassword", "import", null,
+        v.add(backupEntry("BACKUP-SECRETS-RANDOM-PASSWORD", "Secret", "randomPassword", "import", RANDOM_PASSWORD,
                 secretLines(gson, RANDOM_PASSWORD, iv), secretItems()));
 
         JsonObject wrongKeys = backupEntry("BACKUP-KEYS-WRONG-PASSWORD", "KeyInfo", "appPassword", "reject",
@@ -318,17 +322,19 @@ public final class CryptoVectorsGenerator {
         fidMismatch.addProperty("reason", "The prikey belongs to " + FID_A + ", not to the item's id.");
         v.add(fidMismatch);
 
-        JsonObject[] lines = backupKeyAndHeader("KeyInfo", 1, RANDOM_PASSWORD);
-        lines[0].addProperty("keyName", "000000000000");
-        JsonObject keyNameMismatch = backupEntry("BACKUP-KEYNAME-MISMATCH", "KeyInfo", "randomPassword", "reject", null,
-                gson.toJson(lines[0]) + "\n\n" + gson.toJson(lines[1]) + "\n\n"
-                        + gson.toJson(keyItem("A", PRI_FID_A, FID_A, RANDOM_PASSWORD, iv)), null);
-        keyNameMismatch.addProperty("reason", "BackupKey.keyName differs from BackupHeader.keyName.");
-        v.add(keyNameMismatch);
+        // Files from version-1 writers: the password inside the BackupKey, and a keyName on both lines.
+        JsonObject[] legacy = legacyBackupKeyAndHeader("KeyInfo", 2);
+        JsonObject legacyKeys = backupEntry("BACKUP-KEYS-LEGACY-RANDOM-PASSWORD", "KeyInfo", "legacyRandomPassword",
+                "import", null, gson.toJson(legacy[0]) + "\n\n" + gson.toJson(legacy[1]) + "\n\n"
+                        + gson.toJson(keyItem("A", PRI_FID_A, FID_A, LEGACY_RANDOM_PASSWORD, iv)) + "\n\n"
+                        + gson.toJson(keyItem("B", PRI_FID_B, FID_B, LEGACY_RANDOM_PASSWORD, iv)), keyItems());
+        legacyKeys.addProperty("reason", "A version-1 file: the reader takes the password from the BackupKey and ignores keyName.");
+        v.add(legacyKeys);
 
         return doc("Entity backup lists (FTSP31): JSON objects separated by a blank line - an optional BackupKey, "
-                + "an optional BackupHeader, then the items. mode=plain: items in the clear. mode=appPassword: the "
-                + "reader asks for password. mode=randomPassword: the password is in the BackupKey. expect=import: "
+                + "an optional BackupHeader, then the items. mode=plain: items in the clear. mode=appPassword and "
+                + "mode=randomPassword: the password is not in the list; the reader asks for password. "
+                + "mode=legacyRandomPassword: a version-1 list with the password in the BackupKey. expect=import: "
                 + "reading backupText gives exactly items. expect=reject: the reader must refuse the list and save "
                 + "nothing. Key items carry prikeyCipher as a Base64 FTSP30 bundle and no pubkey; other items are "
                 + "encrypted whole as a FVEP8 Password cipher JSON.", v);
@@ -347,26 +353,34 @@ public final class CryptoVectorsGenerator {
         return o;
     }
 
-    /** [BackupKey, BackupHeader] as Safe writes them for an encrypted export. */
+    /**
+     * [BackupKey, BackupHeader] as Safe writes them for an encrypted export. Neither carries the
+     * password or anything derived from it; a random password is handed to the user apart.
+     */
     static JsonObject[] backupKeyAndHeader(String tClass, int items, String randomPassword) {
-        String password = randomPassword != null ? randomPassword : PASSWORD;
-        String keyName = HF.formatHex(Hash.sha256(password.getBytes(StandardCharsets.UTF_8))).substring(0, 12);
         JsonObject key = new JsonObject();
-        if (randomPassword != null) key.addProperty("password", randomPassword);
         key.addProperty("time", BACKUP_TIME);
-        key.addProperty("keyName", keyName);
-        if (randomPassword == null) key.addProperty("hint", APP_PASSWORD_HINT);
-        return new JsonObject[]{key, header(tClass, items, keyName)};
+        key.addProperty("hint", randomPassword != null ? RANDOM_PASSWORD_HINT : APP_PASSWORD_HINT);
+        return new JsonObject[]{key, header(tClass, items, true)};
     }
 
-    static JsonObject header(String tClass, int items, String keyName) {
+    /** [BackupKey, BackupHeader] as version-1 writers made them in randomPassword mode. */
+    static JsonObject[] legacyBackupKeyAndHeader(String tClass, int items) {
+        String keyName = HF.formatHex(Hash.sha256(LEGACY_RANDOM_PASSWORD.getBytes(StandardCharsets.UTF_8))).substring(0, 12);
+        JsonObject key = new JsonObject();
+        key.addProperty("password", LEGACY_RANDOM_PASSWORD);
+        key.addProperty("time", BACKUP_TIME);
+        key.addProperty("keyName", keyName);
+        JsonObject header = header(tClass, items, true);
+        header.addProperty("keyName", keyName);
+        return new JsonObject[]{key, header};
+    }
+
+    static JsonObject header(String tClass, int items, boolean encrypted) {
         JsonObject header = new JsonObject();
         header.addProperty("time", BACKUP_TIME);
         header.addProperty("items", items);
-        if (keyName != null) {
-            header.addProperty("keyName", keyName);
-            header.addProperty("alg", FC_AesGcm256_No1_NrC7.getDisplayName());
-        }
+        if (encrypted) header.addProperty("alg", FC_AesGcm256_No1_NrC7.getDisplayName());
         header.addProperty("tClass", tClass);
         return header;
     }
@@ -416,7 +430,7 @@ public final class CryptoVectorsGenerator {
             JsonObject[] kh = backupKeyAndHeader("Secret", 2, RANDOM_PASSWORD.equals(password) ? password : null);
             sb.append(gson.toJson(kh[0])).append("\n\n").append(gson.toJson(kh[1])).append("\n\n");
         } else {
-            sb.append(gson.toJson(header("Secret", 2, null))).append("\n\n");
+            sb.append(gson.toJson(header("Secret", 2, false))).append("\n\n");
         }
         JsonArray items = secretItems();
         for (int i = 0; i < items.size(); i++) {
@@ -454,6 +468,7 @@ public final class CryptoVectorsGenerator {
         c.setAlg(FC_AesGcm256_No1_NrC7);
         c.setType(EncryptType.Password);
         c.setKdf(Kdf.Argon2id_No1_NrC7);
+        c.setKeyName(null);
         requireOk(c);
         c.setData(null);
         c.setSymkey(null);
@@ -544,6 +559,7 @@ public final class CryptoVectorsGenerator {
         c.setAlg(alg);
         c.setType(EncryptType.Password);
         c.setKdf(kdf);
+        c.setKeyName(null);
         return requireOk(c);
     }
 

@@ -32,7 +32,7 @@
         "password": "MyPassword"
       },
       "plaintextHex": "48656c6c6f20776f726c6421",
-      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Argon2id@No1_NrC7\",\"cipher\":\"YcBKnPD9dP6i04r45LDWTkrL1Zek4sQ9LIZF7g\\u003d\\u003d\",\"keyName\":\"f700db5983ea\",\"iv\":\"000102030405060708090a0b\"}"
+      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Argon2id@No1_NrC7\",\"cipher\":\"YcBKnPD9dP6i04r45LDWTkrL1Zek4sQ9LIZF7g\\u003d\\u003d\",\"iv\":\"000102030405060708090a0b\"}"
     },
     {
       "id": "JSON-PASSWORD-GCM-SHA256IV",
@@ -44,7 +44,7 @@
         "password": "MyPassword"
       },
       "plaintextHex": "48656c6c6f20776f726c6421",
-      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Sha256Iv@No1_NrC7\",\"cipher\":\"nJ2abmD5wSYgJoI47NVgLdBE9djlgpKfsk1bhg\\u003d\\u003d\",\"keyName\":\"bbeddbe89c74\",\"iv\":\"000102030405060708090a0b\"}"
+      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"kdf\":\"Sha256Iv@No1_NrC7\",\"cipher\":\"nJ2abmD5wSYgJoI47NVgLdBE9djlgpKfsk1bhg\\u003d\\u003d\",\"iv\":\"000102030405060708090a0b\"}"
     },
     {
       "id": "JSON-PASSWORD-GCM-NOKDF-ARGON2ID",
@@ -56,7 +56,7 @@
         "password": "MyPassword"
       },
       "plaintextHex": "48656c6c6f20776f726c6421",
-      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"YcBKnPD9dP6i04r45LDWTkrL1Zek4sQ9LIZF7g\\u003d\\u003d\",\"keyName\":\"f700db5983ea\",\"iv\":\"000102030405060708090a0b\"}"
+      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"YcBKnPD9dP6i04r45LDWTkrL1Zek4sQ9LIZF7g\\u003d\\u003d\",\"iv\":\"000102030405060708090a0b\"}"
     },
     {
       "id": "JSON-PASSWORD-GCM-NOKDF-SHA256IV",
@@ -68,7 +68,7 @@
         "password": "MyPassword"
       },
       "plaintextHex": "48656c6c6f20776f726c6421",
-      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"nJ2abmD5wSYgJoI47NVgLdBE9djlgpKfsk1bhg\\u003d\\u003d\",\"keyName\":\"bbeddbe89c74\",\"iv\":\"000102030405060708090a0b\"}"
+      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesGcm256@No1_NrC7\",\"cipher\":\"nJ2abmD5wSYgJoI47NVgLdBE9djlgpKfsk1bhg\\u003d\\u003d\",\"iv\":\"000102030405060708090a0b\"}"
     },
     {
       "id": "JSON-PASSWORD-CBC-NOKDF-SHA256IV",
@@ -80,7 +80,7 @@
         "password": "MyPassword"
       },
       "plaintextHex": "48656c6c6f20776f726c6421",
-      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesCbc256@No1_NrC7\",\"cipher\":\"dIxQ9wE5S214zqX9vDZKeA\\u003d\\u003d\",\"keyName\":\"f25e7f92ceef\",\"iv\":\"000102030405060708090a0b0c0d0e0f\",\"sum\":\"2d917a6e\"}"
+      "cipherJson": "{\"type\":\"Password\",\"alg\":\"AesCbc256@No1_NrC7\",\"cipher\":\"dIxQ9wE5S214zqX9vDZKeA\\u003d\\u003d\",\"iv\":\"000102030405060708090a0b0c0d0e0f\",\"sum\":\"2d917a6e\"}"
     },
     {
       "id": "JSON-ASYONEWAY-ECCK1GCM",
