@@ -90,7 +90,7 @@ Creates a new proof. **`proofId` is not supplied** — it becomes the **current 
 3. **`issuer`** MUST be the transaction **signer** FID.
 4. **`owner`** MUST be the **recipient** FID from the transaction context when a recipient is defined; otherwise **`owner`** = **`issuer`** (reference: `opre.getRecipient()`).
 5. **`destroyed`** MUST be **`false`** on issue; **`cosignersSigned`** starts unset / empty.
-6. **CDD (reference):** When block height exceeds a configured threshold, **issue** requires **CDD ≥ `CddRequired` × 100** (see `StartFEIP` in the reference parser). Conforming indexers SHOULD apply the same anti-spam policy for consistency.
+6. **CDD:** When block height exceeds **`CddCheckHeight`**, **issue** requires **CDD ≥ `CddRequired`** (1 cd), the same as other FEIP operations (see `StartFEIP` in the reference parser).
 
 #### 2. sign
 

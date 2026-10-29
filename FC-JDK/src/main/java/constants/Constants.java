@@ -17,8 +17,18 @@ public class Constants {
     public static final double MIN_AMOUNT = 0.000001;
     public static final int MAX_AMOUNT = 99999999;
 
-    public static long CDD_CHECK_HEIGHT =3000000;
-    public static long CD_REQUIRED =0;
+    public static long CDD_CHECK_HEIGHT =4000000;
+    public static long CD_REQUIRED =1;
+
+    /**
+     * The CD a FEIP carve must destroy at {@code bestHeight} (FEIP0 CDD rule):
+     * nothing below {@link #CDD_CHECK_HEIGHT}, the requested CD from there on.
+     * An unknown height (null or 0) keeps the requested CD.
+     */
+    public static long requiredCd(Long bestHeight, long requestedCd) {
+        if (requestedCd > 0 && bestHeight != null && bestHeight > 0 && bestHeight < CDD_CHECK_HEIGHT) return 0;
+        return requestedCd;
+    }
     public static final Long COIN_TO_SATOSHI = 100000000L;
     public static final Long CASH_TO_SATOSHI = 100L;
     public static final Long OneDayInterval = 1440L;

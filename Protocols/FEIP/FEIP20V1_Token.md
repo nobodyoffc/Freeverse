@@ -81,7 +81,7 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
 #### 1. deploy
 
 - **Required:** `op`, non-empty **`name`**.
-- **CDD:** When block height exceeds **`CddCheckHeight`**, **`cdd`** must be non-null and **≥ `CddRequired * 100`** (**`makeToken`**).
+- **CDD:** When block height exceeds **`CddCheckHeight`**, **`cdd`** must be non-null and **≥ `CddRequired`** (1 cd), the same as other FEIP operations (**`makeToken`**).
 - **`tokenId`** is **not** taken from JSON; it is set to **this transaction’s id**.
 - **Optional:** `desc`, `consensusId`, `capacity`, `decimal` (must be integer string), `transferable`, `closable`, `openIssue`, and when `openIssue` is true: `maxAmtPerIssue`, `minCddPerIssue`, `maxIssuesPerAddr`.
 - Creates **`TOKEN`**; **`News.createNews`** with op **`create`**.

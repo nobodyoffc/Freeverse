@@ -17,7 +17,6 @@ import com.google.gson.Gson;
 import core.crypto.KeyTools;
 import data.fchData.OpReturn;
 import utils.NumberUtils;
-import startFEIP.FeipConstants;
 import startFEIP.StartFEIP;
 import utils.StringUtils;
 
@@ -62,8 +61,8 @@ public class FinanceParser {
             case OpNames.DEPLOY:
                 if (opre.getHeight() > StartFEIP.CddCheckHeight) {
                     Long cdd = opre.getCdd();
-                    if (cdd == null || cdd < StartFEIP.CddRequired * FeipConstants.CDD_MULTIPLIER) {
-                        log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired * FeipConstants.CDD_MULTIPLIER");
+                    if (cdd == null || cdd < StartFEIP.CddRequired) {
+                        log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
                         return null;
                     }
                 }
@@ -212,7 +211,7 @@ public class FinanceParser {
                 }
                 if (opre.getHeight() > StartFEIP.CddCheckHeight) {
                     Long cdd = opre.getCdd();
-                    if (cdd == null || cdd < StartFEIP.CddRequired * FeipConstants.CDD_MULTIPLIER) {
+                    if (cdd == null || cdd < StartFEIP.CddRequired) {
                         log.info("Height is greater than CddCheckHeight and Cdd is null or less than CddRequired");
                         return null;
                     }

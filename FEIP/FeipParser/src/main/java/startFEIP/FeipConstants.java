@@ -30,7 +30,6 @@ public class FeipConstants {
     public static final int MAX_CID_COUNT = 4;
     public static final int MAX_RATE = 5;
     public static final int INITIAL_CID_SUFFIX_LENGTH = 4;
-    public static final long CDD_MULTIPLIER = 100;
 
     // --- Input validation limits ---
     public static final int MAX_NAME_LENGTH = 256;

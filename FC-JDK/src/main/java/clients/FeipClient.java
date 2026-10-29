@@ -156,11 +156,8 @@ public class FeipClient {
         String prikeyCipher = cipher.toJson();
 
         String dataOnChainJson = FeipUtils.getMasterData(master,masterPubkey,prikeyCipher);
-        long requiredCd = 0;
+        long requiredCd = Constants.requiredCd(bestHeight, Constants.CD_REQUIRED);
         int maxCashes=20;
-
-        if (bestHeight > Constants.CDD_CHECK_HEIGHT)
-            requiredCd = Constants.CD_REQUIRED;
 
         if("".equals(userPrikeyCipher)){
             String rawTx = Wallet.makeTxForCs(br,fid,null,dataOnChainJson,requiredCd,20,apipClient);
@@ -184,11 +181,8 @@ public class FeipClient {
         cid = Inputer.inputString(br, "Input the name you want to give the address");
         if(FeipUtils.isGoodCidName(cid)){
             String dataOnChainJson = FeipUtils.getCidRegisterData(cid);
-            long requiredCd = 0;
+            long requiredCd = Constants.requiredCd(bestHeight, Constants.CD_REQUIRED);
             int maxCashes=20;
-
-            if (bestHeight > Constants.CDD_CHECK_HEIGHT)
-                requiredCd = Constants.CD_REQUIRED;
 
             if("".equals(userPrikeyCipher)){
                 String rawTx = Wallet.makeTxForCs(br, fid,null,dataOnChainJson,requiredCd,20,apipClient);

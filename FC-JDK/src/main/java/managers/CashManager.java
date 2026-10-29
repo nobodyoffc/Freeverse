@@ -766,6 +766,7 @@ public class CashManager extends Manager<Cash> {
     public String send(@Nullable List<Cash> cashList, @Nullable Double amount, @Nullable Long cd, @Nullable List<Cash> sendToList, @Nullable String opReturn, Multisig multisig, Double feeRate, String changeTo, MainNetParams mainNetParams, @Nullable BufferedReader br){
         TxResultType resultType = TxResultType.NULL;
         if(feeRate==null)feeRate=DEFAULT_FEE_RATE;
+        if(cd!=null) cd = requiredCd(bestHeight, cd);
         List<Cash> meetList;
         int opReturnSize = opReturn == null ? 0 : opReturn.getBytes().length;
         if(cashList!=null)meetList = cashList;
@@ -1916,6 +1917,10 @@ public class CashManager extends Manager<Cash> {
                 if (bestBlock != null) bestheight = bestBlock.getHeight();
             } catch (IOException ignore) {
             }
+        }
+        if(cd!=null && cd>0) {
+            if((bestheight==null || bestheight==0) && apipClient!=null) bestheight = apipClient.bestHeight();
+            cd = requiredCd(bestheight, cd);
         }
         if(apipClient!=null){
             Fcdsl fcdsl = createFcdslForValidCashes(sinceHeight, myFid);

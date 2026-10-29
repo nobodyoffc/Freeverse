@@ -140,6 +140,10 @@ public class Wallet {
         }
 
         if (apipClient != null) {
+            if (cd > 0) {
+                Long knownHeight = apipClient.getBestHeight() > 0 ? apipClient.getBestHeight() : apipClient.bestHeight();
+                cd = Constants.requiredCd(knownHeight, cd);
+            }
             cashList = apipClient.cashValid(fid,sum,cd,sendToList.size(),opReturnSize,RequestMethod.POST,AuthType.ENCRYPTED);
             bestHeight = apipClient.getFcClientEvent().getResponseBody().getBestHeight();
         } else if (esClient != null) {
@@ -153,6 +157,8 @@ public class Wallet {
             bestHeight = nasaClient.getBestHeight();
         }else
             return "No APIP client or ES client to make tx.";
+
+        cd = Constants.requiredCd(bestHeight, cd);
 
         if (cashList == null) return "No qualified cash found.";
         Iterator<Cash> iter = cashList.iterator();
