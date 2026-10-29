@@ -222,7 +222,14 @@ public class FinanceParser {
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
                 proofHist.setSigner(opre.getSigner());
-                proofHist.setRecipient(opre.getRecipient());
+
+                if(proofRaw.getIssueTo()!=null){
+                    if(!KeyTools.isGoodFid(proofRaw.getIssueTo())){
+                        log.info("IssueTo is not a good fid");
+                        return null;
+                    }
+                    proofHist.setIssueTo(proofRaw.getIssueTo());
+                }
 
                 proofHist.setTitle(proofRaw.getTitle());
                 proofHist.setContent(proofRaw.getContent());
@@ -268,7 +275,15 @@ public class FinanceParser {
                 proofHist.setIndex(opre.getTxIndex());
                 proofHist.setTime(opre.getTime());
                 proofHist.setSigner(opre.getSigner());
-                proofHist.setRecipient(opre.getRecipient());
+                if(proofRaw.getTransferTo()==null || !KeyTools.isGoodFid(proofRaw.getTransferTo())){
+                    log.info("TransferTo is null or not a good fid");
+                    return null;
+                }
+                if(proofRaw.getTransferTo().equals(opre.getSigner())){
+                    log.info("TransferTo is the signer");
+                    return null;
+                }
+                proofHist.setTransferTo(proofRaw.getTransferTo());
                 break;
             default:
                 log.info("Invalid operation");
@@ -780,8 +795,8 @@ public class FinanceParser {
 
                 proof.setIssuer(proofHist.getSigner());
 
-                if(proofHist.getRecipient()!=null) {
-                    proof.setOwner(proofHist.getRecipient());
+                if(proofHist.getIssueTo()!=null) {
+                    proof.setOwner(proofHist.getIssueTo());
                 }else proof.setOwner(proofHist.getSigner());
 
                 proof.setBirthTime(proofHist.getTime());
@@ -881,12 +896,12 @@ public class FinanceParser {
                     return false;
                 }
 
-                if(proofHist.getRecipient()==null){
-                    log.info("Recipient is null");
+                if(proofHist.getTransferTo()==null){
+                    log.info("TransferTo is null");
                     return false;
                 }
 
-                proof.setOwner(proofHist.getRecipient());
+                proof.setOwner(proofHist.getTransferTo());
                 proof.setLastTxId(proofHist.getId());
                 proof.setLastTime(proofHist.getTime());
                 proof.setLastHeight(proofHist.getHeight());

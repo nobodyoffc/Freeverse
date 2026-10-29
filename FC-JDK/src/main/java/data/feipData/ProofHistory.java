@@ -10,7 +10,6 @@ public class ProofHistory extends FcObject {
 	private Integer index;
 	private Long time;
 	private String signer;
-	private String recipient;
 
 	private String proofId;
 	private List<String> proofIds;
@@ -20,13 +19,23 @@ public class ProofHistory extends FcObject {
 	private List<String> cosigners;
 	private Boolean transferable;
 	private Boolean allSignsRequired;
+	private String issueTo;
+	private String transferTo;
 
-	public String getRecipient() {
-		return recipient;
+	public String getIssueTo() {
+		return issueTo;
 	}
 
-	public void setRecipient(String recipient) {
-		this.recipient = recipient;
+	public void setIssueTo(String issueTo) {
+		this.issueTo = issueTo;
+	}
+
+	public String getTransferTo() {
+		return transferTo;
+	}
+
+	public void setTransferTo(String transferTo) {
+		this.transferTo = transferTo;
 	}
 
 	public Long getHeight() {

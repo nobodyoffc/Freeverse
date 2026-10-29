@@ -38,13 +38,14 @@ General consensus of FEIP: [FEIP0V1_FEIP](FEIP0V1_FEIP.md)
 
 ## Abstract
 
-The **Proof** protocol registers **on-chain proof documents**: a **title**, **body** (`content`), optional **multi-party cosigning**, **transferability**, and lifecycle operations **issue**, **sign**, **transfer**, and **destroy**. Each proof has a stable **`id`** equal to the **issue** transaction id. The **issuer** is the issuing transaction’s signer; **owner** holds current rights (initially the **recipient** of that transaction if present, otherwise the issuer). **Cosigners** invited by the issuer may **sign** to satisfy **`allSignsRequired`** gating before the proof is **active**.
+The **Proof** protocol registers **on-chain proof documents**: a **title**, **body** (`content`), optional **multi-party cosigning**, **transferability**, and lifecycle operations **issue**, **sign**, **transfer**, and **destroy**. Each proof has a stable **`id`** equal to the **issue** transaction id. The **issuer** is the issuing transaction’s signer; **owner** holds current rights: initially the FID named in **`issueTo`**, otherwise the issuer; a **transfer** hands it to the FID named in **`transferTo`**. Owners are always named in the op data, never inferred from transaction outputs. **Cosigners** invited by the issuer may **sign** to satisfy **`allSignsRequired`** gating before the proof is **active**.
 
 ## Motivation
 
 - **Attestations and agreements**: Publish a clear title + content with optional co-signer workflow.
 - **Controlled activation**: Require all invited cosigners to sign before the proof becomes **active** when **`allSignsRequired`** is true.
-- **Transfer**: Optionally allow **transfer** of ownership when **`transferable`** is true (enforced by client/economic convention; reference **transfer** checks **active**, not destroyed, and **owner** == signer).
+- **Issue to someone**: The issuer can make another FID the first owner with **`issueTo`**. This is the only way an untransferable proof can belong to anyone but its issuer.
+- **Transfer**: Allow **transfer** of ownership only when **`transferable`** is true.
 - **Destruction**: **Owner** may **destroy** one or more proofs they own.
 
 ## Specification
@@ -62,7 +63,7 @@ The **Proof** protocol registers **on-chain proof documents**: a **title**, **bo
 |`active`|Issue / **sign**|`true` when the proof is considered live; may start **`false`** if **`allSignsRequired`** and there are invited cosigners (see [issue](#1-issue)).|
 |`destroyed`|**destroy**|`true` after successful **destroy**; **`active`** also set **`false`**.|
 |`issuer`|Issue signer|FID that issued the proof.|
-|`owner`|Issue / **transfer**|Current owner FID (see [issue](#1-issue) and [transfer](#3-transfer)).|
+|`owner`|Issue / **transfer**|Current owner FID: **`issueTo`** or the issuer at issue, then each **`transferTo`** (see [issue](#1-issue) and [transfer](#3-transfer)).|
 |`birthTime`, `birthHeight`|Issue block|Creation context.|
 |`lastTxId`, `lastTime`, `lastHeight`|Last mutating op|Updated when the indexed document changes.|
 
@@ -82,13 +83,14 @@ Creates a new proof. **`proofId` is not supplied** — it becomes the **current 
 |`cosigners`|N|Array of FID strings|Invited cosigners (issuer SHOULD NOT be listed; reference **drops** the issuer if present).|
 |`transferable`|N|Boolean|Whether the proof may be transferred.|
 |`allSignsRequired`|N|Boolean|If **true** and there is at least one invited cosigner after filtering, **`active`** starts **`false`** until every invited cosigner has **signed**.|
+|`issueTo`|N|String (FID)|The first owner. Absent means the issuer owns the proof.|
 
 **Consensus rules**
 
 1. **`title`** and **`content`** MUST be present (reference rejects null).
 2. **`id`** = **`proofId`** = **this transaction’s txid**; document MUST NOT already exist for that id.
 3. **`issuer`** MUST be the transaction **signer** FID.
-4. **`owner`** MUST be the **recipient** FID from the transaction context when a recipient is defined; otherwise **`owner`** = **`issuer`** (reference: `opre.getRecipient()`).
+4. If **`issueTo`** is present it MUST be a valid FID (otherwise the op is invalid), and **`owner`** = **`issueTo`**; otherwise **`owner`** = **`issuer`**. Transaction outputs play no part: paying an FID in the issue transaction does not make it the owner.
 5. **`destroyed`** MUST be **`false`** on issue; **`cosignersSigned`** starts unset / empty.
 6. **CDD:** When block height exceeds **`CddCheckHeight`**, **issue** requires **CDD ≥ `CddRequired`** (1 cd), the same as other FEIP operations (see `StartFEIP` in the reference parser).
 
@@ -119,15 +121,14 @@ Moves **ownership** to a new FID.
 |---|---|---|---|
 |`op`|Y|String|`"transfer"`|
 |`proofId`|Y|String|Proof **`id`**.|
+|`transferTo`|Y|String (FID)|The new owner.|
 
 **Consensus rules**
 
-12. The proof MUST exist, MUST NOT be **`destroyed`**, and MUST be **`active`**.
+12. The proof MUST exist, MUST NOT be **`destroyed`**, MUST be **`active`**, and MUST be **`transferable`** (`true`; absent counts as not transferable).
 13. **`signer`** MUST equal current **`owner`**.
-14. A **recipient** FID MUST be present in the transaction context (reference rejects null `recipient`); **`owner`** becomes that recipient.
+14. **`transferTo`** MUST be present, MUST be a valid FID and MUST NOT equal the **signer**; **`owner`** becomes **`transferTo`**. Transaction outputs play no part.
 15. Update last-* fields.
-
-*Note:* Reference **transfer** does not re-check **`transferable`**; clients SHOULD refuse to build transfer txs when **`transferable`** is false.
 
 #### 4. destroy
 
@@ -158,7 +159,7 @@ Marks proofs as destroyed (and inactive).
 
 ### ProofHistory (audit)
 
-[ProofHistory](../../FC-JDK/src/main/java/data/feipData/ProofHistory.java) stores operation context: `height`, `index`, `time`, `signer`, `recipient` (when applicable), `op`, and op-specific fields (`proofId`, `proofIds`, `title`, `content`, `cosigners`, `transferable`, `allSignsRequired`) for audit or reparse (see **FinanceRollbacker**).
+[ProofHistory](../../FC-JDK/src/main/java/data/feipData/ProofHistory.java) stores operation context: `height`, `index`, `time`, `signer`, `op`, and op-specific fields (`proofId`, `proofIds`, `title`, `content`, `cosigners`, `transferable`, `allSignsRequired`, `issueTo`, `transferTo`) for audit or reparse (see **FinanceRollbacker**).
 
 ### Parsing order and reorg
 
@@ -184,6 +185,26 @@ Marks proofs as destroyed (and inactive).
   }
 }
 ```
+
+### Example 1b — issue to another owner
+
+```json
+{
+  "type": "FEIP",
+  "sn": "14",
+  "ver": "1",
+  "name": "Proof",
+  "data": {
+    "op": "issue",
+    "title": "Diploma",
+    "content": "The holder completed the course ...",
+    "transferable": false,
+    "issueTo": "FID..."
+  }
+}
+```
+
+The proof is owned by `issueTo` from birth. Being untransferable, it stays with that FID until destroyed.
 
 ### Example 2 — issue with cosigners (all must sign before active)
 
@@ -231,12 +252,13 @@ If **`allSignsRequired`** is **true** and there is at least one invited cosigner
   "name": "Proof",
   "data": {
     "op": "transfer",
-    "proofId": "<issue_txid>"
+    "proofId": "<issue_txid>",
+    "transferTo": "FID..."
   }
 }
 ```
 
-The new **owner** is the transaction **recipient** FID (same notion as other finance FEIPs in the reference).
+The new **owner** is **`transferTo`**.
 
 ### Example 5 — destroy
 
@@ -258,6 +280,7 @@ The new **owner** is the transaction **recipient** FID (same notion as other fin
 |Version|Date|Summary|
 |---|---|---|
 |1|2026-03-23|Initial spec: issue / sign / transfer / destroy; aligned with `Feip.PROOF` (`14`/`1`).|
+|1|2026-10-29|Owners named in the data: **`issueTo`** on issue, required **`transferTo`** on transfer; transaction recipients are no longer read. **`transferable`** enforced on transfer.|
 
 ## Related Protocols
 
@@ -278,6 +301,5 @@ The new **owner** is the transaction **recipient** FID (same notion as other fin
 
 ### Implementation notes (non-normative)
 
-- **`transferable`** is stored on the entity but not enforced in **`parseProof`** for **transfer**; enforcement is a client concern unless tightened in a later FEIP version.
 - **CDD on issue**: a missing (`null`) CDD is treated as insufficient, i.e. the same as a CDD below the threshold.
 - **`destroy`** writes the whole batch in one bulk request to the **`proof`** index; a batch in which every entry is skipped produces no bulk request at all (see rule 18).
