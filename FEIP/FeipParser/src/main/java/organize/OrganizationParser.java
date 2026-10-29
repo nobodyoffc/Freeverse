@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import constants.OpNames;
+import core.crypto.KeyTools;
 import startFEIP.FeipConstants;
 import data.fcData.News;
 import data.fchData.Freer;
@@ -464,8 +465,8 @@ public class OrganizationParser {
 					log.info("TID is null");
 					return null;
 				}
-				if(teamRaw.getTransferee() ==null){
-					log.info("Transferee is null");
+				if(teamRaw.getTransferee() ==null || !KeyTools.isGoodFid(teamRaw.getTransferee())){
+					log.info("Transferee is null or not a good fid");
 					return null;
 				}
 				if(teamRaw.getConfirm()==null || !teamRaw.getConfirm().equals(FeipConstants.CONFIRM_TRANSFER_TEAM)){
@@ -566,6 +567,14 @@ public class OrganizationParser {
 				if(teamRaw.getList().length==0){
 					log.info("List is empty");
 					return null;
+				}
+				// One malformed FID invalidates the whole op: applying the rest would put the
+				// team in a state the signer never signed.
+				for(String fid : teamRaw.getList()){
+					if(!KeyTools.isGoodFid(fid)){
+						log.info("List contains a bad fid");
+						return null;
+					}
 				}
 				teamHist.setTid(teamRaw.getTid());
 				teamHist.setList(teamRaw.getList());

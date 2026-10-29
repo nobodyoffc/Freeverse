@@ -132,7 +132,7 @@ Use **FeipOp** values (case as serialized in JSON, typically lowercase where sin
 
 #### 5. transfer
 
-- **Fields:** `tid`, `transferee`, **`confirm`** (exact).
+- **Fields:** `tid`, `transferee` (MUST be a well-formed FID, otherwise the op is invalid), **`confirm`** (exact).
 - **Effect:** Signer **must be owner**, or reference allows non-owner path using signer’s **Freer** `master` field (see implementation notes). Sets **`transferee`** (cleared if transferee equals current owner).
 
 #### 6. take over
@@ -152,7 +152,7 @@ Use **FeipOp** values (case as serialized in JSON, typically lowercase where sin
 
 #### 9. invite
 
-- **Fields:** `tid`, `list` (non-empty FID array).
+- **Fields:** `tid`, `list` (non-empty FID array; if any entry is not a well-formed FID the whole op is invalid — this applies to every op that takes a `list`: invite, withdraw invitation, dismiss, appoint, cancel appointment).
 - **Effect:** Signer must be in **`managers`**; add FIDs to **`invitees`** (skip owner and existing members).
 
 #### 10. withdraw invitation

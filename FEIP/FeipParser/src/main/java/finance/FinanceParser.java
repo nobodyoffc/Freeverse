@@ -233,8 +233,15 @@ public class FinanceParser {
                 proofHist.setTitle(proofRaw.getTitle());
                 proofHist.setContent(proofRaw.getContent());
 
-                if(proofRaw.getCosigners()!=null)
-                        proofHist.setCosigners(proofRaw.getCosigners());
+                if(proofRaw.getCosigners()!=null) {
+                    for(String cosigner : proofRaw.getCosigners()){
+                        if(!KeyTools.isGoodFid(cosigner)){
+                            log.info("Cosigners contains a bad fid");
+                            return null;
+                        }
+                    }
+                    proofHist.setCosigners(proofRaw.getCosigners());
+                }
                 proofHist.setTransferable(proofRaw.isTransferable());
 
                 proofHist.setAllSignsRequired(proofRaw.isAllSignsRequired());

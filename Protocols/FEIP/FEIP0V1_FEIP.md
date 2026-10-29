@@ -128,6 +128,8 @@ FEIP operations MUST be parsed in strict blockchain order: by block height first
 
 If the OP_RETURN content is not valid JSON, or does not conform to the expected format of the declared protocol (`type` + `sn` + `ver`), the transaction MUST be ignored by parsers. No state change should occur.
 
+A field that a protocol defines as an FID, or as a list of FIDs, MUST hold well-formed FIDs (valid Base58Check, FCH address version). If any one of them is malformed, the whole operation is invalid and MUST be ignored; parsers MUST NOT apply the well-formed entries and skip the rest. Whether a well-formed FID is acceptable in the current state (e.g. is a member of a team) is a separate question that each protocol answers for itself.
+
 ### 8. Blockchain Reorganization
 
 When a blockchain reorganization occurs, parsers MUST ensure that the resulting state is identical to what would be produced by parsing the reorganized chain from genesis. The specific implementation strategy for achieving this is not prescribed.

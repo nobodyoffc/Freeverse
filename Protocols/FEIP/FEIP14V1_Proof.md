@@ -80,7 +80,7 @@ Creates a new proof. **`proofId` is not supplied** — it becomes the **current 
 |`op`|Y|String|`"issue"`|
 |`title`|Y|String|Proof title.|
 |`content`|Y|String|Proof body (plaintext, public in the index).|
-|`cosigners`|N|Array of FID strings|Invited cosigners (issuer SHOULD NOT be listed; reference **drops** the issuer if present).|
+|`cosigners`|N|Array of FID strings|Invited cosigners (issuer SHOULD NOT be listed; reference **drops** the issuer if present). Every entry MUST be a valid FID; one malformed entry makes the op invalid.|
 |`transferable`|N|Boolean|Whether the proof may be transferred.|
 |`allSignsRequired`|N|Boolean|If **true** and there is at least one invited cosigner after filtering, **`active`** starts **`false`** until every invited cosigner has **signed**.|
 |`issueTo`|N|String (FID)|The first owner. Absent means the issuer owns the proof.|
