@@ -125,7 +125,7 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
 
 ### TokenHistory
 
-[TokenHistory](../../FC-JDK/src/main/java/data/feipData/TokenHistory.java) records block context, **`signer`**, **`cdd`** (used for **issue** limits), **`op`**, **`tokenId`** / **`tokenIds`**, deploy fields, **`issueTo`** / **`transferTo`**.
+[TokenHistory](../../FC-JDK/src/main/java/data/feipData/TokenHistory.java) records block context, **`signer`**, **`cdd`** (used for **issue** limits), **`op`**, **`tokenId`** / **`tokenIds`**, deploy fields, **`issueTo`** / **`transferTo`**. Recipients are only those named in **`issueTo`** / **`transferTo`**; transaction outputs are never read, and there is no `recipient` field. In the `token_history` index both lists are mapped as `object` (not `nested`), so a party's history can be found with a term on `issueTo.fid` / `transferTo.fid`.
 
 ## Examples
 

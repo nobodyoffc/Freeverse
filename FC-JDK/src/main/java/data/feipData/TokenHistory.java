@@ -11,7 +11,6 @@ public class TokenHistory extends FcObject {
 	private Integer index;
 	private Long time;
 	private String signer;
-	private String recipient;
 	private Long cdd;
 
 	private String tokenId;
@@ -81,14 +80,6 @@ public class TokenHistory extends FcObject {
 
 	public void setSigner(String signer) {
 		this.signer = signer;
-	}
-
-	public String getRecipient() {
-		return recipient;
-	}
-
-	public void setRecipient(String recipient) {
-		this.recipient = recipient;
 	}
 
 	public String getTokenId() {

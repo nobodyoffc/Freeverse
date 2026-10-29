@@ -171,7 +171,6 @@ public class FinanceParser {
         tokenHist.setIndex(opre.getTxIndex());
         tokenHist.setTime(opre.getTime());
         tokenHist.setSigner(opre.getSigner());
-        tokenHist.setRecipient(opre.getRecipient());
     }
 
     public ProofHistory makeProof(OpReturn opre, Feip feip) {
