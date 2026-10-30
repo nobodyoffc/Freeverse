@@ -67,8 +67,17 @@ public class Menu {
 
     public static void welcome(String name) {
         Shower.printUnderline(20);
-        System.out.println("\nWelcome to the Freeverse with "+ name +".");
+        System.out.println("\nWelcome to the Freeverse " + releaseVersion() + " with " + name + ".");
         Shower.printUnderline(20);
+    }
+
+    /**
+     * The Freeverse release this app was built for, from Implementation-Version in the
+     * jar manifest (the release tag, e.g. "v0.4"); "dev" when run from classes.
+     */
+    public static String releaseVersion() {
+        String version = Menu.class.getPackage().getImplementationVersion();
+        return version == null ? "dev" : version;
     }
 
     public Menu add(String item) {

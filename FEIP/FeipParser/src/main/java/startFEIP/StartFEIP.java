@@ -39,11 +39,13 @@ public class StartFEIP {
 	// Active parser reference for graceful shutdown
 	private static volatile FileParser activeParser;
 
-	private final static String serverName = "FEIP v2.1";
+	private final static String APP_NAME = "FEIP Parser";
+	// Names config/FEIP_settings.json.
+	private final static String SETTINGS_NAME = "FEIP";
 
 
 	public static void main(String[] args) {
-		Menu.welcome(serverName);
+		Menu.welcome(APP_NAME);
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
 		Map<String,Object>  settingMap = new HashMap<> ();
@@ -53,7 +55,7 @@ public class StartFEIP {
 		List<Module> modules = new ArrayList<>();
 		modules.add(new Module(Service.class.getSimpleName(), ServiceType.ES.name()));
 
-		Settings settings = Starter.startMuteServer(serverName, settingMap, br, modules,null);
+		Settings settings = Starter.startMuteServer(SETTINGS_NAME, settingMap, br, modules,null);
 		if(settings ==null)return;
 		String opReturnJsonPath = (String) settings.getSettingMap().get(Settings.OP_RETURN_PATH);
 
@@ -70,7 +72,7 @@ public class StartFEIP {
 			log.info("FEIP Parser shutdown complete.");
 		}, "feip-shutdown-hook"));
 
-		Menu menu = new Menu("FEIP Parser v2.0");
+		Menu menu = new Menu(APP_NAME);
 		menu.add("Start New Parse from file", () -> startNewParse(opReturnJsonPath, br, esClient));
 		menu.add("Restart from interruption", () -> restartFromFile(esClient, opReturnJsonPath));
 		menu.add("Manual start from a height", () -> restartSinceHeight(opReturnJsonPath, br, esClient));
