@@ -28,6 +28,8 @@ public class TextHistory extends FcObject {
 	private String format;
 	private String summary;
 	private List<String> locas;
+	/** Record id of the FEIP24 Image shown as this work's cover. */
+	private String cover;
 
 	private Integer rate;
 	/** Free text the rater attached to a {@code rate} op. Optional. */
@@ -186,5 +188,13 @@ public class TextHistory extends FcObject {
 
 	public void setLocas(List<String> locas) {
 		this.locas = locas;
+	}
+
+	public String getCover() {
+		return cover;
+	}
+
+	public void setCover(String cover) {
+		this.cover = cover;
 	}
 }

@@ -14,6 +14,8 @@ public class Text extends FcObject {
 	private String format;
 	private String summary;
 	private List<String> locas;
+	/** Record id of the FEIP24 Image shown as this work's cover. */
+	private String cover;
 	private String publisher;
 	private Long birthTime;
 	private Long birthHeight;
@@ -149,5 +151,13 @@ public class Text extends FcObject {
 
 	public void setLocas(List<String> locas) {
 		this.locas = locas;
+	}
+
+	public String getCover() {
+		return cover;
+	}
+
+	public void setCover(String cover) {
+		this.cover = cover;
 	}
 }

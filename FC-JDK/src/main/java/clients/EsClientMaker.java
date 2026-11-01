@@ -1,6 +1,7 @@
 package clients;
 
 import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import config.ApiAccount;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.ElasticsearchException;
@@ -220,7 +221,7 @@ public class EsClientMaker {
                     .build();
             // Create the transport with a Jackson mapper
             transport = new RestClientTransport(
-                    restClient, new JacksonJsonpMapper());
+                    restClient, tolerantMapper());
             // And create the API client
             esClient = new ElasticsearchClient(transport);
             try {
@@ -271,7 +272,7 @@ public class EsClientMaker {
 
         // Create the transport with a Jackson mapper
         transport = new RestClientTransport(
-                restClient, new JacksonJsonpMapper());
+                restClient, tolerantMapper());
 
         // And create the API client
         esClient = new ElasticsearchClient(transport);
@@ -303,4 +304,15 @@ public class EsClientMaker {
         if (this.restClient != null) this.restClient.close();
     }
 
+
+    /**
+     * The client's usual mapper, except that a field a class does not know is skipped. A parser of a
+     * newer release may index fields (such as a work's {@code cover}) that an older server's classes
+     * lack; failing the whole read would make every such record unreadable on that server.
+     */
+    static JacksonJsonpMapper tolerantMapper() {
+        JacksonJsonpMapper mapper = new JacksonJsonpMapper();
+        mapper.objectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        return mapper;
+    }
 }

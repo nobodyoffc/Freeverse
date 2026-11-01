@@ -36,7 +36,7 @@
 
 ## Abstract
 
-FVEP11 Release defines how the protocols, code and apps of a software release are registered on chain with FEIP1 Protocol, FEIP2 Code and FEIP15 APP, so that anyone can check a registration against the release it names. It fixes what each DID is the hash of, including a byte-exact code archive that any tool can rebuild from the repository; how a record is kept across versions; how a document names its own PID; which home keys point where; and the freeverse-release.json manifest that tells a tool what a repository releases. It adds no on-chain operation.
+FVEP11 Release defines how the protocols, code and apps of a software release are registered on chain with FEIP1 Protocol, FEIP2 Code and FEIP15 APP, and the works it publishes with FEIP21 Text, FEIP23 Sound, FEIP24 Image and FEIP25 Video, so that anyone can check a registration against the release it names. It fixes what each DID is the hash of, including a byte-exact code archive that any tool can rebuild from the repository; how a record is kept across versions; how a document names its own PID; which home keys point where; and the freeverse-release.json manifest that tells a tool what a repository releases. It adds no on-chain operation.
 
 ## Motivation
 
@@ -56,9 +56,10 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 |---|---|
 |sha256x2|`SHA-256(SHA-256(bytes))`, written as 64 lowercase hex digits in digest byte order (not reversed as a txid is).|
 |Release|A tagged version of a repository, with its assets (e.g. a GitHub release).|
-|Entity|A protocol, code or app registered with FEIP1, FEIP2 or FEIP15.|
-|Record id|The `pid`, `codeId` or `aid`: the txid of the entity's `publish`.|
-|Owner|The FID that published the record. Only the owner can update it: FEIP1, FEIP2 and FEIP15 ignore an `update` whose signer is not the owner. A master (FEIP6) may stop, recover or close the record, but not update it.|
+|Entity|A protocol, code or app registered with FEIP1, FEIP2 or FEIP15, or a work.|
+|Work|A text, image, sound or video published with FEIP21, FEIP24, FEIP23 or FEIP25: one file of the release, such as a course video or a guide.|
+|Record id|The `pid`, `codeId`, `aid`, `textId`, `imageId`, `soundId` or `videoId`: the txid of the entity's `publish`.|
+|Owner|The FID that published the record (a work's `publisher`). Only the owner can update it: the parsers ignore an `update` whose signer is not the owner. A master (FEIP6) may stop, recover or close a protocol, code or app, and delete or recover a work, but not update it.|
 
 ### 1. Identity across versions
 
@@ -72,12 +73,13 @@ The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 |Protocol|owner + `type` + `sn` (a document that states its PID is matched by that PID instead)|
 |Code|owner + `name`|
 |App|owner + `stdName`|
+|Work|owner + kind + record id, when the manifest names one; otherwise owner + kind + `title` (section 5)|
 
    - Records of other owners are never matched. Anyone can publish a FEIP1 record with the same `type` and `sn`: that is a separate registration (a fork, or a competing specification), not a version of this one, and an update carved against it would be ignored. Which owner's record is the reference one is for each reader to decide.
    - A document whose PID is a record of another owner MUST NOT be registered: the release's signer cannot update it.
    - If several records of the owner share a key, the tool MUST NOT choose one silently.
 
-5. Stopped and closed records are not updated: the parsers ignore an `update` to an inactive record. A stopped record MUST be recovered first. A closed record stays closed.
+5. Stopped and closed records are not updated: the parsers ignore an `update` to an inactive record. A stopped record MUST be recovered first. A closed record stays closed. Likewise a deleted work MUST be recovered before it is updated.
 
 ### 2. Protocol documents
 
@@ -134,13 +136,30 @@ Because the archive depends only on the files, a module whose files did not chan
 2. The app's `ver` is the release tag.
 3. Its `downloads` holds the asset: `os` (free text such as `java`, `macos`, `android`, `web`), `link` (the asset's download URL) and `did` = sha256x2 of the asset's bytes. When the host publishes the asset's SHA-256, the DID is the SHA-256 of that digest's 32 bytes; the file need not be downloaded.
 
-### 5. Links
+### 5. Works
+
+A release MAY publish works: the videos of a course, the images of a guide, a document that is not a protocol.
+
+1. **File.** A work is one file: a release asset, or a file of the repository at the release tag. Its kind (text, image, sound or video) is stated by the manifest (section 8).
+2. **DID.** The `did` is the sha256x2 of the file's bytes. When the host publishes an asset's SHA-256, the DID is the SHA-256 of that digest's 32 bytes, as for apps (4.3).
+3. **Fields.** `title`, `lang`, `authors`, `format`, `summary` and, for a text, `type` come from the manifest. `summary` MAY be shortened, at a word and ending in "…", to fit the OP_RETURN.
+   **Cover.** A text, sound or video MAY name a cover: the record id (`imageId`) of a FEIP24 Image. The manifest names either an image work of the same manifest, which resolves to that work's record id, or an `imageId` directly. Being an id rather than a DID, the cover follows later updates of the Image.
+4. **Locations.** `locas` lists, in this order:
+   - the DISK that holds the file, as `(sid)<SID>`, when the file is stored there;
+   - the file's download URL on the host: the release asset's URL, or for a repository file its raw URL at the tag (`https://raw.githubusercontent.com/<owner>/<repo>/<tag>/<path>`);
+   - the manifest's `mirrors`.
+   At most 3 are listed (FEIP21, Locations); the rest are dropped. Large media need not be stored on DISK: the host and mirrors serve them, and a reader checks what it fetched against `did`.
+5. **Identity.** A work has no name of its own, so it is found by its record id when the manifest names one, and otherwise by its kind and `title` among the owner's records. After carving a `publish`, a tool SHOULD write the new record id into the manifest entry, so that the record is still found after its title changes.
+6. **Updates.** A work whose `did`, manifest fields and URL locations equal the record's is left as it is. Otherwise it is carved as an `update`, resending every field (1.3), `locas` included. A DISK location is compared by its presence only, since which DISK holds the file is the tool's choice.
+7. **Order.** Works are carved after apps, images first, so that a cover names an image carved earlier in the same run. Like other links (6.3), its id is known once the image's carve is broadcast.
+
+### 6. Links
 
 1. A code's `protocols` lists the record ids of the protocols it implements. A family MAY be named by its root protocol (`FEIP0`, `FUDP0`, …) rather than by each member, to fit the OP_RETURN.
 2. An app's `codes` and `protocols` list the record ids of the code it is built from and the protocols it speaks.
 3. Protocols are carved before code, and code before apps, so every link names a record that exists. A record id is known as soon as its carve is broadcast; it need not be confirmed first.
 
-### 6. Home keys
+### 7. Home keys
 
 `home` is a `Map<String,String>` for all three entities. A releasing tool sets these keys and MUST keep any others the record already has:
 
@@ -151,13 +170,14 @@ Because the archive depends only on the files, a module whose files did not chan
 |Code|`zip`|Download URL of the archive (3.4)|
 |App|`src`|URL of the release page|
 
-### 7. The release manifest
+### 8. The release manifest
 
 A repository states what it releases in `freeverse-release.json` at its root. A conforming tool MUST NOT register a repository without one.
 
 ```json
 {
   "github": "owner/repo",
+  "owner": "FJYN3D7x4yiLF692WUAe7Vfo2nQpYDNrC7",
   "protocolDirs": ["Protocols"],
   "codes": [
     { "name": "FC-JDK", "path": "FC-JDK", "langs": ["Java"], "desc": "…",
@@ -167,6 +187,11 @@ A repository states what it releases in `freeverse-release.json` at its root. A 
     { "stdName": "FapiServer", "asset": "FapiServer.jar", "os": "java", "types": ["server"],
       "desc": "…", "localNames": { "en": "…" },
       "codes": ["FC-JDK"], "protocols": ["FAPI0"] }
+  ],
+  "works": [
+    { "kind": "video", "title": "U1-01 初识飞人", "asset": "U1-01.mp4",
+      "lang": "zh", "format": "video/mp4", "summary": "…",
+      "mirrors": ["https://example.org/download/repo/{tag}/{name}"] }
   ]
 }
 ```
@@ -174,6 +199,7 @@ A repository states what it releases in `freeverse-release.json` at its root. A 
 |Field|Type|Meaning|
 |---|---|---|
 |`github`|String|`owner/repo` of the repository; release assets and `home` URLs derive from it.|
+|`owner`|String|Optional. The FID that must sign this repository's carves. A tool MUST NOT carve the repository's entries with another FID. Useful when a repository is not released by the usual owner, such as a course published by its teacher.|
 |`protocolDirs`|List\<String\>|Directories searched, recursively, for protocol documents (section 2).|
 |`codes[].name`|String|The code's `name`, its key. Unique in the manifest.|
 |`codes[].path`|String|Module directory relative to the root, or `.` for the whole repository. MUST stay inside the repository.|
@@ -184,6 +210,13 @@ A repository states what it releases in `freeverse-release.json` at its root. A 
 |`apps[].os`, `.types`, `.desc`, `.localNames`|String, List\<String\>, String, Map|Carved as the app's download `os`, `types`, `desc` and `localNames`.|
 |`apps[].codes`|List\<String\>|Code references (below).|
 |`apps[].protocols`|List\<String\>|Protocol references (below).|
+|`works[].kind`|String|`text`, `image`, `sound` or `video`.|
+|`works[].asset`, `.path`|String|Exactly one: the release asset (`*` as for apps, matching exactly one asset), or the file's path relative to the root, read at the tag. Unique in the manifest.|
+|`works[].id`|String|Optional. The 64-hex record id; written by the tool after the first publish (5.5).|
+|`works[].title`, `.lang`, `.authors`, `.format`, `.summary`, `.type`|String, String, List\<String\>, String, String, String|Carved as the work's fields; `type` only for a text.|
+|`works[].mirrors`|List\<String\>|Further `https://` URLs that serve the file. `{tag}` and `{name}` are replaced by the release tag and the file name.|
+|`works[].disk`|Boolean|Store the file permanently on DISK and list that DISK first (5.4). Default false.|
+|`works[].cover`|String|Optional, not for an image. The `asset` or `path` of an image work in this manifest, or a 64-hex `imageId` (5.3).|
 
 **References.** A protocol reference is `<TYPE><SN>` (`FEIP1`), resolving to the owner's record of that type and sn, or a 64-hex record id. A code reference is a code `name`, optionally prefixed by a repository (`repo/name`), resolving to the owner's code of that name, or a 64-hex record id. Names resolve only among the owner's records; to link a record of another owner, write its record id.
 
@@ -207,7 +240,18 @@ The chain holds code `FreerForMac`, `ver` `v0.4.1`, `did` `38ad5bf570246fe52ddde
 
 A reader clones the repository, builds the archive of path `.` at tag `v0.4.1` named `FreerForMac` (section 3), and computes sha256x2: `38ad5bf5…ebce6`. It matches, so the registered code is exactly the tagged source. The reader can also fetch `FreerForMac-v0.4.1.zip` from DISK by the DID, or from the release, and check its hash without cloning.
 
-### Example 3: An unchanged module
+### Example 3: Publishing a course video
+
+A course repository's manifest has `"owner"` set to its teacher's FID and lists `U1-01.mp4`, an asset of release `u1-u2-v1`, as a video with mirror `https://example.org/download/FreerSchool/{tag}/{name}`. GitHub publishes the asset's SHA-256 `cf57eb41…`, so the DID is SHA-256 of those 32 bytes, and the file is not downloaded.
+
+1. Signer: the teacher's FID, as the manifest requires.
+2. Match: the entry names no id, and the teacher has no video titled "U1-01 初识飞人", so it is a `publish`.
+3. Carve FEIP25 `publish` with the title, `lang`, `format`, `summary`, the `did`, and `locas` = [the asset's GitHub URL, `https://example.org/download/FreerSchool/u1-u2-v1/U1-01.mp4`].
+4. Write the txid into the entry as `"id"`. When the episode is re-exported in a later release, its new DID makes the next run carve an `update` of that id.
+
+A viewer who fetched the file from either location computes sha256x2 and compares it with `did` before playing it.
+
+### Example 4: An unchanged module
 
 FeipClient's files are the same at tags `v0.3` and `v0.3.1`. Both archives are byte-identical (`did` `3b122fdc…`), so releasing `v0.3.1` leaves the FeipClient record as it is.
 
@@ -216,6 +260,7 @@ FeipClient's files are the same at tags `v0.3` and `v0.3.1`. Both archives are b
 |Version|Date|Changes|
 |---|---|---|
 |1|2026-10-09|Initial version. DID rules for protocols, code and apps; the byte-exact code archive; identity across versions; the PID row; links and home keys; the release manifest.|
+|1|2026-11-01|Works (section 5): texts, images, sounds and videos published from a release, their DIDs, locations, covers and identity; manifest `owner` and `works`. Links, home keys and the manifest renumbered 6–8. Draft, so revised in place.|
 
 ## Related Protocols
 
@@ -227,11 +272,12 @@ FeipClient's files are the same at tags `v0.3` and `v0.3.1`. Both archives are b
 |FEIP1 Protocol|Carries protocol registrations; its `did` follows section 2|
 |FEIP2 Code|Carries code registrations; its `did` follows section 3|
 |FEIP15 APP|Carries app registrations; each download's `did` follows section 4|
+|FEIP21 Text, FEIP23 Sound, FEIP24 Image, FEIP25 Video|Carry works; their `did` and `locas` follow section 5|
 |FAPI12 DISK|Stores documents and archives by DID|
 
 ## Reference Implementation
 
-- `FreerForMac/Packages/FCDomain/Sources/FCDomain/ReleaseSync/` — Release Sync in Freer for macOS: manifest (`ReleaseManifest.swift`), protocol documents and the PID row (`ProtocolDoc.swift`), the code archive (`DeterministicZip.swift`, `ReleaseTools.swift`), matching and planning (`ReleasePlan.swift`), carving (`ReleaseRunner.swift`). Its design notes are `RELEASE_SYNC_SPEC.md`.
+- `FreerForMac/Packages/FCDomain/Sources/FCDomain/ReleaseSync/` — Release Sync in Freer for macOS: manifest (`ReleaseManifest.swift`), protocol documents and the PID row (`ProtocolDoc.swift`), the code archive (`DeterministicZip.swift`, `ReleaseTools.swift`), matching and planning (`ReleasePlan.swift`), carving (`ReleaseRunner.swift`), works (`ReleaseWorks.swift`). Its design notes are `RELEASE_SYNC_SPEC.md`.
 - The code archive in Python, standard library only. It reproduces the DIDs of the Swift implementation byte for byte:
 
 ```python

@@ -219,6 +219,7 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 |FEIP21 Text|Parallel semantics; Text adds **`type`**.|
 |FEIP23 Sound|Parallel semantics for audio references.|
 |FEIP6 Master|**delete** / **recover** when signer ≠ publisher.|
+|FEIP21 Text, FEIP23 Sound, FEIP25 Video|Name an Image by its `imageId` as their `cover`; updating the Image changes every cover that names it.|
 
 ## Reference Implementation
 

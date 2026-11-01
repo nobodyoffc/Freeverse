@@ -60,6 +60,7 @@ The **Sound** protocol indexes **audio publication references** on-chain (metada
 |`format`|Op|Optional format hint (e.g. codec or container).|
 |`summary`|Op|Optional short description.|
 |`locas`|Op|Optional list of places the content can be fetched: `(sid)<SID>` for a DISK service ([FVEP2](../FVEP/FVEP2V1_ID.md) typed ID), or a URL. Hints, not guarantees; see [Locations](#locations).|
+|`cover`|Op|Optional **record id of a [FEIP24 Image](FEIP24V1_Image.md)** (its `imageId`, 64 hex digits) shown as this work's cover. Not a DID: the publisher can replace the picture by updating that Image, without updating this record. See [Cover](#cover).|
 |`publisher`|Publish signer|Publisher FID; **update** requires this FID; **delete** / **recover** allow [FEIP6](FEIP6V1_Master.md) **master** bypass when signer ≠ publisher.|
 |`birthTime`, `birthHeight`, `lastTxId`, `lastTime`, `lastHeight`|Tx / block|Lifecycle.|
 |`tCdd`, `tRate`|**rate**|CDD-weighted rating aggregate.|
@@ -74,7 +75,7 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 #### 1. publish
 
 - **Required:** `op`, non-empty **`title`**.
-- **Optional:** `did`, `lang`, `authors`, `format`, `summary`, `locas`. (Op JSON **`ver`** is not applied by reference; entity **`ver`** is **`1`**.)
+- **Optional:** `did`, `lang`, `authors`, `format`, `summary`, `locas`, `cover`. (Op JSON **`ver`** is not applied by reference; entity **`ver`** is **`1`**.)
 - **`soundId`** MUST NOT be set; **`id`** = **`soundId`** = this **txid**.
 - **CDD:** above `CddCheckHeight`, **`cdd` ≥ `CddRequired`** (**makeSound**).
 - Reject if document already exists.
@@ -82,7 +83,7 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 #### 2. update
 
 - **Required:** `soundId`, non-empty **`title`**.
-- **Optional:** `did`, `lang`, `authors`, `format`, `summary`, `locas` — reference overwrites fields from history (nulls may clear stored values).
+- **Optional:** `did`, `lang`, `authors`, `format`, `summary`, `locas`, `cover` — reference overwrites fields from history (nulls may clear stored values).
 - Signer MUST equal **`publisher`** (no master bypass in reference).
 - Sound must exist, **`deleted`** false; bump **`ver`**.
 
@@ -116,6 +117,15 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 4. A client MAY fetch from `(sid)` and `fudp://` entries on its own, since it checks what arrives against `did`. It SHOULD present an `https://` URL for the user to open rather than fetch it unasked, because that request goes to a server nobody vouched for.
 5. **update** replaces `locas` with the op's value, as it does every other field: an **update** that omits `locas` clears it. To add or drop a mirror, resend the full list. Doing so bumps `ver` like any other update.
 6. Entries count against the OP_RETURN size limit; a `(sid)` entry is about 72 bytes. A publisher SHOULD list no more than 3.
+
+### Cover
+
+`cover` names the image shown with the work: a poster, a thumbnail, album art.
+
+1. It is the **record id** (`imageId`, the txid of the Image's **publish**) of a [FEIP24 Image](FEIP24V1_Image.md), written as 64 hex digits. The reference parser stores it lowercase and drops any other value, keeping the rest of the op.
+2. A reader looks the Image up by that id and shows its current `did`, fetched from its `locas` and checked as in [Locations](#locations). Because the id stays fixed while the Image is updated, the publisher changes a cover by updating the Image, and every work naming it follows.
+3. The parser does not check that the id is an Image, that it exists, or who published it. A reader SHOULD show nothing when the id is not an Image record, or when the Image is deleted.
+4. **update** replaces `cover` with the op's value, as it does every other field: an **update** that omits `cover` clears it.
 
 ### OP_RETURN envelope
 
@@ -211,6 +221,7 @@ Lowercase: **`publish`**, **`update`**, **`delete`**, **`recover`**, **`rate`** 
 |1|2026-09-06|Optional **`cause`** added to the **rate** op (free text saying why, stored on history, no effect on `tRate` / `tCdd`). Added in place rather than by a version bump: it is a new optional field, so every carve valid before this change is still valid and reads identically, and a parser that does not know `cause` simply drops it. Mirrors [FEIP16 Reputation](FEIP16V1_Reputation.md), where a rating has carried a `cause` from the start.|
 |1|2026-09-06|**`rate` is now bounded to 0–5** in the reference parser. It previously required only a non-null value, so an out-of-range score was indexed and folded into `tRate` permanently. Bounded in place: the range matches `FeipConstants.MAX_RATE`, which the Construct protocols have enforced all along.|
 |1|2026-10-09|Optional **`locas`** added to **publish** / **update** (where to download the content: `(sid)<SID>` of a DISK service, or a URL), indexed on the entity and history; see [Locations](#locations). **`did`** is now the sha256x2 of the content rather than any pointer, so fetched bytes can be checked against it. Added in place rather than by a version bump: `locas` is a new optional field, so every earlier carve is still valid, and a parser that does not know it drops it. An index built before this change needs a FEIP reparse to pick it up.|
+|1|2026-11-01|Optional **`cover`** added to **publish** / **update**: the record id (`imageId`) of a FEIP24 Image shown as the work's cover, indexed on the entity and history; see [Cover](#cover). An id rather than a DID so the cover follows updates of the Image. Added in place rather than by a version bump: a new optional field, so every earlier carve is still valid, and a parser that does not know it drops it. An index built before this change needs a FEIP reparse.|
 
 ## Related Protocols
 

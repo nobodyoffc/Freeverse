@@ -31,6 +31,16 @@ public class PublishParser {
 
 	private static final Logger log = LoggerFactory.getLogger(PublishParser.class);
 
+	/**
+	 * A cover names an Image record by its id: 64 hex digits, or it is dropped.
+	 * Whether that record is an image is for the reader to check.
+	 */
+	static String coverOrNull(String cover) {
+		if (cover.matches("[0-9a-fA-F]{64}")) return cover.toLowerCase();
+		log.info("Cover {} is not a record id; dropped", cover);
+		return null;
+	}
+
 	public boolean parseStatement(ElasticsearchClient esClient, OpReturn opre, Feip feip) throws ElasticsearchException, IOException {
 
 		Gson gson = new Gson();
@@ -151,6 +161,7 @@ public class PublishParser {
 				if(textRaw.getFormat()!=null)textHist.setFormat(textRaw.getFormat());
 				if(textRaw.getSummary()!=null)textHist.setSummary(textRaw.getSummary());
 				if(textRaw.getLocas()!=null)textHist.setLocas(textRaw.getLocas());
+				if(textRaw.getCover()!=null)textHist.setCover(coverOrNull(textRaw.getCover()));
 				break;
 
 			case UPDATE:
@@ -174,6 +185,7 @@ public class PublishParser {
 				if(textRaw.getFormat()!=null)textHist.setFormat(textRaw.getFormat());
 				if(textRaw.getSummary()!=null)textHist.setSummary(textRaw.getSummary());
 				if(textRaw.getLocas()!=null)textHist.setLocas(textRaw.getLocas());
+				if(textRaw.getCover()!=null)textHist.setCover(coverOrNull(textRaw.getCover()));
 				break;
 			case RECOVER:
 			case DELETE:
@@ -260,6 +272,7 @@ public class PublishParser {
 					text.setFormat(textHist.getFormat());
 					text.setSummary(textHist.getSummary());
 					text.setLocas(textHist.getLocas());
+					text.setCover(textHist.getCover());
 					text.setPublisher(textHist.getSigner());
 
 					text.setBirthTime(textHist.getTime());
@@ -315,6 +328,7 @@ public class PublishParser {
 				text.setFormat(textHist.getFormat());
 				text.setSummary(textHist.getSummary());
 				text.setLocas(textHist.getLocas());
+				text.setCover(textHist.getCover());
 				text.setLastTxId(textHist.getId());
 				text.setLastTime(textHist.getTime());
 				text.setLastHeight(textHist.getHeight());
@@ -936,6 +950,7 @@ public class PublishParser {
 				if(soundRaw.getFormat()!=null)soundHist.setFormat(soundRaw.getFormat());
 				if(soundRaw.getSummary()!=null)soundHist.setSummary(soundRaw.getSummary());
 				if(soundRaw.getLocas()!=null)soundHist.setLocas(soundRaw.getLocas());
+				if(soundRaw.getCover()!=null)soundHist.setCover(coverOrNull(soundRaw.getCover()));
 
 				break;
 
@@ -959,6 +974,7 @@ public class PublishParser {
 				if(soundRaw.getFormat()!=null)soundHist.setFormat(soundRaw.getFormat());
 				if(soundRaw.getSummary()!=null)soundHist.setSummary(soundRaw.getSummary());
 				if(soundRaw.getLocas()!=null)soundHist.setLocas(soundRaw.getLocas());
+				if(soundRaw.getCover()!=null)soundHist.setCover(coverOrNull(soundRaw.getCover()));
 
 				break;
 			case RECOVER:
@@ -1039,6 +1055,7 @@ public class PublishParser {
 					sound.setFormat(soundHist.getFormat());
 					sound.setSummary(soundHist.getSummary());
 					sound.setLocas(soundHist.getLocas());
+					sound.setCover(soundHist.getCover());
 
 					sound.setPublisher(soundHist.getSigner());
 
@@ -1095,6 +1112,7 @@ public class PublishParser {
 				sound.setFormat(soundHist.getFormat());
 				sound.setSummary(soundHist.getSummary());
 				sound.setLocas(soundHist.getLocas());
+				sound.setCover(soundHist.getCover());
 				sound.setLastTxId(soundHist.getId());
 				sound.setLastTime(soundHist.getTime());
 				sound.setLastHeight(soundHist.getHeight());
@@ -1598,6 +1616,7 @@ public class PublishParser {
 				if(videoRaw.getFormat()!=null)videoHist.setFormat(videoRaw.getFormat());
 				if(videoRaw.getSummary()!=null)videoHist.setSummary(videoRaw.getSummary());
 				if(videoRaw.getLocas()!=null)videoHist.setLocas(videoRaw.getLocas());
+				if(videoRaw.getCover()!=null)videoHist.setCover(coverOrNull(videoRaw.getCover()));
 
 				break;
 
@@ -1621,6 +1640,7 @@ public class PublishParser {
 				if(videoRaw.getFormat()!=null)videoHist.setFormat(videoRaw.getFormat());
 				if(videoRaw.getSummary()!=null)videoHist.setSummary(videoRaw.getSummary());
 				if(videoRaw.getLocas()!=null)videoHist.setLocas(videoRaw.getLocas());
+				if(videoRaw.getCover()!=null)videoHist.setCover(coverOrNull(videoRaw.getCover()));
 
 				break;
 			case RECOVER:
@@ -1701,6 +1721,7 @@ public class PublishParser {
 					video.setFormat(videoHist.getFormat());
 					video.setSummary(videoHist.getSummary());
 					video.setLocas(videoHist.getLocas());
+					video.setCover(videoHist.getCover());
 
 					video.setPublisher(videoHist.getSigner());
 
@@ -1757,6 +1778,7 @@ public class PublishParser {
 				video.setFormat(videoHist.getFormat());
 				video.setSummary(videoHist.getSummary());
 				video.setLocas(videoHist.getLocas());
+				video.setCover(videoHist.getCover());
 				video.setLastTxId(videoHist.getId());
 				video.setLastTime(videoHist.getTime());
 				video.setLastHeight(videoHist.getHeight());
