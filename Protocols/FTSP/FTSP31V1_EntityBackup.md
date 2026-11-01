@@ -34,7 +34,7 @@
 |Status|Draft|
 |Author|No1_NrC7|
 |Created|2026-10-02|
-|PID||
+|PID|1a3e96c1b36adb27c2f61de61969c9652680c3a4b02898bb50d9a89864b4df29|
 
 Parent rules: [FTSP0V1_FTSP](FTSP0V1_FTSP.md)
 
