@@ -22,6 +22,7 @@ import utils.JsonUtils;
 
 import java.util.*;
 
+import static constants.FieldNames.FID;
 import static constants.FieldNames.SIGNER;
 
 public class IdentityRollbacker {
@@ -53,30 +54,65 @@ public class IdentityRollbacker {
 	private boolean rollbackCid(ElasticsearchClient esClient, long height) throws Exception {
 		boolean error = false;
 		Map<String, ArrayList<String>> resultMap = getEffectedCidAndHistory(esClient,height);
-		ArrayList<String> signerList = resultMap.get("signerList");
+		ArrayList<String> fidList = resultMap.get("fidList");
 		ArrayList<String> histIdList = resultMap.get("histIdList");
 
-		if(signerList==null || signerList.isEmpty())return error;
+		if(fidList==null || fidList.isEmpty())return error;
 
 		log.warn("If Rollbacking is interrupted, reparse all effected ids of index 'cid': ");
-		JsonUtils.printJson(signerList);
+		JsonUtils.printJson(fidList);
 
 		// Query reparse data BEFORE deleting, so it's available even if crash occurs mid-rollback
-		List<FreerHist> reparseList = EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY, SIGNER, null, signerList, height, FreerHist.class);
+		List<FreerHist> reparseList = getFreerHistsForReparse(esClient, fidList, height);
 
-		error |= deleteEffectedCids(esClient, signerList);
+		error |= clearFreers(esClient, fidList);
 		error |= deleteRolledHists(esClient, IndicesNames.FREER_HISTORY, histIdList);
 
 		error |= reparse(esClient, reparseList);
+		// Clearing the FEIP fields zeroed reputation and hot on every affected FID, not only on
+		// those rated above the rollback height that rollbackRepu revises.
+		error |= reviseCidRepuAndHot(esClient, fidList);
 
 		return error;
+	}
+
+	/**
+	 * Rebuild the FEIP part of these Freer documents, and their Nobody records, from the
+	 * histories at or below maxHeight (null for all).
+	 *
+	 * @return true on error
+	 */
+	public boolean rebuildFreers(ElasticsearchClient esClient, ArrayList<String> fidList, Long maxHeight) throws Exception {
+		if(fidList==null || fidList.isEmpty())return false;
+		boolean error = false;
+		List<FreerHist> reparseList = getFreerHistsForReparse(esClient, fidList, maxHeight);
+		error |= clearFreers(esClient, fidList);
+		error |= reparse(esClient, reparseList);
+		error |= reviseCidRepuAndHot(esClient, fidList);
+		return error;
+	}
+
+	/**
+	 * The histories that built these FIDs' Freer documents, in parse order. An op is matched by
+	 * the FID it changed, which for Nobody is the FID of the announced key ({@code fid}) and may
+	 * not be the signer. A history the FIDs signed that changed another FID is left out: that FID
+	 * is not being rebuilt.
+	 */
+	private List<FreerHist> getFreerHistsForReparse(ElasticsearchClient esClient, ArrayList<String> fidList, Long maxHeight) throws Exception {
+		List<FreerHist> hists = EsUtils.getHistsForReparse(esClient, IndicesNames.FREER_HISTORY, SIGNER, FID, fidList, maxHeight, FreerHist.class);
+		Set<String> fidSet = new HashSet<>(fidList);
+		List<FreerHist> result = new ArrayList<>();
+		for(FreerHist hist : hists) {
+			if(fidSet.contains(hist.targetFid()))result.add(hist);
+		}
+		return result;
 	}
 
 	private Map<String, ArrayList<String>> getEffectedCidAndHistory(ElasticsearchClient esClient, long height) throws Exception {
 	
 		List<Hit<FreerHist>> effectedHits = EsUtils.scanHitsAboveHeight(esClient, IndicesNames.FREER_HISTORY, "height", height, FreerHist.class);
 		
-		Set<String> signerSet = new HashSet<String>();
+		Set<String> fidSet = new HashSet<String>();
 		ArrayList<String> idList = new ArrayList<String>();
 
 		for(Hit<FreerHist> hit: effectedHits) {
@@ -84,15 +120,15 @@ public class IdentityRollbacker {
 				log.info("Cid hist is null");
 				continue;
 			}
-			signerSet.add(hit.source().getSigner());
+			fidSet.add(hit.source().targetFid());
 			idList.add(hit.id());
 		}
 		
 
-		ArrayList<String> signerList = new ArrayList<String>(signerSet);
+		ArrayList<String> fidList = new ArrayList<String>(fidSet);
 		
 		Map<String,ArrayList<String>> resultMap = new HashMap<String,ArrayList<String>>();
-		resultMap.put("signerList", signerList);
+		resultMap.put("fidList", fidList);
 		resultMap.put("histIdList", idList);
 		
 		return resultMap;
@@ -101,29 +137,43 @@ public class IdentityRollbacker {
 	/**
 	 * Clear FEIP-managed fields from affected Freer documents instead of deleting them,
 	 * so that blockchain fields (balance, cash, income, cd, cdd, weight, etc.) written
-	 * by BlockWriter are preserved.
+	 * by BlockWriter are preserved. Their Nobody records go too: the replay rebuilds the ones
+	 * that survive, and a Nobody left in place would make that replay reject its own op.
 	 */
-	private boolean deleteEffectedCids(ElasticsearchClient esClient, ArrayList<String> signerList) throws Exception {
-		if (signerList == null || signerList.isEmpty()) return false;
+	private boolean clearFreers(ElasticsearchClient esClient, ArrayList<String> fidList) throws Exception {
+		if (fidList == null || fidList.isEmpty()) return false;
+		boolean error = false;
 
-		Map<String, Object> clearFields = new HashMap<>();
-		for (String field : FeipConstants.FREER_FEIP_FIELDS) {
-			clearFields.put(field, null);
-		}
-
+		// Removed by script: a partial doc of nulls does nothing here, because the client's JSON
+		// mapper drops null values and sends an empty doc.
+		Map<String, JsonData> params = Map.of("fields", JsonData.of(FeipConstants.FREER_FEIP_FIELDS));
 		BulkRequest.Builder br = new BulkRequest.Builder();
-		for (String signer : signerList) {
+		for (String fid : fidList) {
 			br.operations(op -> op.update(u -> u
 					.index(IndicesNames.FREER)
-					.id(signer)
-					.action(a -> a.doc(clearFields))));
+					.id(fid)
+					.action(a -> a.script(sc -> sc.inline(in -> in
+							.lang("painless")
+							.source("for (f in params.fields) { ctx._source.remove(f); }")
+							.params(params))))));
 		}
 		BulkResponse response = esClient.bulk(br.build());
 		if (response.errors()) {
 			log.error("Rollback: clearing FEIP fields on freer reported errors");
-			return true;
+			error = true;
 		}
-		return false;
+
+		BulkResponse nobodyResponse = EsUtils.bulkDeleteList(esClient, IndicesNames.NOBODY, fidList);
+		if (nobodyResponse != null && nobodyResponse.errors()) {
+			// A delete of an id that has no Nobody record reports not_found, which is not an error.
+			for (var item : nobodyResponse.items()) {
+				if (item.error() != null) {
+					log.error("Rollback: deleting nobody {} failed: {}", item.id(), item.error().reason());
+					error = true;
+				}
+			}
+		}
+		return error;
 	}
 
 	private boolean deleteRolledHists(ElasticsearchClient esClient, String index, ArrayList<String> histIdList) throws Exception {

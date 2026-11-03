@@ -13,6 +13,10 @@ public class FreerHist extends FcObject {
 	private String sn;
 	private String ver;
 	private String signer;
+	// Nobody only: the FID whose prikey was announced. It is the signer when an FID announces its
+	// own key and another FID when anyone announces a leaked key (FEIP4). Null for other ops,
+	// whose target is the signer.
+	private String fid;
 	private String op;
 	private String name;
 	private String prikey;
@@ -76,6 +80,19 @@ public class FreerHist extends FcObject {
 
 	public void setSigner(String signer) {
 		this.signer = signer;
+	}
+
+	public String getFid() {
+		return fid;
+	}
+
+	public void setFid(String fid) {
+		this.fid = fid;
+	}
+
+	/** The FID whose Freer document this op changes. */
+	public String targetFid() {
+		return fid != null ? fid : signer;
 	}
 
 	public String getOp() {

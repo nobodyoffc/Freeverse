@@ -62,6 +62,27 @@ public class IndicesFEIP {
 		return lacks;
 	}
 
+	/**
+	 * Map the fields added to existing indices since they were created. Third-party Nobody
+	 * announcements store the announced FID as freer_history.fid, which rollbacks look up with a
+	 * terms query; left to dynamic mapping it would become analyzed text and the lookup would
+	 * miss. Must run before parsing writes the first such history.
+	 */
+	public static void addNewMappings(ElasticsearchClient esClient) {
+		putKeyword(esClient, IndicesNames.FREER_HISTORY, "fid");
+		putKeyword(esClient, IndicesNames.NOBODY, "announcer");
+	}
+
+	private static void putKeyword(ElasticsearchClient esClient, String index, String field) {
+		try {
+			if (EsUtils.noSuchIndex(esClient, index)) return;
+			esClient.indices().putMapping(p -> p.index(index).properties(field, pr -> pr.keyword(k -> k)));
+		} catch (Exception e) {
+			log.error("Failed to map {}.{} as keyword. If it was already mapped as text, rebuild {} with a new parse.",
+					index, field, index, e);
+		}
+	}
+
 	public static void createAllIndices(ElasticsearchClient esClient) throws ElasticsearchException {
 
 		if (esClient == null) {

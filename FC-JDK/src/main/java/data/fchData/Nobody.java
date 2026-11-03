@@ -12,6 +12,9 @@ public class Nobody extends FcObject {
     private Long leakHeight;
     private String leakTxId;
     private Integer leakTxIndex;
+    // The FID that signed the announcement. It differs from id when someone else published the
+    // leaked key (FEIP4).
+    private String announcer;
 
 
     public static LinkedHashMap<String,Integer> getFieldWidthMap(){
@@ -78,6 +81,14 @@ public class Nobody extends FcObject {
 
     public void setLeakTxId(String leakTxId) {
         this.leakTxId = leakTxId;
+    }
+
+    public String getAnnouncer() {
+        return announcer;
+    }
+
+    public void setAnnouncer(String announcer) {
+        this.announcer = announcer;
     }
 
     public Integer getLeakTxIndex() {

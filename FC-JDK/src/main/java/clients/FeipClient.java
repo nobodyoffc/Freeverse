@@ -239,11 +239,51 @@ public class FeipClient {
     }
 
     /**
-     * The method is similar to protocol.
+     * Announce a private key on chain, marking the FID it controls as Nobody (FEIP4). The key need
+     * not be the sender's: anyone may announce a leaked key, which is how a leaked FID gets marked
+     * when sweepers leave it no coins to pay the CDD itself.
      */
     public static String nobody(@Nullable byte[] prikey, @Nullable String offLineFid, @Nullable List<Cash> sendToList,
                                 @Nullable NobodyOpData data, @Nullable ApipClient apipClient, @Nullable NaSaRpcClient nasaClient, @Nullable BufferedReader br) {
-        return sendFeip(prikey, offLineFid, sendToList, null, data, NobodyOpData.class, FeipProtocol.NOBODY, apipClient, nasaClient, br, null, null);
+        if(br==null)
+            return sendFeip(prikey, offLineFid, sendToList, null, data, NobodyOpData.class, FeipProtocol.NOBODY, apipClient, nasaClient, null, null, null);
+
+        String leakedKey = data != null ? data.getPrikey() : null;
+        String target;
+        while (true) {
+            if (leakedKey == null || leakedKey.isBlank())
+                leakedKey = ui.Inputer.inputString(br, "Input the private key to announce (hex or WIF). Enter to quit:");
+            if (leakedKey == null || leakedKey.isBlank()) return null;
+            leakedKey = leakedKey.trim(); // parsers derive from the key exactly as sent
+            target = fidOfPrikey(leakedKey);
+            if (target != null) break;
+            System.out.println("Not a valid private key.");
+            leakedKey = null;
+        }
+
+        String sender = offLineFid != null ? offLineFid : (prikey != null ? KeyTools.prikeyToFid(prikey) : null);
+        System.out.println("This publishes the private key of " + target + " and marks it as Nobody for good.");
+        if (target.equals(sender)) {
+            System.out.println("It is your own FID: anyone will be able to spend what it holds and sign as it.");
+        } else {
+            System.out.println("It is announced by " + sender + ", which pays the fee and the CDD.");
+        }
+        if (!askIfYes(br, "Continue?")) return null;
+
+        Feip feip = Feip.fromProtocolName(FeipProtocol.NOBODY);
+        feip.setData(NobodyOpData.makeNobody(leakedKey));
+        return sendFeip(feip, null, prikey, offLineFid, sendToList, apipClient, nasaClient, br);
+    }
+
+    /** @return the FID a hex or WIF private key controls, or null if it is not one */
+    @Nullable
+    public static String fidOfPrikey(String prikey) {
+        try {
+            String pubkey = KeyTools.prikeyToPubkey(prikey.trim());
+            return pubkey == null ? null : KeyTools.pubkeyToFchAddr(pubkey);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /**
