@@ -40,15 +40,41 @@ public class IdentityParser {
 		return CREATED.equals(jsonValue) || UPDATED.equals(jsonValue) || NOOP.equals(jsonValue);
 	}
 
+	/**
+	 * Set these fields on the Freer document, keeping the blockchain fields FchParser writes. A
+	 * null value removes the field, as it would in a whole-document write. A plain partial doc
+	 * cannot do that: the client's JSON mapper drops null values, so the old value would stay.
+	 */
 	@SuppressWarnings("unchecked")
 	private boolean partialUpdateFreer(ElasticsearchClient esClient, String id, Map<String, Object> fields) throws IOException {
 		if (id != null) fields.put("id", id);
-		UpdateResponse<Map> result = esClient.update(u -> u
-				.index(FREER)
-				.id(id)
-				.doc(fields)
-				.docAsUpsert(true),
-				Map.class);
+		Map<String, Object> set = new HashMap<>();
+		List<String> remove = new ArrayList<>();
+		for (Map.Entry<String, Object> e : fields.entrySet()) {
+			if (e.getValue() == null) remove.add(e.getKey());
+			else set.put(e.getKey(), e.getValue());
+		}
+		UpdateResponse<Map> result;
+		if (remove.isEmpty()) {
+			result = esClient.update(u -> u
+					.index(FREER)
+					.id(id)
+					.doc(set)
+					.docAsUpsert(true),
+					Map.class);
+		} else {
+			Map<String, JsonData> params = Map.of("set", JsonData.of(set), "remove", JsonData.of(remove));
+			result = esClient.update(u -> u
+					.index(FREER)
+					.id(id)
+					.script(sc -> sc.inline(in -> in
+							.lang("painless")
+							.source("for (e in params.set.entrySet()) { ctx._source[e.getKey()] = e.getValue(); } "
+									+ "for (f in params.remove) { ctx._source.remove(f); }")
+							.params(params)))
+					.upsert(set),
+					Map.class);
+		}
 		log.info(FREER + ": " + result.result());
 		return isValidEsResult(result.result().jsonValue());
 	}
@@ -124,13 +150,19 @@ public class IdentityParser {
 			log.info("Prikey is null");
 			return null;
 		}
-		if(! addrFromPrikey(nobodyRaw.getPrikey()).equals(opre.getSigner())){
-			log.info("Prikey is not the signer");
+		// The key proves itself: whoever can publish it has shown that the FID it controls is
+		// compromised. So the target is the FID the key derives to, and any FID may sign the
+		// announcement. A leaked FID usually cannot announce for itself - sweepers empty it
+		// before it can gather the 1 CDD every FEIP op needs.
+		String target = addrFromPrikey(nobodyRaw.getPrikey());
+		if(target==null){
+			log.info("Prikey is invalid");
 			return null;
 		}
 		FreerHist freerHist = new FreerHist();
 
 		freerHist.setSigner(opre.getSigner());
+		freerHist.setFid(target);
 		freerHist.setSn(feip.getSn());
 		freerHist.setVer(feip.getVer());
 		freerHist.setHeight(opre.getHeight());
@@ -142,9 +174,15 @@ public class IdentityParser {
 		return freerHist;
 	}
 
+	/** @return the FID the key controls, or null if it is not a valid private key */
 	private String addrFromPrikey(String priKey) {
-
-		return KeyTools.pubkeyToFchAddr(KeyTools.prikeyToPubkey(priKey));
+		try {
+			String pubkey = KeyTools.prikeyToPubkey(priKey);
+			if(pubkey==null)return null;
+			return KeyTools.pubkeyToFchAddr(pubkey);
+		}catch(Exception e){
+			return null;
+		}
 	}
 
 	public FreerHist makeMaster(OpReturn opre, Feip feip) {
@@ -366,15 +404,18 @@ public class IdentityParser {
 			log.info("The freer history is null");
 			return false;
 		}
+		// Histories written before third-party announcements were allowed have no fid: there the
+		// key was the signer's own.
+		String target = freerHist.targetFid();
 		GetResponse<Freer> resultGetCid;
 		try {
-			GetResponse<Nobody> result = esClient.get(g -> g.index(NOBODY).id(freerHist.getSigner()), Nobody.class);
+			GetResponse<Nobody> result = esClient.get(g -> g.index(NOBODY).id(target), Nobody.class);
 			if(result.found()){
 				log.info("Nobody is found");
 				return false;
 			}
 
-			resultGetCid = esClient.get(g->g.index(FREER).id(freerHist.getSigner()), Freer.class);
+			resultGetCid = esClient.get(g->g.index(FREER).id(target), Freer.class);
 			if(resultGetCid==null){
 				log.info("Cid is null");
 				return false;
@@ -397,19 +438,20 @@ public class IdentityParser {
 		Map<String, Object> doc = new HashMap<>();
 		doc.put("prikey", freerHist.getPrikey());
 		doc.put("lastHeight", freerHist.getHeight());
-		if(!partialUpdateFreer(esClient, freerHist.getSigner(), doc)){
+		if(!partialUpdateFreer(esClient, target, doc)){
 			log.info("Failed to update cid");
 			return false;
 		}
 
 		Nobody nobody = new Nobody();
-		nobody.setId(freerHist.getSigner());
+		nobody.setId(target);
+		nobody.setAnnouncer(freerHist.getSigner());
 		nobody.setLeakTime(freerHist.getTime());
 		nobody.setLeakHeight(freerHist.getHeight());
 		nobody.setPrikey(freerHist.getPrikey());
 		nobody.setLeakTxId(freerHist.getId());
 		nobody.setLeakTxIndex(freerHist.getIndex());
-		IndexResponse result1 = esClient.index(i->i.index(NOBODY).id(freerHist.getSigner()).document(nobody));
+		IndexResponse result1 = esClient.index(i->i.index(NOBODY).id(target).document(nobody));
 		log.info(IndicesNames.NOBODY + ": " + result1.result());
 		if(!isValidEsResult(result1.result().jsonValue())){
 			log.info("Failed to index nobody");
@@ -417,7 +459,7 @@ public class IdentityParser {
 		}
 		// Create News for Nobody operation
 		News.createNews(esClient, freerHist.getId(), freerHist.getSigner(), OpNames.ANNOUNCE, Feip.FeipProtocol.NOBODY.getName(),
-				freerHist.getSigner(), cid.getCid(), freerHist.getPrikey(), freerHist.getHeight(), freerHist.getTime());
+				target, cid.getCid(), freerHist.getPrikey(), freerHist.getHeight(), freerHist.getTime());
 
 		return true;
 	}

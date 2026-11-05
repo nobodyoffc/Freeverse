@@ -38,13 +38,15 @@ General consensus of FEIP: [FEIP0V1_FEIP](FEIP0V1_FEIP.md)
 
 ## Abstract
 
-The Nobody protocol lets an FID **irreversibly abandon** an address by publishing the private key that controls it on-chain. Parsers record the leak, attach the key to the **Freer** entity for that FID, and index a separate **Nobody** record for audit and discovery.
+The Nobody protocol marks an FID as **irreversibly abandoned** by publishing the private key that controls it on-chain. The owner may announce its own key, and **anyone may announce a key that has leaked**. Parsers record the leak, attach the key to the **Freer** entity for that FID, and index a separate **Nobody** record for audit and discovery.
 
 ## Motivation
 
 Users may want to prove they no longer control an address, transfer archival responsibility, or exit an identity in a way third parties can verify. Publishing the private key is extreme: **anyone can spend funds** still held at that FID afterward. This protocol therefore encodes a deliberate, one-way act of abandonment, not a casual metadata update.
 
-Implementers and wallet software MUST warn users before constructing such a transaction.
+A key that has really leaked usually cannot be announced by its own FID. Sweepers spend whatever the FID holds as soon as it arrives, so it never gathers the 1 CDD that every FEIP operation needs (see FEIP0). A published private key proves itself, though: whoever can publish it has shown that the FID it controls is compromised. So the announcement may be signed by any FID, which pays the fee and the CDD from its own coins.
+
+Implementers and wallet software MUST warn users before constructing such a transaction, and MUST show which FID the key controls.
 
 ## Specification
 
@@ -58,7 +60,7 @@ There is no `op` field. A valid Nobody transaction carries only the private key 
 
 |Field|Required|Type|Description|
 |---|---|---|---|
-|prikey|Y|String|Private key whose derived Freecash address (FID) MUST equal the transaction signer (first-input FID). Encoding is whatever the reference implementation accepts (e.g. WIF or hex) as long as derivation matches.|
+|prikey|Y|String|The private key to announce, as 64 hex characters or a compressed WIF. The FID it controls (the **target**) is marked as Nobody. It may be the signer's own key or any other FID's.|
 
 **OP_RETURN:**
 
@@ -80,15 +82,23 @@ There is no `op` field. A valid Nobody transaction carries only the private key 
 
 2. `data.prikey` MUST NOT be null. If null, the operation is ignored.
 
-3. Let `derivedFid` be the Freecash address obtained from `prikey` (derive public key, then FID). `derivedFid` MUST equal the **signer** (FID of the first transaction input). If not equal, the operation is ignored.
+3. Let `target` be the Freecash address obtained from `prikey` (derive public key, then FID). If `prikey` is not a valid private key, the operation is ignored. The **signer** (FID of the first transaction input) may be `target` or any other FID; it is recorded as the `announcer`.
 
-4. If a **Nobody** record already exists for `signer` (same id as signer FID), the operation is rejected; no state change.
+4. If a **Nobody** record already exists for `target`, the operation is rejected; no state change. The first valid announcement of a key wins.
 
-5. A **Freer** document MUST already exist for `signer`. If not found, the operation is rejected; no state change.
+5. A **Freer** document MUST already exist for `target`. If not found, the operation is rejected; no state change.
 
 6. On success:
-   - Update **Freer** for `signer`: set `prikey` to `data.prikey`, set `lastHeight` to the current block height.
-   - Index a **Nobody** entity with `id` = signer FID, `prikey`, `leakTime` (block timestamp), `leakHeight`, `leakTxId` (this txid), `leakTxIndex`.
+   - Update **Freer** for `target`: set `prikey` to `data.prikey`, set `lastHeight` to the current block height.
+   - Index a **Nobody** entity with `id` = `target`, `announcer` = signer, `prikey`, `leakTime` (block timestamp), `leakHeight`, `leakTxId` (this txid), `leakTxIndex`.
+
+7. The general CDD rule of FEIP0 applies to the transaction, and so to the announcer's coins.
+
+8. An announcement signed by an FID that is already a Nobody is ignored (FEIP0 rule 10). Anyone else may still announce the key.
+
+### Effect on Other Protocols
+
+After a successful announcement, every FEIP operation signed by the target is ignored by all parsers ([FEIP0](FEIP0V1_FEIP.md), General Rule 10). What the target did before the announcement stands.
 
 ### Output
 
@@ -101,11 +111,12 @@ The Nobody protocol updates the **Freer** entity and creates a **Nobody** entity
 |prikey|String|Leaked private key from the successful operation.|
 |lastHeight|Long|Block height of the Nobody transaction.|
 
-**Nobody entity** (keyed by FID = signer):
+**Nobody entity** (keyed by the target FID):
 
 |Field|Type|Description|
 |---|---|---|
-|id|String|Signer FID.|
+|id|String|Target FID: the FID the leaked key controls.|
+|announcer|String|Signer of the announcement. Equals `id` when the FID announced its own key.|
 |prikey|String|Leaked private key.|
 |leakTime|Long|Block timestamp of the leak transaction.|
 |leakHeight|Long|Block height of the leak transaction.|
@@ -120,7 +131,8 @@ The Nobody protocol updates the **Freer** entity and creates a **Nobody** entity
 |height|Long|Block height|
 |index|Integer|Transaction index in block|
 |time|Long|Block timestamp|
-|signer|String|The FID that performed the operation|
+|signer|String|The FID that performed the operation (the announcer)|
+|fid|String|The target FID. Histories written before third-party announcements were accepted lack it; their target is `signer`.|
 |sn|String|"4"|
 |ver|String|"1"|
 |prikey|String|The published private key|
@@ -129,7 +141,7 @@ The Nobody protocol updates the **Freer** entity and creates a **Nobody** entity
 
 ### Example 1: Successful leak
 
-**Signer:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV` (must match key derived from `prikey`)
+**Signer:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV` (the FID the key controls, announcing its own key)
 
 **OP_RETURN:**
 
@@ -147,21 +159,29 @@ The Nobody protocol updates the **Freer** entity and creates a **Nobody** entity
 
 **Precondition:** Freer document exists for the signer; no Nobody document yet for that id.
 
-**Result:** Freer gains `prikey` and updated `lastHeight`; Nobody index holds leak metadata; FreerHist row indexed.
+**Result:** Freer gains `prikey` and updated `lastHeight`; Nobody index holds leak metadata with `announcer` equal to the signer; FreerHist row indexed.
 
-### Example 2: Wrong key
+### Example 2: Announcing someone else's leaked key
 
-If `prikey` derives to a different FID than the signer, the operation is **ignored**.
+**Signer:** any FID with at least 1 CDD, say `FEk41Kqjar45fLDriztUDTUkdki7mmcjWK`.
 
-### Example 3: Duplicate Nobody
+**Data:** the leaked key of `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV`.
 
-If a Nobody record already exists for this signer, a second transaction is **rejected** (no Freer update).
+**Result:** `FPL44YJRwPdd2ipziFvqq6y2tw4VnVvkUV` becomes Nobody, with `announcer` = `FEk41Kqjar45fLDriztUDTUkdki7mmcjWK`. The signer's own Freer is unchanged.
+
+### Example 3: Invalid key
+
+If `prikey` is not a valid private key, the operation is **ignored**.
+
+### Example 4: Duplicate Nobody
+
+If a Nobody record already exists for the target, a later announcement of the same key, by anyone, is **rejected** (no Freer update).
 
 ## Versioning
 
 |Version|Changes|
 |---|---|
-|1|Current version|
+|1|Current version. Since 2026-11-03 the announcement may be signed by any FID, not only the FID the key controls, and an announced FID can sign no further FEIP operation (FEIP0 rule 10). This only accepts operations that were ignored before, so no earlier valid operation changes meaning.|
 
 ## Related Protocols
 
@@ -184,4 +204,4 @@ If a Nobody record already exists for this signer, a second transaction is **rej
 |History|`FC-JDK/src/main/java/data/feipData/FreerHist.java`|
 |Parser|`FEIP/FeipParser/src/main/java/identity/IdentityParser.java` → `makeNobody()`, `parseNobody()`|
 |Dispatcher|`FEIP/FeipParser/src/main/java/startFEIP/FileParser.java` → `case NOBODY`|
-|Rollback|`FEIP/FeipParser/src/main/java/identity/IdentityRollbacker.java` → `rollbackCid` (Freer + FreerHist reparse; see implementation for Nobody index consistency on reorg)|
+|Rollback|`FEIP/FeipParser/src/main/java/identity/IdentityRollbacker.java` → `rollbackCid` / `rebuildFreers`: affected FIDs are the targets of the rolled-back histories; their FEIP fields and Nobody records are removed and rebuilt from the surviving histories matched by `signer` or `fid`.|

@@ -23,7 +23,7 @@ public class FeipConstants {
     // (balance, cash, income, cd, cdd, weight, etc.) are preserved.
     public static final List<String> FREER_FEIP_FIELDS = Arrays.asList(
             "cid", "usedCids", "nameTime", "master",
-            "home", "noticeFee", "reputation", "hot"
+            "home", "noticeFee", "reputation", "hot", "prikey"
     );
 
     // --- Protocol rules ---

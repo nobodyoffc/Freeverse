@@ -212,6 +212,14 @@ public class FileParser {
 
 			if(protocolName==null)continue;
 
+			// FEIP0: an FID whose private key has been published (FEIP4) signs nothing any more.
+			// Ops are parsed in chain order, so a Nobody record that exists now was announced
+			// before this op. Outside the try: a failed lookup must stop the parser, not drop the op.
+			if (signerIsNobody(esClient, opre.getSigner())) {
+				log.info("Ignoring {} {}: signer {} is a Nobody.", protocolName, opre.getId(), opre.getSigner());
+				continue;
+			}
+
 			log.info("");
 
 			showFound(protocolName.name(), opre);
@@ -257,6 +265,15 @@ public class FileParser {
 			raf.close();
 		}
 		return error;
+	}
+
+	/**
+	 * @return true if the signer's private key has been announced by FEIP4, so that every FEIP
+	 * op it signs is ignored
+	 */
+	public static boolean signerIsNobody(ElasticsearchClient esClient, String signer) throws IOException {
+		if (signer == null) return false;
+		return esClient.exists(e -> e.index(IndicesNames.NOBODY).id(signer)).value();
 	}
 
 	/** Protocols whose parse step indexes its own documents and keeps no *_HISTORY record. */
@@ -564,17 +581,10 @@ public class FileParser {
 		if(idList==null || idList.isEmpty())return;
 		switch (index) {
 			case IndicesNames.FREER:
-				// Clear only FEIP-managed fields instead of deleting entire document,
-				// to preserve blockchain fields (balance, cash, income, etc.) from BlockWriter
-				clearFeipFieldsFromFreer(esClient, (ArrayList<String>) idList);
-				TimeUnit.SECONDS.sleep(2);
-
-				ArrayList<FreerHist> reparseCidList = getReparseHistList(esClient, IndicesNames.FREER_HISTORY,idList,FieldNames.SIGNER, FreerHist.class);
-
-				for(FreerHist idHist: reparseCidList) {
-					new IdentityParser().parseCidInfo(esClient,idHist);
-				}
-				new IdentityRollbacker().reviseCidRepuAndHot(esClient, (ArrayList<String>) idList);
+				// Clears only FEIP-managed fields, preserving blockchain fields (balance, cash,
+				// income, etc.) from BlockWriter, and matches Nobody ops by the announced FID,
+				// which need not be the signer.
+				new IdentityRollbacker().rebuildFreers(esClient, new ArrayList<>(idList), null);
 				break;
 			case IndicesNames.PROTOCOL:
 				EsUtils.bulkDeleteList(esClient, IndicesNames.PROTOCOL, (ArrayList<String>) idList);
@@ -673,28 +683,6 @@ public class FileParser {
 		// histories, rebuilds a different entity.
 		return new ArrayList<>(EsUtils.getHistsForReparse(esClient, histIndex, idField, null,
 				new ArrayList<>(idList), clazz));
-	}
-
-	/**
-	 * Clear only FEIP-managed fields from Freer documents instead of deleting them,
-	 * so blockchain fields (balance, cash, income, cd, cdd, weight, etc.) are preserved.
-	 */
-	private void clearFeipFieldsFromFreer(ElasticsearchClient esClient, ArrayList<String> idList) throws Exception {
-		if (idList == null || idList.isEmpty()) return;
-
-		Map<String, Object> clearFields = new HashMap<>();
-		for (String field : FeipConstants.FREER_FEIP_FIELDS) {
-			clearFields.put(field, null);
-		}
-
-		BulkRequest.Builder br = new BulkRequest.Builder();
-		for (String id : idList) {
-			br.operations(op -> op.update(u -> u
-					.index(IndicesNames.FREER)
-					.id(id)
-					.action(a -> a.doc(clearFields))));
-		}
-		esClient.bulk(br.build());
 	}
 
 	/**

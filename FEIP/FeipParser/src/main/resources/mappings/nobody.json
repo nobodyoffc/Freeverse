@@ -1,1 +1,1 @@
-{"mappings":{"properties":{"id":{"type":"keyword"},"prikey":{"type":"keyword"},"leakTime":{"type":"long"},"leakTxIndex":{"type":"integer"},"leakTxId":{"type":"keyword"}}}}
+{"mappings":{"properties":{"id":{"type":"keyword"},"prikey":{"type":"keyword"},"leakTime":{"type":"long"},"leakHeight":{"type":"long"},"announcer":{"type":"keyword"},"leakTxIndex":{"type":"integer"},"leakTxId":{"type":"keyword"}}}}

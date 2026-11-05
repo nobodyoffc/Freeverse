@@ -143,6 +143,14 @@ CoinDays Destroyed (CDD) is calculated as the sum of (value × age_in_days) for 
 
 Individual FEIP protocols MAY define additional CDD requirements beyond the general minimum.
 
+### 10. Nobody Signers
+
+Once the private key of an FID has been published by a valid [FEIP4 Nobody](FEIP4V1_Nobody.md) operation, anyone can sign as that FID, so its signature no longer identifies anyone. From then on, every FEIP operation of any protocol whose signer is that FID MUST be ignored, including a further Nobody operation.
+
+"From then on" follows the parsing order of rule 6: an operation is ignored if the Nobody operation for its signer comes before it in that order, including earlier in the same block. Operations the FID signed before its key was published keep their effect.
+
+This rule only concerns the signer. Whether a Nobody may be named in an operation (as a recipient, member, master, ratee, etc.) is up to each protocol.
+
 ## Protocol Document Structure
 
 Each FEIP protocol document SHOULD follow this structure:
