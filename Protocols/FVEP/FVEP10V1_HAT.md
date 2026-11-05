@@ -10,6 +10,8 @@
 
 [Specification](#specification)
 
+[HAT from a Published Work](#hat-from-a-published-work)
+
 [Examples](#examples)
 
 [Versioning](#versioning)
@@ -250,6 +252,70 @@ For non-confidential data, the same pattern applies with the cipher HAT replaced
 
 A HAT MAY also be published in a public catalog (e.g., a search index, a community board, an open dataset directory). In this mode the HAT is the entry seen by every reader; the bytes are fetched by interested parties on demand. Description fields (`name`, `desc`, `types`) are written for general consumption rather than for one specific recipient.
 
+### HAT from a Published Work
+
+A work published under FEIP21 Text, FEIP23 Sound, FEIP24 Image or FEIP25 Video names its content by `did` and says where to fetch it in `locas`. When a reader fetches that content, the HAT they keep for it SHOULD be built from the work's own fields, so that every implementation produces the same HAT for the same work:
+
+|HAT field|Value|
+|---|---|
+|`id`|The work's `did`, lowercased. It MUST be 64 hex characters; otherwise no HAT is built.|
+|`hAlg`|`"sha256x2"`|
+|`born`, `last`|The time the HAT is built.|
+|`name`|The work's `title`, trimmed, with `/`, `\` and `:` replaced by `_`. Without a title: the first 8 characters of the DID. An extension is appended (see below) unless the name already ends with it.|
+|`desc`|The work's `summary`, trimmed; omitted if blank.|
+|`types`|One MIME type, resolved from `format` (see below).|
+|`pids`|The PID of the work's protocol (FEIP21, 23, 24 or 25).|
+|`locas`|The work's `locas`, trimmed, blanks and duplicates removed, order kept. Both use the same notation.|
+|`state`|`ACTIVE`|
+
+`size` is left out because a work does not carry it. It is filled in from the fetched bytes, and so is the local location. Nothing else of the work goes into the HAT: not its id (the DID leads back to it), nor `authors`, `cover`, `ver` or `lang`. A HAT describes bytes, not the publication.
+
+**Resolving `format`.** Matching ignores case, and anything after a `;` is dropped.
+
+1. If it is a MIME type (`text|image|audio|video|application|font|model` `/` subtype), use it.
+2. Otherwise read it as a file extension (a leading `.` is ignored; `jpeg` → `jpg`, `markdown` → `md`) and map it through the table below.
+3. Otherwise use the protocol's default: `text/plain` (Text), `audio/*` (Sound), `image/*` (Image), `video/*` (Video).
+
+The name's extension comes from the same table, read from MIME to extension. For a MIME type not in the table, a bare `format` of 1–5 letters or digits is used as the extension.
+
+|MIME|Ext|MIME|Ext|MIME|Ext|
+|---|---|---|---|---|---|
+|text/plain|txt|image/jpeg|jpg|audio/mpeg|mp3|
+|text/markdown|md|image/png|png|audio/mp4|m4a|
+|text/html|html|image/gif|gif|audio/aac|aac|
+|application/pdf|pdf|image/webp|webp|audio/wav|wav|
+|application/epub+zip|epub|image/svg+xml|svg|audio/ogg|ogg|
+|video/mp4|mp4|video/webm|webm|audio/flac|flac|
+|video/quicktime|mov|video/x-matroska|mkv| | |
+|application/rtf|rtf|application/msword|doc|application/vnd.oasis.opendocument.text|odt|
+|application/vnd.openxmlformats-officedocument.wordprocessingml.document|docx| | | | |
+
+**Merging into a HAT already held.** If the reader already holds a HAT for the DID, the work's HAT is merged into it instead of replacing it:
+
+- `name` is replaced only when it is missing or is still the 8-character DID placeholder.
+- `desc`, `types`, `hAlg`, `state` and `born` are filled only when missing.
+- `pids` and `locas` are unioned, with the existing entries first.
+- `last` only moves forward.
+- `size`, the version and slice groups, and the crypto group are never changed.
+
+**Publishing a HAT as a work.** When a user publishes data they hold as a FEIP21/23/24/25 work, the HAT pre-fills a draft. The user reviews it before anything is carved, and adds `authors`, `lang`, `cover` and Text's `type` themselves.
+
+|Work field|From the HAT|
+|---|---|
+|`did`|`id`, lowercased; it MUST be 64 hex characters.|
+|`title`|`name` without its extension (1–5 letters or digits after the last `.`, which must not be the first character).|
+|`format`|The first `types` entry if it is a concrete MIME type: no `*`, and not `application/octet-stream`. Otherwise the MIME of the name's extension, from the table above.|
+|`summary`|`desc`, trimmed.|
+|`locas`|The `(sid)`, `fudp://` and `https://` entries of `locas`, in order and at most three. `local://` paths and the `fudp://unknown` placeholder are never included.|
+
+The protocol is taken from the format, or failing that from the first type even if it is a wildcard: `text/*` and the document types above (PDF, EPUB, RTF, Word, OpenDocument) are Text; `image/*` is Image; `audio/*` is Sound; `video/*` is Video. The user may still choose another protocol.
+
+Three rules keep a publish from pointing at bytes nobody can read:
+
+1. A **cipher HAT** (`rawDid` set) MUST NOT be published. Its DID names encrypted bytes; publish the raw HAT instead.
+2. A HAT carrying a plaintext **`key`** came through a messaging channel (see [HAT Exchange in Messaging](#hat-exchange-in-messaging)), so its DISK entries hold the encrypted copy. None of them may be carved as `locas`.
+3. The **plaintext** MUST be on a DISK before the carve. A user's own backups are encrypted (cipher HATs), so publishing uploads the raw bytes unencrypted and names that DISK. The user SHOULD be told that the file becomes public.
+
 ## Examples
 
 ### Example 1: Plain document
@@ -367,6 +433,7 @@ The HAT is public; anyone can see it, fetch the bytes from DISK, and verify them
 |Version|Date|Changes|
 |---|---|---|
 |1|2026-05-09|Initial version. Defines HAT as a transmissible metadata record describing data identified by DID, with six field groups, the DISK ↔ HAT decoupling, and the messaging-as-HAT-exchange pattern.|
+|1|2026-11-05|Added [HAT from a Published Work](#hat-from-a-published-work): the HAT a reader builds for content fetched through a FEIP21/23/24/25 work, how it merges into a HAT already held, and the reverse: pre-filling a work from a HAT when publishing, with the cipher, plaintext-key and plaintext-upload rules. Added in place, without a version bump, because it adds no field and changes no existing rule.|
 
 ## Related Protocols
 
@@ -380,11 +447,13 @@ The HAT is public; anyone can see it, fetch the bytes from DISK, and verify them
 |FVEP7 Signature|HAT records MAY be signed when shared between users|
 |FVEP8 Encryption|Cipher HATs reference the encryption scheme used to produce the cipher DID from the raw DID|
 |FEIP15 App|`aids` references registered Apps|
+|FEIP21 Text, FEIP23 Sound, FEIP24 Image, FEIP25 Video|A work's `did`, `title`, `format`, `summary` and `locas` build the HAT for its content; see [HAT from a Published Work](#hat-from-a-published-work)|
 
 DISK (the open data storage component, defined as a FAPI component in the cryptoeconomic stack) is the byte-storage counterpart of HAT: DISK holds bytes addressed by DID; HAT holds attributes addressed by the same DID.
 
 ## Reference Implementation
 
-- `FC-AJDK/src/main/java/com/fc/fc_ajdk/data/fcData/Hat.java` — HAT data class with all six field groups and the `DataState` enum.
+- `FC-JDK/src/main/java/data/fcData/Hat.java` and `FC-AJDK/src/main/java/com/fc/fc_ajdk/data/fcData/Hat.java` — HAT data class with all six field groups, the `DataState` enum, and `fromWork` / `mergeWork` / `toWorkDraft` (FC-JDK adds `fromText`/`fromSound`/`fromImage`/`fromVideo`). Tests: `HatFromWorkTest` in each, sharing one JSON vector.
+- `FreerForMac/Packages/FCDomain/Sources/FCDomain/Hat/Hat+Work.swift` — the same in Swift (`HatFromWorkTests`, same vector); `PublishBody.fetchURL(…, work:)` uses it for every fetched work, and the Files pane's **Publish as** menu (`FilesView.swift`) opens the Text or Media composer from `toWorkDraft()`.
 - `Freer/app/src/main/java/com/fc/freer/manager/HatManager.java` — Singleton manager that maintains the user's local HAT store, provides paginated listing sorted by `last`, search across name/desc/types/aids/pids/DIDs/locas, and the raw ↔ cipher helpers (`createCipherHat`, `addCipherId`, `filterOutCipherHats`).
 - `Freer/app/src/main/java/com/fc/freer/data/DataActivity.java` — User-facing data management screen built on `HatManager`; demonstrates HAT-driven listing, search, sort, encryption, and DISK upload/download flows.
