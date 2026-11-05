@@ -58,6 +58,7 @@ The **Token** protocol defines **deploy**, **issue**, **transfer**, **destroy** 
 |`decimal`|deploy|String integer; max fractional digits for **issue** / **transfer** amounts (default **`0`** if omitted in parser).|
 |`transferable`, `closable`, `openIssue`|deploy|Booleans; defaults **`false`** when omitted in reference.|
 |`maxAmtPerIssue`, `minCddPerIssue`, `maxIssuesPerAddr`|deploy|Optional; applied when **`openIssue`** is true (per-issue total cap, min **CDD** on issue tx, max prior **issue** ops per signer in history index).|
+|`cover`|deploy|Optional **record id of a [FEIP24 Image](FEIP24V1_Image.md)** (its `imageId`, 64 hex digits) shown as the token's logo. Shown only when that Image was published by the **deployer**. See [Cover](#cover).|
 |`closed`|**close**|**true** when deployer closes the token.|
 |`deployer`|deploy signer|FID that deployed the token.|
 |`circulating`|issue / destroy|Aggregated issued amount minus **destroy** burns (reference uses `Double`).|
@@ -83,7 +84,7 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
 - **Required:** `op`, non-empty **`name`**.
 - **CDD:** When block height exceeds **`CddCheckHeight`**, **`cdd`** must be non-null and **≥ `CddRequired`** (1 cd), the same as other FEIP operations (**`makeToken`**).
 - **`tokenId`** is **not** taken from JSON; it is set to **this transaction’s id**.
-- **Optional:** `desc`, `consensusId`, `capacity`, `decimal` (must be integer string), `transferable`, `closable`, `openIssue`, and when `openIssue` is true: `maxAmtPerIssue`, `minCddPerIssue`, `maxIssuesPerAddr`.
+- **Optional:** `desc`, `consensusId`, `capacity`, `decimal` (must be integer string), `transferable`, `closable`, `openIssue`, and when `openIssue` is true: `maxAmtPerIssue`, `minCddPerIssue`, `maxIssuesPerAddr`; `cover` (see [Cover](#cover)).
 - Creates **`TOKEN`**; **`News.createNews`** with op **`create`**.
 
 #### 2. issue
@@ -111,6 +112,15 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
 - For **each** id: token must exist, not already **closed**, and **signer** must be **deployer**; sets **`closed` = true**.
 - **`News.createNews`** with op **`close`** and the full id list.
 
+### Cover
+
+`cover` names the image shown with the token: its logo or icon. It works as in the publish protocols ([FEIP21 Cover](FEIP21V1_Text.md#cover)), with one rule added because a token can never be updated.
+
+1. It is the **record id** (`imageId`, the txid of the Image's **publish**) of a [FEIP24 Image](FEIP24V1_Image.md), written as 64 hex digits, given on **deploy**. The reference parser stores it lowercase and drops any other value, keeping the rest of the op.
+2. A reader looks the Image up by that id and shows its current `did`, fetched from its `locas`. Because the id stays fixed while the Image is updated, the deployer changes the logo by updating the Image. This is the only way to change it: there is no token **update**, and a token deployed without `cover` never gets one.
+3. **A reader MUST show the cover only when the Image's `publisher` equals the token's `deployer`**, and SHOULD show nothing when the id is not an Image record or the Image is deleted. Otherwise whoever published the Image could change the logo of a token they do not own, for good, and a new token could take on the logo of an established one by naming its Image.
+4. The parser does not check that the id is an Image, that it exists, or who published it; rule 3 is the reader's.
+
 ### OP_RETURN envelope
 
 ```json
@@ -125,7 +135,7 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
 
 ### TokenHistory
 
-[TokenHistory](../../FC-JDK/src/main/java/data/feipData/TokenHistory.java) records block context, **`signer`**, **`cdd`** (used for **issue** limits), **`op`**, **`tokenId`** / **`tokenIds`**, deploy fields, **`issueTo`** / **`transferTo`**. Recipients are only those named in **`issueTo`** / **`transferTo`**; transaction outputs are never read, and there is no `recipient` field. In the `token_history` index both lists are mapped as `object` (not `nested`), so a party's history can be found with a term on `issueTo.fid` / `transferTo.fid`.
+[TokenHistory](../../FC-JDK/src/main/java/data/feipData/TokenHistory.java) records block context, **`signer`**, **`cdd`** (used for **issue** limits), **`op`**, **`tokenId`** / **`tokenIds`**, deploy fields (including **`cover`**), **`issueTo`** / **`transferTo`**. Recipients are only those named in **`issueTo`** / **`transferTo`**; transaction outputs are never read, and there is no `recipient` field. In the `token_history` index both lists are mapped as `object` (not `nested`), so a party's history can be found with a term on `issueTo.fid` / `transferTo.fid`.
 
 ## Examples
 
@@ -147,7 +157,8 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
     "openIssue": true,
     "maxAmtPerIssue": "1000",
     "minCddPerIssue": "1000000",
-    "maxIssuesPerAddr": "10"
+    "maxIssuesPerAddr": "10",
+    "cover": "abababababababababababababababababababababababababababababababab"
   }
 }
 ```
@@ -224,12 +235,14 @@ Lowercase strings aligned with [TokenOpData](../../FC-JDK/src/main/java/data/fei
 |Version|Date|Summary|
 |---|---|---|
 |1|2026-03-24|Initial spec; aligned with `Feip.TOKEN` (`20`/`1`).|
+|1|2026-11-05|Optional **`cover`** added to **deploy**: the record id (`imageId`) of a FEIP24 Image shown as the token's logo, indexed on the entity and history; shown only when the Image's publisher is the deployer. See [Cover](#cover). Added in place rather than by a version bump: a new optional field, so every earlier carve is still valid, and a parser that does not know it drops it. An index built before this change needs a FEIP reparse.|
 
 ## Related Protocols
 
 |Protocol|Relationship|
 |---|---|
 |FEIP0|Envelope, CDD constants.|
+|FEIP24|`cover` names an Image record.|
 |FEIP21+|Other domains; tokens may attach to services/apps off-chain by convention.|
 
 ## Reference Implementation

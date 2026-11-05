@@ -101,6 +101,7 @@ public class FinanceParser {
                 if(tokenRaw.getMaxAmtPerIssue()!=null)tokenHist.setMaxAmtPerIssue(tokenRaw.getMaxAmtPerIssue());
                 if(tokenRaw.getMinCddPerIssue()!=null)tokenHist.setMinCddPerIssue(tokenRaw.getMinCddPerIssue());
                 if(tokenRaw.getMaxIssuesPerAddr()!=null)tokenHist.setMaxIssuesPerAddr(tokenRaw.getMaxIssuesPerAddr());
+                if(tokenRaw.getCover()!=null)tokenHist.setCover(publish.PublishParser.coverOrNull(tokenRaw.getCover()));
                 break;
 
             case OpNames.ISSUE:
@@ -321,6 +322,7 @@ public class FinanceParser {
                 if(tokenHist.getDesc()!=null)token.setDesc(tokenHist.getDesc());
                 if(tokenHist.getConsensusId()!=null)token.setConsensusId(tokenHist.getConsensusId());
                 if(tokenHist.getCapacity()!=null)token.setCapacity(tokenHist.getCapacity());
+                if(tokenHist.getCover()!=null)token.setCover(tokenHist.getCover());
                 if(tokenHist.getDecimal()!=null) token.setDecimal(tokenHist.getDecimal());
                 else token.setDecimal("0");
                 if(tokenHist.getTransferable()!=null)token.setTransferable(tokenHist.getTransferable());

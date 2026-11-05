@@ -24,6 +24,8 @@ public class TokenOpData {
     private String maxAmtPerIssue;
     private String minCddPerIssue;
     private String maxIssuesPerAddr;
+    /** Record id of the FEIP24 Image shown as this token's logo. */
+    private String cover;
     private List<TokenHistory.FidAmount> issueTo;
     private List<TokenHistory.FidAmount> transferTo;
 
@@ -60,7 +62,7 @@ public class TokenOpData {
     public static final Map<String, String[]> OP_FIELDS = new HashMap<>();
     static {
         OP_FIELDS.put(Op.DEPLOY.toLowerCase(), new String[]{FieldNames.NAME, FieldNames.DESC, FieldNames.CONSENSUS_ID, FieldNames.CAPACITY,
-                FieldNames.DECIMAL, FieldNames.TRANSFERABLE, FieldNames.CLOSABLE, FieldNames.OPEN_ISSUE, FieldNames.MAX_AMT_PER_ISSUE, FieldNames.MIN_CDD_PER_ISSUE, FieldNames.MAX_ISSUES_PER_ADDR});
+                FieldNames.DECIMAL, FieldNames.TRANSFERABLE, FieldNames.CLOSABLE, FieldNames.OPEN_ISSUE, FieldNames.MAX_AMT_PER_ISSUE, FieldNames.MIN_CDD_PER_ISSUE, FieldNames.MAX_ISSUES_PER_ADDR, FieldNames.COVER});
         OP_FIELDS.put(Op.ISSUE.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.ISSUE_TO});
         OP_FIELDS.put(Op.TRANSFER.toLowerCase(), new String[]{FieldNames.TOKEN_ID, FieldNames.TRANSFER_TO});
         OP_FIELDS.put(Op.DESTROY.toLowerCase(), new String[]{FieldNames.TOKEN_IDS});
@@ -74,6 +76,14 @@ public class TokenOpData {
     public static TokenOpData makeDeploy(String name, String desc, String consensusId,
                                          String capacity, String decimal, Boolean transferable, Boolean closable, Boolean openIssue,
                                          String maxAmtPerIssue, String minCddPerIssue, String maxIssuesPerAddr) {
+        return makeDeploy(name, desc, consensusId, capacity, decimal, transferable, closable, openIssue,
+                maxAmtPerIssue, minCddPerIssue, maxIssuesPerAddr, null);
+    }
+
+    /** As above, with {@code cover}: the record id of a FEIP24 Image published by the deployer, or null. */
+    public static TokenOpData makeDeploy(String name, String desc, String consensusId,
+                                         String capacity, String decimal, Boolean transferable, Boolean closable, Boolean openIssue,
+                                         String maxAmtPerIssue, String minCddPerIssue, String maxIssuesPerAddr, String cover) {
         TokenOpData data = new TokenOpData();
         data.setOp(Op.DEPLOY.toLowerCase());
         data.setName(name);
@@ -87,6 +97,7 @@ public class TokenOpData {
         data.setMaxAmtPerIssue(maxAmtPerIssue);
         data.setMinCddPerIssue(minCddPerIssue);
         data.setMaxIssuesPerAddr(maxIssuesPerAddr);
+        data.setCover(cover);
         return data;
     }
 
@@ -248,5 +259,13 @@ public class TokenOpData {
 
     public void setTransferTo(List<TokenHistory.FidAmount> transferTo) {
         this.transferTo = transferTo;
+    }
+
+    public String getCover() {
+        return cover;
+    }
+
+    public void setCover(String cover) {
+        this.cover = cover;
     }
 }

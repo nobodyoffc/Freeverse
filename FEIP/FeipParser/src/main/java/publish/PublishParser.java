@@ -35,7 +35,7 @@ public class PublishParser {
 	 * A cover names an Image record by its id: 64 hex digits, or it is dropped.
 	 * Whether that record is an image is for the reader to check.
 	 */
-	static String coverOrNull(String cover) {
+	public static String coverOrNull(String cover) {
 		if (cover.matches("[0-9a-fA-F]{64}")) return cover.toLowerCase();
 		log.info("Cover {} is not a record id; dropped", cover);
 		return null;

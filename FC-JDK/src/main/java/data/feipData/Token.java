@@ -14,6 +14,8 @@ public class Token extends FcObject {
 	private String maxAmtPerIssue;
 	private String minCddPerIssue;
 	private String maxIssuesPerAddr;
+	/** Record id of the FEIP24 Image shown as this token's logo; shown only if its publisher is the deployer. */
+	private String cover;
 	private Boolean closed;
 	
 	private String deployer;
@@ -174,5 +176,13 @@ public class Token extends FcObject {
 
 	public void setLastHeight(Long lastHeight) {
 		this.lastHeight = lastHeight;
+	}
+
+	public String getCover() {
+		return cover;
+	}
+
+	public void setCover(String cover) {
+		this.cover = cover;
 	}
 }
