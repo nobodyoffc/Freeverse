@@ -23,7 +23,8 @@
 - [5. Security Considerations](#5-security-considerations)
   - [5.1. Storage Abuse Prevention](#51-storage-abuse-prevention)
   - [5.2. Sender-Only Deletion](#52-sender-only-deletion)
-  - [5.3. Lifetime Limits](#53-lifetime-limits)
+  - [5.3. No Membership Enforcement](#53-no-membership-enforcement)
+  - [5.4. Lifetime Limits](#54-lifetime-limits)
 - [6. Versioning](#6-versioning)
 - [7. References](#7-references)
 
@@ -61,9 +62,11 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 A message MAY be addressed to one or more recipients. Each recipient is identified by one of the following:
 
 - **FID** -- A Freecash Identity, addressing a single individual.
-- **Team ID** -- Addresses all members of the specified team.
-- **Group ID** -- Addresses all members of the specified group.
-- **Room ID** -- Addresses all participants of the specified room.
+- **Team ID** -- The id of a team, under which its members fetch the item.
+- **Group ID** -- The id of a group, likewise.
+- **Room ID** -- The id of a room, likewise.
+
+The server treats every recipient identifier as an opaque string. It does not resolve a team, group or room id into member FIDs, keeps no member list, and does not check membership on `put` or on retrieval (§5.3). An item addressed to an entity id is reachable by any caller that names that id. Who may read the item and who may post under the id are matters for the client protocol, which enforces them by encryption and by checking signatures on receipt (e.g. FIMP0 §DOCK Conventions).
 
 A single `dock.put` request MUST NOT contain more than 100 recipients. When a message is addressed to multiple recipients, the server stores a single copy of the data and indexes the recipients on the document. Each recipient independently retrieves the message and is charged egress fees on retrieval.
 
@@ -213,19 +216,19 @@ Store data for one or more recipients. The sender pays storage and ingress fees 
 
 ### 4.2. dock.get
 
-Retrieve item data as binary by item ID. Only a designated recipient MAY retrieve the item.
+Retrieve item data as binary by item ID. The caller MUST name one of the item's recipients: either its own authenticated peer ID, or the id given in `recipientId`.
 
 - **Category**: Binary operation
 - **Request `params`**:
   - `id` (string, REQUIRED): The item ID returned by `dock.put`.
-  - `recipientId` (string, OPTIONAL): A recipient identifier (e.g., team or group ID) to assert membership against the item, in addition to the caller's authenticated peer ID.
+  - `recipientId` (string, OPTIONAL): A recipient identifier (e.g., a team or room ID), matched against the item's `recipients` as an alternative to the caller's authenticated peer ID. The server checks only that the id is among the item's recipients. It does not check that the caller is a member of the entity the id names (§5.3).
 - **Response header `data`**: `id`, `sender`, `size`, `createTime`, `expireHeight`, `egressFee`.
 - **Response body**: Raw decoded item content (Base64-decoded from the stored representation).
 - **Charging**: Recipient pays `egressFee = ceil(size/1024) * pricePerKBOut`.
 - **Errors**:
   - `BAD_REQUEST`: Missing `id`.
   - `NOT_FOUND`: Item ID does not exist, or stored payload is missing.
-  - `FORBIDDEN`: Caller is not a designated recipient.
+  - `FORBIDDEN`: Neither the caller's peer ID nor `recipientId` is among the item's recipients.
   - `GONE`: Item has expired.
   - `PAYMENT_REQUIRED`: Recipient's balance cannot cover the egress fee.
 
@@ -265,7 +268,7 @@ List items addressed to the requesting peer (or to a list of recipient IDs), wit
 
 - **Category**: Query
 - **Request `params`** (OPTIONAL):
-  - `recipientIds` (array of strings, OPTIONAL): Recipient identifiers to query. The caller MUST be authorized to receive on behalf of each ID.
+  - `recipientIds` (array of strings, OPTIONAL): Recipient identifiers to query. The server returns items addressed to any listed ID. It does not check that the caller is that FID or a member of that entity (§5.3). The caller pays egress for everything returned.
   - `recipientId` (string, OPTIONAL): Alternative to `recipientIds` for a single recipient.
   - If neither is provided, the requesting peer's own ID is used.
 - **Request `fcdsl`** (OPTIONAL): Standard FCDSL `sort`, `size` (max 50, default 20), and `after` (search-after cursor) fields as defined in FAPI2.
@@ -329,7 +332,7 @@ List item metadata addressed to the requesting peer, without item content. Use t
 
 - **Category**: Query
 - **Request `params`** (OPTIONAL):
-  - `recipientId` (string, OPTIONAL): Recipient identifier to query. Defaults to the requesting peer's ID.
+  - `recipientId` (string, OPTIONAL): Recipient identifier to query. Defaults to the requesting peer's ID. Not checked against the caller, as for `dock.fetch` (§5.3).
 - **Request `fcdsl`** (OPTIONAL): Standard FCDSL `sort`, `size` (max 100, default 20), and `after` fields. The server transparently excludes `dataBase64` from results.
 - **Response**: `data` is an array of metadata objects: `id`, `sender`, `size`, `createTime`, `expireHeight`, `remainingDays`, `egressFee`, optional `dataType`. Standard pagination fields (`got`, `total`, `last`) are included.
 - **Charging**: No egress fee, since item content is not returned.
@@ -536,7 +539,15 @@ Only the original sender of an item MAY delete it via `dock.delete`. Recipients 
 
 Recipients who wish to disregard an item simply do not retrieve it; the item expires naturally when the chain advances past `expireHeight`.
 
-### 5.3. Lifetime Limits
+### 5.3. No Membership Enforcement
+
+DOCK is a mailbox, not an access-control service. Retrieval by `dock.get`, `dock.fetch` and `dock.list` is gated only by naming a recipient id the item carries. The server does not resolve entity ids to members, and does not check that a caller who names an id is entitled to it. Storing is gated only by payment: anyone may `put` an item under any recipient id.
+
+So a client protocol MUST NOT rely on DOCK to keep an item from non-recipients, or to vouch for who stored it. It MUST encrypt anything that has to stay confidential, and MUST verify authorship and membership itself when it receives an item. `DockItem.sender` names whoever paid for the `put`, and after a forward that is the forwarding server, not the author. FIMP does all of this; see FIMP0 §DOCK Conventions and §Message Signing. What the server does reveal to a caller who names an id is metadata: `sender`, `size`, `recipients`, timestamps and lifetime.
+
+The same rule makes a group item cheap to serve: one stored copy under the entity id serves every member, and each member pays the egress for its own fetch.
+
+### 5.4. Lifetime Limits
 
 The maximum lifetime of 365 days prevents indefinite storage consumption. Servers MUST reject `dock.put` requests with `maxDays` outside `[1, 365]`. The `dock.extend` method MUST enforce that each individual `extraDays` value is within `[1, 365]`. This cap ensures predictable storage cost accounting and prevents long-tail storage obligations.
 

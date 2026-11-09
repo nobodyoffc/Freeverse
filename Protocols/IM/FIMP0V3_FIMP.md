@@ -38,7 +38,7 @@
 
 ## Abstract
 
-FIMP (Freeverse Instant Messaging Protocol) defines a decentralized instant messaging framework for the Freeverse ecosystem. FIMP runs over FUDP encrypted transport and FAPI application services (DOCK for store-and-forward, DISK for large attachments, BASE for on-chain entity lookup). It defines a single message envelope -- `ImMessage` -- that is shared by four messaging modes: **P2P** (direct one-to-one), **Room** (locally-defined group), **Square** (open on-chain group), and **Team** (closed on-chain owner-managed group). Each mode has its own membership semantics, encryption rules, and DOCK addressing conventions, all specified in companion documents (FIMP1-4). Voice calls and meetings over these modes are specified in FIMP5.
+FIMP (Freeverse Instant Messaging Protocol) defines a decentralized instant messaging framework for the Freeverse ecosystem. FIMP runs over FUDP encrypted transport and FAPI application services (DOCK for store-and-forward, DISK for large attachments, BASE for on-chain entity lookup). It defines a single message envelope -- `ImMessage` -- that is shared by four messaging modes: **P2P** (direct one-to-one), **Room** (locally-defined group), **Square** (open on-chain group), and **Team** (closed on-chain group run by an owner and managers). Each mode has its own membership semantics, encryption rules, and DOCK addressing conventions, all specified in companion documents (FIMP1-4). Voice calls and meetings over these modes are specified in FIMP5.
 
 This document (FIMP0) defines the foundational rules shared by all FIMP modes: the wire envelope, message signing, content-type registry, request-type registry, encryption layering, delivery channels, and identifier conventions.
 
@@ -84,7 +84,7 @@ FIMP depends on and references several Freeverse protocol series:
 
 - **FUDP** -- Provides the encrypted, reliable transport layer for direct delivery and for FAPI requests. All FIMP traffic ultimately rides on FUDP streams. Authentication and confidentiality of every *hop* are handled by FUDP, and FIMP embeds no transport-level credentials or nonces. A FUDP session authenticates a connection, not the author of a message carried over it; authorship is established by the FIMP signature (see [Message Signing](#message-signing)).
 - **FAPI1V1 (Core Protocol)** -- Defines the wire format for API requests sent to FAPI servers (used to talk to DOCK, DISK, BASE).
-- **FAPI13V1 (DOCK)** -- The store-and-forward service used to deliver messages to offline recipients and to fan out to group/team/room recipients. FIMP defines the `dataType` tag, recipient identifier conventions, and payload framing for items stored on DOCK.
+- **FAPI13V1 (DOCK)** -- The store-and-forward service used to deliver messages to offline recipients, and to hold a single copy of each Square/Team/Room message under the entity's id for every member to fetch. FIMP defines the `dataType` tag, recipient identifier conventions, and payload framing for items stored on DOCK.
 - **FAPI12V1 (DISK)** -- Used for attachments larger than the resolved inline budget. FIMP messages carry a `HAT` reference (DID + key cipher) to a DISK object.
 - **FAPI11V1 (BASE)** -- Used to look up `Square` and `Team` records on chain (membership, owner, advertised DOCK URL), and to read a DOCK service record's advertised `maxDataSize`.
 - **FEIP** -- Defines the on-chain protocol-level data formats. Square and Team are FEIP entities; FIMP only references their lookup. Room is **not** an on-chain entity.
@@ -160,7 +160,7 @@ FIMP defines four messaging modes, expressed by the `type` field of `ImMessage`:
 |---|---|---|---|
 |P2P|FIMP1|Two endpoints; no shared state|Asymmetric (secp256k1), on DOCK and ROAD channels|
 |Square|FIMP3|On-chain FEIP record; open membership|None -- body is plaintext|
-|Team|FIMP4|On-chain FEIP record; owner-managed membership|AES-GCM under the team symkey|
+|Team|FIMP4|On-chain FEIP18 record; managers invite and dismiss, invitees join themselves|AES-GCM under the team symkey|
 |Room|FIMP2|Local; owner-managed membership; not on chain|AES-GCM under the room symkey|
 
 The wire envelope is identical across all four modes; only the field population, recipient addressing, and sealing rules differ.
@@ -465,7 +465,7 @@ The FUDP direct channel has its own, far larger frame limits and does not consul
 |---|---|---|
 |0|`P2P`|Direct one-to-one|
 |1|`SQUARE`|Open on-chain group (FIMP3)|
-|2|`TEAM`|Closed on-chain owner-managed group (FIMP4)|
+|2|`TEAM`|Closed on-chain group with owner and managers (FIMP4)|
 |3|`ROOM`|Local owner-managed group (FIMP2)|
 
 ### ContentType
@@ -593,9 +593,11 @@ The `recipients` array of a DockItem MUST contain at most 100 entries (FAPI13). 
 |Mode|`recipients` content|
 |---|---|
 |P2P|`[<recipientFid>]` (single FID)|
-|Square|`[<squareId>]` (server expands to current members per FAPI13)|
-|Team|`[<teamId>]` (server expands to current members)|
-|Room|`[<roomId>]` (server expands to current members)|
+|Square|`[<squareId>]`|
+|Team|`[<teamId>]`|
+|Room|`[<roomId>]`|
+
+A group item is stored **once**, indexed under the entity id, and returned to anyone who fetches that id (FAPI13 §2.1). The DOCK does not expand an entity id into member FIDs, keeps no member list, and does not check membership on put or fetch (see [Body framing](#body-framing)). Who may post and who may read are enforced by the receiver and by the symkey. Each mode document says how (FIMP2 §8, FIMP3, FIMP4 §8).
 
 For SYMKEY and other P2P-typed control messages used by Team or Room, `recipients` is `[<recipientFid>]`.
 
@@ -626,7 +628,7 @@ A DOCK URL is an endpoint, not a string. Implementations MUST compare DOCK URLs 
 
 Receivers MUST de-duplicate on the message's `(senderId, id)`, as required by [Message Signing §4](#4-receive-checks). De-duplicating by DockItem id alone is not sufficient: a verbatim replay is stored under a new DockItem id. Receivers MAY additionally skip DockItem ids they have already routed, to save decoding. The dedup window MUST cover at least the longest expected DOCK retention period.
 
-Group items (Square, Team, Room) are addressed to an entity and one stored copy serves every member. A member MUST NOT delete a group item after fetching it; deletion would remove it for members who have not yet fetched. Per-recipient P2P items MAY be deleted by their recipient.
+Group items (Square, Team, Room) are addressed to an entity and one stored copy serves every member. Recipients cannot delete DOCK items. FAPI13 permits `dock.delete` only by the item's sender (FAPI13 §5.2), and an unwanted item simply expires. A sender MUST NOT delete a group item it has posted merely because some members have fetched it: one stored copy serves every member, and deleting it removes it for members who have not fetched it yet.
 
 ## Identifiers
 
@@ -746,5 +748,5 @@ Every FIMP mode document (FIMP1 onward) follows this section layout:
 |1|3|[P2P](FIMP1V3_P2P.md)|Direct one-to-one messaging|
 |2|3|[Room](FIMP2V3_Room.md)|Local owner-managed group|
 |3|3|[Square](FIMP3V3_Square.md)|Open on-chain group|
-|4|3|[Team](FIMP4V3_Team.md)|Closed on-chain owner-managed group|
+|4|3|[Team](FIMP4V3_Team.md)|Closed on-chain group with owner and managers|
 |5|1|[Call](FIMP5V1_Call.md)|Voice calls and meetings over the modes above|

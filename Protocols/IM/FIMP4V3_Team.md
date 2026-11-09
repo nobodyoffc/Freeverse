@@ -9,7 +9,7 @@
 |Status|Draft|
 |Author|C_armX|
 |Created|2026-09-17|
-|Updated|2026-09-17|
+|Updated|2026-11-09|
 |PID|e3ccee1c6406e36f7ad7559a9c4060387111e509882e5872973ea56833865b59|
 
 ## Contents
@@ -19,11 +19,12 @@
 - [2. Data Model](#2-data-model)
 - [3. Lifecycle](#3-lifecycle)
   - [3.1. Create](#31-create)
-  - [3.2. Add member](#32-add-member)
-  - [3.3. Remove member](#33-remove-member)
-  - [3.4. Update](#34-update)
-  - [3.5. Disband](#35-disband)
-  - [3.6. Membership sync](#36-membership-sync)
+  - [3.2. Invite and join](#32-invite-and-join)
+  - [3.3. Leave and dismiss](#33-leave-and-dismiss)
+  - [3.4. Update and managers](#34-update-and-managers)
+  - [3.5. Transfer](#35-transfer)
+  - [3.6. Disband](#36-disband)
+  - [3.7. Membership sync](#37-membership-sync)
 - [4. Message Contracts](#4-message-contracts)
   - [4.1. Chat messages](#41-chat-messages)
   - [4.2. SYMKEY (proactive push)](#42-symkey-proactive-push)
@@ -45,15 +46,16 @@
 
 ## Abstract
 
-FIMP4V3 defines the **Team** mode of FIMP -- a closed, owner-managed group chat whose membership and metadata are recorded on chain as a FEIP `Team` entity, and whose messages are end-to-end encrypted under a per-team symmetric key. The team owner is the sole authority for adding and removing members, rotating the symkey, and disbanding the team. Symmetric keys are distributed via P2P `SYMKEY` messages, each wrapping the key to a specific member's secp256k1 public key. Messages are addressed to the team's advertised DOCK with `recipients = [teamId]`, encrypted under the current symkey, and tagged with the symkey version that produced them.
+FIMP4V3 defines the **Team** mode of FIMP -- a closed group chat whose membership and metadata are recorded on chain as a FEIP18 `Team` entity, and whose messages are end-to-end encrypted under a per-team symmetric key. Membership changes only through FEIP18 operations: managers invite and dismiss, an invitee joins by signing for itself, a member leaves by signing for itself, and the owner appoints managers, updates, transfers and disbands. FIMP adds no membership operation of its own. At the IM layer the owner is the only party that mints and rotates the symkey. Symmetric keys are distributed via P2P `SYMKEY` messages, each wrapping the key to a specific member's secp256k1 public key. Messages are addressed to the team's advertised DOCK with `recipients = [teamId]`, encrypted under the current symkey, and tagged with the symkey version that produced them.
 
 ## 1. Overview
 
 A Team is characterized by:
 
 - An on-chain FEIP `Team` record (`entityType = TEAM`) whose `id` is the `teamId`.
-- A single **owner** FID, encoded on chain. Only the owner may modify membership and metadata.
-- An on-chain `members` list, modified only by owner-signed FEIP transactions.
+- A single **owner** FID, encoded on chain. On chain, only the owner may update metadata, appoint and cancel managers, transfer and disband (FEIP18). At the IM layer, only the owner mints symkeys (§7.2).
+- An on-chain `managers` list, the owner always among them. A manager may `invite` FIDs, `withdraw invitation`, and `dismiss` members (FEIP18).
+- An on-chain `members` list, changed only by FEIP18 operations: `join` by an invitee, `leave` by a member, `dismiss` by a manager, and `take over` by a transferee. Nobody can add a member directly. An invited FID becomes a member only when it signs `join` itself.
 - An on-chain `home` map advertising the team's DOCK URL (under `"DOCK@No1_NrC7"`).
 - A per-team **symmetric key** (AES-256), generated and rotated by the owner at the IM layer (the symkey is NOT on chain).
 - All chat messages encrypted under the current symkey; only members holding the corresponding key version can decrypt.
@@ -70,13 +72,15 @@ The `Team` FEIP entity is fully defined by FEIP and is not redefined here. FIMP 
 |Field|Type|Source|FIMP usage|
 |---|---|---|---|
 |`id`|string|on-chain FEIP|`teamId`. Used as `targetId` in chat messages and as the DOCK recipient.|
-|`owner`|FID|on-chain FEIP|Sole authority for membership / symkey / metadata changes.|
+|`owner`|FID|on-chain FEIP|Sole authority for metadata, managers, transfer and disband on chain (FEIP18), and the only party that mints symkeys (§7.2). Always in `members` and `managers`.|
+|`managers`|list of FIDs|on-chain FEIP|May invite, withdraw invitations and dismiss. Has no IM-layer authority: a manager cannot mint symkeys.|
+|`invitees`|list of FIDs|on-chain FEIP|Invited but not yet joined. **Not members**: no key, no posting, no requests answered (§3.2).|
 |`stdName`|string|on-chain FEIP|Display name.|
 |`desc`|string|on-chain FEIP|Description.|
-|`members`|list of FIDs|on-chain FEIP|Authoritative member list, owner-managed.|
+|`members`|list of FIDs|on-chain FEIP|Authoritative member list, changed only by FEIP18 `join`, `leave`, `dismiss` and `take over`.|
 |`home`|map<string,string>|on-chain FEIP|Service map. The DOCK URL under `"DOCK@No1_NrC7"` is the team's mailbox.|
 |`active`|boolean|on-chain FEIP|If false, the team is disbanded.|
-|`birthHeight`, `lastHeight`, ...|various|on-chain FEIP|Used for incremental sync (§3.6).|
+|`birthHeight`, `lastHeight`, ...|various|on-chain FEIP|Used for incremental sync (§3.7).|
 
 Per-member local state (NOT on the wire, NOT on chain):
 
@@ -87,42 +91,59 @@ Per-member local state (NOT on the wire, NOT on chain):
 
 ## 3. Lifecycle
 
-Membership and metadata changes are **on-chain** FEIP transactions and generate no FIMP wire traffic. Symkey distribution is the only IM-layer activity tied to lifecycle events.
+Membership, managers and metadata change only through the **on-chain** FEIP18 operations, which FEIP18 specifies and this document does not restate. They generate no FIMP wire traffic. The only IM-layer activity tied to them is symkey distribution, described below for each operation.
 
 ### 3.1. Create
 
-The owner submits a FEIP Create transaction for the Team (specified by FEIP), which sets `stdName`, `desc`, optional `home` (DOCK URL), and an initial `members` list.
+The creator signs FEIP18 `create`, which sets `stdName`, `consensusId`, optional `desc`, `home` (DOCK URL) and the other profile fields. Create takes no member list. The creator becomes the owner, the only member and the only manager. Every other member arrives later by invite and join (§3.2).
 
-After creation, the owner:
+After creation, the owner mints the team's first symkey (§7.2) and stores it locally. Nobody else is a member yet, so there is nobody to send it to.
 
-1. Generates a fresh AES-256 symkey at version 1.
-2. Stores the symkey locally, wrapped to the owner's own pubkey.
-3. For each non-owner member listed at create time, sends a P2P `SYMKEY` message (§4.2) wrapping the symkey to that member's pubkey.
+### 3.2. Invite and join
 
-### 3.2. Add member
+Joining takes two on-chain steps, each signed by a different party:
 
-The owner submits a FEIP Add-member transaction. After confirmation, the owner sends a P2P `SYMKEY` message (§4.2) to the new member with the current symkey wrapped to their pubkey. The owner MAY simultaneously rotate the symkey (§3.4) -- although rotation is RECOMMENDED only for removals, not additions, since adding a member does not compromise the existing key.
+1. A manager signs `invite` naming one or more FIDs, which FEIP18 adds to `invitees`. A manager may take an invitation back with `withdraw invitation`.
+2. The invitee signs `join`, agreeing to the team's current `consensusId`. Only then does FEIP18 move it from `invitees` to `members`.
 
-### 3.3. Remove member
+An invitee is not a member. A device MUST NOT push a symkey to an invitee, and the membership check of §5.1 refuses an invitee's request. An invitation therefore gives nobody access to the team's history. Access starts when the invitee signs `join`.
 
-The owner submits a FEIP Remove-member transaction. After confirmation, the owner SHOULD:
+Once its `join` is confirmed, the new member gets the current symkey **by request** (§5.1). The request goes to the owner by default, and any member holding the key may answer it. The owner MAY also push the key proactively (§4.2) when it sees the new member in a sync. The protocol does not depend on that push, because the owner may be offline and the inviting manager cannot mint. Adding a member needs no rotation, because it does not compromise the existing key.
 
-1. Generate a new symkey at the next version.
-2. Distribute the new symkey to every remaining member via P2P `SYMKEY`.
+### 3.3. Leave and dismiss
 
-The removed member retains older symkey versions (used to decrypt past messages) but cannot decrypt messages encrypted under the new version. Owners that do not rotate the symkey on removal accept that the removed member can still decrypt subsequent messages.
+A member leaves by signing `leave`. A manager removes members by signing `dismiss`. Either way FEIP18 moves the FID from `members` to `exMembers` and drops it from `managers`. The owner can neither leave nor be dismissed.
 
-### 3.4. Update
+After a removal is confirmed, the owner SHOULD:
 
-The on-chain Update transaction may change `stdName`, `desc`, `home`, or other metadata. After the next sync, members refresh their local cache; if `home.DOCK@No1_NrC7` changed, members switch to the new DOCK URL for subsequent reads and posts.
+1. Mint a new symkey version (§7.2).
+2. Distribute it to every remaining member via P2P `SYMKEY`.
+
+The removed member keeps the older versions, which still open past messages, but cannot open messages sealed under the new version. Only the owner can rotate. So when a manager dismisses someone, or a member leaves, the removed FID can still read new messages until the owner acts. An owner who does not rotate after a removal accepts that the removed member can read what follows. Rotation is a human action on one device. It MUST NOT be triggered automatically by seeing the removal on chain (§7.2).
+
+The owner's implementation SHOULD therefore **prompt the owner to rotate** whenever its membership sync (§3.7) shows that an FID has left `members`, whoever signed the removal. The prompt SHOULD name the removed FIDs. It SHOULD gather further removals into the same prompt until the owner acts, and SHOULD close once the owner's device holds a version minted after the prompt was raised, so that a rotation done on another of the owner's devices also clears it. A rotation minted *before* the removal was confirmed does not count. It was distributed to a member list that still included the removed FID.
+
+No FIMP message carries this reminder, and a manager who dismisses a member does not send one. The removal is already on chain, and the owner's own sync sees it, including a `leave` that no manager took part in. A reminder message would add a ContentType, its own checks and a DOCK fee, only to repeat what the chain already says.
+
+### 3.4. Update and managers
+
+The owner's `update` may change `stdName`, `desc`, `home`, `consensusId` or other metadata. After the next sync, members refresh their local cache. If `home.DOCK@No1_NrC7` changed, members switch to the new DOCK URL for later reads and posts. A changed `consensusId` puts members into `notAgreeMembers` until they sign `agree consensus`. This has no IM-layer effect: they remain members and keep their keys.
+
+`appoint` and `cancel appointment`, both owner-only, change who may invite and dismiss. They have no IM-layer effect, since a manager holds no key-related authority.
 
 The owner MAY rotate the symkey at any time without changing on-chain state. Rotation is signaled by sending a fresh P2P `SYMKEY` (with a higher `symkeyVersion`) to every member.
 
-### 3.5. Disband
+### 3.5. Transfer
 
-The owner submits a FEIP transaction setting `active = false` (or otherwise marking the team as disbanded, per FEIP). FIMP wire effect: none. Members observing `active = false` after sync SHOULD stop posting and SHOULD treat the team as read-only.
+The owner signs `transfer` naming a transferee (FEIP18 also accepts it from the owner's master, per FEIP6). Ownership moves only when the transferee signs `take over`. FEIP18 then makes the transferee the owner and the only manager, and adds it to `members`. From the confirming block on, the new owner holds every owner role in this document: it is the sender whose proactive `SYMKEY` push is accepted (§4.2, §8.2), and the only party that mints. The former owner is an ordinary member from then on.
 
-### 3.6. Membership sync
+A new owner may hold no symkey at all. It obtains existing versions by request from any member (§5.1), like any member, or mints a new version and distributes it.
+
+### 3.6. Disband
+
+The owner signs `disband`, which sets `active = false`. FIMP wire effect: none. Members who see `active = false` after sync SHOULD stop posting and SHOULD treat the team as read-only.
+
+### 3.7. Membership sync
 
 FIMP implementations SHOULD periodically poll FAPI BASE for Team records that match either:
 
@@ -153,7 +174,7 @@ The plaintext input to the seal is the complete body framing of FIMP0 §Body Fra
 
 ### 4.2. SYMKEY (proactive push)
 
-The owner pushes the team symkey to a single member. Used at create time, after add-member, and after rotation.
+The owner pushes the team symkey to a single member. Used after rotation (§3.3, §3.4), and optionally to a member who has just joined (§3.2).
 
 |Field|Value|
 |---|---|
@@ -210,7 +231,7 @@ See §5.3 for the request side. The response is a single message:
 
 ### 5.1. SYMKEY
 
-A member requests team symkeys from any current member: the current one, one named version, or a batch of named versions. Used by a new joiner whose owner has not yet pushed the key, by a member whose symkey store has been lost, and by a member recovering the older versions that seal messages sent before they arrived.
+A member requests team symkeys from any current member: the current one, one named version, or a batch of named versions. Used by a new joiner (the normal way it gets its first key, §3.2), by a new owner after take over (§3.5), by a member whose symkey store has been lost, and by a member recovering the older versions that seal messages sent before they arrived.
 
 |Direction|Field|Value|
 |---|---|---|
@@ -353,19 +374,21 @@ Receivers MUST treat the on-chain `members` list as the authoritative source. Wh
 
 Membership is anchored on chain. A malicious actor cannot fake membership without subverting the chain. Receivers MUST use the on-chain record (queried via FAPI BASE) as the ground truth, not any push received over IM.
 
-### 9.2. Owner trust
+### 9.2. Owner and manager trust
 
 The owner controls the symkey. A malicious or compromised owner can:
 
-- Add an attacker as a "member" on chain and push the current symkey to them, exposing future messages.
-- Refuse to rotate the key after removing a member, allowing the removed member to continue decrypting messages.
+- Invite an attacker (the owner is a manager), and once the attacker joins, push it the current symkey, exposing future messages.
+- Refuse to rotate the key after a removal, so the removed member can keep decrypting messages.
 - Delay or fail to deliver `SYMKEY` to legitimate new members.
 
-These trust assumptions are inherent to the owner-managed model. For groups that require less trusted ownership, FIMP version 1 has no answer; the application layer MUST select participants accordingly.
+A malicious or compromised **manager** can invite an FID it controls. Once that FID signs `join`, every member's device answers its `SYMKEY` requests automatically (§9.7), and it can read every message under every version those members hold. That includes history from before it joined. Inviting is therefore as sensitive as handing out the key, and owners SHOULD appoint managers on that basis. A manager can also dismiss a member, but cannot rotate. A dismissal on its own removes the member from the on-chain list and does not cut off its access to messages until the owner rotates (§3.3).
+
+These trust assumptions are inherent to the owner-and-manager model of FEIP18. For groups that require less trusted ownership, FIMP has no answer; the application layer MUST select participants accordingly.
 
 ### 9.3. Forward secrecy
 
-FIMP version 1 does NOT provide forward secrecy. A future compromise of a member's prikey decrypts every past `SYMKEY` push the member received, which then decrypts every past chat message under those symkey versions. Implementations that require forward secrecy MUST limit retention of `SYMKEY` items on DOCK (FAPI13 `maxDays`) and SHOULD discard old symkeys locally once the user has explicitly opted out of historical access. A future FIMP version MAY define a forward-secure variant.
+FIMP does NOT provide forward secrecy. A future compromise of a member's prikey decrypts every past `SYMKEY` push the member received, which then decrypts every past chat message under those symkey versions. Implementations that require forward secrecy MUST limit retention of `SYMKEY` items on DOCK (FAPI13 `maxDays`) and SHOULD discard old symkeys locally once the user has explicitly opted out of historical access. A future FIMP version MAY define a forward-secure variant.
 
 ### 9.4. Sender impersonation
 
@@ -385,7 +408,7 @@ A symkey leaked to a non-member compromises every chat message under that versio
 
 ### 9.7. Record of symkey distribution
 
-A device answers a `SYMKEY` request **automatically, without asking its user**. §5.1 requires only that the requester be a current member, and that condition is satisfied by anyone the owner has added on chain. The key handed over opens every message under its version, including messages sent long before the requester joined. This is intended -- a new joiner has to obtain the key from somewhere, and requiring a human to approve each request would leave joiners stranded -- but it means a member's device gives away the team's readable history on the strength of a check it performs silently.
+A device answers a `SYMKEY` request **automatically, without asking its user**. §5.1 requires only that the requester be a current member, and that condition is satisfied by anyone a manager has invited who has then signed `join` (§3.2, §9.2). The key handed over opens every message under its version, including messages sent long before the requester joined. This is intended -- a new joiner has to obtain the key from somewhere, and requiring a human to approve each request would leave joiners stranded -- but it means a member's device gives away the team's readable history on the strength of a check it performs silently.
 
 An implementation SHOULD therefore keep a local, durable record of every symkey it distributes and every symkey it accepts, holding at least:
 
@@ -435,6 +458,7 @@ Amendments made within version 3, during development:
 4. The solicited-response rule for a non-owner `SYMKEY` is a MUST, checked against a persisted request record; a key from the receiver's own FID is admitted unasked, since the envelope signature proves it came from this identity (§4.2, §8.2).
 5. Recovery asks the message's sender automatically, and the retry limit is a MUST with persisted state, counted per responder rather than per question (§7.4).
 6. Refused requests join the distribution record (§9.7).
+7. The lifecycle (§1-§3, §9.2) is restated against the FEIP18 operations that actually exist: create with the owner as sole member, invite then join, leave and dismiss, managers, transfer and take over. Earlier drafts described an owner-only "add member / remove member" that FEIP18 never had. Joiners get their first key by request, and a manager's invite is called out as equivalent to granting the key. After a removal the owner's implementation SHOULD prompt for rotation, with no wire message involved (§3.3).
 
 **None of these changes the wire**, so none requires a new version number under the rule at the end of this section: every one is either a constraint on the value carried in an existing field or a local record that is never transmitted. A build implementing them exchanges bytes with a build that does not; what differs is which values are minted and which messages are stored.
 
@@ -454,7 +478,7 @@ Changes from FIMP4V1, retained from version 2:
 Future versions MAY:
 
 - Define forward-secret symkey delivery (e.g., a tree-based key agreement).
-- Define multi-owner / multi-admin authorization.
+- Let managers, or more than one party, mint and rotate symkeys, so that a dismissal by a manager can be followed by a rotation without waiting for the owner.
 - Define a sealed-message variant that hides `senderId` (and the signature trailer's pubkey) from non-members.
 - Define an explicit rekey-broadcast message containing all members' wrapped keys in a single envelope.
 
@@ -466,7 +490,7 @@ Wire-incompatible changes require a new version number.
 - **FIMP1V3** -- P2P mode (used as the carrier for SYMKEY, MEMBERS, HISTORY responses, REQUESTs, and the source of their sealing rules).
 - **FIMP2V3** -- Room mode (analogous closed-group semantics, but with local non-on-chain membership).
 - **FIMP3V3** -- Square mode (open on-chain membership, no IM-layer sealing).
-- **FEIP** -- Defines the on-chain `Team` entity, owner-signed Add/Remove/Update/Disband transactions, and the `members` list semantics.
+- **FEIP18** -- Defines the on-chain `Team` entity and its operations (`create`, `update`, `invite`, `withdraw invitation`, `join`, `leave`, `dismiss`, `appoint`, `cancel appointment`, `transfer`, `take over`, `disband`, `agree consensus`), and the semantics of `members`, `managers` and `invitees`.
 - **FAPI11V1 (BASE)** -- Used to query Team records on chain.
 - **FAPI13V1 (DOCK)** -- Store-and-forward; one item stored under `recipients = [<teamId>]` for every member to fetch.
 - **FAPI12V1 (DISK)** -- Used for HISTORY files and HAT-referenced large attachments.
