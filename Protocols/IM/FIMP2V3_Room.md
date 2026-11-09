@@ -121,7 +121,7 @@ All Room lifecycle events are expressed as FIMP messages. There is no on-chain o
 
 ### 3.1. Create
 
-The owner generates a `roomId`, an initial symkey at version 1, and a `Room` record locally. No wire traffic is required at creation time. If the owner immediately invites members, see §3.2.
+The owner generates a `roomId`, mints the room's first symkey (§7.2), and creates a `Room` record locally. No wire traffic is required at creation time. If the owner immediately invites members, see §3.2.
 
 ### 3.2. Invite
 
@@ -280,7 +280,7 @@ Push of a member list update without a full `RoomInfo`. OPTIONAL. Implementation
 |`targetId`|recipient FID|
 |`content`|JSON `{"roomId": "...", "members": ["fid1", "fid2", ...]}`|
 
-In version 1, `MEMBERS` is OPTIONAL; receivers MUST tolerate the absence of `MEMBERS` messages and rely on `ROOM_INFO` updates as the authoritative source.
+`MEMBERS` is OPTIONAL; receivers MUST tolerate the absence of `MEMBERS` messages and rely on `ROOM_INFO` updates as the authoritative source.
 
 ### 4.6. ROOM_ACCEPT
 
@@ -464,7 +464,7 @@ Because Room is not on chain, there is no globally-authoritative source for the 
 
 ### 8.2. Forward secrecy
 
-FIMP version 1 does NOT provide forward secrecy for room messages. A future compromise of a current member's prikey allows decryption of every past message that member received (because past `ROOM_INFO` payloads include past symkeys wrapped to that member's pubkey, and past messages are stored on DOCK or in DISK). Implementations that require forward secrecy MUST limit the on-server retention of `ROOM_INFO` (which DOCK already does via `maxDays`) and SHOULD discard old symkeys locally once no longer needed.
+FIMP does NOT provide forward secrecy for room messages. A future compromise of a current member's prikey allows decryption of every past message that member received (because past `ROOM_INFO` payloads include past symkeys wrapped to that member's pubkey, and past messages are stored on DOCK or in DISK). Implementations that require forward secrecy MUST limit the on-server retention of `ROOM_INFO` (which DOCK already does via `maxDays`) and SHOULD discard old symkeys locally once no longer needed.
 
 ### 8.3. Symkey leakage on member removal
 

@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static constants.FieldNames.*;
 
 /**
- * ROAD Component - Relay Of Arbitrary Data
+ * ROAD Component - data relay
  * <p>
  * A minimal relay service that forwards arbitrary data to target FIDs.
  * ROAD is a "dumb pipe" - it doesn't interpret data content.

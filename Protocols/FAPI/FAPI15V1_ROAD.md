@@ -37,7 +37,7 @@
 
 ## Abstract
 
-FAPI15V1 specifies the ROAD (Relay Of Arbitrary Data) component of the FAPI protocol series. ROAD provides a data relay service for peer-to-peer communication when direct connectivity between peers is unavailable. It operates as a "dumb pipe" that forwards opaque binary payloads from a sender to one or more target FIDs without interpreting, modifying, or inspecting the data. ROAD enforces a maximum of 2 hops per relay chain, requires the MAP component for local peer address resolution, and charges the sender ingress and egress fees per kilobyte per target. This document defines the three ROAD API methods (`road.relay`, `road.forward`, `road.stats`), the relay algorithm, error codes, and the charging model.
+FAPI15V1 specifies the ROAD component of the FAPI protocol series. ROAD provides a data relay service for peer-to-peer communication when direct connectivity between peers is unavailable. It operates as a "dumb pipe" that forwards opaque binary payloads from a sender to one or more target FIDs without interpreting, modifying, or inspecting the data. ROAD enforces a maximum of 2 hops per relay chain, requires the MAP component for local peer address resolution, and charges the sender ingress and egress fees per kilobyte per target. This document defines the three ROAD API methods (`road.relay`, `road.forward`, `road.stats`), the relay algorithm, error codes, and the charging model.
 
 ## Summary
 

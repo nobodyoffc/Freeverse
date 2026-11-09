@@ -206,7 +206,7 @@ Open membership creates a spam vector. Mitigations:
 - Receivers discard posts from non-members (§8.2), so reaching readers requires a confirmed on-chain join, which costs a transaction fee.
 - Receivers MAY apply local heuristics (rate limits, blocklists, reputation) at the IM layer.
 
-FIMP version 1 does not specify a spam-control protocol; this is left to the application layer.
+FIMP does not specify a spam-control protocol; this is left to the application layer.
 
 ### 9.4. Membership timing
 
