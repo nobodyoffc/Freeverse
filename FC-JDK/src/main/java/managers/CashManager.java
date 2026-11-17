@@ -1906,6 +1906,12 @@ public class CashManager extends Manager<Cash> {
         return removed;
     }
 
+    /** Cashes fetched by the first, compatibility pass of the ES cash selection. */
+    public static final int FIRST_PASS_SIZE = 200;
+    /** Default and maximum page size for {@link #getValidCashPage}. */
+    public static final int DEFAULT_CASH_PAGE_SIZE = 1000;
+    public static final int MAX_CASH_PAGE_SIZE = 5000;
+
     public static SearchResult<Cash> getValidCashes(String myFid, Long amount, Long cd, Long sinceHeight, int outputSize, int msgSize, ApipClient apipClient, ElasticsearchClient esClient, MempoolManager mempoolHandler) {
         SearchResult<Cash> searchResult = new SearchResult<>();
         List<Cash> cashList = null;
@@ -1943,64 +1949,7 @@ public class CashManager extends Manager<Cash> {
                 return searchResult;
             }
         }else if(esClient!=null){
-            cashList = new ArrayList<>();
-            SearchResponse<Cash> result;
-            try {
-                SearchRequest.Builder searchBuilder = new SearchRequest.Builder();
-                searchBuilder.index(CASH)
-                        .trackTotalHits(tr -> tr.enabled(true))
-                        .sort(s1 -> s1.field(f -> f.field(FieldNames.CD).order(SortOrder.Asc)))
-                        .sort(s2 -> s2.field(f -> f.field(FieldNames.ID).order(SortOrder.Asc)))
-                        .size(200);
-
-                BoolQuery.Builder boolQueryBuilder = new BoolQuery.Builder();
-                TermQuery ownerQuery = new TermQuery.Builder().field(OWNER).value(myFid).build();
-                TermQuery validQuery = new TermQuery.Builder().field(FieldNames.VALID).value(true).build();
-                if (sinceHeight != null) {
-                    RangeQuery heightQuery = new RangeQuery.Builder()
-                            .field(BIRTH_HEIGHT)
-                            .gt(JsonData.of(sinceHeight))
-                            .build();
-                    boolQueryBuilder.must(new Query(heightQuery));
-                }
-                boolQueryBuilder.must(new Query(ownerQuery))
-                        .must(new Query(validQuery));
-
-                searchBuilder.query(q -> q.bool(boolQueryBuilder.build()));
-                result = esClient.search(searchBuilder.build(), Cash.class);
-            } catch (IOException e) {
-                searchResult.setCode(CodeMessage.Code1020OtherError);
-                searchResult.setMessage("Get cash from ES wrong:"+e.getMessage());
-                return searchResult;
-            }
-
-            if (result == null) {
-                searchResult.setCode(CodeMessage.Code1020OtherError);
-                searchResult.setMessage("The server failed to get cash from ES.");
-                return searchResult;
-            }
-
-
-            List<Hit<Cash>> hitList = result.hits().hits();
-            if (hitList.size() == 0) {
-                searchResult.setCode(CodeMessage.Code2007CashNoFound);
-                searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
-                return searchResult;
-            }
-
-            for (Hit<Cash> hit : hitList) {
-                cashList.add(hit.source());
-            }
-            if (amount == null && cd == null) {
-                if(mempoolHandler != null)
-                    checkUnconfirmed(cashList, myFid, mempoolHandler, apipClient);
-                searchResult.setData(cashList);
-                searchResult.setGot((long) cashList.size());
-                try{
-                    searchResult.setTotal(result.hits().total().value());
-                }catch (Exception ignore){}
-                return searchResult;
-            }
+            return getValidCashesFromEs(myFid, amount, cd, sinceHeight, outputSize, msgSize, bestheight, esClient, mempoolHandler);
         }
 
         if(cashList==null){
@@ -2009,22 +1958,260 @@ public class CashManager extends Manager<Cash> {
             return searchResult;
         }
 
-        if(cashList.isEmpty()){
-            searchResult.setCode(CodeMessage.Code2007CashNoFound);
-            searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
-        }
-
         if(mempoolHandler!=null)
             checkUnconfirmed(cashList,myFid, mempoolHandler, apipClient);
 
-        amount = amount == null ? 0L : amount;
-        cd = cd == null ? 0L : cd;
+        List<Cash> meetList = pickCashes(cashList, amount == null ? 0L : amount, cd == null ? 0L : cd,
+                outputSize, msgSize, bestheight, Integer.MAX_VALUE);
+        if (meetList == null) {
+            searchResult.setCode(CodeMessage.Code1026InsufficientFchOnChain);
+            searchResult.setMessage("Can't get enough amount or cd within " + cashList.size() + " cashes. You may need to merge cashes.");
+            return searchResult;
+        }
+
+        searchResult.setData(meetList);
+        searchResult.setGot((long) meetList.size());
+        return searchResult;
+    }
+
+    /**
+     * Valid cashes from Elasticsearch.
+     *
+     * <p>Without amount and cd: the first {@value #FIRST_PASS_SIZE} valid cashes (cd asc, id asc), with
+     * got and total. Callers that need every cash use {@link #getValidCashPage}.</p>
+     *
+     * <p>With amount and/or cd: first the original selection (the {@value #FIRST_PASS_SIZE}
+     * lowest-cd cashes, in order, until amount + fee and cd are met), so an address that this
+     * always served gets exactly the same cashes. Only when that fails and the address has more
+     * cashes than the first pass saw does a second pass take the largest cashes first (by value, or
+     * by cd when only cd is asked), up to {@link #MAX_INPUT_SIZE} inputs.</p>
+     *
+     * <p>On failure the code says why: {@link CodeMessage#Code2007CashNoFound} no valid cash at all,
+     * {@link CodeMessage#Code1026InsufficientFchOnChain} the balance (or cd) is not enough,
+     * {@link CodeMessage#Code2011TooManyCashesToSpend} it is enough but takes more than
+     * {@link #MAX_INPUT_SIZE} inputs; merge cashes first.</p>
+     */
+    public static SearchResult<Cash> getValidCashesFromEs(String myFid, Long amount, Long cd, Long sinceHeight, int outputSize, int msgSize,
+                                                   Long bestheight, ElasticsearchClient esClient, MempoolManager mempoolHandler) {
+        SearchResult<Cash> searchResult = new SearchResult<>();
+        boolean selecting = amount != null || cd != null;
+
+        SearchResponse<Cash> result;
+        try {
+            result = searchValidCashes(esClient, myFid, sinceHeight, FIRST_PASS_SIZE, cdAscIdAsc(), null);
+        } catch (IOException e) {
+            searchResult.setCode(CodeMessage.Code1020OtherError);
+            searchResult.setMessage("Get cash from ES wrong:"+e.getMessage());
+            return searchResult;
+        }
+        if (result == null) {
+            searchResult.setCode(CodeMessage.Code1020OtherError);
+            searchResult.setMessage("The server failed to get cash from ES.");
+            return searchResult;
+        }
+
+        List<Hit<Cash>> hitList = result.hits().hits();
+        if (hitList.isEmpty()) {
+            searchResult.setCode(CodeMessage.Code2007CashNoFound);
+            searchResult.setMessage(CodeMessage.getMsg(CodeMessage.Code2007CashNoFound));
+            return searchResult;
+        }
+        long total = totalHits(result, hitList.size());
+
+        List<Cash> cashList = new ArrayList<>();
+        for (Hit<Cash> hit : hitList) if (hit.source() != null) cashList.add(hit.source());
+
+        if (!selecting) {
+            if(mempoolHandler != null)
+                checkUnconfirmed(cashList, myFid, mempoolHandler, null);
+            searchResult.setData(cashList);
+            searchResult.setGot((long) cashList.size());
+            searchResult.setTotal(total);
+            searchResult.setLast(EsUtils.toStringList(hitList.get(hitList.size() - 1).sort()));
+            return searchResult;
+        }
+
+        long amountL = amount == null ? 0L : amount;
+        long cdL = cd == null ? 0L : cd;
+
+        // Pass 1: the original selection.
+        if(mempoolHandler!=null)
+            checkUnconfirmed(cashList, myFid, mempoolHandler, null);
+        List<Cash> meetList = pickCashes(cashList, amountL, cdL, outputSize, msgSize, bestheight, Integer.MAX_VALUE);
+        if (meetList != null) {
+            searchResult.setData(meetList);
+            searchResult.setGot((long) meetList.size());
+            searchResult.setTotal(total);
+            return searchResult;
+        }
+
+        // Pass 1 saw every cash: there is not enough.
+        if (total <= hitList.size()) {
+            return insufficient(searchResult, amountL, cdL, total);
+        }
+
+        // Pass 2: largest first. Fetch some extra so skipped immature coinbase cashes and
+        // mempool-spent cashes do not shrink the candidate set below MAX_INPUT_SIZE.
+        boolean byCd = amountL == 0 && cdL > 0;
+        String key = byCd ? FieldNames.CD : FieldNames.VALUE;
+        int pass2Size = MAX_INPUT_SIZE.intValue() * 2;
+        List<Cash> largest = new ArrayList<>();
+        try {
+            SearchResponse<Cash> r2 = searchValidCashes(esClient, myFid, sinceHeight, pass2Size, descIdAsc(key), null);
+            for (Hit<Cash> hit : r2.hits().hits()) if (hit.source() != null) largest.add(hit.source());
+        } catch (IOException e) {
+            searchResult.setCode(CodeMessage.Code1020OtherError);
+            searchResult.setMessage("Get cash from ES wrong:"+e.getMessage());
+            return searchResult;
+        }
+        if(mempoolHandler!=null)
+            checkUnconfirmed(largest, myFid, mempoolHandler, null);
+        largest.sort(byCd ? largestCdFirst(bestheight) : largestValueFirst());
+
+        meetList = pickCashes(largest, amountL, cdL, outputSize, msgSize, bestheight, MAX_INPUT_SIZE.intValue());
+        if (meetList != null) {
+            searchResult.setData(meetList);
+            searchResult.setGot((long) meetList.size());
+            searchResult.setTotal(total);
+            return searchResult;
+        }
+
+        // Enough in total but not within MAX_INPUT_SIZE inputs?
+        Long sum = sumValidCashValue(esClient, myFid);
+        long fee = TxCreator.calcFee(TxCreator.calcTxSize(MAX_INPUT_SIZE.intValue(), outputSize, msgSize), DEFAULT_FEE_RATE);
+        if (!byCd && sum != null && sum >= amountL + fee) {
+            searchResult.setCode(CodeMessage.Code2011TooManyCashesToSpend);
+            searchResult.setMessage("The balance is enough but needs more than " + MAX_INPUT_SIZE
+                    + " cashes. Merge cashes first, or send a smaller amount.");
+            searchResult.setTotal(total);
+            return searchResult;
+        }
+        return insufficient(searchResult, amountL, cdL, total);
+    }
+
+    private static SearchResult<Cash> insufficient(SearchResult<Cash> searchResult, long amount, long cd, long total) {
+        searchResult.setCode(CodeMessage.Code1026InsufficientFchOnChain);
+        searchResult.setMessage("Not enough " + (cd > 0 && amount == 0 ? "cd" : "FCH") + " in the valid cashes of this address.");
+        searchResult.setTotal(total);
+        return searchResult;
+    }
+
+    /**
+     * One page of valid cashes, sorted cd asc, id asc (the order getValidCashes has always used).
+     * Pass the previous page's {@link SearchResult#getLast()} as {@code after} to get the next page.
+     * Unconfirmed incoming cashes are added to the first page only; cashes spent in the mempool
+     * are removed from every page. {@code got} is the size of this page, {@code total} the number
+     * of confirmed valid cashes, and {@code last} is null when no page follows.
+     */
+    public static SearchResult<Cash> getValidCashPage(String fid, Long sinceHeight, int size, @Nullable List<String> after,
+                                                      ElasticsearchClient esClient, @Nullable MempoolManager mempoolHandler) {
+        SearchResult<Cash> searchResult = new SearchResult<>();
+        if (size <= 0) size = DEFAULT_CASH_PAGE_SIZE;
+        size = Math.min(size, MAX_CASH_PAGE_SIZE);
+        SearchResponse<Cash> result;
+        try {
+            result = searchValidCashes(esClient, fid, sinceHeight, size, cdAscIdAsc(), after);
+        } catch (IOException e) {
+            searchResult.setCode(CodeMessage.Code1020OtherError);
+            searchResult.setMessage("Get cash from ES wrong:" + e.getMessage());
+            return searchResult;
+        }
+        List<Hit<Cash>> hits = result.hits().hits();
+        List<Cash> cashList = new ArrayList<>();
+        for (Hit<Cash> hit : hits) if (hit.source() != null) cashList.add(hit.source());
+
+        if (mempoolHandler != null) {
+            List<Cash> unconfirmed = mempoolHandler.checkUnconfirmedCash(fid);
+            if (unconfirmed != null) {
+                Set<String> spent = new HashSet<>();
+                for (Cash c : unconfirmed) {
+                    if (c.isValid()) { if (after == null || after.isEmpty()) cashList.add(c); }
+                    else spent.add(c.getId());
+                }
+                if (!spent.isEmpty()) cashList.removeIf(c -> spent.contains(c.getId()));
+            }
+        }
+        searchResult.setData(cashList);
+        searchResult.setGot((long) cashList.size());
+        searchResult.setTotal(totalHits(result, hits.size()));
+        if (hits.size() == size)
+            searchResult.setLast(EsUtils.toStringList(hits.get(hits.size() - 1).sort()));
+        return searchResult;
+    }
+
+    /**
+     * Every valid cash of the address, read page by page. Capped at {@code maxCashes} so one call
+     * cannot pull an address with millions of cashes into memory; check {@code got < total}.
+     */
+    public static SearchResult<Cash> getAllValidCashes(String fid, int maxCashes, ElasticsearchClient esClient, @Nullable MempoolManager mempoolHandler) {
+        SearchResult<Cash> all = new SearchResult<>();
+        List<Cash> cashList = new ArrayList<>();
+        List<String> after = null;
+        while (true) {
+            int size = Math.min(MAX_CASH_PAGE_SIZE, Math.max(1, maxCashes - cashList.size()));
+            SearchResult<Cash> page = getValidCashPage(fid, null, size, after, esClient, after == null ? mempoolHandler : null);
+            if (page.hasError()) return page;
+            cashList.addAll(page.getData());
+            all.setTotal(page.getTotal());
+            after = page.getLast();
+            if (after == null || cashList.size() >= maxCashes) break;
+        }
+        if (mempoolHandler != null && after != null) {
+            // Later pages were read without the mempool; drop what the mempool spends there too.
+            List<Cash> unconfirmed = mempoolHandler.checkUnconfirmedCash(fid);
+            if (unconfirmed != null) {
+                Set<String> spent = new HashSet<>();
+                for (Cash c : unconfirmed) if (!c.isValid()) spent.add(c.getId());
+                cashList.removeIf(c -> spent.contains(c.getId()));
+            }
+        }
+        all.setData(cashList);
+        all.setGot((long) cashList.size());
+        all.setLast(after);
+        return all;
+    }
+
+    /**
+     * Confirmed balance of an address in satoshis: the Freer index balance (what freerByIds
+     * reports), falling back to summing the valid cashes. Null if neither can be read.
+     */
+    @Nullable
+    public static Long confirmedBalance(ElasticsearchClient esClient, String fid) {
+        try {
+            Freer freer = EsUtils.getById(esClient, FREER, fid, Freer.class);
+            if (freer != null && freer.getBalance() != null) return freer.getBalance();
+        } catch (Exception e) {
+            log.warn("Failed to read the Freer of {}: {}", fid, e.getMessage());
+        }
+        return sumValidCashValue(esClient, fid);
+    }
+
+    /** Sum of the values of all valid cashes of the address, in satoshis, or null on error. */
+    @Nullable
+    public static Long sumValidCashValue(ElasticsearchClient esClient, String fid) {
+        try {
+            SearchResponse<Void> r = esClient.search(s -> s.index(CASH).size(0)
+                    .query(q -> q.bool(validCashQuery(fid, null)))
+                    .aggregations("sum", a -> a.sum(sm -> sm.field(FieldNames.VALUE))), Void.class);
+            double v = r.aggregations().get("sum").sum().value();
+            return Math.round(v);
+        } catch (Exception e) {
+            log.warn("Failed to sum the valid cashes of {}: {}", fid, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Take cashes in list order, skipping immature coinbase ones, until amount + fee and cd are
+     * met. Null if they are not met within the list or within {@code maxInputs} cashes.
+     */
+    @Nullable
+    static List<Cash> pickCashes(List<Cash> candidates, long amount, long cd, int outputSize, int msgSize, Long bestheight, int maxInputs) {
         long fchSum = 0;
         long cdSum = 0;
-        long fee = 0;
         List<Cash> meetList = new ArrayList<>();
-
-        for (Cash cash : cashList) {
+        for (Cash cash : candidates) {
+            if (meetList.size() >= maxInputs) break;
             if(Boolean.TRUE.equals(isImmature(cash, bestheight)))continue;
             long cdd=0;
             if(cash.getBirthHeight()!=null && bestheight!=null) {
@@ -2034,20 +2221,63 @@ public class CashManager extends Manager<Cash> {
             cdSum += cdd;
             meetList.add(cash);
             long txSize = TxCreator.calcTxSize(meetList.size(),outputSize,msgSize);
-            fee = TxCreator.calcFee(txSize,DEFAULT_FEE_RATE);
+            long fee = TxCreator.calcFee(txSize,DEFAULT_FEE_RATE);
             if (fchSum >= (amount+fee) && cdSum >= cd) {
-                break;
+                return meetList;
             }
         }
+        return null;
+    }
 
-        if (fchSum < (amount+fee) || cdSum < cd) {
-            searchResult.setMessage("Can't get enough amount or cd within 200 cashes. You may need to merge cashes.");
-            return searchResult;
+    static Comparator<Cash> largestValueFirst() {
+        return Comparator.comparing((Cash c) -> c.getValue() == null ? 0L : c.getValue()).reversed()
+                .thenComparing(c -> c.getId() == null ? "" : c.getId());
+    }
+
+    static Comparator<Cash> largestCdFirst(Long bestheight) {
+        return Comparator.comparing((Cash c) -> {
+            if (c.getBirthHeight() == null || bestheight == null || c.getValue() == null) return 0L;
+            return utils.FchUtils.cdd(c.getValue(), c.getBirthHeight(), bestheight);
+        }).reversed().thenComparing(c -> c.getId() == null ? "" : c.getId());
+    }
+
+    private static List<SortOptions> cdAscIdAsc() {
+        return List.of(
+                SortOptions.of(s -> s.field(f -> f.field(FieldNames.CD).order(SortOrder.Asc))),
+                SortOptions.of(s -> s.field(f -> f.field(FieldNames.ID).order(SortOrder.Asc))));
+    }
+
+    private static List<SortOptions> descIdAsc(String field) {
+        return List.of(
+                SortOptions.of(s -> s.field(f -> f.field(field).order(SortOrder.Desc))),
+                SortOptions.of(s -> s.field(f -> f.field(FieldNames.ID).order(SortOrder.Asc))));
+    }
+
+    private static BoolQuery validCashQuery(String fid, Long sinceHeight) {
+        BoolQuery.Builder b = new BoolQuery.Builder();
+        b.must(new Query(new TermQuery.Builder().field(OWNER).value(fid).build()));
+        b.must(new Query(new TermQuery.Builder().field(FieldNames.VALID).value(true).build()));
+        if (sinceHeight != null) {
+            b.must(new Query(new RangeQuery.Builder().field(BIRTH_HEIGHT).gt(JsonData.of(sinceHeight)).build()));
         }
+        return b.build();
+    }
 
-        searchResult.setData(meetList);
-        searchResult.setGot((long) meetList.size());
-        return searchResult;
+    private static SearchResponse<Cash> searchValidCashes(ElasticsearchClient esClient, String fid, Long sinceHeight, int size,
+                                                          List<SortOptions> sort, @Nullable List<String> after) throws IOException {
+        SearchRequest.Builder sb = new SearchRequest.Builder();
+        sb.index(CASH).trackTotalHits(tr -> tr.enabled(true)).sort(sort).size(size)
+                .query(q -> q.bool(validCashQuery(fid, sinceHeight)));
+        if (after != null && !after.isEmpty()) sb.searchAfter(EsUtils.toFieldValueList(after));
+        return esClient.search(sb.build(), Cash.class);
+    }
+
+    private static long totalHits(SearchResponse<?> result, long fallback) {
+        try {
+            return result.hits().total().value();
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     // Helper Classes
@@ -2059,6 +2289,8 @@ public class CashManager extends Manager<Cash> {
         private Long total;
         private Long lastHeight;
         private Long lastTime;
+        /** Sort values of the last hit; pass as the next page's cursor. Null when no page follows. */
+        private List<String> last;
 
         public SearchResult() {
             this.data = new ArrayList<>();
@@ -2102,6 +2334,9 @@ public class CashManager extends Manager<Cash> {
         public void setLastTime(Long lastTime) {
             this.lastTime = lastTime;
         }
+
+        public List<String> getLast() { return last; }
+        public void setLast(List<String> last) { this.last = last; }
     }
 
     // Sample Data Methods

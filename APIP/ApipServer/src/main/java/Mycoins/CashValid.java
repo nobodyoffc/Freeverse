@@ -73,6 +73,8 @@ public class CashValid extends HttpServlet {
         String msgSizeStr = null;
         String outputSizeStr = null;
         String sinceHeightStr = null;
+        String sizeStr = null;
+        String afterStr = null;
         int msgSize = 0;
         int outputSize = 0;
         long sinceHeight = 0;
@@ -115,6 +117,8 @@ public class CashValid extends HttpServlet {
                             msgSizeStr = otherMap.get(FieldNames.MSG_SIZE);
                             outputSizeStr = otherMap.get(FieldNames.OUTPUT_SIZE);
                             sinceHeightStr = otherMap.get(FieldNames.SINCE_HEIGHT);
+                            sizeStr = otherMap.get("size");
+                            afterStr = otherMap.get("after");
                         }
                     }
                 } catch (Exception ignored) {
@@ -127,6 +131,8 @@ public class CashValid extends HttpServlet {
             msgSizeStr = request.getParameter(FieldNames.MSG_SIZE);
             outputSizeStr = request.getParameter(FieldNames.OUTPUT_SIZE);
             sinceHeightStr = request.getParameter(FieldNames.SINCE_HEIGHT);
+            sizeStr = request.getParameter("size");
+            afterStr = request.getParameter("after");
         }
 
         try {
@@ -137,14 +143,33 @@ public class CashValid extends HttpServlet {
             if (sinceHeightStr != null) sinceHeight = Long.parseLong(sinceHeightStr);
         } catch (Exception ignore) {
         }
+        if (fid == null || fid.isEmpty()) {
+            replier.replyHttp(CodeMessage.Code1015FidMissed, null, response);
+            return;
+        }
+        int size = CashManager.DEFAULT_CASH_PAGE_SIZE;
+        try {
+            if (sizeStr != null && !sizeStr.isBlank()) size = Integer.parseInt(sizeStr.trim());
+        } catch (Exception ignore) {
+        }
         MempoolManager mempoolHandler = (MempoolManager) settings.getManager(ManagerType.MEMPOOL);
-        SearchResult<Cash> searchResult = CashManager.getValidCashes(fid, amount, cd, sinceHeight, outputSize, msgSize, null, esClient, mempoolHandler);
-        if (searchResult.hasError()||searchResult.getData().isEmpty()) {
-            replier.replyHttp(CodeMessage.Code2007CashNoFound, null,response);
+        SearchResult<Cash> searchResult;
+        if (amount == null && cd == null) {
+            // Every valid cash, page by page: size (default 1000, max 5000) and after = the last reply's "last".
+            searchResult = CashManager.getValidCashPage(fid, sinceHeight, size, CommonApiBase.parseCursor(afterStr), esClient, mempoolHandler);
+        } else {
+            // Enough cashes for amount + fee (and cd), largest first when the lowest-cd 200 are not enough.
+            searchResult = CashManager.getValidCashes(fid, amount, cd, sinceHeight, outputSize, msgSize, null, esClient, mempoolHandler);
+        }
+        if (searchResult.hasError() || searchResult.getData().isEmpty()) {
+            int code = searchResult.getCode();
+            if (code == 0 || searchResult.getData().isEmpty() && !searchResult.hasError()) code = CodeMessage.Code2007CashNoFound;
+            replier.replyHttp(code, null, response);
             return;
         }
         replier.setGot(searchResult.getGot());
         replier.setTotal(searchResult.getTotal());
+        if (searchResult.getLast() != null) replier.setLast(searchResult.getLast());
         List<Cash> cashList = searchResult.getData();
         replier.reply0SuccessHttp(cashList,response);
     }

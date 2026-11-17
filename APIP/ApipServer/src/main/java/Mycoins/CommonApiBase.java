@@ -1,7 +1,8 @@
 package Mycoins;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import config.Settings;
 import core.crypto.CryptoDataByte;
 import core.crypto.Decryptor;
@@ -18,7 +19,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -119,7 +122,7 @@ public abstract class CommonApiBase {
 
         Map<String, String> params;
         try {
-            params = gson.fromJson(decryptedJson, new TypeToken<Map<String, String>>(){}.getType());
+            params = parseParams(decryptedJson);
         } catch (Exception e) {
             writeError(response, 1013, "Failed to parse request params: " + e.getMessage(), clientPubkey);
             return;
@@ -131,6 +134,9 @@ public abstract class CommonApiBase {
         Object result;
         try {
             result = doApiRequest(params);
+        } catch (ApiException e) {
+            writeError(response, e.code, e.getMessage(), clientPubkey);
+            return;
         } catch (Exception e) {
             writeError(response, 1020, e.getMessage(), clientPubkey);
             return;
@@ -140,7 +146,14 @@ public abstract class CommonApiBase {
         Map<String, Object> respMap = new HashMap<>();
         respMap.put("code", 0);
         respMap.put("message", "Success");
-        respMap.put("data", result);
+        if (result instanceof Paged paged) {
+            respMap.put("data", paged.data);
+            if (paged.got != null) respMap.put("got", paged.got);
+            if (paged.total != null) respMap.put("total", paged.total);
+            if (paged.last != null) respMap.put("last", paged.last);
+        } else {
+            respMap.put("data", result);
+        }
 
         // Step 7: Charge the user based on response size
         if (apiName != null && fid != null && accountHandler != null) {
@@ -159,6 +172,49 @@ public abstract class CommonApiBase {
     protected void handleEncryptedPost(HttpServletRequest request, HttpServletResponse response) {
         handleEncryptedPost(request, response, null);
     }
+
+    /**
+     * Decrypted request params as strings. A number keeps its JSON text ("50000", "0.5"); an
+     * array or object (such as an {@code after} cursor) is kept as its JSON text.
+     */
+    static Map<String, String> parseParams(String json) {
+        Map<String, String> params = new HashMap<>();
+        JsonElement root = JsonParser.parseString(json);
+        if (root == null || !root.isJsonObject()) return params;
+        for (Map.Entry<String, JsonElement> e : root.getAsJsonObject().entrySet()) {
+            JsonElement v = e.getValue();
+            if (v == null || v.isJsonNull()) continue;
+            params.put(e.getKey(), v.isJsonPrimitive() ? v.getAsString() : v.toString());
+        }
+        return params;
+    }
+
+    /** A cursor sent back by the client: a JSON array (["123","abc"]) or comma-separated text. */
+    static List<String> parseCursor(String after) {
+        if (after == null || after.isBlank()) return null;
+        String t = after.trim();
+        if (t.startsWith("[")) {
+            List<String> list = new ArrayList<>();
+            for (JsonElement e : JsonParser.parseString(t).getAsJsonArray()) list.add(e.getAsString());
+            return list.isEmpty() ? null : list;
+        }
+        return List.of(t.split(","));
+    }
+
+    /** Thrown by {@link #doApiRequest} to reply with a specific error code. */
+    static class ApiException extends Exception {
+        final int code;
+        ApiException(int code, String message) {
+            super(message);
+            this.code = code;
+        }
+    }
+
+    /**
+     * Returned by {@link #doApiRequest} to put got / total / last next to data at the top level
+     * of the reply, the way FCDSL replies carry them. data stays exactly what it was.
+     */
+    record Paged(Object data, Long got, Long total, List<String> last) {}
 
     /**
      * Subclasses implement this to handle the specific API request.

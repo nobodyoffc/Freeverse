@@ -103,6 +103,8 @@ public class CodeMessage {
     public static final String Msg2009NoFreeSessionKey= "No free sessionKey.";
     public static final int Code2010ErrorFromFchRpc= 2010;
     public static final String Msg2010ErrorFromFchRpc= "Error from freecash RPC.";
+    public static final int Code2011TooManyCashesToSpend= 2011;
+    public static final String Msg2011TooManyCashesToSpend= "The balance is enough but needs too many cashes. Merge cashes first.";
     public static final int Code2020FailedToWriteData= 2020;
     public static final String Msg2020FailedToWriteData= "Failed to write data";
     public static final int Code3001ResponseIsNull = 3001;
@@ -201,6 +203,7 @@ public class CodeMessage {
             case Code2008ServiceNoFound -> Msg2008ServiceNoFound;
             case Code2009NoFreeSessionKey -> Msg2009NoFreeSessionKey;
             case Code2010ErrorFromFchRpc -> Msg2010ErrorFromFchRpc;
+            case Code2011TooManyCashesToSpend -> Msg2011TooManyCashesToSpend;
             case Code2020FailedToWriteData -> Msg2020FailedToWriteData;
             case Code3001ResponseIsNull -> Msg3001ResponseIsNull;
             case Code3002GetRequestFailed -> Msg3002GetRequestFailed;

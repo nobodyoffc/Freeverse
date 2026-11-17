@@ -2,10 +2,8 @@ package Mycoins;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import constants.ApipApiNames;
-import data.fchData.Cash;
 import data.feipData.ServiceType;
 import managers.CashManager;
-import managers.CashManager.SearchResult;
 import managers.Manager.ManagerType;
 import managers.MempoolManager;
 
@@ -37,33 +35,30 @@ public class GetBalance extends HttpServlet {
         }
     };
 
-    private Map<String, Object> getBalanceFch(String address) {
-        System.out.println("[GetBalance] getBalanceFch called for " + address);
-        try {
-            ElasticsearchClient esClient = (ElasticsearchClient) apiBase.settings.getClient(ServiceType.ES);
-            System.out.println("[GetBalance] esClient=" + (esClient != null ? "OK" : "NULL"));
-            MempoolManager mempoolHandler = (MempoolManager) apiBase.settings.getManager(ManagerType.MEMPOOL);
-            System.out.println("[GetBalance] mempoolHandler=" + (mempoolHandler != null ? "OK" : "NULL"));
+    /**
+     * Full balance of the address in satoshis: the confirmed balance from the Freer index (the
+     * same number freerByIds reports), plus the net of its unconfirmed mempool cashes. This used
+     * to sum only the first 200 valid cashes, which undercounted any address with more.
+     */
+    private Map<String, Object> getBalanceFch(String address) throws Exception {
+        ElasticsearchClient esClient = (ElasticsearchClient) apiBase.settings.getClient(ServiceType.ES);
+        MempoolManager mempoolHandler = (MempoolManager) apiBase.settings.getManager(ManagerType.MEMPOOL);
 
-            SearchResult<Cash> searchResult = CashManager.getValidCashes(address, null, null, 0L, 0, 0, null, esClient, mempoolHandler);
-            System.out.println("[GetBalance] searchResult=" + (searchResult != null ? "got " + (searchResult.getData() != null ? searchResult.getData().size() : 0) + " cashes" : "NULL"));
+        Long confirmed = CashManager.confirmedBalance(esClient, address);
+        if (confirmed == null) throw new Exception("Failed to read the balance of " + address);
 
-            long balance = 0;
-            if (searchResult != null && searchResult.getData() != null) {
-                for (Cash cash : searchResult.getData()) {
-                    balance += cash.getValue();
-                }
+        long unconfirmed = 0;
+        if (mempoolHandler != null) {
+            try {
+                unconfirmed = mempoolHandler.checkUnconfirmedBalance(address);
+            } catch (Exception e) {
+                System.out.println("[GetBalance] mempool unavailable: " + e.getMessage());
             }
-            System.out.println("[GetBalance] balance=" + balance);
-
-            Map<String, Object> result = new HashMap<>();
-            result.put("balance", balance);
-            return result;
-        } catch (Exception e) {
-            System.out.println("[GetBalance] ERROR in getBalanceFch: " + e.getMessage());
-            e.printStackTrace();
-            throw new RuntimeException(e);
         }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("balance", confirmed + unconfirmed);
+        return result;
     }
 
     @Override

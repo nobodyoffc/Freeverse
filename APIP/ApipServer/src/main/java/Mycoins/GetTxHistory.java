@@ -36,13 +36,16 @@ public class GetTxHistory extends HttpServlet {
         }
     };
 
+    static final int MAX_CASHES = CashManager.MAX_CASH_PAGE_SIZE;
+
     private List<Map<String, Object>> getTxHistoryFch(String address) {
         System.out.println("[GetTxHistory] getTxHistoryFch called for " + address);
         try {
             ElasticsearchClient esClient = (ElasticsearchClient) apiBase.settings.getClient(ServiceType.ES);
             MempoolManager mempoolHandler = (MempoolManager) apiBase.settings.getManager(ManagerType.MEMPOOL);
 
-            SearchResult<Cash> searchResult = CashManager.getValidCashes(address, null, null, 0L, 0, 0, null, esClient, mempoolHandler);
+            // All valid cashes (it used to be only the first 200), up to a cap for huge addresses.
+            SearchResult<Cash> searchResult = CashManager.getAllValidCashes(address, MAX_CASHES, esClient, mempoolHandler);
 
             Map<String, Map<String, Object>> txMap = new LinkedHashMap<>();
             if (searchResult.getData() != null) {
