@@ -76,7 +76,13 @@ public final class DiskMetaStore implements Closeable {
     }
 
     private long sumSizes() {
-        long sum = 0;
+        long[] sum = {0};
+        forEach(d -> sum[0] += size(d));
+        return sum[0];
+    }
+
+    /** Visit every stored item in id order, a page at a time. */
+    public void forEach(java.util.function.Consumer<DiskItem> action) {
         List<String> after = null;
         while (true) {
             Fcdsl f = new Fcdsl();
@@ -84,8 +90,8 @@ public final class DiskMetaStore implements Closeable {
             f.addSize(3000);
             if (after != null) f.setAfter(after);
             FcdslResult<DiskItem> page = items.query(f, null, null);
-            for (DiskItem d : page.getItems()) if (d.getSize() != null) sum += d.getSize();
-            if (page.getItems().size() < 3000) return sum;
+            for (DiskItem d : page.getItems()) action.accept(d);
+            if (page.getItems().size() < 3000) return;
             after = page.getLast();
         }
     }

@@ -65,10 +65,26 @@ public class ServiceBootstrap {
             // 3. 加载或创建 Settings
             Settings settings = loadOrCreateSettings(sid, config, configure);
 
+            // A service exported to another host, or imported with DISK files still missing, must not start.
+            String blocker = fapi.migrate.ServerMigration.startBlocker(settings.getDbDir(), settings.getMainFid(), sid);
+            if (blocker != null) {
+                System.out.println("\n" + blocker);
+                log.error(blocker);
+                return null;
+            }
+
             // 4. 初始化必需的外部服务（ES, NASA_RPC 等）
             settings.setBootstrapping(true);
             initializeExternalServices(settings, symkey, configure);
             settings.setBootstrapping(false);
+
+            // An imported full server waits for its local parsers to reach the block the balances were exported at.
+            String chainBlocker = checkImportedChainHeight(settings, sid);
+            if (chainBlocker != null) {
+                System.out.println("\n" + chainBlocker);
+                log.error(chainBlocker);
+                return null;
+            }
 
             // 5. 加载链上服务信息
             Service service = settings.loadMyService(sid, symkey, configure);
@@ -296,6 +312,36 @@ public class ServiceBootstrap {
         return settings;
     }
     
+    /**
+     * After an import, the balance store remembers the last block seen on the old host. If this
+     * host's Elasticsearch is behind it, the recharge scanner would read the lag as a rollback and
+     * reverse recent recharges, so the start is refused until FchParser has caught up.
+     * Light servers read the chain from their upstream, which is already current.
+     */
+    static String checkImportedChainHeight(Settings settings, String sid) {
+        fapi.migrate.ServerMigration.ChainPoint need =
+                fapi.migrate.ServerMigration.pendingChainCheck(settings.getDbDir(), settings.getMainFid(), sid);
+        if (need == null) return null;
+        Object es = settings.getClient(data.feipData.ServiceType.ES);
+        try {
+            if (es instanceof co.elastic.clients.elasticsearch.ElasticsearchClient esClient) {
+                data.fchData.Block best = utils.EsUtils.getBestBlock(esClient);
+                long have = best == null || best.getHeight() == null ? 0 : best.getHeight();
+                if (have < need.height()) {
+                    return "This service was imported with balances at block " + need.height()
+                            + ", but this host's chain index is at " + (have == 0 ? "no block" : "block " + have) + ".\n"
+                            + "Let FchParser and FeipParser finish catching up, then start again. Starting earlier would"
+                            + " be read as a chain rollback and reverse recent recharges.";
+                }
+                log.info("Imported service: chain index at {} has reached the exported height {}", have, need.height());
+            }
+            fapi.migrate.ServerMigration.clearChainCheck(settings.getDbDir(), settings.getMainFid(), sid);
+            return null;
+        } catch (Exception e) {
+            return "Cannot read this host's chain height to check the imported service: " + e.getMessage();
+        }
+    }
+
     private static void initializeExternalServices(Settings settings,
                                                    byte[] symkey, Configure configure) {
         // 初始化模块

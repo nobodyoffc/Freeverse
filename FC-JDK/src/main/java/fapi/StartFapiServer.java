@@ -49,12 +49,15 @@ public class StartFapiServer {
 
     /**
      * @param args {@code --light}: when this server's settings are first created, make it a light
-     *             server, which reads the chain from an upstream FAPI instead of a local ES
+     *             server, which reads the chain from an upstream FAPI instead of a local ES.
+     *             {@code --export [SID]}, {@code --import BUNDLE}, {@code --check-disk [SID]}: move the
+     *             service to another host instead of starting it (see {@link fapi.migrate.MigrationCli})
      */
     public static void main(String[] args) {
         boolean light = java.util.Arrays.asList(args).contains("--light");
-        Menu.welcome(SERVER_NAME + (light ? " (light)" : ""));
         br = new BufferedReader(new InputStreamReader(System.in));
+        if (fapi.migrate.MigrationCli.run(args, br)) return;
+        Menu.welcome(SERVER_NAME + (light ? " (light)" : ""));
         
         try {
             while (true) {
