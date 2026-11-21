@@ -520,14 +520,17 @@ public class BlockMaker {
 					}
 					if(addr.getExpend()==null)addr.setExpend(inValue);
 					else addr.setExpend(addr.getExpend() + inValue);
-					if(addr.getBalance()==null)addr.setBalance(inValue);
+					// Blocks are in txid order (CTOR), so a spend can come before the tx that
+					// created the cash. For an address new in this block the balance and the
+					// cash count then go negative here and come back up when the issue is seen.
+					if(addr.getBalance()==null)addr.setBalance(-inValue);
 					else addr.setBalance(addr.getBalance() - inValue);
 					if(addr.getCdd()==null)addr.setCdd(cdd);
 					else addr.setCdd(addr.getCdd() + cdd);
 					if(addr.getWeight()==null)addr.setWeight((cdd* Weight.CDD_WEIGHT)/100);
 					else addr.setWeight(addr.getWeight()+(cdd* Weight.CDD_WEIGHT)/100);
 					addr.setLastHeight(tx.getHeight());
-					if(addr.getCash()==null)addr.setCash(1L);
+					if(addr.getCash()==null)addr.setCash(-1L);
 					else addr.setCash(addr.getCash() - 1);
 
 					if (addr.getPubkey() == null) {
@@ -597,9 +600,18 @@ public class BlockMaker {
 				if (cid.getBirthHeight() == null)
 					cid.setBirthHeight(tx.getHeight());
 
+				// The guide is whoever first paid this address. Under CTOR the address's own
+				// spend of that first cash can be met first; a payment to itself is never the
+				// guide, so wait for the tx from someone else.
 				if (cid.getGuide() == null) {
 					if (tx.getSpentCashes() != null && !tx.getSpentCashes().isEmpty()) {
-						cid.setGuide(tx.getSpentCashes().get(0).getOwner());
+						for (CashMask spent : tx.getSpentCashes()) {
+							String payer = spent.getOwner();
+							if (payer != null && !payer.equals(outAddr)) {
+								cid.setGuide(payer);
+								break;
+							}
+						}
 					} else
 						cid.setGuide(COINBASE);
 				}

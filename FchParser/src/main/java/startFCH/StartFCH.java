@@ -64,9 +64,21 @@ public class StartFCH {
         menu.add("Start new parse", () -> handleNewParse(br, settings, esClient));
         menu.add("Restart from interruption", () -> handleRestart(br, esClient, settings));
         menu.add("Manually start from a height", () -> handleManualStart(br, esClient, settings));
+        menu.add("Repair Freer balances", () -> handleRepairFreers(br, esClient));
         menu.add("Settings", () -> settings.setting(br, null));
 
         menu.showAndSelect(br);
+    }
+
+    private static void handleRepairFreers(BufferedReader br, ElasticsearchClient esClient) {
+        try {
+            System.out.println("Recompute every Freer whose balance is not income - expend (and its guide if it is itself).");
+            System.out.println("Stop any other running FchParser first. Continue? y or n:");
+            if (!"y".equals(br.readLine())) return;
+            new writeEs.FreerRepairer().repair(esClient);
+        } catch (Exception e) {
+            log.error("Freer repair failed. It can be run again.", e);
+        }
     }
 
     private static void handleExit(Settings settings) {
